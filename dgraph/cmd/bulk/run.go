@@ -18,7 +18,6 @@ package bulk
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -113,7 +112,6 @@ func run() {
 		os.Exit(0)
 	}
 	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		flag.Usage()
 		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
 		os.Exit(1)
 	}

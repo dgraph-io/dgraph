@@ -49,6 +49,7 @@ type flagOptions struct {
 	pdir       string
 	itemMeta   bool
 	jepsen     bool
+	jepsenAt   uint64
 }
 
 func init() {
@@ -64,6 +65,7 @@ func init() {
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
 	flag.BoolVar(&opt.jepsen, "jepsen", false, "Disect Jepsen output.")
+	flag.Uint64Var(&opt.jepsenAt, "at", math.MaxUint64, "Show Jepsen sum at this timestamp.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
@@ -288,7 +290,7 @@ func getMinMax(db *badger.DB, readTs uint64) (uint64, uint64) {
 }
 
 func jepsen(db *badger.DB) {
-	min, max := getMinMax(db, math.MaxUint64)
+	min, max := getMinMax(db, opt.jepsenAt)
 	fmt.Printf("min=%d. max=%d\n", min, max)
 
 	ts := findFirstInvalidTxn(db, min, max)

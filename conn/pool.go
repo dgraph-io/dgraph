@@ -83,13 +83,34 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 	return pool, nil
 }
 
-func (p *Pools) Remove(addr string) {
+func (p *Pools) RemoveInvalid(state *pb.MembershipState) {
+	// Keeps track of valid IP addresses, assigned to active nodes. We do this
+	// to avoid removing valid IP addresses from the Removed list.
+	validAddr := make(map[string]struct{})
+	for _, group := range state.Groups {
+		for _, member := range group.Members {
+			validAddr[member.Addr] = struct{}{}
+		}
+	}
+	for _, member := range state.Zeros {
+		validAddr[member.Addr] = struct{}{}
+	}
+	for _, member := range state.Removed {
+		// Some nodes could have the same IP address. So, check before disconnecting.
+		if _, valid := validAddr[member.Addr]; !valid {
+			p.remove(member.Addr)
+		}
+	}
+}
+
+func (p *Pools) remove(addr string) {
 	p.Lock()
 	pool, ok := p.all[addr]
 	if !ok {
 		p.Unlock()
 		return
 	}
+	glog.Warningf("DISCONNECTING from %s\n", addr)
 	delete(p.all, addr)
 	p.Unlock()
 	pool.shutdown()
@@ -200,6 +221,9 @@ func (p *Pool) MonitorHealth() {
 }
 
 func (p *Pool) IsHealthy() bool {
+	if p == nil {
+		return false
+	}
 	p.RLock()
 	defer p.RUnlock()
 	return time.Since(p.lastEcho) < 2*echoDuration

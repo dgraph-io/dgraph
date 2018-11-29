@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -103,7 +101,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		}
 		zc := pb.NewZeroClient(pl.Get())
 		connState, err = zc.Connect(gr.ctx, m)
-		if err == nil || grpc.ErrorDesc(err) == x.ErrReuseRemovedId.Error() {
+		if err == nil || x.ShouldCrash(err) {
 			break
 		}
 	}
@@ -260,27 +258,15 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	if g.state != nil && g.state.Counter > state.Counter {
 		return
 	}
-
 	g.state = state
 
-	// While restarting we fill Node information after retrieving initial state.
-	if g.Node != nil {
-		// Lets have this block before the one that adds the new members, else we may end up
-		// removing a freshly added node.
-		for _, member := range g.state.Removed {
-			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
-			}
-			// Each node should have different id and address.
-			conn.Get().Remove(member.Addr)
-		}
-	}
-
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
+	var foundSelf bool
 	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if Config.RaftId == member.Id {
+				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if Config.MyAddr != member.Addr {
@@ -295,6 +281,23 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		if Config.MyAddr != member.Addr {
 			conn.Get().Connect(member.Addr)
 		}
+	}
+	if !foundSelf {
+		// I'm not part of this cluster. I should crash myself.
+		glog.Fatalf("Unable to find myself [id:%d group:%d] in membership state: %+v. Goodbye!",
+			g.Node.Id, g.groupId(), state)
+	}
+
+	// While restarting we fill Node information after retrieving initial state.
+	if g.Node != nil {
+		// Lets have this block before the one that adds the new members, else we may end up
+		// removing a freshly added node.
+		for _, member := range g.state.Removed {
+			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
+				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+			}
+		}
+		conn.Get().RemoveInvalid(g.state)
 	}
 }
 
@@ -521,6 +524,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		zc := pb.NewZeroClient(pl.Get())
 		if pl := getLeaderConn(zc); pl != nil {
+			glog.V(1).Infof("Found connection to leader: %s", pl.Addr)
 			return pl
 		}
 		glog.V(1).Infof("Unable to connect to a healthy Zero leader. Retrying...")

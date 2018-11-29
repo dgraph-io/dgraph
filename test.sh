@@ -1,6 +1,9 @@
 #!/bin/bash
 
-source contrib/scripts/functions.sh
+# run from directory containing this script
+cd ${BASH_SOURCE[0]%/*}
+
+source ./contrib/scripts/functions.sh
 function run {
   go test -short=true $@ |\
 		GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' |\
@@ -30,6 +33,9 @@ restartCluster
 echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?
+
+# Run non-go tests.
+./contrib/scripts/test-bulk-schema.sh
 
 echo
 echo "Running load-test.sh"
