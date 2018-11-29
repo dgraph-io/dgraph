@@ -46,6 +46,7 @@ type options struct {
 	DgraphsDir  string
 	ExpandEdges bool
 	StoreXids   bool
+    ZeroAddr    string
 }
 
 var (
@@ -54,11 +55,11 @@ var (
     WriteToBadger = gio.RegisterMapper(writeToBadger)
 	Xdb           *XidMap
     Outdb         *badger.DB
-    // Outwb         *badger.WriteBatch
-    Outwb         *badger.Txn
+    Outtx         *badger.Txn
 	Opt           options
 	Schema        *schemaStore
-	isDistributed = flag.Bool("distributed", false, "run in distributed or not")
+    WriteTs       uint64
+    isDistributed = flag.Bool("distributed", false, "run in distributed or not")
 )
 
 const (
@@ -68,6 +69,20 @@ const (
     // PATH_PREFIX = "../../"
 )
 
+func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
+    client := pb.NewZeroClient(zero)
+    for {
+        ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+        ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
+        cancel()
+        if err == nil {
+            return ts.GetStartId()
+        }
+        fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
+        time.Sleep(time.Second)
+    }
+}
+
 func main() {
     var err error
 	Opt = options{
@@ -76,7 +91,17 @@ func main() {
 		DgraphsDir:  PATH_PREFIX + xid.New().String() + "-dgraph-p",
 		ExpandEdges: true,
 		StoreXids:   false,
+        ZeroAddr:    "127.0.0.1:5080",
 	}
+
+    zero, err := grpc.Dial(
+        Opt.ZeroAddr,
+        grpc.WithBlock(),
+        grpc.WithInsecure(),
+        grpc.WithTimeout(time.Minute),
+    )
+    x.Checkf(err, "Unable to connect to zero, Is it running at %s?", Opt.ZeroAddr)
+    WriteTs = getWriteTimestamp(zero)
 
 	Xdb = NewXidmap(PATH_PREFIX + "xids", 1 << 19)
 
@@ -88,8 +113,7 @@ func main() {
     Outdb, err = badger.OpenManaged(badgeropts)
     x.Check(err)
 
-    // Outwb = Outdb.NewWriteBatch()
-    Outwb = Outdb.NewTransactionAt(math.MaxUint64, true)
+    Outtx = Outdb.NewTransactionAt(math.MaxUint64, true)
 	Schema = newSchemaStore(readSchema(Opt.SchemaFile), Opt)
 
     gio.RegisterCleanup(cleanup)
@@ -161,18 +185,15 @@ func writeToBadger(row []interface{}) error {
         return err
     }
 
-    // if err = Outwb.Set(row[0].([]byte), val, posting.BitCompletePosting); err != nil {
-    //     return err
-    // }
-    err = Outwb.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
+    err = Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
     if err == badger.ErrTxnTooBig {
-        err = Outwb.CommitAt(2, nil)
+        err = Outtx.CommitAt(WriteTs, nil)
         if err != nil {
             return err
         }
 
         // try again, if it fails, this time it's serious
-        err = Outwb.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
+        err = Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
         if err != nil {
             return err
         }
@@ -189,9 +210,8 @@ func cleanup() {
         Xdb.Close()
     }
 
-    if Outwb != nil {
-        // Outwb.Flush()
-        x.Check(Outwb.CommitAt(2, nil))
+    if Outtx != nil {
+        x.Check(Outtx.CommitAt(WriteTs, nil))
     }
     if Schema != nil {
         Schema.write(Outdb)
