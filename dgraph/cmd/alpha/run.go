@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -31,6 +32,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/dgraph-io/dgraph/ee/acl"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -120,6 +123,8 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
+		" that is used for signing the JWT")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -274,6 +279,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
+	api.RegisterDgraphAccessServer(s, &acl.AccessServer{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
@@ -391,6 +397,19 @@ func run() {
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	})
+
+	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	if secretFile != "" {
+		hmacSecret, err := ioutil.ReadFile(secretFile)
+		if err != nil {
+			glog.Fatalf("unable to read hmac secret from file: %v", secretFile)
+		}
+
+		acl.SetAccessConfiguration(acl.AccessOptions{
+			HmacSecret: hmacSecret,
+		})
+		glog.Info("HMAC secret loaded successfully.")
+	}
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
