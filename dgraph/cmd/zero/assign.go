@@ -41,6 +41,7 @@ func (s *Server) updateLeases() {
 	s.nextLeaseId = s.state.MaxLeaseId + 1
 	s.nextTxnTs = s.state.MaxTxnTs + 1
 	startTs = s.nextTxnTs
+	glog.Infof("Updated Lease id: %d. Txn Ts: %d", s.nextLeaseId, s.nextTxnTs)
 	s.Unlock()
 	s.orc.updateStartTxnTs(startTs)
 }

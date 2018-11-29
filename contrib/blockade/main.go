@@ -105,7 +105,10 @@ func testCommon(remove, join string, minAlphasUp int) error {
 		if err := increment(minAlphasUp); err != nil {
 			return err
 		}
-		// Then join.
+		// Then join, if available.
+		if len(join) == 0 {
+			continue
+		}
 		if err := run(ctxb, join); err != nil {
 			return err
 		}
@@ -155,10 +158,16 @@ func runTests() error {
 	fmt.Println("===> Slow TEST: OK")
 
 	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
-		fmt.Printf("Error testRestart: %v\n", err)
+		fmt.Printf("Error testRestart with stop: %v\n", err)
 		return err
 	}
-	fmt.Println("===> Restart TEST: OK")
+	fmt.Println("===> Restart TEST1: OK")
+
+	if err := testCommon("blockade restart", "", 3); err != nil {
+		fmt.Printf("Error testRestart with restart: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Restart TEST2: OK")
 
 	if err := testCommon("blockade partition", "blockade join", 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)

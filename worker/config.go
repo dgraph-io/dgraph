@@ -24,6 +24,7 @@ type IPRange struct {
 type Options struct {
 	ExportPath          string
 	NumPendingProposals int
+	// TODO: Get rid of this here.
 	Tracing             float64
 	MyAddr              string
 	ZeroAddr            string

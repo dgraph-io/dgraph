@@ -20,8 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
+	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc"
 
 	"github.com/coreos/etcd/raft"
@@ -70,6 +72,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	}
 
 	propose := func(timeout time.Duration) error {
+		if !n.AmLeader() {
+			return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
+		}
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
@@ -84,6 +89,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		defer n.Proposals.Delete(key)
 		proposal.Key = key
 
+		// TODO: Remove this and use OpenCensus spans.
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Proposing with key: %X", key)
 		}
@@ -119,6 +125,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	for err == errInternalRetry {
 		err = propose(timeout)
 		timeout *= 2 // Exponential backoff
+		if timeout > time.Minute {
+			timeout = 32 * time.Second
+		}
 	}
 	return err
 }
@@ -135,6 +144,116 @@ func newGroup() *pb.Group {
 	}
 }
 
+func (n *node) handleMemberProposal(member *pb.Member) error {
+	n.server.AssertLock()
+	state := n.server.state
+
+	m := n.server.member(member.Addr)
+	// Ensures that different nodes don't have same address.
+	if m != nil && (m.Id != member.Id || m.GroupId != member.GroupId) {
+		return x.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
+	}
+	if member.GroupId == 0 {
+		state.Zeros[member.Id] = member
+		if member.Leader {
+			// Unset leader flag for other nodes, there can be only one
+			// leader at a time.
+			for _, m := range state.Zeros {
+				if m.Id != member.Id {
+					m.Leader = false
+				}
+			}
+		}
+		return nil
+	}
+	group := state.Groups[member.GroupId]
+	if group == nil {
+		group = newGroup()
+		state.Groups[member.GroupId] = group
+	}
+	m, has := group.Members[member.Id]
+	if member.AmDead {
+		if has {
+			delete(group.Members, member.Id)
+			state.Removed = append(state.Removed, m)
+			conn.Get().Remove(m.Addr)
+		}
+		// else already removed.
+		return nil
+	}
+	if !has && len(group.Members) >= n.server.NumReplicas {
+		// We shouldn't allow more members than the number of replicas.
+		return x.Errorf("Group reached replication level. Can't add another member: %+v", member)
+	}
+
+	// Create a connection to this server.
+	go conn.Get().Connect(member.Addr)
+
+	group.Members[member.Id] = member
+	// Increment nextGroup when we have enough replicas
+	if member.GroupId == n.server.nextGroup &&
+		len(group.Members) >= n.server.NumReplicas {
+		n.server.nextGroup++
+	}
+	if member.Leader {
+		// Unset leader flag for other nodes, there can be only one
+		// leader at a time.
+		for _, m := range group.Members {
+			if m.Id != member.Id {
+				m.Leader = false
+			}
+		}
+	}
+	// On replay of logs on restart we need to set nextGroup.
+	if n.server.nextGroup <= member.GroupId {
+		n.server.nextGroup = member.GroupId + 1
+	}
+	return nil
+}
+
+func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
+	n.server.AssertLock()
+	state := n.server.state
+
+	if tablet.GroupId == 0 {
+		return x.Errorf("Tablet group id is zero: %+v", tablet)
+	}
+	group := state.Groups[tablet.GroupId]
+	if tablet.Remove {
+		glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", tablet.Predicate, tablet.GroupId)
+		if group != nil {
+			delete(group.Tablets, tablet.Predicate)
+		}
+		return nil
+	}
+	if group == nil {
+		group = newGroup()
+		state.Groups[tablet.GroupId] = group
+	}
+
+	// There's a edge case that we're handling.
+	// Two servers ask to serve the same tablet, then we need to ensure that
+	// only the first one succeeds.
+	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
+		if tablet.Force {
+			// TODO: Try and remove this whole Force flag logic.
+			originalGroup := state.Groups[prev.GroupId]
+			delete(originalGroup.Tablets, tablet.Predicate)
+		} else {
+			if prev.GroupId != tablet.GroupId {
+				glog.Infof(
+					"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
+					prev.Predicate, tablet.GroupId, prev.GroupId)
+				return errTabletAlreadyServed
+			}
+			// This update can come from tablet size.
+			tablet.ReadOnly = prev.ReadOnly
+		}
+	}
+	group.Tablets[tablet.Predicate] = tablet
+	return nil
+}
+
 func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	var p pb.ZeroProposal
 	// Raft commits empty entry on becoming a leader.
@@ -147,6 +266,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	if len(p.Key) == 0 {
 		return p.Key, errInvalidProposal
 	}
+	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
 
 	n.server.Lock()
 	defer n.server.Unlock()
@@ -165,103 +285,33 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		}
 		state.MaxRaftId = p.MaxRaftId
 	}
+	if p.SnapshotTs != nil {
+		for gid, ts := range p.SnapshotTs {
+			if group, ok := state.Groups[gid]; ok {
+				group.SnapshotTs = x.Max(group.SnapshotTs, ts)
+			}
+		}
+		purgeTs := uint64(math.MaxUint64)
+		for _, group := range state.Groups {
+			purgeTs = x.Min(purgeTs, group.SnapshotTs)
+		}
+		if purgeTs < math.MaxUint64 {
+			n.server.orc.purgeBelow(purgeTs)
+		}
+	}
 	if p.Member != nil {
-		m := n.server.member(p.Member.Addr)
-		// Ensures that different nodes don't have same address.
-		if m != nil && (m.Id != p.Member.Id || m.GroupId != p.Member.GroupId) {
-			return p.Key, errInvalidAddress
-		}
-		if p.Member.GroupId == 0 {
-			state.Zeros[p.Member.Id] = p.Member
-			if p.Member.Leader {
-				// Unset leader flag for other nodes, there can be only one
-				// leader at a time.
-				for _, m := range state.Zeros {
-					if m.Id != p.Member.Id {
-						m.Leader = false
-					}
-				}
-			}
-			return p.Key, nil
-		}
-		group := state.Groups[p.Member.GroupId]
-		if group == nil {
-			group = newGroup()
-			state.Groups[p.Member.GroupId] = group
-		}
-		m, has := group.Members[p.Member.Id]
-		if p.Member.AmDead {
-			if has {
-				delete(group.Members, p.Member.Id)
-				state.Removed = append(state.Removed, m)
-				conn.Get().Remove(m.Addr)
-			}
-			// else already removed.
-			return p.Key, nil
-		}
-		if !has && len(group.Members) >= n.server.NumReplicas {
-			// We shouldn't allow more members than the number of replicas.
-			return p.Key, errInvalidProposal
-		}
-
-		// Create a connection to this server.
-		go conn.Get().Connect(p.Member.Addr)
-
-		group.Members[p.Member.Id] = p.Member
-		// Increment nextGroup when we have enough replicas
-		if p.Member.GroupId == n.server.nextGroup &&
-			len(group.Members) >= n.server.NumReplicas {
-			n.server.nextGroup++
-		}
-		if p.Member.Leader {
-			// Unset leader flag for other nodes, there can be only one
-			// leader at a time.
-			for _, m := range group.Members {
-				if m.Id != p.Member.Id {
-					m.Leader = false
-				}
-			}
-		}
-		// On replay of logs on restart we need to set nextGroup.
-		if n.server.nextGroup <= p.Member.GroupId {
-			n.server.nextGroup = p.Member.GroupId + 1
+		if err := n.handleMemberProposal(p.Member); err != nil {
+			span.Annotatef(nil, "While applying membership proposal: %+v", err)
+			glog.Errorf("While applying membership proposal: %+v", err)
+			return p.Key, err
 		}
 	}
 	if p.Tablet != nil {
-		if p.Tablet.GroupId == 0 {
-			return p.Key, errInvalidProposal
+		if err := n.handleTabletProposal(p.Tablet); err != nil {
+			span.Annotatef(nil, "While applying tablet proposal: %+v", err)
+			glog.Errorf("While applying tablet proposal: %+v", err)
+			return p.Key, err
 		}
-		group := state.Groups[p.Tablet.GroupId]
-		if p.Tablet.Remove {
-			glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", p.Tablet.Predicate, p.Tablet.GroupId)
-			if group != nil {
-				delete(group.Tablets, p.Tablet.Predicate)
-			}
-			return p.Key, nil
-		}
-		if group == nil {
-			group = newGroup()
-			state.Groups[p.Tablet.GroupId] = group
-		}
-
-		// There's a edge case that we're handling.
-		// Two servers ask to serve the same tablet, then we need to ensure that
-		// only the first one succeeds.
-		if tablet := n.server.servingTablet(p.Tablet.Predicate); tablet != nil {
-			if p.Tablet.Force {
-				originalGroup := state.Groups[tablet.GroupId]
-				delete(originalGroup.Tablets, p.Tablet.Predicate)
-			} else {
-				if tablet.GroupId != p.Tablet.GroupId {
-					glog.Infof("Tablet for attr: [%s], gid: [%d] is already being served by group: [%d]\n",
-						tablet.Predicate, p.Tablet.GroupId, tablet.GroupId)
-					return p.Key, errTabletAlreadyServed
-				}
-				// This update can come from tablet size.
-				p.Tablet.ReadOnly = tablet.ReadOnly
-			}
-		}
-		group.Tablets[p.Tablet.Predicate] = p.Tablet
 	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
@@ -352,19 +402,18 @@ func (n *node) initAndStartNode() error {
 	} else if len(opts.peer) > 0 {
 		p := conn.Get().Connect(opts.peer)
 		if p == nil {
-			return errInvalidAddress
+			return x.Errorf("Unhealthy connection to %v", opts.peer)
 		}
 
 		gconn := p.Get()
 		c := pb.NewRaftClient(gconn)
-		err := errJoinCluster
 		timeout := 8 * time.Second
-		for i := 0; err != nil; i++ {
+		for {
 			ctx, cancel := context.WithTimeout(n.ctx, timeout)
 			defer cancel()
 			// JoinCluster can block indefinitely, raft ignores conf change proposal
 			// if it has pending configuration.
-			_, err = c.JoinCluster(ctx, n.RaftContext)
+			_, err := c.JoinCluster(ctx, n.RaftContext)
 			if err == nil {
 				break
 			}
@@ -379,9 +428,6 @@ func (n *node) initAndStartNode() error {
 				timeout = 32 * time.Second
 			}
 			time.Sleep(timeout) // This is useful because JoinCluster can exit immediately.
-		}
-		if err != nil {
-			x.Fatalf("Max retries exceeded while trying to join cluster: %v\n", err)
 		}
 		glog.Infof("[%d] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
@@ -512,7 +558,7 @@ func (n *node) Run() {
 
 				} else if entry.Type == raftpb.EntryNormal {
 					key, err := n.applyProposal(entry)
-					if err != nil && err != errTabletAlreadyServed {
+					if err != nil {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
@@ -523,9 +569,9 @@ func (n *node) Run() {
 				n.Applied.Done(entry.Index)
 			}
 
-			// TODO: Should we move this to the top?
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
+					glog.Infoln("I've become the leader, updating leases.")
 					n.server.updateLeases()
 				}
 				leader = rd.RaftState == raft.StateLeader

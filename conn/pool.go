@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"go.opencensus.io/plugin/ocgrpc"
 
 	"google.golang.org/grpc"
 )
@@ -124,6 +125,7 @@ func (p *Pools) Connect(addr string) *Pool {
 // NewPool creates a new "pool" with one gRPC connection, refcount 0.
 func NewPool(addr string) (*Pool, error) {
 	conn, err := grpc.Dial(addr,
+		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
