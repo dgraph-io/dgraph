@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"regexp"
@@ -399,4 +400,16 @@ func PredicateLang(s string) (string, string) {
 		return s, ""
 	}
 	return s[0:i], s[i+1:]
+}
+
+func DivideAndRule(num int) (numGo, width int) {
+	numGo, width = 64, 0
+	for ; numGo >= 1; numGo /= 2 {
+		widthF := math.Ceil(float64(num) / float64(numGo))
+		if numGo == 1 || widthF >= 256.0 {
+			width = int(widthF)
+			return
+		}
+	}
+	return
 }

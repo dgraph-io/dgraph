@@ -31,3 +31,24 @@ func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
 	set := RemoveDuplicates([]string{"a", "b", "c", "d"})
 	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
 }
+
+func TestDivideAndRule(t *testing.T) {
+	test := func(num, expectedGo, expectedWidth int) {
+		numGo, width := DivideAndRule(num)
+		require.Equal(t, expectedGo, numGo)
+		require.Equal(t, expectedWidth, width)
+	}
+
+	test(68, 1, 68)
+	test(255, 1, 255)
+	test(256, 1, 256)
+	test(510, 1, 510)
+
+	test(511, 2, 256)
+	test(512, 2, 256)
+	test(513, 2, 257)
+
+	test(768, 2, 384)
+
+	test(1755, 4, 439)
+}

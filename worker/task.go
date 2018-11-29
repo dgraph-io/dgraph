@@ -487,13 +487,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 	}
 
 	// Divide the task into many goroutines.
-	numGo, width := 64, 0
-	for ; numGo >= 1; numGo /= 2 {
-		width = srcFn.n / numGo
-		if numGo == 1 || width >= 256 {
-			break
-		}
-	}
+	numGo, width := x.DivideAndRule(srcFn.n)
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
