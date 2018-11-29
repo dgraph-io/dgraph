@@ -1701,6 +1701,12 @@ func recursiveCopy(dst *SubGraph, src *SubGraph) {
 }
 
 func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+	span := otrace.FromContext(ctx)
+	if span != nil {
+		span.Annotatef(nil, "expandSubgraph: %s", sg.Attr)
+		defer span.Annotate(nil, "Done expandSubgraph")
+	}
+
 	var err error
 	out := make([]*SubGraph, 0, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
@@ -1725,6 +1731,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		switch child.Params.Expand {
 		// It could be expand(_all_), expand(_forward_), expand(_reverse_) or expand(val(x)).
 		case "_all_":
+			span.Annotate(nil, "expand(_all_)")
 			// Get the predicate list for expansion.
 			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
@@ -1738,18 +1745,21 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			preds = append(preds, rpreds...)
 		case "_forward_":
+			span.Annotate(nil, "expand(_forward_)")
 			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
 				return out, err
 			}
 			preds = uniquePreds(child.ExpandPreds)
 		case "_reverse_":
+			span.Annotate(nil, "expand(_reverse_)")
 			rpreds, err := getReversePredicates(ctx)
 			if err != nil {
 				return out, err
 			}
 			preds = rpreds
 		default:
+			span.Annotate(nil, "expand default")
 			// We already have the predicates populated from the var.
 			preds = uniquePreds(child.ExpandPreds)
 		}

@@ -142,7 +142,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, "attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
+		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d",
+			attr, gid, q.ReadTs)
 	}
 
 	if groups().ServesGroup(gid) {
@@ -160,7 +161,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 	reply := result.(*pb.Result)
 	if span != nil {
-		span.Annotatef(nil, "Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
+		span.Annotatef(nil, "Reply from server. len: %v gid: %v Attr: %v",
+			len(reply.UidMatrix), gid, attr)
 	}
 	return reply, nil
 }
