@@ -1997,9 +1997,48 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
-{{% notice "note" %}} If your predicate is a URI or has special characters, then you should wrap
-it with angular brackets while doing the schema mutation. E.g. `<first:name>`{{% /notice %}}
+### Predicates i18n
 
+If your predicate is a URI or has laguange-specific vocabs, then enclose
+it with angle brackets `<>` when executing the schema mutation.
+
+{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifier](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRI) for predicate names and values.{{% /notice  %}}
+
+Schema syntax:
+```
+<职业>: string @index(exact) .
+<年龄>: int @index(int) .
+<地点>: geo @index(geo) .
+<公司>: string .
+```
+
+This syntax allows for internationalized predicate, but fulltext indexing still defaults to English.
+To use the right tokenizer for your language, you need to use the `@lang` directive and enter values using your
+language tag.
+
+Schema:
+```
+<公司>: string @index(fulltext) @lang .
+```
+Mutation:
+```
+{
+  set {
+    _:a <公司> "Dgraph Labs Inc"@en
+    _:b <公司> "夏新科技有限责任公司"@zh
+  }
+}
+```
+Query:
+```
+{
+  query {
+    q (func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
+      _predicate_
+    }
+  }
+}
+```
 
 ### Upsert directive
 
@@ -2344,6 +2383,30 @@ All facets on an edge are queried with `@facets`.
 }
 {{</ runnable >}}
 
+### Facets i18n
+
+Facets keys and values can use language vocabs directly when mutating. But facet keys need to be enclosed in angle brackets `<>` when querying. This is similar to predicates. See [Predicates i18n](#predicates-i18n) for more info.
+
+{{% notice "note" %}}Dgraph supports [Internationalized Resource Identifier](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier) (IRI) for facet keys when querying.{{% /notice  %}}
+
+Example:
+```
+{
+  set {
+		_:person1 <name> "Daniel" (वंश="स्पेनी", ancestry="Español") .
+		_:person2 <name> "Raj" (वंश="हिंदी", ancestry="हिंदी") .
+		_:person3 <name> "Zhang Wei" (वंश="चीनी", ancestry="中文") .
+  }
+}
+```
+Query, notice the `<>`'s:
+```
+{
+  q (func: has(name)) {
+    name @facets(<वंश>)
+  }
+}
+```
 
 ### Alias with facets
 
