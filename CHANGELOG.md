@@ -30,7 +30,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Updates to the version output info.
   - Print the go version used to build Dgraph when running `dgraph version` and in the logs when Dgraph runs. (#2768)
   - Print the Dgraph version when running live or bulk loader. (#2736)
-- Refactor bleve tokenizer usage (#2738)
 - Checking nil values in the equal function (#2769)
 - Optimize query: UID expansion. (#2772)
 - Split membership sync endpoints and remove PurgeTs endpoint. (#2773)
@@ -46,6 +45,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 ### Fixed
 
 - Restore schema states on error. (#2730)
+- Refactor bleve tokenizer usage (#2738). Fixes #2622 and #2601.
 - Switch to Badger's Watermark library, which has a memory leak fix. (0cd9d82e)
 - Fix tiny typo. (#2761)
 - Fix Test: TestMillion.
