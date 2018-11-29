@@ -37,9 +37,9 @@ var (
 	emptyMembershipState pb.MembershipState
 	emptyConnectionState pb.ConnectionState
 	errInternalError     = errors.New("Internal server error")
-	errUnknownMember     = errors.New("Unknown cluster member")
-	errUpdatedMember     = errors.New("Cluster member has updated credentials.")
-	errServerShutDown    = errors.New("Server is being shut down.")
+	// errUnknownMember     = errors.New("Unknown cluster member")
+	errUpdatedMember  = errors.New("Cluster member has updated credentials.")
+	errServerShutDown = errors.New("Server is being shut down.")
 )
 
 type Server struct {
@@ -254,7 +254,6 @@ func (s *Server) removeZero(nodeId uint64) {
 		return
 	}
 	delete(s.state.Zeros, nodeId)
-	go conn.Get().Remove(m.Addr)
 	s.state.Removed = append(s.state.Removed, m)
 }
 
@@ -298,11 +297,11 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	for mid, dstMember := range dst.Members {
 		group, has := s.state.Groups[dstMember.GroupId]
 		if !has {
-			return res, errUnknownMember
+			return res, x.Errorf("Unknown group for member: %+v", dstMember)
 		}
 		srcMember, has := group.Members[mid]
 		if !has {
-			return res, errUnknownMember
+			return res, x.Errorf("Unknown member: %+v", dstMember)
 		}
 		if srcMember.Addr != dstMember.Addr ||
 			srcMember.Leader != dstMember.Leader {
@@ -325,7 +324,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	for key, dstTablet := range dst.Tablets {
 		group, has := s.state.Groups[dstTablet.GroupId]
 		if !has {
-			return res, errUnknownMember
+			return res, x.Errorf("Unknown group for tablet: %+v", dstTablet)
 		}
 		srcTablet, has := group.Tablets[key]
 		if !has {
@@ -375,10 +374,13 @@ func (s *Server) Connect(ctx context.Context,
 		x.Errorf("Context has error: %v\n", ctx.Err())
 		return &emptyConnectionState, ctx.Err()
 	}
+	ms, err := s.latestMembershipState(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
-		ms, err := s.latestMembershipState(ctx)
 		cs := &pb.ConnectionState{
 			State:      ms,
 			MaxPending: s.orc.MaxPending(),
@@ -386,26 +388,41 @@ func (s *Server) Connect(ctx context.Context,
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
-		return &emptyConnectionState, x.Errorf("No address provided: %+v", m)
+		return &emptyConnectionState, x.Errorf("NO_ADDR: No address provided: %+v", m)
 	}
 
-	for _, member := range s.membershipState().Removed {
+	for _, member := range ms.Removed {
 		// It is not recommended to reuse RAFT ids.
 		if member.GroupId != 0 && m.Id == member.Id {
-			return &emptyConnectionState, x.ErrReuseRemovedId
+			return &emptyConnectionState, x.Errorf(
+				"REUSE_RAFTID: Duplicate Raft ID %d to removed member: %+v", m.Id, member)
 		}
 	}
 
-	for _, group := range s.state.Groups {
-		member, has := group.Members[m.Id]
-		if !has {
-			break
-		}
-		if member.Addr != m.Addr {
-			// Different address, then check if the last one is healthy or not.
-			if _, err := conn.Get().Get(member.Addr); err == nil {
-				// Healthy conn to the existing member with the same id.
-				return &emptyConnectionState, conn.ErrDuplicateRaftId
+	for _, group := range ms.Groups {
+		for _, member := range group.Members {
+			switch {
+			case member.Addr == m.Addr && m.Id == 0:
+				glog.Infof("Found a member with the same address. Returning: %+v", member)
+				conn.Get().Connect(m.Addr)
+				return &pb.ConnectionState{
+					State:  ms,
+					Member: member,
+				}, nil
+
+			case member.Addr == m.Addr && member.Id != m.Id:
+				// Same address. Different Id. If Id is zero, then it might be trying to connect for
+				// the first time. We can just directly return the membership information.
+				return nil, x.Errorf("REUSE_ADDR: Duplicate address to existing member: %+v."+
+					" Self: +%v", member, m)
+
+			case member.Addr != m.Addr && member.Id == m.Id:
+				// Same Id. Different address.
+				if pl, err := conn.Get().Get(member.Addr); err == nil && pl.IsHealthy() {
+					// Found a healthy connection.
+					return nil, x.Errorf("REUSE_RAFTID: Healthy connection to a member"+
+						" with same ID: %+v", member)
+				}
 			}
 		}
 	}

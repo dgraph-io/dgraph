@@ -25,7 +25,6 @@ import (
 	"time"
 
 	otrace "go.opencensus.io/trace"
-	"google.golang.org/grpc"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -188,7 +187,6 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		if has {
 			delete(group.Members, member.Id)
 			state.Removed = append(state.Removed, m)
-			conn.Get().Remove(m.Addr)
 		}
 		// else already removed.
 		return nil
@@ -348,6 +346,9 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cc.Unmarshal(e.Data)
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
+		if cc.NodeID == n.Id {
+			glog.Fatalf("I [id:%d group:0] have been removed. Goodbye!", n.Id)
+		}
 		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
 
@@ -360,8 +361,9 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
-				x.Errorf("Reusing removed id: %d. Canceling config change.\n", m.Id)
-				n.DoneConfChange(cc.ID, x.ErrReuseRemovedId)
+				// TODO: Is this unused?
+				err := x.Errorf("REUSE_RAFTID: Reusing removed id: %d.\n", m.Id)
+				n.DoneConfChange(cc.ID, err)
 				// Cancel configuration change.
 				cc.NodeID = raft.None
 				n.Raft().ApplyConfChange(cc)
@@ -429,10 +431,8 @@ func (n *node) initAndStartNode() error {
 			if err == nil {
 				break
 			}
-			errorDesc := grpc.ErrorDesc(err)
-			if errorDesc == conn.ErrDuplicateRaftId.Error() ||
-				errorDesc == x.ErrReuseRemovedId.Error() {
-				log.Fatalf("Error while joining cluster: %v", errorDesc)
+			if x.ShouldCrash(err) {
+				log.Fatalf("Error while joining cluster: %v", err)
 			}
 			glog.Errorf("Error while joining cluster: %v\n", err)
 			timeout *= 2
@@ -498,11 +498,14 @@ func (n *node) checkQuorum(closer *y.Closer) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		if err := n.WaitLinearizableRead(ctx); err == nil {
+		if state, err := n.server.latestMembershipState(ctx); err == nil {
 			n.mu.Lock()
 			n.lastQuorum = time.Now()
 			n.mu.Unlock()
-		} else if glog.V(2) {
+			// Also do some connection cleanup.
+			conn.Get().RemoveInvalid(state)
+
+		} else if glog.V(1) {
 			glog.Warningf("Zero node: %d unable to reach quorum.", n.Id)
 		}
 	}
