@@ -15,11 +15,11 @@ package acl
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"strings"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -161,8 +161,6 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User
 	}
 	return user, nil
 }
-
-
 
 func userMod(dc *dgo.Dgraph) error {
 	userid := UserMod.Conf.GetString("user")

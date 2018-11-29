@@ -149,11 +149,11 @@ func initSubcommands() {
 		},
 	}
 	chModFlags := ChMod.Cmd.Flags()
-	chModFlags.StringP("group", "g", "", "The group whose permission " +
+	chModFlags.StringP("group", "g", "", "The group whose permission "+
 		"is to be changed")
-	chModFlags.StringP("pred", "p", "", "The predicates whose acls" +
+	chModFlags.StringP("pred", "p", "", "The predicates whose acls"+
 		" are to be changed")
-	chModFlags.IntP("perm", "P", 0, "The acl represented using " +
+	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
 		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
 }
 
