@@ -29,6 +29,9 @@ all: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -w -C $@ all
 
+oss:
+	$(MAKE) BUILD_TAGS=oss
+
 version:
 	@echo Dgraph ${BUILD_VERSION}
 	@echo Build: ${BUILD}
@@ -51,8 +54,9 @@ uninstall:
 help:
 	@echo
 	@echo Build commands:
-	@echo "  make [all]     - Build all targets"
-	@echo "  make dgraph    - Build only dgraph binary"
+	@echo "  make [all]     - Build all targets [EE]"
+	@echo "  make oss       - Build all targets [OSS]"
+	@echo "  make dgraph    - Build dgraph binary"
 	@echo "  make install   - Install all targets"
 	@echo "  make uninstall - Uninstall known targets"
 	@echo "  make version   - Show current build info"
