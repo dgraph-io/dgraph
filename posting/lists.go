@@ -231,12 +231,12 @@ func Cleanup() {
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
 func Get(key []byte) (rlist *List, err error) {
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		x.LcacheHit.Add(1)
-		return lp, nil
-	}
-	x.LcacheMiss.Add(1)
+	// lp := lcache.Get(string(key))
+	// if lp != nil {
+	// 	x.LcacheHit.Add(1)
+	// 	return lp, nil
+	// }
+	// x.LcacheMiss.Add(1)
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
@@ -245,11 +245,11 @@ func Get(key []byte) (rlist *List, err error) {
 		return nil, err
 	}
 	// We are always going to return lp to caller, whether it is l or not
-	lp = lcache.PutIfMissing(string(key), l)
-	if lp != l {
-		x.LcacheRace.Add(1)
-	}
-	return lp, nil
+	// lp = lcache.PutIfMissing(string(key), l)
+	// if lp != l {
+	// 	x.LcacheRace.Add(1)
+	// }
+	return l, nil
 }
 
 // GetLru checks the lru map and returns it if it exits

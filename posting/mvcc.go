@@ -248,10 +248,10 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		return l, err
 	}
 
-	l.Lock()
-	size := l.calculateSize()
-	l.Unlock()
-	x.BytesRead.Add(int64(size))
-	atomic.StoreInt32(&l.estimatedSize, size)
+	// l.Lock()
+	// size := l.calculateSize()
+	// l.Unlock()
+	// x.BytesRead.Add(int64(size))
+	// atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
 }
