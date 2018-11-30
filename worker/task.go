@@ -142,7 +142,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, "attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
+		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d",
+			attr, gid, q.ReadTs)
 	}
 
 	if groups().ServesGroup(gid) {
@@ -160,7 +161,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 	reply := result.(*pb.Result)
 	if span != nil {
-		span.Annotatef(nil, "Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
+		span.Annotatef(nil, "Reply from server. len: %v gid: %v Attr: %v",
+			len(reply.UidMatrix), gid, attr)
 	}
 	return reply, nil
 }
@@ -312,8 +314,14 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 func handleValuePostings(ctx context.Context, args funcArgs) error {
 	srcFn := args.srcFn
 	q := args.q
-	attr := q.Attr
-	out := args.out
+
+	span := otrace.FromContext(ctx)
+	if span != nil {
+		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", srcFn.n, args.srcFn)
+		defer func() {
+			span.Annotate(nil, "Done handleValuePostings")
+		}()
+	}
 
 	switch srcFn.fnType {
 	case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
@@ -321,145 +329,185 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
 
-	{
-		if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
-			// Silently skip if the user is trying to fetch an attribute of type password.
-			return nil
-		}
-
-		if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
-			return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
-				" Got type: %s", attr, types.TypeID(srcFn.atype).Name())
-		}
-
+	if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
+		// Silently skip if the user is trying to fetch an attribute of type password.
+		return nil
+	}
+	if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
+		return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
+			" Got type: %s", q.Attr, types.TypeID(srcFn.atype).Name())
+	}
+	if srcFn.n == 0 {
+		return nil
 	}
 
-	var key []byte
-	listType := schema.State().IsList(attr)
-	for i := 0; i < srcFn.n; i++ {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		key = x.DataKey(attr, q.UidList.Uids[i])
+	// This function has small boiletplate as handleUidPostings, around how the code gets
+	// concurrently executed. I didn't see much value in trying to separate it out, because the core
+	// logic constitutes most of the code volume here.
+	numGo, width := x.DivideAndRule(srcFn.n)
+	x.AssertTrue(width > 0)
+	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-		// Get or create the posting list for an entity, attribute combination.
-		pl, err := posting.Get(key)
-		if err != nil {
-			return err
-		}
-		var vals []types.Val
-		if q.ExpandAll {
-			vals, err = pl.AllValues(args.q.ReadTs)
-		} else if listType && len(q.Langs) == 0 {
-			vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-		} else {
-			var val types.Val
-			val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
-			vals = append(vals, val)
-		}
+	errCh := make(chan error, 1)
+	outputs := make([]*pb.Result, numGo)
+	listType := schema.State().IsList(q.Attr)
 
-		if err == posting.ErrNoValue || len(vals) == 0 {
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			if q.DoCount {
-				out.Counts = append(out.Counts, 0)
+	calculate := func(start, end int) error {
+		x.AssertTrue(start%width == 0)
+		out := &pb.Result{}
+		outputs[start/width] = out
+
+		for i := start; i < end; i++ {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			key := x.DataKey(q.Attr, q.UidList.Uids[i])
+
+			// Get or create the posting list for an entity, attribute combination.
+			pl, err := posting.Get(key)
+			if err != nil {
+				return err
+			}
+			var vals []types.Val
+			if q.ExpandAll {
+				vals, err = pl.AllValues(args.q.ReadTs)
+			} else if listType && len(q.Langs) == 0 {
+				vals, err = pl.AllUntaggedValues(args.q.ReadTs)
 			} else {
-				out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-				if q.ExpandAll {
-					// To keep the cardinality same as that of ValueMatrix.
-					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
+				var val types.Val
+				val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
+				vals = append(vals, val)
+			}
+
+			if err == posting.ErrNoValue || len(vals) == 0 {
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				if q.DoCount {
+					out.Counts = append(out.Counts, 0)
+				} else {
+					out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
+					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+					if q.ExpandAll {
+						// To keep the cardinality same as that of ValueMatrix.
+						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
+					}
 				}
-			}
-			continue
-		} else if err != nil {
-			return err
-		}
-
-		if q.ExpandAll {
-			langTags, err := pl.GetLangTags(args.q.ReadTs)
-			if err != nil {
-				return err
-			}
-			out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
-		}
-
-		valTid := vals[0].Tid
-		newValue := &pb.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
-		uidList := new(pb.List)
-		var vl pb.ValueList
-		for _, val := range vals {
-			newValue, err = convertToType(val, srcFn.atype)
-			if err != nil {
+				continue
+			} else if err != nil {
 				return err
 			}
 
-			// This means we fetched the value directly instead of fetching index key and intersecting.
-			// Lets compare the value and add filter the uid.
-			if srcFn.fnType == CompareAttrFn {
-				// Lets convert the val to its type.
-				if val, err = types.Convert(val, srcFn.atype); err != nil {
+			if q.ExpandAll {
+				langTags, err := pl.GetLangTags(args.q.ReadTs)
+				if err != nil {
 					return err
 				}
-				if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-					uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
-					break
+				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
+			}
+
+			valTid := vals[0].Tid
+			newValue := &pb.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
+			uidList := new(pb.List)
+			var vl pb.ValueList
+			for _, val := range vals {
+				newValue, err = convertToType(val, srcFn.atype)
+				if err != nil {
+					return err
 				}
-			} else {
-				vl.Values = append(vl.Values, newValue)
-			}
-		}
-		out.ValueMatrix = append(out.ValueMatrix, &vl)
 
-		if q.FacetsFilter != nil { // else part means isValueEdge
-			// This is Value edge and we are asked to do facet filtering. Not supported.
-			return x.Errorf("Facet filtering is not supported on values.")
-		}
+				// This means we fetched the value directly instead of fetching index key and intersecting.
+				// Lets compare the value and add filter the uid.
+				if srcFn.fnType == CompareAttrFn {
+					// Lets convert the val to its type.
+					if val, err = types.Convert(val, srcFn.atype); err != nil {
+						return err
+					}
+					if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
+						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						break
+					}
+				} else {
+					vl.Values = append(vl.Values, newValue)
+				}
+			}
+			out.ValueMatrix = append(out.ValueMatrix, &vl)
 
-		// add facets to result.
-		if q.FacetParam != nil {
-			fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
-			if err != nil {
-				fs = []*api.Facet{}
+			if q.FacetsFilter != nil { // else part means isValueEdge
+				// This is Value edge and we are asked to do facet filtering. Not supported.
+				return x.Errorf("Facet filtering is not supported on values.")
 			}
-			out.FacetMatrix = append(out.FacetMatrix,
-				&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
-		}
 
-		switch {
-		case q.DoCount:
-			len := pl.Length(args.q.ReadTs, 0)
-			if len == -1 {
-				return posting.ErrTsTooOld
+			// add facets to result.
+			if q.FacetParam != nil {
+				fs, err := pl.Facets(args.q.ReadTs, q.FacetParam, q.Langs)
+				if err != nil {
+					fs = []*api.Facet{}
+				}
+				out.FacetMatrix = append(out.FacetMatrix,
+					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 			}
-			out.Counts = append(out.Counts, uint32(len))
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		case srcFn.fnType == AggregatorFn:
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		case srcFn.fnType == PasswordFn:
-			lastPos := len(out.ValueMatrix) - 1
-			if len(out.ValueMatrix[lastPos].Values) == 0 {
-				continue
+
+			switch {
+			case q.DoCount:
+				len := pl.Length(args.q.ReadTs, 0)
+				if len == -1 {
+					return posting.ErrTsTooOld
+				}
+				out.Counts = append(out.Counts, uint32(len))
+				// Add an empty UID list to make later processing consistent
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			case srcFn.fnType == AggregatorFn:
+				// Add an empty UID list to make later processing consistent
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			case srcFn.fnType == PasswordFn:
+				lastPos := len(out.ValueMatrix) - 1
+				if len(out.ValueMatrix[lastPos].Values) == 0 {
+					continue
+				}
+				newValue := out.ValueMatrix[lastPos].Values[0]
+				if len(newValue.Val) == 0 {
+					out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
+				}
+				pwd := q.SrcFunc.Args[0]
+				err = types.VerifyPassword(pwd, string(newValue.Val))
+				if err != nil {
+					out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
+				} else {
+					out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
+				}
+				// Add an empty UID list to make later processing consistent
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			default:
+				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
-			newValue := out.ValueMatrix[lastPos].Values[0]
-			if len(newValue.Val) == 0 {
-				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
-			}
-			pwd := q.SrcFunc.Args[0]
-			err = types.VerifyPassword(pwd, string(newValue.Val))
-			if err != nil {
-				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
-			} else {
-				out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
-			}
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		default:
-			out.UidMatrix = append(out.UidMatrix, uidList)
 		}
+		return nil
+	} // End of calculate function.
+
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > srcFn.n {
+			end = srcFn.n
+		}
+		go func(start, end int) {
+			errCh <- calculate(start, end)
+		}(start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
+	}
+	// All goroutines are done. Now attach their results.
+	out := args.out
+	for _, chunk := range outputs {
+		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
+		out.Counts = append(out.Counts, chunk.Counts...)
+		out.ValueMatrix = append(out.ValueMatrix, chunk.ValueMatrix...)
+		out.FacetMatrix = append(out.FacetMatrix, chunk.FacetMatrix...)
+		out.LangMatrix = append(out.LangMatrix, chunk.LangMatrix...)
 	}
 	return nil
 }
