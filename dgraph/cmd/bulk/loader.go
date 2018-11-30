@@ -188,7 +188,7 @@ func skipSpace(r *bufio.Reader) error {
 		ch, _, err = r.ReadRune()
 	}
 
-	if err != nil {
+	if err == nil {
 		err = r.UnreadRune()
 	}
 
@@ -218,22 +218,22 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch.Grow(1 << 20)
 
 	// For RDF, the loader just reads the input and the mapper parses it into nquads,
-	// so do the same for JSON. But since JSON is not line-oriented like RDF, give
-	// the mapper complete map structures.
+	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
+	// more complicated to ensure a complete JSON structure is read.
 
 	if err := skipSpace(r); err != nil {
 		return nil, err
 	}
 
-	ch, _, _ := r.ReadRune()
-	if ch != '{' {
+	ch, _, err := r.ReadRune()
+	if err == io.EOF {
+		return batch, err
+	} else if ch != '{' {
 		return nil, errors.New("expected json map start")
 	}
 
 	// Find matching closing brace... let the JSON parser in the mapper worry about
-	// matching anything else.
-	//
-	// XXX not sure if this simple parsing is for all cases.
+	// balancing any internal delimiters anything else.
 	depth := 0
 	quoted := false
 	done := false
@@ -241,7 +241,12 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	for !done {
 		batch.WriteRune(ch)
 		pch = ch
-		ch, _, _ := r.ReadRune()
+
+		ch, _, err = r.ReadRune()
+		if err != nil {
+			// any error at this point, even EOF, is fatal
+			return nil, errors.New("malformed json")
+		}
 
 		switch ch {
 		case '{':
@@ -262,6 +267,16 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 				quoted = !quoted
 			}
 		}
+	}
+
+	// The map should be followed by either the ',' between array elements, or the ']'
+	// at the end of the array.
+	skipSpace(r)
+	ch, _, err = r.ReadRune()
+	if ch == ']' {
+		err = io.EOF
+	} else if ch != ',' {
+		r.UnreadRune()
 	}
 
 	return batch, nil
