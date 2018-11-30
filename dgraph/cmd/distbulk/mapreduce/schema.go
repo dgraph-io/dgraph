@@ -21,22 +21,18 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
-	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
     "math"
 )
 
 type schemaStore struct {
-	sync.RWMutex
 	m map[string]*pb.SchemaUpdate
 }
 
@@ -59,21 +55,8 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-func newSchemaStore(initial []*pb.SchemaUpdate, opt options) *schemaStore {
-	s := &schemaStore{
-		m: map[string]*pb.SchemaUpdate{
-			"_predicate_": &pb.SchemaUpdate{
-				ValueType: pb.Posting_STRING,
-				List:      true,
-			},
-		},
-	}
-	if opt.StoreXids {
-		s.m["xid"] = &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			Tokenizer: []string{"hash"},
-		}
-	}
+func newSchemaStore(initial []*pb.SchemaUpdate, storeXids bool) *schemaStore {
+	s := &schemaStore{m: map[string]*pb.SchemaUpdate{}}
 	for _, sch := range initial {
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
@@ -86,33 +69,7 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options) *schemaStore {
 }
 
 func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
-	s.RLock()
-	defer s.RUnlock()
 	return s.m[pred]
-}
-
-func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
-	if objectIsUID {
-		de.ValueType = pb.Posting_UID
-	}
-
-	s.RLock()
-	sch, ok := s.m[de.Attr]
-	s.RUnlock()
-	if !ok {
-		s.Lock()
-		sch, ok = s.m[de.Attr]
-		if !ok {
-			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
-			s.m[de.Attr] = sch
-		}
-		s.Unlock()
-	}
-
-	err := wk.ValidateAndConvert(de, sch)
-	if err != nil {
-		log.Fatalf("RDF doesn't match schema: %v", err)
-	}
 }
 
 func (s *schemaStore) getPredicates(db *badger.DB) []string {
