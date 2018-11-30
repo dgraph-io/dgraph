@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -126,9 +125,6 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 		if err := n.proposeAndWait(ctx, proposal); err != nil {
 			return err
 		}
-	}
-	if i := rand.Intn(2); i == 1 {
-		return x.Errorf("Simulated error")
 	}
 	return nil
 }
