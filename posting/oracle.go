@@ -140,6 +140,12 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	}
 	o.Lock()
 	defer o.Unlock()
+	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
+	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
+	// moved past startTs.
+	if startTs <= o.MaxAssigned() {
+		return nil, false
+	}
 	ch := make(chan struct{})
 	o.waiters[startTs] = append(o.waiters[startTs], ch)
 	return ch, true
