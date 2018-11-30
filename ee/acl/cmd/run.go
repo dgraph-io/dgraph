@@ -32,15 +32,6 @@ var opt options
 var tlsConf x.TLSHelperConfig
 
 var CmdAcl x.SubCommand
-var UserAdd x.SubCommand
-var UserDel x.SubCommand
-var LogIn x.SubCommand
-
-var GroupAdd x.SubCommand
-var GroupDel x.SubCommand
-
-var UserMod x.SubCommand
-var ChMod x.SubCommand
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
@@ -55,12 +46,7 @@ func init() {
 	x.RegisterTLSFlags(flag)
 	flag.String("tls_server_name", "", "Used to verify the server hostname.")
 
-	initSubcommands()
-
-	var subcommands = []*x.SubCommand{
-		&UserAdd, &UserDel, &LogIn, &GroupAdd, &GroupDel, &UserMod, &ChMod,
-	}
-
+	subcommands := initSubcommands()
 	for _, sc := range subcommands {
 		CmdAcl.Cmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
@@ -70,112 +56,122 @@ func init() {
 	}
 }
 
-func initSubcommands() {
+func initSubcommands() []*x.SubCommand {
 	// user creation command
-	UserAdd.Cmd = &cobra.Command{
+	var cmdUserAdd x.SubCommand
+	cmdUserAdd.Cmd = &cobra.Command{
 		Use:   "useradd",
 		Short: "Run Dgraph acl tool to add a user",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := userAdd(UserAdd.Conf); err != nil {
+			if err := userAdd(cmdUserAdd.Conf); err != nil {
 				glog.Errorf("Unable to add user:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	userAddFlags := UserAdd.Cmd.Flags()
+	userAddFlags := cmdUserAdd.Cmd.Flags()
 	userAddFlags.StringP("user", "u", "", "The user id to be created")
 	userAddFlags.StringP("password", "p", "", "The password for the user")
 
 	// user deletion command
-	UserDel.Cmd = &cobra.Command{
+	var cmdUserDel x.SubCommand
+	cmdUserDel.Cmd = &cobra.Command{
 		Use:   "userdel",
 		Short: "Run Dgraph acl tool to delete a user",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := userDel(UserDel.Conf); err != nil {
+			if err := userDel(cmdUserDel.Conf); err != nil {
 				glog.Errorf("Unable to delete the user:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	userDelFlags := UserDel.Cmd.Flags()
+	userDelFlags := cmdUserDel.Cmd.Flags()
 	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
 
 	// login command
-	LogIn.Cmd = &cobra.Command{
+	var cmdLogIn x.SubCommand
+	cmdLogIn.Cmd = &cobra.Command{
 		Use:   "login",
 		Short: "Login to dgraph in order to get a jwt token",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := userLogin(LogIn.Conf); err != nil {
+			if err := userLogin(cmdLogIn.Conf); err != nil {
 				glog.Errorf("Unable to login:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	loginFlags := LogIn.Cmd.Flags()
+	loginFlags := cmdLogIn.Cmd.Flags()
 	loginFlags.StringP("user", "u", "", "The user id to be created")
 	loginFlags.StringP("password", "p", "", "The password for the user")
 
 	// group creation command
-	GroupAdd.Cmd = &cobra.Command{
+	var cmdGroupAdd x.SubCommand
+	cmdGroupAdd.Cmd = &cobra.Command{
 		Use:   "groupadd",
 		Short: "Run Dgraph acl tool to add a group",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := groupAdd(GroupAdd.Conf); err != nil {
+			if err := groupAdd(cmdGroupAdd.Conf); err != nil {
 				glog.Errorf("Unable to add group:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	groupAddFlags := GroupAdd.Cmd.Flags()
+	groupAddFlags := cmdGroupAdd.Cmd.Flags()
 	groupAddFlags.StringP("group", "g", "", "The group id to be created")
 
 	// group deletion command
-	GroupDel.Cmd = &cobra.Command{
+	var cmdGroupDel x.SubCommand
+	cmdGroupDel.Cmd = &cobra.Command{
 		Use:   "groupdel",
 		Short: "Run Dgraph acl tool to delete a group",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := groupDel(GroupDel.Conf); err != nil {
+			if err := groupDel(cmdGroupDel.Conf); err != nil {
 				glog.Errorf("Unable to delete group:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	groupDelFlags := GroupDel.Cmd.Flags()
+	groupDelFlags := cmdGroupDel.Cmd.Flags()
 	groupDelFlags.StringP("group", "g", "", "The group id to be deleted")
 
 	// the usermod command used to set a user's groups
-	UserMod.Cmd = &cobra.Command{
+	var cmdUserMod x.SubCommand
+	cmdUserMod.Cmd = &cobra.Command{
 		Use:   "usermod",
 		Short: "Run Dgraph acl tool to change a user's groups",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := userMod(UserMod.Conf); err != nil {
+			if err := userMod(cmdUserMod.Conf); err != nil {
 				glog.Errorf("Unable to modify user:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	userModFlags := UserMod.Cmd.Flags()
+	userModFlags := cmdUserMod.Cmd.Flags()
 	userModFlags.StringP("user", "u", "", "The user id to be changed")
 	userModFlags.StringP("groups", "g", "", "The groups to be set for the user")
 
 	// the chmod command is used to change a group's permissions
-	ChMod.Cmd = &cobra.Command{
+	var cmdChMod x.SubCommand
+	cmdChMod.Cmd = &cobra.Command{
 		Use:   "chmod",
 		Short: "Run Dgraph acl tool to change a group's permissions",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := chMod(ChMod.Conf); err != nil {
+			if err := chMod(cmdChMod.Conf); err != nil {
 				glog.Errorf("Unable to change permisson for group:%v", err)
 				os.Exit(1)
 			}
 		},
 	}
-	chModFlags := ChMod.Cmd.Flags()
+	chModFlags := cmdChMod.Cmd.Flags()
 	chModFlags.StringP("group", "g", "", "The group whose permission "+
 		"is to be changed")
 	chModFlags.StringP("pred", "p", "", "The predicates whose acls"+
 		" are to be changed")
 	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
 		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
+	return []*x.SubCommand{
+		&cmdUserAdd, &cmdUserDel, &cmdLogIn, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod, &cmdChMod,
+	}
 }
 
 func getDgraphClient(conf *viper.Viper) *dgo.Dgraph {

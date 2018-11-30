@@ -138,7 +138,7 @@ type Acl struct {
 func chMod(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	predicate := conf.GetString("pred")
-	perm := ChMod.Conf.GetInt("perm")
+	perm := conf.GetInt("perm")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the groupid must not be empty")
 	}

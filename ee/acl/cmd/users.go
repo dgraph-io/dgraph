@@ -191,16 +191,15 @@ func userMod(conf *viper.Viper) error {
 	}
 
 	targetGroupsMap := make(map[string]struct{})
-	var exists = struct{}{}
 	if len(groups) > 0 {
 		for _, g := range strings.Split(groups, ",") {
-			targetGroupsMap[g] = exists
+			targetGroupsMap[g] = struct{}{}
 		}
 	}
 
 	existingGroupsMap := make(map[string]struct{})
 	for _, g := range user.Groups {
-		existingGroupsMap[g.GroupID] = exists
+		existingGroupsMap[g.GroupID] = struct{}{}
 	}
 	newGroups, groupsToBeDeleted := x.Diff(targetGroupsMap, existingGroupsMap)
 
