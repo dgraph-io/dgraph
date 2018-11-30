@@ -53,6 +53,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix link to help_wanted. (#2774)
 - Fix invalid division by zero error. Fixes #2733.
 - Fix missing predicates after export and bulk load. Fixes #2616.
+- Handle various edge cases around cluster memberships. (#2791)
 
 ## [1.0.10] - 2018-11-05
 
