@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
@@ -180,36 +182,88 @@ func readRDFChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
+func skipSpace(r *bufio.Reader) error {
+	ch, _, err := r.ReadRune()
+	for unicode.IsSpace(ch) {
+		ch, _, err = r.ReadRune()
+	}
+
+	if err != nil {
+		err = r.UnreadRune()
+	}
+
+	return nil
+}
+func readJSONPreChunk(r *bufio.Reader) error {
+	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
+	// This function must be called before calling readJSONChunk for the first time to advance
+	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
+	// one array element at a time instead of having to read the entire array into memory.
+	if err := skipSpace(r); err != nil {
+		return err
+	}
+
+	ch, _, err := r.ReadRune()
+	if err != nil && err != io.EOF {
+		return err
+	} else if ch != '[' {
+		return errors.New("json file must contain array")
+	}
+
+	return nil
+}
+
 func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
-	// FIXME don't read entire file at once
-	slc, err := r.ReadSlice(0)
-	fmt.Fprintf(os.Stderr, "Read %d bytes of JSON, err = %v\n",len(slc), err)
-	if len(slc) == 0 && err == io.EOF {
-		return batch, err
-	}
-	if err != nil && err != io.EOF {
+
+	// For RDF, the loader just reads the input and the mapper parses it into nquads,
+	// so do the same for JSON. But since JSON is not line-oriented like RDF, give
+	// the mapper complete map structures.
+
+	if err := skipSpace(r); err != nil {
 		return nil, err
 	}
-/*	nqd, err := edgraph.NquadsFromJson(slc)
-	fmt.Fprintf(os.Stderr, "Got %d nquads\n, err = %v\n", len(nqd), err)
-	for i := 0; i < len(nqd); i++ {
-//		batch.WriteString("<" + nqd[i].Subject + "> ")
-//		batch.WriteString("<" + nqd[i].Predicate + "> ")
-		rdf := "<" + nqd[i].Subject + "> <" + nqd[i].Predicate + "> "
-		if nqd[i].ObjectId == "" {
-			rdf += "\"" + nqd[i].ObjectValue.GetStrVal() + "\""
-		} else {
-			rdf += "<" + nqd[i].ObjectId + ">"
-		}
-		fmt.Fprintln(os.Stderr, rdf)
-		batch.WriteString(rdf + " .\n")
+
+	ch, _, _ := r.ReadRune()
+	if ch != '{' {
+		return nil, errors.New("expected json map start")
 	}
-*/
-	batch.Write(slc)
-//	batch.WriteByte(0)
-//	fmt.Fprintf(os.Stderr,"batch = %v\n", batch)
+
+	// Find matching closing brace... let the JSON parser in the mapper worry about
+	// matching anything else.
+	//
+	// XXX not sure if this simple parsing is for all cases.
+	depth := 0
+	quoted := false
+	done := false
+	var pch rune
+	for !done {
+		batch.WriteRune(ch)
+		pch = ch
+		ch, _, _ := r.ReadRune()
+
+		switch ch {
+		case '{':
+			if !quoted {
+				depth++
+			}
+		case '}':
+			if !quoted {
+				if depth == 0 {
+					batch.WriteRune(ch)
+					done = true
+				} else {
+					depth--
+				}
+			}
+		case '"':
+			if !quoted || (quoted && pch != '\\') {
+				quoted = !quoted
+			}
+		}
+	}
+
 	return batch, nil
 }
 
@@ -305,6 +359,11 @@ func (ld *loader) mapStage() {
 		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), file)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
+			if loaderType == jsonLoader {
+				if err := readJSONPreChunk(r); err != nil {
+					x.Check(err)
+				}
+			}
 			for {
 				chunkBuf, err := chunker(r)
 				if err == io.EOF {

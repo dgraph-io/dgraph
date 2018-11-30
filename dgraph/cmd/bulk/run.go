@@ -47,6 +47,7 @@ func init() {
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
+	// would be nice to use -j to match -r, but already used by --num_go_routines
 	flag.String("jsons", "",
 		"Directory containing *.json or *.json.gz files to load.")
 	flag.StringP("schema_file", "s", "",

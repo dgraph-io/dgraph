@@ -146,7 +146,9 @@ func (m *mapper) run(loaderType int) {
 				// process JSON chunk
 				str, err := chunkBuf.ReadBytes(0)
 				nquads, err := edgraph.NquadsFromJson(str)
-				if err != nil {
+				if err == io.EOF {
+					done = true
+				} else if err != nil {
 					atomic.AddInt64(&m.prog.errCount, 1)
 					if !m.opt.IgnoreErrors {
 						x.Check(err)
