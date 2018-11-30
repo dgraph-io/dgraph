@@ -115,7 +115,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				if err := n.proposeAndWait(ctx, proposal); err != nil {
 					return err
 				}
-				proposal.Kv = proposal.Kv[:0]
+				proposal = &pb.Proposal{}
 				size = 0
 			}
 		}
@@ -216,9 +216,6 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		in.Predicate, in.SourceGid, in.DestGid)
 	glog.Info(msg)
 	span.Annotate(nil, msg)
-	// glog.Infof("Let's slow things down a bit...")
-	// time.Sleep(10 * time.Second)
-	// glog.Infof("Resuming MovePredicate")
 
 	err := movePredicateHelper(ctx, in)
 	if err != nil {

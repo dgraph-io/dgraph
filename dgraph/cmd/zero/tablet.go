@@ -95,8 +95,10 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if tab == nil {
 		return x.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
-	glog.Infof("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
+	msg := fmt.Sprintf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
+	glog.Info(msg)
+	span.Annotate(nil, msg)
 
 	// Now block all commits on this predicate. Keep them blocked until we
 	// return from this function.
@@ -123,6 +125,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		DestGid:   dstGroup,
 		TxnTs:     ids.StartId,
 	}
+	span.Annotatef(nil, "Starting move: %+v", in)
 	glog.Infof("Starting move: %+v", in)
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
 		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
@@ -135,11 +138,16 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		Space:     tab.Space,
 		Force:     true,
 	}
-	glog.Infof("Move at Alpha done. Now proposing: %+v", p)
+	msg = fmt.Sprintf("Move at Alpha done. Now proposing: %+v", p)
+	span.Annotate(nil, msg)
+	glog.Info(msg)
 	if err := s.Node.proposeAndWait(ctx, p); err != nil {
 		return x.Errorf("While proposing tablet reassignment. Proposal: %+v Error: %v", p, err)
 	}
-	glog.Infof("Predicate move done for: [%v] from group %d to %d\n", predicate, srcGroup, dstGroup)
+	msg = fmt.Sprintf("Predicate move done for: [%v] from group %d to %d\n",
+		predicate, srcGroup, dstGroup)
+	glog.Info(msg)
+	span.Annotate(nil, msg)
 	return nil
 }
 
@@ -205,77 +213,3 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 	}
 	return
 }
-
-// // TODO: Can get rid of this function, and merge it with movePredicate above.
-// // movePredicate -> movePredicateHelper -> worker.MovePredicate
-// func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint32,
-// 	dstGroup uint32) error {
-// 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
-// 	if err == nil {
-// 		// If no error, then return immediately.
-// 		return nil
-// 	}
-// 	glog.Errorf("Got error during move: %v", err)
-// 	if !s.Node.AmLeader() {
-// 		return err
-// 	}
-
-// 	stab := s.ServingTablet(predicate)
-// 	x.AssertTrue(stab != nil)
-// 	p := &pb.ZeroProposal{}
-// 	p.Tablet = &pb.Tablet{
-// 		GroupId:   srcGroup,
-// 		Predicate: predicate,
-// 		Space:     stab.Space,
-// 		Force:     true,
-// 	}
-// 	if nerr := s.Node.proposeAndWait(context.Background(), p); nerr != nil {
-// 		glog.Errorf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
-// 		return nerr
-// 	}
-// 	return err
-// }
-
-// func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
-// 	dstGroup uint32) error {
-// 	n := s.Node
-// 	if _, err := n.server.latestMembershipState(ctx); err != nil {
-// 		// Ensure that I'm connected to the Zero group.
-// 	}
-// 	if !n.AmLeader() {
-// 		return x.Errorf("I am not the Zero leader")
-// 	}
-
-// 	pl := s.Leader(srcGroup)
-// 	if pl == nil {
-// 		glog.Errorf("Unable to find leader of group: %v", srcGroup)
-// 		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
-// 	}
-
-// 	c := pb.NewWorkerClient(pl.Get())
-// 	in := &pb.MovePredicatePayload{
-// 		Predicate:     predicate,
-// 		SourceGroupId: srcGroup,
-// 		DestGroupId:   dstGroup,
-// 	}
-// 	glog.Infof("Starting move: %+v", in)
-// 	if _, err := c.MovePredicate(ctx, in); err != nil {
-// 		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
-// 	}
-
-// 	// Propose that predicate is served by dstGroup in RW.
-// 	p.Tablet = &pb.Tablet{
-// 		GroupId:   dstGroup,
-// 		Predicate: predicate,
-// 		Space:     stab.Space,
-// 		ReadOnly:  false,
-// 		Force:     true,
-// 	}
-// 	if err := n.proposeAndWait(ctx, p); err != nil {
-// 		return err
-// 	}
-// 	// TODO: Probably make it R in dstGroup and send state to srcGroup and only after
-// 	// it proposes make it RW in dstGroup. That way we won't have stale reads from srcGroup
-// 	// for sure.
-// 	return nil
-// }

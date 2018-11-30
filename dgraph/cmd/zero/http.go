@@ -195,7 +195,6 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-
 	w.Write([]byte(fmt.Sprintf("Predicate: [%s] moved from group: [%d] to [%d]",
 		tablet, srcGroup, dstGroup)))
 }
