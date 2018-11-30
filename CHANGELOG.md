@@ -14,7 +14,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Add `--enterprise_features` flag to enable enterprise features. By enabling enterprise features, you accept the terms of the Dgraph Community License.
 - Add minio dep and its deps in govendor. (94daeaf7, 35a73e81)
 - Add network partitioning tests with blockade tool. (fd4e3872, dada74f4, e59cbfb2, 50b0484f, 3c4df36c, bec18bc8, c8ccb943)
-  - Add the `/assign?what=uids&num10` and `/assign?what=timestamps&num=10` Zero endpoints to assign UIDs or transaction timestamp leases.
+- Add Zero endpoints `/assign?what=uids&num10` and `/assign?what=timestamps&num=10` to assign UIDs or transaction timestamp leases.
 
 ### Changed
 
