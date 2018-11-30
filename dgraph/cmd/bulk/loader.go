@@ -232,8 +232,8 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		return nil, errors.New("expected json map start")
 	}
 
-	// Find matching closing brace... let the JSON parser in the mapper worry about
-	// balancing any internal delimiters anything else.
+	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
+	// about whether everything in between is valid JSON or not.
 	depth := 0
 	quoted := false
 	done := false
@@ -276,6 +276,7 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	if ch == ']' {
 		err = io.EOF
 	} else if ch != ',' {
+		// Let next call to this function report the error.
 		_ = r.UnreadRune()
 	}
 
