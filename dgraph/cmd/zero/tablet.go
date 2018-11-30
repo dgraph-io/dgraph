@@ -88,7 +88,9 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
 	defer cancel()
 
-	if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
+	if err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup); err != nil {
+		go s.runRecovery()
+		// If no error, then return immediately.
 		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
 			srcGroup, dstGroup, err)
 	}
@@ -98,6 +100,10 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 // runRecovery can only be run at Zero leader.
 func (s *Server) runRecovery() {
+	if !s.Node.AmLeader() {
+		glog.Warningf("As a follower, I'm unable to run recovery for tablet move.")
+		return
+	}
 	s.RLock()
 	defer s.RUnlock()
 	if s.state == nil {
@@ -118,6 +124,11 @@ func (s *Server) runRecovery() {
 			}
 		}
 	}
+	if len(proposals) == 0 {
+		return
+	} else {
+		glog.Infof("Attempting to run recovery for tablet move. Proposals: %+v", proposals)
+	}
 
 	errCh := make(chan error)
 	for _, pr := range proposals {
@@ -131,8 +142,10 @@ func (s *Server) runRecovery() {
 		// Ideally shouldn't error out.
 		if err := <-errCh; err != nil {
 			glog.Errorf("Error while applying proposal in update stream %v\n", err)
+			return
 		}
 	}
+	glog.Infof("Server.runRecovery DONE")
 }
 
 func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uint32) {
@@ -198,35 +211,35 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 	return
 }
 
-// TODO: Can get rid of this function, and merge it with movePredicate above.
-// movePredicate -> movePredicateHelper -> worker.MovePredicate
-func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint32,
-	dstGroup uint32) error {
-	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
-	if err == nil {
-		// If no error, then return immediately.
-		return nil
-	}
-	glog.Errorf("Got error during move: %v", err)
-	if !s.Node.AmLeader() {
-		return err
-	}
+// // TODO: Can get rid of this function, and merge it with movePredicate above.
+// // movePredicate -> movePredicateHelper -> worker.MovePredicate
+// func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint32,
+// 	dstGroup uint32) error {
+// 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
+// 	if err == nil {
+// 		// If no error, then return immediately.
+// 		return nil
+// 	}
+// 	glog.Errorf("Got error during move: %v", err)
+// 	if !s.Node.AmLeader() {
+// 		return err
+// 	}
 
-	stab := s.ServingTablet(predicate)
-	x.AssertTrue(stab != nil)
-	p := &pb.ZeroProposal{}
-	p.Tablet = &pb.Tablet{
-		GroupId:   srcGroup,
-		Predicate: predicate,
-		Space:     stab.Space,
-		Force:     true,
-	}
-	if nerr := s.Node.proposeAndWait(context.Background(), p); nerr != nil {
-		glog.Errorf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
-		return nerr
-	}
-	return err
-}
+// 	stab := s.ServingTablet(predicate)
+// 	x.AssertTrue(stab != nil)
+// 	p := &pb.ZeroProposal{}
+// 	p.Tablet = &pb.Tablet{
+// 		GroupId:   srcGroup,
+// 		Predicate: predicate,
+// 		Space:     stab.Space,
+// 		Force:     true,
+// 	}
+// 	if nerr := s.Node.proposeAndWait(context.Background(), p); nerr != nil {
+// 		glog.Errorf("Error while reverting group %d to RW: %+v\n", srcGroup, nerr)
+// 		return nerr
+// 	}
+// 	return err
+// }
 
 func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
 	dstGroup uint32) error {
