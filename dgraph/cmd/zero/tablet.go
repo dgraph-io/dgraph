@@ -256,10 +256,12 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		Force:     true,
 	}
 	if err := n.proposeAndWait(ctx, p); err != nil {
+		glog.Errorf("Error while proposing: %+v. Error: %v", p, err)
 		return err
 	}
 	pl := s.Leader(srcGroup)
 	if pl == nil {
+		glog.Errorf("Unable to find leader of group: %v", srcGroup)
 		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
 	}
 
@@ -270,6 +272,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		SourceGroupId: srcGroup,
 		DestGroupId:   dstGroup,
 	}
+	glog.Infof("Starting move: %+v", in)
 	if _, err := c.MovePredicate(ctx, in); err != nil {
 		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
 	}
@@ -279,6 +282,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		GroupId:   dstGroup,
 		Predicate: predicate,
 		Space:     stab.Space,
+		ReadOnly:  false,
 		Force:     true,
 	}
 	if err := n.proposeAndWait(ctx, p); err != nil {

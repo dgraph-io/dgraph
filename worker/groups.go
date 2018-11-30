@@ -21,6 +21,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -41,15 +42,15 @@ import (
 type groupi struct {
 	x.SafeMutex
 	// TODO: Is this context being used?
-	ctx       context.Context
-	cancel    context.CancelFunc
-	state     *pb.MembershipState
-	Node      *node
-	gid       uint32
-	tablets   map[string]*pb.Tablet
-	triggerCh chan struct{} // Used to trigger membership sync
-	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
-	closer    *y.Closer
+	ctx          context.Context
+	cancel       context.CancelFunc
+	state        *pb.MembershipState
+	Node         *node
+	gid          uint32
+	tablets      map[string]*pb.Tablet
+	triggerCh    chan struct{} // Used to trigger membership sync
+	blockDeletes sync.Mutex    // Ensure that deletion won't happen when move is going on.
+	closer       *y.Closer
 }
 
 var gr *groupi
@@ -118,7 +119,6 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 
 	gid := gr.groupId()
 	gr.triggerCh = make(chan struct{}, 1)
-	gr.delPred = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
 	store := raftwal.Init(walStore, Config.RaftId, gid)
@@ -332,6 +332,7 @@ func (g *groupi) ServesTablet(key string) bool {
 }
 
 // Do not modify the returned Tablet
+// TODO: This should return error.
 func (g *groupi) Tablet(key string) *pb.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
@@ -730,15 +731,6 @@ OUTER:
 	goto START
 }
 
-func (g *groupi) waitForBackgroundDeletion() {
-	// Waits for background cleanup if any to finish.
-	// No new cleanup on any predicate would start until we finish moving
-	// the predicate because read only flag would be set by now. We start deletion
-	// only when no predicate is being moved.
-	g.delPred <- struct{}{}
-	<-g.delPred
-}
-
 func (g *groupi) hasReadOnlyTablets() bool {
 	g.RLock()
 	defer g.RUnlock()
@@ -758,55 +750,60 @@ func (g *groupi) hasReadOnlyTablets() bool {
 func (g *groupi) cleanupTablets() {
 	defer g.closer.Done() // CLOSER:1
 
+	cleanup := func() {
+		g.blockDeletes.Lock()
+		defer g.blockDeletes.Unlock()
+
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		defer txn.Discard()
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
+
+		for itr.Rewind(); itr.Valid(); {
+			item := itr.Item()
+
+			// TODO: Investiage out of bounds.
+			pk := x.Parse(item.Key())
+			if pk == nil {
+				itr.Next()
+				continue
+			}
+
+			// Delete at most one predicate at a time.
+			// Tablet is not being served by me and is not read only.
+			// Don't use servesTablet function because it can return false even if
+			// request made to group zero fails. We might end up deleting a predicate
+			// on failure of network request even though no one else is serving this
+			// tablet.
+			if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
+				if g.hasReadOnlyTablets() {
+					return
+				}
+				glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
+				// Predicate moves are disabled during deletion, deletePredicate purges everything.
+				posting.DeletePredicate(context.Background(), pk.Attr)
+				return
+			}
+			if pk.IsSchema() {
+				itr.Seek(pk.SkipSchema())
+				continue
+			}
+			itr.Seek(pk.SkipPredicate())
+		}
+	}
+
 	ticker := time.NewTimer(time.Minute * 10)
 	defer ticker.Stop()
 
-	select {
-	case <-g.closer.HasBeenClosed():
-		return
-	case <-ticker.C:
-		func() {
-			opt := badger.DefaultIteratorOptions
-			opt.PrefetchValues = false
-			txn := pstore.NewTransactionAt(math.MaxUint64, false)
-			defer txn.Discard()
-			itr := txn.NewIterator(opt)
-			defer itr.Close()
-
-			for itr.Rewind(); itr.Valid(); {
-				item := itr.Item()
-
-				// TODO: Investiage out of bounds.
-				pk := x.Parse(item.Key())
-				if pk == nil {
-					itr.Next()
-					continue
-				}
-
-				// Delete at most one predicate at a time.
-				// Tablet is not being served by me and is not read only.
-				// Don't use servesTablet function because it can return false even if
-				// request made to group zero fails. We might end up deleting a predicate
-				// on failure of network request even though no one else is serving this
-				// tablet.
-				if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
-					if g.hasReadOnlyTablets() {
-						return
-					}
-					g.delPred <- struct{}{}
-					glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
-					// Predicate moves are disabled during deletion, deletePredicate purges everything.
-					posting.DeletePredicate(context.Background(), pk.Attr)
-					<-g.delPred
-					return
-				}
-				if pk.IsSchema() {
-					itr.Seek(pk.SkipSchema())
-					continue
-				}
-				itr.Seek(pk.SkipPredicate())
-			}
-		}()
+	for {
+		select {
+		case <-g.closer.HasBeenClosed():
+			return
+		case <-ticker.C:
+			cleanup()
+		}
 	}
 }
 

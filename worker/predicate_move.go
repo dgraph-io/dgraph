@@ -49,7 +49,10 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
-	groups().waitForBackgroundDeletion()
+	mu := groups().blockDeletes
+	mu.Lock()
+	defer mu.Unlock()
+
 	glog.Infof("Writing %d keys\n", len(kvs))
 
 	var hasError uint32
