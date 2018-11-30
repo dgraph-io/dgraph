@@ -148,8 +148,6 @@ func lookupUid(xid string) (uid uint64, err error) {
 }
 
 func createPostings(nq gql.NQuad, de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
-	Schema.validateType(de, nq.ObjectValue == nil)
-
 	p := posting.NewPosting(de)
 	sch := Schema.getSchema(nq.Predicate)
 	if nq.GetObjectValue() != nil {
@@ -167,13 +165,10 @@ func createPostings(nq gql.NQuad, de *pb.DirectedEdge) (*pb.Posting, *pb.Posting
 	if sch.GetDirective() != pb.SchemaUpdate_REVERSE {
 		return p, nil
 	}
-
-	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
-	de.Entity, de.ValueId = de.ValueId, de.Entity
-	Schema.validateType(de, true)
-	rp := posting.NewPosting(de)
 
+	de.Entity, de.ValueId = de.ValueId, de.Entity
+	rp := posting.NewPosting(de)
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 
 	return p, rp
@@ -214,11 +209,10 @@ func addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) error {
 		}
 
 		// Store index posting.
-		entity := de.GetEntity()
 		for _, t := range toks {
 			key := x.IndexKey(nq.Predicate, t)
 			p := &pb.Posting{
-				Uid:         entity,
+				Uid:         de.GetEntity(),
 				PostingType: pb.Posting_REF,
 			}
 			if err = emitMapEntry(nq.Predicate, key, p); err != nil {

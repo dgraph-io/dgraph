@@ -19,8 +19,6 @@ package main
 import (
 	"flag"
     "sort"
-    "context"
-    "time"
 
 	"github.com/chrislusf/gleam/distributed"
 	"github.com/chrislusf/gleam/flow"
@@ -36,10 +34,12 @@ import (
     "github.com/dgraph-io/dgraph/protos/pb"
     "github.com/dgraph-io/dgraph/posting"
     "github.com/dgraph-io/dgraph/codec"
-    "google.golang.org/grpc"
 
-    "fmt"
+    // "fmt"
+    // "os"
     // "github.com/chrislusf/gleam/util"
+    // "context"
+    // "time"
 )
 
 type options struct {
@@ -60,7 +60,6 @@ var (
     Outtx         *badger.Txn
 	Opt           options
 	Schema        *schemaStore
-    WriteTs       uint64
     isDistributed = flag.Bool("distributed", false, "run in distributed or not")
 )
 
@@ -69,41 +68,19 @@ const (
 	REQUESTED_PREDICATE_SHARDS = 4
     // PATH_PREFIX = "./"
     PATH_PREFIX = "../../"
+    WriteTs = 1
 )
-
-func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-    client := pb.NewZeroClient(zero)
-    for {
-        ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-        ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
-        cancel()
-        if err == nil {
-            return ts.GetStartId()
-        }
-        fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
-        time.Sleep(time.Second)
-    }
-}
 
 func main() {
     var err error
 	Opt = options{
 		RDFDir:      "./data",
-		SchemaFile:  PATH_PREFIX + "data.schema",
+		SchemaFile:  PATH_PREFIX + "data.schema.full",
 		DgraphsDir:  PATH_PREFIX + xid.New().String() + "-dgraph-p",
 		ExpandEdges: true,
 		StoreXids:   false,
         ZeroAddr:    "127.0.0.1:5080",
 	}
-
-    zero, err := grpc.Dial(
-        Opt.ZeroAddr,
-        grpc.WithBlock(),
-        grpc.WithInsecure(),
-        grpc.WithTimeout(time.Minute),
-    )
-    x.Checkf(err, "Unable to connect to zero, Is it running at %s?", Opt.ZeroAddr)
-    WriteTs = getWriteTimestamp(zero)
 
 	Xdb = NewXidmap(PATH_PREFIX + "xids", 1 << 19)
 
@@ -116,7 +93,7 @@ func main() {
     x.Check(err)
 
     Outtx = Outdb.NewTransactionAt(WriteTs, true)
-	Schema = newSchemaStore(readSchema(Opt.SchemaFile), Opt)
+	Schema = newSchemaStore(readSchema(Opt.SchemaFile), Opt.StoreXids)
 
     gio.RegisterCleanup(cleanup)
 
@@ -135,19 +112,18 @@ func main() {
 	f := flow.New("dgraph distributed bulk loader").
 		Read(file.Txt(Opt.RDFDir + "/*", NUM_SHARDS)).
 		Map("rdfToMapEntry", RdfToMapEntry).
+		PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
+		LocalReduceBy("create postings", TestDeserialize, flow.Field(2)).
+        Map("write to badger", WriteToBadger)
         // OutputRow(func(row *util.Row) error {
-        //     var spl pb.SivaPostingList
-        //     err := proto.Unmarshal(row.V[1].([]byte), &spl)
+        //     var pl pb.PostingList
+        //     err := proto.Unmarshal(row.V[0].([]byte), &pl)
         //     if err != nil {
         //         return err
         //     }
-        //     fmt.Printf("%v %v %v\n", row.K[0], row.V[0], spl)
+        //     fmt.Fprintf(os.Stderr, "KEY: %v\nPL: %+v\n\n", row.K[0].([]byte), pl)
         //     return nil
         // })
-		PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
-		LocalReduceBy("create postings", TestDeserialize, flow.Field(2)).
-        Map("write to badger out", WriteToBadger)
-        // Printlnf("%v %v %v")
 
 	if *isDistributed {
 		f.Run(distributed.Option())
@@ -160,6 +136,8 @@ func main() {
 
 // format becomes row = {key, pred, uid list, posting list} after reduction
 func writeToBadger(row []interface{}) error {
+    key := row[0].([]byte)
+
     var ul pb.List
     err := proto.Unmarshal(row[2].([]byte), &ul)
     if err != nil {
@@ -187,7 +165,9 @@ func writeToBadger(row []interface{}) error {
         return err
     }
 
-    err = Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
+    // gio.Emit(key, val)
+
+    err = Outtx.SetWithMeta(key, val, posting.BitCompletePosting)
     if err != badger.ErrTxnTooBig {
         return err
     }
