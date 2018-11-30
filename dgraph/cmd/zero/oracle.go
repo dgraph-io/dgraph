@@ -363,12 +363,15 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			}
 			pred := strings.Join(splits[1:], "")
 			tablet := s.ServingTablet(pred)
-			if tablet == nil || tablet.GetReadOnly() {
-				return x.Errorf("Tablet %+v is nil or readonly", tablet)
+			if tablet == nil {
+				return x.Errorf("Tablet for %s is nil", pred)
 			}
 			if tablet.GroupId != uint32(gid) {
 				return x.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
 					gid, pred, tablet.GroupId)
+			}
+			if s.tabletBlocked(pred) {
+				return x.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
 			}
 		}
 		return nil

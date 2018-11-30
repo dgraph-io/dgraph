@@ -170,7 +170,6 @@ message Tablet {
 	uint32 group_id  = 1; // Served by which group.
 	string predicate = 2;
 	bool force       = 3; // Used while moving predicate.
-	bool read_only   = 4;  // Used to block mutations on this predicate.
 	int64 space      = 7;
 	bool remove      = 8;
 }
@@ -363,10 +362,9 @@ message MapEntry {
 }
 
 message MovePredicatePayload {
-	string predicate = 1;
-	uint32 source_group_id = 2;
-	uint32 dest_group_id = 3;
-	MembershipState state = 4;
+	string predicate  = 1;
+	uint32 source_gid = 2;
+	uint32 dest_gid   = 3;
 }
 
 message TxnStatus {

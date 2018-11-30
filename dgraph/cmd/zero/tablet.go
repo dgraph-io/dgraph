@@ -73,11 +73,20 @@ func (s *Server) rebalanceTablets() {
 	}
 }
 
+// movePredicate is the main entry point for move predicate logic. This Zero must remain the leader
+// for the entire duration of predicate move. If this Zero stops being the leader, the final
+// proposal of reassigning the tablet to the destination would fail automatically.
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
-	// Typically move predicate is run only on leader. But, in this case, an external HTTP request
-	// can also trigger a predicate move. We could render them invalid here by checking if this node
-	// is actually the leader. But, I have noticed no side effects with allowing them to run, even
-	// if this node is a follower node.
+	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
+	defer cancel()
+
+	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
+	if _, err := s.latestMembershipState(ctx); err != nil {
+		return x.Errorf("Unable to reach quorum: %v", err)
+	}
+	if !s.Node.AmLeader() {
+		return x.Errorf("I am not the Zero leader")
+	}
 	tab := s.ServingTablet(predicate)
 	if tab == nil {
 		return x.Errorf("Tablet to be moved: [%v] is not being served", predicate)
@@ -85,67 +94,38 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Infof("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
-	defer cancel()
+	unblock := s.blockTablet(predicate)
+	defer unblock()
 
-	if err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup); err != nil {
-		go s.runRecovery()
-		// If no error, then return immediately.
-		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
-			srcGroup, dstGroup, err)
+	// Get connection to leader of source group.
+	pl := s.Leader(srcGroup)
+	if pl == nil {
+		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
+	}
+	wc := pb.NewWorkerClient(pl.Get())
+	in := &pb.MovePredicatePayload{
+		Predicate: predicate,
+		SourceGid: srcGroup,
+		DestGid:   dstGroup,
+	}
+	glog.Infof("Starting move: %+v", in)
+	if _, err := wc.MovePredicate(ctx, in); err != nil {
+		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
+	}
+
+	p := &pb.ZeroProposal{}
+	p.Tablet = &pb.Tablet{
+		GroupId:   dstGroup,
+		Predicate: predicate,
+		Space:     tab.Space,
+		Force:     true,
+	}
+	glog.Infof("Move at Alpha done. Now proposing: %+v", p)
+	if err := s.Node.proposeAndWait(ctx, p); err != nil {
+		return x.Errorf("While proposing tablet reassignment. Proposal: %+v Error: %v", p, err)
 	}
 	glog.Infof("Predicate move done for: [%v] from group %d to %d\n", predicate, srcGroup, dstGroup)
 	return nil
-}
-
-// runRecovery can only be run at Zero leader.
-func (s *Server) runRecovery() {
-	if !s.Node.AmLeader() {
-		glog.Warningf("As a follower, I'm unable to run recovery for tablet move.")
-		return
-	}
-	s.RLock()
-	defer s.RUnlock()
-	if s.state == nil {
-		return
-	}
-	var proposals []*pb.ZeroProposal
-	for _, group := range s.state.Groups {
-		for _, tab := range group.Tablets {
-			if tab.ReadOnly {
-				p := &pb.ZeroProposal{}
-				p.Tablet = &pb.Tablet{
-					GroupId:   tab.GroupId,
-					Predicate: tab.Predicate,
-					Space:     tab.Space,
-					Force:     true,
-				}
-				proposals = append(proposals, p)
-			}
-		}
-	}
-	if len(proposals) == 0 {
-		return
-	} else {
-		glog.Infof("Attempting to run recovery for tablet move. Proposals: %+v", proposals)
-	}
-
-	errCh := make(chan error)
-	for _, pr := range proposals {
-		go func(pr *pb.ZeroProposal) {
-			errCh <- s.Node.proposeAndWait(context.Background(), pr)
-		}(pr)
-	}
-
-	for range proposals {
-		// We Don't care about these errors
-		// Ideally shouldn't error out.
-		if err := <-errCh; err != nil {
-			glog.Errorf("Error while applying proposal in update stream %v\n", err)
-			return
-		}
-	}
-	glog.Infof("Server.runRecovery DONE")
 }
 
 func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uint32) {
@@ -241,55 +221,46 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 // 	return err
 // }
 
-func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
-	dstGroup uint32) error {
-	n := s.Node
-	stab := s.ServingTablet(predicate)
-	x.AssertTrue(stab != nil)
-	// Propose that predicate in read only
-	p := &pb.ZeroProposal{}
-	p.Tablet = &pb.Tablet{
-		GroupId:   srcGroup,
-		Predicate: predicate,
-		Space:     stab.Space,
-		ReadOnly:  true,
-		Force:     true,
-	}
-	if err := n.proposeAndWait(ctx, p); err != nil {
-		glog.Errorf("Error while proposing: %+v. Error: %v", p, err)
-		return err
-	}
-	pl := s.Leader(srcGroup)
-	if pl == nil {
-		glog.Errorf("Unable to find leader of group: %v", srcGroup)
-		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
-	}
+// func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcGroup uint32,
+// 	dstGroup uint32) error {
+// 	n := s.Node
+// 	if _, err := n.server.latestMembershipState(ctx); err != nil {
+// 		// Ensure that I'm connected to the Zero group.
+// 	}
+// 	if !n.AmLeader() {
+// 		return x.Errorf("I am not the Zero leader")
+// 	}
 
-	c := pb.NewWorkerClient(pl.Get())
-	in := &pb.MovePredicatePayload{
-		Predicate:     predicate,
-		State:         s.membershipState(),
-		SourceGroupId: srcGroup,
-		DestGroupId:   dstGroup,
-	}
-	glog.Infof("Starting move: %+v", in)
-	if _, err := c.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
-	}
+// 	pl := s.Leader(srcGroup)
+// 	if pl == nil {
+// 		glog.Errorf("Unable to find leader of group: %v", srcGroup)
+// 		return x.Errorf("No healthy connection found to leader of group %d", srcGroup)
+// 	}
 
-	// Propose that predicate is served by dstGroup in RW.
-	p.Tablet = &pb.Tablet{
-		GroupId:   dstGroup,
-		Predicate: predicate,
-		Space:     stab.Space,
-		ReadOnly:  false,
-		Force:     true,
-	}
-	if err := n.proposeAndWait(ctx, p); err != nil {
-		return err
-	}
-	// TODO: Probably make it R in dstGroup and send state to srcGroup and only after
-	// it proposes make it RW in dstGroup. That way we won't have stale reads from srcGroup
-	// for sure.
-	return nil
-}
+// 	c := pb.NewWorkerClient(pl.Get())
+// 	in := &pb.MovePredicatePayload{
+// 		Predicate:     predicate,
+// 		SourceGroupId: srcGroup,
+// 		DestGroupId:   dstGroup,
+// 	}
+// 	glog.Infof("Starting move: %+v", in)
+// 	if _, err := c.MovePredicate(ctx, in); err != nil {
+// 		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
+// 	}
+
+// 	// Propose that predicate is served by dstGroup in RW.
+// 	p.Tablet = &pb.Tablet{
+// 		GroupId:   dstGroup,
+// 		Predicate: predicate,
+// 		Space:     stab.Space,
+// 		ReadOnly:  false,
+// 		Force:     true,
+// 	}
+// 	if err := n.proposeAndWait(ctx, p); err != nil {
+// 		return err
+// 	}
+// 	// TODO: Probably make it R in dstGroup and send state to srcGroup and only after
+// 	// it proposes make it RW in dstGroup. That way we won't have stale reads from srcGroup
+// 	// for sure.
+// 	return nil
+// }
