@@ -28,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 )
 
 const baseTimeout time.Duration = 4 * time.Second
@@ -112,7 +111,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-
 	// Set this to disable retrying mechanism, and using the user-specified
 	// timeout.
 	var noTimeout bool
@@ -168,20 +166,13 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing data with key: %s. Timeout: %v", key, timeout)
-		}
-
+		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
 		data, err := proposal.Marshal()
 		if err != nil {
 			return err
 		}
-
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return x.Wrapf(err, "While proposing")
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal.")
 		}
 
 		timer := time.NewTimer(timeout)
@@ -191,25 +182,17 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			select {
 			case err = <-che:
 				// We arrived here by a call to n.Proposals.Done().
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Done with error: %v", err)
-				}
 				return err
 			case <-ctx.Done():
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("External context timed out with error: %v.", ctx.Err())
-				}
 				return ctx.Err()
 			case <-timer.C:
 				if atomic.LoadUint32(&pctx.Found) > 0 {
 					// We found the proposal in CommittedEntries. No need to retry.
 				} else {
+					span.Annotatef(nil, "Timeout %s reached. Cancelling...", timeout)
 					cancel()
 				}
 			case <-cctx.Done():
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Internal context timed out with error: %v. Retrying...", cctx.Err())
-				}
 				return errInternalRetry
 			}
 		}

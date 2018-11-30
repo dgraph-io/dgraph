@@ -34,6 +34,7 @@ version:
 	@echo Build: ${BUILD}
 	@echo Build date: ${BUILD_DATE}
 	@echo Branch: ${BUILD_BRANCH}
+	@echo Go version: $(shell go version)
 
 install:
 	@(set -e;for i in $(SUBDIRS); do \

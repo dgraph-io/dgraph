@@ -2245,7 +2245,7 @@ Facets can also be used as `weights` for edges.
 Though you may find yourself leaning towards facets many times, they should not be misused.  It wouldn't be correct modeling to give the `friend` edge a facet `date_of_birth`. That should be an edge for the friend.  However, a facet like `start_of_friendship` might be appropriate.  Facets are however not first class citizen in Dgraph like predicates.
 
 Facet keys are strings and values can be `string`, `bool`, `int`, `float` and `dateTime`.
-For `int` and `float`, only decimal integers upto 32 signed bits, and 64 bit float values are accepted respectively.
+For `int` and `float`, only 32-bit signed integers and 64-bit floats are accepted.
 
 The following mutation is used throughout this section on facets.  The mutation adds data for some peoples and, for example, records a `since` facet in `mobile` and `car` to record when Alice bought the car and started using the mobile number.
 
@@ -2330,7 +2330,7 @@ The syntax `@facets(facet-name)` is used to query facet data. For Alice the `sin
 {{</ runnable >}}
 
 
-Facets are retuned at the same level as the corresponding edge and have keys like edge|facet.
+Facets are returned at the same level as the corresponding edge and have keys like edge|facet.
 
 All facets on an edge are queried with `@facets`.
 

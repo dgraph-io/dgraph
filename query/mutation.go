@@ -22,15 +22,14 @@ import (
 	"fmt"
 	"strings"
 
+	otrace "go.opencensus.io/trace"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"golang.org/x/net/trace"
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
@@ -40,9 +39,6 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 			return nil, x.Wrapf(err, "While adding pb.edges")
 		}
 		m.Edges = edges
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Added Internal edges")
-		}
 	} else {
 		for _, mu := range m.Edges {
 			if mu.Attr == x.Star && !worker.Config.ExpandEdge {
@@ -53,9 +49,8 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	}
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
-		glog.Errorf("MutateOverNetwork Error: %v. Mutation: %v.", err, m)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
+		if span := otrace.FromContext(ctx); span != nil {
+			span.Annotatef(nil, "MutateOverNetwork Error: %v. Mutation: %v.", err, m)
 		}
 	}
 	return tctx, err
@@ -168,9 +163,6 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		// TODO: Optimize later by prefetching. Also consolidate all the UID requests into a single
 		// pending request from this server to zero.
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while AssignUidsOverNetwork for newUids: %+v", err)
-			}
 			return newUids, err
 		}
 		curId := res.StartId

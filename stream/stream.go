@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -51,10 +52,12 @@ type keyRange struct {
 	end   []byte
 }
 
-func (sl *Lists) Orchestrate(ctx context.Context, prefix string, ts uint64) error {
-	keyCh := make(chan keyRange, 100) // Contains keys for posting lists.
-	kvChan := make(chan *pb.KVS, 100) // Contains marshaled posting lists.
-	errCh := make(chan error, 1)      // Stores error by consumeKeys.
+func (sl *Lists) Orchestrate(ctx context.Context, logPrefix string, ts uint64) error {
+	keyCh := make(chan keyRange, 3) // Contains keys for posting lists.
+	// kvChan should only have a small capacity to ensure that we don't buffer up too much data, if
+	// sending is slow. So, setting this to 3.
+	kvChan := make(chan *pb.KVS, 3) // Contains marshaled posting lists.
+	errCh := make(chan error, 1)    // Stores error by consumeKeys.
 
 	// Read the predicate keys and stream to keysCh.
 	go sl.produceRanges(ctx, ts, keyCh)
@@ -77,7 +80,7 @@ func (sl *Lists) Orchestrate(ctx context.Context, prefix string, ts uint64) erro
 	// Pick up key-values from kvChan and send to stream.
 	kvErr := make(chan error, 1)
 	go func() {
-		kvErr <- sl.streamKVs(ctx, prefix, kvChan)
+		kvErr <- sl.streamKVs(ctx, logPrefix, kvChan)
 	}()
 	wg.Wait()     // Wait for produceKVs to be over.
 	close(kvChan) // Now we can close kvChan.
@@ -100,32 +103,15 @@ func (sl *Lists) produceRanges(ctx context.Context, ts uint64, keyCh chan keyRan
 	if len(sl.Predicate) > 0 {
 		prefix = x.PredicatePrefix(sl.Predicate)
 	}
-	txn := sl.DB.NewTransactionAt(ts, false)
-	defer txn.Discard()
-	iterOpts := badger.DefaultIteratorOptions
-	iterOpts.PrefetchValues = false
-	it := txn.NewIterator(iterOpts)
-	defer it.Close()
-
-	var start []byte
-	var size int64
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		item := it.Item()
-		if len(start) == 0 {
-			start = item.KeyCopy(nil)
-		}
-
-		size += item.EstimatedSize()
-		if size > pageSize {
-			kr := keyRange{start: start, end: item.KeyCopy(nil)}
-			keyCh <- kr
-			start = item.KeyCopy(nil)
-			size = 0
-		}
+	splits := sl.DB.KeySplits(prefix)
+	start := prefix
+	for _, key := range splits {
+		keyCh <- keyRange{start: start, end: y.SafeCopy(nil, []byte(key))}
+		start = y.SafeCopy(nil, []byte(key))
 	}
-	if len(start) > 0 {
-		keyCh <- keyRange{start: start}
-	}
+	// Edge case: prefix is empty and no splits exist. In that case, we should have at least one
+	// keyRange output.
+	keyCh <- keyRange{start: start}
 	close(keyCh)
 }
 
@@ -136,18 +122,21 @@ func (sl *Lists) produceKVs(ctx context.Context, ts uint64,
 		prefix = x.PredicatePrefix(sl.Predicate)
 	}
 
+	var size int
 	txn := sl.DB.NewTransactionAt(ts, false)
 	defer txn.Discard()
 	iterate := func(kr keyRange) error {
 		iterOpts := badger.DefaultIteratorOptions
 		iterOpts.AllVersions = true
+		iterOpts.Prefix = prefix
 		iterOpts.PrefetchValues = false
 		it := txn.NewIterator(iterOpts)
 		defer it.Close()
 
 		kvs := new(pb.KVS)
 		var prevKey []byte
-		for it.Seek(kr.start); it.ValidForPrefix(prefix); {
+		for it.Seek(kr.start); it.Valid(); {
+			// it.Valid would only return true for keys with the provided Prefix in iterOpts.
 			item := it.Item()
 			if bytes.Equal(item.Key(), prevKey) {
 				it.Next()
@@ -171,6 +160,12 @@ func (sl *Lists) produceKVs(ctx context.Context, ts uint64,
 			}
 			if kv != nil {
 				kvs.Kv = append(kvs.Kv, kv)
+				size += kv.Size()
+			}
+			if size >= pageSize {
+				kvChan <- kvs
+				kvs = new(pb.KVS)
+				size = 0
 			}
 		}
 		if len(kvs.Kv) > 0 {
@@ -195,7 +190,7 @@ func (sl *Lists) produceKVs(ctx context.Context, ts uint64,
 	}
 }
 
-func (sl *Lists) streamKVs(ctx context.Context, prefix string, kvChan chan *pb.KVS) error {
+func (sl *Lists) streamKVs(ctx context.Context, logPrefix string, kvChan chan *pb.KVS) error {
 	var count int
 	var bytesSent uint64
 	t := time.NewTicker(time.Second)
@@ -224,7 +219,7 @@ func (sl *Lists) streamKVs(ctx context.Context, prefix string, kvChan chan *pb.K
 			return err
 		}
 		glog.V(2).Infof("%s Created batch of size: %s in %s.\n",
-			prefix, humanize.Bytes(sz), time.Since(t))
+			logPrefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
 
@@ -243,7 +238,7 @@ outer:
 			}
 			speed := bytesSent / durSec
 			glog.Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n",
-				prefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
+				logPrefix, x.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
 		case kvs, ok := <-kvChan:
 			if !ok {
@@ -257,6 +252,6 @@ outer:
 		}
 	}
 
-	glog.Infof("%s Sent %d keys\n", prefix, count)
+	glog.Infof("%s Sent %d keys\n", logPrefix, count)
 	return nil
 }

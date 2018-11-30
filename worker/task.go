@@ -43,8 +43,6 @@ import (
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -61,8 +59,8 @@ func invokeNetworkRequest(
 	}
 
 	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
+	if span := otrace.FromContext(ctx); span != nil {
+		span.Annotatef(nil, "invokeNetworkRequest: Sending request to %v", addr)
 	}
 	c := pb.NewWorkerClient(conn)
 	return f(ctx, c)
@@ -91,12 +89,15 @@ func processWithBackupRequest(
 	chResults := make(chan taskresult, len(addrs))
 	ctx0, cancel := context.WithCancel(ctx)
 	defer cancel()
+
 	go func() {
 		reply, err := invokeNetworkRequest(ctx0, addrs[0], f)
 		chResults <- taskresult{reply, err}
 	}()
+
 	timer := time.NewTimer(backupRequestGracePeriod)
 	defer timer.Stop()
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -139,8 +140,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	if gid == 0 {
 		return &pb.Result{}, errUnservedTablet
 	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
+	span := otrace.FromContext(ctx)
+	if span != nil {
+		span.Annotatef(nil, "attr: %v groupId: %v, readTs: %d", attr, gid, q.ReadTs)
 	}
 
 	if groups().ServesGroup(gid) {
@@ -148,14 +150,16 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		return processTask(ctx, q, gid)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
-		return c.ServeTask(ctx, q)
-	})
+	result, err := processWithBackupRequest(ctx, gid,
+		func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
+			return c.ServeTask(ctx, q)
+		})
+
 	if err != nil {
 		return nil, err
 	}
 	reply := result.(*pb.Result)
-	if span := otrace.FromContext(ctx); span != nil {
+	if span != nil {
 		span.Annotatef(nil, "Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
 	}
 	return reply, nil
@@ -1420,15 +1424,6 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		err    error
 	}
 	c := make(chan reply, 1)
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		// md is a map[string][]string
-		if v, ok := md["trace"]; ok && len(v) > 0 {
-			var tr trace.Trace
-			tr, ctx = x.NewTrace("GrpcQuery", ctx)
-			defer tr.Finish()
-			tr.LazyPrintf("Trace id %s", v[0])
-		}
-	}
 	go func() {
 		result, err := processTask(ctx, q, gid)
 		c <- reply{result, err}
@@ -1677,20 +1672,19 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 	x.AssertTrue(count >= 1)
 	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
 
+	txn := pstore.NewTransactionAt(cp.readTs, false)
+	defer txn.Discard()
+
+	pk := x.ParsedKey{Attr: cp.attr}
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
-	txn := pstore.NewTransactionAt(cp.readTs, false)
-	defer txn.Discard()
-	pk := x.ParsedKey{
-		Attr: cp.attr,
-	}
-	countPrefix := pk.CountPrefix(cp.reverse)
+	itOpt.Prefix = pk.CountPrefix(cp.reverse)
 
 	itr := txn.NewIterator(itOpt)
 	defer itr.Close()
 
-	for itr.Seek(countKey); itr.ValidForPrefix(countPrefix); itr.Next() {
+	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.KeyCopy(nil)
 		pl, err := posting.Get(key)
@@ -1732,13 +1726,14 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
 	itOpt.AllVersions = true
+	itOpt.Prefix = prefix
 	it := txn.NewIterator(itOpt)
 	defer it.Close()
 
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
 	// occurs in filterStringFunction (like has(name) queries).
-	for it.Seek(startKey); it.ValidForPrefix(prefix); {
+	for it.Seek(startKey); it.Valid(); {
 		item := it.Item()
 		if bytes.Equal(item.Key(), prevKey) {
 			it.Next()
@@ -1774,10 +1769,6 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("handleHasFunction:"+
-						" key: %v:%v", pk.Attr, pk.Uid)
-				}
 			}
 		}
 	}

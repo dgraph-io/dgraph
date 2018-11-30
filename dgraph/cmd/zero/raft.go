@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sync"
 	"time"
 
 	otrace "go.opencensus.io/trace"
@@ -35,7 +36,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 )
 
 type node struct {
@@ -45,6 +45,10 @@ type node struct {
 	reads       map[uint64]chan uint64
 	subscribers map[uint32]chan struct{}
 	stop        chan struct{} // to send stop signal to Run
+
+	// The last timestamp when this Zero was able to reach quorum.
+	mu         sync.RWMutex
+	lastQuorum time.Time
 }
 
 var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
@@ -54,7 +58,17 @@ func (n *node) AmLeader() bool {
 		return false
 	}
 	r := n.Raft()
-	return r.Status().Lead == r.Status().ID
+	if r.Status().Lead != r.Status().ID {
+		return false
+	}
+
+	// This node must be the leader, but must also be an active member of the cluster, and not
+	// hidden behind a partition. Basically, if this node was the leader and goes behind a
+	// partition, it would still think that it is indeed the leader for the duration mentioned
+	// below.
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return time.Since(n.lastQuorum) <= 5*time.Second
 }
 
 func (n *node) uniqueKey() string {
@@ -70,6 +84,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	span := otrace.FromContext(ctx)
 
 	propose := func(timeout time.Duration) error {
 		if !n.AmLeader() {
@@ -88,17 +103,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key)
 		proposal.Key = key
-
-		// TODO: Remove this and use OpenCensus spans.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Proposing with key: %X", key)
+		if span != nil {
+			span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
 		}
 
 		data, err := proposal.Marshal()
 		if err != nil {
 			return err
 		}
-
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			return x.Wrapf(err, "While proposing")
@@ -462,6 +474,7 @@ func (n *node) initAndStartNode() error {
 }
 
 func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
+	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -471,13 +484,41 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 			n.server.updateZeroLeader()
 
 		case <-closer.HasBeenClosed():
-			closer.Done()
+			return
+		}
+	}
+}
+
+func (n *node) checkQuorum(closer *y.Closer) {
+	defer closer.Done()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	quorum := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		if err := n.WaitLinearizableRead(ctx); err == nil {
+			n.mu.Lock()
+			n.lastQuorum = time.Now()
+			n.mu.Unlock()
+		} else if glog.V(2) {
+			glog.Warningf("Zero node: %d unable to reach quorum.", n.Id)
+		}
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			quorum()
+		case <-closer.HasBeenClosed():
 			return
 		}
 	}
 }
 
 func (n *node) snapshotPeriodically(closer *y.Closer) {
+	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -487,7 +528,6 @@ func (n *node) snapshotPeriodically(closer *y.Closer) {
 			n.trySnapshot(1000)
 
 		case <-closer.HasBeenClosed():
-			closer.Done()
 			return
 		}
 	}
@@ -505,9 +545,6 @@ func (n *node) trySnapshot(skip uint64) {
 	data, err := n.server.MarshalMembershipState()
 	x.Check(err)
 
-	if tr, ok := trace.FromContext(n.ctx); ok {
-		tr.LazyPrintf("Taking snapshot of state at watermark: %d\n", idx)
-	}
 	err = n.Store.CreateSnapshot(idx, n.ConfState(), data)
 	x.Checkf(err, "While creating snapshot")
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
@@ -518,17 +555,18 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	closer := y.NewCloser(4)
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
+	readStateCh := make(chan raft.ReadState, 10)
+	closer := y.NewCloser(4)
+	defer closer.SignalAndWait()
+
 	go n.snapshotPeriodically(closer)
 	go n.updateZeroMembershipPeriodically(closer)
-
-	readStateCh := make(chan raft.ReadState, 10)
+	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
-	defer closer.SignalAndWait()
 
 	for {
 		select {
@@ -543,7 +581,6 @@ func (n *node) Run() {
 			}
 
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))

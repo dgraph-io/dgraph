@@ -27,8 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
 	"github.com/golang/glog"
@@ -39,7 +37,6 @@ import (
 
 var (
 	emptyPostingList []byte // Used for indexing.
-	elog             trace.EventLog
 )
 
 const (
@@ -65,7 +62,6 @@ func init() {
 		emptyPostingList, err = pl.Marshal()
 		x.Check(err)
 	})
-	elog = trace.NewEventLog("Memory", "")
 }
 
 func getMemUsage() int {

@@ -18,6 +18,7 @@ package x
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/golang/glog"
 )
@@ -64,6 +65,7 @@ Dgraph version   : %v
 Commit SHA-1     : %v
 Commit timestamp : %v
 Branch           : %v
+Go version       : %v
 
 For Dgraph official documentation, visit https://docs.dgraph.io.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
@@ -72,7 +74,7 @@ To say hi to the community       , visit https://dgraph.slack.com.
 Licensed under Apache 2.0. Copyright 2015-2018 Dgraph Labs, Inc.
 
 `,
-		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch)
+		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version())
 }
 
 // PrintVersionOnly prints version and other helpful information if --version.

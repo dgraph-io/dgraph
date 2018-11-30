@@ -810,11 +810,11 @@ func appendIteratorsReversed(out []y.Iterator, th []*table.Table, reversed bool)
 // appendIterators appends iterators to an array of iterators, for merging.
 // Note: This obtains references for the table handlers. Remember to close these iterators.
 func (s *levelsController) appendIterators(
-	iters []y.Iterator, reversed bool) []y.Iterator {
+	iters []y.Iterator, opt *IteratorOptions) []y.Iterator {
 	// Just like with get, it's important we iterate the levels from 0 on upward, to avoid missing
 	// data when there's a compaction.
 	for _, level := range s.levels {
-		iters = level.appendIterators(iters, reversed)
+		iters = level.appendIterators(iters, opt)
 	}
 	return iters
 }

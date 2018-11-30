@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -37,7 +36,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 )
 
 var (
@@ -80,8 +78,9 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	key := x.DataKey(edge.Attr, edge.Entity)
 	plist, err := posting.Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("GetLru took %v", dur)
+		if span := otrace.FromContext(ctx); span != nil {
+			span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-get", true)},
+				"GetLru took %s", dur)
 		}
 	}
 	if err != nil {
@@ -227,7 +226,7 @@ func updateSchema(attr string, s pb.SchemaUpdate) error {
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	if err := txn.Set(x.SchemaKey(attr), data); err != nil {
+	if err := txn.SetWithMeta(x.SchemaKey(attr), data, posting.BitSchemaPosting); err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)
@@ -246,17 +245,18 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 }
 
 func hasEdges(attr string, startTs uint64) bool {
+	pk := x.ParsedKey{Attr: attr}
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
+	iterOpt.Prefix = pk.DataPrefix()
+
 	txn := pstore.NewTransactionAt(startTs, false)
 	defer txn.Discard()
+
 	it := txn.NewIterator(iterOpt)
 	defer it.Close()
-	pk := x.ParsedKey{
-		Attr: attr,
-	}
-	prefix := pk.DataPrefix()
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+
+	for it.Rewind(); it.Valid(); it.Next() {
 		// Check for non-empty posting
 		// BitEmptyPosting is also a complete posting,
 		// so checking for CompletePosting&BitCompletePosting > 0 would
@@ -402,7 +402,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 }
 
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	pl := groups().Leader(0)
+	pl := groups().connToZeroLeader()
 	if pl == nil {
 		return nil, conn.ErrNoConnection
 	}
@@ -437,9 +437,6 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 	pl := groups().Leader(gid)
 	if pl == nil {
 		res.err = conn.ErrNoConnection
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(res.err.Error())
-		}
 		chr <- res
 		return
 	}
@@ -542,9 +539,6 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 		res := <-resCh
 		if res.err != nil {
 			e = res.err
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while running all mutations: %+v", res.err)
-			}
 		}
 		if res.ctx != nil {
 			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
@@ -583,6 +577,9 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	ctx, span := otrace.StartSpan(ctx, "worker.Mutate")
+	defer span.End()
+
 	txnCtx := &api.TxnContext{}
 	if ctx.Err() != nil {
 		return txnCtx, ctx.Err()
@@ -592,12 +589,6 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	}
 
 	node := groups().Node
-	if rand.Float64() < Config.Tracing {
-		var tr trace.Trace
-		tr, ctx = x.NewTrace("grpcWorker.Mutate", ctx)
-		defer tr.Finish()
-	}
-
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 	fillTxnContext(txnCtx, m.StartTs)
 	return txnCtx, err
