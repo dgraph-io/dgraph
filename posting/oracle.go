@@ -20,6 +20,7 @@ import (
 	"context"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -74,7 +75,7 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 type oracle struct {
 	x.SafeMutex
 
-	// max start ts given out by Zero.
+	// max start ts given out by Zero. Do not use mutex on this, only use atomics.
 	maxAssigned uint64
 
 	// Keeps track of all the startTs we have seen so far, based on the mutations. Then as
@@ -134,9 +135,15 @@ func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
 }
 
 func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
+	if startTs <= o.MaxAssigned() {
+		return nil, false
+	}
 	o.Lock()
 	defer o.Unlock()
-	if o.maxAssigned >= startTs {
+	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
+	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
+	// moved past startTs.
+	if startTs <= o.MaxAssigned() {
 		return nil, false
 	}
 	ch := make(chan struct{})
@@ -145,9 +152,7 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 }
 
 func (o *oracle) MaxAssigned() uint64 {
-	o.RLock()
-	defer o.RUnlock()
-	return o.maxAssigned
+	return atomic.LoadUint64(&o.maxAssigned)
 }
 
 func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
@@ -169,7 +174,8 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	for _, txn := range delta.Txns {
 		delete(o.pendingTxns, txn.StartTs)
 	}
-	if delta.MaxAssigned < o.maxAssigned {
+	curMax := o.MaxAssigned()
+	if delta.MaxAssigned < curMax {
 		return
 	}
 
@@ -183,7 +189,7 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		}
 		delete(o.waiters, startTs)
 	}
-	o.maxAssigned = delta.MaxAssigned
+	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
 }
 
 func (o *oracle) ResetTxns() {

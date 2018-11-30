@@ -69,25 +69,6 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Export completed."}`)))
 }
 
-func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodPost) {
-		return
-	}
-	target := r.FormValue("destination")
-	if target == "" {
-		err := x.Errorf("You must specify a 'destination' value")
-		x.SetStatus(w, err.Error(), "Backup failed.")
-		return
-	}
-	if err := worker.BackupOverNetwork(context.Background(), target); err != nil {
-		x.SetStatus(w, err.Error(), "Backup failed.")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
-
-}
-
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:

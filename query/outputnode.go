@@ -154,7 +154,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
-		if v.Value.(bool) == true {
+		if v.Value.(bool) {
 			return []byte("true"), nil
 		}
 		return []byte("false"), nil
@@ -434,7 +434,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 
 	if sg.Params.isGroupBy {
 		if len(sg.GroupbyRes) == 0 {
-			return fmt.Errorf("Expected GroupbyRes to have length > 0.")
+			return x.Errorf("Expected GroupbyRes to have length > 0.")
 		}
 		n.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil
