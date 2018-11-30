@@ -17,121 +17,92 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"context"
 	"testing"
-	"time"
+
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-func liveExportPassword(t *testing.T, topDir string) {
-	tmpDir := filepath.Join(topDir, "test1")
-	check(t, os.Mkdir(tmpDir, 0700))
-	cluster := NewDgraphCluster(tmpDir)
-	check(t, cluster.Start())
-	defer cluster.Close()
-	time.Sleep(2 * time.Second)
-
-	schemaFile := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/secret.schema.gz")
-	rdfFile := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/secret.rdf1.gz")
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--rdfs", rdfFile,
-		"--schema", schemaFile,
-		"--dgraph", ":"+cluster.dgraphPort,
-		"--zero", ":"+cluster.zeroPort,
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	if err := liveCmd.Run(); err != nil {
-		t.Errorf("Live Loader didn't run: %v\n", err)
-	}
-
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", cluster.dgraphPortOffset+8080))
-	if err != nil {
-		t.Errorf("Error while calling export: %v", err)
-	}
-
-	b, err := ioutil.ReadAll(resp.Body)
-	expected := `{"code": "Success", "message": "Export completed."}`
-	if string(b) != expected {
-		t.Errorf("Unexpected message while exporting: %v", string(b))
-	}
-}
-
-func liveImportPassword(t *testing.T, topDir string) {
-	tmpDir := filepath.Join(topDir, "test2")
-	check(t, os.Mkdir(tmpDir, 0700))
-	cluster := NewDgraphCluster(tmpDir)
-	check(t, cluster.Start())
-	defer cluster.Close()
-	time.Sleep(2 * time.Second)
-
-	// fetch exported file from export test
-	dataFile1, err := findFile(filepath.Join(topDir, "test1", "export"), ".rdf.gz")
-	if err != nil {
-		t.Errorf("While trying to find exported file: %v", err)
-	}
-
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--rdfs", dataFile1,
-		"--dgraph", ":"+cluster.dgraphPort,
-		"--zero", ":"+cluster.zeroPort,
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
-	if err := liveCmd.Run(); err != nil {
-		t.Errorf("Live Loader didn't run: %v\n", err)
-	}
-
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", cluster.dgraphPortOffset+8080))
-	if err != nil {
-		t.Errorf("Error while calling export: %v", err)
-	}
-
-	b, err := ioutil.ReadAll(resp.Body)
-	expected := `{"code": "Success", "message": "Export completed."}`
-	if string(b) != expected {
-		t.Errorf("Unexpected message while exporting: %v", string(b))
-	}
-
-	out1, err := exec.Command(
-		"sh", "-c", fmt.Sprint("gunzip -c ", dataFile1, " | sort")).Output()
-	if err != nil {
-		t.Errorf("While trying to sort exported file: %v", err)
-	}
-
-	dataFile2, err := findFile(filepath.Join(tmpDir, "export"), ".rdf.gz")
-	if err != nil {
-		t.Errorf("While trying to find exported file: %v", err)
-	}
-	out2, err := exec.Command(
-		"sh", "-c", fmt.Sprint("gunzip -c ", dataFile2, " | sort")).Output()
-	if err != nil {
-		t.Errorf("While trying to sort exported file: %v", err)
-	}
-
-	if len(out1) == 0 || len(out2) == 0 || !bytes.Equal(out1, out2) {
-		t.Errorf("Export is not as expected.\n--- Expected:\n%v\n--- Actual:\n%v",
-			string(out1), string(out2))
-	}
-}
-
 func TestLivePassword(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	check(t, err)
-	defer os.RemoveAll(tmpDir)
+	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
+		return func(t *testing.T) {
+			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			x.Check(err)
+			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+			fn(t, dg)
+			require.NoError(t, dg.Alter(
+				context.Background(), &api.Operation{DropAll: true}))
+		}
+	}
 
-	t.Run("export", func(t *testing.T) {
-		liveExportPassword(t, tmpDir)
-	})
+	t.Run("export", wrap(PasswordExport))
+	t.Run("import", wrap(PasswordImport))
+}
 
-	t.Run("import", func(t *testing.T) {
-		liveImportPassword(t, tmpDir)
+func PasswordExport(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `secret: password .`,
+	}))
+
+	assigned, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:uid1 <secret> "password1" .
+			_:uid2 <secret> "password2" .
+			_:uid3 <secret> "password3" .
+		`),
 	})
+	require.NoError(t, err)
+	require.Len(t, assigned.Uids, 3)
+
+	// x.UpdateHealthStatus(true)
+	// resp, err := http.Get("http://127.0.0.1:8180/admin/export")
+	// require.NoError(t, err)
+
+	// b, err := ioutil.ReadAll(resp.Body)
+	// require.NoError(t, err)
+	// defer resp.Body.Close()
+	// require.Contains(t, string(b), "Success", "export failed: %v", string(b))
+
+	resp, err := c.NewTxn().Query(ctx, `
+	{
+	  q(func: uid(`+assigned.Uids["uid2"]+`)) {
+			secret: checkpwd(secret, "password2")
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"secret":true}]}`, string(resp.Json))
+}
+
+func PasswordImport(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `secret: password .`,
+	}))
+
+	assigned, err := c.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			<_:uid1> <secret> "$2a$10$0Cv9uJBUhG2FstnCUNw2/.GNH7M89M.yaXn3//Zp8a0.s6zVIJFz6"^^<xs:password> .
+			<_:uid2> <secret> "$2a$10$LxWNQhbgcdnJkzWfYnUahuDWkWfs9e8pf7uH8WkdAjMxTeKh8W8V2"^^<xs:password> .
+			<_:uid3> <secret> "$2a$10$IXnmk8WSQmhNpHWrAIMtgOnU1QWcndyqgfsUGlzHsVzrpFcrFnUoi"^^<xs:password> .
+		`),
+	})
+	require.NoError(t, err)
+	require.Len(t, assigned.Uids, 3)
+
+	resp, err := c.NewTxn().Query(ctx, `
+	{
+	  q(func: uid(`+assigned.Uids["uid2"]+`)) {
+			secret: checkpwd(secret, "password2")
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"secret":true}]}`, string(resp.Json))
+
 }
