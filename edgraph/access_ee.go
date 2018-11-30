@@ -26,7 +26,7 @@ import (
 )
 
 func (s *Server) Login(ctx context.Context,
-	request *api.LogInRequest) (*api.LogInResponse, error) {
+	request *api.LogInRequest) (*api.Response, error) {
 	ctx, span := otrace.StartSpan(ctx, "server.LogIn")
 	defer span.End()
 
@@ -45,10 +45,7 @@ func (s *Server) Login(ctx context.Context,
 		return nil, err
 	}
 
-	resp := &api.LogInResponse{
-		Context: &api.TxnContext{}, // context needed in order to set the jwt below
-		Code:    api.AclResponseCode_UNAUTHENTICATED,
-	}
+	resp := &api.Response{}
 
 	user, err := s.queryUser(ctx, request.Userid, request.Password)
 	if err != nil {
@@ -76,13 +73,13 @@ func (s *Server) Login(ctx context.Context,
 		},
 	}
 
-	resp.Context.Jwt, err = jwt.EncodeToString(Config.HmacSecret)
+	jwtString, err := jwt.EncodeToString(Config.HmacSecret)
 	if err != nil {
 		glog.Errorf("Unable to encode jwt to string: %v", err)
 		return nil, err
 	}
 
-	resp.Code = api.AclResponseCode_OK
+	resp.Json = []byte(jwtString)
 	return resp, nil
 }
 

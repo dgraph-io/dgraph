@@ -13,10 +13,8 @@
 package acl
 
 import (
-	"context"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -78,7 +76,10 @@ func initSubcommands() {
 		Use:   "useradd",
 		Short: "Run Dgraph acl tool to add a user",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(UserAdd.Conf, userAdd)
+			if err := userAdd(UserAdd.Conf); err != nil {
+				glog.Errorf("Unable to add user:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	userAddFlags := UserAdd.Cmd.Flags()
@@ -90,7 +91,10 @@ func initSubcommands() {
 		Use:   "userdel",
 		Short: "Run Dgraph acl tool to delete a user",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(UserDel.Conf, userDel)
+			if err := userDel(UserDel.Conf); err != nil {
+				glog.Errorf("Unable to delete the user:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	userDelFlags := UserDel.Cmd.Flags()
@@ -101,7 +105,10 @@ func initSubcommands() {
 		Use:   "login",
 		Short: "Login to dgraph in order to get a jwt token",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(LogIn.Conf, userLogin)
+			if err := userLogin(LogIn.Conf); err != nil {
+				glog.Errorf("Unable to login:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	loginFlags := LogIn.Cmd.Flags()
@@ -113,7 +120,10 @@ func initSubcommands() {
 		Use:   "groupadd",
 		Short: "Run Dgraph acl tool to add a group",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(GroupAdd.Conf, groupAdd)
+			if err := groupAdd(GroupAdd.Conf); err != nil {
+				glog.Errorf("Unable to add group:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	groupAddFlags := GroupAdd.Cmd.Flags()
@@ -124,7 +134,10 @@ func initSubcommands() {
 		Use:   "groupdel",
 		Short: "Run Dgraph acl tool to delete a group",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(GroupDel.Conf, groupDel)
+			if err := groupDel(GroupDel.Conf); err != nil {
+				glog.Errorf("Unable to delete group:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	groupDelFlags := GroupDel.Cmd.Flags()
@@ -135,7 +148,10 @@ func initSubcommands() {
 		Use:   "usermod",
 		Short: "Run Dgraph acl tool to change a user's groups",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(UserMod.Conf, userMod)
+			if err := userMod(UserMod.Conf); err != nil {
+				glog.Errorf("Unable to modify user:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	userModFlags := UserMod.Cmd.Flags()
@@ -147,7 +163,10 @@ func initSubcommands() {
 		Use:   "chmod",
 		Short: "Run Dgraph acl tool to change a group's permissions",
 		Run: func(cmd *cobra.Command, args []string) {
-			runTxn(ChMod.Conf, chMod)
+			if err := chMod(ChMod.Conf); err != nil {
+				glog.Errorf("Unable to change permisson for group:%v", err)
+				os.Exit(1)
+			}
 		},
 	}
 	chModFlags := ChMod.Cmd.Flags()
@@ -159,7 +178,7 @@ func initSubcommands() {
 		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
 }
 
-func runTxn(conf *viper.Viper, f func(ctx context.Context, dc *dgo.Dgraph) error) {
+func getDgraphClient(conf *viper.Viper) *dgo.Dgraph {
 	opt = options{
 		dgraph: conf.GetString("dgraph"),
 	}
@@ -177,18 +196,10 @@ func runTxn(conf *viper.Viper, f func(ctx context.Context, dc *dgo.Dgraph) error
 	for _, d := range ds {
 		conn, err := x.SetupConnection(d, &tlsConf)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
-		defer conn.Close()
 
 		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
 	}
-	dgraphClient := dgo.NewDgraphClient(clients...)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := f(ctx, dgraphClient); err != nil {
-		glog.Errorf("Error while running transaction: %v", err)
-		os.Exit(1)
-	}
+	return dgo.NewDgraphClient(clients...)
 }

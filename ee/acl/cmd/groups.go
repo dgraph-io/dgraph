@@ -16,29 +16,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/spf13/viper"
 )
 
-func groupAdd(ctx context.Context, dc *dgo.Dgraph) error {
-	groupId := GroupAdd.Conf.GetString("group")
+func groupAdd(conf *viper.Viper) error {
+	groupId := conf.GetString("group")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while querying group:%v", err)
 	}
 	if group != nil {
-		return fmt.Errorf("The group with id %v already exists.", groupId)
+		return fmt.Errorf("the group with id %v already exists", groupId)
 	}
 
 	createGroupNQuads := []*api.NQuad{
@@ -54,28 +59,31 @@ func groupAdd(ctx context.Context, dc *dgo.Dgraph) error {
 		Set:       createGroupNQuads,
 	}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to create user: %v", err)
+		return fmt.Errorf("unable to create group: %v", err)
 	}
 
 	glog.Infof("Created new group with id %v", groupId)
 	return nil
 }
 
-func groupDel(ctx context.Context, dc *dgo.Dgraph) error {
-	groupId := GroupDel.Conf.GetString("group")
+func groupDel(conf *viper.Viper) error {
+	groupId := conf.GetString("group")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while querying group:%v", err)
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("Unable to delete group because it does not exist: %v", groupId)
+		return fmt.Errorf("unable to delete group because it does not exist: %v", groupId)
 	}
 
 	deleteGroupNQuads := []*api.NQuad{
@@ -90,10 +98,10 @@ func groupDel(ctx context.Context, dc *dgo.Dgraph) error {
 		Del:       deleteGroupNQuads,
 	}
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to delete group: %v", err)
+		return fmt.Errorf("unable to delete group: %v", err)
 	}
 
-	glog.Infof("Deleted user with id %v", groupId)
+	glog.Infof("Deleted group with id %v", groupId)
 	return nil
 }
 
@@ -127,9 +135,9 @@ type Acl struct {
 	Perm      int32  `json:"perm"`
 }
 
-func chMod(ctx context.Context, dc *dgo.Dgraph) error {
-	groupId := ChMod.Conf.GetString("group")
-	predicate := ChMod.Conf.GetString("pred")
+func chMod(conf *viper.Viper) error {
+	groupId := conf.GetString("group")
+	predicate := conf.GetString("pred")
 	perm := ChMod.Conf.GetInt("perm")
 	if len(groupId) == 0 {
 		return fmt.Errorf("the groupid must not be empty")
@@ -138,22 +146,25 @@ func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 		return fmt.Errorf("the predicate must not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
 	if err != nil {
-		return err
+		return fmt.Errorf("error while querying group:%v", err)
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("Unable to change permission for group because it does not exist: %v",
+		return fmt.Errorf("unable to change permission for group because it does not exist: %v",
 			groupId)
 	}
 
-	currentAcls := []Acl{}
+	var currentAcls []Acl
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v:%v",
 				groupId, err)
 		}
 	}
@@ -169,7 +180,7 @@ func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 
 	newAclBytes, err := json.Marshal(newAcls)
 	if err != nil {
-		return fmt.Errorf("Unable to marshal the updated acls:%v", err)
+		return fmt.Errorf("unable to marshal the updated acls:%v", err)
 	}
 
 	chModNQuads := &api.NQuad{
@@ -183,7 +194,7 @@ func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to change mutations for the group %v on predicate %v: %v",
+		return fmt.Errorf("unable to change mutations for the group %v on predicate %v: %v",
 			groupId, predicate, err)
 	}
 	glog.Infof("Successfully changed permission for group %v on predicate %v to %v",
@@ -193,13 +204,13 @@ func chMod(ctx context.Context, dc *dgo.Dgraph) error {
 
 // returns whether the existing acls slice is changed
 func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
-	for idx, acl := range acls {
-		if acl.Predicate == newAcl.Predicate {
-			if acl.Perm == newAcl.Perm {
+	for idx, aclEntry := range acls {
+		if aclEntry.Predicate == newAcl.Predicate {
+			if aclEntry.Perm == newAcl.Perm {
 				return acls, false
 			}
 			if newAcl.Perm < 0 {
-				// remove the current acl from the array
+				// remove the current aclEntry from the array
 				copy(acls[idx:], acls[idx+1:])
 				return acls[:len(acls)-1], true
 			}
@@ -208,6 +219,6 @@ func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 		}
 	}
 
-	// we do not find any existing acl matching the newAcl predicate
+	// we do not find any existing aclEntry matching the newAcl predicate
 	return append(acls, newAcl), true
 }

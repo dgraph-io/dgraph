@@ -16,33 +16,39 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/spf13/viper"
 )
 
-func userAdd(ctx context.Context, dc *dgo.Dgraph) error {
-	userid := UserAdd.Conf.GetString("user")
-	password := UserAdd.Conf.GetString("password")
+func userAdd(conf *viper.Viper) error {
+	userid := conf.GetString("user")
+	password := conf.GetString("password")
 
 	if len(userid) == 0 {
-		return fmt.Errorf("The user must not be empty.")
+		return fmt.Errorf("the user must not be empty")
 	}
 	if len(password) == 0 {
-		return fmt.Errorf("The password must not be empty.")
+		return fmt.Errorf("the password must not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
+
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while querying user:%v", err)
 	}
 	if user != nil {
-		return fmt.Errorf("Unable to create user because of conflict: %v", userid)
+		return fmt.Errorf("unable to create user because of conflict: %v", userid)
 	}
 
 	createUserNQuads := []*api.NQuad{
@@ -63,30 +69,33 @@ func userAdd(ctx context.Context, dc *dgo.Dgraph) error {
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to create user: %v", err)
+		return fmt.Errorf("unable to create user: %v", err)
 	}
 
 	glog.Infof("Created new user with id %v", userid)
 	return nil
 }
 
-func userDel(ctx context.Context, dc *dgo.Dgraph) error {
-	userid := UserDel.Conf.GetString("user")
+func userDel(conf *viper.Viper) error {
+	userid := conf.GetString("user")
 	// validate the userid
 	if len(userid) == 0 {
-		return fmt.Errorf("The user id should not be empty")
+		return fmt.Errorf("the user id should not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while querying user:%v", err)
 	}
 
 	if user == nil || len(user.Uid) == 0 {
-		return fmt.Errorf("Unable to delete user because it does not exist: %v", userid)
+		return fmt.Errorf("unable to delete user because it does not exist: %v", userid)
 	}
 
 	deleteUserNQuads := []*api.NQuad{
@@ -102,28 +111,35 @@ func userDel(ctx context.Context, dc *dgo.Dgraph) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to delete user: %v", err)
+		return fmt.Errorf("unable to delete user: %v", err)
 	}
 
 	glog.Infof("Deleted user with id %v", userid)
 	return nil
 }
 
-func userLogin(ctx context.Context, dc *dgo.Dgraph) error {
-	userid := LogIn.Conf.GetString("user")
-	password := LogIn.Conf.GetString("password")
+func userLogin(conf *viper.Viper) error {
+	userid := conf.GetString("user")
+	password := conf.GetString("password")
 
 	if len(userid) == 0 {
-		return fmt.Errorf("The user must not be empty.")
+		return fmt.Errorf("the user must not be empty")
 	}
 	if len(password) == 0 {
-		return fmt.Errorf("The password must not be empty.")
+		return fmt.Errorf("the password must not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	txn := dc.NewTxn()
+	defer txn.Discard(ctx)
+
 	if err := dc.Login(ctx, userid, password); err != nil {
-		return fmt.Errorf("Unable to login:%v", err)
+		return fmt.Errorf("unable to login:%v", err)
 	}
-	glog.Infof("Login successfully with jwt:\n%v", dc.GetJwt())
+	updatedContext := dc.GetContext(ctx)
+	glog.Infof("Login successfully with jwt:\n%v", updatedContext.Value("jwt"))
 	return nil
 }
 
@@ -144,7 +160,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User
 
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
-		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
+		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
 	}
 	user, err = acl.UnmarshalUser(queryResp, "user")
 	if err != nil {
@@ -153,22 +169,25 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User
 	return user, nil
 }
 
-func userMod(ctx context.Context, dc *dgo.Dgraph) error {
-	userid := UserMod.Conf.GetString("user")
-	groups := UserMod.Conf.GetString("groups")
-	if len(userid) == 0 {
-		return fmt.Errorf("The user must not be empty")
+func userMod(conf *viper.Viper) error {
+	userId := conf.GetString("user")
+	groups := conf.GetString("groups")
+	if len(userId) == 0 {
+		return fmt.Errorf("the user must not be empty")
 	}
 
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	txn := dc.NewTxn()
 	defer txn.Discard(ctx)
 
-	user, err := queryUser(ctx, txn, userid)
+	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while querying user:%v", err)
 	}
 	if user == nil {
-		return fmt.Errorf("The user does not exist: %v", userid)
+		return fmt.Errorf("the user does not exist: %v", userId)
 	}
 
 	targetGroupsMap := make(map[string]struct{})
@@ -192,7 +211,7 @@ func userMod(ctx context.Context, dc *dgo.Dgraph) error {
 	}
 
 	for _, g := range newGroups {
-		glog.Infof("Adding user %v to group %v", userid, g)
+		glog.Infof("Adding user %v to group %v", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
@@ -201,7 +220,7 @@ func userMod(ctx context.Context, dc *dgo.Dgraph) error {
 	}
 
 	for _, g := range groupsToBeDeleted {
-		glog.Infof("Deleting user %v from group %v", userid, g)
+		glog.Infof("Deleting user %v from group %v", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
 			return fmt.Errorf("error while getting the user mod nquad:%v", err)
@@ -209,29 +228,29 @@ func userMod(ctx context.Context, dc *dgo.Dgraph) error {
 		mu.Del = append(mu.Del, nquad)
 	}
 	if len(mu.Del) == 0 && len(mu.Set) == 0 {
-		glog.Infof("Nothing nees to be changed for the groups of user:%v", userid)
+		glog.Infof("Nothing needs to be changed for the groups of user:%v", userId)
 		return nil
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return err
+		return fmt.Errorf("error while mutating the group:%+v", err)
 	}
-	glog.Infof("Successfully modifed groups for user %v", userid)
+	glog.Infof("Successfully modified groups for user %v", userId)
 	return nil
 }
 
-func getUserModNQuad(ctx context.Context, txn *dgo.Txn, useruid string,
-	groupid string) (*api.NQuad, error) {
-	group, err := queryGroup(ctx, txn, groupid, "uid")
+func getUserModNQuad(ctx context.Context, txn *dgo.Txn, userId string,
+	groupId string) (*api.NQuad, error) {
+	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
 		return nil, err
 	}
 	if group == nil {
-		return nil, fmt.Errorf("the group does not exist:%v", groupid)
+		return nil, fmt.Errorf("the group does not exist:%v", groupId)
 	}
 
 	createUserGroupNQuads := &api.NQuad{
-		Subject:   useruid,
+		Subject:   userId,
 		Predicate: "dgraph.user.group",
 		ObjectId:  group.Uid,
 	}
