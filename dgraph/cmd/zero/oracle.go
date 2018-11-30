@@ -18,7 +18,10 @@ package zero
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger/y"
@@ -328,33 +331,52 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return s.proposeTxn(ctx, src)
 	}
 
-	// Check if any of these tablets is being moved. If so, abort the transaction.
-	preds := make(map[string]struct{})
-	// _predicate_ would never be part of conflict detection, so keys corresponding to any
-	// modifications to this predicate would not be sent to Zero. But, we still need to abort
-	// transactions which are coming in, while this predicate is being moved. This means that if
-	// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
-	// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
-	// which sneaked in during the move.
+	checkPreds := func() error {
+		// Check if any of these tablets is being moved. If so, abort the transaction.
+		preds := make(map[string]struct{})
+		// _predicate_ would never be part of conflict detection, so keys corresponding to any
+		// modifications to this predicate would not be sent to Zero. But, we still need to abort
+		// transactions which are coming in, while this predicate is being moved. This means that if
+		// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
+		// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
+		// which sneaked in during the move.
 
-	// Ensure that we only consider checking _predicate_, if expand_edge flag is
-	// set to true, i.e. we are actually serving _predicate_. Otherwise, the
-	// code below, which checks if a tablet is present or is readonly, causes
-	// ALL txns to abort. See #2547.
-	if tablet := s.ServingTablet("_predicate_"); tablet != nil {
-		preds["_predicate_"] = struct{}{}
-	}
-
-	for _, k := range src.Preds {
-		preds[k] = struct{}{}
-	}
-	for pred := range preds {
-		tablet := s.ServingTablet(pred)
-		if tablet == nil || tablet.GetReadOnly() {
-			span.Annotate(nil, "Tablet is readonly. Aborting.")
-			src.Aborted = true
-			return s.proposeTxn(ctx, src)
+		// Ensure that we only consider checking _predicate_, if expand_edge flag is
+		// set to true, i.e. we are actually serving _predicate_. Otherwise, the
+		// code below, which checks if a tablet is present or is readonly, causes
+		// ALL txns to abort. See #2547.
+		if tablet := s.ServingTablet("_predicate_"); tablet != nil {
+			pkey := fmt.Sprintf("%d-_predicate_", tablet.GroupId)
+			preds[pkey] = struct{}{}
 		}
+		for _, k := range src.Preds {
+			preds[k] = struct{}{}
+		}
+		for pkey := range preds {
+			splits := strings.Split(pkey, "-")
+			if len(splits) < 2 {
+				return x.Errorf("Unable to find group id in %s", pkey)
+			}
+			gid, err := strconv.Atoi(splits[0])
+			if err != nil {
+				return x.Errorf("Unable to parse group id from %s. Error: %v", pkey, err)
+			}
+			pred := strings.Join(splits[1:], "")
+			tablet := s.ServingTablet(pred)
+			if tablet == nil || tablet.GetReadOnly() {
+				return x.Errorf("Tablet %+v is nil or readonly", tablet)
+			}
+			if tablet.GroupId != uint32(gid) {
+				return x.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
+					gid, pred, tablet.GroupId)
+			}
+		}
+		return nil
+	}
+	if err := checkPreds(); err != nil {
+		span.Annotate(nil, err.Error())
+		src.Aborted = true
+		return s.proposeTxn(ctx, src)
 	}
 
 	num := pb.Num{Val: 1}

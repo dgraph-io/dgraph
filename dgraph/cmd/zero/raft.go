@@ -246,7 +246,6 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	// only the first one succeeds.
 	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 		if tablet.Force {
-			// TODO: Try and remove this whole Force flag logic.
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
 		} else {
@@ -260,6 +259,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 			tablet.ReadOnly = prev.ReadOnly
 		}
 	}
+	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
 	return nil
 }
@@ -612,6 +612,10 @@ func (n *node) Run() {
 				if rd.RaftState == raft.StateLeader && !leader {
 					glog.Infoln("I've become the leader, updating leases.")
 					n.server.updateLeases()
+					// It is possible that some other Zero had initiated a tablet move, while it was
+					// the leader. There's no chance it can conclude it now because it won't be able
+					// to propose changes. So, run recovery now that I've become leader.
+					n.server.runRecovery()
 				}
 				leader = rd.RaftState == raft.StateLeader
 				// Oracle stream would close the stream once it steps down as leader

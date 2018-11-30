@@ -79,40 +79,16 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	// is actually the leader. But, I have noticed no side effects with allowing them to run, even
 	// if this node is a follower node.
 	tab := s.ServingTablet(predicate)
-	x.AssertTruef(tab != nil, "Tablet to be moved: [%v] should not be nil", predicate)
+	if tab == nil {
+		return x.Errorf("Tablet to be moved: [%v] is not being served", predicate)
+	}
 	glog.Infof("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
 
 	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
-	done := make(chan struct{}, 1)
+	defer cancel()
 
-	go func(done chan struct{}, cancel context.CancelFunc) {
-		select {
-		case <-s.leaderChangeChannel():
-			// Cancel predicate moves when you step down as leader.
-			if !s.Node.AmLeader() {
-				cancel()
-				break
-			}
-
-			glog.Infof("Sleeping before we run recovery for tablet move")
-			// We might have initiated predicate move on some other node, give it some
-			// time to get cancelled. On cancellation the other node would set the predicate
-			// to write mode again and we need to be sure that it doesn't happen after we
-			// decide to move the predicate and set it to read mode.
-			time.Sleep(time.Minute)
-			// Check if any predicates were stuck in read mode. We don't need to do it
-			// periodically because we revert back the predicate to write state in case
-			// of any error unless a node crashes or is shutdown.
-			s.runRecovery()
-		case <-done:
-			cancel()
-		}
-	}(done, cancel)
-
-	err := s.moveTablet(ctx, predicate, srcGroup, dstGroup)
-	done <- struct{}{}
-	if err != nil {
+	if err := s.moveTablet(ctx, predicate, srcGroup, dstGroup); err != nil {
 		return x.Errorf("Error while trying to move predicate %v from %d to %d: %v", predicate,
 			srcGroup, dstGroup, err)
 	}
@@ -120,6 +96,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	return nil
 }
 
+// runRecovery can only be run at Zero leader.
 func (s *Server) runRecovery() {
 	s.RLock()
 	defer s.RUnlock()
@@ -221,6 +198,8 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 	return
 }
 
+// TODO: Can get rid of this function, and merge it with movePredicate above.
+// movePredicate -> movePredicateHelper -> worker.MovePredicate
 func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint32,
 	dstGroup uint32) error {
 	err := s.movePredicateHelper(ctx, predicate, srcGroup, dstGroup)
@@ -230,7 +209,6 @@ func (s *Server) moveTablet(ctx context.Context, predicate string, srcGroup uint
 	}
 	glog.Errorf("Got error during move: %v", err)
 	if !s.Node.AmLeader() {
-		s.runRecovery()
 		return err
 	}
 
