@@ -271,12 +271,12 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 
 	// The map should be followed by either the ',' between array elements, or the ']'
 	// at the end of the array.
-	skipSpace(r)
+	_ = skipSpace(r)
 	ch, _, err = r.ReadRune()
 	if ch == ']' {
 		err = io.EOF
 	} else if ch != ',' {
-		r.UnreadRune()
+		_ = r.UnreadRune()
 	}
 
 	return batch, nil
@@ -288,7 +288,7 @@ func findDataFiles(dir string, ext string) []string {
 		if err != nil {
 			return err
 		}
-		if strings.HasSuffix(path, ext) || strings.HasSuffix(path, ext + ".gz") {
+		if strings.HasSuffix(path, ext) || strings.HasSuffix(path, ext+".gz") {
 			files = append(files, path)
 		}
 		return nil
