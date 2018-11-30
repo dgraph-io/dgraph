@@ -189,6 +189,8 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := st.zero.movePredicate(tablet, srcGroup, dstGroup); err != nil {
+		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
+			tablet, srcGroup, dstGroup, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		x.SetStatus(w, x.Error, err.Error())
 		return

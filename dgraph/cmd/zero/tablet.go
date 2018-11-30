@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
@@ -80,6 +81,9 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
 	defer cancel()
 
+	ctx, span := otrace.StartSpan(ctx, "Zero.MovePredicate")
+	defer span.End()
+
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {
 		return x.Errorf("Unable to reach quorum: %v", err)
@@ -94,8 +98,18 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Infof("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
 
+	// Now block all commits on this predicate. Keep them blocked until we
+	// return from this function.
 	unblock := s.blockTablet(predicate)
 	defer unblock()
+
+	// Now get a new timestamp, beyond which we are sure that no new txns would
+	// be committed for this predicate. Source Alpha leader must reach this
+	// timestamp before streaming the data.
+	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
+	if err != nil || ids.StartId == 0 {
+		return x.Errorf("While leasing txn timestamp. Id: %+v Error: %v", ids, err)
+	}
 
 	// Get connection to leader of source group.
 	pl := s.Leader(srcGroup)
@@ -107,6 +121,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		Predicate: predicate,
 		SourceGid: srcGroup,
 		DestGid:   dstGroup,
+		TxnTs:     ids.StartId,
 	}
 	glog.Infof("Starting move: %+v", in)
 	if _, err := wc.MovePredicate(ctx, in); err != nil {

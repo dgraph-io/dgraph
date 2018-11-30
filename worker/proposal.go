@@ -120,13 +120,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
-			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
-			} else if tablet.GroupId != groups().groupId() {
-				// Tablet can move by the time request reaches here.
+			if tablet := groups().Tablet(edge.Attr); tablet == nil || tablet.GroupId != groups().groupId() {
 				return errUnservedTablet
 			}
-
 			su, ok := schema.State().Get(edge.Attr)
 			if !ok {
 				continue
@@ -135,8 +131,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			}
 		}
 		for _, schema := range proposal.Mutations.Schema {
-			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
+			if t := groups().Tablet(schema.Predicate); t == nil || t.GroupId != groups().groupId() {
+				return errUnservedTablet
 			}
 			if err := checkSchema(schema); err != nil {
 				return err

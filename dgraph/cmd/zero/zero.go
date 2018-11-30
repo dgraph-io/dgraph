@@ -77,6 +77,7 @@ func (s *Server) Init() {
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
+	s.blockCommitsOn = make(map[string]struct{})
 	go s.rebalanceTablets()
 }
 

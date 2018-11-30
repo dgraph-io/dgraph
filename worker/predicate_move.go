@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -46,15 +47,7 @@ var (
 
 // size of kvs won't be too big, we would take care before proposing.
 func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
-	// No new deletion/background cleanup would start after we start streaming tablet,
-	// so all the proposals for a particular tablet would atmost wait for deletion of
-	// single tablet.
-	mu := groups().blockDeletes
-	mu.Lock()
-	defer mu.Unlock()
-
 	glog.Infof("Writing %d keys\n", len(kvs))
-
 	var hasError uint32
 	var wg sync.WaitGroup
 	wg.Add(len(kvs))
@@ -93,78 +86,6 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	return schema.Load(predicate)
 }
 
-func movePredicateHelper(ctx context.Context, predicate string, gid uint32) error {
-	span := otrace.FromContext(ctx)
-
-	pl := groups().Leader(gid)
-	if pl == nil {
-		return x.Errorf("Unable to find a connection for group: %d\n", gid)
-	}
-	c := pb.NewWorkerClient(pl.Get())
-	s, err := c.ReceivePredicate(ctx)
-	if err != nil {
-		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
-	}
-
-	// sends all data except schema, schema key has different prefix
-	// Read the predicate keys and stream to keysCh.
-	sl := stream.Lists{Stream: s, Predicate: predicate, DB: pstore}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
-		l, err := posting.ReadPostingList(key, itr)
-		if err != nil {
-			return nil, err
-		}
-		return l.MarshalToKv()
-	}
-
-	span.Annotatef(nil, "Starting stream list orchestrate")
-	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
-		return err
-	}
-
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	// Send schema (if present) now after all keys have been transferred over.
-	schemaKey := x.SchemaKey(predicate)
-	item, err := txn.Get(schemaKey)
-	if err == badger.ErrKeyNotFound {
-		// The predicate along with the schema could have been deleted. In that case badger would
-		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	} else if err != nil {
-		return err
-	} else {
-		val, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		kvs := &pb.KVS{}
-		kv := &pb.KV{}
-		kv.Key = schemaKey
-		kv.Val = val
-		kv.Version = 1
-		kv.UserMeta = []byte{item.UserMeta()}
-		kvs.Kv = append(kvs.Kv, kv)
-		if err := s.Send(kvs); err != nil {
-			return err
-		}
-	}
-
-	payload, err := s.CloseAndRecv()
-	if err != nil {
-		return err
-	}
-	recvCount, err := strconv.Atoi(string(payload.Data))
-	if err != nil {
-		return err
-	}
-
-	msg := fmt.Sprintf("Receiver says it got %d keys.\n", recvCount)
-	span.Annotate(nil, msg)
-	glog.Infof(msg)
-	return nil
-}
-
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	glog.Infoln("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
@@ -177,6 +98,9 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 			if pk == nil {
 				// This only happens once.
 				pk = x.Parse(kv.Key)
+				if !pk.IsSchema() {
+					return x.Errorf("Expecting first key to be schema key: %+v", kv)
+				}
 				// Delete on all nodes.
 				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				glog.Infof("Predicate being received: %v", pk.Attr)
@@ -203,12 +127,25 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 			return err
 		}
 	}
+	if i := rand.Intn(2); i == 1 {
+		return x.Errorf("Simulated error")
+	}
 	return nil
 }
 
 // Returns count which can be used to verify whether we have moved all keys
 // for a predicate or not.
 func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) error {
+	if !groups().Node.AmLeader() {
+		return x.Errorf("ReceivePredicate failed: Not the leader of group")
+	}
+	// No new deletion/background cleanup would start after we start streaming tablet,
+	// so all the proposals for a particular tablet would atmost wait for deletion of
+	// single tablet. Only leader needs to do this.
+	mu := groups().blockDeletes
+	mu.Lock()
+	defer mu.Unlock()
+
 	// Values can be pretty big so having less buffer is safer.
 	kvs := make(chan *pb.KVS, 3)
 	che := make(chan error, 1)
@@ -260,10 +197,10 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	ctx, span := otrace.StartSpan(ctx, "worker.MovePredicate")
 	defer span.End()
 
-	if groups().gid != in.SourceGroupId {
+	if groups().gid != in.SourceGid {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
-				in.SourceGroupId, groups().gid)
+				in.SourceGid, groups().gid)
 	}
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate
@@ -275,43 +212,92 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if !n.AmLeader() {
 		return &emptyPayload, errNotLeader
 	}
+	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
+		return &emptyPayload, x.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
+	}
 
-	msg := fmt.Sprintf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n", in.Predicate,
-		in.SourceGroupId, in.DestGroupId)
+	msg := fmt.Sprintf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n",
+		in.Predicate, in.SourceGid, in.DestGid)
 	glog.Info(msg)
-
 	span.Annotate(nil, msg)
-	span.Annotatef(nil, "Applying state: %+v", in.State)
+	// glog.Infof("Let's slow things down a bit...")
+	// time.Sleep(10 * time.Second)
+	// glog.Infof("Resuming MovePredicate")
 
-	// Ensures that all future mutations beyond this point are rejected.
-	if err := n.proposeAndWait(ctx, &pb.Proposal{State: in.State}); err != nil {
-		return &emptyPayload, err
-	}
-	span.Annotate(nil, "State applied. Cancelling txns.")
-	aborted := false
-	for i := 0; i < 12; i++ {
-		// Try a dozen times, then give up.
-		glog.Infof("Trying to abort pending mutations. Loop: %d", i)
-		tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
-			pk := x.Parse(key)
-			return pk.Attr == in.Predicate
-		})
-		if len(tctxs) == 0 {
-			aborted = true
-			break
-		}
-		tryAbortTransactions(tctxs)
-	}
-	if !aborted {
-		return &emptyPayload, errUnableToAbort
-	}
-	span.Annotate(nil, "Txns cancelled.")
-	// We iterate over badger, so need to flush and wait for sync watermark to catch up.
-	n.applyAllMarks(ctx)
-
-	err := movePredicateHelper(ctx, in.Predicate, in.DestGroupId)
+	err := movePredicateHelper(ctx, in)
 	if err != nil {
 		span.Annotatef(nil, "Error while movePredicateHelper: %v", err)
 	}
 	return &emptyPayload, err
+}
+
+func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
+	span := otrace.FromContext(ctx)
+
+	pl := groups().Leader(in.DestGid)
+	if pl == nil {
+		return x.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
+	}
+	c := pb.NewWorkerClient(pl.Get())
+	s, err := c.ReceivePredicate(ctx)
+	if err != nil {
+		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
+	}
+
+	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	// Send schema (if present) now after all keys have been transferred over.
+	schemaKey := x.SchemaKey(in.Predicate)
+	item, err := txn.Get(schemaKey)
+	if err == badger.ErrKeyNotFound {
+		// The predicate along with the schema could have been deleted. In that case badger would
+		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
+	} else if err != nil {
+		return err
+	} else {
+		val, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		kvs := &pb.KVS{}
+		kv := &pb.KV{}
+		kv.Key = schemaKey
+		kv.Val = val
+		kv.Version = 1
+		kv.UserMeta = []byte{item.UserMeta()}
+		kvs.Kv = append(kvs.Kv, kv)
+		if err := s.Send(kvs); err != nil {
+			return err
+		}
+	}
+
+	// sends all data except schema, schema key has different prefix
+	// Read the predicate keys and stream to keysCh.
+	sl := stream.Lists{Stream: s, Predicate: in.Predicate, DB: pstore}
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+		l, err := posting.ReadPostingList(key, itr)
+		if err != nil {
+			return nil, err
+		}
+		return l.MarshalToKv()
+	}
+
+	span.Annotatef(nil, "Starting stream list orchestrate")
+	prefix := fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
+	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
+		return err
+	}
+	payload, err := s.CloseAndRecv()
+	if err != nil {
+		return err
+	}
+	recvCount, err := strconv.Atoi(string(payload.Data))
+	if err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("Receiver says it got %d keys.\n", recvCount)
+	span.Annotate(nil, msg)
+	glog.Infof(msg)
+	return nil
 }

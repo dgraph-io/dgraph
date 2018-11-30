@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -313,14 +312,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 		return tablet.GroupId
 	}
 	return 0
-}
-
-func (g *groupi) ServesTabletRW(key string) bool {
-	tablet := g.Tablet(key)
-	if tablet != nil && !tablet.ReadOnly && tablet.GroupId == groups().groupId() {
-		return true
-	}
-	return false
 }
 
 func (g *groupi) ServesTablet(key string) bool {
@@ -731,28 +722,20 @@ OUTER:
 	goto START
 }
 
-func (g *groupi) hasReadOnlyTablets() bool {
-	g.RLock()
-	defer g.RUnlock()
-	if g.state == nil {
-		return false
-	}
-	for _, group := range g.state.Groups {
-		for _, tab := range group.Tablets {
-			if tab.ReadOnly {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (g *groupi) cleanupTablets() {
 	defer g.closer.Done() // CLOSER:1
+	defer func() {
+		glog.Infof("EXITING cleanupTablets.")
+	}()
 
 	cleanup := func() {
 		g.blockDeletes.Lock()
 		defer g.blockDeletes.Unlock()
+		if !g.Node.AmLeader() {
+			return
+		}
+		glog.Infof("Running cleaning at Node: %d Group: %d", g.Node.Id, g.groupId())
+		defer glog.Info("Cleanup Done")
 
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
@@ -763,8 +746,6 @@ func (g *groupi) cleanupTablets() {
 
 		for itr.Rewind(); itr.Valid(); {
 			item := itr.Item()
-
-			// TODO: Investiage out of bounds.
 			pk := x.Parse(item.Key())
 			if pk == nil {
 				itr.Next()
@@ -778,12 +759,12 @@ func (g *groupi) cleanupTablets() {
 			// on failure of network request even though no one else is serving this
 			// tablet.
 			if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
-				if g.hasReadOnlyTablets() {
-					return
-				}
-				glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
+				glog.Warningf("Node: %d Group: %d. Proposing predicate delete: %v. Tablet: %+v",
+					g.Node.Id, g.groupId(), pk.Attr, tablet)
 				// Predicate moves are disabled during deletion, deletePredicate purges everything.
-				posting.DeletePredicate(context.Background(), pk.Attr)
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
+				err := groups().Node.proposeAndWait(context.Background(), p)
+				glog.Errorf("Cleaning up predicate: %+v. Error: %v", p, err)
 				return
 			}
 			if pk.IsSchema() {
@@ -794,9 +775,8 @@ func (g *groupi) cleanupTablets() {
 		}
 	}
 
-	ticker := time.NewTimer(time.Minute * 10)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():

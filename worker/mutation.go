@@ -53,7 +53,7 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
-	if !groups().ServesTabletRW(edge.Attr) {
+	if !groups().ServesTablet(edge.Attr) {
 		// Don't assert, can happen during replay of raft logs if server crashes immediately
 		// after predicate move and before snapshot.
 		return x.Errorf("runMutation: Tablet isn't being served by this group.")
@@ -542,6 +542,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 		}
 		if res.ctx != nil {
 			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
+			tctx.Preds = append(tctx.Preds, res.ctx.Preds...)
 		}
 	}
 	close(resCh)
