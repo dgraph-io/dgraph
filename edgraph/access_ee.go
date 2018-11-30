@@ -14,11 +14,14 @@ package edgraph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/peer"
 
@@ -63,17 +66,15 @@ func (s *Server) Login(ctx context.Context,
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	jwt := &acl.Jwt{
-		Header: acl.StdJwtHeader,
-		Payload: acl.JwtPayload{
-			Userid: request.Userid,
-			Groups: acl.ToJwtGroups(user.Groups),
-			// TODO add the token refresh mechanism
-			Exp: time.Now().Add(Config.JwtTtl).Unix(), // set the jwt valid for 30 days
-		},
-	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userid": request.Userid,
+		"groups": acl.ToJwtGroups(user.Groups),
+		// set the jwt exp according to the ttl
+		"exp": json.Number(
+			strconv.FormatInt(time.Now().Add(Config.JwtTtl).Unix(), 10)),
+	})
 
-	jwtString, err := jwt.EncodeToString(Config.HmacSecret)
+	jwtString, err := token.SignedString(Config.HmacSecret)
 	if err != nil {
 		glog.Errorf("Unable to encode jwt to string: %v", err)
 		return nil, err

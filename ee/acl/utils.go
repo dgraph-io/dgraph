@@ -40,7 +40,7 @@ func ToJwtGroups(groups []Group) []JwtGroup {
 		return nil
 	}
 
-	jwtGroups := make([]JwtGroup, len(groups))
+	jwtGroups := make([]JwtGroup, 0, len(groups))
 	for _, g := range groups {
 		jwtGroups = append(jwtGroups, JwtGroup{
 			Group: g.GroupID,
@@ -101,4 +101,8 @@ func UnmarshalGroup(resp *api.Response, groupKey string) (group *Group, err erro
 		return nil, x.Errorf("Found multiple groups: %s", resp.GetJson())
 	}
 	return &groups[0], nil
+}
+
+type JwtGroup struct {
+	Group string
 }
