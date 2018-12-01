@@ -103,6 +103,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), "debug", d)
 
+	// If ro is set, run this as a readonly query.
+	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {
+		if ro == "true" || ro == "1" {
+			req.ReadOnly = true
+		}
+	}
+
 	// Core processing happens here.
 	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
