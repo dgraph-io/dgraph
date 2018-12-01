@@ -27,8 +27,8 @@ import (
 )
 
 func (s *Server) Login(ctx context.Context,
-	request *api.LogInRequest) (*api.LogInResponse, error) {
+	request *api.LogInRequest) (*api.Response, error) {
 
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
-	return &api.LogInResponse{}, x.ErrNotSupported
+	return &api.Response{}, x.ErrNotSupported
 }
