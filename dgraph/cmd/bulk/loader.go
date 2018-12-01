@@ -41,21 +41,22 @@ import (
 )
 
 type options struct {
-	RDFDir        string
-	SchemaFile    string
-	DgraphsDir    string
-	TmpDir        string
-	NumGoroutines int
-	MapBufSize    int64
-	ExpandEdges   bool
-	SkipMapPhase  bool
-	CleanupTmp    bool
-	NumShufflers  int
-	Version       bool
-	StoreXids     bool
-	ZeroAddr      string
-	HttpAddr      string
-	IgnoreErrors  bool
+	RDFDir           string
+	SchemaFile       string
+	DgraphsDir       string
+	TmpDir           string
+	NumGoroutines    int
+	MapBufSize       int64
+	ExpandEdges      bool
+	SkipMapPhase     bool
+	CleanupTmp       bool
+	NumShufflers     int
+	Version          bool
+	StoreXids        bool
+	ZeroAddr         string
+	HttpAddr         string
+	IgnoreErrors     bool
+	CustomTokenizers string
 
 	MapShards    int
 	ReduceShards int
