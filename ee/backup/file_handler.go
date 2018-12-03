@@ -61,6 +61,10 @@ func (h *fileHandler) Close() error {
 	return h.fp.Close()
 }
 
+func (h *fileHandler) Read(b []byte) (int, error) {
+	return h.fp.Read(b)
+}
+
 func (h *fileHandler) Write(b []byte) (int, error) {
 	return h.fp.Write(b)
 }

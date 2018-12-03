@@ -136,6 +136,10 @@ func (h *s3Handler) Close() error {
 	return <-h.cerr
 }
 
+func (h *s3Handler) Read(b []byte) (int, error) {
+	return h.preader.Read(b)
+}
+
 func (h *s3Handler) Write(b []byte) (int, error) {
 	return h.pwriter.Write(b)
 }

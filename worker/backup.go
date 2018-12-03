@@ -39,3 +39,14 @@ func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Sta
 func BackupOverNetwork(pctx context.Context, target string) error {
 	return x.Errorf("Backup failed: %s", errNotSupported)
 }
+
+// Restore implements the Worker interface.
+func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.Status, error) {
+	glog.Infof("Restore failed: %s", errNotSupported)
+	return &pb.Status{}, nil
+}
+
+// RestoreOverNetwork handles a request coming from an HTTP client.
+func RestoreOverNetwork(pctx context.Context, target string) error {
+	return x.Errorf("Restore failed: %s", errNotSupported)
+}
