@@ -113,6 +113,10 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 * [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
 * [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)
 
+**Dart**
+
+* [https://github.com/katutz/dgraph](https://github.com/katutz/dgraph)
+
 **Elixir**
 
 * [https://github.com/ospaarmann/exdgraph](https://github.com/ospaarmann/exdgraph)
