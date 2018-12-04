@@ -36,19 +36,27 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
-	if err := os.Mkdir(dir, 0700); err != nil {
-		return err
+	// opening location for write
+	if req.Backup.Target != "" {
+		dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
+		if err := os.Mkdir(dir, 0700); err != nil {
+			return err
+		}
+
+		path := filepath.Join(dir,
+			fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+		fp, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		glog.V(2).Infof("Using file path: %q", path)
+		h.fp = fp
+
+		return nil
 	}
 
-	path := filepath.Join(dir,
-		fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
-	fp, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	glog.V(2).Infof("Using file path: %q", path)
-	h.fp = fp
+	// open location for read, find backup file.
+
 	return nil
 }
 

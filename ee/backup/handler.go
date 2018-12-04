@@ -24,6 +24,8 @@ import (
 	"github.com/golang/glog"
 )
 
+var errLocationEmpty = x.Errorf("Empty URI location given.")
+
 // handler interface is implemented by URI scheme handlers.
 type handler interface {
 	// Handlers know how to Read, Write and Close to their target.
@@ -38,7 +40,7 @@ type file struct {
 	h handler
 }
 
-// openFile parses the requested target URI, finds a handler and then tries to create a session.
+// openLocation parses the requested target URI, finds a handler and then tries to create a session.
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -60,8 +62,12 @@ type file struct {
 //   as://dgraph-container/backups/
 //   http://backups.dgraph.io/upload
 //   file:///tmp/dgraph/backups or /tmp/dgraph/backups?compress=gzip
-func (r *Request) openFile() (*file, error) {
-	uri, err := url.Parse(r.Backup.Target)
+func (r *Request) openLocation(loc string) (*file, error) {
+	if loc == "" {
+		return nil, errLocationEmpty
+	}
+
+	uri, err := url.Parse(loc)
 	if err != nil {
 		return nil, err
 	}

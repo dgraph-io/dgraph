@@ -37,7 +37,7 @@ func restoreProcess(ctx context.Context, req *pb.BackupRequest) error {
 	}
 	// create backup request and process it.
 	br := &backup.Request{DB: pstore, Backup: req}
-	return br.Load(ctx)
+	return br.Restore(ctx)
 }
 
 // Restore handles a request coming from another node.

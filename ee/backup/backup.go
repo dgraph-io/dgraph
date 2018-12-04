@@ -36,7 +36,7 @@ type Request struct {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (r *Request) Process(ctx context.Context) error {
-	f, err := r.openFile()
+	f, err := r.openLocation(r.Backup.Target)
 	if err != nil {
 		return err
 	}
