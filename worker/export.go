@@ -104,16 +104,20 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 
 				fVal, err := facets.ValFor(f)
 				if err != nil {
-					return err
+					glog.Errorf("Error getting value from facet %#v:%v", f, err)
+					continue
 				}
 
 				fStringVal := &types.Val{Tid: types.StringID}
 				if err = types.Marshal(fVal, fStringVal); err != nil {
-					return err
+					glog.Errorf("Error while marshaling facet value %v to string: %v",
+						fVal, err)
+					continue
 				}
 				facetTid, err := facets.TypeIDFor(f)
 				if err != nil {
-					return err
+					glog.Errorf("Error getting type id from facet %#v:%v", f, err)
+					continue
 				}
 
 				if facetTid == types.StringID {

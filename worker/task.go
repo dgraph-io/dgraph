@@ -1476,7 +1476,11 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 			return types.CompareVals(fname, fVal, v), nil
 
 		case StandardFn: // allofterms, anyofterms
-			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
+			facetType, err := facets.TypeIDFor(fc)
+			if err != nil {
+				return false, err
+			}
+			if facetType != types.StringID {
 				return false, nil
 			}
 			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)
