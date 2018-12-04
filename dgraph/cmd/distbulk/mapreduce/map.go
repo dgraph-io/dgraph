@@ -20,7 +20,6 @@ import (
 
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 
     // "fmt"
     // "os"
@@ -33,16 +32,12 @@ func emitMapEntry(pred string, key []byte, p *pb.Posting) error {
         pbytes, err = proto.Marshal(&pb.SivaPostingList{
             Postings: []*pb.Posting{p},
         })
-        if err != nil {
-            return err
-        }
+        x.Check(err)
     }
     ubytes, err := proto.Marshal(&pb.List{
         Uids: []uint64{p.Uid},
     })
-    if err != nil {
-        return err
-    }
+    x.Check(err)
 
 	gio.Emit(pred, key, ubytes, pbytes)
 	return nil
@@ -51,25 +46,21 @@ func emitMapEntry(pred string, key []byte, p *pb.Posting) error {
 func rdfToMapEntry(row []interface{}) error {
 	rdfLine := gio.ToString(row[0])
 	nq, err := parseNQuad(rdfLine)
-	if err != nil {
-		if err == rdf.ErrEmpty {
-			return nil
-		}
-		return errors.Wrapf(err, "while parsing line %q", rdfLine)
-	}
-
-	if err := facets.SortAndValidate(nq.Facets); err != nil {
-		return err
-	}
-
-	return processNQuad(nq)
+    if err == rdf.ErrEmpty {
+        return nil
+    }
+    x.Check(err)
+    x.Check(facets.SortAndValidate(nq.Facets))
+    x.Check(processNQuad(nq))
+    return nil
 }
 
 func parseNQuad(line string) (gql.NQuad, error) {
 	nq, err := rdf.Parse(line)
-	if err != nil {
-		return gql.NQuad{}, err
-	}
+    if err == rdf.ErrEmpty {
+        return gql.NQuad{}, err
+    }
+    x.Check(err)
 	return gql.NQuad{NQuad: &nq}, nil
 }
 
@@ -79,43 +70,24 @@ func processNQuad(nq gql.NQuad) error {
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid, err = lookupUid(nq.GetObjectId())
-		if err != nil {
-			return err
-		}
+        x.Check(err)
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
 		de, err = nq.CreateValueEdge(sid)
-		if err != nil {
-			return err
-		}
+        x.Check(err)
 	}
 
-	fwd, rev := createPostings(nq, de)
-	key := x.DataKey(nq.Predicate, sid)
-	err = emitMapEntry(nq.Predicate, key, fwd)
-	if err != nil {
-		return err
-	}
-
-	if rev != nil {
-		key = x.ReverseKey(nq.Predicate, oid)
-		err = emitMapEntry(nq.Predicate, key, rev)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err = addIndexMapEntries(nq, de); err != nil {
-		return err
-	}
+    // emit forward and (if exists) reverse postings
+    x.Check(emitPostings(nq, de))
+    // emit index postings for the given pred if any
+    x.Check(emitIndexPostings(nq, de))
 
 	if Opt.ExpandEdges {
-		key = x.DataKey("_predicate_", sid)
-		pp := createPredicatePosting(nq.Predicate)
-		err = emitMapEntry("_predicate_", key, pp)
-		if err != nil {
-			return err
-		}
+		return emitMapEntry(
+            "_predicate_",
+            x.DataKey("_predicate_", sid),
+            createPredicatePosting(nq.Predicate),
+        )
 	}
 
 	return nil
@@ -140,41 +112,58 @@ func lookupUid(xid string) (uid uint64, err error) {
 			Val: &api.Value_StrVal{StrVal: xid},
 		},
 	}})
-	if err != nil {
-		return 0, err
-	}
+    x.Check(err)
 
 	return uid, nil
 }
 
-func createPostings(nq gql.NQuad, de *pb.DirectedEdge) (*pb.Posting, *pb.Posting) {
-	p := posting.NewPosting(de)
+func emitPostings(nq gql.NQuad, de *pb.DirectedEdge) error {
+    Schema.convertToSchemaType(de, nq.ObjectValue == nil)
+	fwd := posting.NewPosting(de)
 	sch := Schema.getSchema(nq.Predicate)
 	if nq.GetObjectValue() != nil {
 		if lang := de.GetLang(); len(lang) > 0 {
-			p.Uid = farm.Fingerprint64([]byte(lang))
+			fwd.Uid = farm.Fingerprint64([]byte(lang))
 		} else if sch.List {
-			p.Uid = farm.Fingerprint64(de.Value)
+			fwd.Uid = farm.Fingerprint64(de.Value)
 		} else {
-			p.Uid = math.MaxUint64
+			fwd.Uid = math.MaxUint64
 		}
 	}
-	p.Facets = nq.Facets
+	fwd.Facets = nq.Facets
+
+    err := emitMapEntry(
+        nq.Predicate,
+        x.DataKey(nq.Predicate, de.Entity),
+        fwd,
+    )
+    x.Check(err)
 
 	// Early exit for no reverse edge.
 	if sch.GetDirective() != pb.SchemaUpdate_REVERSE {
-		return p, nil
+        return nil
 	}
+
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 
+    // reuse DE by swapping subject and object
 	de.Entity, de.ValueId = de.ValueId, de.Entity
-	rp := posting.NewPosting(de)
-	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
+    Schema.convertToSchemaType(de, true)
+	rev := posting.NewPosting(de)
 
-	return p, rp
+    err = emitMapEntry(
+        nq.Predicate,
+        x.ReverseKey(nq.Predicate, de.Entity),
+        rev,
+    )
+    x.Check(err)
+
+    // swap back after reuse
+	de.Entity, de.ValueId = de.ValueId, de.Entity
+	return nil
 }
 
-func addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) error {
+func emitIndexPostings(nq gql.NQuad, de *pb.DirectedEdge) error {
 	// Cannot index UIDs
 	if nq.GetObjectValue() == nil {
 		return nil
@@ -198,15 +187,11 @@ func addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) error {
 		schemaVal, err := types.Convert(storageVal, types.TypeID(sch.GetValueType()))
 		// Shouldn't error, since we've already checked for convertibility when
 		// doing edge postings. So okay to be fatal.
-		if err != nil {
-			return err
-		}
+        x.Check(err)
 
 		// Extract tokens.
 		toks, err := tok.BuildTokens(schemaVal.Value, toker)
-		if err != nil {
-			return err
-		}
+        x.Check(err)
 
 		// Store index posting.
 		for _, t := range toks {
@@ -215,9 +200,7 @@ func addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) error {
 				Uid:         de.GetEntity(),
 				PostingType: pb.Posting_REF,
 			}
-			if err = emitMapEntry(nq.Predicate, key, p); err != nil {
-				return err
-			}
+            x.Check(emitMapEntry(nq.Predicate, key, p))
 		}
 	}
 

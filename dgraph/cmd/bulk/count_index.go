@@ -25,6 +25,8 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+    "fmt"
+    "os"
 )
 
 type current struct {
@@ -82,9 +84,9 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		pl.Pack = codec.Encode(uids, 256)
 		data, err := pl.Marshal()
 		x.Check(err)
-		x.Check(writer.SetAt(
-			x.CountKey(pred, uint32(count), rev),
-			data, posting.BitCompletePosting, c.state.writeTs))
+        key := x.CountKey(pred, uint32(count), rev)
+        fmt.Fprintf(os.Stderr, "Writing Count Index at writeTs=%d:\n\tkey: %v\n\tval: %v\n\n", c.state.writeTs, key, data)
+		x.Check(writer.SetAt(key, data, posting.BitCompletePosting, c.state.writeTs))
 	}
 	x.Check(writer.Flush())
 	c.wg.Done()

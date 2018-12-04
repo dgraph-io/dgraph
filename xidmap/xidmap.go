@@ -30,6 +30,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
+
+    "fmt"
+    "os"
 )
 
 // Options controls the performance characteristics of the XidMap.
@@ -224,6 +227,7 @@ func (s *shard) evict(ratio float64) {
 		if !m.persisted {
 			var uidBuf [binary.MaxVarintLen64]byte
 			n := binary.PutUvarint(uidBuf[:], m.uid)
+            fmt.Fprintf(os.Stderr, "XID ENTRY: %s -> %d\n\n", m.xid, m.uid)
 			txn.Set([]byte(m.xid), uidBuf[:n])
 		}
 

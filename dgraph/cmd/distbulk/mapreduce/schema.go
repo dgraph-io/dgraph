@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+    wk "github.com/dgraph-io/dgraph/worker"
     "math"
 )
 
@@ -95,6 +96,21 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 		preds = append(preds, pred)
 	}
 	return preds
+}
+
+func (s *schemaStore) convertToSchemaType(de *pb.DirectedEdge, objectIsUID bool) {
+    if objectIsUID {
+        de.ValueType = pb.Posting_UID
+    }
+
+    sch, ok := s.m[de.Attr]
+    if !ok {
+        sch = &pb.SchemaUpdate{ValueType: de.ValueType}
+        s.m[de.Attr] = sch
+    }
+
+    err := wk.ValidateAndConvert(de, sch)
+    x.Check(err)
 }
 
 func (s *schemaStore) write(db *badger.DB) {

@@ -24,6 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+    "fmt"
+    "os"
 )
 
 type reducer struct {
@@ -67,6 +69,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 		pl.Pack = codec.Encode(uids, 256)
 		val, err := pl.Marshal()
 		x.Check(err)
+        fmt.Fprintf(os.Stderr, "%v %v\n", currentKey, val)
 		x.Check(txn.SetWithMeta(currentKey, val, meta))
 
 		uids = uids[:0]

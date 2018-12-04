@@ -18,6 +18,7 @@ package bulk
 
 import (
 	"fmt"
+    // "os"
 	"log"
 	"math"
 	"sync"
@@ -146,6 +147,7 @@ func (s *schemaStore) write(db *badger.DB) {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
+        // fmt.Fprintf(os.Stderr, "Writing Schema Entry at writeTs=1:\n\tkey: %v\n\tval: %v\n\n", k, v)
 		x.Check(txn.SetWithMeta(k, v, posting.BitCompletePosting))
 	}
 	x.Check(txn.CommitAt(1, nil))

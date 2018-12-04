@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	numIds = 10000000
+	numIds = 1000000
     NUM_FILES = 4
     SCHEMA_FILE = "data.schema"
     STORE_XIDS = false
@@ -122,8 +122,11 @@ func main() {
             sch.validateType(&de)
 
 			var uidBuf [binary.MaxVarintLen64]byte
-			n := binary.PutUvarint(uidBuf[:], row.V[1].(uint64))
-			return wb.Set([]byte(row.K[0].(string)), uidBuf[:n], 0)
+            xid := row.K[0].(string)
+            uid := row.V[1].(uint64)
+			n := binary.PutUvarint(uidBuf[:], uid)
+            // fmt.Fprintf(os.Stderr, "XID ENTRY: %s -> %d\n\n", xid, uid)
+			return wb.Set([]byte(xid), uidBuf[:n], 0)
 		})
 
 	if *isDistributed {

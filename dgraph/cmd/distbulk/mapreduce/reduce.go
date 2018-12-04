@@ -16,12 +16,27 @@
 
 package main
 
+import (
+    "bytes"
+    // "fmt"
+    // "os"
+)
+
 func testDeserialize(x, y interface{}) (interface{}, error) {
 	xx := x.([]interface{})
 	yy := y.([]interface{})
-    return []interface{}{
-        xx[0],
-        append(xx[1].([]byte), yy[1].([]byte)...),
-        append(xx[2].([]byte), yy[2].([]byte)...),
-    }, nil
+
+    // check if this is a duplicate entry (UID match)
+    xuids := xx[1].([]byte)
+    yuids := yy[1].([]byte)
+    // fmt.Fprintf(os.Stderr, "pred '%s', new uid: %v\n", xx[0], yuids)
+    if (bytes.Equal(xuids[len(xuids)-len(yuids):], yuids)) {
+        return xx, nil
+    } else {
+        return []interface{}{
+            xx[0],
+            append(xx[1].([]byte), yy[1].([]byte)...),
+            append(xx[2].([]byte), yy[2].([]byte)...),
+        }, nil
+    }
 }

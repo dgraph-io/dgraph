@@ -18,7 +18,6 @@ package main
 
 import (
 	"flag"
-    "sort"
 
 	"github.com/chrislusf/gleam/distributed"
 	"github.com/chrislusf/gleam/flow"
@@ -40,6 +39,7 @@ import (
     // "github.com/chrislusf/gleam/util"
     // "context"
     // "time"
+    // "sort"
 )
 
 type options struct {
@@ -78,6 +78,7 @@ func main() {
 		SchemaFile:  PATH_PREFIX + "data.schema.full",
 		DgraphsDir:  PATH_PREFIX + xid.New().String() + "-dgraph-p",
 		ExpandEdges: true,
+        // ExpandEdges: false,
 		StoreXids:   false,
         ZeroAddr:    "127.0.0.1:5080",
 	}
@@ -113,17 +114,10 @@ func main() {
 		Read(file.Txt(Opt.RDFDir + "/*", NUM_SHARDS)).
 		Map("rdfToMapEntry", RdfToMapEntry).
 		PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
-		LocalReduceBy("create postings", TestDeserialize, flow.Field(2)).
-        Map("write to badger", WriteToBadger)
-        // OutputRow(func(row *util.Row) error {
-        //     var pl pb.PostingList
-        //     err := proto.Unmarshal(row.V[0].([]byte), &pl)
-        //     if err != nil {
-        //         return err
-        //     }
-        //     fmt.Fprintf(os.Stderr, "KEY: %v\nPL: %+v\n\n", row.K[0].([]byte), pl)
-        //     return nil
-        // })
+        LocalSort("sort keys", flow.OrderBy(2, true).By(3, true)).
+		LocalReduceBy("create postings", TestDeserialize, flow.Field(2)). // REQUIRES LOCAL SORT TO WORK CORRECTLY
+        Map("write to badger", WriteToBadger).
+        Printlnf("%v %v")
 
 	if *isDistributed {
 		f.Run(distributed.Option())
@@ -136,50 +130,44 @@ func main() {
 
 // format becomes row = {key, pred, uid list, posting list} after reduction
 func writeToBadger(row []interface{}) error {
-    key := row[0].([]byte)
-
     var ul pb.List
     err := proto.Unmarshal(row[2].([]byte), &ul)
-    if err != nil {
-        return err
-    }
+    x.Check(err)
 
     var spl pb.SivaPostingList
     err = proto.Unmarshal(row[3].([]byte), &spl)
-    if err != nil {
-        return err
-    }
+    x.Check(err)
 
-    sort.Slice(ul.Uids, func(i, j int) bool {
-        return ul.Uids[i] < ul.Uids[j]
-    })
-    sort.Slice(spl.Postings, func(i, j int) bool {
-        return spl.Postings[i].Uid < spl.Postings[j].Uid
-    })
+    // sort.Slice(ul.Uids, func(i, j int) bool {
+    //     return ul.Uids[i] < ul.Uids[j]
+    // })
+    // sort.Slice(spl.Postings, func(i, j int) bool {
+    //     return spl.Postings[i].Uid < spl.Postings[j].Uid
+    // })
 
     val, err := proto.Marshal(&pb.PostingList{
         Pack: codec.Encode(ul.Uids, 256),
         Postings: spl.Postings,
     })
-    if err != nil {
-        return err
-    }
+    x.Check(err)
 
-    // gio.Emit(key, val)
+    key := row[0].([]byte)
+    gio.Emit(key, val)
 
     err = Outtx.SetWithMeta(key, val, posting.BitCompletePosting)
     if err != badger.ErrTxnTooBig {
-        return err
+        x.Check(err)
     }
 
     // txn got too big
-    if err = Outtx.CommitAt(WriteTs, nil); err != nil {
-        return err
-    }
+    x.Check(Outtx.CommitAt(WriteTs, nil))
+
     Outtx = Outdb.NewTransactionAt(WriteTs, true)
 
     // try again, if it fails, this time it's serious
-    return Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting)
+    x.Check(Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting))
+
+    return nil
 }
 
 func cleanup() {
