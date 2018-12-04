@@ -60,15 +60,6 @@ func PasswordExport(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.Len(t, assigned.Uids, 3)
 
-	// x.UpdateHealthStatus(true)
-	// resp, err := http.Get("http://127.0.0.1:8180/admin/export")
-	// require.NoError(t, err)
-
-	// b, err := ioutil.ReadAll(resp.Body)
-	// require.NoError(t, err)
-	// defer resp.Body.Close()
-	// require.Contains(t, string(b), "Success", "export failed: %v", string(b))
-
 	resp, err := c.NewTxn().Query(ctx, `
 	{
 	  q(func: uid(`+assigned.Uids["uid2"]+`)) {
