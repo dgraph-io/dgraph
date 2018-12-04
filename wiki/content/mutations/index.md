@@ -193,6 +193,7 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 | &#60;xs:double&#62;                                     | `float`          |
 | &#60;xs:float&#62;                                      | `float`          |
 | &#60;geo:geojson&#62;                                   | `geo`            |
+| &#60;xs:password&#62;                                   | `password`       |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
@@ -523,7 +524,7 @@ testList: [string] .
 Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 
 ```JSON
-{  
+{
    "uid": "0xd", #UID of the list.
    "testList": "Apple"
 }
@@ -647,4 +648,3 @@ Mutation with a JSON file:
 ```
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
 ```
-
