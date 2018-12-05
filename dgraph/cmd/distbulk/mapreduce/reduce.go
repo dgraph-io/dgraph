@@ -22,21 +22,23 @@ import (
     // "os"
 )
 
-func testDeserialize(x, y interface{}) (interface{}, error) {
+// pred, uid, ubytes, pbytes
+func concatenatePostings(x, y interface{}) (interface{}, error) {
 	xx := x.([]interface{})
 	yy := y.([]interface{})
 
+    xuid := xx[1].([]byte)
+    yuid := yy[1].([]byte)
+
     // check if this is a duplicate entry (UID match)
-    xuids := xx[1].([]byte)
-    yuids := yy[1].([]byte)
-    // fmt.Fprintf(os.Stderr, "pred '%s', new uid: %v\n", xx[0], yuids)
-    if (bytes.Equal(xuids[len(xuids)-len(yuids):], yuids)) {
+    if bytes.Equal(xuid, yuid) {
         return xx, nil
     } else {
         return []interface{}{
-            xx[0],
-            append(xx[1].([]byte), yy[1].([]byte)...),
+            yy[0],
+            yuid,
             append(xx[2].([]byte), yy[2].([]byte)...),
+            append(xx[3].([]byte), yy[3].([]byte)...),
         }, nil
     }
 }

@@ -36,7 +36,7 @@ import (
 
     // "fmt"
     // "os"
-    // "github.com/chrislusf/gleam/util"
+    "github.com/chrislusf/gleam/util"
     // "context"
     // "time"
     // "sort"
@@ -53,8 +53,8 @@ type options struct {
 
 var (
 	RdfToMapEntry   = gio.RegisterMapper(rdfToMapEntry)
-	TestDeserialize = gio.RegisterReducer(testDeserialize)
-    WriteToBadger = gio.RegisterMapper(writeToBadger)
+	ConcatenatePostings = gio.RegisterReducer(concatenatePostings)
+    WriteToBadgerMany = gio.RegisterMapper(writeToBadgerMany)
 	Xdb           *XidMap
     Outdb         *badger.DB
     Outtx         *badger.Txn
@@ -65,38 +65,30 @@ var (
 
 const (
 	NUM_SHARDS                 = 4
-	REQUESTED_PREDICATE_SHARDS = 4
-    // PATH_PREFIX = "./"
-    PATH_PREFIX = "../../"
+	REQUESTED_PREDICATE_SHARDS = 1
     WriteTs = 1
 )
 
 func main() {
-    var err error
-	Opt = options{
-		RDFDir:      "./data",
-		SchemaFile:  PATH_PREFIX + "data.schema.full",
-		DgraphsDir:  PATH_PREFIX + xid.New().String() + "-dgraph-p",
-		ExpandEdges: true,
+    _ = util.Row{}
+    Opt = options{
+        RDFDir:      "data",
+        SchemaFile:  "../../data.schema.full",
+        ExpandEdges: true,
         // ExpandEdges: false,
-		StoreXids:   false,
+        StoreXids:   false,
         ZeroAddr:    "127.0.0.1:5080",
-	}
+    }
+    if REQUESTED_PREDICATE_SHARDS > 1 {
+        Opt.DgraphsDir = "../../" + xid.New().String() + "-dgraph-p"
+        initOutDb()
+        gio.RegisterCleanup(cleanup)
+    } else {
+        Opt.DgraphsDir = xid.New().String() + "-dgraph-p"
+    }
 
-	Xdb = NewXidmap(PATH_PREFIX + "xids", 1 << 19)
-
-    badgeropts := badger.DefaultOptions
-    badgeropts.SyncWrites = false
-    badgeropts.TableLoadingMode = bo.MemoryMap
-    badgeropts.Dir = Opt.DgraphsDir
-    badgeropts.ValueDir = Opt.DgraphsDir
-    Outdb, err = badger.OpenManaged(badgeropts)
-    x.Check(err)
-
-    Outtx = Outdb.NewTransactionAt(WriteTs, true)
-	Schema = newSchemaStore(readSchema(Opt.SchemaFile), Opt.StoreXids)
-
-    gio.RegisterCleanup(cleanup)
+    Xdb = NewXidmap("../../xids", 1 << 19)
+    Schema = newSchemaStore(readSchema(Opt.SchemaFile), Opt.StoreXids)
 
 	// ^^^^^^^^^^ Executor code above, driver code below vvvvvvvvvvv
 	gio.Init()
@@ -112,12 +104,27 @@ func main() {
 
 	f := flow.New("dgraph distributed bulk loader").
 		Read(file.Txt(Opt.RDFDir + "/*", NUM_SHARDS)).
-		Map("rdfToMapEntry", RdfToMapEntry).
-		PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
-        LocalSort("sort keys", flow.OrderBy(2, true).By(3, true)).
-		LocalReduceBy("create postings", TestDeserialize, flow.Field(2)). // REQUIRES LOCAL SORT TO WORK CORRECTLY
-        Map("write to badger", WriteToBadger).
-        Printlnf("%v %v")
+		Map("rdfToMapEntry", RdfToMapEntry)
+
+    if REQUESTED_PREDICATE_SHARDS > 1 {
+        f = f.
+            PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
+            LocalSort("sort keys", flow.OrderBy(2, true).By(3, true)).
+            LocalReduceBy("create postings", ConcatenatePostings, flow.Field(2)).
+            Map("write to badger", WriteToBadgerMany)
+    } else {
+        initOutDb()
+        f = f.
+            // Sort("sort keys and uids", flow.OrderBy(2, true).By(3, true)).
+            Sort("sort keys and uids", flow.OrderBy(1, true).By(2, true).By(3, true)).
+            LocalReduceBy("create postings", ConcatenatePostings, flow.Field(2)).
+            OutputRow(func(row *util.Row) error {
+                // key, pred, uid, uidlist, pbytes
+                writeToBadger(row.K[0].([]byte), row.V[2].([]byte), row.V[3].([]byte))
+                return nil
+            })
+            // Printlnf("%v %v %v %v %v")
+    }
 
 	if *isDistributed {
 		f.Run(distributed.Option())
@@ -128,14 +135,19 @@ func main() {
     cleanup()
 }
 
-// format becomes row = {key, pred, uid list, posting list} after reduction
-func writeToBadger(row []interface{}) error {
+// format becomes row = {key, pred, uidbuf, uid list, posting list} after reduction
+func writeToBadgerMany(row []interface{}) error {
+    writeToBadger(row[0].([]byte), row[3].([]byte), row[4].([]byte))
+    return nil
+}
+
+func writeToBadger(key, ubytes, pbytes []byte) {
     var ul pb.List
-    err := proto.Unmarshal(row[2].([]byte), &ul)
+    err := proto.Unmarshal(ubytes, &ul)
     x.Check(err)
 
     var spl pb.SivaPostingList
-    err = proto.Unmarshal(row[3].([]byte), &spl)
+    err = proto.Unmarshal(pbytes, &spl)
     x.Check(err)
 
     // sort.Slice(ul.Uids, func(i, j int) bool {
@@ -151,8 +163,7 @@ func writeToBadger(row []interface{}) error {
     })
     x.Check(err)
 
-    key := row[0].([]byte)
-    gio.Emit(key, val)
+    // gio.Emit(key, val)
 
     err = Outtx.SetWithMeta(key, val, posting.BitCompletePosting)
     if err != badger.ErrTxnTooBig {
@@ -165,9 +176,20 @@ func writeToBadger(row []interface{}) error {
     Outtx = Outdb.NewTransactionAt(WriteTs, true)
 
     // try again, if it fails, this time it's serious
-    x.Check(Outtx.SetWithMeta(row[0].([]byte), val, posting.BitCompletePosting))
+    x.Check(Outtx.SetWithMeta(key, val, posting.BitCompletePosting))
+}
 
-    return nil
+func initOutDb() {
+    var err error
+    badgeropts := badger.DefaultOptions
+    badgeropts.SyncWrites = false
+    badgeropts.TableLoadingMode = bo.MemoryMap
+    badgeropts.Dir = Opt.DgraphsDir
+    badgeropts.ValueDir = Opt.DgraphsDir
+    Outdb, err = badger.OpenManaged(badgeropts)
+    x.Check(err)
+
+    Outtx = Outdb.NewTransactionAt(WriteTs, true)
 }
 
 func cleanup() {

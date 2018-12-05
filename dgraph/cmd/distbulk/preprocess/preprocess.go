@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"encoding/binary"
 	"flag"
 	"fmt"
 	"os"
-    "time"
 
 	"github.com/chrislusf/gleam/distributed"
 	"github.com/chrislusf/gleam/flow"
@@ -21,7 +19,10 @@ import (
     "github.com/dgraph-io/dgraph/gql"
 
     "github.com/gogo/protobuf/proto"
+
 	"google.golang.org/grpc"
+    "context"
+    "time"
 )
 
 const (
@@ -36,6 +37,21 @@ var (
 	uidStart      uint64
 	uidEnd        uint64
 	zc            pb.ZeroClient
+    // uidMap = map[string]uint64{
+    //     "6993395339427947996": 20001,
+    //     "9124413486081389766": 1,
+    //     "12157535227869930158": 90001,
+    //     "2204567941178379046": 120001,
+    //     "2695865011725746053": 110001,
+    //     "13259440069764597455": 30001,
+    //     "5050508413252056582": 40001,
+    //     "7725715438840337311": 10001,
+    //     "17007490938041521212": 50001,
+    //     "8397113093673239460": 80001,
+    //     "12236106871166960662": 100001,
+    //     "12277518267403927018": 70001,
+    //     "3811935039818710427": 60001,
+    // }
 )
 
 func check(err error) {
@@ -192,6 +208,7 @@ func assignUid(row []interface{}) error {
 		}
 	}
 	row = append(row, uidStart)
+    // row = append(row, uidMap[row[0].(string)])
 	uidStart += 1
 	gio.Emit(row...)
 	return nil

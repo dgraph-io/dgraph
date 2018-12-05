@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-
+    "encoding/binary"
 	"math"
 	"strings"
 
@@ -39,7 +39,10 @@ func emitMapEntry(pred string, key []byte, p *pb.Posting) error {
     })
     x.Check(err)
 
-	gio.Emit(pred, key, ubytes, pbytes)
+    uidBuf := make([]byte, 8)
+    binary.BigEndian.PutUint64(uidBuf, p.Uid)
+
+    gio.Emit(pred, key, uidBuf, ubytes, pbytes)
 	return nil
 }
 
@@ -164,9 +167,8 @@ func emitPostings(nq gql.NQuad, de *pb.DirectedEdge) error {
 }
 
 func emitIndexPostings(nq gql.NQuad, de *pb.DirectedEdge) error {
-	// Cannot index UIDs
 	if nq.GetObjectValue() == nil {
-		return nil
+		return nil // Cannot index UIDs
 	}
 
 	sch := Schema.getSchema(nq.GetPredicate())
@@ -187,20 +189,20 @@ func emitIndexPostings(nq gql.NQuad, de *pb.DirectedEdge) error {
 		schemaVal, err := types.Convert(storageVal, types.TypeID(sch.GetValueType()))
 		// Shouldn't error, since we've already checked for convertibility when
 		// doing edge postings. So okay to be fatal.
-        x.Check(err)
+		x.Check(err)
 
 		// Extract tokens.
-		toks, err := tok.BuildTokens(schemaVal.Value, toker)
-        x.Check(err)
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
+		x.Check(err)
 
 		// Store index posting.
 		for _, t := range toks {
-			key := x.IndexKey(nq.Predicate, t)
-			p := &pb.Posting{
-				Uid:         de.GetEntity(),
-				PostingType: pb.Posting_REF,
-			}
-            x.Check(emitMapEntry(nq.Predicate, key, p))
+            key := x.IndexKey(nq.Predicate, t)
+            p := &pb.Posting{
+                Uid:         de.GetEntity(),
+                PostingType: pb.Posting_REF,
+            }
+			x.Check(emitMapEntry(nq.Predicate, key, p))
 		}
 	}
 
