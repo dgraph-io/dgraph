@@ -148,6 +148,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User
     query search($userid: string){
       user(func: eq(dgraph.xid, $userid)) {
 	    uid
+        dgraph.xid
         dgraph.user.group {
           uid
           dgraph.xid

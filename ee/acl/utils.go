@@ -80,14 +80,15 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 type Group struct {
 	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
+	Users   []User `json:"~dgraph.user.group"`
 	Acls    string `json:"dgraph.group.acl"`
 }
 
 // Extract the first User pointed by the userKey in the query response
-func UnmarshalGroup(resp *api.Response, groupKey string) (group *Group, err error) {
+func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	m := make(map[string][]Group)
 
-	err = json.Unmarshal(resp.GetJson(), &m)
+	err = json.Unmarshal(input, &m)
 	if err != nil {
 		glog.Errorf("Unable to unmarshal the query group response:%v", err)
 		return nil, err
@@ -98,7 +99,7 @@ func UnmarshalGroup(resp *api.Response, groupKey string) (group *Group, err erro
 		return nil, nil
 	}
 	if len(groups) > 1 {
-		return nil, x.Errorf("Found multiple groups: %s", resp.GetJson())
+		return nil, x.Errorf("Found multiple groups: %s", input)
 	}
 	return &groups[0], nil
 }

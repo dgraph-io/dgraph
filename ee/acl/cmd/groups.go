@@ -123,7 +123,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
 	}
-	group, err = acl.UnmarshalGroup(queryResp, "group")
+	group, err = acl.UnmarshalGroup(queryResp.GetJson(), "group")
 	if err != nil {
 		return nil, err
 	}

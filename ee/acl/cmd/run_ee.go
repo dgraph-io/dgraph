@@ -13,8 +13,12 @@
 package acl
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -169,8 +173,24 @@ func initSubcommands() []*x.SubCommand {
 		" are to be changed")
 	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
 		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
+
+	var cmdInfo x.SubCommand
+	cmdInfo.Cmd = &cobra.Command{
+		Use:   "info",
+		Short: "Show info about a user or group",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := info(cmdInfo.Conf); err != nil {
+				glog.Errorf("Unable to show info:%v", err)
+				os.Exit(1)
+			}
+		},
+	}
+	infoFlags := cmdInfo.Cmd.Flags()
+	infoFlags.StringP("user", "u", "", "The user to be shown")
+	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{
-		&cmdUserAdd, &cmdUserDel, &cmdLogIn, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod, &cmdChMod,
+		&cmdUserAdd, &cmdUserDel, &cmdLogIn, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
+		&cmdChMod, &cmdInfo,
 	}
 }
 
@@ -198,4 +218,70 @@ func getDgraphClient(conf *viper.Viper) *dgo.Dgraph {
 	}
 
 	return dgo.NewDgraphClient(clients...)
+}
+
+func info(conf *viper.Viper) error {
+	userId := conf.GetString("user")
+	groupId := conf.GetString("group")
+	if (len(userId) == 0 && len(groupId) == 0) ||
+		(len(userId) != 0 && len(groupId) != 0) {
+		return fmt.Errorf("either the user or group should be specified, not both")
+	}
+
+	dc := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	txn := dc.NewTxn()
+	defer txn.Discard(ctx)
+
+	if len(userId) != 0 {
+		user, err := queryUser(ctx, txn, userId)
+		if err != nil {
+			return err
+		}
+
+		var userSB strings.Builder
+		userSB.WriteString(fmt.Sprintf("user %v:\n", userId))
+		userSB.WriteString(fmt.Sprintf("uid:%v\nid:%v\n", user.Uid, user.UserID))
+		var groupNames []string
+		for _, group := range user.Groups {
+			groupNames = append(groupNames, group.GroupID)
+		}
+		userSB.WriteString(fmt.Sprintf("groups:%v\n", strings.Join(groupNames, " ")))
+		glog.Infof(userSB.String())
+	}
+
+	if len(groupId) != 0 {
+		group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
+			"dgraph.group.acl")
+		if err != nil {
+			return err
+		}
+		// build the info string for group
+		var groupSB strings.Builder
+		groupSB.WriteString(fmt.Sprintf("group %v:\n", groupId))
+		groupSB.WriteString(fmt.Sprintf("uid:%v\nid:%v\n", group.Uid, group.GroupID))
+
+		var userNames []string
+		for _, user := range group.Users {
+			userNames = append(userNames, user.UserID)
+		}
+		groupSB.WriteString(fmt.Sprintf("users:%v\n", strings.Join(userNames, " ")))
+
+		var aclStrs []string
+		var acls []Acl
+		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v:%v",
+				groupId, err)
+		}
+
+		for _, acl := range acls {
+			aclStrs = append(aclStrs, fmt.Sprintf("(predicate:%v,perm:%v)", acl.Predicate, acl.Perm))
+		}
+		groupSB.WriteString(fmt.Sprintf("acls:%v\n", strings.Join(aclStrs, " ")))
+
+		glog.Infof(groupSB.String())
+	}
+
+	return nil
 }
