@@ -14,9 +14,11 @@ package backup
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -26,7 +28,9 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp *os.File
+	fp    *os.File
+	files []string
+	fidx  int
 }
 
 // Open authenticates or prepares a handler session.
@@ -37,7 +41,7 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// opening location for write
+	// open a single file for write.
 	if req.Backup.Target != "" {
 		dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
 		if err := os.Mkdir(dir, 0700); err != nil {
@@ -56,26 +60,24 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 		return nil
 	}
 
-	// scan location and find backup for our group.
-	files := x.FindFilesFunc(req.Backup.Source, func(path string) bool {
-		return strings.HasSuffix(path, fmt.Sprintf("g%d.backup", req.Backup.GroupId))
+	// scan location and find backup files. read them sequentially.
+	h.files = x.FindFilesFunc(req.Backup.Source, func(path string) bool {
+		return strings.HasSuffix(path, ".backup")
 	})
-	if len(files) == 0 {
-		return x.Errorf("No backup files found for groupId %d in %q",
-			req.Backup.GroupId, req.Backup.Source)
+	if len(h.files) == 0 {
+		return x.Errorf("No backup files found in %q", req.Backup.Source)
 	}
-	if len(files) > 1 {
-		return x.Errorf("Too many backup files found for groupId %d in %q",
-			req.Backup.GroupId, req.Backup.Source)
-	}
+	sort.Strings(h.files)
 
-	fp, err := os.Open(files[0])
+	// open the first file.
+	fp, err := os.Open(h.files[h.fidx])
 	if err != nil {
 		return err
 	}
-	glog.V(2).Infof("Loading backup file: %q", files[0])
 	h.fp = fp
+	h.fidx++
 
+	glog.V(2).Infof("Loading backup file(s): %v", h.files)
 	return nil
 }
 
@@ -88,8 +90,27 @@ func (h *fileHandler) Close() error {
 	return h.fp.Close()
 }
 
+// Read will read each file in order until done or error.
 func (h *fileHandler) Read(b []byte) (int, error) {
-	return h.fp.Read(b)
+	n, err := h.fp.Read(b)
+	if err != nil {
+		if err != io.EOF {
+			return n, err
+		}
+		if h.fidx < len(h.files) {
+			err = h.fp.Close()
+			if err != nil {
+				return -1, err
+			}
+			h.fp, err = os.Open(h.files[h.fidx])
+			if err != nil {
+				return -2, err
+			}
+			h.fidx++
+			n, err = h.fp.Read(b)
+		}
+	}
+	return n, err
 }
 
 func (h *fileHandler) Write(b []byte) (int, error) {

@@ -36,11 +36,11 @@ const (
 
 // s3Handler is used for 's3:' URI scheme.
 type s3Handler struct {
-	bucket string
-	object string
-	writer io.Writer
-	reader io.Reader
-	cerr   chan error
+	bucket  string
+	objects []string
+	writer  io.Writer
+	reader  io.Reader
+	cerr    chan error
 }
 
 // Open creates an AWS session and sends our data stream to an S3 blob.
@@ -96,12 +96,12 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		// The location is: /bucket/folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 		parts = append(parts, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
 		parts = append(parts, fmt.Sprintf("r%d.g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
-		h.object = filepath.Join(parts[1:]...)
-		glog.V(2).Infof("Sending data to S3 blob %q ...", h.object)
+		object := filepath.Join(parts[1:]...)
+		glog.V(2).Infof("Sending data to S3 blob %q ...", object)
 
 		h.cerr = make(chan error, 1)
 		go func() {
-			h.cerr <- h.upload(mc)
+			h.cerr <- h.upload(mc, object)
 		}()
 
 		glog.Infof("Uploading data, estimated size %s", humanize.Bytes(req.Sizex))
@@ -109,36 +109,30 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 	}
 
 	// scan location and find backup for our group.
-	var files []string
+	var objects []string
 	done := make(chan struct{})
 	defer close(done)
 	for info := range mc.ListObjects(h.bucket, "dgraph", true, done) {
-		if strings.HasSuffix(info.Key, fmt.Sprintf("g%d.backup", req.Backup.GroupId)) {
-			files = append(files, info.Key)
+		if strings.HasSuffix(info.Key, ".backup") {
+			objects = append(objects, info.Key)
 		}
 	}
-	if len(files) == 0 {
-		return x.Errorf("No backup files found for groupId %d in %q",
-			req.Backup.GroupId, req.Backup.Source)
-	}
-	if len(files) > 1 {
-		return x.Errorf("Too many backup files found for groupId %d in %q",
-			req.Backup.GroupId, req.Backup.Source)
+	if len(objects) == 0 {
+		return x.Errorf("No backup files found in %q", req.Backup.Source)
 	}
 
-	h.object = files[0]
-	glog.V(2).Infof("Receiving data from S3 blob %q ...", h.object)
+	glog.V(2).Infof("Receiving data from S3 blobs %v ...", objects)
 
 	h.cerr = make(chan error, 1)
 	go func() {
-		h.cerr <- h.download(mc)
+		h.cerr <- h.download(mc, objects...)
 	}()
 
 	return <-h.cerr
 }
 
 // upload will block until it's done or an error occurs.
-func (h *s3Handler) upload(mc *minio.Client) error {
+func (h *s3Handler) upload(mc *minio.Client, object string) error {
 	start := time.Now()
 	preader, pwriter := io.Pipe()
 	h.reader, h.writer = preader, pwriter
@@ -147,7 +141,7 @@ func (h *s3Handler) upload(mc *minio.Client) error {
 	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
 	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
 	// the progress of read. By definition, it must be the same.
-	n, err := mc.PutObject(h.bucket, h.object, preader, -1, minio.PutObjectOptions{})
+	n, err := mc.PutObject(h.bucket, object, preader, -1, minio.PutObjectOptions{})
 	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
 		n, time.Since(start).Round(time.Second))
 
@@ -161,20 +155,22 @@ func (h *s3Handler) upload(mc *minio.Client) error {
 }
 
 // download will block until it's done or an error occurs.
-func (h *s3Handler) download(mc *minio.Client) error {
-	reader, err := mc.GetObject(h.bucket, h.object, minio.GetObjectOptions{})
-	if err != nil {
-		glog.Errorf("Backup: closing due to error: %s", err)
-		return err
+func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
+	for _, object := range objects {
+		reader, err := mc.GetObject(h.bucket, object, minio.GetObjectOptions{})
+		if err != nil {
+			glog.Errorf("Backup: closing due to error: %s", err)
+			return err
+		}
+		st, err := reader.Stat()
+		if err != nil {
+			reader.Close()
+			glog.Errorf("Backup: unexpected error: %s", err)
+			return err
+		}
+		h.reader = reader
+		glog.Infof("Downloading data, size %s", humanize.Bytes(uint64(st.Size)))
 	}
-	st, err := reader.Stat()
-	if err != nil {
-		reader.Close()
-		glog.Errorf("Backup: unexpected error: %s", err)
-		return err
-	}
-	h.reader = reader
-	glog.Infof("Downloading data, size %s", humanize.Bytes(uint64(st.Size)))
 	return nil
 }
 

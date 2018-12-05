@@ -50,31 +50,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func restoreHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodPost) {
-		return
-	}
-	if !Alpha.Conf.GetBool("enterprise_features") {
-		err := x.Errorf("You must enable Dgraph enterprise features.")
-		x.SetStatus(w, err.Error(), "Restore failed.")
-		return
-	}
-	target := r.FormValue("source")
-	if target == "" {
-		err := x.Errorf("You must specify a 'source' value")
-		x.SetStatus(w, err.Error(), "Restore failed.")
-		return
-	}
-	if err := worker.RestoreOverNetwork(context.Background(), target); err != nil {
-		x.SetStatus(w, err.Error(), "Restore failed.")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Restore completed."}`)))
-
-}
-
 func init() {
 	http.HandleFunc("/admin/backup", backupHandler)
-	http.HandleFunc("/admin/restore", restoreHandler)
 }

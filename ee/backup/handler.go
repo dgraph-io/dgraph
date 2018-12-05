@@ -35,8 +35,8 @@ type handler interface {
 	Open(*url.URL, *Request) error
 }
 
-// file implements the handler interface.
-type file struct {
+// File implements the handler interface.
+type File struct {
 	h handler
 }
 
@@ -62,7 +62,7 @@ type file struct {
 //   as://dgraph-container/backups/
 //   http://backups.dgraph.io/upload
 //   file:///tmp/dgraph/backups or /tmp/dgraph/backups?compress=gzip
-func (r *Request) openLocation(loc string) (*file, error) {
+func (r *Request) OpenLocation(loc string) (*File, error) {
 	if loc == "" {
 		return nil, errLocationEmpty
 	}
@@ -97,17 +97,24 @@ func (r *Request) openLocation(loc string) (*file, error) {
 		return nil, err
 	}
 
-	return &file{h: h}, nil
+	return &File{h: h}, nil
 }
 
-func (f *file) flush() error {
+func (f *File) Close() error {
 	glog.V(2).Infof("Backup closing handler.")
 	return f.h.Close()
 }
 
-// write uses the data length as delimiter.
-// XXX: we could use CRC for restore.
-func (f *file) write(kv *pb.KV) error {
+func (f *File) Read(b []byte) (int, error) {
+	return f.h.Read(b)
+}
+
+func (f *File) Write(b []byte) (int, error) {
+	return f.h.Write(b)
+}
+
+// writeKVS uses the data length as delimiter.
+func (f *File) writeKVS(kv *pb.KV) error {
 	if err := binary.Write(f.h, binary.LittleEndian, uint64(kv.Size())); err != nil {
 		return err
 	}
@@ -122,10 +129,10 @@ func (f *file) write(kv *pb.KV) error {
 // Send implements the stream.kvStream interface.
 // It writes the received KV to the target as a delimited binary chain.
 // Returns error if the writing fails, nil on success.
-func (f *file) Send(kvs *pb.KVS) error {
+func (f *File) Send(kvs *pb.KVS) error {
 	var err error
 	for _, kv := range kvs.Kv {
-		err = f.write(kv)
+		err = f.writeKVS(kv)
 		if err != nil {
 			return err
 		}
