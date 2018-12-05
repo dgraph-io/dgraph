@@ -128,7 +128,10 @@ they form a Raft group and provide synchronous replication.
 			" For Grpc, in auth-token key in the context.")
 	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
 		" that is used for signing the JWT. Enterprise feature.")
-	flag.Duration("jwt_ttl", 6*time.Hour, "The TTL of jwt tokens. Enterprise feature.")
+	flag.Duration("access_jwt_ttl", 6*time.Hour, "The TTL for the access jwt. "+
+		"Enterprise feature.")
+	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -409,7 +412,8 @@ func run() {
 		}
 
 		opts.HmacSecret = hmacSecret
-		opts.JwtTtl = Alpha.Conf.GetDuration("jwt_ttl")
+		opts.AccessJwtTtl = Alpha.Conf.GetDuration("access_jwt_ttl")
+		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("refresh_jwt_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}

@@ -21,30 +21,15 @@ import (
 	"github.com/golang/glog"
 )
 
-func ValidateLoginRequest(request *api.LogInRequest) error {
-	if request == nil {
-		return fmt.Errorf("the request should not be nil")
-	}
-	if len(request.Userid) == 0 {
-		return fmt.Errorf("the userid should not be empty")
-	}
-	if len(request.Password) == 0 {
-		return fmt.Errorf("the password should not be empty")
-	}
-	return nil
-}
-
-func ToJwtGroups(groups []Group) []JwtGroup {
+func GetGroupIDs(groups []Group) []string {
 	if len(groups) == 0 {
 		// the user does not have any groups
 		return nil
 	}
 
-	jwtGroups := make([]JwtGroup, 0, len(groups))
+	jwtGroups := make([]string, 0, len(groups))
 	for _, g := range groups {
-		jwtGroups = append(jwtGroups, JwtGroup{
-			Group: g.GroupID,
-		})
+		jwtGroups = append(jwtGroups, g.GroupID)
 	}
 	return jwtGroups
 }

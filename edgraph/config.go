@@ -36,8 +36,9 @@ type Options struct {
 
 	AllottedMemory float64
 
-	HmacSecret []byte
-	JwtTtl     time.Duration
+	HmacSecret    []byte
+	AccessJwtTtl  time.Duration
+	RefreshJwtTtl time.Duration
 }
 
 var Config Options

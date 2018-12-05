@@ -139,7 +139,8 @@ func userLogin(conf *viper.Viper) error {
 		return fmt.Errorf("unable to login:%v", err)
 	}
 	updatedContext := dc.GetContext(ctx)
-	glog.Infof("Login successfully with jwt:\n%v", updatedContext.Value("jwt"))
+	glog.Infof("Login successfully.\naccess jwt:\n%v\nrefresh jwt:\n%v",
+		updatedContext.Value("accessJwt"), updatedContext.Value("refreshJwt"))
 	return nil
 }
 

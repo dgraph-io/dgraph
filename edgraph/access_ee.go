@@ -21,7 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/peer"
 
@@ -43,45 +43,165 @@ func (s *Server) Login(ctx context.Context,
 		}, "client ip for login")
 	}
 
-	if err := acl.ValidateLoginRequest(request); err != nil {
-		glog.Warningf("Invalid login from: %s", addr)
-		return nil, err
+	user, err := s.authenticate(ctx, request)
+	if err != nil {
+		errMsg := fmt.Sprintf("authentication from address %s failed: %v", addr, err)
+		glog.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 
 	resp := &api.Response{}
-
-	user, err := s.queryUser(ctx, request.Userid, request.Password)
+	accessJwt, err := getAccessJwt(request.Userid, user.Groups)
 	if err != nil {
-		glog.Warningf("Unable to login user id: %v. Addr: %s", request.Userid, addr)
-		return nil, err
-	}
-	if user == nil {
-		errMsg := fmt.Sprintf("User not found for user id %v. Addr: %s", request.Userid, addr)
-		glog.Warningf(errMsg)
+		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
+			request.Userid, addr, err)
+		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	if !user.PasswordMatch {
-		errMsg := fmt.Sprintf("Password mismatch for user: %v. Addr: %s", request.Userid, addr)
-		glog.Warningf(errMsg)
+	refreshJwt, err := getRefreshJwt(request.Userid)
+	if err != nil {
+		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
+			request.Userid, addr, err)
+		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	loginJwt := api.Jwt{
+		AccessJwt:  accessJwt,
+		RefreshJwt: refreshJwt,
+	}
+
+	jwtBytes, err := loginJwt.Marshal()
+	if err != nil {
+		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
+			request.Userid, addr, err)
+		glog.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+	resp.Json = jwtBytes
+	return resp, nil
+}
+
+func (s *Server) authenticate(ctx context.Context, request *api.LogInRequest) (*acl.User, error) {
+	if err := validateLoginRequest(request); err != nil {
+		return nil, fmt.Errorf("invalid login request: %v", err)
+	}
+
+	var user *acl.User
+	if len(request.RefreshToken) > 0 {
+		userId, err := authenticateRefreshToken(request.RefreshToken)
+		if err != nil {
+			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
+				request.RefreshToken, err)
+		}
+
+		user, err = s.queryUser(ctx, userId, "")
+		if err != nil {
+			return nil, fmt.Errorf("error while querying user with id: %v",
+				request.Userid)
+		}
+
+		if user == nil {
+			return nil, fmt.Errorf("user not found for id %v", request.Userid)
+		}
+	} else {
+		var err error
+		user, err = s.queryUser(ctx, request.Userid, request.Password)
+		if err != nil {
+			return nil, fmt.Errorf("error while querying user with id: %v",
+				request.Userid)
+		}
+
+		if user == nil {
+			return nil, fmt.Errorf("user not found for id %v", request.Userid)
+		}
+		if !user.PasswordMatch {
+			return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
+		}
+	}
+
+	return user, nil
+}
+
+func authenticateRefreshToken(refreshToken string) (string, error) {
+	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return Config.HmacSecret, nil
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("unable to parse refresh token:%v", err)
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if (!ok) || (!token.Valid) {
+		return "", fmt.Errorf("claims in refresh token is not map claims:%v", refreshToken)
+	}
+
+	// by default, the MapClaims.Valid will return true if the exp field is not set
+	// here we enforce the checking to make sure that the refresh token has not expired
+	now := time.Now().Unix()
+	if claims.VerifyExpiresAt(now, true) == false {
+		return "", fmt.Errorf("refresh token has expired: %v", refreshToken)
+	}
+
+	userId, ok := claims["userid"].(string)
+	if !ok {
+		return "", fmt.Errorf("userid in claims is not a string:%v", userId)
+	}
+	return userId, nil
+}
+
+func validateLoginRequest(request *api.LogInRequest) error {
+	if request == nil {
+		return fmt.Errorf("the request should not be nil")
+	}
+	// we will use the refresh token for authentication if it's set
+	if len(request.RefreshToken) > 0 {
+		return nil
+	}
+
+	// otherwise make sure both userid and password are set
+	if len(request.Userid) == 0 {
+		return fmt.Errorf("the userid should not be empty")
+	}
+	if len(request.Password) == 0 {
+		return fmt.Errorf("the password should not be empty")
+	}
+	return nil
+}
+
+func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userid": request.Userid,
-		"groups": acl.ToJwtGroups(user.Groups),
+		"userid": userId,
+		"groups": acl.GetGroupIDs(groups),
 		// set the jwt exp according to the ttl
 		"exp": json.Number(
-			strconv.FormatInt(time.Now().Add(Config.JwtTtl).Unix(), 10)),
+			strconv.FormatInt(time.Now().Add(Config.AccessJwtTtl).Unix(), 10)),
 	})
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
 	if err != nil {
-		glog.Errorf("Unable to encode jwt to string: %v", err)
-		return nil, err
+		return "", fmt.Errorf("unable to encode jwt to string: %v", err)
 	}
+	return jwtString, nil
+}
 
-	resp.Json = []byte(jwtString)
-	return resp, nil
+func getRefreshJwt(userId string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"userid": userId,
+		// set the jwt exp according to the ttl
+		"exp": json.Number(
+			strconv.FormatInt(time.Now().Add(Config.RefreshJwtTtl).Unix(), 10)),
+	})
+
+	jwtString, err := token.SignedString(Config.HmacSecret)
+	if err != nil {
+		return "", fmt.Errorf("unable to encode jwt to string: %v", err)
+	}
+	return jwtString, nil
 }
 
 const queryUser = `
