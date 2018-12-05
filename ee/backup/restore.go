@@ -18,9 +18,14 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"math"
+	"sync"
+	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 const bufSize = 16 << 10
@@ -32,12 +37,13 @@ func (r *Request) Restore(ctx context.Context) error {
 	}
 
 	br := bufio.NewReaderSize(f.h, bufSize)
-	errChan := make(chan error, 1)
+	entries := make([]*pb.KV, 0, 1000)
+	start := time.Now()
 
 	var (
-		bb      bytes.Buffer
-		sz      uint64
-		entries []*pb.KV
+		bb  bytes.Buffer
+		sz  uint64
+		cnt int
 	)
 	for {
 		err = binary.Read(br, binary.LittleEndian, &sz)
@@ -58,15 +64,57 @@ func (r *Request) Restore(ctx context.Context) error {
 		if err = e.Unmarshal((&bb).Bytes()); err != nil {
 			return err
 		}
+		bb.Reset()
 		entries = append(entries, e)
+		cnt++
+		if cnt%1000 == 0 {
+			if err := setKeyValues(r.DB, entries); err != nil {
+				return err
+			}
+			entries = entries[:0]
+			if cnt%100000 == 0 {
+				glog.V(3).Infof("--- writing %d keys", cnt)
+			}
+		}
 	}
-
-	select {
-	case err := <-errChan:
-		return err
-	default:
-		// Mark all versions done up until nextTxnTs.
+	if len(entries) > 0 {
+		if err := setKeyValues(r.DB, entries); err != nil {
+			return err
+		}
 	}
+	glog.Infof("Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))
 
 	return nil
+}
+
+func setKeyValues(pstore *badger.DB, kvs []*pb.KV) error {
+	var wg sync.WaitGroup
+	cerr := make(chan error, 1)
+	wg.Add(len(kvs))
+	for _, kv := range kvs {
+		txn := pstore.NewTransactionAt(math.MaxUint64, true)
+		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
+			return err
+		}
+		err := txn.CommitAt(kv.Version, func(err error) {
+			if err != nil {
+				select {
+				case cerr <- err:
+				default:
+				}
+			}
+			wg.Done()
+		})
+		if err != nil {
+			return err
+		}
+		txn.Discard()
+	}
+	wg.Wait()
+	select {
+	case err := <-cerr:
+		return x.Errorf("Error while writing: %s", err)
+	default:
+		return nil
+	}
 }

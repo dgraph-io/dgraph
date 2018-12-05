@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -55,7 +56,25 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 		return nil
 	}
 
-	// open location for read, find backup file.
+	// scan location and find backup for our group.
+	files := x.FindFilesFunc(req.Backup.Source, func(path string) bool {
+		return strings.HasSuffix(path, fmt.Sprintf("g%d.backup", req.Backup.GroupId))
+	})
+	if len(files) == 0 {
+		return x.Errorf("No backup files found for groupId %d in %q",
+			req.Backup.GroupId, req.Backup.Source)
+	}
+	if len(files) > 1 {
+		return x.Errorf("Too many backup files found for groupId %d in %q",
+			req.Backup.GroupId, req.Backup.Source)
+	}
+
+	fp, err := os.Open(files[0])
+	if err != nil {
+		return err
+	}
+	glog.V(2).Infof("Loading backup file: %q", files[0])
+	h.fp = fp
 
 	return nil
 }

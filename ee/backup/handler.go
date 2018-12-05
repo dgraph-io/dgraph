@@ -71,6 +71,10 @@ func (r *Request) openLocation(loc string) (*file, error) {
 	if err != nil {
 		return nil, err
 	}
+	// allow /dir/dir/ to work without file://.
+	if uri.Scheme == "" && uri.Path != "" {
+		uri.Scheme = "file"
+	}
 
 	// find handler for this URI scheme
 	var h handler
