@@ -29,8 +29,8 @@ import (
 )
 
 func (s *Server) Login(ctx context.Context,
-	request *api.LogInRequest) (*api.Response, error) {
-	ctx, span := otrace.StartSpan(ctx, "server.LogIn")
+	request *api.LoginRequest) (*api.Response, error) {
+	ctx, span := otrace.StartSpan(ctx, "server.Login")
 	defer span.End()
 
 	// record the client ip for this login request
@@ -82,7 +82,7 @@ func (s *Server) Login(ctx context.Context,
 	return resp, nil
 }
 
-func (s *Server) authenticate(ctx context.Context, request *api.LogInRequest) (*acl.User, error) {
+func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*acl.User, error) {
 	if err := validateLoginRequest(request); err != nil {
 		return nil, fmt.Errorf("invalid login request: %v", err)
 	}
@@ -136,14 +136,14 @@ func authenticateRefreshToken(refreshToken string) (string, error) {
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if (!ok) || (!token.Valid) {
+	if !ok || !token.Valid {
 		return "", fmt.Errorf("claims in refresh token is not map claims:%v", refreshToken)
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
-	if claims.VerifyExpiresAt(now, true) == false {
+	if !claims.VerifyExpiresAt(now, true) {
 		return "", fmt.Errorf("refresh token has expired: %v", refreshToken)
 	}
 
@@ -154,7 +154,7 @@ func authenticateRefreshToken(refreshToken string) (string, error) {
 	return userId, nil
 }
 
-func validateLoginRequest(request *api.LogInRequest) error {
+func validateLoginRequest(request *api.LoginRequest) error {
 	if request == nil {
 		return fmt.Errorf("the request should not be nil")
 	}

@@ -194,7 +194,9 @@ func initSubcommands() []*x.SubCommand {
 	}
 }
 
-func getDgraphClient(conf *viper.Viper) *dgo.Dgraph {
+type CloseFunc func()
+
+func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 	opt = options{
 		dgraph: conf.GetString("dgraph"),
 	}
@@ -207,17 +209,15 @@ func getDgraphClient(conf *viper.Viper) *dgo.Dgraph {
 	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
 
-	ds := strings.Split(opt.dgraph, ",")
-	var clients []api.DgraphClient
-	for _, d := range ds {
-		conn, err := x.SetupConnection(d, &tlsConf)
-		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
+	conn, err := x.SetupConnection(opt.dgraph, &tlsConf)
+	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 
-		dc := api.NewDgraphClient(conn)
-		clients = append(clients, dc)
+	dc := api.NewDgraphClient(conn)
+	return dgo.NewDgraphClient(dc), func() {
+		if err := conn.Close(); err != nil {
+			glog.Errorf("Error while closing connection:%v", err)
+		}
 	}
-
-	return dgo.NewDgraphClient(clients...)
 }
 
 func info(conf *viper.Viper) error {
@@ -228,7 +228,8 @@ func info(conf *viper.Viper) error {
 		return fmt.Errorf("either the user or group should be specified, not both")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
@@ -240,15 +241,15 @@ func info(conf *viper.Viper) error {
 			return err
 		}
 
-		var userSB strings.Builder
-		userSB.WriteString(fmt.Sprintf("user %v:\n", userId))
-		userSB.WriteString(fmt.Sprintf("uid:%v\nid:%v\n", user.Uid, user.UserID))
+		var userBuf strings.Builder
+		userBuf.WriteString(fmt.Sprintf("user %v:\n", userId))
+		userBuf.WriteString(fmt.Sprintf("uid:%v\nid:%v\n", user.Uid, user.UserID))
 		var groupNames []string
 		for _, group := range user.Groups {
 			groupNames = append(groupNames, group.GroupID)
 		}
-		userSB.WriteString(fmt.Sprintf("groups:%v\n", strings.Join(groupNames, " ")))
-		glog.Infof(userSB.String())
+		userBuf.WriteString(fmt.Sprintf("groups:%v\n", strings.Join(groupNames, " ")))
+		glog.Infof(userBuf.String())
 	}
 
 	if len(groupId) != 0 {

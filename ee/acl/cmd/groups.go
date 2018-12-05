@@ -32,7 +32,8 @@ func groupAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
@@ -72,7 +73,8 @@ func groupDel(conf *viper.Viper) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
@@ -146,7 +148,8 @@ func chMod(conf *viper.Viper) error {
 		return fmt.Errorf("the predicate must not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()

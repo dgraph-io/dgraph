@@ -37,7 +37,8 @@ func userAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the password must not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
@@ -83,7 +84,8 @@ func userDel(conf *viper.Viper) error {
 		return fmt.Errorf("the user id should not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
@@ -129,7 +131,8 @@ func userLogin(conf *viper.Viper) error {
 		return fmt.Errorf("the password must not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
@@ -178,7 +181,8 @@ func userMod(conf *viper.Viper) error {
 		return fmt.Errorf("the user must not be empty")
 	}
 
-	dc := getDgraphClient(conf)
+	dc, close := getDgraphClient(conf)
+	defer close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
