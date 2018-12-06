@@ -25,10 +25,10 @@ import (
 // TODO: connect to zero instead of http.
 func runBackup() error {
 	if opt.http == "" {
-		return x.Errorf("Backup: must specify alpha address http with --http")
+		return x.Errorf("Must specify alpha address http with --http")
 	}
 	if opt.loc == "" {
-		return x.Errorf("Backup: must specify a backup destination with --loc")
+		return x.Errorf("Must specify a backup destination with --loc")
 	}
 
 	resp, err := http.PostForm(opt.http, url.Values{"destination": {opt.loc}})

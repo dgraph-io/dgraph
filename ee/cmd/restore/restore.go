@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package backup
+package restore
 
 import (
 	"bytes"
@@ -29,10 +29,10 @@ import (
 
 func runRestore() error {
 	if opt.pdir == "" {
-		return x.Errorf("Restore: must specify posting dir with -p")
+		return x.Errorf("Must specify posting dir with -p")
 	}
 	if opt.loc == "" {
-		return x.Errorf("Restore: must specify a backup source with --loc")
+		return x.Errorf("Must specify a backup source with --loc")
 	}
 
 	req := &backup.Request{

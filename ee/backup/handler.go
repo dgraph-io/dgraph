@@ -40,7 +40,8 @@ type File struct {
 	h handler
 }
 
-// openLocation parses the requested target URI, finds a handler and then tries to create a session.
+// OpenLocation parses the requested URI location, finds a handler and then tries to create a session.
+//
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]

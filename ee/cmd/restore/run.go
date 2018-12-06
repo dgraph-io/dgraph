@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package backup
+package restore
 
 import (
 	"fmt"
@@ -20,20 +20,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Backup x.SubCommand
+var Restore x.SubCommand
 
 var opt struct {
 	version   bool
-	loc, http string
+	loc, pdir string
 }
 
 func init() {
-	Backup.Cmd = &cobra.Command{
-		Use:   "backup",
-		Short: "Dgraph Enterprise Backup",
+	Restore.Cmd = &cobra.Command{
+		Use:   "restore",
+		Short: "Dgraph Enterprise Restore",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Backup.Conf).Stop()
+			defer x.StartProfile(Restore.Conf).Stop()
 			if err := run(); err != nil {
 				fmt.Println(err)
 				os.Exit(1)
@@ -41,10 +41,10 @@ func init() {
 		},
 	}
 
-	flag := Backup.Cmd.Flags()
+	flag := Restore.Cmd.Flags()
 	flag.StringVarP(&opt.loc, "loc", "l", "", "sets the location URI to a source or target.")
-	flag.BoolVar(&opt.version, "version", false, "prints the version of Dgraph Backup.")
-	flag.StringVar(&opt.http, "http", "http://localhost:8080", "HTTP address to Dgraph alpha.")
+	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
+	flag.BoolVar(&opt.version, "version", false, "prints the version of Dgraph Restore.")
 	flag.Bool("debugmode", false, "Enable debug mode for more debug information.")
 }
 
@@ -53,7 +53,7 @@ func run() error {
 	if opt.version {
 		return nil
 	}
-	x.Config.DebugMode = Backup.Conf.GetBool("debugmode")
+	x.Config.DebugMode = Restore.Conf.GetBool("debugmode")
 
-	return runBackup()
+	return runRestore()
 }

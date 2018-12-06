@@ -12,8 +12,11 @@
 
 package cmd
 
-import "github.com/dgraph-io/dgraph/ee/cmd/backup"
+import (
+	"github.com/dgraph-io/dgraph/ee/cmd/backup"
+	"github.com/dgraph-io/dgraph/ee/cmd/restore"
+)
 
 func init() {
-	subcommands = append(subcommands, &backup.Backup)
+	subcommands = append(subcommands, &backup.Backup, &restore.Restore)
 }
