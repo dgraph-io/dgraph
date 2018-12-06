@@ -28,7 +28,7 @@ var errLocationEmpty = x.Errorf("Empty URI location given.")
 
 // handler interface is implemented by URI scheme handlers.
 type handler interface {
-	// Handlers know how to Read, Write and Close to their target.
+	// Handlers know how to Read, Write and Close their location.
 	io.ReadWriteCloser
 	// Session receives the host and path of the target. It should get all its configuration
 	// from the environment.
@@ -105,16 +105,18 @@ func (f *File) Close() error {
 	return f.h.Close()
 }
 
+// Read implements the io.Reader interface backed by an URI handler.
 func (f *File) Read(b []byte) (int, error) {
 	return f.h.Read(b)
 }
 
+// Write implements the io.Writer interface backed by an URI handler.
 func (f *File) Write(b []byte) (int, error) {
 	return f.h.Write(b)
 }
 
-// writeKVS uses the data length as delimiter.
-func (f *File) writeKVS(kv *pb.KV) error {
+// writeKV writes a single KV via handler using the data length as delimiter.
+func (f *File) writeKV(kv *pb.KV) error {
 	if err := binary.Write(f.h, binary.LittleEndian, uint64(kv.Size())); err != nil {
 		return err
 	}
@@ -127,12 +129,12 @@ func (f *File) writeKVS(kv *pb.KV) error {
 }
 
 // Send implements the stream.kvStream interface.
-// It writes the received KV to the target as a delimited binary chain.
+// It writes the received KVS to the target as a delimited binary chain.
 // Returns error if the writing fails, nil on success.
 func (f *File) Send(kvs *pb.KVS) error {
 	var err error
 	for _, kv := range kvs.Kv {
-		err = f.writeKVS(kv)
+		err = f.writeKV(kv)
 		if err != nil {
 			return err
 		}

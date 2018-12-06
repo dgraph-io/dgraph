@@ -13,9 +13,9 @@
 package backup
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"time"
@@ -25,12 +25,16 @@ import (
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
-const bufSize = 16 << 10
-
 func runRestore() error {
+	if opt.pdir == "" {
+		return x.Errorf("Restore: must specify posting dir with -p")
+	}
+	if opt.loc == "" {
+		return x.Errorf("Restore: must specify a backup source with --loc")
+	}
+
 	req := &backup.Request{
 		Backup: &pb.BackupRequest{Source: opt.loc},
 	}
@@ -63,10 +67,10 @@ func runRestore() error {
 	)
 	kvs.Kv = make([]*pb.KV, 0, 1000)
 
-	br := bufio.NewReaderSize(f, bufSize)
 	start := time.Now()
+	fmt.Printf("Restore in starting: %q\n", opt.loc)
 	for {
-		err = binary.Read(br, binary.LittleEndian, &sz)
+		err = binary.Read(f, binary.LittleEndian, &sz)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -74,7 +78,7 @@ func runRestore() error {
 		}
 
 		e := &pb.KV{}
-		n, err := bb.ReadFrom(io.LimitReader(br, int64(sz)))
+		n, err := bb.ReadFrom(io.LimitReader(f, int64(sz)))
 		if err != nil {
 			return err
 		}
@@ -95,7 +99,7 @@ func runRestore() error {
 			kvs.Kv = kvs.Kv[:0]
 			kvs.Done = true
 			if cnt%100000 == 0 {
-				glog.V(3).Infof("--- writing %d keys", cnt)
+				fmt.Printf("--- writing %d keys\n", cnt)
 			}
 		}
 	}
@@ -107,7 +111,7 @@ func runRestore() error {
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	glog.Infof("Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))
+	fmt.Printf("Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))
 
 	return nil
 }

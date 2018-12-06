@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net/url"
@@ -32,14 +33,14 @@ import (
 const (
 	s3DefaultEndpoint = "s3.amazonaws.com"
 	s3AccelerateHost  = "s3-accelerate"
+	s3DownloadBufSize = 4 << 20
 )
 
 // s3Handler is used for 's3:' URI scheme.
 type s3Handler struct {
 	bucket  string
-	objects []string
-	writer  io.Writer
-	reader  io.Reader
+	pwriter *io.PipeWriter
+	preader *io.PipeReader
 	cerr    chan error
 }
 
@@ -76,7 +77,9 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 	if strings.Contains(uri.Host, s3AccelerateHost) {
 		mc.SetS3TransferAccelerate(uri.Host)
 	}
-	// mc.TraceOn(os.Stderr)
+	if x.Config.DebugMode {
+		mc.TraceOn(os.Stderr)
+	}
 
 	// split path into bucket and blob
 	parts := strings.Split(uri.Path[1:], "/")
@@ -91,7 +94,9 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		return x.Errorf("S3 bucket %s not found.", h.bucket)
 	}
 
-	// opening location for write
+	h.preader, h.pwriter = io.Pipe()
+
+	// Backup: opening location for write
 	if req.Backup.Target != "" {
 		// The location is: /bucket/folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 		parts = append(parts, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
@@ -108,7 +113,7 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		return nil
 	}
 
-	// scan location and find backup for our group.
+	// Restore: scan location and find backup files. load them sequentially.
 	var objects []string
 	done := make(chan struct{})
 	defer close(done)
@@ -128,34 +133,35 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		h.cerr <- h.download(mc, objects...)
 	}()
 
-	return <-h.cerr
+	return nil
 }
 
 // upload will block until it's done or an error occurs.
 func (h *s3Handler) upload(mc *minio.Client, object string) error {
 	start := time.Now()
-	preader, pwriter := io.Pipe()
-	h.reader, h.writer = preader, pwriter
 
 	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
 	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
 	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
 	// the progress of read. By definition, it must be the same.
-	n, err := mc.PutObject(h.bucket, object, preader, -1, minio.PutObjectOptions{})
+	n, err := mc.PutObject(h.bucket, object, h.preader, -1, minio.PutObjectOptions{})
 	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
 		n, time.Since(start).Round(time.Second))
 
 	if err != nil {
 		// This should cause Write to fail as well.
 		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
-		pwriter.Close()
-		preader.Close()
+		h.pwriter.Close()
+		h.preader.Close()
 	}
 	return err
 }
 
 // download will block until it's done or an error occurs.
 func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
+	start := time.Now()
+
+	var tot uint64
 	for _, object := range objects {
 		reader, err := mc.GetObject(h.bucket, object, minio.GetObjectOptions{})
 		if err != nil {
@@ -168,15 +174,24 @@ func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
 			glog.Errorf("Backup: unexpected error: %s", err)
 			return err
 		}
-		h.reader = reader
-		glog.Infof("Downloading data, size %s", humanize.Bytes(uint64(st.Size)))
+		glog.Infof("Downloading %q, %d bytes", object, st.Size)
+		n, err := io.Copy(h.pwriter, bufio.NewReaderSize(reader, s3DownloadBufSize))
+		if err != nil {
+			return err
+		}
+		tot += uint64(n)
 	}
+	if err := h.Close(); err != nil {
+		return err
+	}
+	glog.V(2).Infof("Restore recv %s bytes. Time elapsed: %s",
+		humanize.Bytes(tot), time.Since(start).Round(time.Second))
 	return nil
 }
 
 func (h *s3Handler) Close() error {
 	// we are done buffering, send EOF.
-	if err := h.writer.(*io.PipeWriter).CloseWithError(nil); err != nil && err != io.EOF {
+	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
 		glog.Errorf("Unexpected error while uploading: %v", err)
 	}
 	glog.V(2).Infof("Backup waiting for upload to complete.")
@@ -184,9 +199,9 @@ func (h *s3Handler) Close() error {
 }
 
 func (h *s3Handler) Read(b []byte) (int, error) {
-	return h.reader.Read(b)
+	return h.preader.Read(b)
 }
 
 func (h *s3Handler) Write(b []byte) (int, error) {
-	return h.writer.Write(b)
+	return h.pwriter.Write(b)
 }

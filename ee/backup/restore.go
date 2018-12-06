@@ -13,7 +13,6 @@
 package backup
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -28,15 +27,12 @@ import (
 	"github.com/golang/glog"
 )
 
-const bufSize = 16 << 10
-
 func (r *Request) Restore(ctx context.Context) error {
 	f, err := r.OpenLocation(r.Backup.Source)
 	if err != nil {
 		return err
 	}
 
-	br := bufio.NewReaderSize(f.h, bufSize)
 	entries := make([]*pb.KV, 0, 1000)
 	start := time.Now()
 
@@ -46,7 +42,7 @@ func (r *Request) Restore(ctx context.Context) error {
 		cnt int
 	)
 	for {
-		err = binary.Read(br, binary.LittleEndian, &sz)
+		err = binary.Read(f, binary.LittleEndian, &sz)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -54,7 +50,7 @@ func (r *Request) Restore(ctx context.Context) error {
 		}
 
 		e := &pb.KV{}
-		n, err := bb.ReadFrom(io.LimitReader(br, int64(sz)))
+		n, err := bb.ReadFrom(io.LimitReader(f, int64(sz)))
 		if err != nil {
 			return err
 		}

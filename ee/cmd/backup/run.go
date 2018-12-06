@@ -24,8 +24,7 @@ var Backup x.SubCommand
 
 var opt struct {
 	restore, version bool
-	http, loc, zero  string
-	pdir             string
+	loc, pdir, http  string
 }
 
 func init() {
@@ -43,37 +42,23 @@ func init() {
 	}
 
 	flag := Backup.Cmd.Flags()
-	flag.BoolVarP(&opt.restore, "restore", "r", true, "perform a restore of a previous backup.")
-	flag.StringVar(&opt.http, "http", "localhost:8080", "Address to serve http (pprof).")
+	flag.BoolVarP(&opt.restore, "restore", "r", false, "perform a restore of a previous backup.")
 	flag.StringVarP(&opt.loc, "loc", "l", "", "sets the location URI to a source or target.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.version, "version", false, "prints the version of Dgraph Backup.")
-	flag.StringVarP(&opt.zero, "zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
-
-	cmdList := &cobra.Command{
-		Use:   "ls",
-		Short: "lists existing backups at a location.",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return listBackup()
-		},
-	}
-	cmdList.Flags().AddFlag(Backup.Cmd.Flag("loc"))
-	Backup.Cmd.AddCommand(cmdList)
+	flag.StringVar(&opt.http, "http", "localhost:8080", "HTTP address to Dgraph alpha.")
+	flag.Bool("debugmode", false, "Enable debug mode for more debug information.")
 }
 
 func run() error {
 	x.PrintVersion()
-	switch {
-	case opt.version:
+	if opt.version {
 		return nil
-	case opt.pdir == "":
-		return x.Errorf("Must specify posting dir with -p")
 	}
+	x.Config.DebugMode = Backup.Conf.GetBool("debugmode")
 
-	return runRestore()
-}
-
-func listBackup() error {
-	return nil
+	if opt.restore {
+		return runRestore()
+	}
+	return runBackup()
 }
