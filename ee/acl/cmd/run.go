@@ -16,19 +16,18 @@
  * limitations under the License.
  */
 
-package edgraph
+package acl
 
 import (
-	"context"
-
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
+	"github.com/spf13/cobra"
 )
 
-func (s *Server) Login(ctx context.Context,
-	request *api.LoginRequest) (*api.Response, error) {
+var CmdAcl x.SubCommand
 
-	glog.Warningf("Login failed: %s", x.ErrNotSupported)
-	return &api.Response{}, x.ErrNotSupported
+func init() {
+	CmdAcl.Cmd = &cobra.Command{
+		Use:   "acl",
+		Short: "Enterprise feature. Not supported in oss version",
+	}
 }
