@@ -24,8 +24,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg1
     working_dir: /data/dg1
-    environment:
-      - GOPATH=$GOPATH
     volumes:
       - type: bind
         source: $GOPATH/bin
