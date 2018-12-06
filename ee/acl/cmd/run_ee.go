@@ -237,7 +237,11 @@ func info(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	if len(userId) != 0 {
 		user, err := queryUser(ctx, txn, userId)

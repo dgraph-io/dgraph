@@ -42,7 +42,11 @@ func userAdd(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
@@ -89,7 +93,11 @@ func userDel(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
@@ -136,7 +144,11 @@ func userLogin(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	if err := dc.Login(ctx, userid, password); err != nil {
 		return fmt.Errorf("unable to login:%v", err)
@@ -186,7 +198,11 @@ func userMod(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
