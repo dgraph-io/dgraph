@@ -68,7 +68,7 @@ func runRestore() error {
 	kvs.Kv = make([]*pb.KV, 0, 1000)
 
 	start := time.Now()
-	fmt.Printf("Restore in starting: %q\n", opt.loc)
+	fmt.Printf("Restore starting: %q\n", opt.loc)
 	for {
 		err = binary.Read(f, binary.LittleEndian, &sz)
 		if err == io.EOF {
@@ -109,6 +109,9 @@ func runRestore() error {
 		}
 	}
 	if err := writer.Flush(); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 	fmt.Printf("Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))

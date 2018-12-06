@@ -29,12 +29,13 @@ import (
 	"github.com/golang/glog"
 )
 
-const fileReadBufSize = 1 << 20
+const fileReadBufSize = 4 << 12
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
 	writer *os.File
 	reader io.Reader
+	cerr   chan error
 }
 
 // Open authenticates or prepares a handler session.
@@ -73,8 +74,9 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 	}
 	sort.Strings(files)
 
+	h.cerr = make(chan error, 1)
 	go func() {
-		h.multiRead(files...)
+		h.cerr <- h.multiRead(files...)
 	}()
 
 	glog.V(2).Infof("Loading backup file(s): %v", files)
@@ -99,16 +101,14 @@ func (h *fileHandler) multiRead(files ...string) error {
 		}
 		tot += uint64(n)
 	}
-	// close the pipe
-	pw.CloseWithError(nil)
 	glog.V(2).Infof("Restore recv %s bytes. Time elapsed: %s",
 		humanize.Bytes(tot), time.Since(start).Round(time.Second))
-	return nil
+	return pw.CloseWithError(nil)
 }
 
 func (h *fileHandler) Close() error {
 	if h.writer == nil {
-		return nil
+		return <-h.cerr
 	}
 	if err := h.writer.Sync(); err != nil {
 		glog.Errorf("While closing file: %s. Error: %v", h.writer.Name(), err)

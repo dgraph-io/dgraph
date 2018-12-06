@@ -46,7 +46,7 @@ func init() {
 	flag.StringVarP(&opt.loc, "loc", "l", "", "sets the location URI to a source or target.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.version, "version", false, "prints the version of Dgraph Backup.")
-	flag.StringVar(&opt.http, "http", "localhost:8080", "HTTP address to Dgraph alpha.")
+	flag.StringVar(&opt.http, "http", "http://localhost:8080", "HTTP address to Dgraph alpha.")
 	flag.Bool("debugmode", false, "Enable debug mode for more debug information.")
 }
 

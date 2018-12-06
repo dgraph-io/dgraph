@@ -33,7 +33,9 @@ import (
 const (
 	s3DefaultEndpoint = "s3.amazonaws.com"
 	s3AccelerateHost  = "s3-accelerate"
-	s3DownloadBufSize = 4 << 20
+	// s3ReadBufSize can't be too large or we'll compete with minio's internal buffer
+	// and the reader will be slower.
+	s3ReadBufSize = 1 << 20
 )
 
 // s3Handler is used for 's3:' URI scheme.
@@ -175,18 +177,15 @@ func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
 			return err
 		}
 		glog.Infof("Downloading %q, %d bytes", object, st.Size)
-		n, err := io.Copy(h.pwriter, bufio.NewReaderSize(reader, s3DownloadBufSize))
+		n, err := io.Copy(h.pwriter, bufio.NewReaderSize(reader, s3ReadBufSize))
 		if err != nil {
 			return err
 		}
 		tot += uint64(n)
 	}
-	if err := h.Close(); err != nil {
-		return err
-	}
 	glog.V(2).Infof("Restore recv %s bytes. Time elapsed: %s",
 		humanize.Bytes(tot), time.Since(start).Round(time.Second))
-	return nil
+	return h.pwriter.CloseWithError(nil)
 }
 
 func (h *s3Handler) Close() error {
