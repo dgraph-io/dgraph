@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"io"
 	"log"
 	"math"
@@ -32,6 +31,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -119,52 +119,87 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
+func parseRDFToNquads(chunkBuf *bytes.Buffer) ([]gql.NQuad, error, bool) {
+	done := false
+
+	str, err := chunkBuf.ReadString('\n')
+	if err != nil {
+		if err == io.EOF {
+			done = true
+		} else {
+			x.Check(err)
+		}
+	}
+
+	nq, err := rdf.Parse(strings.TrimSpace(str))
+	if err == rdf.ErrEmpty {
+		return []gql.NQuad{}, nil, done
+	} else if err != nil {
+		return nil, errors.Wrapf(err, "while parsing line %q", str), done
+	}
+
+	return []gql.NQuad{ gql.NQuad{NQuad: &nq} }, nil, done
+}
+
+func parseJSONToNquads(chunkBuf *bytes.Buffer) ([]gql.NQuad, error, bool) {
+	done := false
+
+	if chunkBuf.Len() == 0 {
+		return []gql.NQuad{}, nil, true
+	}
+
+	str := make([]byte, chunkBuf.Len())
+	chunkBuf.Read(str)
+	nqs, err := edgraph.NquadsFromJson(str)
+	if err != nil {
+		if err == io.EOF {
+			done = true
+		} else {
+			x.Check(err)
+		}
+	}
+
+	gqlNq := make([]gql.NQuad, len(nqs))
+	for i, nq := range nqs {
+		gqlNq[i] = gql.NQuad{NQuad: nq}
+	}
+
+	return gqlNq, nil, done
+}
+
 func (m *mapper) run(loaderType int) {
 	for chunkBuf := range m.readerChunkCh {
 		done := false
-		for !done {
-			if loaderType == rdfLoader {
-				str, err := chunkBuf.ReadString('\n')
-				if err == io.EOF {
-					// Process the last chunk rather than breaking immediately.
-					done = true
-				} else {
+		for ! done {
+			var nqs []gql.NQuad
+			var err error
+
+			switch loaderType {
+			case rdfLoader:
+				nqs, err, done = parseRDFToNquads(chunkBuf)
+			case jsonLoader:
+				nqs, err, done = parseJSONToNquads(chunkBuf)
+			default:
+				log.Fatalf("bulk loader type %+v not supported by mapper", loaderType)
+			}
+
+			if err != nil && err != io.EOF {
+				atomic.AddInt64(&m.prog.errCount, 1)
+				if ! m.opt.IgnoreErrors {
 					x.Check(err)
 				}
-				str = strings.TrimSpace(str)
+			}
 
-				// process RDF line
-				if err := m.processRDF(str); err != nil {
+			for _, nq := range nqs {
+				if err := facets.SortAndValidate(nq.Facets); err != nil {
 					atomic.AddInt64(&m.prog.errCount, 1)
-					if !m.opt.IgnoreErrors {
+					if ! m.opt.IgnoreErrors {
 						x.Check(err)
 					}
 				}
 
-				atomic.AddInt64(&m.prog.rdfCount, 1)
-			} else {
-				// process JSON chunk
-				str, err := chunkBuf.ReadBytes(0)
-				nquads, err := edgraph.NquadsFromJson(str)
-				if err == io.EOF {
-					done = true
-				} else if err != nil {
-					atomic.AddInt64(&m.prog.errCount, 1)
-					if !m.opt.IgnoreErrors {
-						x.Check(err)
-					}
-				}
-
-				for _, nq := range nquads {
-					if err := facets.SortAndValidate(nq.Facets); err != nil {
-						if !m.opt.IgnoreErrors {
-							x.Check(err)
-						}
-					}
-
-					m.processNQuad(gql.NQuad{NQuad: nq})
-					atomic.AddInt64(&m.prog.rdfCount, 1)
-				}
+				m.processNQuad(nq)
+				atomic.AddInt64(&m.prog.nquadCount, 1)
 			}
 
 			for i := range m.shards {
@@ -177,6 +212,7 @@ func (m *mapper) run(loaderType int) {
 			}
 		}
 	}
+
 	for i := range m.shards {
 		sh := &m.shards[i]
 		if len(sh.entriesBuf) > 0 {
@@ -204,21 +240,6 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh.entriesBuf = x.AppendUvarint(sh.entriesBuf, uint64(me.Size()))
 	sh.entriesBuf, err = x.AppendProtoMsg(sh.entriesBuf, me)
 	x.Check(err)
-}
-
-func (m *mapper) processRDF(rdfLine string) error {
-	nq, err := parseNQuad(rdfLine)
-	if err != nil {
-		if err == rdf.ErrEmpty {
-			return nil
-		}
-		return errors.Wrapf(err, "while parsing line %q", rdfLine)
-	}
-	if err := facets.SortAndValidate(nq.Facets); err != nil {
-		return err
-	}
-	m.processNQuad(nq)
-	return nil
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
@@ -271,14 +292,6 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	}}
 	m.processNQuad(nq)
 	return uid
-}
-
-func parseNQuad(line string) (gql.NQuad, error) {
-	nq, err := rdf.Parse(line)
-	if err != nil {
-		return gql.NQuad{}, err
-	}
-	return gql.NQuad{NQuad: &nq}, nil
 }
 
 func (m *mapper) createPredicatePosting(predicate string) *pb.Posting {

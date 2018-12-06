@@ -353,7 +353,7 @@ func (ld *loader) mapStage() {
 	}
 
 	if len(readers) == 0 {
-		fmt.Printf("No *.%s files found.\n", ext)
+		fmt.Printf("No *%s files found.\n", ext)
 		os.Exit(1)
 	}
 
