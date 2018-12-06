@@ -31,9 +31,6 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: /home/lucas/workspace/dgraph-certs/tls
-        target: /home/lucas/workspace/dgraph-certs/tls
     ports:
       - 8180:8180
       - 9180:9180
