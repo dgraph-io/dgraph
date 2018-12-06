@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: 'dgraph'
+    scrape_interval: 15s
+    metrics_path: '/debug/prometheus_metrics'
+    static_configs:
+      - targets:
+        - 'bank-dg1:8180'
+        - 'bank-dg0.1:6080'
+  - job_name: 'node-exporter'
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+        - 'node-exporter:9100'
+    
