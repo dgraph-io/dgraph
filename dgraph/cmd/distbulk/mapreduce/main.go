@@ -109,7 +109,7 @@ func main() {
     if REQUESTED_PREDICATE_SHARDS > 1 {
         f = f.
             PartitionByKey("shard by predicate", REQUESTED_PREDICATE_SHARDS).
-            LocalSort("sort keys", flow.OrderBy(2, true).By(3, true)).
+            LocalSort("sort keys", flow.OrderBy(1, true).By(2, true).By(3, true)).
             LocalReduceBy("create postings", ConcatenatePostings, flow.Field(2)).
             Map("write to badger", WriteToBadgerMany)
     } else {
