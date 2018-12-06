@@ -54,8 +54,12 @@ func init() {
 	for _, sc := range subcommands {
 		CmdAcl.Cmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
-		sc.Conf.BindPFlags(sc.Cmd.Flags())
-		sc.Conf.BindPFlags(CmdAcl.Cmd.PersistentFlags())
+		if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
+			glog.Fatalf("Unable to bind flags for command %v:%v", sc, err)
+		}
+		if err := sc.Conf.BindPFlags(CmdAcl.Cmd.PersistentFlags()); err != nil {
+			glog.Fatalf("Unable to bind persistent flags from acl for command %v:%v", sc, err)
+		}
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 	}
 }

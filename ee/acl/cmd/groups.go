@@ -37,7 +37,11 @@ func groupAdd(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
@@ -78,7 +82,11 @@ func groupDel(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
@@ -153,7 +161,11 @@ func chMod(conf *viper.Viper) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	txn := dc.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
 
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
 	if err != nil {
