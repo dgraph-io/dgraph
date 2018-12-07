@@ -1547,6 +1547,20 @@ Go's built-in metrics may also be useful to measure for memory usage and garbage
  `dgraph_dirtymap_keys_total`     | Unused.
  `dgraph_posting_reads_total`     | Unused.
 
+## Tracing
+
+Dgraph is integrated with [OpenCensus](https://opencensus.io/zpages/) to collect distributed traces from the Dgraph cluster.
+
+Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 1 to trace 100% of queries.
+
+### Examining Traces with zPages
+
+The most basic way to view traces is with the integrated trace pages.
+
+OpenCensus's [zPages](https://opencensus.io/zpages/) are accessible via the Zero or Alpha HTTP port at `/z/tracez`.
+
+Although the zPages are always accessible via each Dgraph instance, it is impractical to use them to correlate the ordering of different traces within or across different services.
+
 ## Dgraph Administration
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
