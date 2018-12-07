@@ -660,7 +660,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				}
 
 				out.UidMatrix = append(out.UidMatrix, uidList)
-				if len(fcsList) > 0 {
+				if q.FacetParam != nil {
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
 			}
