@@ -98,8 +98,7 @@ type DirectedEdge struct {
 }
 ```
 
-Note that irrespective of the input, both `Entity` and `Object/ValueId` get converted in `UID` format
-as explained in [XID <-> UID]({{< relref "#xid-uid" >}}).
+Note that irrespective of the input, both `Entity` and `Object/ValueId` get converted in `UID` format.
 
 ### Posting List
 Conceptually, a posting list contains all the `DirectedEdges` corresponding to an `Attribute`, in the
