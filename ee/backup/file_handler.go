@@ -50,7 +50,9 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 	if req.Backup.Target != "" {
 		dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
 		if err := os.Mkdir(dir, 0700); err != nil {
-			return err
+			if !os.IsExist(err) {
+				return err
+			}
 		}
 
 		path := filepath.Join(dir,
@@ -66,8 +68,15 @@ func (h *fileHandler) Open(uri *url.URL, req *Request) error {
 	}
 
 	// Restore: scan location and find backup files. load them sequentially.
-	files := x.FindFilesFunc(req.Backup.Source, func(path string) bool {
-		return strings.HasSuffix(path, ".backup")
+
+	var suffix string
+	if req.Backup.GroupId > 0 {
+		suffix = fmt.Sprintf("g%d", req.Backup.GroupId)
+	}
+	suffix += ".backup"
+
+	files := x.FindFilesFunc(uri.Path, func(path string) bool {
+		return strings.HasSuffix(path, suffix)
 	})
 	if len(files) == 0 {
 		return x.Errorf("No backup files found in %q", req.Backup.Source)

@@ -17,11 +17,8 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
-	"math"
-	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -33,14 +30,19 @@ func (r *Request) Restore(ctx context.Context) error {
 		return err
 	}
 
-	entries := make([]*pb.KV, 0, 1000)
-	start := time.Now()
+	writer := x.NewTxnWriter(r.DB)
+	writer.BlindWrite = true
 
 	var (
+		kvs pb.KVS
 		bb  bytes.Buffer
 		sz  uint64
 		cnt int
 	)
+	kvs.Kv = make([]*pb.KV, 0, 1000)
+
+	start := time.Now()
+	glog.Infof("Restore starting: %q", r.Backup.Source)
 	for {
 		err = binary.Read(f, binary.LittleEndian, &sz)
 		if err == io.EOF {
@@ -61,56 +63,29 @@ func (r *Request) Restore(ctx context.Context) error {
 			return err
 		}
 		bb.Reset()
-		entries = append(entries, e)
+		kvs.Kv = append(kvs.Kv, e)
+		kvs.Done = false
 		cnt++
 		if cnt%1000 == 0 {
-			if err := setKeyValues(r.DB, entries); err != nil {
+			if err := writer.Send(&kvs); err != nil {
 				return err
 			}
-			entries = entries[:0]
-			if cnt%100000 == 0 {
-				glog.V(3).Infof("--- writing %d keys", cnt)
-			}
+			kvs.Kv = kvs.Kv[:0]
+			kvs.Done = true
 		}
 	}
-	if len(entries) > 0 {
-		if err := setKeyValues(r.DB, entries); err != nil {
+	if !kvs.Done {
+		if err := writer.Send(&kvs); err != nil {
 			return err
 		}
 	}
-	glog.Infof("Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	glog.Infof("Loaded %d keys in %s", cnt, time.Since(start).Round(time.Second))
 
 	return nil
-}
-
-func setKeyValues(pstore *badger.DB, kvs []*pb.KV) error {
-	var wg sync.WaitGroup
-	cerr := make(chan error, 1)
-	wg.Add(len(kvs))
-	for _, kv := range kvs {
-		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
-			return err
-		}
-		err := txn.CommitAt(kv.Version, func(err error) {
-			if err != nil {
-				select {
-				case cerr <- err:
-				default:
-				}
-			}
-			wg.Done()
-		})
-		if err != nil {
-			return err
-		}
-		txn.Discard()
-	}
-	wg.Wait()
-	select {
-	case err := <-cerr:
-		return x.Errorf("Error while writing: %s", err)
-	default:
-		return nil
-	}
 }

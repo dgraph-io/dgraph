@@ -116,11 +116,19 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 	}
 
 	// Restore: scan location and find backup files. load them sequentially.
+
+	var suffix string
+	if req.Backup.GroupId > 0 {
+		suffix = fmt.Sprintf("g%d", req.Backup.GroupId)
+	}
+	suffix += ".backup"
+	prefix := filepath.Join(parts[1:]...)
+
 	var objects []string
 	done := make(chan struct{})
 	defer close(done)
-	for info := range mc.ListObjects(h.bucket, "dgraph", true, done) {
-		if strings.HasSuffix(info.Key, ".backup") {
+	for info := range mc.ListObjects(h.bucket, prefix, true, done) {
+		if strings.HasSuffix(info.Key, suffix) {
 			objects = append(objects, info.Key)
 		}
 	}
@@ -167,13 +175,13 @@ func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
 	for _, object := range objects {
 		reader, err := mc.GetObject(h.bucket, object, minio.GetObjectOptions{})
 		if err != nil {
-			glog.Errorf("Backup: closing due to error: %s", err)
+			glog.Errorf("Restore: Closing due to error: %s", err)
 			return err
 		}
 		st, err := reader.Stat()
 		if err != nil {
 			reader.Close()
-			glog.Errorf("Backup: unexpected error: %s", err)
+			glog.Errorf("Restore: Unexpected error: %s", err)
 			return err
 		}
 		glog.Infof("Downloading %q, %d bytes", object, st.Size)
@@ -191,9 +199,9 @@ func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
 func (h *s3Handler) Close() error {
 	// we are done buffering, send EOF.
 	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
-		glog.Errorf("Unexpected error while uploading: %v", err)
+		glog.Errorf("Unexpected error when closing pipe: %v", err)
 	}
-	glog.V(2).Infof("Backup waiting for upload to complete.")
+	glog.V(2).Infof("--- waiting to complete remote transfer.")
 	return <-h.cerr
 }
 
