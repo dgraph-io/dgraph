@@ -98,21 +98,66 @@ uppercase). For example, instead of using `dgraph alpha --lru_mb=8096`, you
 could use `DGRAPH_ALPHA_LRU_MB=8096 dgraph alpha`.
 
 Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
-properties (detected via file extension).
+properties (detected via file extension). The file extensions are .json, .toml,
+.yml or .yaml, .hcl, and .properties for each format.
 
 A configuration file can be specified using the `--config` flag, or an
 environment variable. E.g. `dgraph zero --config my_config.json` or
 `DGRAPH_ZERO_CONFIG=my_config.json dgraph zero`.
 
 The config file structure is just simple key/value pairs (mirroring the flag
-names). E.g. a JSON config file that sets `--idx`, `--peer`, and `--replicas`:
+names).
+
+Example JSON config file (config.json):
 
 ```json
 {
-  "idx": 42,
-  "peer": 192.168.0.55:9080,
-  "replicas": 2
+  "my": "localhost:7080",
+  "zero": "localhost:5080",
+  "lru_mb": 4096,
+  "postings": "/path/to/p",
+  "wal": "/path/to/w"
 }
+```
+
+Example TOML config file (config.toml):
+
+```toml
+my = "localhost:7080"
+zero = "localhost:5080"
+lru_mb = 4096
+postings = "/path/to/p"
+wal = "/path/to/w"
+```
+
+
+Example YAML config file (config.yml):
+
+```yaml
+my: "localhost:7080"
+zero: "localhost:5080"
+lru_mb: 4096
+postings: "/path/to/p"
+wal: "/path/to/w"
+```
+
+Example HCL config file (config.hcl):
+
+```hcl
+my = "localhost:7080"
+zero = "localhost:5080"
+lru_mb = 4096
+postings = "/path/to/p"
+wal = "/path/to/w"
+```
+
+Example Java properties config file (config.properties):
+```text
+my=localhost:7080
+zero=localhost:5080
+lru_mb=4096
+postings=/path/to/p
+wal=/path/to/w
 ```
 
 ## Cluster Setup
