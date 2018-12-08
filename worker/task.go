@@ -378,11 +378,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
 					out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 					if q.ExpandAll {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -441,6 +441,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
 					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
+			} else {
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 			}
 
 			switch {
@@ -635,9 +637,9 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				uidList := &pb.List{
 					Uids: make([]uint64, 0, pl.ApproxLen()),
 				}
-				var fcsList []*pb.Facets
 
-				if err := pl.Postings(opts, func(p *pb.Posting) error {
+				var fcsList []*pb.Facets
+				err = pl.Postings(opts, func(p *pb.Posting) error {
 					pick, err := applyFacetsTree(p.Facets, facetsTree)
 					if err != nil {
 						return err
@@ -654,8 +656,8 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 						}
 					}
 					return nil // continue iteration.
-
-				}); err != nil {
+				})
+				if err != nil {
 					return err
 				}
 
