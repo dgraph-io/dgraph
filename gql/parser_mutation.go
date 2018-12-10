@@ -18,7 +18,6 @@ package gql
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
@@ -29,16 +28,15 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer := lex.Lexer{Input: mutation}
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
-	var mu *api.Mutation
+	var mu api.Mutation
 
 	if !it.Next() {
 		return nil, errors.New("Invalid mutation.")
 	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
-		return nil, fmt.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
 	}
-	mu = new(api.Mutation)
 
 	for it.Next() {
 		item := it.Item()
@@ -46,10 +44,18 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 			continue
 		}
 		if item.Typ == itemRightCurl {
-			return mu, nil
+			// mutations must be enclosed in a single block.
+			if it.Next() && it.Item().Typ == itemLeftCurl {
+				return nil, x.Errorf("Too many mutation blocks.")
+			}
+			return &mu, nil
 		}
 		if item.Typ == itemMutationOp {
-			if err := parseMutationOp(it, item.Val, mu); err != nil {
+			// mutation object has been assigned already, don't overwrite it.
+			if mu.Size() != 0 {
+				return nil, x.Errorf("Too many mutation operations.")
+			}
+			if err := parseMutationOp(it, item.Val, &mu); err != nil {
 				return nil, err
 			}
 		}
@@ -59,10 +65,6 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
 func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
-	if mu == nil {
-		return x.Errorf("Mutation is nil.")
-	}
-
 	parse := false
 	for it.Next() {
 		item := it.Item()
