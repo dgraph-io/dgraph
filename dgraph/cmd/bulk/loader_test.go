@@ -17,8 +17,6 @@ package bulk
 
 import (
 	"bufio"
-	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -70,7 +68,7 @@ func TestJSONLoadReadNext(t *testing.T) {
 	}
 }
 
-// Test that loading first chunk succeeds. Does *not* test that loaded chunk is valid.
+// Test that loading first chunk succeeds. No need to test that loaded chunk is valid.
 func TestJSONLoadSuccess(t *testing.T) {
 	var posTests = []struct {
 		json string
@@ -78,15 +76,35 @@ func TestJSONLoadSuccess(t *testing.T) {
 		desc string
 	}{
 		{"[{}]", "{}","empty map"},
+		{`[{"closingDelimeter":"}"}]`, `{"closingDelimeter":"}"}`, "quoted closing brace" },
 		{`[{"company":"dgraph"}]`, `{"company":"dgraph"}`,"simple, compact map"},
-		{"[\n  {\n    \"company\":\"dgraph\"\n  }\n]\n", `{"company":"dgraph"}`,"simple, pretty map"},
+		{
+			"[\n  {\n    \"company\" : \"dgraph\"\n  }\n]\n",
+			"{\n    \"company\" : \"dgraph\"\n  }",
+			"simple, pretty map",
+		},
+		{
+			`[{"professor":"Alastor \"Mad-Eye\" Moody"}]`,
+			`{"professor":"Alastor \"Mad-Eye\" Moody"}`,
+			"escaped balanced quotes",
+		},
+		{
+			`[{"height":"6'0\""}]`,
+			`{"height":"6'0\""}`,
+			"escaped unbalanced quote",
+		},
+		{
+			`[{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}]`,
+			`{"house":{"Hermione":"Gryffindor","Cedric":"Hufflepuff","Luna":"Ravenclaw","Draco":"Slytherin",}}`,
+			"nested braces",
+		},
 	}
 	for _, test := range posTests {
 		rd := bufioReader(test.json)
 		require.NoError(t, readJSONPreChunk(rd), test.desc)
 
 		json, err := readJSONChunk(rd)
-		fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
+		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		require.NoError(t, err, test.desc)
 		require.Equal(t, test.expt, json.String(), test.desc)
 
