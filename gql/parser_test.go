@@ -4298,7 +4298,7 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
 		set { _:b2 <reg>  "b2 content" . }
 	}`
 	mu, err := ParseMutation(m)
-	require.Error(t, err)
+	require.EqualError(t, err, ErrMutationTooManyBlocks.Error())
 	require.Nil(t, mu)
 }
 

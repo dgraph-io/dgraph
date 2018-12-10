@@ -24,6 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var ErrMutationTooManyBlocks = errors.New("Too many mutation blocks.")
+
 func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer := lex.Lexer{Input: mutation}
 	lexer.Run(lexInsideMutation)
@@ -46,7 +48,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
 			if it.Next() && it.Item().Typ == itemLeftCurl {
-				return nil, x.Errorf("Too many mutation blocks.")
+				return nil, ErrMutationTooManyBlocks
 			}
 			return &mu, nil
 		}
