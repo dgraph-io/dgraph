@@ -4289,7 +4289,17 @@ func TestParseMutation(t *testing.T) {
 	require.EqualValues(t, &api.NQuad{
 		Subject: "name", Predicate: "is", ObjectId: "something-else"},
 		dels[0])
+}
 
+func TestParseMutationTooManyBlocks(t *testing.T) {
+	m := `{
+		set { _:a1 <reg>  "a1 content" . }
+	}{ 
+		set { _:b2 <reg>  "b2 content" . }
+	}`
+	mu, err := ParseMutation(m)
+	require.Error(t, err)
+	require.Nil(t, mu)
 }
 
 func TestParseMissingGraphQLVar(t *testing.T) {

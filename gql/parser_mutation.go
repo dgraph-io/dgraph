@@ -51,10 +51,6 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 			return &mu, nil
 		}
 		if item.Typ == itemMutationOp {
-			// mutation object has been assigned already, don't overwrite it.
-			if mu.Size() != 0 {
-				return nil, x.Errorf("Too many mutation operations.")
-			}
 			if err := parseMutationOp(it, item.Val, &mu); err != nil {
 				return nil, err
 			}
