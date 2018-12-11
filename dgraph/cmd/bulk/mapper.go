@@ -119,73 +119,69 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func parseRDFToNquads(chunkBuf *bytes.Buffer) ([]gql.NQuad, error, bool) {
-	done := false
+type parser interface {
+	parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error)
+}
+type rdfParser struct{}
+type jsonParser struct{}
 
-	str, err := chunkBuf.ReadString('\n')
-	if err != nil {
-		if err == io.EOF {
-			done = true
-		} else {
-			x.Check(err)
-		}
+func newParser(chunkFormat int) parser {
+	switch chunkFormat {
+	case rdfInput:
+		return rdfParser{}
+	case jsonInput:
+		return jsonParser{}
+	default:
+		panic("unknown mapper type")
 	}
-
-	nq, err := rdf.Parse(strings.TrimSpace(str))
-	if err == rdf.ErrEmpty {
-		return []gql.NQuad{}, nil, done
-	} else if err != nil {
-		return nil, errors.Wrapf(err, "while parsing line %q", str), done
-	}
-
-	return []gql.NQuad{ gql.NQuad{NQuad: &nq} }, nil, done
 }
 
-func parseJSONToNquads(chunkBuf *bytes.Buffer) ([]gql.NQuad, error, bool) {
-	done := false
+func (_ rdfParser) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
+	str, readErr := chunkBuf.ReadString('\n')
+	if readErr != nil && readErr != io.EOF {
+		x.Check(readErr)
+	}
 
+	nq, parseErr := rdf.Parse(strings.TrimSpace(str))
+	if parseErr == rdf.ErrEmpty {
+		return nil, readErr
+	} else if parseErr != nil {
+		return nil, errors.Wrapf(parseErr, "while parsing line %q", str)
+	}
+
+	return []gql.NQuad{gql.NQuad{NQuad: &nq}}, readErr
+}
+
+func (_ jsonParser) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
 	if chunkBuf.Len() == 0 {
-		return []gql.NQuad{}, nil, true
+		return nil, io.EOF
 	}
 
-	str := make([]byte, chunkBuf.Len())
-	chunkBuf.Read(str)
-	nqs, err := edgraph.NquadsFromJson(str)
-	if err != nil {
-		if err == io.EOF {
-			done = true
-		} else {
-			x.Check(err)
-		}
+	nqs, err := edgraph.NquadsFromJson(chunkBuf.Bytes())
+	if err != nil && err != io.EOF {
+		x.Check(err)
 	}
+	chunkBuf.Reset()
 
 	gqlNq := make([]gql.NQuad, len(nqs))
 	for i, nq := range nqs {
 		gqlNq[i] = gql.NQuad{NQuad: nq}
 	}
 
-	return gqlNq, nil, done
+	return gqlNq, err
 }
 
-func (m *mapper) run(loaderType int) {
+func (m *mapper) run(inputFormat int) {
+	parser := newParser(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
-		for ! done {
-			var nqs []gql.NQuad
-			var err error
-
-			switch loaderType {
-			case rdfInput:
-				nqs, err, done = parseRDFToNquads(chunkBuf)
-			case jsonInput:
-				nqs, err, done = parseJSONToNquads(chunkBuf)
-			default:
-				log.Fatalf("bulk loader type %+v not supported by mapper", loaderType)
-			}
-
-			if err != nil && err != io.EOF {
+		for !done {
+			nqs, err := parser.parse(chunkBuf)
+			if err == io.EOF {
+				done = true
+			} else if err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
-				if ! m.opt.IgnoreErrors {
+				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
 			}
@@ -193,7 +189,7 @@ func (m *mapper) run(loaderType int) {
 			for _, nq := range nqs {
 				if err := facets.SortAndValidate(nq.Facets); err != nil {
 					atomic.AddInt64(&m.prog.errCount, 1)
-					if ! m.opt.IgnoreErrors {
+					if !m.opt.IgnoreErrors {
 						x.Check(err)
 					}
 				}

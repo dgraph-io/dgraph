@@ -159,8 +159,8 @@ type chunker interface {
 type rdfChunker struct{}
 type jsonChunker struct{}
 
-func newChunker(loaderType int) chunker {
-	switch loaderType {
+func newChunker(inputFormat int) chunker {
+	switch inputFormat {
 	case rdfInput:
 		return rdfChunker{}
 	case jsonInput:
