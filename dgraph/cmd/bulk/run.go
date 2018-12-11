@@ -92,7 +92,7 @@ func init() {
 func run() {
 	opt := options{
 		RDFDir:        Bulk.Conf.GetString("rdfs"),
-		JSONDir:	   Bulk.Conf.GetString("jsons"),
+		JSONDir:       Bulk.Conf.GetString("jsons"),
 		SchemaFile:    Bulk.Conf.GetString("schema_file"),
 		DgraphsDir:    Bulk.Conf.GetString("out"),
 		TmpDir:        Bulk.Conf.GetString("tmp"),
@@ -186,11 +186,11 @@ func maxOpenFilesWarning() {
 	)
 	maxOpenFiles, err := queryMaxOpenFiles()
 	if err != nil || maxOpenFiles < 1e6 {
-		fmt.Println(green+"\nThe bulk loader needs to open many files at once. This number depends" +
+		fmt.Println(green + "\nThe bulk loader needs to open many files at once. This number depends" +
 			" on the size of the data set loaded, the map file output size, and the level" +
 			" of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
 			" details of how to change the limit.")
-		if err !=  nil {
+		if err != nil {
 			fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
 		} else {
 			fmt.Printf(yellow+"Current max open files limit: %d\n"+reset, maxOpenFiles)

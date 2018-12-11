@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -39,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
