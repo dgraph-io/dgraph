@@ -67,8 +67,8 @@ type options struct {
 }
 
 const (
-	rdfLoader int = iota
-	jsonLoader
+	rdfInput int = iota
+	jsonInput
 )
 
 type state struct {
@@ -150,7 +150,31 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-func readRDFChunk(r *bufio.Reader) (*bytes.Buffer, error) {
+type chunker interface {
+	begin(r *bufio.Reader) error
+	chunk(r *bufio.Reader) (*bytes.Buffer, error)
+	end(r *bufio.Reader) error
+}
+
+type rdfChunker struct{}
+type jsonChunker struct{}
+
+func newChunker(loaderType int) chunker {
+	switch loaderType {
+	case rdfInput:
+		return rdfChunker{}
+	case jsonInput:
+		return jsonChunker{}
+	default:
+		panic("unknown loader type")
+	}
+}
+
+func (_ rdfChunker) begin(r *bufio.Reader) error {
+	return nil
+}
+
+func (_ rdfChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
@@ -182,6 +206,10 @@ func readRDFChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
+func (_ rdfChunker) end(r *bufio.Reader) error {
+	return nil
+}
+
 func skipSpace(r *bufio.Reader) error {
 	ch, _, err := r.ReadRune()
 	for unicode.IsSpace(ch) {
@@ -192,9 +220,10 @@ func skipSpace(r *bufio.Reader) error {
 		err = r.UnreadRune()
 	}
 
-	return nil
+	return err
 }
-func readJSONPreChunk(r *bufio.Reader) error {
+
+func (_ jsonChunker) begin(r *bufio.Reader) error {
 	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
@@ -213,7 +242,7 @@ func readJSONPreChunk(r *bufio.Reader) error {
 	return nil
 }
 
-func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (_ jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 
@@ -222,7 +251,7 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	// more complicated to ensure a complete JSON structure is read.
 
 	if err := skipSpace(r); err != nil {
-		return nil, err
+		return batch, err
 	}
 
 	ch, _, err := r.ReadRune()
@@ -283,6 +312,14 @@ func readJSONChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
+func (_ jsonChunker) end(r *bufio.Reader) error {
+	if skipSpace(r) == io.EOF {
+		return nil
+	} else {
+		return errors.New("not all of json file consumed")
+	}
+}
+
 func findDataFiles(dir string, ext string) []string {
 	var files []string
 	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -323,17 +360,14 @@ func (ld *loader) mapStage() {
 	var files []string
 	var ext string
 	var loaderType int
-	var chunker func(r *bufio.Reader) (*bytes.Buffer, error)
 	if ld.opt.RDFDir != "" {
-		loaderType = rdfLoader
+		loaderType = rdfInput
 		ext = ".rdf"
 		files = findDataFiles(ld.opt.RDFDir, ext)
-		chunker = readRDFChunk
 	} else {
-		loaderType = jsonLoader
+		loaderType = jsonInput
 		ext = ".json"
 		files = findDataFiles(ld.opt.JSONDir, ext)
-		chunker = readJSONChunk
 	}
 
 	readers := make(map[string]*bufio.Reader)
@@ -373,15 +407,12 @@ func (ld *loader) mapStage() {
 		thr.Start()
 		fileCount++
 		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), file)
+		chunker := newChunker(loaderType)
 		go func(r *bufio.Reader) {
 			defer thr.Done()
-			if loaderType == jsonLoader {
-				if err := readJSONPreChunk(r); err != nil {
-					x.Check(err)
-				}
-			}
+			x.Check(chunker.begin(r))
 			for {
-				chunkBuf, err := chunker(r)
+				chunkBuf, err := chunker.chunk(r)
 				if err == io.EOF {
 					if chunkBuf.Len() != 0 {
 						ld.readerChunkCh <- chunkBuf
@@ -391,6 +422,7 @@ func (ld *loader) mapStage() {
 				x.Check(err)
 				ld.readerChunkCh <- chunkBuf
 			}
+			x.Check(chunker.end(r))
 		}(r)
 	}
 	thr.Wait()

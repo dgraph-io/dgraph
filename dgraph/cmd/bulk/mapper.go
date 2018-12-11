@@ -175,9 +175,9 @@ func (m *mapper) run(loaderType int) {
 			var err error
 
 			switch loaderType {
-			case rdfLoader:
+			case rdfInput:
 				nqs, err, done = parseRDFToNquads(chunkBuf)
-			case jsonLoader:
+			case jsonInput:
 				nqs, err, done = parseJSONToNquads(chunkBuf)
 			default:
 				log.Fatalf("bulk loader type %+v not supported by mapper", loaderType)

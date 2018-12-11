@@ -17,6 +17,9 @@ package bulk
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -42,13 +45,14 @@ func TestJSONLoadStart(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		require.Error(t, readJSONPreChunk(bufioReader(test.json)), test.desc)
+		chunker := newChunker(jsonInput)
+		require.Error(t, chunker.begin(bufioReader(test.json)), test.desc)
 	}
 }
 
 // Test that problems at the start of the next chunk are caught.
 func TestJSONLoadReadNext(t *testing.T) {
-	var test = []struct {
+	var tests = []struct {
 		json string
 		desc string
 	}{
@@ -57,11 +61,12 @@ func TestJSONLoadReadNext(t *testing.T) {
 		{"[ this is not really a json array ]", "no start of JSON map 2"},
 		{"[{]", "malformed map"},
 	}
-	for _, test := range test {
-		rd := bufioReader(test.json)
-		require.NoError(t, readJSONPreChunk(rd), test.desc)
+	for _, test := range tests {
+		chunker := newChunker(jsonInput)
+		reader := bufioReader(test.json)
+		require.NoError(t, chunker.begin(reader), test.desc)
 
-		json, err := readJSONChunk(rd)
+		json, err := chunker.chunk(reader)
 		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		require.Nil(t, json, test.desc)
 		require.Error(t, err, test.desc)
@@ -69,8 +74,8 @@ func TestJSONLoadReadNext(t *testing.T) {
 }
 
 // Test that loading first chunk succeeds. No need to test that loaded chunk is valid.
-func TestJSONLoadSuccess(t *testing.T) {
-	var posTests = []struct {
+func TestJSONLoadSuccessFirst(t *testing.T) {
+	var tests = []struct {
 		json string
 		expt string
 		desc string
@@ -99,14 +104,82 @@ func TestJSONLoadSuccess(t *testing.T) {
 			"nested braces",
 		},
 	}
-	for _, test := range posTests {
-		rd := bufioReader(test.json)
-		require.NoError(t, readJSONPreChunk(rd), test.desc)
+	for _, test := range tests {
+		chunker := newChunker(jsonInput)
+		reader := bufioReader(test.json)
+		require.NoError(t, chunker.begin(reader), test.desc)
 
-		json, err := readJSONChunk(rd)
+		json, err := chunker.chunk(reader)
 		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		require.NoError(t, err, test.desc)
 		require.Equal(t, test.expt, json.String(), test.desc)
 
 	}
+}
+
+// Test that loading all chunks succeeds. No need to test that loaded chunk is valid.
+func TestJSONLoadSuccessAll(t *testing.T) {
+	var testDoc = `
+[
+	{},
+	{
+		"closingDelimeter" : "}"
+	},
+	{
+		"company" : "dgraph"
+	},
+	{
+		"professor" : "Alastor \"Mad-Eye\" Moody",
+		"height"    : "6'0\""
+	},
+	{
+		"house" : {
+			"Hermione" : "Gryffindor",
+			"Cedric"   : "Hufflepuff",
+			"Luna"     : "Ravenclaw",
+			"Draco"    : "Slytherin"
+		}
+	}
+]`
+	var testChunks = []string {
+		`{}`,
+		`{
+		"closingDelimeter" : "}"
+	}`,
+		`{
+		"company" : "dgraph"
+	}`,
+		`{
+		"professor" : "Alastor \"Mad-Eye\" Moody",
+		"height"    : "6'0\""
+	}`,
+		`{
+		"house" : {
+			"Hermione" : "Gryffindor",
+			"Cedric"   : "Hufflepuff",
+			"Luna"     : "Ravenclaw",
+			"Draco"    : "Slytherin"
+		}
+	}`,
+	}
+
+	chunker := newChunker(jsonInput)
+	reader := bufioReader(testDoc)
+
+	var json *bytes.Buffer
+	var idx int
+
+	err := chunker.begin(reader)
+	require.NoError(t, err, "begin reading JSON document")
+	for idx = 0; err == nil; idx++ {
+		desc := fmt.Sprintf("reading chunk #%d", idx+1)
+		json, err = chunker.chunk(reader)
+		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
+		if err != io.EOF {
+			require.NoError(t, err, desc)
+			require.Equal(t, testChunks[idx], json.String(), desc)
+		}
+	}
+	err = chunker.end(reader)
+	require.NoError(t, err, "end reading JSON document")
 }
