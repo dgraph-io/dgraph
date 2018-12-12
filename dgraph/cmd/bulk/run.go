@@ -19,7 +19,6 @@ package bulk
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgraph/tok"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -29,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
