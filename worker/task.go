@@ -1502,7 +1502,11 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
 			var err error
-			typId := facets.TypeIDFor(fc)
+			typId, err := facets.TypeIDFor(fc)
+			if err != nil {
+				return false, err
+			}
+
 			v, has := ftree.function.convertedVal[typId]
 			if !has {
 				if v, err = types.Convert(ftree.function.val, typId); err != nil {
@@ -1512,10 +1516,19 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 					ftree.function.convertedVal[typId] = v
 				}
 			}
-			return types.CompareVals(fname, facets.ValFor(fc), v), nil
+			fVal, err := facets.ValFor(fc)
+			if err != nil {
+				return false, err
+			}
+
+			return types.CompareVals(fname, fVal, v), nil
 
 		case StandardFn: // allofterms, anyofterms
-			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
+			facetType, err := facets.TypeIDFor(fc)
+			if err != nil {
+				return false, err
+			}
+			if facetType != types.StringID {
 				return false, nil
 			}
 			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)

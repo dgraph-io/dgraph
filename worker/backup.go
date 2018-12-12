@@ -19,25 +19,21 @@
 package worker
 
 import (
-	"errors"
-
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
 
-var errNotSupported = errors.New("Feature available only in Dgraph Enterprise Edition.")
-
 // Backup implements the Worker interface.
 func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.Infof("Backup failed: %s", errNotSupported)
-	return &pb.Status{}, nil
+	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
+	return &pb.Status{}, x.ErrNotSupported
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
 func BackupOverNetwork(pctx context.Context, target string) error {
-	return x.Errorf("Backup failed: %s", errNotSupported)
+	return x.ErrNotSupported
 }
 
 // Restore implements the Worker interface.

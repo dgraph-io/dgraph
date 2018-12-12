@@ -754,9 +754,10 @@ func DeleteAll() error {
 		pk := x.Parse(key)
 		if pk == nil {
 			return true
-		} else if pk.IsSchema() && pk.Attr == x.PredicateListAttr {
+		} else if pk.IsSchema() {
 			// Don't delete schema for _predicate_
-			return false
+			_, isInitialPred := x.InitialPreds[pk.Attr]
+			return !isInitialPred
 		}
 		return true
 	})

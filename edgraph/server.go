@@ -598,6 +598,11 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	return nqs, nil
 }
 
+// parseMutationObject tries to consolidate fields of the api.Mutation into the
+// corresponding field of the returned gql.Mutation. For example, the 3 fields,
+// api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
+// gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
+// and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
@@ -629,13 +634,11 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		res.Del = append(res.Del, nqs...)
 	}
 
-	// We check that the facet value is in the right format based on the facet type.
-	for _, m := range mu.Set {
-		for _, f := range m.Facets {
-			if err := facets.TryValFor(f); err != nil {
-				return nil, err
-			}
-		}
+	// parse facets and convert to the binary format so that
+	// a field of type datetime like "2017-01-01" can be correctly encoded in the
+	// marshaled binary format as done in the time.Marshal method
+	if err := validateAndConvertFacets(mu); err != nil {
+		return nil, err
 	}
 
 	res.Set = append(res.Set, mu.Set...)
@@ -645,6 +648,27 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+func validateAndConvertFacets(mu *api.Mutation) error {
+	for _, m := range mu.Set {
+		encodedFacets := make([]*api.Facet, 0, len(m.Facets))
+		for _, f := range m.Facets {
+			// try to interpret the value as binary first
+			if _, err := facets.ValFor(f); err == nil {
+				encodedFacets = append(encodedFacets, f)
+			} else {
+				encodedFacet, err := facets.FacetFor(f.Key, string(f.Value))
+				if err != nil {
+					return err
+				}
+				encodedFacets = append(encodedFacets, encodedFacet)
+			}
+		}
+
+		m.Facets = encodedFacets
+	}
+	return nil
 }
 
 func validateNQuads(set, del []*api.NQuad) error {
