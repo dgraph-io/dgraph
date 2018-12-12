@@ -31,22 +31,22 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Error constants representing different types of errors.
+var (
+	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition.")
+)
+
 const (
-	Success                 = "Success"
-	ErrorUnauthorized       = "ErrorUnauthorized"
-	ErrorInvalidMethod      = "ErrorInvalidMethod"
-	ErrorInvalidRequest     = "ErrorInvalidRequest"
-	ErrorMissingRequired    = "ErrorMissingRequired"
-	Error                   = "Error"
-	ErrorNoData             = "ErrorNoData"
-	ErrorUptodate           = "ErrorUptodate"
-	ErrorNoPermission       = "ErrorNoPermission"
-	ErrorInvalidMutation    = "ErrorInvalidMutation"
-	ErrorServiceUnavailable = "ErrorServiceUnavailable"
-	ValidHostnameRegex      = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	Success             = "Success"
+	ErrorUnauthorized   = "ErrorUnauthorized"
+	ErrorInvalidMethod  = "ErrorInvalidMethod"
+	ErrorInvalidRequest = "ErrorInvalidRequest"
+	Error               = "Error"
+	ErrorNoData         = "ErrorNoData"
+	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
@@ -66,11 +66,28 @@ const (
 	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
 	// start aborting old transactions.
 	ForceAbortDifference = 5000
+
+	TlsClientCert = "client.crt"
+	TlsClientKey  = "client.key"
 )
 
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
+	InitialPreds   = map[string]struct{}{
+		PredicateListAttr:   {},
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+	}
+	AclPredsJson = `
+{"predicate":"dgraph.group.acl", "type":"string"},
+{"predicate":"dgraph.password", "type":"password"},
+{"reverse":true, "predicate":"dgraph.user.group", "type":"uid"},
+{"index":true, "tokenizer":["exact"], "predicate":"dgraph.xid", "type":"string"}
+`
+	Nilbyte []byte
 )
 
 func ShouldCrash(err error) bool {
@@ -198,8 +215,6 @@ func HasString(a []string, b string) bool {
 	}
 	return false
 }
-
-var Nilbyte []byte
 
 // Reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
@@ -412,4 +427,43 @@ func DivideAndRule(num int) (numGo, width int) {
 		}
 	}
 	return
+}
+
+func SetupConnection(host string, tlsConf *TLSHelperConfig) (*grpc.ClientConn, error) {
+	opts := append([]grpc.DialOption{},
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(GrpcMaxSize),
+			grpc.MaxCallSendMsgSize(GrpcMaxSize)),
+		grpc.WithBlock(),
+		grpc.WithTimeout(10*time.Second))
+
+	if tlsConf.CertRequired {
+		tlsConf.ConfigType = TLSClientConfig
+		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	} else {
+		opts = append(opts, grpc.WithInsecure())
+	}
+	return grpc.Dial(host, opts...)
+}
+
+func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string, []string) {
+	var newGroups []string
+	var groupsToBeDeleted []string
+
+	for g := range targetMap {
+		if _, ok := existingMap[g]; !ok {
+			newGroups = append(newGroups, g)
+		}
+	}
+	for g := range existingMap {
+		if _, ok := targetMap[g]; !ok {
+			groupsToBeDeleted = append(groupsToBeDeleted, g)
+		}
+	}
+
+	return newGroups, groupsToBeDeleted
 }
