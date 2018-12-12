@@ -28,7 +28,7 @@
 
 ### Setup Dgraph from source repo
 
-    $ go get -u -v -t github.com/dgraph-io/dgraph/...
+    $ go get -v -t github.com/dgraph-io/dgraph/...
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and compile the binaries to `$GOPATH/bin`.
 
