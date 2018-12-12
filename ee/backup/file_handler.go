@@ -25,8 +25,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const fileReadBufSize = 4 << 12
-
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
 	fp   *os.File

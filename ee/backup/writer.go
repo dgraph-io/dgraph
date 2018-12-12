@@ -22,14 +22,12 @@ import (
 	"github.com/golang/glog"
 )
 
-var errLocationEmpty = x.Errorf("Empty URI location given.")
-
 // KVWriter implements the stream.kvStream interface.
 type KVWriter struct {
 	h handler
 }
 
-// NewWriter parses the requested source URI, finds a handler and then tries to create a session
+// newWriter parses the requested source URI, finds a handler and then tries to create a session
 // for writing.
 //
 // Target URI formats:

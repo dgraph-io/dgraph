@@ -52,8 +52,8 @@ func init() {
 	flag.BoolVar(&opt.verify, "verify", false, "Verify the posting contents.")
 	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
 		"Enable debug mode for more debug information.")
-	Restore.Cmd.MarkFlagRequired("postings")
-	Restore.Cmd.MarkFlagRequired("location")
+	_ = Restore.Cmd.MarkFlagRequired("postings")
+	_ = Restore.Cmd.MarkFlagRequired("location")
 }
 
 func run() error {
