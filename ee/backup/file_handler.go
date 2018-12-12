@@ -13,18 +13,14 @@
 package backup
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgraph/x"
-	humanize "github.com/dustin/go-humanize"
 
 	"github.com/golang/glog"
 )
@@ -33,107 +29,84 @@ const fileReadBufSize = 4 << 12
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	writer *os.File
-	reader io.Reader
-	cerr   chan error
+	fp   *os.File
+	cerr chan error
 }
 
-// Open authenticates or prepares a handler session.
+// Create prepares the a path to save backup files.
 // Returns error on failure, nil on success.
-func (h *fileHandler) Open(uri *url.URL, req *Request) error {
-	// check that this path exists and we can access it.
+func (h *fileHandler) Create(uri *url.URL, req *Request) error {
+	// check that the path exists and we can access it.
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Backup: open a single file for write.
-	if req.Backup.Target != "" {
-		dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
-		if err := os.Mkdir(dir, 0700); err != nil {
-			if !os.IsExist(err) {
-				return err
-			}
-		}
-
-		path := filepath.Join(dir,
-			fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
-		fp, err := os.Create(path)
-		if err != nil {
+	dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
+	if err := os.Mkdir(dir, 0700); err != nil {
+		if !os.IsExist(err) {
 			return err
 		}
-		glog.V(2).Infof("Using file path: %q", path)
-		h.writer = fp
-
-		return nil
 	}
 
-	// Restore: scan location and find backup files. load them sequentially.
-
-	var suffix string
-	if req.Backup.GroupId > 0 {
-		suffix = fmt.Sprintf("g%d", req.Backup.GroupId)
+	path := filepath.Join(dir,
+		fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+	fp, err := os.Create(path)
+	if err != nil {
+		return err
 	}
-	suffix += ".backup"
+	glog.V(2).Infof("Using file path: %q", path)
+	h.fp = fp
 
-	files := x.FindFilesFunc(uri.Path, func(path string) bool {
-		return strings.HasSuffix(path, suffix)
-	})
-	if len(files) == 0 {
-		return x.Errorf("No backup files found in %q", req.Backup.Source)
-	}
-	sort.Strings(files)
-
-	h.cerr = make(chan error, 1)
-	go func() {
-		h.cerr <- h.multiRead(files...)
-	}()
-
-	glog.V(2).Infof("Loading backup file(s): %v", files)
 	return nil
 }
 
-// multiRead will read multiple files sequentially and send via pipe.
-func (h *fileHandler) multiRead(files ...string) error {
-	start := time.Now()
-	pr, pw := io.Pipe()
-	h.reader = pr
+// Load uses loadFn to try to load any backup files found.
+// Returns nil on success, error otherwise.
+func (h *fileHandler) Load(uri *url.URL, loadFn loadFunc) error {
+	if !h.exists(uri.Path) {
+		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
 
-	var tot uint64
+	// find files and sort.
+	files := x.FindFilesFunc(uri.Path, func(path string) bool {
+		return strings.HasSuffix(path, ".backup")
+	})
+	if len(files) == 0 {
+		return x.Errorf("No backup files found in %q", uri.Path)
+	}
+	sort.Strings(files)
+	glog.V(2).Infof("Loading backup file(s): %v", files)
+
 	for _, file := range files {
 		fp, err := os.Open(file)
 		if err != nil {
 			return err
 		}
-		n, err := io.Copy(pw, bufio.NewReaderSize(fp, fileReadBufSize))
-		if err != nil {
+		if err = loadFn(fp, file); err != nil {
 			return err
 		}
-		tot += uint64(n)
+		if err = fp.Close(); err != nil {
+			glog.V(3).Infof("Error closing file %q: %s", file, err)
+		}
 	}
-	glog.V(2).Infof("Restore recv %s bytes. Time elapsed: %s",
-		humanize.Bytes(tot), time.Since(start).Round(time.Second))
-	return pw.CloseWithError(nil)
+
+	return nil
 }
 
 func (h *fileHandler) Close() error {
-	if h.writer == nil {
+	if h.fp == nil {
 		return <-h.cerr
 	}
-	if err := h.writer.Sync(); err != nil {
-		glog.Errorf("While closing file: %s. Error: %v", h.writer.Name(), err)
-		x.Ignore(h.writer.Close())
+	if err := h.fp.Sync(); err != nil {
+		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)
+		x.Ignore(h.fp.Close())
 		return err
 	}
-	return h.writer.Close()
-}
-
-// Read will read each file in order until done or error.
-func (h *fileHandler) Read(b []byte) (int, error) {
-	return h.reader.Read(b)
+	return h.fp.Close()
 }
 
 func (h *fileHandler) Write(b []byte) (int, error) {
-	return h.writer.Write(b)
+	return h.fp.Write(b)
 }
 
 // Exists checks if a path (file or dir) is found at target.

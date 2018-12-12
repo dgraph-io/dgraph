@@ -456,8 +456,7 @@ message BackupRequest {
 	uint64 read_ts  = 1;
 	uint32 group_id = 2;
 	string unix_ts  = 3;
-	string target   = 4;
-	string source   = 5;
+	string location = 4;
 }
 
 message ExportRequest {

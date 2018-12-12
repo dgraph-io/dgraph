@@ -13,82 +13,95 @@
 package restore
 
 import (
-	"context"
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
-	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
 )
 
-var Restore x.SubCommand
-
-var opt struct {
-	verify       bool
-	source, pdir string
-	group        uint32
-}
-
-func init() {
-	Restore.Cmd = &cobra.Command{
-		Use:   "restore",
-		Short: "Run Dgraph (EE) Restore backup",
-		Long: `
-		Dgraph Restore is used to load backup files offline.
-		`,
-		Args: cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Restore.Conf).Stop()
-			if err := run(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-		},
-	}
-
-	flag := Restore.Cmd.Flags()
-	flag.StringVarP(&opt.source, "source", "l", "", "Sets the source location URI (required).")
-	flag.Uint32VarP(&opt.group, "group", "g", 0, "Group ID to restore (0 for all).")
-	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored (required).")
-	flag.BoolVar(&opt.verify, "verify", false, "Verify the posting contents.")
-	Restore.Cmd.MarkFlagRequired("postings")
-	Restore.Cmd.MarkFlagRequired("source")
-}
-
-func run() error {
-	if opt.pdir == "" {
-		fmt.Println("Must specify posting dir with -p")
-		return Restore.Cmd.Usage()
-	}
-	if opt.source == "" {
-		fmt.Println("Must specify a restore source with --loc")
-		return Restore.Cmd.Usage()
-	}
-
+func runRestore() error {
 	bo := badger.DefaultOptions
 	bo.SyncWrites = false
 	bo.TableLoadingMode = options.MemoryMap
 	bo.ValueThreshold = 1 << 10
 	bo.NumVersionsToKeep = math.MaxInt32
-	bo.Dir = opt.pdir
-	bo.ValueDir = opt.pdir
-	db, err := badger.OpenManaged(bo)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
 
-	req := &backup.Request{
-		DB: db,
-		Backup: &pb.BackupRequest{
-			Source:  opt.source,
-			GroupId: opt.group,
-		},
-	}
-	return req.Restore(context.Background())
+	var num int
+	return backup.Load(opt.location, func(reader io.Reader, name string) error {
+		bo := bo
+		bo.Dir = filepath.Join(opt.pdir, fmt.Sprintf("p%d", num))
+		bo.ValueDir = bo.Dir
+		db, err := badger.OpenManaged(bo)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		fmt.Println("--- Creating new db:", bo.Dir)
+
+		writer := x.NewTxnWriter(db)
+		writer.BlindWrite = true
+
+		var (
+			kvs pb.KVS
+			bb  bytes.Buffer
+			sz  uint64
+			cnt int
+		)
+		kvs.Kv = make([]*pb.KV, 0, 1000)
+
+		start := time.Now()
+		fmt.Println("--- Loading:", name)
+		for {
+			err = binary.Read(reader, binary.LittleEndian, &sz)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+
+			e := &pb.KV{}
+			n, err := bb.ReadFrom(io.LimitReader(reader, int64(sz)))
+			if err != nil {
+				return err
+			}
+			if n != int64(sz) {
+				return x.Errorf("Restore failed read. Expected %d bytes but got %d instead.", sz, n)
+			}
+			if err = e.Unmarshal((&bb).Bytes()); err != nil {
+				return err
+			}
+			bb.Reset()
+			kvs.Kv = append(kvs.Kv, e)
+			kvs.Done = false
+			cnt++
+			if cnt%1000 == 0 {
+				if err := writer.Send(&kvs); err != nil {
+					return err
+				}
+				kvs.Kv = kvs.Kv[:0]
+				kvs.Done = true
+			}
+		}
+		if !kvs.Done {
+			if err := writer.Send(&kvs); err != nil {
+				return err
+			}
+		}
+		if err := writer.Flush(); err != nil {
+			return err
+		}
+		num++
+		fmt.Printf("--- Loaded %d keys in %s\n\n", cnt, time.Since(start).Round(time.Second))
+
+		return nil
+	})
 }
