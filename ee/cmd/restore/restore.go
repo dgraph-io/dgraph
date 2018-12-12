@@ -89,11 +89,19 @@ func runRestore() error {
 				}
 				kvs.Kv = kvs.Kv[:0]
 				kvs.Done = true
+				if x.Config.DebugMode && cnt%100000 == 0 {
+					fmt.Printf("... wrote %d keys ~ %.1f k/s\n",
+						cnt, float64(cnt)/time.Since(start).Seconds())
+				}
 			}
 		}
 		if !kvs.Done {
 			if err := writer.Send(&kvs); err != nil {
 				return err
+			}
+			if x.Config.DebugMode {
+				fmt.Printf("... wrote %d keys ~ %.1f k/s\n",
+					cnt, float64(cnt)/time.Since(start).Seconds())
 			}
 		}
 		if err := writer.Flush(); err != nil {

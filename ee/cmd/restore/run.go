@@ -57,15 +57,6 @@ func init() {
 }
 
 func run() error {
-	if opt.pdir == "" {
-		fmt.Println("Must specify posting dir with -p")
-		return Restore.Cmd.Usage()
-	}
-	if opt.location == "" {
-		fmt.Println("Must specify a restore source location with -l")
-		return Restore.Cmd.Usage()
-	}
-
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
