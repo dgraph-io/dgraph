@@ -48,7 +48,7 @@ type groupi struct {
 	gid          uint32
 	tablets      map[string]*pb.Tablet
 	triggerCh    chan struct{} // Used to trigger membership sync
-	blockDeletes sync.Mutex    // Ensure that deletion won't happen when move is going on.
+	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
 	closer       *y.Closer
 }
 
@@ -63,7 +63,9 @@ func groups() *groupi {
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
-	gr = new(groupi)
+	gr = &groupi{
+		blockDeletes: new(sync.Mutex),
+	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
 	if len(Config.MyAddr) == 0 {
