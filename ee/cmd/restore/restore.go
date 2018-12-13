@@ -56,9 +56,28 @@ func runRestore() error {
 			sz  uint64
 			cnt int
 		)
-		kvs.Kv = make([]*pb.KV, 0, 1000)
 
+		kvs.Kv = make([]*pb.KV, 0, 1000)
 		start := time.Now()
+
+		// track progress
+		tick := time.NewTicker(time.Second)
+		done := make(chan struct{})
+		if x.Config.DebugMode {
+			go func() {
+				for {
+					select {
+					case <-done:
+						return
+					case now := <-tick.C:
+						fmt.Printf("... Time elapsed: %s, keys loaded: %d, speed: %d keys/s\n",
+							now.Sub(start).Round(time.Second), cnt,
+							int64(float64(cnt)/time.Since(start).Seconds()))
+					}
+				}
+			}()
+		}
+
 		fmt.Println("--- Loading:", name)
 		for {
 			err = binary.Read(reader, binary.LittleEndian, &sz)
@@ -89,26 +108,20 @@ func runRestore() error {
 				}
 				kvs.Kv = kvs.Kv[:0]
 				kvs.Done = true
-				if x.Config.DebugMode && cnt%100000 == 0 {
-					fmt.Printf("... wrote %d keys ~ %.1f k/s\n",
-						cnt, float64(cnt)/time.Since(start).Seconds())
-				}
 			}
 		}
 		if !kvs.Done {
 			if err := writer.Send(&kvs); err != nil {
 				return err
 			}
-			if x.Config.DebugMode {
-				fmt.Printf("... wrote %d keys ~ %.1f k/s\n",
-					cnt, float64(cnt)/time.Since(start).Seconds())
-			}
 		}
 		if err := writer.Flush(); err != nil {
 			return err
 		}
 		num++
-		fmt.Printf("--- Loaded %d keys in %s\n\n", cnt, time.Since(start).Round(time.Second))
+		tick.Stop()
+		done <- struct{}{}
+		fmt.Printf("--- Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))
 
 		return nil
 	})
