@@ -553,7 +553,7 @@ The result:
       "processing_ns": 4722207
     },
     "txn": {
-      "start_ts": 17,
+      "start_ts": 4,
       "keys": [
         "i4elpex2rwx3",
         "nkvfdz3ltmvv"
