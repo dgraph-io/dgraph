@@ -35,10 +35,20 @@ func runRestore() error {
 	bo.ValueThreshold = 1 << 10
 	bo.NumVersionsToKeep = math.MaxInt32
 
+	// num is used to create the posting 'p*' directories for each group.
 	var num int
+
+	// Scan location for backup files and load them.
 	return backup.Load(opt.location, func(reader io.Reader, name string) error {
+		var (
+			kvs pb.KVS       // KV process queue
+			bb  bytes.Buffer // KV read buffer
+			sz  uint64       // size of KV value
+			cnt int          // total count of KV records loaded
+		)
+
 		bo := bo
-		bo.Dir = filepath.Join(opt.pdir, fmt.Sprintf("p%d", num))
+		bo.Dir = filepath.Join(opt.pdir, fmt.Sprintf("p%d", num)) // p0 ... pN-1
 		bo.ValueDir = bo.Dir
 		db, err := badger.OpenManaged(bo)
 		if err != nil {
@@ -46,21 +56,15 @@ func runRestore() error {
 		}
 		defer db.Close()
 		fmt.Println("--- Creating new db:", bo.Dir)
+		fmt.Println("--- Loading:", name)
 
 		writer := x.NewTxnWriter(db)
 		writer.BlindWrite = true
 
-		var (
-			kvs pb.KVS
-			bb  bytes.Buffer
-			sz  uint64
-			cnt int
-		)
-
 		kvs.Kv = make([]*pb.KV, 0, 1000)
 		start := time.Now()
 
-		// track progress
+		// start progress ticker
 		tick := time.NewTicker(time.Second)
 		done := make(chan struct{})
 		if x.Config.DebugMode {
@@ -78,23 +82,25 @@ func runRestore() error {
 			}()
 		}
 
-		fmt.Println("--- Loading:", name)
+		// This loop will access reader until EOF (or an error) is returned.
 		for {
 			err = binary.Read(reader, binary.LittleEndian, &sz)
-			if err == io.EOF {
-				break
-			} else if err != nil {
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				return err
 			}
 
-			e := &pb.KV{}
 			n, err := bb.ReadFrom(io.LimitReader(reader, int64(sz)))
 			if err != nil {
 				return err
 			}
+			// The byte count must match the header otherwise we have data loss.
 			if n != int64(sz) {
 				return x.Errorf("Restore failed read. Expected %d bytes but got %d instead.", sz, n)
 			}
+			e := &pb.KV{}
 			if err = e.Unmarshal((&bb).Bytes()); err != nil {
 				return err
 			}
@@ -102,14 +108,17 @@ func runRestore() error {
 			kvs.Kv = append(kvs.Kv, e)
 			kvs.Done = false
 			cnt++
+
+			// check if KV queue is full, then send.
 			if cnt%1000 == 0 {
-				if err := writer.Send(&kvs); err != nil {
+				if err = writer.Send(&kvs); err != nil {
 					return err
 				}
 				kvs.Kv = kvs.Kv[:0]
 				kvs.Done = true
 			}
 		}
+		// check if we have more unsent queued KV's.
 		if !kvs.Done {
 			if err := writer.Send(&kvs); err != nil {
 				return err
@@ -118,9 +127,14 @@ func runRestore() error {
 		if err := writer.Flush(); err != nil {
 			return err
 		}
+
+		// increment to next pN dir for a new DB.
 		num++
+
+		// stop progress ticker
 		tick.Stop()
 		done <- struct{}{}
+
 		fmt.Printf("--- Loaded %d keys in %s\n", cnt, time.Since(start).Round(time.Second))
 
 		return nil
