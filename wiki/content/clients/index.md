@@ -39,7 +39,7 @@ fashion, resulting in an initially semi random predicate distribution.
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgo?status.svg)](https://godoc.org/github.com/dgraph-io/dgo)
 
-The go client communicates with the server on the grpc port (default value 9080).
+The Go client communicates with the server on the gRPC port (default value 9080).
 
 The client can be obtained in the usual way via `go get`:
 
@@ -52,7 +52,7 @@ documentation for the client API along with examples showing how to use it.
 
 ### Create the client
 
-To create a client, dial a connection to Dgraph's external Grpc port (typically
+To create a client, dial a connection to Dgraph's external gRPC port (typically
 9080). The following code snippet shows just one connection. You can connect to multiple Dgraph alphas to distribute the workload evenly.
 
 ```go
@@ -390,7 +390,8 @@ working gRPC implementation.
 In the examples shown here, regular command line tools such as `curl` and
 [`jq`](https://stedolan.github.io/jq/) are used. However, the real intention
 here is to show other programmers how they could implement a client in their
-language on top of the HTTP API.
+language on top of the HTTP API. For an example of how to build a client on top
+of gRPC, refer to the implementation of the Go client.
 
 Similar to the Go client example, we use a bank account transfer example.
 
@@ -405,8 +406,16 @@ for each transaction.
 2. The set of keys modified by the transaction (`keys`). This aids in
    transaction conflict detection.
 
+     Every mutation would send back a neeuatw set of keys. The client must merge them
+     with the existing set. Optionally, a client can de-dup these keys while
+     merging.
+
 3. The set of predicates modified by the transaction (`preds`). This aids in
-   predicate move detection. This only appears in clusters with multiple Alphas.
+   predicate move detection.
+
+     Every mutation would send back a new set of preds. The client must merge them
+     with the existing set. Optionally, a client can de-dup these keys while
+     merging.
 
 ### Alter the database
 
