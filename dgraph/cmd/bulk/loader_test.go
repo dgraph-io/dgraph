@@ -60,6 +60,7 @@ func TestJSONLoadReadNext(t *testing.T) {
 		{"[,]", "no start of JSON map 1"},
 		{"[ this is not really a json array ]", "no start of JSON map 2"},
 		{"[{]", "malformed map"},
+		{"[{}", "malformed array"},
 	}
 	for _, test := range tests {
 		chunker := newChunker(jsonInput)
@@ -80,9 +81,9 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		expt string
 		desc string
 	}{
-		{"[{}]", "{}","empty map"},
-		{`[{"closingDelimeter":"}"}]`, `{"closingDelimeter":"}"}`, "quoted closing brace" },
-		{`[{"company":"dgraph"}]`, `{"company":"dgraph"}`,"simple, compact map"},
+		{"[{}]", "{}", "empty map"},
+		{`[{"closingDelimeter":"}"}]`, `{"closingDelimeter":"}"}`, "quoted closing brace"},
+		{`[{"company":"dgraph"}]`, `{"company":"dgraph"}`, "simple, compact map"},
 		{
 			"[\n  {\n    \"company\" : \"dgraph\"\n  }\n]\n",
 			"{\n    \"company\" : \"dgraph\"\n  }",
@@ -92,6 +93,12 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 			`[{"professor":"Alastor \"Mad-Eye\" Moody"}]`,
 			`{"professor":"Alastor \"Mad-Eye\" Moody"}`,
 			"escaped balanced quotes",
+		},
+		{
+
+			`[{"something{": "}something"}]`,
+			`{"something{": "}something"}`,
+			"escape quoted brackets",
 		},
 		{
 			`[{"height":"6'0\""}]`,
@@ -110,10 +117,13 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		require.NoError(t, chunker.begin(reader), test.desc)
 
 		json, err := chunker.chunk(reader)
+		if err == io.EOF {
+			// pass
+		} else {
+			require.NoError(t, err, test.desc)
+		}
 		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
-		require.NoError(t, err, test.desc)
 		require.Equal(t, test.expt, json.String(), test.desc)
-
 	}
 }
 
@@ -126,7 +136,8 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 		"closingDelimeter" : "}"
 	},
 	{
-		"company" : "dgraph"
+		"company" : "dgraph",
+		"age": 3
 	},
 	{
 		"professor" : "Alastor \"Mad-Eye\" Moody",
@@ -141,13 +152,14 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 		}
 	}
 ]`
-	var testChunks = []string {
+	var testChunks = []string{
 		`{}`,
 		`{
 		"closingDelimeter" : "}"
 	}`,
 		`{
-		"company" : "dgraph"
+		"company" : "dgraph",
+		"age": 3
 	}`,
 		`{
 		"professor" : "Alastor \"Mad-Eye\" Moody",

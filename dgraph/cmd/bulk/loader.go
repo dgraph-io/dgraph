@@ -162,9 +162,9 @@ type jsonChunker struct{}
 func newChunker(inputFormat int) chunker {
 	switch inputFormat {
 	case rdfInput:
-		return rdfChunker{}
+		return &rdfChunker{}
 	case jsonInput:
-		return jsonChunker{}
+		return &jsonChunker{}
 	default:
 		panic("unknown loader type")
 	}
@@ -210,17 +210,41 @@ func (_ rdfChunker) end(r *bufio.Reader) error {
 	return nil
 }
 
-func skipSpace(r *bufio.Reader) error {
-	ch, _, err := r.ReadRune()
-	for unicode.IsSpace(ch) {
-		ch, _, err = r.ReadRune()
+func slurpSpace(r *bufio.Reader) error {
+	for {
+		ch, _, err := r.ReadRune()
+		if err != nil {
+			return err
+		}
+		if !unicode.IsSpace(ch) {
+			r.UnreadRune()
+			break
+		}
 	}
+	return nil
+}
 
-	if err == nil {
-		err = r.UnreadRune()
+func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
+	for {
+		ch, _, err := r.ReadRune()
+		if err != nil {
+			return err
+		}
+		x.Check2(out.WriteRune(ch))
+
+		if ch == '\\' {
+			// Pick one more rune.
+			if esc, _, err := r.ReadRune(); err != nil {
+				return err
+			} else {
+				x.Check2(out.WriteRune(esc))
+				continue
+			}
+		}
+		if ch == '"' {
+			return nil
+		}
 	}
-
-	return err
 }
 
 func (_ jsonChunker) begin(r *bufio.Reader) error {
@@ -228,92 +252,88 @@ func (_ jsonChunker) begin(r *bufio.Reader) error {
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
 	// one array element at a time instead of having to read the entire array into memory.
-	if err := skipSpace(r); err != nil {
+	if err := slurpSpace(r); err != nil {
 		return err
 	}
 
 	ch, _, err := r.ReadRune()
-	if err != nil && err != io.EOF {
+	if err != nil {
 		return err
-	} else if ch != '[' {
-		return errors.New("json file must contain array")
 	}
-
+	if ch != '[' {
+		return fmt.Errorf("json file must contain array. Found: %v", ch)
+	}
 	return nil
 }
 
 func (_ jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
-	batch := new(bytes.Buffer)
-	batch.Grow(1 << 20)
+	out := new(bytes.Buffer)
+	out.Grow(1 << 20)
 
 	// For RDF, the loader just reads the input and the mapper parses it into nquads,
 	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
 	// more complicated to ensure a complete JSON structure is read.
 
-	if err := skipSpace(r); err != nil {
-		return batch, err
+	if err := slurpSpace(r); err != nil {
+		return out, err
 	}
-
 	ch, _, err := r.ReadRune()
-	if err == io.EOF {
-		return batch, err
-	} else if ch != '{' {
-		return nil, errors.New("expected json map start")
+	if err != nil {
+		return out, err
 	}
+	if ch != '{' {
+		return nil, fmt.Errorf("expected json map start. Found: %v", ch)
+	}
+	x.Check2(out.WriteRune(ch))
 
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
-	depth := 0
-	quoted := false
-	done := false
-	var pch rune
-	for !done {
-		batch.WriteRune(ch)
-		pch = ch
 
+	depth := 1 // We already consumed one `{`, so our depth starts at one.
+	for depth > 0 {
 		ch, _, err = r.ReadRune()
 		if err != nil {
-			// any error at this point, even EOF, is fatal
 			return nil, errors.New("malformed json")
 		}
+		x.Check2(out.WriteRune(ch))
 
 		switch ch {
 		case '{':
-			if !quoted {
-				depth++
-			}
+			depth++
 		case '}':
-			if !quoted {
-				if depth == 0 {
-					batch.WriteRune(ch)
-					done = true
-				} else {
-					depth--
-				}
-			}
+			depth--
 		case '"':
-			if !quoted || (quoted && pch != '\\') {
-				quoted = !quoted
+			if err := slurpQuoted(r, out); err != nil {
+				return nil, err
 			}
+		default:
+			// We just write the rune to out, and let the Go JSON parser do its job.
 		}
 	}
 
 	// The map should be followed by either the ',' between array elements, or the ']'
 	// at the end of the array.
-	_ = skipSpace(r)
-	ch, _, err = r.ReadRune()
-	if ch == ']' {
-		err = io.EOF
-	} else if ch != ',' {
-		// Let next call to this function report the error.
-		_ = r.UnreadRune()
+	if err := slurpSpace(r); err != nil {
+		return nil, err
 	}
-
-	return batch, nil
+	ch, _, err = r.ReadRune()
+	if err != nil {
+		return nil, err
+	}
+	switch ch {
+	case ']':
+		return out, io.EOF
+	case ',':
+		// pass
+	default:
+		// Let next call to this function report the error.
+		x.Check(r.UnreadRune())
+	}
+	return out, nil
 }
 
 func (_ jsonChunker) end(r *bufio.Reader) error {
-	if skipSpace(r) == io.EOF {
+	if slurpSpace(r) == io.EOF {
 		return nil
 	} else {
 		return errors.New("not all of json file consumed")
@@ -413,14 +433,14 @@ func (ld *loader) mapStage() {
 			x.Check(chunker.begin(r))
 			for {
 				chunkBuf, err := chunker.chunk(r)
-				if err == io.EOF {
-					if chunkBuf.Len() != 0 {
-						ld.readerChunkCh <- chunkBuf
-					}
-					break
+				if chunkBuf != nil && chunkBuf.Len() > 0 {
+					ld.readerChunkCh <- chunkBuf
 				}
-				x.Check(err)
-				ld.readerChunkCh <- chunkBuf
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					x.Check(err)
+				}
 			}
 			x.Check(chunker.end(r))
 		}(r)
