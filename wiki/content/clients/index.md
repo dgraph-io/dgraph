@@ -405,6 +405,9 @@ for each transaction.
 2. The set of keys modified by the transaction (`keys`). This aids in
    transaction conflict detection.
 
+3. The set of predicates modified by the transaction (`preds`). This aids in
+   predicate move detection. This only appears in clusters with multiple Alphas.
+
 ### Alter the database
 
 The `/alter` endpoint is used to create or change the schema. Here, the
@@ -555,15 +558,18 @@ The result:
         "i4elpex2rwx3",
         "nkvfdz3ltmvv"
       ]
+      "preds": [
+        "1-balance",
+        "1-_predicate_"
+      ]
     }
   }
 }
 ```
 
-We get another `lin_read` map, which needs to be merged (the new `lin_read` map
-for **both the client and transaction** becomes `{"1": 17}`). We also get some
-`keys`. These should be added to the set of `keys` stored in the transaction
-state.
+We get some `keys`. These should be added to the set of `keys` stored in the
+transaction state. We also get some `preds`, which should be added to the set of
+`preds` stored in the transaction state.
 
 ### Committing the transaction
 
