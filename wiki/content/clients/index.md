@@ -399,11 +399,11 @@ Similar to the Go client example, we use a bank account transfer example.
 A client built on top of the HTTP API will need to track three pieces of state
 for each transaction.
   
-    1. A start timestamp (`start_ts`). This uniquely identifies a transaction,
-       and doesn't change over the transaction lifecycle.
+1. A start timestamp (`start_ts`). This uniquely identifies a transaction,
+   and doesn't change over the transaction lifecycle.
   
-    2. The set of keys modified by the transaction (`keys`). This aids in
-       transaction conflict detection.
+2. The set of keys modified by the transaction (`keys`). This aids in
+   transaction conflict detection.
 
 ### Alter the database
 
