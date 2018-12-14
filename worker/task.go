@@ -142,8 +142,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d",
-			attr, gid, q.ReadTs)
+		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d, node id: %d",
+			attr, gid, q.ReadTs, groups().Node.Id)
 	}
 
 	if groups().ServesGroup(gid) {

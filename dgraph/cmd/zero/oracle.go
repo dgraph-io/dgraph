@@ -326,7 +326,8 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	conflict := s.orc.hasConflict(src)
 	s.orc.RUnlock()
 	if conflict {
-		span.Annotate(nil, "Oracle found conflict")
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("abort", true)},
+			"Oracle found conflict")
 		src.Aborted = true
 		return s.proposeTxn(ctx, src)
 	}
@@ -377,7 +378,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return nil
 	}
 	if err := checkPreds(); err != nil {
-		span.Annotate(nil, err.Error())
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("abort", true)}, err.Error())
 		src.Aborted = true
 		return s.proposeTxn(ctx, src)
 	}
@@ -416,6 +417,9 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 		return nil, x.Errorf("Only leader can decide to commit or abort")
 	}
 	err := s.commit(ctx, src)
+	if err != nil {
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("error", true)}, err.Error())
+	}
 	return src, err
 }
 

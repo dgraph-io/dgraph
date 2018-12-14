@@ -98,7 +98,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	msg := fmt.Sprintf("Going to move predicate: [%v], size: [%v] from group %d to %d\n", predicate,
 		humanize.Bytes(uint64(tab.Space)), srcGroup, dstGroup)
 	glog.Info(msg)
-	span.Annotate(nil, msg)
+	span.Annotate([]otrace.Attribute{otrace.StringAttribute("tablet", predicate)}, msg)
 
 	// Now block all commits on this predicate. Keep them blocked until we
 	// return from this function.

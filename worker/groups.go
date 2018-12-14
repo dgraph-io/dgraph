@@ -133,7 +133,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
-	go gr.cleanupTablets()
+	// HACK: Remove this.
+	// go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
 	gr.proposeInitialSchema()

@@ -257,10 +257,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 	return nil
 }
 
-func (n *node) applyCommitted(proposal *pb.Proposal) error {
-	ctx := n.Ctx(proposal.Key)
-	ctx, span := otrace.StartSpan(ctx, "node.applyCommitted")
-	defer span.End()
+func (n *node) applyCommitted(ctx context.Context, proposal *pb.Proposal) error {
+	span := otrace.FromContext(ctx)
 	span.Annotatef(nil, "Node id: %d. Group id: %d. Got proposal key: %s",
 		n.Id, n.gid, proposal.Key)
 
@@ -381,16 +379,24 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
-				perr = n.applyCommitted(proposal)
+				ctx := n.Ctx(proposal.Key)
+				ctx, span := otrace.StartSpan(ctx, "node.applyCommitted")
+				perr = n.applyCommitted(ctx, proposal)
+
 				if len(proposal.Key) > 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
 					previous[proposal.Key] = p
 				}
 				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					msg := fmt.Sprintf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					glog.Error(msg)
+					span.Annotate([]otrace.Attribute{otrace.BoolAttribute("error", true)}, msg)
+				} else {
+					span.Annotate([]otrace.Attribute{otrace.BoolAttribute("error", false)}, "OK")
 				}
 				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 					proposal.Key, proposal.Index, perr)
+				span.End()
 			}
 
 			n.Proposals.Done(proposal.Key, perr)

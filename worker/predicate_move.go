@@ -187,8 +187,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, x.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
 
-	msg := fmt.Sprintf("Move predicate request for pred: [%v], src: [%v], dst: [%v]\n",
-		in.Predicate, in.SourceGid, in.DestGid)
+	msg := fmt.Sprintf("Move predicate request: %+v", in)
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
@@ -247,12 +246,17 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		return l.MarshalToKv()
+		kv, err := l.MarshalToKv()
+		if kv != nil {
+			// HACK: Let's set all of them at this timestamp, to see what happens.
+			kv.Version = in.TxnTs
+		}
+		return kv, err
 	}
 
 	span.Annotatef(nil, "Starting stream list orchestrate")
 	prefix := fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
-	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
+	if err := sl.Orchestrate(ctx, prefix, in.TxnTs); err != nil {
 		return err
 	}
 	payload, err := s.CloseAndRecv()
@@ -264,7 +268,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return err
 	}
 
-	msg := fmt.Sprintf("Receiver says it got %d keys.\n", recvCount)
+	msg := fmt.Sprintf("Receiver %s says it got %d keys.\n", pl.Addr, recvCount)
 	span.Annotate(nil, msg)
 	glog.Infof(msg)
 	return nil
