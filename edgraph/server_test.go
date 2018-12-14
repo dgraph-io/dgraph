@@ -83,7 +83,7 @@ func TestNquadsFromJson1(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := NQuadsFromJson(b, set)
+	nq, err := nquadsFromJson(b, set)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -126,7 +126,7 @@ func TestNquadsFromJson2(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := NQuadsFromJson(b, set)
+	nq, err := nquadsFromJson(b, set)
 	require.NoError(t, err)
 
 	require.Equal(t, 6, len(nq))
@@ -154,7 +154,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := NQuadsFromJson(b, set)
+	nq, err := nquadsFromJson(b, set)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(nq))
@@ -167,7 +167,7 @@ func TestNquadsFromJson3(t *testing.T) {
 func TestNquadsFromJson4(t *testing.T) {
 	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123", "age": 21, "weight": 58.7}]`
 
-	nq, err := NQuadsFromJson([]byte(json), set)
+	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
 	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
@@ -192,7 +192,7 @@ func TestJsonNumberParsing(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		nqs, err := NQuadsFromJson([]byte(test.in), set)
+		nqs, err := nquadsFromJson([]byte(test.in), set)
 		if test.out != nil {
 			require.NoError(t, err, "%T", err)
 			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
@@ -205,21 +205,21 @@ func TestJsonNumberParsing(t *testing.T) {
 func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
 	json := `{"uid":"0xa14222b693e4ba34123","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
-	_, err := NQuadsFromJson([]byte(json), set)
+	_, err := nquadsFromJson([]byte(json), set)
 	require.Error(t, err)
 }
 
 func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 	json := `{"uid":"-100","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
-	_, err := NQuadsFromJson([]byte(json), set)
+	_, err := nquadsFromJson([]byte(json), set)
 	require.Error(t, err)
 }
 
 func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	json := `{"uid":"","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name":"Crown Public School"}]}`
 
-	nq, err := NQuadsFromJson([]byte(json), set)
+	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -230,7 +230,7 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 func TestNquadsFromJson_BlankNodes(t *testing.T) {
 	json := `{"uid":"_:alice","name":"Alice","following":[{"name":"Bob"}],"school":[{"uid":"_:school","name":"Crown Public School"}]}`
 
-	nq, err := NQuadsFromJson([]byte(json), set)
+	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -239,7 +239,7 @@ func TestNquadsFromJson_BlankNodes(t *testing.T) {
 
 func TestNquadsDeleteEdges(t *testing.T) {
 	json := `[{"uid": "0x1","name":null,"mobile":null,"car":null}]`
-	nq, err := NQuadsFromJson([]byte(json), delete)
+	nq, err := nquadsFromJson([]byte(json), delete)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 }
@@ -256,7 +256,7 @@ func checkCount(t *testing.T, nq []*api.NQuad, pred string, count int) {
 func TestNquadsFromJsonFacets1(t *testing.T) {
 	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile|since":"2006-01-02T15:04:05Z","car|first":"true"}]`
 
-	nq, err := NQuadsFromJson([]byte(json), set)
+	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 	checkCount(t, nq, "mobile", 1)
@@ -267,7 +267,7 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	// Dave has uid facets which should go on the edge between Alice and Dave
 	json := `[{"name":"Alice","friend":[{"name":"Dave","friend|close":"true"}]}]`
 
-	nq, err := NQuadsFromJson([]byte(json), set)
+	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 	checkCount(t, nq, "friend", 1)
@@ -284,7 +284,7 @@ func TestNquadsFromJsonError1(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	_, err = NQuadsFromJson(b, delete)
+	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "uid must be present and non-zero while deleting edges.")
 }
@@ -292,7 +292,7 @@ func TestNquadsFromJsonError1(t *testing.T) {
 func TestNquadsFromJsonList(t *testing.T) {
 	json := `{"address":["Riley Street","Redfern"],"phone_number":[123,9876],"points":[{"type":"Point", "coordinates":[1.1,2.0]},{"type":"Point", "coordinates":[2.0,1.1]}]}`
 
-	nq, err := NQuadsFromJson([]byte(json), set)
+	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
 }
@@ -300,7 +300,7 @@ func TestNquadsFromJsonList(t *testing.T) {
 func TestNquadsFromJsonDelete(t *testing.T) {
 	json := `{"uid":1000,"friend":[{"uid":1001}]}`
 
-	nq, err := NQuadsFromJson([]byte(json), delete)
+	nq, err := nquadsFromJson([]byte(json), delete)
 	require.NoError(t, err)
 	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
 }

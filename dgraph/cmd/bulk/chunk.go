@@ -120,11 +120,10 @@ func slurpSpace(r *bufio.Reader) error {
 			return err
 		}
 		if !unicode.IsSpace(ch) {
-			r.UnreadRune()
-			break
+			x.Check(r.UnreadRune())
+			return nil
 		}
 	}
-	return nil
 }
 
 func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
@@ -158,7 +157,6 @@ func (_ jsonChunker) begin(r *bufio.Reader) error {
 	if err := slurpSpace(r); err != nil {
 		return err
 	}
-
 	ch, _, err := r.ReadRune()
 	if err != nil {
 		return err
@@ -176,7 +174,6 @@ func (_ jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	// For RDF, the loader just reads the input and the mapper parses it into nquads,
 	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
 	// more complicated to ensure a complete JSON structure is read.
-
 	if err := slurpSpace(r); err != nil {
 		return out, err
 	}
@@ -191,7 +188,6 @@ func (_ jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
-
 	depth := 1 // We already consumed one `{`, so our depth starts at one.
 	for depth > 0 {
 		ch, _, err = r.ReadRune()
