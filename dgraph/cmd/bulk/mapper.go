@@ -31,18 +31,15 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 type mapper struct {
@@ -119,64 +116,12 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-type parser interface {
-	parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error)
-}
-type rdfParser struct{}
-type jsonParser struct{}
-
-func newParser(chunkFormat int) parser {
-	switch chunkFormat {
-	case rdfInput:
-		return rdfParser{}
-	case jsonInput:
-		return jsonParser{}
-	default:
-		panic("unknown mapper type")
-	}
-}
-
-func (_ rdfParser) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
-	str, readErr := chunkBuf.ReadString('\n')
-	if readErr != nil && readErr != io.EOF {
-		x.Check(readErr)
-	}
-
-	nq, parseErr := rdf.Parse(strings.TrimSpace(str))
-	if parseErr == rdf.ErrEmpty {
-		return nil, readErr
-	} else if parseErr != nil {
-		return nil, errors.Wrapf(parseErr, "while parsing line %q", str)
-	}
-
-	return []gql.NQuad{gql.NQuad{NQuad: &nq}}, readErr
-}
-
-func (_ jsonParser) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
-	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
-	}
-
-	nqs, err := edgraph.NquadsFromJson(chunkBuf.Bytes())
-	if err != nil && err != io.EOF {
-		x.Check(err)
-	}
-	chunkBuf.Reset()
-
-	gqlNq := make([]gql.NQuad, len(nqs))
-	for i, nq := range nqs {
-		gqlNq[i] = gql.NQuad{NQuad: nq}
-	}
-
-	return gqlNq, err
-}
-
 func (m *mapper) run(inputFormat int) {
-	parser := newParser(inputFormat)
+	chunker := newChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			nqs, err := parser.parse(chunkBuf)
+			nqs, err := chunker.parse(chunkBuf)
 			if err == io.EOF {
 				done = true
 			} else if err != nil {

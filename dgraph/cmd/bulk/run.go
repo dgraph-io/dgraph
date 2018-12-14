@@ -122,7 +122,8 @@ func run() {
 	if opt.RDFDir == "" && opt.JSONDir == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
 		os.Exit(1)
-	} else if opt.RDFDir != "" && opt.JSONDir != "" {
+	}
+	if opt.RDFDir != "" && opt.JSONDir != "" {
 		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
 			opt.RDFDir, opt.JSONDir)
 		os.Exit(1)
