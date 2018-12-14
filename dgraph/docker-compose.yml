@@ -26,7 +26,7 @@ services:
     ports:
       - 5080:5080
       - 6080:6080
-    command: /gobin/dgraph zero --my=zero1:5080 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph zero --my=zero1:5080 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=3 --jaeger.collector=http://jaeger:14268
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -36,36 +36,36 @@ services:
       #   source: "${DATA}"
       #   target: /data
 
-  zero2:
-    image: dgraph/dgraph:latest
-    container_name: bank-dg0.2
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --peer=zero1:5080 --idx 2 --logtostderr -v=2 --jaeger.collector=http://jaeger:14268
-    depends_on:
-      - zero1
-    ports:
-      - 5082:5082
-      - 6082:6082
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+  # zero2:
+  #   image: dgraph/dgraph:latest
+  #   container_name: bank-dg0.2
+  #   command: /gobin/dgraph zero -o 2 --my=zero2:5082 --peer=zero1:5080 --idx 2 --logtostderr -v=3 --jaeger.collector=http://jaeger:14268
+  #   depends_on:
+  #     - zero1
+  #   ports:
+  #     - 5082:5082
+  #     - 6082:6082
+  #   volumes:
+  #     - type: bind
+  #       source: $GOPATH/bin
+  #       target: /gobin
+  #       read_only: true
 
-  zero3:
-    image: dgraph/dgraph:latest
-    container_name: bank-dg0.3
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --peer=zero1:5080 --idx 3 --logtostderr -v=2 --jaeger.collector=http://jaeger:14268
+  # zero3:
+  #   image: dgraph/dgraph:latest
+  #   container_name: bank-dg0.3
+  #   command: /gobin/dgraph zero -o 3 --my=zero3:5083 --peer=zero1:5080 --idx 3 --logtostderr -v=3 --jaeger.collector=http://jaeger:14268
 
-    depends_on:
-      - zero2
-    ports:
-      - 5083:5083
-      - 6083:6083
-    volumes:
-      - type: bind
-        source: $GOPATH/bin
-        target: /gobin
-        read_only: true
+  #   depends_on:
+  #     - zero2
+  #   ports:
+  #     - 5083:5083
+  #     - 6083:6083
+  #   volumes:
+  #     - type: bind
+  #       source: $GOPATH/bin
+  #       target: /gobin
+  #       read_only: true
 
   # zero4:
   #   image: debian:latest
@@ -104,7 +104,7 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --jaeger.collector=http://jaeger:14268
 
   dg2:
     image: dgraph/dgraph:latest
@@ -123,7 +123,7 @@ services:
     ports:
       - 8182:8182
       - 9182:9182
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --jaeger.collector=http://jaeger:14268
 
   dg3:
     image: dgraph/dgraph:latest
@@ -142,7 +142,7 @@ services:
     ports:
       - 8183:8183
       - 9183:9183
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --jaeger.collector=http://jaeger:14268
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace   --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --jaeger.collector=http://jaeger:14268
 
   # dg4:
   #   image: debian:latest

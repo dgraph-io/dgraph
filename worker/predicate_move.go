@@ -21,8 +21,6 @@ import (
 	"io"
 	"math"
 	"strconv"
-	"sync"
-	"sync/atomic"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -47,42 +45,19 @@ var (
 // size of kvs won't be too big, we would take care before proposing.
 func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 	glog.Infof("Writing %d keys\n", len(kvs))
-	var hasError uint32
-	var wg sync.WaitGroup
-	wg.Add(len(kvs))
-	first := true
-	var predicate string
-	for _, kv := range kvs {
-		if kv.Version == 0 {
-			glog.Errorf("Got a KV with version=0. Ignoring... UserMeta=%b key=\n%s\n",
-				kv.UserMeta, kv.Key)
-			continue
-		}
-		if first {
-			pk := x.Parse(kv.Key)
-			predicate = pk.Attr
-			first = false
-		}
-		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
-			return err
-		}
-		err := txn.CommitAt(kv.Version, func(err error) {
-			if err != nil {
-				atomic.StoreUint32(&hasError, 1)
-			}
-			wg.Done()
-		})
-		if err != nil {
-			return err
-		}
-		txn.Discard()
+	if len(kvs) == 0 {
+		return nil
 	}
-	if hasError > 0 {
-		return x.Errorf("Error while writing to badger")
+	writer := x.NewTxnWriter(pstore)
+	writer.BlindWrite = true
+	if err := writer.Send(&pb.KVS{Kv: kvs}); err != nil {
+		return err
 	}
-	wg.Wait()
-	return schema.Load(predicate)
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	pk := x.Parse(kvs[0].Key)
+	return schema.Load(pk.Attr)
 }
 
 func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {

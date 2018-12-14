@@ -648,6 +648,11 @@ func (l *List) MarshalToKv() (*pb.KV, error) {
 	val, meta := marshalPostingList(l.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Val = val
+
+	if kv.Version == 0 {
+		// Invalid list. Could be empty.
+		return nil, nil
+	}
 	return kv, nil
 }
 
