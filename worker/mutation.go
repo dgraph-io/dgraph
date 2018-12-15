@@ -344,8 +344,10 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 	}
 
+	storageType := posting.TypeID(edge)
+	schemaType := types.TypeID(su.ValueType)
+
 	// type checks
-	storageType, schemaType := posting.TypeID(edge), types.TypeID(su.ValueType)
 	switch {
 	case edge.Lang != "" && !su.GetLang():
 		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",

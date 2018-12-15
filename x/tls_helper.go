@@ -39,8 +39,6 @@ const (
 
 const (
 	tlsRootCert = "ca.crt"
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
 )
 
 // TLSHelperConfig define params used to create a tls.Config
@@ -61,13 +59,13 @@ func RegisterTLSFlags(flag *pflag.FlagSet) {
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 }
 
-func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper) {
+func LoadTLSConfig(conf *TLSHelperConfig, v *viper.Viper, tlsCertFile string, tlsKeyFile string) {
 	conf.CertDir = v.GetString("tls_dir")
 	if conf.CertDir != "" {
 		conf.CertRequired = true
 		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, tlsNodeCert)
-		conf.Key = path.Join(conf.CertDir, tlsNodeKey)
+		conf.Cert = path.Join(conf.CertDir, tlsCertFile)
+		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
 		conf.ClientAuth = v.GetString("tls_client_auth")
 	}
 	conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
