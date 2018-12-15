@@ -36,12 +36,12 @@ type Request struct {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (r *Request) Process(ctx context.Context) error {
-	f, err := r.OpenLocation(r.Backup.Target)
+	w, err := r.newWriter()
 	if err != nil {
 		return err
 	}
 
-	sl := stream.Lists{Stream: f, DB: r.DB}
+	sl := stream.Lists{Stream: w, DB: r.DB}
 	sl.ChooseKeyFunc = nil
 	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
 		item := itr.Item()
@@ -70,7 +70,7 @@ func (r *Request) Process(ctx context.Context) error {
 	if err = sl.Orchestrate(ctx, "Backup:", r.Backup.ReadTs); err != nil {
 		return err
 	}
-	if err = f.Close(); err != nil {
+	if err = w.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)

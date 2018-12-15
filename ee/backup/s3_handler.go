@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -40,24 +41,21 @@ const (
 
 // s3Handler is used for 's3:' URI scheme.
 type s3Handler struct {
-	bucket  string
-	pwriter *io.PipeWriter
-	preader *io.PipeReader
-	cerr    chan error
+	bucketName, objectPrefix string
+	pwriter                  *io.PipeWriter
+	cerr                     chan error
 }
 
-// Open creates an AWS session and sends our data stream to an S3 blob.
-// URI formats:
-//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
-//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
-func (h *s3Handler) Open(uri *url.URL, req *Request) error {
+// setup creates an AWS session, checks valid bucket at uri.Path, and configures a minio client.
+// setup also fills in values used by the handler in subsequent calls.
+// Returns a new S3 minio client, otherwise a nil client with an error.
+func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	accessKeyID := os.Getenv("AWS_ACCESS_KEY_ID")
 	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	if accessKeyID == "" || secretAccessKey == "" {
-		return x.Errorf("Env vars AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set.")
+		return nil, x.Errorf("Env vars AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set.")
 	}
 
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 	// s3:///bucket/folder
 	if !strings.Contains(uri.Host, ".") {
 		uri.Host = s3DefaultEndpoint
@@ -65,7 +63,7 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 	glog.V(2).Infof("S3Handler using host: %s, path: %s", uri.Host, uri.Path)
 
 	if len(uri.Path) < 1 {
-		return x.Errorf("The S3 bucket %q is invalid", uri.Path)
+		return nil, x.Errorf("The S3 bucket %q is invalid", uri.Path)
 	}
 
 	// secure by default
@@ -73,7 +71,7 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 
 	mc, err := minio.New(uri.Host, accessKeyID, secretAccessKey, secure)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// S3 transfer acceleration support.
 	if strings.Contains(uri.Host, s3AccelerateHost) {
@@ -83,65 +81,95 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 		mc.TraceOn(os.Stderr)
 	}
 
-	// split path into bucket and blob
+	// split path into bucketName and blobPrefix
 	parts := strings.Split(uri.Path[1:], "/")
-	h.bucket = parts[0] // bucket
+	h.bucketName = parts[0] // bucket
 
-	found, err := mc.BucketExists(h.bucket)
+	// verify the requested bucket exists.
+	found, err := mc.BucketExists(h.bucketName)
 	if err != nil {
-		return x.Errorf("Error while looking for bucket: %s at host: %s. Error: %v",
-			h.bucket, uri.Host, err)
+		return nil, x.Errorf("Error while looking for bucket: %s at host: %s. Error: %v",
+			h.bucketName, uri.Host, err)
 	}
 	if !found {
-		return x.Errorf("S3 bucket %s not found.", h.bucket)
+		return nil, x.Errorf("S3 bucket %s not found.", h.bucketName)
+	}
+	if len(parts) > 1 {
+		h.objectPrefix = filepath.Join(parts[1:]...)
 	}
 
-	h.preader, h.pwriter = io.Pipe()
+	return mc, err
+}
 
-	// Backup: opening location for write
-	if req.Backup.Target != "" {
-		// The location is: /bucket/folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-		parts = append(parts, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
-		parts = append(parts, fmt.Sprintf("r%d.g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
-		object := filepath.Join(parts[1:]...)
-		glog.V(2).Infof("Sending data to S3 blob %q ...", object)
+// Create creates an AWS session and sends our data stream to an S3 blob.
+// URI formats:
+//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
+//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
+func (h *s3Handler) Create(uri *url.URL, req *Request) error {
+	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
-		h.cerr = make(chan error, 1)
-		go func() {
-			h.cerr <- h.upload(mc, object)
-		}()
-
-		glog.Infof("Uploading data, estimated size %s", humanize.Bytes(req.Sizex))
-		return nil
+	mc, err := h.setup(uri)
+	if err != nil {
+		return err
 	}
 
-	// Restore: scan location and find backup files. load them sequentially.
-
-	var suffix string
-	if req.Backup.GroupId > 0 {
-		suffix = fmt.Sprintf("g%d", req.Backup.GroupId)
-	}
-	suffix += ".backup"
-	prefix := filepath.Join(parts[1:]...)
-
-	var objects []string
-	done := make(chan struct{})
-	defer close(done)
-	for info := range mc.ListObjects(h.bucket, prefix, true, done) {
-		if strings.HasSuffix(info.Key, suffix) {
-			objects = append(objects, info.Key)
-		}
-	}
-	if len(objects) == 0 {
-		return x.Errorf("No backup files found in %q", req.Backup.Source)
-	}
-
-	glog.V(2).Infof("Receiving data from S3 blobs %v ...", objects)
+	// The object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
+	object := filepath.Join(h.objectPrefix,
+		fmt.Sprintf("dgraph.%s", req.Backup.UnixTs),
+		fmt.Sprintf("r%d.g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
 
 	h.cerr = make(chan error, 1)
 	go func() {
-		h.cerr <- h.download(mc, objects...)
+		h.cerr <- h.upload(mc, object)
 	}()
+
+	glog.Infof("Uploading data, estimated size %s", humanize.Bytes(req.Sizex))
+	return nil
+}
+
+// Load creates an AWS session, scans for backup objects in a bucket, then uses loadFn to try
+// and load any backup objects found.
+// Returns nil on success, error otherwise.
+func (h *s3Handler) Load(uri *url.URL, loadFn loadFunc) error {
+	var objects []string
+
+	mc, err := h.setup(uri)
+	if err != nil {
+		return err
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
+		if strings.HasSuffix(object.Key, ".backup") {
+			objects = append(objects, object.Key)
+		}
+	}
+	if len(objects) == 0 {
+		return x.Errorf("No backup files found in %q", uri.String())
+	}
+	sort.Strings(objects)
+	glog.V(2).Infof("Loading from S3: %v", objects)
+
+	for _, object := range objects {
+		reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
+		if err != nil {
+			return err
+		}
+		st, err := reader.Stat()
+		if err != nil {
+			reader.Close()
+			return err
+		}
+		glog.Infof("Downloading %q, %d bytes", object, st.Size)
+		if err = loadFn(bufio.NewReaderSize(reader, s3ReadBufSize), object); err != nil {
+			return err
+		}
+		if err = reader.Close(); err != nil {
+			glog.V(3).Infof("Error closing object %q: %s", object, err)
+		}
+	}
 
 	return nil
 }
@@ -149,51 +177,24 @@ func (h *s3Handler) Open(uri *url.URL, req *Request) error {
 // upload will block until it's done or an error occurs.
 func (h *s3Handler) upload(mc *minio.Client, object string) error {
 	start := time.Now()
+	pr, pw := io.Pipe()
+	h.pwriter = pw
 
 	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
 	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
 	// of upload. We're already tracking progress of the writes in stream.Lists, so no need to track
 	// the progress of read. By definition, it must be the same.
-	n, err := mc.PutObject(h.bucket, object, h.preader, -1, minio.PutObjectOptions{})
+	n, err := mc.PutObject(h.bucketName, object, pr, -1, minio.PutObjectOptions{})
 	glog.V(2).Infof("Backup sent %d bytes. Time elapsed: %s",
 		n, time.Since(start).Round(time.Second))
 
 	if err != nil {
 		// This should cause Write to fail as well.
 		glog.Errorf("Backup: Closing RW pipe due to error: %v", err)
-		h.pwriter.Close()
-		h.preader.Close()
+		pw.Close()
+		pr.Close()
 	}
 	return err
-}
-
-// download will block until it's done or an error occurs.
-func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
-	start := time.Now()
-
-	var tot uint64
-	for _, object := range objects {
-		reader, err := mc.GetObject(h.bucket, object, minio.GetObjectOptions{})
-		if err != nil {
-			glog.Errorf("Restore: Closing due to error: %s", err)
-			return err
-		}
-		st, err := reader.Stat()
-		if err != nil {
-			reader.Close()
-			glog.Errorf("Restore: Unexpected error: %s", err)
-			return err
-		}
-		glog.Infof("Downloading %q, %d bytes", object, st.Size)
-		n, err := io.Copy(h.pwriter, bufio.NewReaderSize(reader, s3ReadBufSize))
-		if err != nil {
-			return err
-		}
-		tot += uint64(n)
-	}
-	glog.V(2).Infof("Restore recv %s bytes. Time elapsed: %s",
-		humanize.Bytes(tot), time.Since(start).Round(time.Second))
-	return h.pwriter.CloseWithError(nil)
 }
 
 func (h *s3Handler) Close() error {
@@ -203,10 +204,6 @@ func (h *s3Handler) Close() error {
 	}
 	glog.V(2).Infof("--- waiting to complete remote transfer.")
 	return <-h.cerr
-}
-
-func (h *s3Handler) Read(b []byte) (int, error) {
-	return h.preader.Read(b)
 }
 
 func (h *s3Handler) Write(b []byte) (int, error) {
