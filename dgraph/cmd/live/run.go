@@ -36,6 +36,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	rpcgz "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
@@ -240,11 +241,20 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 }
 
 func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
+	callOpts := []grpc.CallOption{
+		grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxCallSendMsgSize(x.GrpcMaxSize),
+	}
+	// FIXME temporary for testing
+	if os.Getenv("USE_COMPRESSION") == "" {
+		fmt.Fprintf(os.Stderr, "Not using compression with %s\n", host)
+	} else {
+		fmt.Fprintf(os.Stderr, "Using gzip compression with %s\n", host)
+		callOpts = append(callOpts, grpc.UseCompressor(rpcgz.Name))
+	}
 	if insecure {
 		return grpc.Dial(host,
-			grpc.WithDefaultCallOptions(
-				grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-				grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
+			grpc.WithDefaultCallOptions(callOpts...),
 			grpc.WithInsecure(),
 			grpc.WithBlock(),
 			grpc.WithTimeout(10*time.Second))
@@ -259,9 +269,7 @@ func setupConnection(host string, insecure bool) (*grpc.ClientConn, error) {
 	}
 
 	return grpc.Dial(host,
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
+		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)),
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
