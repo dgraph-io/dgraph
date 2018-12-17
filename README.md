@@ -46,7 +46,7 @@ docker pull dgraph/dgraph:latest
 If you want to install from source, you can use `go get` to install to `$GOPATH/bin`.
 
 ```bash
-go get -u -v github.com/dgraph-io/dgraph/dgraph
+go get -v github.com/dgraph-io/dgraph/dgraph
 ```
 
 ## Get Started
@@ -112,6 +112,10 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 
 * [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
 * [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)
+
+**Dart**
+
+* [https://github.com/katutz/dgraph](https://github.com/katutz/dgraph)
 
 **Elixir**
 

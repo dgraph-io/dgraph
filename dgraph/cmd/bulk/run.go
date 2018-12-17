@@ -26,7 +26,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
@@ -87,28 +89,30 @@ func init() {
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
+	flag.String("custom_tokenizers", "",
+		"Comma separated list of tokenizer plugins")
 }
 
 func run() {
 	opt := options{
-		RDFDir:        Bulk.Conf.GetString("rdfs"),
-		JSONDir:       Bulk.Conf.GetString("jsons"),
-		SchemaFile:    Bulk.Conf.GetString("schema_file"),
-		DgraphsDir:    Bulk.Conf.GetString("out"),
-		TmpDir:        Bulk.Conf.GetString("tmp"),
-		NumGoroutines: Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:    int64(Bulk.Conf.GetInt("mapoutput_mb")),
-		ExpandEdges:   Bulk.Conf.GetBool("expand_edges"),
-		SkipMapPhase:  Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:    Bulk.Conf.GetBool("cleanup_tmp"),
-		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
-		Version:       Bulk.Conf.GetBool("version"),
-		StoreXids:     Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:      Bulk.Conf.GetString("zero"),
-		HttpAddr:      Bulk.Conf.GetString("http"),
-		IgnoreErrors:  Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:     Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
+		RDFDir:           Bulk.Conf.GetString("rdfs"),
+		SchemaFile:       Bulk.Conf.GetString("schema_file"),
+		DgraphsDir:       Bulk.Conf.GetString("out"),
+		TmpDir:           Bulk.Conf.GetString("tmp"),
+		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
+		ExpandEdges:      Bulk.Conf.GetBool("expand_edges"),
+		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
+		NumShufflers:     Bulk.Conf.GetInt("shufflers"),
+		Version:          Bulk.Conf.GetBool("version"),
+		StoreXids:        Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:         Bulk.Conf.GetString("zero"),
+		HttpAddr:         Bulk.Conf.GetString("http"),
+		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:        Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 	}
 
 	x.PrintVersion()
@@ -137,6 +141,11 @@ func run() {
 		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
 			opt.NumShufflers, opt.ReduceShards)
 		os.Exit(1)
+	}
+	if opt.CustomTokenizers != "" {
+		for _, soFile := range strings.Split(opt.CustomTokenizers, ",") {
+			tok.LoadCustomTokenizer(soFile)
+		}
 	}
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.

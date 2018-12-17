@@ -447,7 +447,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					for _, f := range fs.Facets {
-						uc.AddValue(facetName(fieldName, f), facets.ValFor(f))
+						fVal, err := facets.ValFor(f)
+						if err != nil {
+							return err
+						}
+
+						uc.AddValue(facetName(fieldName, f), fVal)
 					}
 				}
 
@@ -483,7 +488,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					dst.AddValue(facetName(fieldName, f), facets.ValFor(f))
+					fVal, err := facets.ValFor(f)
+					if err != nil {
+						return err
+					}
+
+					dst.AddValue(facetName(fieldName, f), fVal)
 				}
 			}
 
@@ -1495,11 +1505,20 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
 						if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
-							doneVars[fvar].Vals[uid] = facets.ValFor(f)
+							fVal, err := facets.ValFor(f)
+							if err != nil {
+								return err
+							}
+
+							doneVars[fvar].Vals[uid] = fVal
 						} else {
 							// If the value is int/float we add them up. Else we throw an error as
 							// many to one maps are not allowed for other types.
-							nVal := facets.ValFor(f)
+							nVal, err := facets.ValFor(f)
+							if err != nil {
+								return err
+							}
+
 							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
 								return x.Errorf("Repeated id with non int/float value for facet var encountered.")
 							}
@@ -1702,10 +1721,8 @@ func recursiveCopy(dst *SubGraph, src *SubGraph) {
 
 func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	span := otrace.FromContext(ctx)
-	if span != nil {
-		span.Annotatef(nil, "expandSubgraph: %s", sg.Attr)
-		defer span.Annotate(nil, "Done expandSubgraph")
-	}
+	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
+	defer stop()
 
 	var err error
 	out := make([]*SubGraph, 0, len(sg.Children))
@@ -1822,8 +1839,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph"+suffix)
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
+	defer stop()
 
 	if sg.Attr == "uid" {
 		// We dont need to call ProcessGraph for uid, as we already have uids
@@ -2210,7 +2228,12 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 				}
 			}
 			if facet != nil {
-				values = append(values, []types.Val{facets.ValFor(facet)})
+				fVal, err := facets.ValFor(facet)
+				if err != nil {
+					return err
+				}
+
+				values = append(values, []types.Val{fVal})
 			} else {
 				values = append(values, []types.Val{{Value: nil}})
 			}
@@ -2394,8 +2417,9 @@ type QueryRequest struct {
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.
 func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessQuery")
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "query.ProcessQuery")
+	defer stop()
 
 	// doneVars stores the processed variables.
 	req.vars = make(map[string]varValue)

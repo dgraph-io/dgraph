@@ -316,11 +316,10 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	q := args.q
 
 	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleValuePostings")
+	defer stop()
 	if span != nil {
 		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", srcFn.n, args.srcFn)
-		defer func() {
-			span.Annotate(nil, "Done handleValuePostings")
-		}()
 	}
 
 	switch srcFn.fnType {
@@ -524,11 +523,10 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 	}
 
 	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleUidPostings")
+	defer stop()
 	if span != nil {
 		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", srcFn.n, args.srcFn)
-		defer func() {
-			span.Annotate(nil, "Done handleUidPostings.")
-		}()
 	}
 	if srcFn.n == 0 {
 		return nil
@@ -708,6 +706,9 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
 	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "processTask"+q.Attr)
+	defer stop()
+
 	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
@@ -717,9 +718,6 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 		span.Annotatef(nil, "Done waiting for maxAssigned. Attr: %q ReadTs: %d Max: %d",
 			q.Attr, q.ReadTs, maxAssigned)
 	}
-	defer func() {
-		span.Annotatef(nil, "Done processTask for %q", q.Attr)
-	}()
 
 	// If a group stops serving tablet and it gets partitioned away from group zero, then it
 	// wouldn't know that this group is no longer serving this predicate.
@@ -1502,7 +1500,11 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
 			var err error
-			typId := facets.TypeIDFor(fc)
+			typId, err := facets.TypeIDFor(fc)
+			if err != nil {
+				return false, err
+			}
+
 			v, has := ftree.function.convertedVal[typId]
 			if !has {
 				if v, err = types.Convert(ftree.function.val, typId); err != nil {
@@ -1512,10 +1514,19 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 					ftree.function.convertedVal[typId] = v
 				}
 			}
-			return types.CompareVals(fname, facets.ValFor(fc), v), nil
+			fVal, err := facets.ValFor(fc)
+			if err != nil {
+				return false, err
+			}
+
+			return types.CompareVals(fname, fVal, v), nil
 
 		case StandardFn: // allofterms, anyofterms
-			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
+			facetType, err := facets.TypeIDFor(fc)
+			if err != nil {
+				return false, err
+			}
+			if facetType != types.StringID {
 				return false, nil
 			}
 			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)
@@ -1744,6 +1755,8 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 
 func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleHasFunction")
+	defer stop()
 	if glog.V(3) {
 		glog.Infof("handleHasFunction query: %+v\n", q)
 	}
