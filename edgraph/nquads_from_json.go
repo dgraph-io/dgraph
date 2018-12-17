@@ -424,3 +424,7 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
 }
+
+func NquadsFromJson(b []byte) ([]*api.NQuad, error) {
+	return nquadsFromJson(b, set)
+}

@@ -49,6 +49,9 @@ func init() {
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
+	// would be nice to use -j to match -r, but already used by --num_go_routines
+	flag.String("jsons", "",
+		"Directory containing *.json or *.json.gz files to load.")
 	flag.StringP("schema_file", "s", "",
 		"Location of schema file to load.")
 	flag.String("out", "out",
@@ -116,8 +119,17 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
+	if opt.SchemaFile == "" {
+		fmt.Fprint(os.Stderr, "schema file must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.RDFDir == "" && opt.JSONDir == "" {
+		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.RDFDir != "" && opt.JSONDir != "" {
+		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
+			opt.RDFDir, opt.JSONDir)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {
@@ -176,26 +188,23 @@ func run() {
 }
 
 func maxOpenFilesWarning() {
-	maxOpenFiles, err := queryMaxOpenFiles()
 	const (
 		red    = "\x1b[31m"
 		green  = "\x1b[32m"
 		yellow = "\x1b[33m"
 		reset  = "\x1b[0m"
 	)
-	if err != nil {
-		fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+	maxOpenFiles, err := queryMaxOpenFiles()
+	if err != nil || maxOpenFiles < 1e6 {
+		fmt.Println(green + "\nThe bulk loader needs to open many files at once. This number depends" +
+			" on the size of the data set loaded, the map file output size, and the level" +
+			" of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
+			" details of how to change the limit.")
+		if err != nil {
+			fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+		} else {
+			fmt.Printf(yellow+"Current max open files limit: %d\n"+reset, maxOpenFiles)
+		}
+		fmt.Println()
 	}
-	fmt.Println("The bulk loader needs to open many files at once. This number depends" +
-		" on the size of the data set loaded, the map file output size, and the level " +
-		"of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
-		" details of how to change the limit.")
-	if err != nil {
-		return
-	}
-	colour := green
-	if maxOpenFiles < 1e5 {
-		colour = yellow
-	}
-	fmt.Printf(colour+"Current max open files limit: %d\n"+reset, maxOpenFiles)
 }
