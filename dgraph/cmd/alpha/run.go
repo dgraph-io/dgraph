@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -53,6 +54,11 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
+)
+
+const (
+	tlsNodeCert = "node.crt"
+	tlsNodeKey  = "node.key"
 )
 
 var (
@@ -121,6 +127,12 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
+		" that is used for signing the JWT. Enterprise feature.")
+	flag.Duration("access_jwt_ttl", 6*time.Hour, "The TTL for the access jwt. "+
+		"Enterprise feature.")
+	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -381,7 +393,7 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	edgraph.SetConfiguration(edgraph.Options{
+	opts := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
 
@@ -391,7 +403,22 @@ func run() {
 		Nomutations:    Alpha.Conf.GetBool("nomutations"),
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	})
+	}
+
+	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	if secretFile != "" {
+		hmacSecret, err := ioutil.ReadFile(secretFile)
+		if err != nil {
+			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
+		}
+
+		opts.HmacSecret = hmacSecret
+		opts.AccessJwtTtl = Alpha.Conf.GetDuration("access_jwt_ttl")
+		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("refresh_jwt_ttl")
+
+		glog.Info("HMAC secret loaded successfully.")
+	}
+	edgraph.SetConfiguration(opts)
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
@@ -407,7 +434,7 @@ func run() {
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 	}
 
-	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
+	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)
 	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
 	setupCustomTokenizers()
