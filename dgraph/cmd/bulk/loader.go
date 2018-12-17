@@ -42,6 +42,7 @@ import (
 
 type options struct {
 	RDFDir           string
+	JSONDir          string
 	SchemaFile       string
 	DgraphsDir       string
 	TmpDir           string

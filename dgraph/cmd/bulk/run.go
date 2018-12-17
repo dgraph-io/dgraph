@@ -96,6 +96,7 @@ func init() {
 func run() {
 	opt := options{
 		RDFDir:           Bulk.Conf.GetString("rdfs"),
+		JSONDir:          Bulk.Conf.GetString("jsons"),
 		SchemaFile:       Bulk.Conf.GetString("schema_file"),
 		DgraphsDir:       Bulk.Conf.GetString("out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
