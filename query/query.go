@@ -1727,10 +1727,8 @@ func recursiveCopy(dst *SubGraph, src *SubGraph) {
 
 func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	span := otrace.FromContext(ctx)
-	if span != nil {
-		span.Annotatef(nil, "expandSubgraph: %s", sg.Attr)
-		defer span.Annotate(nil, "Done expandSubgraph")
-	}
+	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
+	defer stop()
 
 	var err error
 	out := make([]*SubGraph, 0, len(sg.Children))
@@ -1847,8 +1845,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph"+suffix)
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
+	defer stop()
 
 	if sg.Attr == "uid" {
 		// We dont need to call ProcessGraph for uid, as we already have uids
@@ -2428,8 +2427,9 @@ type QueryRequest struct {
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.
 func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessQuery")
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "query.ProcessQuery")
+	defer stop()
 
 	// doneVars stores the processed variables.
 	req.vars = make(map[string]varValue)

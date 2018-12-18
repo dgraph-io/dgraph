@@ -16,22 +16,18 @@
  * limitations under the License.
  */
 
-package worker
+package acl
 
 import (
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
+	"github.com/spf13/cobra"
 )
 
-// Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
-	return &pb.Status{}, x.ErrNotSupported
-}
+var CmdAcl x.SubCommand
 
-// BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, target string) error {
-	return x.ErrNotSupported
+func init() {
+	CmdAcl.Cmd = &cobra.Command{
+		Use:   "acl",
+		Short: "Enterprise feature. Not supported in oss version",
+	}
 }

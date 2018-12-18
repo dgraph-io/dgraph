@@ -623,7 +623,12 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	sortSchema(resp.Schema)
 	b, err := json.Marshal(resp.Schema)
 	require.NoError(t, err)
-	require.JSONEq(t, `[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"friend","type":"uid"},{"predicate":"married","type":"bool"},{"predicate":"name","type":"default"}]`, string(b))
+	require.JSONEq(t, `[`+
+		`{"predicate":"_predicate_","type":"string","list":true},`+
+		x.AclPredsJson+","+
+		`{"predicate":"friend","type":"uid"},`+
+		`{"predicate":"married","type":"bool"},`+
+		`{"predicate":"name","type":"default"}]`, string(b))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -641,7 +646,11 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	sortSchema(resp.Schema)
 	b, err = json.Marshal(resp.Schema)
 	require.NoError(t, err)
-	require.JSONEq(t, `[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"friend","type":"uid"},{"predicate":"name","type":"default"}]`, string(b))
+	require.JSONEq(t, `[`+
+		`{"predicate":"_predicate_","type":"string","list":true},`+
+		x.AclPredsJson+","+
+		`{"predicate":"friend","type":"uid"},`+
+		`{"predicate":"name","type":"default"}]`, string(b))
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
