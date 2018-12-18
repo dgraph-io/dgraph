@@ -5,13 +5,11 @@
 
   1. "master"
   2. "release/vX.Y.Z"
-
-  Note that for option 2, X, Y, and Z must be a single character for this to work.
 -->
-{{ $version := slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9 }}
-{{ $majorVersion := int (slicestr $version 0 1) }}
-{{ $minorVersion := int (slicestr $version 2 3) }}
-{{ $patchVersion := int (slicestr $version 4 5) }}
+{{ $version := split (slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9) "." }}
+{{ $majorVersion := int (index $version 0) }}
+{{ $minorVersion := int (index $version 1) }}
+{{ $patchVersion := int (index $version 2) }}
 {{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
 
 <pre><code class="no-copy" tabindex="-1">package main
