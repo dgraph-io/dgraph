@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"regexp"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -466,4 +468,21 @@ func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]str
 	}
 
 	return newGroups, groupsToBeDeleted
+}
+
+func SpanTimer(span *trace.Span, name string) func() {
+	if span == nil {
+		return func() {}
+	}
+	uniq := int64(rand.Int31())
+	attrs := []trace.Attribute{
+		trace.Int64Attribute("funcId", uniq),
+		trace.StringAttribute("funcName", name),
+	}
+	span.Annotate(attrs, "Start.")
+	start := time.Now()
+
+	return func() {
+		span.Annotatef(attrs, "End. Took %s", time.Since(start))
+	}
 }
