@@ -394,6 +394,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			// Can happen in recurse query.
 			continue
 		}
+		if len(pc.facetsMatrix) > 0 && len(pc.facetsMatrix) != len(pc.uidMatrix) {
+			return x.Errorf("length of facetsMatrix and uidMatrix mismatch: %d vs %d",
+				len(pc.facetsMatrix), len(pc.uidMatrix))
+		}
 
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
@@ -411,8 +415,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		fieldName := pc.fieldName()
 		if len(pc.counts) > 0 {
 			addCount(pc, uint64(pc.counts[idx]), dst)
+
 		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
 			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
+
 		} else if idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0 {
 			var fcsList []*pb.Facets
 			if pc.Params.Facet != nil {
@@ -485,7 +491,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				continue
 			}
 
-			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
+			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
 					fVal, err := facets.ValFor(f)
@@ -1279,7 +1285,7 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path [
 
 // Filters might have updated the destuids. facetMatrix should also be updated.
 func (sg *SubGraph) updateFacetMatrix() {
-	if sg.Params.Facet == nil {
+	if len(sg.facetsMatrix) != len(sg.uidMatrix) {
 		return
 	}
 
@@ -1721,10 +1727,8 @@ func recursiveCopy(dst *SubGraph, src *SubGraph) {
 
 func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	span := otrace.FromContext(ctx)
-	if span != nil {
-		span.Annotatef(nil, "expandSubgraph: %s", sg.Attr)
-		defer span.Annotate(nil, "Done expandSubgraph")
-	}
+	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
+	defer stop()
 
 	var err error
 	out := make([]*SubGraph, 0, len(sg.Children))
@@ -1841,8 +1845,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) > 0 {
 		suffix += "." + sg.Attr
 	}
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessGraph"+suffix)
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
+	defer stop()
 
 	if sg.Attr == "uid" {
 		// We dont need to call ProcessGraph for uid, as we already have uids
@@ -2206,8 +2211,12 @@ func (sg *SubGraph) updateDestUids() {
 }
 
 func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
-	if sg.facetsMatrix == nil {
+	if len(sg.facetsMatrix) == 0 {
 		return nil
+	}
+	if len(sg.facetsMatrix) != len(sg.uidMatrix) {
+		return x.Errorf("Facet matrix and UID matrix mismatch: %d vs %d",
+			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
 	orderby := sg.Params.FacetOrder
 	for i := 0; i < len(sg.uidMatrix); i++ {
@@ -2418,8 +2427,9 @@ type QueryRequest struct {
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.
 func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
-	ctx, span := otrace.StartSpan(ctx, "query.ProcessQuery")
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "query.ProcessQuery")
+	defer stop()
 
 	// doneVars stores the processed variables.
 	req.vars = make(map[string]varValue)

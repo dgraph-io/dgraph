@@ -1086,7 +1086,7 @@ Syntax Examples:
 * `predicate @filter(...) (orderasc: N) { ... }`
 * `q(func: ..., orderasc: predicate1, orderdesc: predicate2)`
 
-Sortable Types: `int`, `float`, `String`, `dateTime`, `id`, `default`
+Sortable Types: `int`, `float`, `String`, `dateTime`, `default`
 
 Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by a predicate or variable.
 
@@ -1304,7 +1304,7 @@ Syntax Examples:
 * `varName as avg(...)`
 * `varName as math(...)`
 
-Types : `int`, `float`, `String`, `dateTime`, `id`, `default`, `geo`, `bool`
+Types : `int`, `float`, `String`, `dateTime`, `default`, `geo`, `bool`
 
 Value variables store scalar values.  Value variables are a map from the UIDs of the enclosing block to the corresponding values.
 

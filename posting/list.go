@@ -730,6 +730,12 @@ func (l *List) hasPendingTxn() bool {
 	return false
 }
 
+func (l *List) ApproxLen() int {
+	l.RLock()
+	defer l.RUnlock()
+	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
+}
+
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get Uids is expensive

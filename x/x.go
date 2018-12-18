@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"regexp"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -40,19 +42,13 @@ var (
 )
 
 const (
-	Success                 = "Success"
-	ErrorUnauthorized       = "ErrorUnauthorized"
-	ErrorInvalidMethod      = "ErrorInvalidMethod"
-	ErrorInvalidRequest     = "ErrorInvalidRequest"
-	ErrorMissingRequired    = "ErrorMissingRequired"
-	Error                   = "Error"
-	ErrorNoData             = "ErrorNoData"
-	ErrorUptodate           = "ErrorUptodate"
-	ErrorNoPermission       = "ErrorNoPermission"
-	ErrorInvalidMutation    = "ErrorInvalidMutation"
-	ErrorServiceUnavailable = "ErrorServiceUnavailable"
-
-	ValidHostnameRegex = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	Success             = "Success"
+	ErrorUnauthorized   = "ErrorUnauthorized"
+	ErrorInvalidMethod  = "ErrorInvalidMethod"
+	ErrorInvalidRequest = "ErrorInvalidRequest"
+	Error               = "Error"
+	ErrorNoData         = "ErrorNoData"
+	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
@@ -80,6 +76,20 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
+	InitialPreds   = map[string]struct{}{
+		PredicateListAttr:   {},
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+	}
+	AclPredsJson = `
+{"predicate":"dgraph.group.acl", "type":"string"},
+{"predicate":"dgraph.password", "type":"password"},
+{"reverse":true, "predicate":"dgraph.user.group", "type":"uid"},
+{"index":true, "tokenizer":["exact"], "predicate":"dgraph.xid", "type":"string"}
+`
+	Nilbyte []byte
 )
 
 func ShouldCrash(err error) bool {
@@ -207,8 +217,6 @@ func HasString(a []string, b string) bool {
 	}
 	return false
 }
-
-var Nilbyte []byte
 
 // Reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
@@ -460,4 +468,21 @@ func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]str
 	}
 
 	return newGroups, groupsToBeDeleted
+}
+
+func SpanTimer(span *trace.Span, name string) func() {
+	if span == nil {
+		return func() {}
+	}
+	uniq := int64(rand.Int31())
+	attrs := []trace.Attribute{
+		trace.Int64Attribute("funcId", uniq),
+		trace.StringAttribute("funcName", name),
+	}
+	span.Annotate(attrs, "Start.")
+	start := time.Now()
+
+	return func() {
+		span.Annotatef(attrs, "End. Took %s", time.Since(start))
+	}
 }

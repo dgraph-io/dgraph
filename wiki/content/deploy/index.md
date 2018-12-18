@@ -59,7 +59,7 @@ After installing Go, run
 ```sh
 # This should install dgraph binary in your $GOPATH/bin.
 
-go get -u -v github.com/dgraph-io/dgraph/dgraph
+go get -v github.com/dgraph-io/dgraph/dgraph
 ```
 
 If you get errors related to `grpc` while building them, your
