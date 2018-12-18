@@ -46,9 +46,10 @@ import (
 )
 
 var (
-	emptyUIDList   pb.List
-	emptyResult    pb.Result
-	emptyValueList = pb.ValueList{Values: []*pb.TaskValue{}}
+	emptyUIDList    pb.List
+	emptyFacetsList pb.FacetsList
+	emptyResult     pb.Result
+	emptyValueList  = pb.ValueList{Values: []*pb.TaskValue{}}
 )
 
 func invokeNetworkRequest(
@@ -377,7 +378,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
@@ -441,7 +442,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				out.FacetMatrix = append(out.FacetMatrix,
 					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 			} else {
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
 			}
 
 			switch {
