@@ -17,6 +17,7 @@
 package alpha
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -143,7 +144,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if js, err := json.Marshal(response); err == nil {
-		w.Write(js)
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			gz := gzip.NewWriter(w)
+			defer gz.Close()
+			gz.Write(js)
+		} else {
+			w.Write(js)
+		}
 	} else {
 		x.SetStatusWithData(w, x.Error, "Unable to marshal response")
 	}
