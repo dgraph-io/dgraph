@@ -1,0 +1,19 @@
+# This is a multi-stage image build suitable for (cloud) testing.
+# You would want to create your image and push to hub, GCR or/and ECR.
+# Then pull that image from the configuration you wish to deploy.
+
+FROM golang:latest AS build
+WORKDIR /go/src/github.com/dgraph-io/dgraph/
+COPY . .
+ENV GO111MODULE=on
+RUN CGO_ENABLED=0 make -C dgraph dgraph BUILD_FLAGS="-ldflags '-w -extldflags "-static"'"
+
+FROM alpine:latest
+LABEL maintainer="gus@dgraph.io"
+RUN apk --no-cache add ca-certificates
+COPY --from=build /go/src/github.com/dgraph-io/dgraph/dgraph/dgraph /usr/local/bin/
+RUN mkdir /dgraph
+WORKDIR /dgraph
+EXPOSE 8080
+EXPOSE 9080
+CMD ["dgraph"]
