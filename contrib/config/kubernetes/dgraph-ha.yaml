@@ -211,10 +211,6 @@ spec:
                   values:
                   - dgraph-alpha
               topologyKey: kubernetes.io/hostname
-      initContainers:
-        - name: init-alpha
-          image: busybox
-          command: ['sh', '-xc', 'echo "Wait for Zeros to start" && sleep 10']
       containers:
       - name: alpha
         image: dgraph/dgraph:latest
