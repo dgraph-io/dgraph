@@ -1444,6 +1444,23 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 	require.Contains(t, err.Error(), "zero")
 }
 
+// This test is from Github issue #2662.
+// This test couldn't like in query package because that package tries to do some extra JSON
+// marshal, which causes issues for this case.
+func TestJsonUnicode(t *testing.T) {
+	err := runJsonMutation(`{
+  "set": [
+  { "uid": "0x10", "log.message": "\u001b[32mHello World 1!\u001b[39m\n" }
+  ]
+}`)
+	require.NoError(t, err)
+
+	output, err := runQuery(`{ node(func: uid(0x10)) { log.message }}`)
+	require.NoError(t, err)
+	require.Equal(t,
+		`{"data":{"node":[{"log.message":"\u001b[32mHello World 1!\u001b[39m\n"}]}}`, output)
+}
+
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
 	conn, err := grpc.Dial("localhost:5080", grpc.WithInsecure())

@@ -1246,7 +1246,6 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 }
 
 func TestBinaryJSON(t *testing.T) {
-
 	query := `
 	{
 		me(func: uid(1)) {

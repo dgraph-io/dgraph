@@ -18,10 +18,10 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -145,10 +145,10 @@ func (fj *fastJsonNode) IsEmpty() bool {
 
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
+	case types.StringID, types.DefaultID:
+		return json.Marshal(v.Value)
 	case types.BinaryID:
-		// Encode to base64 and add "" around the value.
-		b := fmt.Sprintf("%q", v.Value.([]byte))
-		return []byte(b), nil
+		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
@@ -158,8 +158,6 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte("true"), nil
 		}
 		return []byte("false"), nil
-	case types.StringID, types.DefaultID:
-		return []byte(strconv.Quote(v.Value.(string))), nil
 	case types.DateTimeID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:
