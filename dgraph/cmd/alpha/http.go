@@ -17,6 +17,7 @@
 package alpha
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -117,13 +118,27 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := map[string]interface{}{}
+	var out bytes.Buffer
+	writeEntry := func(key string, js []byte) {
+		out.WriteRune('"')
+		out.WriteString(key)
+		out.WriteRune('"')
+		out.WriteRune(':')
+		out.Write(js)
+	}
 
 	e := query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
 	}
-	response["extensions"] = e
+	js, err := json.Marshal(e)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+	out.WriteRune('{')
+	writeEntry("extensions", js)
+	out.WriteRune(',')
 
 	// User can either ask for schema or have a query.
 	if len(resp.Schema) > 0 {
@@ -135,18 +150,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
 			return
 		}
-		mp := map[string]interface{}{}
-		mp["schema"] = json.RawMessage(string(js))
-		response["data"] = mp
-	} else {
-		response["data"] = json.RawMessage(string(resp.Json))
-	}
 
-	if js, err := json.Marshal(response); err == nil {
-		w.Write(js)
+		writeEntry("data", nil)
+		out.WriteRune('{')
+		writeEntry("schema", js)
+		out.WriteRune('}')
 	} else {
-		x.SetStatusWithData(w, x.Error, "Unable to marshal response")
+		writeEntry("data", resp.Json)
 	}
+	out.WriteRune('}')
+	w.Write(out.Bytes())
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
