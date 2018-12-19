@@ -119,11 +119,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]interface{}{}
 
-	e := query.Extensions{
+	response["extensions"] = query.Extensions{
 		Txn:     resp.Txn,
 		Latency: resp.Latency,
 	}
-	response["extensions"] = e
 
 	// User can either ask for schema or have a query.
 	if len(resp.Schema) > 0 {
@@ -136,15 +135,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		mp := map[string]interface{}{}
-		mp["schema"] = json.RawMessage(string(js))
+		mp["schema"] = json.RawMessage(js)
 		response["data"] = mp
 	} else {
-		response["data"] = json.RawMessage(string(resp.Json))
+		response["data"] = x.SafeMessage(resp.Json)
 	}
 
-	if js, err := json.Marshal(response); err == nil {
-		w.Write(js)
-	} else {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		x.SetStatusWithData(w, x.Error, "Unable to marshal response")
 	}
 }
