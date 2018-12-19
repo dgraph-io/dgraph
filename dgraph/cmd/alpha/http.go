@@ -94,7 +94,22 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	q, err := ioutil.ReadAll(r.Body)
+	rd := r.Body
+	if enc := r.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
+		if enc == "gzip" {
+			rd, err = gzip.NewReader(rd)
+			defer rd.Close()
+			if err != nil {
+				x.SetStatus(w, x.Error, "Unable to create decompressor")
+				return
+			}
+		} else {
+			x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content encoding")
+			return
+		}
+	}
+	q, err := ioutil.ReadAll(rd)
+
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
