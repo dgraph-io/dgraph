@@ -41,14 +41,30 @@ type res struct {
 
 var addr = "http://localhost:8180"
 
-func queryWithCompression(q string, compress bool) (string, *http.Response, error) {
+func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, error) {
 	url := addr + "/query"
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(q))
+
+	var buf *bytes.Buffer
+	if gzReq {
+		var b bytes.Buffer
+		gz := gzip.NewWriter(&b)
+		gz.Write([]byte(q))
+		gz.Close()
+		buf = &b
+	} else {
+		buf = bytes.NewBufferString(q)
+	}
+
+	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
 		return "", nil, err
 	}
 
-	if compress {
+	if gzReq {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+
+	if gzResp {
 		req.Header.Set("Accept-Encoding", "gzip")
 	}
 
@@ -63,7 +79,7 @@ func queryWithCompression(q string, compress bool) (string, *http.Response, erro
 
 	defer resp.Body.Close()
 	rd := resp.Body
-	if compress {
+	if gzResp {
 		rd, err = gzip.NewReader(rd)
 		defer rd.Close()
 		if err != nil {
@@ -280,19 +296,31 @@ func TestQueryCompression(t *testing.T) {
 	  }
 	}
 	`
+
 	r1 := `{"data":{"names":[{"name":"Alice"},{"name":"Bob"},{"name":"Charlie"},{"name":"David"},` +
 		`{"name":"Emily"},{"name":"Frank"},{"name":"Gloria"},{"name":"Hannah"},{"name":"Ian"},` +
 		`{"name":"Judy"},{"name":"Kevin"},{"name":"Linda"},{"name":"Michael"}]}}`
 	err := runMutation(m1)
 	require.NoError(t, err)
 
-	data, resp, err := queryWithCompression(q1, false)
+	data, resp, err := queryWithGz(q1, false, false)
 	require.Equal(t, r1, data)
 	require.NoError(t, err)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithCompression(q1, true)
+	data, resp, err = queryWithGz(q1, false, true)
 	require.Equal(t, r1, data)
 	require.NoError(t, err)
 	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
+
+	data, resp, err = queryWithGz(q1, true, false)
+	require.Equal(t, r1, data)
+	require.NoError(t, err)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	data, resp, err = queryWithGz(q1, true, true)
+	require.Equal(t, r1, data)
+	require.NoError(t, err)
+	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
+
 }
