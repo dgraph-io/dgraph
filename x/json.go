@@ -30,6 +30,6 @@ func (m SafeMessage) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	// Dont change the message.
-	b := bytes.Replace(m, []byte(`\x`), []byte(`\\x`), -1)
+	b := bytes.Replace(m, []byte(`\x`), []byte(`\u00`), -1)
 	return b, nil
 }
