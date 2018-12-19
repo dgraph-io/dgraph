@@ -145,8 +145,10 @@ func (fj *fastJsonNode) IsEmpty() bool {
 
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
-	case types.BinaryID, types.StringID, types.DefaultID:
+	case types.StringID, types.DefaultID:
 		return json.Marshal(v.Value)
+	case types.BinaryID:
+		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
