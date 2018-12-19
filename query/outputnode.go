@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -145,7 +146,7 @@ func (fj *fastJsonNode) IsEmpty() bool {
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID, types.StringID, types.DefaultID:
-		return []byte(fmt.Sprintf("%q", v.Value)), nil
+		return json.Marshal(v.Value)
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
