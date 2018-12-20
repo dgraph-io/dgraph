@@ -47,7 +47,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		}
 		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
-			if it.Next() && it.Item().Typ == itemLeftCurl {
+			if it.Next() && it.Item().Typ != lex.ItemEOF {
 				return nil, ErrMutationTooManyBlocks
 			}
 			return &mu, nil
