@@ -151,6 +151,11 @@ spec:
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         command:
           - bash
           - "-c"
@@ -162,7 +167,7 @@ spec:
             if [[ $ordinal -eq 0 ]]; then
               dgraph zero --my=$(hostname -f):5080 --idx $idx --replicas 3
             else
-              dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.default.svc.cluster.local:5080 --idx $idx --replicas 3
+              dgraph zero --my=$(hostname -f):5080 --peer dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas 3
             fi
       terminationGracePeriodSeconds: 60
       volumes:
@@ -225,12 +230,20 @@ spec:
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
+        env:
+          # This should be the same namespace as the dgraph-zero
+          # StatefulSet to resolve a Dgraph Zero's DNS name for
+          # Alpha's --zero flag.
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         command:
           - bash
           - "-c"
           - |
             set -ex
-            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.default.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
       terminationGracePeriodSeconds: 600
       volumes:
       - name: datadir
