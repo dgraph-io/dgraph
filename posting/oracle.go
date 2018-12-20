@@ -63,6 +63,20 @@ type Txn struct {
 	// getList can be set for a txn, to isolate the retrieval and storage of
 	// posting lists in a separate cache. If nil, global LRU cache is used.
 	getList func(key []byte) (*List, error)
+
+	cache *LocalCache
+}
+
+func (txn *Txn) UseLocalCache() {
+	if txn.cache != nil {
+		return
+	}
+	txn.cache = &LocalCache{
+		plists: make(map[string]*List),
+	}
+	txn.getList = func(key []byte) (*List, error) {
+		return txn.cache.Get(string(key))
+	}
 }
 
 func (txn *Txn) Get(key []byte) (*List, error) {

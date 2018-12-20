@@ -249,6 +249,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
+	txn.UseLocalCache()
 
 	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
 	var retries int
@@ -466,6 +467,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	// Now let's commit all mutations to memory.
+	// TODO: No need to do toMemory anymore.
 	toMemory := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil {
@@ -558,7 +560,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	posting.EvictLRU()
 	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
@@ -833,17 +834,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		return err
 	}
 	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
-	glog.Infof("Rollup on disk done. Rolling up %d keys in LRU cache now...", len(keys))
-	for _, key := range keys {
-		l := posting.GetLru([]byte(key))
-		if l == nil {
-			continue
-		}
-		if err := l.Rollup(readTs); err != nil {
-			glog.Errorf("While rolling up posting.List in LRU cache: %v. Ignoring.", err)
-		}
-	}
-	glog.Infoln("Rollup in LRU cache done.")
+	glog.Infof("Rollup on disk done. Rolled up %d keys.", len(keys))
 
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)

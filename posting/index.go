@@ -413,9 +413,6 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 }
 
 func DeleteReverseEdges(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteReverse)
-	})
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
@@ -433,12 +430,6 @@ func deleteCountIndex(attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteCount)
-	})
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteCountRev)
-	})
 	// Delete index entries from data store.
 	if err := deleteCountIndex(attr, false); err != nil {
 		return err
@@ -680,9 +671,6 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 }
 
 func DeleteIndex(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteIndex)
-	})
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
@@ -699,9 +687,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	// Let's clear out the cache for anything which belongs to this attribute,
 	// so once we're done, any reads would see the new list type. Note that we
 	// don't use lcache during the rebuild process.
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteData)
-	})
 
 	pk := x.ParsedKey{Attr: attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
@@ -749,7 +734,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 }
 
 func DeleteAll() error {
-	lcache.clear(func([]byte) bool { return true })
 	return deleteEntries(nil, func(key []byte) bool {
 		pk := x.Parse(key)
 		if pk == nil {
@@ -765,9 +749,6 @@ func DeleteAll() error {
 
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteData)
-	})
 	pk := x.ParsedKey{
 		Attr: attr,
 	}

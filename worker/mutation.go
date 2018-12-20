@@ -76,7 +76,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 
 	t := time.Now()
 	key := x.DataKey(edge.Attr, edge.Entity)
-	plist, err := posting.Get(key)
+	plist, err := txn.Get(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if span := otrace.FromContext(ctx); span != nil {
 			span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-get", true)},

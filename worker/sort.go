@@ -479,7 +479,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 	key := x.IndexKey(order.Attr, token)
 	// Don't put the Index keys in memory.
-	pl, err := posting.GetNoStore(key)
+	pl, err := posting.Get(key)
 	if err != nil {
 		return err
 	}
@@ -641,7 +641,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 	readTs uint64) (types.Val, error) {
 	// Don't put the values in memory
-	pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	pl, err := posting.Get(x.DataKey(attr, uid))
 	if err != nil {
 		return types.Val{}, err
 	}
