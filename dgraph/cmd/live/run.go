@@ -56,6 +56,7 @@ type options struct {
 	clientDir           string
 	ignoreIndexConflict bool
 	authToken           string
+	useCompression      bool
 }
 
 var opt options
@@ -239,7 +240,7 @@ func fileList(files string) []string {
 	return strings.Split(files, ",")
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, useGz bool) *loader {
 	x.Check(os.MkdirAll(opt.clientDir, 0700))
 	o := badger.DefaultOptions
 	o.SyncWrites = true // So that checkpoints are persisted immediately.
@@ -250,7 +251,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := x.SetupConnection(opt.zero, &tlsConf)
+	connzero, err := x.SetupConnection(opt.zero, &tlsConf, useGz)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -293,6 +294,7 @@ func run() error {
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
+		useCompression:      Live.Conf.GetBool("use_compression"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
@@ -310,7 +312,7 @@ func run() error {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, &tlsConf)
+		conn, err := x.SetupConnection(d, &tlsConf, opt.useCompression)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 
@@ -326,7 +328,7 @@ func run() error {
 		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
 		defer os.RemoveAll(opt.clientDir)
 	}
-	l := setup(bmOpts, dgraphClient)
+	l := setup(bmOpts, dgraphClient, opt.useCompression)
 	defer l.zeroconn.Close()
 	defer l.kv.Close()
 	defer l.alloc.EvictAll()

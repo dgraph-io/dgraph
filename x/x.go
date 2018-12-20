@@ -433,14 +433,12 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
-func SetupConnection(host string, tlsConf *TLSHelperConfig) (*grpc.ClientConn, error) {
+func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
-	// FIXME temporary for testing
-	if os.Getenv("USE_COMPRESSION") == "" {
-		fmt.Fprintf(os.Stderr, "Not using compression with %s\n", host)
-	} else {
+
+	if useGz {
 		fmt.Fprintf(os.Stderr, "Using gzip compression with %s\n", host)
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
