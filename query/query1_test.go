@@ -1442,6 +1442,27 @@ func TestAggregateRoot5(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"sum(val(m))":0.000000}]}}`, js)
 }
 
+func TestAggregateRoot6(t *testing.T) {
+	query := `
+		{
+			uids as var(func: anyofterms(name, "Rick Michonne Andrea"))
+
+			var(func: uid(uids)) @cascade {
+				reason {
+					killed_zombies as math(1)
+				}
+				zombie_count as sum(val(killed_zombies))
+			}
+
+			me(func: uid(uids)) {
+				money: val(zombie_count)
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
 func TestAggregateRootError(t *testing.T) {
 
 	query := `
