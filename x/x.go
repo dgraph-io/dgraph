@@ -439,7 +439,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
 
 	if useGz {
-		fmt.Fprintf(os.Stderr, "Using gzip compression with %s\n", host)
+		fmt.Fprintf(os.Stderr, "Using compression with %s\n", host)
 		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
 	}
 

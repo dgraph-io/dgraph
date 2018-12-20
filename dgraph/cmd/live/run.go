@@ -80,8 +80,8 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
+	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
@@ -91,6 +91,8 @@ func init() {
 		"Ignores conflicts on index keys during transaction")
 	flag.StringP("auth_token", "a", "",
 		"The auth token passed to the server for Alter operation of the schema file")
+	flag.BoolP("use_compression", "C", false,
+		"Use gzip compression on connection to alpha server")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -240,7 +242,7 @@ func fileList(files string) []string {
 	return strings.Split(files, ",")
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph, useGz bool) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	x.Check(os.MkdirAll(opt.clientDir, 0700))
 	o := badger.DefaultOptions
 	o.SyncWrites = true // So that checkpoints are persisted immediately.
@@ -251,7 +253,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, useGz bool) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := x.SetupConnection(opt.zero, &tlsConf, useGz)
+	// compression with zero actually makes things worse
+	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
