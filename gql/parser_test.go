@@ -4292,14 +4292,33 @@ func TestParseMutation(t *testing.T) {
 }
 
 func TestParseMutationTooManyBlocks(t *testing.T) {
-	tests := []string{
-		`{set { _:a1 <reg> "a1 content" . }}{set { _:b2 <reg> "b2 content" . }}`,
-		`{set { _:a1 <reg> "a1 content" . }} something`,
+	tests := []struct {
+		m        string
+		hasError bool
+	}{
+		{hasError: true, m: `
+			{
+				set { _:a1 <reg> "a1 content" . }
+			}{
+				set { _:b2 <reg> "b2 content" . }
+			}`,
+		},
+		{hasError: true, m: `{set { _:a1 <reg> "a1 content" . }} something`},
+		{hasError: false, m: `
+			# comments are ok
+			{
+				set { _:a1 <reg> "a1 content" . } # comments are ok
+			} # comments are ok`,
+		},
 	}
 	for _, tc := range tests {
-		mu, err := ParseMutation(tc)
-		require.EqualError(t, err, ErrMutationTooManyBlocks.Error())
-		require.Nil(t, mu)
+		mu, err := ParseMutation(tc.m)
+		if tc.hasError {
+			require.EqualError(t, err, ErrMutationTooManyBlocks.Error())
+			require.Nil(t, mu)
+		} else {
+			require.NoError(t, err)
+		}
 	}
 }
 
