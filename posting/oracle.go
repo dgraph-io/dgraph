@@ -75,8 +75,8 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(string(key))
 }
 
-func (txn *Txn) Store(pl *List) {
-	txn.cache.Set(string(pl.key), pl)
+func (txn *Txn) Store(pl *List) *List {
+	return txn.cache.Set(string(pl.key), pl)
 }
 
 type oracle struct {
