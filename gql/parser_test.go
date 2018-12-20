@@ -4292,14 +4292,15 @@ func TestParseMutation(t *testing.T) {
 }
 
 func TestParseMutationTooManyBlocks(t *testing.T) {
-	m := `{
-		set { _:a1 <reg>  "a1 content" . }
-	}{ 
-		set { _:b2 <reg>  "b2 content" . }
-	}`
-	mu, err := ParseMutation(m)
-	require.EqualError(t, err, ErrMutationTooManyBlocks.Error())
-	require.Nil(t, mu)
+	tests := []string{
+		`{set { _:a1 <reg> "a1 content" . }}{set { _:b2 <reg> "b2 content" . }}`,
+		`{set { _:a1 <reg> "a1 content" . }} something`,
+	}
+	for _, tc := range tests {
+		mu, err := ParseMutation(tc)
+		require.EqualError(t, err, ErrMutationTooManyBlocks.Error())
+		require.Nil(t, mu)
+	}
 }
 
 func TestParseMissingGraphQLVar(t *testing.T) {
