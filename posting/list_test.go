@@ -72,10 +72,11 @@ func addMutationHelper(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32, 
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 2)
 
-	l, err := Get(key)
+	txn := &Txn{StartTs: uint64(1)}
+	txn.UseLocalCache()
+	l, err := txn.Get(key)
 	require.NoError(t, err)
 
-	txn := &Txn{StartTs: uint64(1)}
 	edge := &pb.DirectedEdge{
 		ValueId: 9,
 		Label:   "testing",
@@ -118,11 +119,6 @@ func TestAddMutation(t *testing.T) {
 	p = getFirst(l, 3)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "anti-testing", p.Label)
-
-	// Try reading the same data in another PostingList.
-	dl, err := Get(key)
-	require.NoError(t, err)
-	checkUids(t, dl, uids, 3)
 }
 
 func getFirst(l *List, readTs uint64) (res pb.Posting) {

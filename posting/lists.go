@@ -177,18 +177,23 @@ type LocalCache struct {
 	plists map[string]*List
 }
 
+func NewLocalCache() *LocalCache {
+	return &LocalCache{plists: make(map[string]*List)}
+}
+
 func (lc *LocalCache) getNoStore(key string) *List {
 	lc.RLock()
 	defer lc.RUnlock()
-	l := lc.plists[key]
-	return l
+	if l, ok := lc.plists[key]; ok {
+		return l
+	}
+	return nil
 }
 
 func (lc *LocalCache) Set(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
-	pl, ok := lc.plists[key]
-	if ok {
+	if pl, ok := lc.plists[key]; ok {
 		return pl
 	}
 	lc.plists[key] = updated
@@ -196,6 +201,9 @@ func (lc *LocalCache) Set(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) Get(key string) (*List, error) {
+	if lc == nil {
+		return getNew([]byte(key), pstore)
+	}
 	if pl := lc.getNoStore(key); pl != nil {
 		return pl, nil
 	}

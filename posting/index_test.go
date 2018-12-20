@@ -130,6 +130,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		x.Fatalf("Unhandled op: %v", op)
 	}
 	txn := Oracle().RegisterStartTs(startTs)
+	txn.cache.Set(string(l.key), l)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
@@ -158,7 +159,6 @@ func TestTokensTable(t *testing.T) {
 	key := x.DataKey("name", 1)
 	l, err := getNew(key, ps)
 	require.NoError(t, err)
-	lcache.PutIfMissing(string(l.key), l)
 
 	edge := &pb.DirectedEdge{
 		Value:  []byte("david"),

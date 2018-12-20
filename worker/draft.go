@@ -249,7 +249,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
-	txn.UseLocalCache()
 
 	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
 	var retries int

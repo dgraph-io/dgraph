@@ -68,10 +68,10 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 			ValueType: edge.ValueType,
 		})
 	}
-	l, err := posting.Get(x.DataKey(attr, src))
-	require.NoError(t, err)
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
+	l, err := txn.Get(x.DataKey(attr, src))
+	require.NoError(t, err)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 

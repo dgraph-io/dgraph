@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var o *oracle
@@ -60,30 +61,22 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	// getList can be set for a txn, to isolate the retrieval and storage of
-	// posting lists in a separate cache. If nil, global LRU cache is used.
-	getList func(key []byte) (*List, error)
-
 	cache *LocalCache
 }
 
 func (txn *Txn) UseLocalCache() {
 	if txn.cache != nil {
-		return
+		glog.Fatalf("Cache is already initiated.")
 	}
-	txn.cache = &LocalCache{
-		plists: make(map[string]*List),
-	}
-	txn.getList = func(key []byte) (*List, error) {
-		return txn.cache.Get(string(key))
-	}
+	txn.cache = NewLocalCache()
 }
 
 func (txn *Txn) Get(key []byte) (*List, error) {
-	if txn.getList == nil {
-		return Get(key)
-	}
-	return txn.getList(key)
+	return txn.cache.Get(string(key))
+}
+
+func (txn *Txn) Store(pl *List) {
+	txn.cache.Set(string(pl.key), pl)
 }
 
 type oracle struct {
@@ -117,9 +110,20 @@ func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 		txn.lastUpdate = time.Now()
 	} else {
 		txn = &Txn{StartTs: ts, lastUpdate: time.Now()}
+		txn.UseLocalCache()
 		o.pendingTxns[ts] = txn
 	}
 	return txn
+}
+
+func (o *oracle) CacheAt(ts uint64) *LocalCache {
+	o.RLock()
+	defer o.RUnlock()
+	txn, ok := o.pendingTxns[ts]
+	if !ok {
+		return nil
+	}
+	return txn.cache
 }
 
 // MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
