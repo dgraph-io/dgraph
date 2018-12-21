@@ -253,7 +253,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	// compression with zero actually makes things worse
+	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
