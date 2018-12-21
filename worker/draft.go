@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -779,20 +778,10 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer := x.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
-	var mu sync.Mutex
-	var keys []string
-
-	addKey := func(key []byte) {
-		mu.Lock()
-		keys = append(keys, string(key))
-		mu.Unlock()
-	}
-
+	var numKeys uint64
 	sl := stream.Lists{Stream: writer, DB: pstore}
 	sl.ChooseKeyFunc = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
-		if pk.IsSchema() {
-			// Skip if schema.
+		if item.UserMeta()&posting.BitSchemaPosting > 0 {
 			return false
 		}
 		// Return true if we don't find the BitCompletePosting bit.
@@ -803,7 +792,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		if err != nil {
 			return nil, err
 		}
-		addKey(key)
+		atomic.AddUint64(&numKeys, 1)
 		return l.MarshalToKv()
 	}
 	if err := sl.Orchestrate(context.Background(), "Rolling up", readTs); err != nil {
@@ -813,7 +802,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		return err
 	}
 	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
-	glog.Infof("Rollup on disk done. Rolled up %d keys.", len(keys))
+	glog.Infof("Rolled up %d keys. Done", atomic.LoadUint64(&numKeys))
 
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
