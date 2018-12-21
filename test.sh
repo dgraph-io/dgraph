@@ -36,6 +36,7 @@ runAll || exit $?
 
 # Run non-go tests.
 ./contrib/scripts/test-bulk-schema.sh
+./contrib/scripts/test-backup-restore.sh
 
 echo
 echo "Running load-test.sh"
