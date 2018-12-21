@@ -72,8 +72,7 @@ func addMutationHelper(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32, 
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 2)
 
-	txn := &Txn{StartTs: uint64(1)}
-	txn.UseLocalCache()
+	txn := NewTxn(1)
 	l, err := txn.Get(key)
 	require.NoError(t, err)
 

@@ -25,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 var o *oracle
@@ -64,11 +63,12 @@ type Txn struct {
 	cache *LocalCache
 }
 
-func (txn *Txn) UseLocalCache() {
-	if txn.cache != nil {
-		glog.Fatalf("Cache is already initiated.")
+func NewTxn(startTs uint64) *Txn {
+	return &Txn{
+		StartTs:    startTs,
+		cache:      NewLocalCache(),
+		lastUpdate: time.Now(),
 	}
-	txn.cache = NewLocalCache()
 }
 
 func (txn *Txn) Get(key []byte) (*List, error) {
@@ -109,8 +109,7 @@ func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 	if ok {
 		txn.lastUpdate = time.Now()
 	} else {
-		txn = &Txn{StartTs: ts, lastUpdate: time.Now()}
-		txn.UseLocalCache()
+		txn = NewTxn(ts)
 		o.pendingTxns[ts] = txn
 	}
 	return txn

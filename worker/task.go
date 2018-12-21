@@ -874,7 +874,7 @@ func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
 		readTs:  arg.q.ReadTs,
 		reverse: arg.q.Reverse,
 	}
-	return cp.evaluate(arg.out)
+	return qs.evaluate(cp, arg.out)
 }
 
 func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) error {
@@ -1682,7 +1682,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *pb.Result) error {
+func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	count := cp.count
 	var illegal bool
 	switch cp.fn {
@@ -1706,7 +1706,7 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl, err := posting.Get(countKey)
+		pl, err := qs.cache.Get(string(countKey))
 		if err != nil {
 			return err
 		}
@@ -1741,8 +1741,7 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 
 	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		key := item.KeyCopy(nil)
-		pl, err := posting.Get(key)
+		pl, err := qs.cache.Get(string(item.Key()))
 		if err != nil {
 			return err
 		}

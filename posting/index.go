@@ -465,8 +465,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 	// We create one txn for all the mutations to be housed in. We also create a
 	// localized posting list cache, to avoid stressing or mixing up with the
 	// global lcache (the LRU cache).
-	txn := &Txn{StartTs: r.startTs}
-	txn.UseLocalCache()
+	txn := NewTxn(r.startTs)
 
 	var prevKey []byte
 	for it.Rewind(); it.Valid(); {
