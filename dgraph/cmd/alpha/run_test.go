@@ -18,6 +18,7 @@ package alpha
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,17 +29,18 @@ import (
 	"testing"
 	"time"
 
-	context "golang.org/x/net/context"
-	"google.golang.org/grpc"
-
-	"github.com/stretchr/testify/require"
-
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/stretchr/testify/require"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 )
 
 var q0 = `
@@ -1459,6 +1461,21 @@ func TestJsonUnicode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t,
 		`{"data":{"node":[{"log.message":"\u001b[32mHello World 1!\u001b[39m\n"}]}}`, output)
+}
+
+func TestGrpcCompressionSupport(t *testing.T) {
+	conn, err := grpc.Dial("localhost:9180",
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
+	)
+	defer conn.Close()
+	require.NoError(t, err)
+
+	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	q := `schema {}`
+	tx := dc.NewTxn()
+	_, err = tx.Query(context.Background(), q)
+	require.NoError(t, err)
 }
 
 func TestMain(m *testing.M) {
