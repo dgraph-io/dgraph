@@ -79,7 +79,7 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file=${1:?no out file}
-  curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2,separators=(',',': '))" > $out_file
+  curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2,separators=(',',': '))" > $out_file
   echo >> $out_file
   #INFO "schema is: " && cat $out_file
 }
@@ -189,11 +189,6 @@ INFO "verifying schema contains all predicates"
 diff - dir3/schema.out <<EOF || FATAL "schema incorrect"
 {
   "schema": [
-    {
-      "list": true,
-      "predicate": "_predicate_",
-      "type": "string"
-    },
     {
       "predicate": "genre",
       "type": "default"
