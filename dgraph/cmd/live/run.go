@@ -331,7 +331,7 @@ func run() error {
 		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
 		defer os.RemoveAll(opt.clientDir)
 	}
-	l := setup(bmOpts, dgraphClient, opt.useCompression)
+	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
 	defer l.kv.Close()
 	defer l.alloc.EvictAll()
