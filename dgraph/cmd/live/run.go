@@ -92,7 +92,7 @@ func init() {
 	flag.StringP("auth_token", "a", "",
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
-		"Use gzip compression on connection to alpha server")
+		"Enable compression on connection to alpha server")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
