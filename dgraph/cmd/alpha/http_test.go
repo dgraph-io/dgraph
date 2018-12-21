@@ -265,7 +265,7 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	require.Equal(t, qr.Errors[0].Code, "Error")
 }
 
-func TestQueryCompression(t *testing.T) {
+func TestHttpCompressionSupport(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
