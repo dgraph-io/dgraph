@@ -14,7 +14,7 @@ package cmd
 
 import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/restore"
-	acl "github.com/dgraph-io/dgraph/ee/acl/cmd"
+	acl "github.com/dgraph-io/dgraph/ee/acl"
 )
 
 func init() {
