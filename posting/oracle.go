@@ -72,7 +72,7 @@ func NewTxn(startTs uint64) *Txn {
 }
 
 func (txn *Txn) Get(key []byte) (*List, error) {
-	return txn.cache.Get(string(key))
+	return txn.cache.Get(key)
 }
 
 func (txn *Txn) Store(pl *List) *List {

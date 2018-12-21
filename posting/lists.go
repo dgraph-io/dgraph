@@ -200,17 +200,18 @@ func (lc *LocalCache) Set(key string, updated *List) *List {
 	return updated
 }
 
-func (lc *LocalCache) Get(key string) (*List, error) {
+func (lc *LocalCache) Get(key []byte) (*List, error) {
 	if lc == nil {
-		return getNew([]byte(key), pstore)
+		return getNew(key, pstore)
 	}
-	if pl := lc.getNoStore(key); pl != nil {
+	skey := string(key)
+	if pl := lc.getNoStore(skey); pl != nil {
 		return pl, nil
 	}
 
-	pl, err := getNew([]byte(key), pstore)
+	pl, err := getNew(key, pstore)
 	if err != nil {
 		return nil, err
 	}
-	return lc.Set(key, pl), nil
+	return lc.Set(skey, pl), nil
 }

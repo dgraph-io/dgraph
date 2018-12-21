@@ -361,7 +361,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			key := x.DataKey(q.Attr, q.UidList.Uids[i])
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := qs.cache.Get(string(key))
+			pl, err := qs.cache.Get(key)
 			if err != nil {
 				return err
 			}
@@ -569,7 +569,7 @@ func (qs *queryState) handleUidPostings(
 			}
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := qs.cache.Get(string(key))
+			pl, err := qs.cache.Get(key)
 			if err != nil {
 				return err
 			}
@@ -912,7 +912,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 				return ctx.Err()
 			default:
 			}
-			pl, err := qs.cache.Get(string(x.DataKey(attr, uid)))
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
 			}
@@ -1085,7 +1085,7 @@ func (qs *queryState) filterGeoFunction(arg funcArgs) error {
 	isList := schema.State().IsList(attr)
 	filtered := &pb.List{}
 	for _, uid := range uids.Uids {
-		pl, err := qs.cache.Get(string(x.DataKey(attr, uid)))
+		pl, err := qs.cache.Get(x.DataKey(attr, uid))
 		if err != nil {
 			return err
 		}
@@ -1147,7 +1147,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, err := qs.cache.Get(string(key))
+		pl, err := qs.cache.Get(key)
 		if err != nil {
 			return err
 		}
@@ -1706,7 +1706,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl, err := qs.cache.Get(string(countKey))
+		pl, err := qs.cache.Get(countKey)
 		if err != nil {
 			return err
 		}
@@ -1741,7 +1741,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 
 	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		pl, err := qs.cache.Get(string(item.Key()))
+		pl, err := qs.cache.Get(item.Key())
 		if err != nil {
 			return err
 		}
