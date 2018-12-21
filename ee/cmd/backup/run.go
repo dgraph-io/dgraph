@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package restore
+package backup
 
 import (
 	"bytes"
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -26,9 +27,47 @@ import (
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/cobra"
 )
 
-func runRestore() error {
+var Restore x.SubCommand
+
+var opt struct {
+	location, pdir string
+}
+
+func init() {
+	Restore.Cmd = &cobra.Command{
+		Use:   "restore",
+		Short: "Run Dgraph (EE) Restore backup",
+		Long: `
+		Dgraph Restore is used to load backup files offline.
+		`,
+		Args: cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Restore.Conf).Stop()
+			if err := run(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	flag := Restore.Cmd.Flags()
+	flag.StringVarP(&opt.location, "location", "l", "",
+		"Sets the source location URI (required).")
+	flag.StringVarP(&opt.pdir, "postings", "p", "",
+		"Directory where posting lists are stored (required).")
+	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
+		"Enable debug mode for more debug information.")
+	_ = Restore.Cmd.MarkFlagRequired("postings")
+	_ = Restore.Cmd.MarkFlagRequired("location")
+}
+
+func run() error {
+	fmt.Println("Restoring backups from:", opt.location)
+	fmt.Println("Writing postings to:", opt.pdir)
+
 	bo := badger.DefaultOptions
 	bo.SyncWrites = false
 	bo.TableLoadingMode = options.MemoryMap

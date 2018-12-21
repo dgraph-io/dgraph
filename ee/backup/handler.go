@@ -15,6 +15,8 @@ package backup
 import (
 	"io"
 	"net/url"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // handler interface is implemented by URI scheme handlers.
@@ -38,5 +40,30 @@ func getHandler(scheme string) handler {
 	case "s3":
 		return &s3Handler{}
 	}
+	return nil
+}
+
+// Load will scan location l for backup files, then load them sequentially.
+// The loadFunc loadFn is called for each backup file found.
+// Returns nil on success, error otherwise.
+func Load(l string, loadFn loadFunc) error {
+	uri, err := url.Parse(l)
+	if err != nil {
+		return err
+	}
+
+	h := getHandler(uri.Scheme)
+	if h == nil {
+		return x.Errorf("Unsupported URI: %v", uri)
+	}
+
+	if loadFn == nil {
+		return x.Errorf("No load function specified.")
+	}
+
+	if err := h.Load(uri, loadFn); err != nil {
+		return err
+	}
+
 	return nil
 }
