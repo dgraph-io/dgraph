@@ -140,7 +140,7 @@ func run() error {
 				return x.Errorf("Restore failed read. Expected %d bytes but got %d instead.", sz, n)
 			}
 			e := &pb.KV{}
-			if err = e.Unmarshal((&bb).Bytes()); err != nil {
+			if err = e.Unmarshal(bb.Bytes()); err != nil {
 				return err
 			}
 			bb.Reset()
