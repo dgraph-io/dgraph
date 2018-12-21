@@ -165,7 +165,7 @@ func Cleanup() {
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func Get(key []byte) (rlist *List, err error) {
+func GetNoStore(key []byte) (rlist *List, err error) {
 	return getNew(key, pstore)
 }
 
