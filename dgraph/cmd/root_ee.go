@@ -13,14 +13,14 @@
 package cmd
 
 import (
+	"github.com/dgraph-io/dgraph/dgraph/cmd/restore"
 	acl "github.com/dgraph-io/dgraph/ee/acl/cmd"
-	"github.com/dgraph-io/dgraph/ee/cmd/backup"
 )
 
 func init() {
 	// subcommands already has the default subcommands, we append to EE ones to that.
 	subcommands = append(subcommands,
-		&backup.Restore,
+		&restore.Restore,
 		&acl.CmdAcl,
 	)
 }
