@@ -464,26 +464,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		x.Errorf("Error while flushing to disk: %v", err)
 		return err
 	}
-
-	// Now let's commit all mutations to memory.
-	// TODO: No need to do toMemory anymore.
-	toMemory := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		err := x.RetryUntilSuccess(Config.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToMemory(commit)
-		})
-		if err != nil {
-			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
-				start, commit, err)
-		}
-	}
-
-	for _, txn := range delta.Txns {
-		toMemory(txn.StartTs, txn.CommitTs)
-	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
