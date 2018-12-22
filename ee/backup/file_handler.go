@@ -14,6 +14,7 @@ package backup
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -27,8 +28,23 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp   *os.File
-	cerr chan error
+	fp      *os.File
+	readers multiReader
+}
+
+type multiReader []io.Reader
+
+func (mr multiReader) Close() error {
+	var err error
+	for i := range mr {
+		if mr[i] == nil {
+			continue
+		}
+		if fp, ok := mr[i].(*os.File); ok {
+			err = fp.Close()
+		}
+	}
+	return err
 }
 
 // Create prepares the a path to save backup files.
@@ -58,11 +74,11 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 	return nil
 }
 
-// Load uses loadFn to try to load any backup files found.
+// Load uses tries to load any backup files found.
 // Returns nil on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, loadFn loadFunc) error {
+func (h *fileHandler) Load(uri *url.URL) (io.Reader, error) {
 	if !h.exists(uri.Path) {
-		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// find files and sort.
@@ -70,30 +86,27 @@ func (h *fileHandler) Load(uri *url.URL, loadFn loadFunc) error {
 		return strings.HasSuffix(path, ".backup")
 	})
 	if len(files) == 0 {
-		return x.Errorf("No backup files found in %q", uri.Path)
+		return nil, x.Errorf("No backup files found in %q", uri.Path)
 	}
 	sort.Strings(files)
 	glog.V(2).Infof("Loading backup file(s): %v", files)
 
+	h.readers = make(multiReader, 0, len(files))
 	for _, file := range files {
 		fp, err := os.Open(file)
 		if err != nil {
-			return err
+			h.readers.Close()
+			return nil, x.Errorf("Error opening %q: %s", file, err)
 		}
-		if err = loadFn(fp, file); err != nil {
-			return err
-		}
-		if err = fp.Close(); err != nil {
-			glog.V(3).Infof("Error closing file %q: %s", file, err)
-		}
+		h.readers = append(h.readers, fp)
 	}
-
-	return nil
+	return io.MultiReader(h.readers...), nil
 }
 
 func (h *fileHandler) Close() error {
+	h.readers.Close()
 	if h.fp == nil {
-		return <-h.cerr
+		return nil
 	}
 	if err := h.fp.Sync(); err != nil {
 		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)

@@ -26,10 +26,8 @@ type handler interface {
 	// Create prepares the location for write operations.
 	Create(*url.URL, *Request) error
 	// Load will scan location URI for backup files, then load them with loadFunc.
-	Load(*url.URL, loadFunc) error
+	Load(*url.URL) (io.Reader, error)
 }
-
-type loadFunc func(io.Reader, string) error
 
 // getHandler returns a handler for the URI scheme.
 // Returns new handler on success, nil otherwise.
@@ -43,27 +41,18 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
-// Load will scan location l for backup files, then load them sequentially.
-// The loadFunc loadFn is called for each backup file found.
+// Load will scan location l for backup files, then load them sequentially through reader.
 // Returns nil on success, error otherwise.
-func Load(l string, loadFn loadFunc) error {
+func Load(l string) (io.Reader, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return x.Errorf("Unsupported URI: %v", uri)
+		return nil, x.Errorf("Unsupported URI: %v", uri)
 	}
 
-	if loadFn == nil {
-		return x.Errorf("No load function specified.")
-	}
-
-	if err := h.Load(uri, loadFn); err != nil {
-		return err
-	}
-
-	return nil
+	return h.Load(uri)
 }
