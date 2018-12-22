@@ -44,6 +44,7 @@ type s3Handler struct {
 	bucketName, objectPrefix string
 	pwriter                  *io.PipeWriter
 	cerr                     chan error
+	trace                    bool
 }
 
 // setup creates an AWS session, checks valid bucket at uri.Path, and configures a minio client.
@@ -68,6 +69,8 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 
 	// secure by default
 	secure := uri.Query().Get("secure") != "false"
+	// remote tracing
+	h.trace = uri.Query().Get("trace") != "false"
 
 	mc, err := minio.New(uri.Host, accessKeyID, secretAccessKey, secure)
 	if err != nil {
@@ -77,7 +80,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	if strings.Contains(uri.Host, s3AccelerateHost) {
 		mc.SetS3TransferAccelerate(uri.Host)
 	}
-	if x.Config.DebugMode {
+	if h.trace {
 		mc.TraceOn(os.Stderr)
 	}
 
