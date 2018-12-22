@@ -42,11 +42,10 @@ func TestBackup(t *testing.T) {
 			x.Check(err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 			fn(t, dg)
-			require.NoError(t, dg.Alter(
-				context.Background(), &api.Operation{DropAll: true}))
 		}
 	}
 
+	t.Run("setup", wrap(BackupSetup))
 	t.Run("test local backup", wrap(BackupLocal))
 }
 
