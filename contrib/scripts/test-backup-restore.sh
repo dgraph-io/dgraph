@@ -17,8 +17,8 @@ set -e
 
 INFO "running backup restore test"
 
-# WORKDIR=$(mktemp -d $TMPDIR/$ME.tmp-XXXXXX)
 WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
+# WORKDIR=$(mktemp -d $TMPDIR/$ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
@@ -70,7 +70,7 @@ function BackupRestore
   INFO "backup loading data"
   dgraph restore \
     -l $WORKDIR/dir1/ \
-    -p $WORKDIR/dir2/ \
+    -p $WORKDIR/dir2/p \
     >restore.log 2>&1 </dev/null \
     || FATAL "backup restore failed"
   sleep 1
@@ -119,7 +119,7 @@ BackupRestore
 popd >/dev/null
 
 p0=$(CheckPData "$WORKDIR/dir1/p/")
-p1=$(CheckPData "$WORKDIR/dir2/p0/")
+p1=$(CheckPData "$WORKDIR/dir2/p/")
 
 [ "$p0" != "$p1" ] && FATAL "Restore failed. Expected '$p0' but got '$p1'"
 
