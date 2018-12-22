@@ -1592,6 +1592,26 @@ Go's built-in metrics may also be useful to measure for memory usage and garbage
  `dgraph_dirtymap_keys_total`     | Unused.
  `dgraph_posting_reads_total`     | Unused.
 
+## Tracing
+
+Dgraph is integrated with [OpenCensus](https://opencensus.io/zpages/) to collect distributed traces from the Dgraph cluster.
+
+Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 1 to trace 100% of queries.
+
+### Examining Traces with zPages
+
+The most basic way to view traces is with the integrated trace pages.
+
+OpenCensus's [zPages](https://opencensus.io/zpages/) are accessible via the Zero or Alpha HTTP port at `/z/tracez`.
+
+### Examining Traces with Jaeger
+
+Jaeger collects distributed traces and provides a UI to view and query traces across different services. This provides the necessary observability to figure out what is happening in the system.
+
+Dgraph can be configured to send traces directly to a Jaeger collector with the `--jaeger.collector` flag. For example, if the Jaeger collector is running on `http://localhost:14268`, then pass the flag to the Dgraph Zero and Dgraph Alpha instances as `--jaeger.collector=http://localhost:14268`.
+
+See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-started/) to get up and running with Jaeger.
+
 ## Dgraph Administration
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
