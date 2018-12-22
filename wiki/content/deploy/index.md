@@ -1559,7 +1559,13 @@ The most basic way to view traces is with the integrated trace pages.
 
 OpenCensus's [zPages](https://opencensus.io/zpages/) are accessible via the Zero or Alpha HTTP port at `/z/tracez`.
 
-Although the zPages are always accessible via each Dgraph instance, it is impractical to use them to correlate the ordering of different traces within or across different services.
+### Examining Traces with Jaeger
+
+Jaeger collects distributed traces and provides a UI to view and query traces across different services. This provides the necessary observability to figure out what is happening in the system.
+
+Dgraph can be configured to send traces directly to a Jaeger collector with the `--jaeger.collector` flag. For example, if the Jaeger collector is running on `http://localhost:14268`, then pass the flag to the Dgraph Zero and Dgraph Alpha instances as `--jaeger.collector=http://localhost:14268`.
+
+See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-started/) to get up and running with Jaeger.
 
 ## Dgraph Administration
 
