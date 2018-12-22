@@ -68,7 +68,7 @@ function BackupRequest
 function BackupRestore
 {
   INFO "backup loading data"
-  dgraph restore --debugmode \
+  dgraph restore \
     -l $WORKDIR/dir1/ \
     -p $WORKDIR/dir2/ \
     >restore.log 2>&1 </dev/null \

@@ -34,6 +34,7 @@ var Restore x.SubCommand
 
 var opt struct {
 	location, pdir string
+	progress       bool
 }
 
 func init() {
@@ -58,8 +59,8 @@ func init() {
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
-	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
-		"Enable debug mode for more debug information.")
+	flag.BoolVar(&opt.progress, "progress", false,
+		"Enable show detailed progress.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -106,7 +107,7 @@ func run() error {
 		// start progress ticker
 		tick := time.NewTicker(time.Second)
 		done := make(chan struct{})
-		if x.Config.DebugMode {
+		if opt.progress {
 			go func() {
 				for {
 					select {
@@ -131,12 +132,13 @@ func run() error {
 				return err
 			}
 
-			n, err := bb.ReadFrom(io.LimitReader(reader, int64(sz)))
+			buf := make([]byte, int(sz))
+			n, err := io.ReadFull(reader, buf)
 			if err != nil {
 				return err
 			}
 			// The byte count must match the header otherwise we have data loss.
-			if n != int64(sz) {
+			if n != int(sz) {
 				return x.Errorf("Restore failed read. Expected %d bytes but got %d instead.", sz, n)
 			}
 			e := &pb.KV{}
@@ -153,7 +155,7 @@ func run() error {
 				if err = writer.Send(&kvs); err != nil {
 					return err
 				}
-				kvs.Kv = kvs.Kv[:0]
+				kvs.Kv = make([]*pb.KV, 0, 1000)
 				kvs.Done = true
 			}
 		}
