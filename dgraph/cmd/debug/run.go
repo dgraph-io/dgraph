@@ -49,7 +49,7 @@ type flagOptions struct {
 	pdir       string
 	itemMeta   bool
 	jepsen     bool
-	jepsenAt   uint64
+	readTs     uint64
 }
 
 func init() {
@@ -65,7 +65,7 @@ func init() {
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
 	flag.BoolVar(&opt.jepsen, "jepsen", false, "Disect Jepsen output.")
-	flag.Uint64Var(&opt.jepsenAt, "at", math.MaxUint64, "Show Jepsen sum at this timestamp.")
+	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
@@ -290,7 +290,7 @@ func getMinMax(db *badger.DB, readTs uint64) (uint64, uint64) {
 }
 
 func jepsen(db *badger.DB) {
-	min, max := getMinMax(db, opt.jepsenAt)
+	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("min=%d. max=%d\n", min, max)
 
 	ts := findFirstInvalidTxn(db, min, max)
@@ -385,7 +385,7 @@ func appendPosting(w io.Writer, o *pb.Posting) {
 }
 
 func lookup(db *badger.DB) {
-	txn := db.NewTransactionAt(math.MaxUint64, false)
+	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
@@ -427,7 +427,7 @@ func lookup(db *badger.DB) {
 }
 
 func printKeys(db *badger.DB) {
-	txn := db.NewTransactionAt(math.MaxUint64, false)
+	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
