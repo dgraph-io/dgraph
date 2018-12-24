@@ -322,5 +322,4 @@ func TestHttpCompressionSupport(t *testing.T) {
 	require.Equal(t, r1, data)
 	require.NoError(t, err)
 	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
-
 }

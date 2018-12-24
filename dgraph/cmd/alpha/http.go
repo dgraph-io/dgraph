@@ -120,7 +120,6 @@ func writeRespBody(w http.ResponseWriter, r *http.Request, b []byte) {
 		gz := gzip.NewWriter(w)
 		defer gz.Close()
 		out = gz
-		w.Header().Add("X-Dgraph-Write-Response", "compressing")
 	}
 
 	out.Write(b)
