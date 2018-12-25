@@ -32,3 +32,7 @@ func (s *Server) Login(ctx context.Context,
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
 	return &api.Response{}, x.ErrNotSupported
 }
+
+func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
+	// do nothing
+}

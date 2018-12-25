@@ -502,6 +502,7 @@ func run() {
 	// Setup external communication.
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 	setupServer()
+	go edgraph.RetrieveAclsPeriodically(shutdownCh)
 	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")

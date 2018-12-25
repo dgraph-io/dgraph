@@ -238,3 +238,46 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 	}
 	return user, nil
 }
+
+func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-closeCh:
+			return
+		case <-ticker.C:
+			(&Server{}).retrieveAcls()
+		}
+	}
+}
+
+const queryAcls = `
+{
+  allAcls(func: has(dgraph.group.acl)) {
+    dgraph.xid
+    dgraph.group.acl
+  }
+}
+`
+
+// the acl cache mapping group names to the group acl
+var aclCache map[string]acl.Group
+
+func (s *Server) retrieveAcls() error {
+	glog.Infof("Retrieving ACLs")
+	queryRequest := api.Request{
+		Query: queryAcls,
+	}
+	queryResp, err := s.Query(context.Background(), &queryRequest)
+	if err != nil {
+		return fmt.Errorf("unable to retrieve acls: %v", err)
+	}
+	groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
+	for _, group := range groups {
+		aclCache[group.GroupID] = group
+	}
+	glog.Infof("updated the ACL cache with %d acl entries", len(groups))
+	return nil
+}

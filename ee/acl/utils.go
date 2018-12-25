@@ -89,6 +89,19 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	return &groups[0], nil
 }
 
+// Extract a sequence of groups from the input
+func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
+	m := make(map[string][]Group)
+
+	err = json.Unmarshal(input, &m)
+	if err != nil {
+		glog.Errorf("Unable to unmarshal the query group response:%v", err)
+		return nil, err
+	}
+	groups := m[groupKey]
+	return groups, nil
+}
+
 type JwtGroup struct {
 	Group string
 }
