@@ -64,7 +64,7 @@ const (
 	BitSchemaPosting   byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
-	BitEmptyPosting    byte = 0x10 | BitCompletePosting
+	BitEmptyPosting    byte = 0x10
 )
 
 type List struct {
