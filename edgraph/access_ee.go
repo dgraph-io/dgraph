@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -240,7 +241,7 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 }
 
 func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -248,7 +249,9 @@ func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 		case <-closeCh:
 			return
 		case <-ticker.C:
-			(&Server{}).retrieveAcls()
+			if err := (&Server{}).retrieveAcls(); err != nil {
+				glog.Errorf("Error while retrieving acls:%v", err)
+			}
 		}
 	}
 }
@@ -263,7 +266,11 @@ const queryAcls = `
 `
 
 // the acl cache mapping group names to the group acl
-var aclCache map[string]acl.Group
+var aclCache sync.Map
+
+func InitAclCache() {
+	aclCache = sync.Map{}
+}
 
 func (s *Server) retrieveAcls() error {
 	glog.Infof("Retrieving ACLs")
@@ -275,9 +282,44 @@ func (s *Server) retrieveAcls() error {
 		return fmt.Errorf("unable to retrieve acls: %v", err)
 	}
 	groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
-	for _, group := range groups {
-		aclCache[group.GroupID] = group
+	if err != nil {
+		return err
 	}
-	glog.Infof("updated the ACL cache with %d acl entries", len(groups))
+
+	storedEntries := 0
+	for _, group := range groups {
+		// convert the serialized acl into a map for easy lookups
+		group.MappedAcls, err = acl.UnmarshalAcls([]byte(group.Acls))
+		if err != nil {
+			glog.Errorf("Error while unmarshalling ACLs for group %v:%v", group, err)
+			continue
+		}
+
+		storedEntries++
+		aclCache.Store(group.GroupID, &group)
+	}
+	glog.Infof("updated the ACL cache with %d entries", storedEntries)
 	return nil
+}
+
+// HasAccess returns true if any group is authorized to perform the operation on the predicate
+func (s *Server) HasAccess(groups []string, predicate string, operation int32) bool {
+	for _, group := range groups {
+		if s.hasAccess(group, predicate, operation) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAccess checks the aclCache and returns if the specified group is authorized to perform the
+// operation on the given predicate
+func (s *Server) hasAccess(group string, predicate string, operation int32) bool {
+	entry, found := aclCache.Load(group)
+	if !found {
+		return false
+	}
+	aclGroup := entry.(*acl.Group)
+	perm, found := aclGroup.MappedAcls[predicate]
+	return found && (perm&operation) != 0
 }

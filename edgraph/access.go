@@ -33,6 +33,15 @@ func (s *Server) Login(ctx context.Context,
 	return &api.Response{}, x.ErrNotSupported
 }
 
+func InitAclCache() {
+	// do nothing
+}
+
 func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 	// do nothing
+}
+
+func (s *Server) HasAccess(groups []string, predicate string, operation int32) bool {
+	// allow all operations
+	return true
 }

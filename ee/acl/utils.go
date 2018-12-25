@@ -63,10 +63,11 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 
 // parse the response and check existing of the uid
 type Group struct {
-	Uid     string `json:"uid"`
-	GroupID string `json:"dgraph.xid"`
-	Users   []User `json:"~dgraph.user.group"`
-	Acls    string `json:"dgraph.group.acl"`
+	Uid        string           `json:"uid"`
+	GroupID    string           `json:"dgraph.xid"`
+	Users      []User           `json:"~dgraph.user.group"`
+	Acls       string           `json:"dgraph.group.acl"`
+	MappedAcls map[string]int32 // only used in memory for acl enforcement
 }
 
 // Extract the first User pointed by the userKey in the query response
@@ -84,9 +85,24 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 		return nil, nil
 	}
 	if len(groups) > 1 {
-		return nil, x.Errorf("Found multiple groups: %s", input)
+		return nil, fmt.Errorf("found multiple groups: %s", input)
 	}
+
 	return &groups[0], nil
+}
+
+func UnmarshalAcls(aclBytes []byte) (map[string]int32, error) {
+	var acls []Acl
+	if len(aclBytes) != 0 {
+		if err := json.Unmarshal(aclBytes, &acls); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal the aclBytes: %v", err)
+		}
+	}
+	mappedAcls := make(map[string]int32)
+	for _, acl := range acls {
+		mappedAcls[acl.Predicate] = acl.Perm
+	}
+	return mappedAcls, nil
 }
 
 // Extract a sequence of groups from the input
