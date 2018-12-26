@@ -14,7 +14,10 @@ package acl
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -23,10 +26,10 @@ const (
 	dgraphEndpoint = "localhost:9180"
 )
 
-func TestAcl(t *testing.T) {
+/*func TestAcl(t *testing.T) {
 	t.Run("create user", CreateAndDeleteUsers)
-	// t.Run("login", LogIn)
-}
+	t.Run("login", LogIn)
+}*/
 
 func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 	out, err := cmd.CombinedOutput()
@@ -38,7 +41,7 @@ func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 	return string(out)
 }
 
-func CreateAndDeleteUsers(t *testing.T) {
+func TestCreateAndDeleteUsers(t *testing.T) {
 	createUserCmd1 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
 		"-p", userpassword)
 	createUserOutput1 := checkOutput(t, createUserCmd1, false)
@@ -64,59 +67,45 @@ func CreateAndDeleteUsers(t *testing.T) {
 }
 
 // TODO(gitlw): Finish this later.
-// func LogIn(t *testing.T) {
-// delete and recreate the user to ensure a clean state
-/*
-	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", "lucas")
-	deleteUserOutput := checkOutput(t, deleteUserCmd, false)
-	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", "lucas",
-		"-p", "haha")
-	createUserOutput := checkOutput(t, createUserCmd, false)
-*/
+func TestLogIn(t *testing.T) {
+	// delete and recreate the user to ensure a clean state
+	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", userid)
+	checkOutput(t, deleteUserCmd, false)
+	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+		"-p", userpassword)
+	checkOutput(t, createUserCmd, false)
 
-// now try to login with the wrong password
+	// now try to login with the wrong password
 
-//loginWithWrongPassword(t, ctx, adminClient)
-//loginWithCorrectPassword(t, ctx, adminClient)
-// }
-
-/*
-func loginWithCorrectPassword(t *testing.T, ctx context.Context,
-	adminClient api.DgraphAccessClient) {
-	loginRequest := api.LogInRequest{
-		Userid:   userid,
-		Password: userpassword,
-	}
-	response2, err := adminClient.LogIn(ctx, &loginRequest)
-	require.NoError(t, err)
-	if response2.Code != api.AclResponseCode_OK {
-		t.Errorf("Login with the correct password should result in the code %v",
-			api.AclResponseCode_OK)
-	}
-	jwt := acl.Jwt{}
-	jwt.DecodeString(response2.Context.Jwt, false, nil)
-	if jwt.Payload.Userid != userid {
-		t.Errorf("the jwt token should have the user id encoded")
-	}
-	jwtTime := time.Unix(jwt.Payload.Exp, 0)
-	jwtValidDays := jwtTime.Sub(time.Now()).Round(time.Hour).Hours() / 24
-	if jwtValidDays != 30.0 {
-		t.Errorf("The jwt token should be valid for 30 days, received %v days", jwtValidDays)
-	}
+	loginWithCorrectPassword(t)
+	loginWithWrongPassword(t)
 }
 
-func loginWithWrongPassword(t *testing.T, ctx context.Context,
-	adminClient api.DgraphAccessClient) {
-	loginRequestWithWrongPassword := api.LogInRequest{
-		Userid:   userid,
-		Password: userpassword + "123",
-	}
+func loginWithCorrectPassword(t *testing.T) {
+	loginCmd := exec.Command("dgraph", "acl", "login", "-d", dgraphEndpoint, "-u", userid,
+		"-p", userpassword)
+	loginOutput := checkOutput(t, loginCmd, false)
 
-	response, err := adminClient.LogIn(ctx, &loginRequestWithWrongPassword)
-	require.NoError(t, err)
-	if response.Code != api.AclResponseCode_UNAUTHENTICATED {
-		t.Errorf("Login with the wrong password should result in the code %v", api.AclResponseCode_UNAUTHENTICATED)
+	// parse the output to extract the accessJwt and refreshJwt
+	lines := strings.Split(loginOutput, "\n")
+	var accessJwt string
+	var refreshJwt string
+	for idx := 0; idx < len(lines); idx++ {
+		line := lines[idx]
+		if line == "access jwt:" {
+			accessJwt = lines[idx+1]
+			idx++ // skip the next line
+		} else if line == "refresh jwt:" {
+			refreshJwt = lines[idx+1]
+			idx++
+		}
 	}
+	require.True(t, len(accessJwt) > 0, "The accessJwt should not be empty")
+	require.True(t, len(refreshJwt) > 0, "The refreshJwt should not be empty")
 }
 
-*/
+func loginWithWrongPassword(t *testing.T) {
+	loginCmd := exec.Command("dgraph", "acl", "login", "-d", dgraphEndpoint, "-u", userid,
+		"-p", userpassword+"123")
+	checkOutput(t, loginCmd, true)
+}
