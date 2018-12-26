@@ -477,6 +477,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	if err != nil {
 		return resp, err
 	}
+	if err := s.AuthorizeQuery(ctx, parsedReq); err != nil {
+		return nil, fmt.Errorf("query is not authorized: %v", err)
+	}
 
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)

@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -41,7 +42,7 @@ func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 	// do nothing
 }
 
-func (s *Server) HasAccess(groups []string, predicate string, operation int32) bool {
-	// allow all operations
-	return true
+func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+	// always allow access
+	return nil
 }

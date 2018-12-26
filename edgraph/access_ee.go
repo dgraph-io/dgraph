@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/gql"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgrijalva/jwt-go"
@@ -90,13 +92,13 @@ func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
-		userId, err := authenticateRefreshToken(request.RefreshToken)
+		user, err := authenticateToken(request.RefreshToken)
 		if err != nil {
 			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
 		}
 
-		user, err = s.queryUser(ctx, userId, "")
+		user, err = s.queryUser(ctx, user.UserID, "")
 		if err != nil {
 			return nil, fmt.Errorf("error while querying user with id: %v",
 				request.Userid)
@@ -124,7 +126,7 @@ func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*
 	return user, nil
 }
 
-func authenticateRefreshToken(refreshToken string) (string, error) {
+func authenticateToken(refreshToken string) (*acl.User, error) {
 	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -133,26 +135,33 @@ func authenticateRefreshToken(refreshToken string) (string, error) {
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("unable to parse refresh token:%v", err)
+		return nil, fmt.Errorf("unable to parse refresh token:%v", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return "", fmt.Errorf("claims in refresh token is not map claims:%v", refreshToken)
+		return nil, fmt.Errorf("claims in refresh token is not map claims:%v", refreshToken)
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return "", fmt.Errorf("refresh token has expired: %v", refreshToken)
+		return nil, fmt.Errorf("refresh token has expired: %v", refreshToken)
 	}
 
 	userId, ok := claims["userid"].(string)
 	if !ok {
-		return "", fmt.Errorf("userid in claims is not a string:%v", userId)
+		return nil, fmt.Errorf("userid in claims is not a string:%v", userId)
 	}
-	return userId, nil
+
+	user := &acl.User{}
+	user.Uid = userId
+	groups, ok := claims["groups"].([]acl.Group)
+	if ok {
+		user.Groups = groups
+	}
+	return user, nil
 }
 
 func validateLoginRequest(request *api.LoginRequest) error {
@@ -340,8 +349,16 @@ func (s *Server) retrieveAcls() error {
 	return nil
 }
 
+func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+	// extract the jwt and unmarshal the jwt to get the list of groups
+
+	// get the relavant predicates used in the query
+	// for each predicate, authorize with the groups, and operation of read
+	return nil
+}
+
 // HasAccess returns true if any group is authorized to perform the operation on the predicate
-func (s *Server) HasAccess(groups []string, predicate string, operation int32) bool {
+func (s *Server) hasAccessForGroups(groups []string, predicate string, operation int32) bool {
 	for _, group := range groups {
 		if s.hasAccess(group, predicate, operation) {
 			return true
