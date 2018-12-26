@@ -117,13 +117,6 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	}
 }
 
-func makeDirEmpty(dir string) error {
-	if err := os.RemoveAll(dir); err != nil {
-		return err
-	}
-	return os.MkdirAll(dir, 0755)
-}
-
 func (s *suite) cleanup() {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
