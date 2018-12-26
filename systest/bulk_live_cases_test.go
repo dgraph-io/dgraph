@@ -285,8 +285,8 @@ func DONOTRUN_TestGoldenData(t *testing.T) {
 	err := matchExportCount(matchExport{
 		expectedRDF:    1120879,
 		expectedSchema: 10,
-		dir:            s.liveCluster.dir,
-		port:           s.liveCluster.dgraphPortOffset + x.PortHTTP,
+		dir:            s.liveCluster.Dir,
+		port:           s.liveCluster.DgraphPortOffset + x.PortHTTP,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -24,6 +24,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/dgraph-io/dgo/test"
 )
 
 // TODO: Convert this to Docker based test.
@@ -32,15 +34,15 @@ func TestLoaderXidmap(t *testing.T) {
 	check(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	cluster := NewDgraphCluster(tmpDir)
+	cluster := test.NewDgraphCluster(tmpDir)
 	check(t, cluster.Start())
 	defer cluster.Close()
 
 	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/first.rdf.gz")
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--rdfs", data,
-		"--dgraph", ":"+cluster.dgraphPort,
-		"--zero", ":"+cluster.zeroPort,
+		"--dgraph", ":"+cluster.DgraphPort,
+		"--zero", ":"+cluster.ZeroPort,
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
@@ -55,8 +57,8 @@ func TestLoaderXidmap(t *testing.T) {
 	data = os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/second.rdf.gz")
 	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--rdfs", data,
-		"--dgraph", ":"+cluster.dgraphPort,
-		"--zero", ":"+cluster.zeroPort,
+		"--dgraph", ":"+cluster.DgraphPort,
+		"--zero", ":"+cluster.ZeroPort,
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
@@ -81,7 +83,8 @@ func TestLoaderXidmap(t *testing.T) {
 	// }
 	// time.Sleep(5 * time.Second)
 
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", cluster.dgraphPortOffset+8080))
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export",
+		cluster.DgraphPortOffset+8080))
 	if err != nil {
 		cluster.Close()
 		t.Fatalf("Error while calling export: %v", err)
