@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -31,14 +30,6 @@ import (
 	"github.com/dgraph-io/dgo/test"
 	"github.com/pkg/errors"
 )
-
-func init() {
-	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-	}
-}
 
 var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
 
