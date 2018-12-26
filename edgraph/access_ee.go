@@ -268,8 +268,46 @@ const queryAcls = `
 // the acl cache mapping group names to the group acl
 var aclCache sync.Map
 
-func InitAclCache() {
+func InitAcl() {
 	aclCache = sync.Map{}
+
+	// upsert the admin account
+	ctx := context.Background()
+	server := &Server{}
+	adminUser, err := server.queryUser(ctx, "admin", "")
+	if err != nil {
+		glog.Errorf("error while querying the admin account")
+		return
+	}
+
+	if adminUser != nil {
+		// the admin user already exists, no need to create
+		return
+	}
+
+	// insert the admin user
+	createUserNQuads := []*api.NQuad{
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "admin"}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "password"}},
+		}}
+
+	mu := &api.Mutation{
+		CommitNow: true,
+		Set:       createUserNQuads,
+	}
+
+	if _, err := server.Mutate(ctx, mu); err != nil {
+		glog.Errorf("unable to create user: %v", err)
+		return
+	}
+	glog.Info("Created the admin account with the default password")
 }
 
 func (s *Server) retrieveAcls() error {

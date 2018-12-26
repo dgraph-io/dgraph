@@ -462,7 +462,6 @@ func run() {
 	// schema before calling posting.Init().
 	schema.Init(edgraph.State.Pstore)
 	posting.Init(edgraph.State.Pstore)
-	edgraph.InitAclCache()
 	defer posting.Cleanup()
 	worker.Init(edgraph.State.Pstore)
 
@@ -501,7 +500,11 @@ func run() {
 	_ = numShutDownSig
 
 	// Setup external communication.
-	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+	go worker.StartRaftNodes(edgraph.State.WALstore, bindall, func() {
+		// initialization of the admin account can only be done after raft nodes are running
+		// and health check passes
+		edgraph.InitAcl()
+	})
 	go edgraph.RetrieveAclsPeriodically(shutdownCh)
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
