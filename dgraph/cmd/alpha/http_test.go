@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -80,10 +81,14 @@ func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, err
 	defer resp.Body.Close()
 	rd := resp.Body
 	if gzResp {
-		rd, err = gzip.NewReader(rd)
-		defer rd.Close()
-		if err != nil {
-			return "", nil, err
+		if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
+			rd, err = gzip.NewReader(rd)
+			if err != nil {
+				return "", nil, err
+			}
+			defer rd.Close()
+		} else {
+			return "", resp, fmt.Errorf("Response not compressed")
 		}
 	}
 	body, err := ioutil.ReadAll(rd)
@@ -304,22 +309,22 @@ func TestHttpCompressionSupport(t *testing.T) {
 	require.NoError(t, err)
 
 	data, resp, err := queryWithGz(q1, false, false)
-	require.Equal(t, r1, data)
 	require.NoError(t, err)
+	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
 	data, resp, err = queryWithGz(q1, false, true)
-	require.Equal(t, r1, data)
 	require.NoError(t, err)
-	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
+	require.Equal(t, r1, data)
+	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	data, resp, err = queryWithGz(q1, true, false)
-	require.Equal(t, r1, data)
 	require.NoError(t, err)
+	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
 	data, resp, err = queryWithGz(q1, true, true)
-	require.Equal(t, r1, data)
 	require.NoError(t, err)
-	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
+	require.Equal(t, r1, data)
+	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 }
