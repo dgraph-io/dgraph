@@ -296,6 +296,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
+
+		// recreate the admin account after a drop all operation
+		ResetAcl()
 		return empty, err
 	}
 	if len(op.DropAttr) > 0 {

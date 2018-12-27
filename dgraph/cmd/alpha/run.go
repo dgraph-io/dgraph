@@ -503,7 +503,7 @@ func run() {
 	go worker.StartRaftNodes(edgraph.State.WALstore, bindall, func() {
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
-		edgraph.InitAcl()
+		edgraph.ResetAcl()
 	})
 	go edgraph.RetrieveAclsPeriodically(shutdownCh)
 	setupServer()

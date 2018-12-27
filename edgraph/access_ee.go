@@ -282,7 +282,7 @@ const queryAcls = `
 // the acl cache mapping group names to the group acl
 var aclCache sync.Map
 
-func InitAcl() {
+func ResetAcl() {
 	aclCache = sync.Map{}
 
 	// upsert the admin account
