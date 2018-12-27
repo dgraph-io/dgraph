@@ -40,8 +40,6 @@ import (
 var (
 	Debug             x.SubCommand
 	opt               flagOptions
-	keySizeViewName   = "debug/key_size_histogram"
-	valueSizeViewName = "debug/value_size_histogram"
 )
 
 type flagOptions struct {
