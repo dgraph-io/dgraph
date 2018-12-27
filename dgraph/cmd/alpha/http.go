@@ -64,8 +64,8 @@ func extractStartTs(urlPath string) (uint64, error) {
 	}
 }
 
-// Common functionality for these request handlers. Returns true if the request is completely handled here
-// and nothing further needs to be done.
+// Common functionality for these request handlers. Returns true if the request is completely
+// handled here and nothing further needs to be done.
 func commonHandler(w http.ResponseWriter, r *http.Request) bool {
 	// Do these requests really need CORS headers? Doesn't seem like it, but they are probably
 	// harmless aside from the extra size they add to each response.
@@ -84,7 +84,7 @@ func commonHandler(w http.ResponseWriter, r *http.Request) bool {
 }
 
 // Read request body, transparently decompressing if necessary. Return nil on error.
-func readReqBody(w http.ResponseWriter, r *http.Request) []byte {
+func readRequest(w http.ResponseWriter, r *http.Request) []byte {
 	var in io.Reader = r.Body
 
 	if enc := r.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
@@ -112,17 +112,17 @@ func readReqBody(w http.ResponseWriter, r *http.Request) []byte {
 }
 
 // Write response body, transparently compressing if necessary.
-func writeRespBody(w http.ResponseWriter, r *http.Request, b []byte) {
+func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w
 
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		out = gz
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
 	}
 
-	out.Write(b)
+	return out.Write(b)
 }
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
@@ -149,11 +149,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	q := readReqBody(w, r)
-	if q == nil {
+	body := readRequest(w, r)
+	if body == nil {
 		return
 	}
-	req.Query = string(q)
+	req.Query = string(body)
 
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), "debug", d)
@@ -214,7 +214,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	out.WriteRune('}')
 
-	writeRespBody(w, r, out.Bytes())
+	writeResponse(w, r, out.Bytes())
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +222,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := readReqBody(w, r)
+	m := readRequest(w, r)
 	if m == nil {
 		return
 	}
@@ -308,7 +308,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeRespBody(w, r, js)
+	writeResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +334,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc.StartTs = ts
 
 	// Keys are sent as an array in the body.
-	keys := readReqBody(w, r)
+	keys := readRequest(w, r)
 	if keys == nil {
 		return
 	}
@@ -372,7 +372,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeRespBody(w, r, js)
+	writeResponse(w, r, js)
 }
 
 func abortHandler(w http.ResponseWriter, r *http.Request) {
@@ -414,7 +414,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeRespBody(w, r, js)
+	writeResponse(w, r, js)
 }
 
 func alterHandler(w http.ResponseWriter, r *http.Request) {
@@ -424,7 +424,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 
 	op := &api.Operation{}
 
-	b := readReqBody(w, r)
+	b := readRequest(w, r)
 	if b == nil {
 		return
 	}
@@ -461,7 +461,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeRespBody(w, r, js)
+	writeResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.
