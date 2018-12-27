@@ -454,12 +454,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		return resp, ctx.Err()
 	}
 
-	// check if the query request is authorized
-	// if not return an error
-	// 1. extract the access tokens from the jwt
-
-	// 2. use the extracted access tokens for authorization
-
 	resp = new(api.Response)
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")

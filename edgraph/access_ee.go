@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -109,6 +111,9 @@ func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*
 		}
 	} else {
 		var err error
+		if ctx, err = appendAdminJwt(ctx); err != nil {
+			return nil, fmt.Errorf("unable to append admin jwt:%v", err)
+		}
 		user, err = s.queryUser(ctx, request.Userid, request.Password)
 		if err != nil {
 			return nil, fmt.Errorf("error while querying user with id: %v",
@@ -156,7 +161,7 @@ func authenticateToken(refreshToken string) (*acl.User, error) {
 	}
 
 	user := &acl.User{}
-	user.Uid = userId
+	user.UserID = userId
 	groups, ok := claims["groups"].([]acl.Group)
 	if ok {
 		user.Groups = groups
@@ -250,7 +255,7 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 }
 
 func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -281,7 +286,12 @@ func InitAcl() {
 	aclCache = sync.Map{}
 
 	// upsert the admin account
-	ctx := context.Background()
+	ctx, err := appendAdminJwt(context.Background())
+	if err != nil {
+		glog.Errorf("unable to append admin jwt")
+		return
+	}
+
 	server := &Server{}
 	adminUser, err := server.queryUser(ctx, "admin", "")
 	if err != nil {
@@ -319,6 +329,18 @@ func InitAcl() {
 	glog.Info("Created the admin account with the default password")
 }
 
+func appendAdminJwt(ctx context.Context) (context.Context, error) {
+	// query the user with admin account
+	adminJwt, err := getAccessJwt("admin", nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get admin jwt:%v", err)
+	}
+
+	md := metadata.New(nil)
+	md.Append("accessJwt", adminJwt)
+	return metadata.NewIncomingContext(ctx, md), nil
+}
+
 func (s *Server) retrieveAcls() error {
 	glog.Infof("Retrieving ACLs")
 	queryRequest := api.Request{
@@ -351,14 +373,39 @@ func (s *Server) retrieveAcls() error {
 
 func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
 	// extract the jwt and unmarshal the jwt to get the list of groups
+	//glog.Infof("authorizing query with access jwt :%v", ctx.Value("accessJwt"))
+	//accessJwt, ok := ctx.Value("accessJwt").(string)
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return fmt.Errorf("no metadata available")
+	}
+	glog.Infof("query metadata :%v", md)
 
-	// get the relavant predicates used in the query
-	// for each predicate, authorize with the groups, and operation of read
+	accessJwt := md.Get("accessJwt")
+	if len(accessJwt) == 0 {
+		//glog.Infof("no accessJwt available, type is %v", reflect.TypeOf(ctx.Value("accessJwt")))
+		return fmt.Errorf("no accessJwt available")
+	}
+	aclUser, err := authenticateToken(accessJwt[0])
+	if err != nil {
+		return fmt.Errorf("token authentication failed:%v", err)
+	}
+	if aclUser.UserID == "admin" {
+		// the admin account has access to everything
+		return nil
+	}
+	glog.Infof("authorizing query with user id :%v", aclUser.UserID)
+	// get the relevant predicates used in the query
+	for _, query := range parsedReq.Query {
+		if !s.authorizeGroups(aclUser.Groups, query.Attr, acl.Read) {
+			return fmt.Errorf("unauthorized to access the predicate %v", query.Attr)
+		}
+	}
 	return nil
 }
 
 // HasAccess returns true if any group is authorized to perform the operation on the predicate
-func (s *Server) hasAccessForGroups(groups []string, predicate string, operation int32) bool {
+func (s *Server) authorizeGroups(groups []acl.Group, predicate string, operation int32) bool {
 	for _, group := range groups {
 		if s.hasAccess(group, predicate, operation) {
 			return true
@@ -369,8 +416,8 @@ func (s *Server) hasAccessForGroups(groups []string, predicate string, operation
 
 // hasAccess checks the aclCache and returns if the specified group is authorized to perform the
 // operation on the given predicate
-func (s *Server) hasAccess(group string, predicate string, operation int32) bool {
-	entry, found := aclCache.Load(group)
+func (s *Server) hasAccess(group acl.Group, predicate string, operation int32) bool {
+	entry, found := aclCache.Load(group.GroupID)
 	if !found {
 		return false
 	}

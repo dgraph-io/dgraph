@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dgraph-io/dgo"
@@ -23,17 +24,28 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
+	"golang.org/x/crypto/ssh/terminal"
+	"google.golang.org/grpc/metadata"
 )
 
 func userAdd(conf *viper.Viper) error {
 	userid := conf.GetString("user")
 	password := conf.GetString("password")
+	adminPassword := conf.GetString("adminPassword")
 
 	if len(userid) == 0 {
 		return fmt.Errorf("the user must not be empty")
 	}
 	if len(password) == 0 {
 		return fmt.Errorf("the password must not be empty")
+	}
+	if len(adminPassword) == 0 {
+		fmt.Print("Enter admin password:")
+		password, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return fmt.Errorf("error while reading password:%v", err)
+		}
+		adminPassword = string(password)
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -46,6 +58,21 @@ func userAdd(conf *viper.Viper) error {
 			glog.Errorf("Unable to discard transaction:%v", err)
 		}
 	}()
+
+	if err := dc.Login(ctx, "admin", adminPassword); err != nil {
+		return fmt.Errorf("unable to login with the admin account %v", err)
+	}
+	glog.Infof("login successfully with the admin account")
+	// update the context so that it has the admin jwt token
+	ctx = dc.GetContext(ctx)
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		glog.Fatalf("unable to read from outgoing context:%v", ctx)
+	}
+	accessJwts := md.Get("accessJwt")
+	if len(accessJwts) == 0 {
+		glog.Fatalf("no accessJwt found in outgoing context metadata:%v", md)
+	}
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
@@ -174,6 +201,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
 
+	glog.Infof("query user with admin jwt %v", ctx.Value("accessJwt"))
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)

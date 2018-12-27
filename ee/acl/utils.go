@@ -34,6 +34,12 @@ func GetGroupIDs(groups []Group) []string {
 	return jwtGroups
 }
 
+const (
+	Read   int32 = 4
+	Write        = 2
+	Modify       = 1
+)
+
 type User struct {
 	Uid           string  `json:"uid"`
 	UserID        string  `json:"dgraph.xid"`
