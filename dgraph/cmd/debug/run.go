@@ -514,7 +514,7 @@ type HistogramData struct {
 	CountPerBucket []int64
 	Min            int64
 	Max            int64
-	Mean           float64
+	Sum            int64
 }
 
 // Return a new instance of HistogramData with properly initialized fields.
@@ -537,8 +537,7 @@ func (histogram *HistogramData) Update(value int64) {
 		histogram.Min = value
 	}
 
-	newSum := histogram.Mean*float64(histogram.Count) + float64(value)
-	histogram.Mean = newSum / float64(histogram.Count+1)
+	histogram.Sum += value
 	histogram.Count += 1
 
 	for index := 0; index <= len(histogram.Bounds); index++ {
@@ -559,7 +558,7 @@ func (histogram *HistogramData) Update(value int64) {
 func (histogram HistogramData) PrintHistogram() {
 	fmt.Printf("Min value: %d\n", histogram.Min)
 	fmt.Printf("Max value: %d\n", histogram.Max)
-	fmt.Printf("Mean: %.2f\n", histogram.Mean)
+	fmt.Printf("Mean: %.2f\n", float64(histogram.Sum)/float64(histogram.Count))
 	fmt.Printf("%24s %9s\n", "Range", "Count")
 
 	num_bounds := len(histogram.Bounds)
@@ -614,10 +613,8 @@ func sizeHistogram(db *badger.DB) {
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
 
-		keySize := int64(len(item.Key()))
-		valueSize := item.ValueSize()
-		keySizeHistogram.Update(keySize)
-		valueSizeHistogram.Update(valueSize)
+		keySizeHistogram.Update(int64(len(item.Key())))
+		valueSizeHistogram.Update(item.ValueSize())
 
 		loop++
 	}
