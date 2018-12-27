@@ -18,6 +18,7 @@ package alpha
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,9 +28,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 type res struct {
@@ -38,6 +40,68 @@ type res struct {
 }
 
 var addr = "http://localhost:8180"
+
+func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, error) {
+	url := addr + "/query"
+
+	var buf *bytes.Buffer
+	if gzReq {
+		var b bytes.Buffer
+		gz := gzip.NewWriter(&b)
+		gz.Write([]byte(q))
+		gz.Close()
+		buf = &b
+	} else {
+		buf = bytes.NewBufferString(q)
+	}
+
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if gzReq {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+
+	if gzResp {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", nil, err
+	}
+	if status := resp.StatusCode; status != http.StatusOK {
+		return "", nil, fmt.Errorf("Unexpected status code: %v", status)
+	}
+
+	defer resp.Body.Close()
+	rd := resp.Body
+	if gzResp {
+		rd, err = gzip.NewReader(rd)
+		defer rd.Close()
+		if err != nil {
+			return "", nil, err
+		}
+	}
+	body, err := ioutil.ReadAll(rd)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var r res
+	x.Check(json.Unmarshal(body, &r))
+
+	// Remove the extensions.
+	r2 := res{
+		Data: r.Data,
+	}
+	output, err := json.Marshal(r2)
+
+	return string(output), resp, err
+}
 
 func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	url := addr + "/query"
@@ -199,4 +263,63 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &qr))
 	require.Len(t, qr.Errors, 1)
 	require.Equal(t, qr.Errors[0].Code, "Error")
+}
+
+func TestHttpCompressionSupport(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	q1 := `
+	{
+	  names(func: has(name), orderasc: name) {
+	    name
+	  }
+	}
+	`
+
+	m1 := `
+	{
+	  set {
+		_:a <name> "Alice" .
+		_:b <name> "Bob" .
+		_:c <name> "Charlie" .
+		_:d <name> "David" .
+		_:e <name> "Emily" .
+		_:f <name> "Frank" .
+		_:g <name> "Gloria" .
+		_:h <name> "Hannah" .
+		_:i <name> "Ian" .
+		_:j <name> "Judy" .
+		_:k <name> "Kevin" .
+		_:l <name> "Linda" .
+		_:m <name> "Michael" .
+	  }
+	}
+	`
+
+	r1 := `{"data":{"names":[{"name":"Alice"},{"name":"Bob"},{"name":"Charlie"},{"name":"David"},` +
+		`{"name":"Emily"},{"name":"Frank"},{"name":"Gloria"},{"name":"Hannah"},{"name":"Ian"},` +
+		`{"name":"Judy"},{"name":"Kevin"},{"name":"Linda"},{"name":"Michael"}]}}`
+	err := runMutation(m1)
+	require.NoError(t, err)
+
+	data, resp, err := queryWithGz(q1, false, false)
+	require.Equal(t, r1, data)
+	require.NoError(t, err)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	data, resp, err = queryWithGz(q1, false, true)
+	require.Equal(t, r1, data)
+	require.NoError(t, err)
+	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
+
+	data, resp, err = queryWithGz(q1, true, false)
+	require.Equal(t, r1, data)
+	require.NoError(t, err)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	data, resp, err = queryWithGz(q1, true, true)
+	require.Equal(t, r1, data)
+	require.NoError(t, err)
+	require.Equal(t, resp.Header.Get("Content-Encoding"), "gzip")
 }
