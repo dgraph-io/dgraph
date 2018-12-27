@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -364,6 +365,16 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
+	}
+	// FIXME: change to if strict
+	if true {
+		for _, nquad := range gmu.Set {
+			typ, err := schema.State().TypeOf(nquad.Predicate)
+			fmt.Fprintf(os.Stderr, "MUTATE SET %s -> %+v (%+v)\n", nquad.Predicate, typ, err)
+			if typ == types.UndefinedID {
+				return resp, err
+			}
+		}
 	}
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
