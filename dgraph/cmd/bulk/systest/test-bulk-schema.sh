@@ -1,6 +1,6 @@
 #!/bin/bash
 # verify fix of https://github.com/dgraph-io/dgraph/issues/2616
-# uses config in dgraph/docker-compose.yml
+# uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
 readonly SRCDIR=$(readlink -f ${BASH_SOURCE[0]%/*})

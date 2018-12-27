@@ -41,6 +41,6 @@ echo "Running load-test.sh"
 
 echo
 echo "Running bulk loader tests"
-./dgraph/cmd/bulk/test-bulk-schema.sh
+./dgraph/cmd/bulk/systest/test-bulk-schema.sh
 
 stopCluster
