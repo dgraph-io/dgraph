@@ -25,13 +25,39 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh/terminal"
-	"google.golang.org/grpc/metadata"
 )
+
+func getAdminCtx(conf *viper.Viper) (context.Context, *dgo.Dgraph, CloseFunc, error) {
+	adminPassword := conf.GetString("adminPassword")
+	if len(adminPassword) == 0 {
+		fmt.Print("Enter admin password:")
+		password, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return nil, nil, func() {}, fmt.Errorf("error while reading password:%v", err)
+		}
+		adminPassword = string(password)
+	}
+
+	dc, close := getDgraphClient(conf)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	cleanFunc := func() {
+		cancel()
+		close()
+	}
+
+	if err := dc.Login(ctx, "admin", adminPassword); err != nil {
+		return nil, dc, cleanFunc, fmt.Errorf("unable to login with the admin account %v", err)
+	}
+	glog.Infof("login successfully with the admin account")
+	// update the context so that it has the admin jwt token
+	ctx = dc.GetContext(ctx)
+	return ctx, dc, cleanFunc, nil
+}
 
 func userAdd(conf *viper.Viper) error {
 	userid := conf.GetString("user")
 	password := conf.GetString("password")
-	adminPassword := conf.GetString("adminPassword")
 
 	if len(userid) == 0 {
 		return fmt.Errorf("the user must not be empty")
@@ -39,40 +65,19 @@ func userAdd(conf *viper.Viper) error {
 	if len(password) == 0 {
 		return fmt.Errorf("the password must not be empty")
 	}
-	if len(adminPassword) == 0 {
-		fmt.Print("Enter admin password:")
-		password, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return fmt.Errorf("error while reading password:%v", err)
-		}
-		adminPassword = string(password)
+
+	ctx, dc, clean, err := getAdminCtx(conf)
+	defer clean()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
 			glog.Errorf("Unable to discard transaction:%v", err)
 		}
 	}()
-
-	if err := dc.Login(ctx, "admin", adminPassword); err != nil {
-		return fmt.Errorf("unable to login with the admin account %v", err)
-	}
-	glog.Infof("login successfully with the admin account")
-	// update the context so that it has the admin jwt token
-	ctx = dc.GetContext(ctx)
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		glog.Fatalf("unable to read from outgoing context:%v", ctx)
-	}
-	accessJwts := md.Get("accessJwt")
-	if len(accessJwts) == 0 {
-		glog.Fatalf("no accessJwt found in outgoing context metadata:%v", md)
-	}
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
@@ -114,10 +119,12 @@ func userDel(conf *viper.Viper) error {
 		return fmt.Errorf("the user id should not be empty")
 	}
 
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx, dc, clean, err := getAdminCtx(conf)
+	defer clean()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -220,10 +227,12 @@ func userMod(conf *viper.Viper) error {
 		return fmt.Errorf("the user must not be empty")
 	}
 
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx, dc, clean, err := getAdminCtx(conf)
+	defer clean()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {

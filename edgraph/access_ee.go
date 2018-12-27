@@ -346,7 +346,13 @@ func (s *Server) retrieveAcls() error {
 	queryRequest := api.Request{
 		Query: queryAcls,
 	}
-	queryResp, err := s.Query(context.Background(), &queryRequest)
+
+	ctx := context.Background()
+	var err error
+	if ctx, err = appendAdminJwt(ctx); err != nil {
+		return fmt.Errorf("unable to append admin jwt:%v", err)
+	}
+	queryResp, err := s.Query(ctx, &queryRequest)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve acls: %v", err)
 	}

@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -31,10 +30,12 @@ func groupAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx, dc, clean, err := getAdminCtx(conf)
+	defer clean()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -76,10 +77,12 @@ func groupDel(conf *viper.Viper) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx, dc, clean, err := getAdminCtx(conf)
+	defer clean()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -155,10 +158,12 @@ func chMod(conf *viper.Viper) error {
 		return fmt.Errorf("the predicate must not be empty")
 	}
 
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	ctx, dc, clean, err := getAdminCtx(conf)
+	defer clean()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
