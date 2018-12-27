@@ -49,7 +49,7 @@ type flagOptions struct {
 	pdir       string
 	itemMeta   bool
 	jepsen     bool
-	jepsenAt   uint64
+	readTs     uint64
 }
 
 func init() {
@@ -65,7 +65,7 @@ func init() {
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
 	flag.BoolVar(&opt.jepsen, "jepsen", false, "Disect Jepsen output.")
-	flag.Uint64Var(&opt.jepsenAt, "at", math.MaxUint64, "Show Jepsen sum at this timestamp.")
+	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
@@ -290,7 +290,7 @@ func getMinMax(db *badger.DB, readTs uint64) (uint64, uint64) {
 }
 
 func jepsen(db *badger.DB) {
-	min, max := getMinMax(db, opt.jepsenAt)
+	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("min=%d. max=%d\n", min, max)
 
 	ts := findFirstInvalidTxn(db, min, max)
@@ -317,10 +317,14 @@ func history(lookup []byte, itr *badger.Iterator) {
 		if !bytes.Equal(item.Key(), lookup) {
 			break
 		}
-		buf.WriteString("{item}")
+
+		fmt.Fprintf(&buf, "ts: %d", item.Version())
+		buf.WriteString(" {item}")
 		if item.IsDeletedOrExpired() {
 			buf.WriteString("{deleted}")
-			break
+		}
+		if item.DiscardEarlierVersions() {
+			buf.WriteString("{discard}")
 		}
 		val, err := item.ValueCopy(nil)
 		x.Check(err)
@@ -332,10 +336,10 @@ func history(lookup []byte, itr *badger.Iterator) {
 		if meta&posting.BitDeltaPosting > 0 {
 			buf.WriteString("{delta}")
 		}
-		if meta&posting.BitEmptyPosting > posting.BitCompletePosting {
+		if meta&posting.BitEmptyPosting > 0 {
 			buf.WriteString("{empty}")
 		}
-		fmt.Fprintf(&buf, " ts=%d\n", item.Version())
+		fmt.Fprintln(&buf)
 		if meta&posting.BitDeltaPosting > 0 {
 			plist := &pb.PostingList{}
 			x.Check(plist.Unmarshal(val))
@@ -385,7 +389,7 @@ func appendPosting(w io.Writer, o *pb.Posting) {
 }
 
 func lookup(db *badger.DB) {
-	txn := db.NewTransactionAt(math.MaxUint64, false)
+	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
@@ -427,7 +431,7 @@ func lookup(db *badger.DB) {
 }
 
 func printKeys(db *badger.DB) {
-	txn := db.NewTransactionAt(math.MaxUint64, false)
+	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
@@ -464,6 +468,13 @@ func printKeys(db *badger.DB) {
 		if pk.IsReverse() {
 			buf.WriteString("{r}")
 		}
+		if item.DiscardEarlierVersions() {
+			buf.WriteString(" {v.las}")
+		} else if item.IsDeletedOrExpired() {
+			buf.WriteString(" {v.not}")
+		} else {
+			buf.WriteString(" {v.ok}")
+		}
 
 		buf.WriteString(" attr: " + pk.Attr)
 		if len(pk.Term) > 0 {
@@ -472,10 +483,11 @@ func printKeys(db *badger.DB) {
 		if pk.Uid > 0 {
 			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
 		}
+		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
 		if opt.itemMeta {
 			fmt.Fprintf(&buf, " item: [%d, b%04b]", item.EstimatedSize(), item.UserMeta())
+			fmt.Fprintf(&buf, " ts: %d", item.Version())
 		}
-		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
 		fmt.Println(buf.String())
 		loop++
 	}
