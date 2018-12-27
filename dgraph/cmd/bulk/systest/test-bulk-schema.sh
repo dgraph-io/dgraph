@@ -3,11 +3,11 @@
 # uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
-readonly SRCDIR=$(readlink -f ${BASH_SOURCE[0]%/*})
-readonly DOCKER_CONF=$SRCDIR/../../docker-compose.yml
-readonly WAIT_FOR_IT=$SRCDIR/../../../contrib/wait-for-it.sh
+readonly SRCROOT=$(readlink -f ${BASH_SOURCE[0]%/*}/../../../..)
+readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
+readonly WAIT_FOR_IT=$SRCROOT/contrib/wait-for-it.sh
 
-declare -ri ZERO_PORT=5080 ALPHA_PORT=7080 HTTP_PORT=8180
+declare -ri ZERO_PORT=5080 HTTP_PORT=8180
 
 INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
@@ -151,12 +151,8 @@ EOF
 
 function StopServers
 {
-#  INFO "killing zero server at pid $ZERO_PID"
-#  INFO "killing alpha server at pid $ALPHA_PID"
-#  kill $ZERO_PID $ALPHA_PID
-#  sleep 1
   INFO "stoping containers"
-  docker-compose -f $DOCKER_CONF down --rmi local
+  docker-compose -f $DOCKER_CONF down
 }
 
 function Cleanup
