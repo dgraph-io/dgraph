@@ -18,7 +18,6 @@ package debug
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -36,8 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/stats/view"
 )
 
 var (
@@ -48,15 +45,15 @@ var (
 )
 
 type flagOptions struct {
-	vals       bool
-	keyLookup  string
-	keyHistory bool
-	predicate  string
-	readOnly   bool
-	pdir       string
-	itemMeta   bool
-	jepsen     bool
-	readTs     uint64
+	vals          bool
+	keyLookup     string
+	keyHistory    bool
+	predicate     string
+	readOnly      bool
+	pdir          string
+	itemMeta      bool
+	jepsen        bool
+	readTs        uint64
 	sizeHistogram bool
 }
 
@@ -79,7 +76,8 @@ func init() {
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
-	flag.BoolVar(&opt.sizeHistogram, "histogram", false, "Show a histogram of the key and value sizes.")
+	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
+		"Show a histogram of the key and value sizes.")
 }
 
 func toInt(o *pb.Posting) int {
@@ -520,66 +518,51 @@ type HistogramData struct {
 	Min            int64
 	Max            int64
 	Mean           float64
-	// The sum of the squared deviations from the mean. Divide by Count to get
-	// the variance of the distribution.
-	SumOfSquaredDev float64
 }
 
 // Return a new instance of HistogramData with properly initialized fields.
 func NewHistogramData(bounds []float64) *HistogramData {
-	histogram := new(HistogramData)
-	histogram.Bounds = bounds
-	histogram.Max = 0
-	histogram.Min = math.MaxInt64
-	return histogram
+	return &HistogramData{
+		Bounds:         bounds,
+		CountPerBucket: make([]int64, len(bounds)+1),
+		Max:            0,
+		Min:            math.MaxInt64,
+	}
 }
 
 // Update the Min and Max fields if value is less than or greater than the
 // current values.
-func (histogram *HistogramData) UpdateMinMax(value int64) {
+func (histogram *HistogramData) Update(value int64) {
 	if value > histogram.Max {
 		histogram.Max = value
 	}
 	if value < histogram.Min {
 		histogram.Min = value
 	}
-}
 
-// Exporter that holds data about key and value distributions.
-type HistogramExporter struct {
-	KeySizeHistogramData   *HistogramData
-	ValueSizeHistogramData *HistogramData
-}
+	newSum := histogram.Mean*float64(histogram.Count) + float64(value)
+	histogram.Mean = newSum / float64(histogram.Count+1)
+	histogram.Count += 1
 
-// Simple exporter function that copies the view data to the exporter.
-func (exporter HistogramExporter) ExportView(viewData *view.Data) {
-	if len(viewData.Rows) == 0 {
-		return
-	}
-
-	switch data := viewData.Rows[0].Data.(type) {
-	case *view.DistributionData:
-		var histogramData *HistogramData
-		if viewData.View.Name == keySizeViewName {
-			histogramData = exporter.KeySizeHistogramData
-		} else {
-			histogramData = exporter.ValueSizeHistogramData
+	for index := 0; index <= len(histogram.Bounds); index++ {
+		// Allocate value in the last buckets if we reached the end of the Bounds array.
+		if index == len(histogram.Bounds) {
+			histogram.CountPerBucket[index] += 1
+			break
 		}
 
-		histogramData.Count = data.Count
-		histogramData.CountPerBucket = data.CountPerBucket
-		histogramData.Mean = data.Mean
-		histogramData.SumOfSquaredDev = data.SumOfSquaredDev
+		if value < int64(histogram.Bounds[index]) {
+			histogram.CountPerBucket[index] += 1
+			break
+		}
 	}
 }
 
 // Print the histogram data in a human-readable format.
 func (histogram HistogramData) PrintHistogram() {
-	standard_deviation := math.Sqrt(histogram.SumOfSquaredDev / float64(histogram.Count))
 	fmt.Printf("Min value: %d\n", histogram.Min)
 	fmt.Printf("Max value: %d\n", histogram.Max)
 	fmt.Printf("Mean: %.2f\n", histogram.Mean)
-	fmt.Printf("Standard deviation: %.2f\n", standard_deviation)
 	fmt.Printf("%24s %9s\n", "Range", "Count")
 
 	num_bounds := len(histogram.Bounds)
@@ -608,7 +591,7 @@ func (histogram HistogramData) PrintHistogram() {
 }
 
 func sizeHistogram(db *badger.DB) {
-	txn := db.NewTransactionAt(math.MaxUint64, false)
+	txn := db.NewTransactionAt(opt.readTs, false)
 	defer txn.Discard()
 
 	iopts := badger.DefaultIteratorOptions
@@ -621,43 +604,9 @@ func sizeHistogram(db *badger.DB) {
 	keyBounds := getHistogramBounds(5, 16)
 	valueBounds := getHistogramBounds(5, 30)
 
-	// A measure to record key sizes and a view to aggregate that data in a
-	// distribution.
-	keySizeMeasure := stats.Int64("debug/key_sizes",
-		"The size of the keys in bytes", "1")
-	keySizeView := &view.View{
-		Name:        keySizeViewName,
-		Measure:     keySizeMeasure,
-		Description: "The distribution of the key sizes",
-		Aggregation: view.Distribution(keyBounds...),
-	}
-
-	// Same as above but for value sizes.
-	valueSizeMeasure := stats.Int64("debug/value_sizes",
-		"The size of the values in bytes", "1")
-	valueSizeView := &view.View{
-		Name:        valueSizeViewName,
-		Measure:     valueSizeMeasure,
-		Description: "The distribution of the value sizes",
-		Aggregation: view.Distribution(valueBounds...),
-	}
-
-	// Set reporting interval to a small value.
-	reportingInterval, _ := time.ParseDuration("50ms")
-	view.SetReportingPeriod(reportingInterval)
-
 	// Initialize exporter.
-	exporter := HistogramExporter{}
 	keySizeHistogram := NewHistogramData(keyBounds)
 	valueSizeHistogram := NewHistogramData(valueBounds)
-	exporter.KeySizeHistogramData = keySizeHistogram
-	exporter.ValueSizeHistogramData = valueSizeHistogram
-
-	// Register the views and the exporter.
-	view.RegisterExporter(exporter)
-	if err := view.Register(keySizeView, valueSizeView); err != nil {
-		log.Fatalf("Failed to collect histogram information: %v", err)
-	}
 
 	// Collect key and value sizes.
 	var prefix []byte
@@ -670,11 +619,9 @@ func sizeHistogram(db *badger.DB) {
 
 		keySize := int64(len(item.Key()))
 		valueSize := item.ValueSize()
-		keySizeHistogram.UpdateMinMax(keySize)
-		valueSizeHistogram.UpdateMinMax(valueSize)
+		keySizeHistogram.Update(keySize)
+		valueSizeHistogram.Update(valueSize)
 
-		stats.Record(context.TODO(), keySizeMeasure.M(keySize),
-			valueSizeMeasure.M(valueSize))
 		loop++
 	}
 
@@ -686,9 +633,9 @@ func sizeHistogram(db *badger.DB) {
 	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
 	fmt.Printf("Found %d keys\n", loop)
 	fmt.Printf("\nHistogram of key sizes (in bytes)\n")
-	exporter.KeySizeHistogramData.PrintHistogram()
+	keySizeHistogram.PrintHistogram()
 	fmt.Printf("\nHistogram of value sizes (in bytes)\n")
-	exporter.ValueSizeHistogramData.PrintHistogram()
+	valueSizeHistogram.PrintHistogram()
 }
 
 func run() {
