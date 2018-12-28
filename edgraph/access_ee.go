@@ -386,6 +386,10 @@ func (s *Server) retrieveAcls() error {
 	return nil
 }
 
+func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+	return nil
+}
+
 func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)

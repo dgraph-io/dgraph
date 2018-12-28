@@ -370,6 +370,11 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
+
+	if err := s.AuthorizeMutation(ctx, gmu); err != nil {
+		return nil, fmt.Errorf("mutation is not authorized: %v", err)
+	}
+
 	defer func() {
 		l.Processing = time.Since(parseEnd)
 		resp.Latency = &api.Latency{

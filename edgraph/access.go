@@ -42,6 +42,10 @@ func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 	// do nothing
 }
 
+func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+	return nil
+}
+
 func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
 	// always allow access
 	return nil
