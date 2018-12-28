@@ -36,20 +36,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Debug x.SubCommand
-
-var opt flagOptions
+var (
+	Debug x.SubCommand
+	opt   flagOptions
+)
 
 type flagOptions struct {
-	vals       bool
-	keyLookup  string
-	keyHistory bool
-	predicate  string
-	readOnly   bool
-	pdir       string
-	itemMeta   bool
-	jepsen     bool
-	readTs     uint64
+	vals          bool
+	keyLookup     string
+	keyHistory    bool
+	predicate     string
+	readOnly      bool
+	pdir          string
+	itemMeta      bool
+	jepsen        bool
+	readTs        uint64
+	sizeHistogram bool
 }
 
 func init() {
@@ -71,6 +73,8 @@ func init() {
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
+	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
+		"Show a histogram of the key and value sizes.")
 }
 
 func toInt(o *pb.Posting) int {
@@ -494,6 +498,135 @@ func printKeys(db *badger.DB) {
 	fmt.Printf("Found %d keys\n", loop)
 }
 
+// Creates bounds for an histogram. The bounds are powers of two of the form
+// [2^min_exponent, ..., 2^max_exponent].
+func getHistogramBounds(min_exponent, max_exponent uint32) []float64 {
+	var bounds []float64
+	for i := min_exponent; i <= max_exponent; i++ {
+		bounds = append(bounds, float64(int(1)<<i))
+	}
+	return bounds
+}
+
+type HistogramData struct {
+	Bounds         []float64
+	Count          int64
+	CountPerBucket []int64
+	Min            int64
+	Max            int64
+	Sum            int64
+}
+
+// Return a new instance of HistogramData with properly initialized fields.
+func NewHistogramData(bounds []float64) *HistogramData {
+	return &HistogramData{
+		Bounds:         bounds,
+		CountPerBucket: make([]int64, len(bounds)+1),
+		Max:            0,
+		Min:            math.MaxInt64,
+	}
+}
+
+// Update the Min and Max fields if value is less than or greater than the
+// current values.
+func (histogram *HistogramData) Update(value int64) {
+	if value > histogram.Max {
+		histogram.Max = value
+	}
+	if value < histogram.Min {
+		histogram.Min = value
+	}
+
+	histogram.Sum += value
+	histogram.Count += 1
+
+	for index := 0; index <= len(histogram.Bounds); index++ {
+		// Allocate value in the last buckets if we reached the end of the Bounds array.
+		if index == len(histogram.Bounds) {
+			histogram.CountPerBucket[index] += 1
+			break
+		}
+
+		if value < int64(histogram.Bounds[index]) {
+			histogram.CountPerBucket[index] += 1
+			break
+		}
+	}
+}
+
+// Print the histogram data in a human-readable format.
+func (histogram HistogramData) PrintHistogram() {
+	fmt.Printf("Min value: %d\n", histogram.Min)
+	fmt.Printf("Max value: %d\n", histogram.Max)
+	fmt.Printf("Mean: %.2f\n", float64(histogram.Sum)/float64(histogram.Count))
+	fmt.Printf("%24s %9s\n", "Range", "Count")
+
+	num_bounds := len(histogram.Bounds)
+	for index, count := range histogram.CountPerBucket {
+		if count == 0 {
+			continue
+		}
+
+		// The last bucket represents the bucket that contains the range from
+		// the last bound up to infinity so it's processed differently than the
+		// other buckets.
+		if index == len(histogram.CountPerBucket)-1 {
+			lower_bound := int(histogram.Bounds[num_bounds-1])
+			fmt.Printf("[%10d, %10s) %9d\n", lower_bound, "infinity", count)
+			continue
+		}
+
+		upper_bound := int(histogram.Bounds[index])
+		lower_bound := 0
+		if index > 0 {
+			lower_bound = int(histogram.Bounds[index-1])
+		}
+
+		fmt.Printf("[%10d, %10d) %9d\n", lower_bound, upper_bound, count)
+	}
+}
+
+func sizeHistogram(db *badger.DB) {
+	txn := db.NewTransactionAt(opt.readTs, false)
+	defer txn.Discard()
+
+	iopts := badger.DefaultIteratorOptions
+	iopts.PrefetchValues = false
+	itr := txn.NewIterator(iopts)
+	defer itr.Close()
+
+	// Generate distribution bounds. Key sizes are not greater than 2^16 while
+	// value sizes are not greater than 1GB (2^30).
+	keyBounds := getHistogramBounds(5, 16)
+	valueBounds := getHistogramBounds(5, 30)
+
+	// Initialize exporter.
+	keySizeHistogram := NewHistogramData(keyBounds)
+	valueSizeHistogram := NewHistogramData(valueBounds)
+
+	// Collect key and value sizes.
+	var prefix []byte
+	if len(opt.predicate) > 0 {
+		prefix = x.PredicatePrefix(opt.predicate)
+	}
+	var loop int
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+		item := itr.Item()
+
+		keySizeHistogram.Update(int64(len(item.Key())))
+		valueSizeHistogram.Update(item.ValueSize())
+
+		loop++
+	}
+
+	fmt.Printf("prefix = %s\n", hex.Dump(prefix))
+	fmt.Printf("Found %d keys\n", loop)
+	fmt.Printf("\nHistogram of key sizes (in bytes)\n")
+	keySizeHistogram.PrintHistogram()
+	fmt.Printf("\nHistogram of value sizes (in bytes)\n")
+	valueSizeHistogram.PrintHistogram()
+}
+
 func run() {
 	bopts := badger.DefaultOptions
 	bopts.Dir = opt.pdir
@@ -513,6 +646,8 @@ func run() {
 		lookup(db)
 	case opt.jepsen:
 		jepsen(db)
+	case opt.sizeHistogram:
+		sizeHistogram(db)
 	default:
 		printKeys(db)
 	}
