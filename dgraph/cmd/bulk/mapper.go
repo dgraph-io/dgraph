@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -227,6 +228,16 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
+	// Attempt to parse as a UID (in the same format that dgraph outputs - a
+	// hex number prefixed by "0x"). If parsing succeeds, then this is assumed
+	// to be an existing node in the graph. There is limited protection against
+	// a user selecting an unassigned UID in this way - it may be assigned
+	// later to another node. It is up to the user to avoid this.
+	if strings.HasPrefix(xid, "0x") {
+		if v, err := strconv.ParseUint(xid[2:], 16, 64); err == nil {
+			return v
+		}
+	}
 	uid, isNew := m.xids.AssignUid(xid)
 	if !isNew || !m.opt.StoreXids {
 		return uid
