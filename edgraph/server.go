@@ -380,6 +380,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 			}
 		}
 	}
+
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
 	defer func() {
