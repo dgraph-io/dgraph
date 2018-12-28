@@ -368,10 +368,15 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 
 	if Config.MutationsMode == StrictMutations {
+		checked := make(map[string]struct{})
 		for _, nquad := range gmu.Set {
-			typ, err := schema.State().TypeOf(nquad.Predicate)
-			if typ == types.UndefinedID {
-				return resp, err
+			// avoid acquiring a lock to check a predicate already checked
+			if _, ok := checked[nquad.Predicate]; !ok {
+				typ, err := schema.State().TypeOf(nquad.Predicate)
+				if typ == types.UndefinedID {
+					return resp, err
+				}
+				checked[nquad.Predicate] = struct{}{}
 			}
 		}
 	}
