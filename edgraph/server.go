@@ -366,11 +366,10 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	if err != nil {
 		return resp, err
 	}
-	// FIXME: change to if strict
-	if true {
+
+	if Config.MutationsMode == StrictMutations {
 		for _, nquad := range gmu.Set {
 			typ, err := schema.State().TypeOf(nquad.Predicate)
-			fmt.Fprintf(os.Stderr, "MUTATE SET %s -> %+v (%+v)\n", nquad.Predicate, typ, err)
 			if typ == types.UndefinedID {
 				return resp, err
 			}
