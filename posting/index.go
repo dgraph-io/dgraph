@@ -401,6 +401,12 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	})
 }
 
+func deleteAllEntries(prefix []byte) error {
+	return deleteEntries(prefix, func(key []byte) bool {
+		return true
+	})
+}
+
 func compareAttrAndType(key []byte, attr string, typ byte) bool {
 	pk := x.Parse(key)
 	if pk == nil {
@@ -412,38 +418,29 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 	return false
 }
 
+func DeleteIndex(attr string) error {
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	return deleteAllEntries(prefix)
+}
+
 func DeleteReverseEdges(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteReverse)
-	})
-	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
-	return deleteEntries(prefix, func(key []byte) bool {
-		return true
-	})
+	return deleteAllEntries(prefix)
 }
 
 func deleteCountIndex(attr string, reverse bool) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.CountPrefix(reverse)
-	return deleteEntries(prefix, func(key []byte) bool {
-		return true
-	})
+	return deleteAllEntries(prefix)
 }
 
 func DeleteCountIndex(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteCount)
-	})
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteCountRev)
-	})
-	// Delete index entries from data store.
-	if err := deleteCountIndex(attr, false); err != nil {
+	if err := deleteCountIndex(attr /*reverse*/, false); err != nil {
 		return err
 	}
-	if err := deleteCountIndex(attr, true); err != nil { // delete reverse count indexes.
+	if err := deleteCountIndex(attr /*reverse*/, true); err != nil {
 		return err
 	}
 	return nil
@@ -577,8 +574,17 @@ func (r *rebuild) Run(ctx context.Context) error {
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
-	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
+	glog.Infof("Deleting index for %s", attr)
+	if err := DeleteIndex(attr); err != nil {
+		return err
+	}
 
+	// Exit early if attribute is not indexed in the new schema.
+	if !schema.State().IsIndexed(attr) {
+		return nil
+	}
+
+	glog.Infof("Rebuilding index for %s", attr)
 	pk := x.ParsedKey{Attr: attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
@@ -605,8 +611,17 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 }
 
 func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
-	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
+	glog.Infof("Deleting count index for %s", attr)
+	if err := DeleteCountIndex(attr); err != nil {
+		return err
+	}
 
+	// Exit early if attribute is not indexed in the new schema.
+	if !schema.State().HasCount(attr) {
+		return nil
+	}
+
+	glog.Infof("Rebuilding count index for %s", attr)
 	var reverse bool
 	fn := func(uid uint64, pl *List, txn *Txn) error {
 		t := &pb.DirectedEdge{
@@ -644,15 +659,19 @@ func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	return builder.Run(ctx)
 }
 
-type item struct {
-	uid  uint64
-	list *List
-}
-
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error {
-	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
+	glog.Infof("Deleting reverse index for %s", attr)
+	if err := DeleteReverseEdges(attr); err != nil {
+		return err
+	}
 
+	// Exit early if attribute is not indexed in the new schema.
+	if !schema.State().IsReversed(attr) {
+		return nil
+	}
+
+	glog.Infof("Rebuilding reverse index for %s", attr)
 	pk := x.ParsedKey{Attr: attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
@@ -677,18 +696,6 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 		})
 	}
 	return builder.Run(ctx)
-}
-
-func DeleteIndex(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteIndex)
-	})
-	// Delete index entries from data store.
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.IndexPrefix()
-	return deleteEntries(prefix, func(key []byte) bool {
-		return true
-	})
 }
 
 // This function is called when the schema is changed from scalar to list type.

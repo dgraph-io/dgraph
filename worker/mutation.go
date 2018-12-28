@@ -113,7 +113,6 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	n := groups().Node
 	if !groups().ServesTablet(update.Predicate) {
 		tablet := groups().Tablet(update.Predicate)
 		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
@@ -139,26 +138,21 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	// We need watermark for index/reverse edge addition for linearizable reads.
 	// (both applied and synced watermarks).
 	defer glog.Infof("Done schema update %+v\n", update)
+	// If the schema was not present already, rebuild all indexes.
 	if !ok {
-		if current.Directive == pb.SchemaUpdate_INDEX {
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, startTs); err != nil {
-				return err
-			}
-		} else if current.Directive == pb.SchemaUpdate_REVERSE {
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, startTs); err != nil {
-				return err
-			}
+		if err := posting.RebuildIndex(ctx, update.Predicate, startTs); err != nil {
+			return err
 		}
-
-		if current.Count {
-			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true, startTs); err != nil {
-				return err
-			}
+		if err := posting.RebuildReverseEdges(ctx, update.Predicate, startTs); err != nil {
+			return err
+		}
+		if err := posting.RebuildCountIndex(ctx, update.Predicate, startTs); err != nil {
+			return err
 		}
 		return nil
 	}
 
-	// schema was present already
+	// If the schema was was present already, rebuild indexes that need it.
 	if current.List && !old.List {
 		if err := posting.RebuildListType(ctx, update.Predicate, startTs); err != nil {
 			return err
@@ -170,24 +164,22 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 
 	if needReindexing(old, current) {
 		// Reindex if update.Index is true or remove index
-		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-			current.Directive == pb.SchemaUpdate_INDEX, startTs); err != nil {
+		if err := posting.RebuildIndex(ctx, update.Predicate, startTs); err != nil {
 			return err
 		}
-	} else if needsRebuildingReverses(old, current) {
+	}
+	if needsRebuildingReverses(old, current) {
 		// Add or remove reverse edge based on update.Reverse
-		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-			current.Directive == pb.SchemaUpdate_REVERSE, startTs); err != nil {
+		if err := posting.RebuildReverseEdges(ctx, update.Predicate, startTs); err != nil {
+			return err
+		}
+	}
+	if current.Count != old.Count {
+		if err := posting.RebuildCountIndex(ctx, update.Predicate, startTs); err != nil {
 			return err
 		}
 	}
 
-	if current.Count != old.Count {
-		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count,
-			startTs); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
