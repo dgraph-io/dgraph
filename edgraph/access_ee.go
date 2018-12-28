@@ -408,19 +408,37 @@ func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error
 	}
 	// get the relevant predicates used in the query
 	for _, query := range parsedReq.Query {
-		glog.Infof("authorizing query children:")
-		for _, child := range query.Children {
-			glog.Infof("authorizing query child:%+v", child)
-		}
-		if !s.authorizeGroups(groupIds, query.Attr, acl.Read) {
+		if !s.authorizeQuery(groupIds, query, acl.Read) {
 			return fmt.Errorf("unauthorized to access the predicate %v", query.Attr)
 		}
 	}
 	return nil
 }
 
-// HasAccess returns true if any group is authorized to perform the operation on the predicate
-func (s *Server) authorizeGroups(groups []string, predicate string, operation int32) bool {
+func (s *Server) authorizeQuery(groups []string, gq *gql.GraphQuery, operation int32) bool {
+	if gq.Func != nil {
+		if !s.authorizePredicate(groups, gq.Func.Attr, operation) {
+			return false
+		}
+	}
+
+	if len(gq.Attr) > 0 {
+		if !s.authorizePredicate(groups, gq.Attr, operation) {
+			return false
+		}
+	}
+
+	// authorize all children queries
+	for _, childQuery := range gq.Children {
+		if !s.authorizeQuery(groups, childQuery, operation) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (s *Server) authorizePredicate(groups []string, predicate string, operation int32) bool {
 	for _, group := range groups {
 		if s.hasAccess(group, predicate, operation) {
 			return true
