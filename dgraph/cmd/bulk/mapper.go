@@ -35,14 +35,12 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 type mapper struct {
@@ -119,28 +117,33 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func (m *mapper) run() {
-	for chunkBuf := range m.rdfChunkCh {
+func (m *mapper) run(inputFormat int) {
+	chunker := newChunker(inputFormat)
+	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			rdf, err := chunkBuf.ReadString('\n')
+			nqs, err := chunker.parse(chunkBuf)
 			if err == io.EOF {
-				// Process the last RDF rather than breaking immediately.
 				done = true
-			} else {
-				x.Check(err)
-			}
-			rdf = strings.TrimSpace(rdf)
-
-			// process RDF line
-			if err := m.processRDF(rdf); err != nil {
+			} else if err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
 			}
 
-			atomic.AddInt64(&m.prog.rdfCount, 1)
+			for _, nq := range nqs {
+				if err := facets.SortAndValidate(nq.Facets); err != nil {
+					atomic.AddInt64(&m.prog.errCount, 1)
+					if !m.opt.IgnoreErrors {
+						x.Check(err)
+					}
+				}
+
+				m.processNQuad(nq)
+				atomic.AddInt64(&m.prog.nquadCount, 1)
+			}
+
 			for i := range m.shards {
 				sh := &m.shards[i]
 				if len(sh.entriesBuf) >= int(m.opt.MapBufSize) {
@@ -151,6 +154,7 @@ func (m *mapper) run() {
 			}
 		}
 	}
+
 	for i := range m.shards {
 		sh := &m.shards[i]
 		if len(sh.entriesBuf) > 0 {
@@ -178,21 +182,6 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh.entriesBuf = x.AppendUvarint(sh.entriesBuf, uint64(me.Size()))
 	sh.entriesBuf, err = x.AppendProtoMsg(sh.entriesBuf, me)
 	x.Check(err)
-}
-
-func (m *mapper) processRDF(rdfLine string) error {
-	nq, err := parseNQuad(rdfLine)
-	if err != nil {
-		if err == rdf.ErrEmpty {
-			return nil
-		}
-		return errors.Wrapf(err, "while parsing line %q", rdfLine)
-	}
-	if err := facets.SortAndValidate(nq.Facets); err != nil {
-		return err
-	}
-	m.processNQuad(nq)
-	return nil
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
@@ -255,14 +244,6 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	}}
 	m.processNQuad(nq)
 	return uid
-}
-
-func parseNQuad(line string) (gql.NQuad, error) {
-	nq, err := rdf.Parse(line)
-	if err != nil {
-		return gql.NQuad{}, err
-	}
-	return gql.NQuad{NQuad: &nq}, nil
 }
 
 func (m *mapper) createPredicatePosting(predicate string) *pb.Posting {

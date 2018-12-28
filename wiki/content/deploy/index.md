@@ -59,7 +59,7 @@ After installing Go, run
 ```sh
 # This should install dgraph binary in your $GOPATH/bin.
 
-go get -u -v github.com/dgraph-io/dgraph/dgraph
+go get -v github.com/dgraph-io/dgraph/dgraph
 ```
 
 If you get errors related to `grpc` while building them, your
@@ -98,21 +98,66 @@ uppercase). For example, instead of using `dgraph alpha --lru_mb=8096`, you
 could use `DGRAPH_ALPHA_LRU_MB=8096 dgraph alpha`.
 
 Configuration file formats supported are JSON, TOML, YAML, HCL, and Java
-properties (detected via file extension).
+properties (detected via file extension). The file extensions are .json, .toml,
+.yml or .yaml, .hcl, and .properties for each format.
 
 A configuration file can be specified using the `--config` flag, or an
 environment variable. E.g. `dgraph zero --config my_config.json` or
 `DGRAPH_ZERO_CONFIG=my_config.json dgraph zero`.
 
 The config file structure is just simple key/value pairs (mirroring the flag
-names). E.g. a JSON config file that sets `--idx`, `--peer`, and `--replicas`:
+names).
+
+Example JSON config file (config.json):
 
 ```json
 {
-  "idx": 42,
-  "peer": 192.168.0.55:9080,
-  "replicas": 2
+  "my": "localhost:7080",
+  "zero": "localhost:5080",
+  "lru_mb": 4096,
+  "postings": "/path/to/p",
+  "wal": "/path/to/w"
 }
+```
+
+Example TOML config file (config.toml):
+
+```toml
+my = "localhost:7080"
+zero = "localhost:5080"
+lru_mb = 4096
+postings = "/path/to/p"
+wal = "/path/to/w"
+```
+
+
+Example YAML config file (config.yml):
+
+```yaml
+my: "localhost:7080"
+zero: "localhost:5080"
+lru_mb: 4096
+postings: "/path/to/p"
+wal: "/path/to/w"
+```
+
+Example HCL config file (config.hcl):
+
+```hcl
+my = "localhost:7080"
+zero = "localhost:5080"
+lru_mb = 4096
+postings = "/path/to/p"
+wal = "/path/to/w"
+```
+
+Example Java properties config file (config.properties):
+```text
+my=localhost:7080
+zero=localhost:5080
+lru_mb=4096
+postings=/path/to/p
+wal=/path/to/w
 ```
 
 ## Cluster Setup
@@ -1547,6 +1592,26 @@ Go's built-in metrics may also be useful to measure for memory usage and garbage
  `dgraph_dirtymap_keys_total`     | Unused.
  `dgraph_posting_reads_total`     | Unused.
 
+## Tracing
+
+Dgraph is integrated with [OpenCensus](https://opencensus.io/zpages/) to collect distributed traces from the Dgraph cluster.
+
+Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 1 to trace 100% of queries.
+
+### Examining Traces with zPages
+
+The most basic way to view traces is with the integrated trace pages.
+
+OpenCensus's [zPages](https://opencensus.io/zpages/) are accessible via the Zero or Alpha HTTP port at `/z/tracez`.
+
+### Examining Traces with Jaeger
+
+Jaeger collects distributed traces and provides a UI to view and query traces across different services. This provides the necessary observability to figure out what is happening in the system.
+
+Dgraph can be configured to send traces directly to a Jaeger collector with the `--jaeger.collector` flag. For example, if the Jaeger collector is running on `http://localhost:14268`, then pass the flag to the Dgraph Zero and Dgraph Alpha instances as `--jaeger.collector=http://localhost:14268`.
+
+See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-started/) to get up and running with Jaeger.
+
 ## Dgraph Administration
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
@@ -1638,7 +1703,7 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [stop Dgraph]({{< relref "#shutdown" >}}) and wait for all writes to complete,
+* [stop Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
 * delete (maybe do an export first) the `p` and `w` directories, then
 * restart Dgraph.
 

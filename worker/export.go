@@ -51,7 +51,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.BoolID:     "xs:boolean",
 	types.GeoID:      "geo:geojson",
 	types.BinaryID:   "xs:base64Binary",
-	types.PasswordID: "xs:string",
+	types.PasswordID: "xs:password",
 }
 
 func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
@@ -101,12 +101,29 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 				}
 				buf.WriteString(f.Key)
 				buf.WriteByte('=')
-				fVal := &types.Val{Tid: types.StringID}
-				x.Check(types.Marshal(facets.ValFor(f), fVal))
-				if facets.TypeIDFor(f) == types.StringID {
-					buf.WriteString(strconv.Quote(fVal.Value.(string)))
+
+				fVal, err := facets.ValFor(f)
+				if err != nil {
+					glog.Errorf("Error getting value from facet %#v:%v", f, err)
+					continue
+				}
+
+				fStringVal := &types.Val{Tid: types.StringID}
+				if err = types.Marshal(fVal, fStringVal); err != nil {
+					glog.Errorf("Error while marshaling facet value %v to string: %v",
+						fVal, err)
+					continue
+				}
+				facetTid, err := facets.TypeIDFor(f)
+				if err != nil {
+					glog.Errorf("Error getting type id from facet %#v:%v", f, err)
+					continue
+				}
+
+				if facetTid == types.StringID {
+					buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
 				} else {
-					buf.WriteString(fVal.Value.(string))
+					buf.WriteString(fStringVal.Value.(string))
 				}
 			}
 			buf.WriteByte(')')

@@ -88,7 +88,11 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 		}
 
 		// convert facet val interface{} to binary
-		tid := facets.TypeIDFor(&api.Facet{ValType: f.ValType})
+		tid, err := facets.TypeIDFor(&api.Facet{ValType: f.ValType})
+		if err != nil {
+			return nil, err
+		}
+
 		fVal := &types.Val{Tid: types.BinaryID}
 		if err := types.Marshal(types.Val{Tid: tid, Value: fv}, fVal); err != nil {
 			return nil, err
@@ -419,4 +423,8 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	mr, err := mapToNquads(ms, &idx, op, "")
 	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
+}
+
+func NquadsFromJson(b []byte) ([]*api.NQuad, error) {
+	return nquadsFromJson(b, set)
 }

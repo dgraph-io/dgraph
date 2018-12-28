@@ -100,7 +100,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	fcs *pb.Facets, rerr error) {
 
 	cost = 1.0
-	if sg.Params.Facet == nil {
+	if len(sg.facetsMatrix) <= matrix {
 		return cost, fcs, rerr
 	}
 	fcsList := sg.facetsMatrix[matrix].FacetsList
@@ -117,7 +117,10 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 		rerr = x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 		return cost, fcs, rerr
 	}
-	tv := facets.ValFor(fcs.Facets[0])
+	tv, err := facets.ValFor(fcs.Facets[0])
+	if err != nil {
+		return 0.0, nil, err
+	}
 	if tv.Tid == types.IntID {
 		cost = float64(tv.Value.(int64))
 	} else if tv.Tid == types.FloatID {

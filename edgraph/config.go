@@ -19,6 +19,7 @@ package edgraph
 import (
 	"expvar"
 	"path/filepath"
+	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
@@ -34,6 +35,10 @@ type Options struct {
 	AuthToken    string
 
 	AllottedMemory float64
+
+	HmacSecret    []byte
+	AccessJwtTtl  time.Duration
+	RefreshJwtTtl time.Duration
 }
 
 var Config Options

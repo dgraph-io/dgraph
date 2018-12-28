@@ -1384,9 +1384,9 @@ L:
 
 		}
 
-		val := collectName(it, item.Val)
+		name := collectName(it, item.Val)
 		function = &Function{
-			Name: strings.ToLower(val),
+			Name: strings.ToLower(name),
 		}
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, x.Errorf("Expected ( after func name [%s]", function.Name)
@@ -1523,11 +1523,17 @@ L:
 				return nil, err
 			}
 			val += v
-			if val == "" && function.Name != "eq" { // allow eq(attr, "")
-				return nil, x.Errorf("Empty argument received")
-			}
-			if val == "uid" {
-				return nil, x.Errorf("Argument cannot be %q", val)
+
+			if function.Name != "eq" {
+				switch {
+				// allow eq(attr, "")
+				case val == "":
+					return nil, x.Errorf("Empty argument received")
+
+				// allow value of "uid" - issue#2827
+				case val == "uid":
+					return nil, x.Errorf("Argument cannot be %q", val)
+				}
 			}
 
 			if isDollar {

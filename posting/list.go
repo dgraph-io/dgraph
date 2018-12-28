@@ -64,7 +64,7 @@ const (
 	BitSchemaPosting   byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
-	BitEmptyPosting    byte = 0x10 | BitCompletePosting
+	BitEmptyPosting    byte = 0x10
 )
 
 type List struct {
@@ -494,7 +494,11 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	storedList := l.plist
 	if deleteBelow > 0 {
 		// There was a delete all marker. So, trim down the list of postings.
-		storedList = emptyList
+
+		// Create an empty posting list at the same commit ts as the deletion marker. This is
+		// important, so that after rollup happens, we are left with a posting list at the
+		// highest commit timestamp.
+		storedList = &pb.PostingList{CommitTs: deleteBelow}
 		result := posts[:0]
 		// Trim the posts.
 		for _, post := range posts {
@@ -682,8 +686,6 @@ func (l *List) rollup(readTs uint64) error {
 
 	final := new(pb.PostingList)
 	enc := codec.Encoder{BlockSize: blockSize}
-
-	maxCommitTs := l.minTs
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
@@ -697,14 +699,27 @@ func (l *List) rollup(readTs uint64) error {
 			// underlying data wouldn't be changed.
 			final.Postings = append(final.Postings, p)
 		}
-		maxCommitTs = x.Max(maxCommitTs, p.CommitTs)
 		return nil
 	})
 	x.Check(err)
 	final.Pack = enc.Done()
 
+	maxCommitTs := l.minTs
+	{
+		// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
+		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
+		// way to get the max commit timestamp is to pick all the relevant postings for the given
+		// readTs and calculate the maxCommitTs.
+		plist, mposts := l.pickPostings(readTs)
+		maxCommitTs = x.Max(maxCommitTs, plist.CommitTs)
+		for _, mp := range mposts {
+			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
+		}
+	}
+
 	// Keep all uncommited Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
+	// TODO: This could be removed after LRU cache is removed.
 	for startTs, plist := range l.mutationMap {
 		cl := plist.CommitTs
 		if cl == 0 || cl > maxCommitTs {
@@ -728,6 +743,12 @@ func (l *List) hasPendingTxn() bool {
 		}
 	}
 	return false
+}
+
+func (l *List) ApproxLen() int {
+	l.RLock()
+	defer l.RUnlock()
+	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
 // Uids returns the UIDs given some query params.
