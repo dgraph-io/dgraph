@@ -395,7 +395,17 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	opts := edgraphOptions()
+	opts := edgraph.Options{
+		BadgerTables: Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+
+		PostingDir: Alpha.Conf.GetString("postings"),
+		WALDir:     Alpha.Conf.GetString("wal"),
+
+		MutationsMode:  edgraph.AllowMutations,
+		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
 
 	secretFile := Alpha.Conf.GetString("hmac_secret_file")
 	if secretFile != "" {
@@ -436,8 +446,7 @@ func run() {
 			os.Exit(1)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "mutations = %v\n", opts.MutationsMode)
-	os.Exit(9)
+
 	edgraph.SetConfiguration(opts)
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
@@ -526,18 +535,4 @@ func run() {
 	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
-}
-
-func edgraphOptions() edgraph.Options {
-	return edgraph.Options{
-		BadgerTables: Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
-
-		MutationsMode:  Alpha.Conf.GetInt("mutations"),
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	}
 }
