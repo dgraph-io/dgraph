@@ -559,7 +559,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
-	if !Config.Nomutations {
+	if Config.MutationsMode != AllowMutations {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)

@@ -138,6 +138,8 @@ they form a Raft group and provide synchronous replication.
 			"Actual usage by the process would be more than specified here.")
 	flag.Bool("debugmode", false,
 		"Enable debug mode for more debug information.")
+	flag.String("mutations", "",
+		"Set mutation mode to allow, disallow, or strict. (default \"allow\")")
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -393,17 +395,7 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	opts := edgraph.Options{
-		BadgerTables: Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
-
-		Nomutations:    Alpha.Conf.GetBool("nomutations"),
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	}
+	opts := edgraphOptions()
 
 	secretFile := Alpha.Conf.GetString("hmac_secret_file")
 	if secretFile != "" {
@@ -418,6 +410,34 @@ func run() {
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
+
+	if Alpha.Conf.GetBool("nomutations") {
+		glog.Warning("--nomutations is deprecated in favor of --mutations=disallow")
+		opts.MutationsMode = edgraph.DisallowMutations
+	}
+	if mutations := Alpha.Conf.GetString("mutations"); mutations != "" {
+		switch strings.ToLower(mutations) {
+		case "allow":
+			if Alpha.Conf.GetBool("nomutations") {
+				glog.Error("--mutations=allow contradicts --nomutations")
+				os.Exit(1)
+			}
+			opts.MutationsMode = edgraph.AllowMutations
+		case "disallow":
+			opts.MutationsMode = edgraph.DisallowMutations
+		case "strict":
+			if Alpha.Conf.GetBool("nomutations") {
+				glog.Error("--mutations=strict contradicts --nomutations")
+				os.Exit(1)
+			}
+			opts.MutationsMode = edgraph.StrictMutations
+		default:
+			glog.Error("--mutations argument must be one of allow, disallow, or strict")
+			os.Exit(1)
+		}
+	}
+	fmt.Fprintf(os.Stderr, "mutations = %v\n", opts.MutationsMode)
+	os.Exit(9)
 	edgraph.SetConfiguration(opts)
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
@@ -506,4 +526,18 @@ func run() {
 	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
+}
+
+func edgraphOptions() edgraph.Options {
+	return edgraph.Options{
+		BadgerTables: Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
+
+		PostingDir: Alpha.Conf.GetString("postings"),
+		WALDir:     Alpha.Conf.GetString("wal"),
+
+		MutationsMode:  Alpha.Conf.GetInt("mutations"),
+		AuthToken:      Alpha.Conf.GetString("auth_token"),
+		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
 }
