@@ -418,29 +418,42 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 	return false
 }
 
-func DeleteIndex(attr string) error {
+func deleteIndex(attr string) error {
+	lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteIndex)
+	})
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	return deleteAllEntries(prefix)
 }
 
-func DeleteReverseEdges(attr string) error {
+func deleteReverseEdges(attr string) error {
+	lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteReverse)
+	})
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
 	return deleteAllEntries(prefix)
 }
 
-func deleteCountIndex(attr string, reverse bool) error {
+func deleteCountIndexInternal(attr string, reverse bool) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.CountPrefix(reverse)
 	return deleteAllEntries(prefix)
 }
 
-func DeleteCountIndex(attr string) error {
-	if err := deleteCountIndex(attr /*reverse*/, false); err != nil {
+func deleteCountIndex(attr string) error {
+	lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteCount)
+	})
+	lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteCountRev)
+	})
+
+	if err := deleteCountIndexInternal(attr /*reverse*/, false); err != nil {
 		return err
 	}
-	if err := deleteCountIndex(attr /*reverse*/, true); err != nil {
+	if err := deleteCountIndexInternal(attr /*reverse*/, true); err != nil {
 		return err
 	}
 	return nil
@@ -571,24 +584,83 @@ func (r *rebuild) Run(ctx context.Context) error {
 	return writer.Flush()
 }
 
+// RebuildIndicesRequest holds the info needed to initiate a rebuilt of the indices.
+type RebuildIndicesRequest struct {
+	Attr          string
+	StartTs       uint64
+	OldSchema     *pb.SchemaUpdate
+	CurrentSchema *pb.SchemaUpdate
+}
+
+// RebuildAllIndices rebuilds all indices that need it.
+func RebuildAllIndices(ctx context.Context, req *RebuildIndicesRequest) error {
+	if err := RebuildListType(ctx, req); err != nil {
+		return err
+	}
+	if err := RebuildIndex(ctx, req); err != nil {
+		return err
+	}
+	if err := RebuildCountIndex(ctx, req); err != nil {
+		return err
+	}
+	if err := RebuildReverseEdges(ctx, req); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) bool {
+	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+
+	// If no previous schema existed, the index needs to be built.
+	if old == nil {
+		return true
+	}
+	// Index needs to be rebuilt if the scheme directive changed.
+	if (current.Directive == pb.SchemaUpdate_INDEX) != (old.Directive == pb.SchemaUpdate_INDEX) {
+		return true
+	}
+	// Index needs to be rebuilt if the value types have changed.
+	if current.Directive == pb.SchemaUpdate_INDEX && current.ValueType != old.ValueType {
+		return true
+	}
+	// Index needs to be rebuilt if the tokenizers have changed
+	if len(current.Tokenizer) != len(old.Tokenizer) {
+		return true
+	}
+	for i, t := range old.Tokenizer {
+		if current.Tokenizer[i] != t {
+			return true
+		}
+	}
+
+	return false
+}
+
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
-func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
-	glog.Infof("Deleting index for %s", attr)
-	if err := DeleteIndex(attr); err != nil {
+func RebuildIndex(ctx context.Context, req *RebuildIndicesRequest) error {
+	// Exit early if indices do not need to be rebuilt.
+	if !needsIndexRebuild(req.OldSchema, req.CurrentSchema) {
+		return nil
+	}
+
+	glog.Infof("Deleting index for %s", req.Attr)
+	if err := deleteIndex(req.Attr); err != nil {
 		return err
 	}
 
 	// Exit early if attribute is not indexed in the new schema.
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(req.Attr) {
 		return nil
 	}
 
-	glog.Infof("Rebuilding index for %s", attr)
-	pk := x.ParsedKey{Attr: attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	glog.Infof("Rebuilding index for %s", req.Attr)
+	pk := x.ParsedKey{Attr: req.Attr}
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: req.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
-		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
+		edge := pb.DirectedEdge{Attr: req.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
@@ -610,26 +682,43 @@ func RebuildIndex(ctx context.Context, attr string, startTs uint64) error {
 	return builder.Run(ctx)
 }
 
-func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
-	glog.Infof("Deleting count index for %s", attr)
-	if err := DeleteCountIndex(attr); err != nil {
+func needsCountIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) bool {
+	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+
+	if old == nil {
+		return true
+	}
+	if current.Count != old.Count {
+		return true
+	}
+	return false
+}
+
+// RebuildCountIndex rebuilds the count index for a given attribute.
+func RebuildCountIndex(ctx context.Context, req *RebuildIndicesRequest) error {
+	if !needsCountIndexRebuild(req.OldSchema, req.CurrentSchema) {
+		return nil
+	}
+
+	glog.Infof("Deleting count index for %s", req.Attr)
+	if err := deleteCountIndex(req.Attr); err != nil {
 		return err
 	}
 
 	// Exit early if attribute is not indexed in the new schema.
-	if !schema.State().HasCount(attr) {
+	if !schema.State().HasCount(req.Attr) {
 		return nil
 	}
 
-	glog.Infof("Rebuilding count index for %s", attr)
+	glog.Infof("Rebuilding count index for %s", req.Attr)
 	var reverse bool
 	fn := func(uid uint64, pl *List, txn *Txn) error {
 		t := &pb.DirectedEdge{
 			ValueId: uid,
-			Attr:    attr,
+			Attr:    req.Attr,
 			Op:      pb.DirectedEdge_SET,
 		}
-		sz := pl.Length(startTs, 0)
+		sz := pl.Length(req.StartTs, 0)
 		if sz == -1 {
 			return nil
 		}
@@ -645,8 +734,8 @@ func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 	}
 
 	// Create the forward index.
-	pk := x.ParsedKey{Attr: attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	pk := x.ParsedKey{Attr: req.Attr}
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: req.StartTs}
 	builder.fn = fn
 	if err := builder.Run(ctx); err != nil {
 		return err
@@ -654,28 +743,42 @@ func RebuildCountIndex(ctx context.Context, attr string, startTs uint64) error {
 
 	// Create the reverse index.
 	reverse = true
-	builder = rebuild{prefix: pk.ReversePrefix(), startTs: startTs}
+	builder = rebuild{prefix: pk.ReversePrefix(), startTs: req.StartTs}
 	builder.fn = fn
 	return builder.Run(ctx)
 }
 
+func needsReverseEdgesRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) bool {
+	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+
+	if old == nil {
+		return true
+	}
+	return (current.Directive == pb.SchemaUpdate_REVERSE) !=
+		(old.Directive == pb.SchemaUpdate_REVERSE)
+}
+
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error {
-	glog.Infof("Deleting reverse index for %s", attr)
-	if err := DeleteReverseEdges(attr); err != nil {
+func RebuildReverseEdges(ctx context.Context, req *RebuildIndicesRequest) error {
+	if !needsReverseEdgesRebuild(req.OldSchema, req.CurrentSchema) {
+		return nil
+	}
+
+	glog.Infof("Deleting reverse index for %s", req.Attr)
+	if err := deleteReverseEdges(req.Attr); err != nil {
 		return err
 	}
 
 	// Exit early if attribute is not indexed in the new schema.
-	if !schema.State().IsReversed(attr) {
+	if !schema.State().IsReversed(req.Attr) {
 		return nil
 	}
 
-	glog.Infof("Rebuilding reverse index for %s", attr)
-	pk := x.ParsedKey{Attr: attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	glog.Infof("Rebuilding reverse index for %s", req.Attr)
+	pk := x.ParsedKey{Attr: req.Attr}
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: req.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
-		edge := pb.DirectedEdge{Attr: attr, Entity: uid}
+		edge := pb.DirectedEdge{Attr: req.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
 			// Add reverse entries based on p.
@@ -698,20 +801,40 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 	return builder.Run(ctx)
 }
 
-// This function is called when the schema is changed from scalar to list type.
+func needsListTypeRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) (bool, error) {
+	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+
+	if old == nil {
+		return false, nil
+	}
+	if current.List && !old.List {
+		return true, nil
+	}
+	if old.List && !current.List {
+		return false, fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
+			" without dropping it first.", current.Predicate)
+	}
+
+	return false, nil
+}
+
+// RebuildListType rebuilds the index when the schema is changed from scalar to list type.
 // We need to fingerprint the values to get the new ValueId.
-func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
-	x.AssertTruef(schema.State().IsList(attr), "Attr %s is not of list type", attr)
+func RebuildListType(ctx context.Context, req *RebuildIndicesRequest) error {
+	if needsRebuild, err := needsListTypeRebuild(req.OldSchema, req.CurrentSchema); !needsRebuild ||
+		err != nil {
+		return err
+	}
 
 	// Let's clear out the cache for anything which belongs to this attribute,
 	// so once we're done, any reads would see the new list type. Note that we
 	// don't use lcache during the rebuild process.
 	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteData)
+		return compareAttrAndType(key, req.Attr, x.ByteData)
 	})
 
-	pk := x.ParsedKey{Attr: attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
+	pk := x.ParsedKey{Attr: req.Attr}
+	builder := rebuild{prefix: pk.DataPrefix(), startTs: req.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -731,7 +854,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 		// Delete the old edge corresponding to ValueId math.MaxUint64
 		t := &pb.DirectedEdge{
 			ValueId: mpost.Uid,
-			Attr:    attr,
+			Attr:    req.Attr,
 			Op:      pb.DirectedEdge_DEL,
 		}
 
@@ -743,7 +866,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 		}
 		// Add the new edge with the fingerprinted value id.
 		newEdge := &pb.DirectedEdge{
-			Attr:      attr,
+			Attr:      req.Attr,
 			Value:     mpost.Value,
 			ValueType: mpost.ValType,
 			Op:        pb.DirectedEdge_SET,
@@ -755,6 +878,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	return builder.Run(ctx)
 }
 
+// DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
 	lcache.clear(func([]byte) bool { return true })
 	return deleteEntries(nil, func(key []byte) bool {
@@ -770,6 +894,7 @@ func DeleteAll() error {
 	})
 }
 
+// DeletePredicate deletes all entries and indices for a given predicate.
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	lcache.clear(func(key []byte) bool {
@@ -791,18 +916,18 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		if err := DeleteIndex(attr); err != nil {
+		if err := deleteIndex(attr); err != nil {
 			return err
 		}
 	} else if reversed {
-		if err := DeleteReverseEdges(attr); err != nil {
+		if err := deleteReverseEdges(attr); err != nil {
 			return err
 		}
 	}
 
 	hasCountIndex := schema.State().HasCount(attr)
 	if hasCountIndex {
-		if err := DeleteCountIndex(attr); err != nil {
+		if err := deleteCountIndex(attr); err != nil {
 			return err
 		}
 	}

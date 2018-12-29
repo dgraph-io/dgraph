@@ -32,10 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const schemaStr = `
-name:string @index(term) .
-`
-
 func uids(l *List, readTs uint64) []uint64 {
 	r, err := l.Uids(ListOptions{ReadTs: readTs})
 	x.Check(err)
@@ -43,42 +39,44 @@ func uids(l *List, readTs uint64) []uint64 {
 }
 
 func TestIndexingInt(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("age:int @index(int) ."), 1))
 	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("age:int @index(int) ."), 1))
 	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("-10")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6},
+		[]byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
-	schema.ParseBytes([]byte("age:float @index(float) ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("age:float @index(float) ."), 1))
 	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
-	schema.ParseBytes([]byte("age:dateTime @index(year) ."), 1)
-	a, err := indexTokens("age", "", types.Val{Tid: types.StringID, Value: []byte("0010-01-01T01:01:01.000000001")})
+	require.NoError(t, schema.ParseBytes([]byte("age:dateTime @index(year) ."), 1))
+	a, err := indexTokens("age", "", types.Val{Tid: types.StringID,
+		Value: []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index(term) ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index(term) ."), 1))
 	a, err := indexTokens("name", "", types.Val{Tid: types.StringID, Value: []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
 }
 
 func TestIndexingMultiLang(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1))
 
 	// ensure that default tokenizer is suitable for English
 	a, err := indexTokens("name", "", types.Val{Tid: types.StringID, Value: []byte("stemming")})
@@ -86,23 +84,26 @@ func TestIndexingMultiLang(t *testing.T) {
 	require.EqualValues(t, "\x08stem", string(a[0]))
 
 	// ensure that Finnish tokenizer is used
-	a, err = indexTokens("name", "fi", types.Val{Tid: types.StringID, Value: []byte("edeltäneessä")})
+	a, err = indexTokens("name", "fi", types.Val{Tid: types.StringID,
+		Value: []byte("edeltäneessä")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08edeltän", string(a[0]))
 
 	// ensure that German tokenizer is used
-	a, err = indexTokens("name", "de", types.Val{Tid: types.StringID, Value: []byte("Auffassungsvermögen")})
+	a, err = indexTokens("name", "de", types.Val{Tid: types.StringID,
+		Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08auffassungsvermog", string(a[0]))
 
 	// ensure that default tokenizer works differently than German
-	a, err = indexTokens("name", "", types.Val{Tid: types.StringID, Value: []byte("Auffassungsvermögen")})
+	a, err = indexTokens("name", "", types.Val{Tid: types.StringID,
+		Value: []byte("Auffassungsvermögen")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x08auffassungsvermögen", string(a[0]))
 }
 
 func TestIndexingInvalidLang(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index(fulltext) ."), 1))
 
 	// tokenizer for "xx" language won't return an error.
 	_, err := indexTokens("name", "xx", types.Val{Tid: types.StringID, Value: []byte("error")})
@@ -110,7 +111,7 @@ func TestIndexingInvalidLang(t *testing.T) {
 }
 
 func TestIndexingAliasedLang(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1)
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index(fulltext) @lang ."), 1))
 	_, err := indexTokens("name", "es", types.Val{Tid: types.StringID, Value: []byte("base")})
 	require.NoError(t, err)
 	// es-es and es-419 are aliased to es
@@ -152,8 +153,7 @@ friend:uid @reverse .
 
 // TODO(Txn): We can't read index key on disk if it was written in same txn.
 func TestTokensTable(t *testing.T) {
-	err := schema.ParseBytes([]byte(schemaVal), 1)
-	require.NoError(t, err)
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 
 	key := x.DataKey("name", 1)
 	l, err := getNew(key, ps)
@@ -232,25 +232,8 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
 }
 
-// addEdgeToUID adds uid edge with reverse edge
-func addReverseEdge(t *testing.T, attr string, src uint64,
-	dst uint64, startTs, commitTs uint64) {
-	edge := &pb.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      pb.DirectedEdge_SET,
-	}
-	txn := Txn{
-		StartTs: startTs,
-	}
-	txn.addReverseMutation(context.Background(), edge)
-	require.NoError(t, txn.CommitToMemory(commitTs))
-}
-
 func TestRebuildIndex(t *testing.T) {
-	schema.ParseBytes([]byte(schemaVal), 1)
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
@@ -261,8 +244,14 @@ func TestRebuildIndex(t *testing.T) {
 		require.NoError(t, txn.CommitAt(1, nil))
 	}
 
-	require.NoError(t, DeleteIndex("name2"))
-	require.NoError(t, RebuildIndex(context.Background(), "name2", 5))
+	currentSchema, _ := schema.State().Get("name2")
+	req := RebuildIndicesRequest{
+		Attr:          "name2",
+		StartTs:       5,
+		OldSchema:     nil,
+		CurrentSchema: &currentSchema,
+	}
+	require.NoError(t, RebuildIndex(context.Background(), &req))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(6, false)
@@ -301,13 +290,20 @@ func TestRebuildIndex(t *testing.T) {
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
-	schema.ParseBytes([]byte(schemaVal), 1)
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 	addEdgeToUID(t, "friend", 1, 23, uint64(10), uint64(11))
 	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
+	currentSchema, _ := schema.State().Get("name2")
+	req := RebuildIndicesRequest{
+		Attr:          "friend",
+		StartTs:       16,
+		OldSchema:     nil,
+		CurrentSchema: &currentSchema,
+	}
 	// TODO: Remove after fixing sync marks.
-	RebuildReverseEdges(context.Background(), "friend", 16)
+	require.NoError(t, RebuildReverseEdges(context.Background(), &req))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(17, false)
@@ -345,4 +341,72 @@ func TestRebuildReverseEdges(t *testing.T) {
 	require.EqualValues(t, 1, uids0[0])
 	require.EqualValues(t, 2, uids0[1])
 	require.EqualValues(t, 1, uids1[0])
+}
+
+func TestNeedsIndexRebuild(t *testing.T) {
+	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
+	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
+	require.False(t, needsIndexRebuild(&s1, &s2))
+	require.True(t, needsIndexRebuild(nil, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"}}
+	require.False(t, needsIndexRebuild(&s1, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"term"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX}
+	require.True(t, needsIndexRebuild(&s1, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"}}
+	require.True(t, needsIndexRebuild(&s1, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"}}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_NONE}
+	require.True(t, needsIndexRebuild(&s1, &s2))
+}
+
+func TestNeedsCountIndexRebuild(t *testing.T) {
+	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
+	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: true}
+	require.True(t, needsCountIndexRebuild(&s1, &s2))
+	require.True(t, needsCountIndexRebuild(nil, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
+	require.False(t, needsCountIndexRebuild(&s1, &s2))
+}
+
+func TestNeedsReverseEdgesRebuild(t *testing.T) {
+	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
+	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	require.True(t, needsReverseEdgesRebuild(&s1, &s2))
+	require.True(t, needsReverseEdgesRebuild(nil, &s2))
+
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
+	require.False(t, needsReverseEdgesRebuild(&s1, &s2))
+}
+
+func TestNeedsListTypeRebuild(t *testing.T) {
+	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false}
+	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID, List: true}
+	rebuild, err := needsListTypeRebuild(&s1, &s2)
+	require.True(t, rebuild)
+	require.NoError(t, err)
+	rebuild, err = needsListTypeRebuild(nil, &s2)
+	require.False(t, rebuild)
+	require.NoError(t, err)
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_UID, List: true}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, List: false}
+	rebuild, err = needsListTypeRebuild(&s1, &s2)
+	require.False(t, rebuild)
+	require.Error(t, err)
 }
