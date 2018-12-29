@@ -71,7 +71,6 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	t.Logf("Got output when creating user:%v", createUserOutput3)
 }
 
-// TODO(gitlw): Finish this later.
 func TestLogIn(t *testing.T) {
 	// delete and recreate the user to ensure a clean state
 	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", userid)
