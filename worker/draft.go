@@ -793,6 +793,10 @@ func (n *node) Run() {
 	}
 }
 
+func listWrap(kv *bpb.KV) *bpb.KVList {
+	return &bpb.KVList{Kv: []*bpb.KV{kv}}
+}
+
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
@@ -825,7 +829,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		addKey(key)
 		kv, err := l.MarshalToKv()
-		return &bpb.KVList{Kv: []*bpb.KV{kv}}, err
+		return listWrap(kv), err
 	}
 	stream.Send = func(list *bpb.KVList) error {
 		return writer.Send(&pb.KVS{Kv: list.Kv})
