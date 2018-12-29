@@ -60,7 +60,7 @@ func (w *TxnWriter) Send(kvs *pb.KVS) error {
 		if len(kv.UserMeta) > 0 {
 			meta = kv.UserMeta[0]
 		}
-		if err := w.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
+		if err := w.SetAt(kv.Key, kv.Value, meta, kv.Version); err != nil {
 			return err
 		}
 	}

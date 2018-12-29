@@ -16,6 +16,7 @@ import (
 	"context"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/stream"
@@ -43,7 +44,7 @@ func (r *Request) Process(ctx context.Context) error {
 
 	sl := stream.Lists{Stream: w, DB: r.DB}
 	sl.ChooseKeyFunc = nil
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*bpb.KV, error) {
 		item := itr.Item()
 		pk := x.Parse(key)
 		if pk.IsSchema() {
@@ -51,9 +52,9 @@ func (r *Request) Process(ctx context.Context) error {
 			if err != nil {
 				return nil, err
 			}
-			kv := &pb.KV{
+			kv := &bpb.KV{
 				Key:      key,
-				Val:      val,
+				Value:    val,
 				UserMeta: []byte{item.UserMeta()},
 				Version:  item.Version(),
 			}

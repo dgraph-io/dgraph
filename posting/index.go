@@ -562,7 +562,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 		// We choose to write the PL at r.startTs, so it won't be read by txns,
 		// which occurred before this schema mutation. Typically, we use
 		// kv.Version as the timestamp.
-		if err = writer.SetAt(kv.Key, kv.Val, kv.UserMeta[0], r.startTs); err != nil {
+		if err = writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], r.startTs); err != nil {
 			return err
 		}
 		// This locking is just to catch any future issues.  We shouldn't need

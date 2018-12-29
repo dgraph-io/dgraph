@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -44,7 +45,7 @@ var (
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
+func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
@@ -63,7 +64,7 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 			first = false
 		}
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
+		if err := txn.SetWithMeta(kv.Key, kv.Value, kv.UserMeta[0]); err != nil {
 			return err
 		}
 		err := txn.CommitAt(kv.Version, func(err error) {
@@ -98,7 +99,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
 	sl := stream.Lists{Stream: s, Predicate: predicate, DB: pstore}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*bpb.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -127,9 +128,9 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 			return err
 		}
 		kvs := &pb.KVS{}
-		kv := &pb.KV{}
+		kv := &bpb.KV{}
 		kv.Key = schemaKey
-		kv.Val = val
+		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
@@ -179,7 +180,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				}
 			}
 			proposal.Kv = append(proposal.Kv, kv)
-			size += len(kv.Key) + len(kv.Val)
+			size += len(kv.Key) + len(kv.Value)
 		}
 	}
 	if size > 0 {
