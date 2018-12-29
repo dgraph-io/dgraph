@@ -121,8 +121,8 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	}
 	old, _ := schema.State().Get(update.Predicate)
 	current := *update
-	// Sets only in memory, we will update it on disk only after schema mutations is successful and
-	// persiste to disk.
+	// Sets only in memory, we will update it on disk only after schema mutations are successful and
+	// written to disk.
 	schema.State().Set(update.Predicate, current)
 
 	// Once we remove index or reverse edges from schema, even though the values
