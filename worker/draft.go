@@ -31,6 +31,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -559,7 +560,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	posting.EvictLRU()
-	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(snap, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -818,7 +819,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		// Return true if we don't find the BitCompletePosting bit.
 		return item.UserMeta()&posting.BitCompletePosting == 0
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*bpb.KV, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err

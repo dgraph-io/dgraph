@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/badger/skl"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
 )
@@ -69,7 +70,7 @@ type DB struct {
 	manifest  *manifestFile
 	lc        *levelsController
 	vlog      valueLog
-	vptr      valuePointer // less than or equal to a pointer to the last vlog value put into mt
+	vhead     valuePointer // less than or equal to a pointer to the last vlog value put into mt
 	writeCh   chan *request
 	flushChan chan flushTask // For flushing memtables.
 
@@ -82,7 +83,7 @@ const (
 	kvWriteChCapacity = 1000
 )
 
-func (out *DB) replayFunction() func(Entry, valuePointer) error {
+func (db *DB) replayFunction() func(Entry, valuePointer) error {
 	type txnEntry struct {
 		nk []byte
 		v  y.ValueStruct
@@ -92,29 +93,29 @@ func (out *DB) replayFunction() func(Entry, valuePointer) error {
 	var lastCommit uint64
 
 	toLSM := func(nk []byte, vs y.ValueStruct) {
-		for err := out.ensureRoomForWrite(); err != nil; err = out.ensureRoomForWrite() {
-			out.elog.Printf("Replay: Making room for writes")
+		for err := db.ensureRoomForWrite(); err != nil; err = db.ensureRoomForWrite() {
+			db.elog.Printf("Replay: Making room for writes")
 			time.Sleep(10 * time.Millisecond)
 		}
-		out.mt.Put(nk, vs)
+		db.mt.Put(nk, vs)
 	}
 
 	first := true
 	return func(e Entry, vp valuePointer) error { // Function for replaying.
 		if first {
-			out.elog.Printf("First key=%q\n", e.Key)
+			db.elog.Printf("First key=%q\n", e.Key)
 		}
 		first = false
 
-		if out.orc.nextTxnTs < y.ParseTs(e.Key) {
-			out.orc.nextTxnTs = y.ParseTs(e.Key)
+		if db.orc.nextTxnTs < y.ParseTs(e.Key) {
+			db.orc.nextTxnTs = y.ParseTs(e.Key)
 		}
 
 		nk := make([]byte, len(e.Key))
 		copy(nk, e.Key)
 		var nv []byte
 		meta := e.meta
-		if out.shouldWriteValueToLSM(e) {
+		if db.shouldWriteValueToLSM(e) {
 			nv = make([]byte, len(e.Value))
 			copy(nv, e.Value)
 		} else {
@@ -342,7 +343,7 @@ func (db *DB) Close() (err error) {
 				defer db.Unlock()
 				y.AssertTrue(db.mt != nil)
 				select {
-				case db.flushChan <- flushTask{db.mt, db.vptr}:
+				case db.flushChan <- flushTask{db.mt, db.vhead}:
 					db.imm = append(db.imm, db.mt) // Flusher will attempt to remove this from s.imm.
 					db.mt = nil                    // Will segfault if we try writing!
 					db.elog.Printf("pushed to flush chan\n")
@@ -360,32 +361,16 @@ func (db *DB) Close() (err error) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	db.flushChan <- flushTask{nil, valuePointer{}} // Tell flusher to quit.
-
-	if db.closers.memtable != nil {
-		db.closers.memtable.Wait()
-		db.elog.Printf("Memtable flushed")
-	}
-	if db.closers.compactors != nil {
-		db.closers.compactors.SignalAndWait()
-		db.elog.Printf("Compaction finished")
-	}
+	db.stopCompactions()
 
 	// Force Compact L0
 	// We don't need to care about cstatus since no parallel compaction is running.
-	cd := compactDef{
-		elog:      trace.New("Badger", "Compact"),
-		thisLevel: db.lc.levels[0],
-		nextLevel: db.lc.levels[1],
-	}
-	cd.elog.SetMaxEvents(100)
-	defer cd.elog.Finish()
-	if db.lc.fillTablesL0(&cd) {
-		if err := db.lc.runCompactDef(0, cd); err != nil {
-			cd.elog.LazyPrintf("\tLOG Compact FAILED with error: %+v: %+v", err, cd)
+	if db.opt.CompactL0OnClose {
+		if err := db.lc.doCompact(compactionPriority{level: 0, score: 1.73}); err != nil {
+			Warningf("Error while forcing compaction on level 0: %v", err)
+		} else {
+			Infof("Force compaction on level 0 done")
 		}
-	} else {
-		cd.elog.LazyPrintf("fillTables failed for level zero. No compaction required")
 	}
 
 	if lcErr := db.lc.close(); err == nil {
@@ -516,7 +501,7 @@ func (db *DB) get(key []byte) (y.ValueStruct, error) {
 	return db.lc.get(key, maxVs)
 }
 
-func (db *DB) updateOffset(ptrs []valuePointer) {
+func (db *DB) updateHead(ptrs []valuePointer) {
 	var ptr valuePointer
 	for i := len(ptrs) - 1; i >= 0; i-- {
 		p := ptrs[i]
@@ -531,8 +516,8 @@ func (db *DB) updateOffset(ptrs []valuePointer) {
 
 	db.Lock()
 	defer db.Unlock()
-	y.AssertTrue(!ptr.Less(db.vptr))
-	db.vptr = ptr
+	y.AssertTrue(!ptr.Less(db.vhead))
+	db.vhead = ptr
 }
 
 var requestPool = sync.Pool{
@@ -588,6 +573,10 @@ func (db *DB) writeRequests(reqs []*request) error {
 			r.Wg.Done()
 		}
 	}
+	if atomic.LoadInt32(&db.blockWrites) > 0 {
+		done(ErrBlockedWrites)
+		return ErrBlockedWrites
+	}
 
 	db.elog.Printf("writeRequests called. Writing to value log")
 
@@ -623,7 +612,7 @@ func (db *DB) writeRequests(reqs []*request) error {
 			done(err)
 			return errors.Wrap(err, "writeRequests")
 		}
-		db.updateOffset(b.Ptrs)
+		db.updateHead(b.Ptrs)
 	}
 	done(nil)
 	db.elog.Printf("%d entries written", count)
@@ -759,7 +748,7 @@ func (db *DB) ensureRoomForWrite() error {
 
 	y.AssertTrue(db.mt != nil) // A nil mt indicates that DB is being closed.
 	select {
-	case db.flushChan <- flushTask{db.mt, db.vptr}:
+	case db.flushChan <- flushTask{db.mt, db.vhead}:
 		db.elog.Printf("Flushing value log to disk if async mode.")
 		// Ensure value log is synced to disk so this memtable's contents wouldn't be lost.
 		err = db.vlog.sync()
@@ -808,6 +797,7 @@ type flushTask struct {
 func (db *DB) handleFlushTask(ft flushTask) error {
 	if !ft.mt.Empty() {
 		// Store badger head even if vptr is zero, need it for readTs
+		Infof("Storing value log head: %+v\n", ft.vptr)
 		db.elog.Printf("Storing offset: %+v\n", ft.vptr)
 		offset := make([]byte, vptrSize)
 		ft.vptr.Encode(offset)
@@ -873,7 +863,8 @@ func (db *DB) flushMemtable(lc *y.Closer) error {
 
 	for ft := range db.flushChan {
 		if ft.mt == nil {
-			return nil // Stop this goroutine.
+			// We close db.flushChan now, instead of sending a nil ft.mt.
+			continue
 		}
 		for {
 			err := db.handleFlushTask(ft)
@@ -1143,153 +1134,158 @@ func (db *DB) MaxBatchSize() int64 {
 	return db.opt.maxBatchSize
 }
 
-// MergeOperator represents a Badger merge operator.
-type MergeOperator struct {
-	sync.RWMutex
-	f      MergeFunc
-	db     *DB
-	key    []byte
-	closer *y.Closer
-}
-
-// MergeFunc accepts two byte slices, one representing an existing value, and
-// another representing a new value that needs to be ‘merged’ into it. MergeFunc
-// contains the logic to perform the ‘merge’ and return an updated value.
-// MergeFunc could perform operations like integer addition, list appends etc.
-// Note that the ordering of the operands is unspecified, so the merge func
-// should either be agnostic to ordering or do additional handling if ordering
-// is required.
-type MergeFunc func(existing, val []byte) []byte
-
-// GetMergeOperator creates a new MergeOperator for a given key and returns a
-// pointer to it. It also fires off a goroutine that performs a compaction using
-// the merge function that runs periodically, as specified by dur.
-func (db *DB) GetMergeOperator(key []byte,
-	f MergeFunc, dur time.Duration) *MergeOperator {
-	op := &MergeOperator{
-		f:      f,
-		db:     db,
-		key:    key,
-		closer: y.NewCloser(1),
+func (db *DB) stopCompactions() {
+	// Stop memtable flushes.
+	if db.closers.memtable != nil {
+		close(db.flushChan)
+		db.closers.memtable.SignalAndWait()
 	}
-
-	go op.runCompactions(dur)
-	return op
+	// Stop compactions.
+	if db.closers.compactors != nil {
+		db.closers.compactors.SignalAndWait()
+	}
 }
 
-var errNoMerge = errors.New("No need for merge")
+func (db *DB) startCompactions() {
+	// Resume compactions.
+	if db.closers.compactors != nil {
+		db.closers.compactors = y.NewCloser(1)
+		db.lc.startCompact(db.closers.compactors)
+	}
+	if db.closers.memtable != nil {
+		db.flushChan = make(chan flushTask, db.opt.NumMemtables)
+		db.closers.memtable = y.NewCloser(1)
+		go db.flushMemtable(db.closers.memtable)
+	}
+}
 
-func (op *MergeOperator) iterateAndMerge(txn *Txn) (val []byte, err error) {
-	opt := DefaultIteratorOptions
-	opt.AllVersions = true
-	it := txn.NewIterator(opt)
-	defer it.Close()
+// Flatten can be used to force compactions on the LSM tree so all the tables fall on the same
+// level. This ensures that all the versions of keys are colocated and not split across multiple
+// levels, which is necessary after a restore from backup. During Flatten, live compactions are
+// stopped. Ideally, no writes are going on during Flatten. Otherwise, it would create competition
+// between flattening the tree and new tables being created at level zero.
+func (db *DB) Flatten(workers int) error {
+	db.stopCompactions()
+	defer db.startCompactions()
 
-	var numVersions int
-	for it.Rewind(); it.ValidForPrefix(op.key); it.Next() {
-		item := it.Item()
-		numVersions++
-		if numVersions == 1 {
-			val, err = item.ValueCopy(val)
+	compactAway := func(cp compactionPriority) error {
+		Infof("Attempting to compact with %+v\n", cp)
+		errCh := make(chan error, 1)
+		for i := 0; i < workers; i++ {
+			go func() {
+				errCh <- db.lc.doCompact(cp)
+			}()
+		}
+		var success int
+		var rerr error
+		for i := 0; i < workers; i++ {
+			err := <-errCh
 			if err != nil {
-				return nil, err
-			}
-		} else {
-			if err := item.Value(func(newVal []byte) error {
-				val = op.f(val, newVal)
-				return nil
-			}); err != nil {
-				return nil, err
+				rerr = err
+				Warningf("While running doCompact with %+v. Error: %v\n", cp, err)
+			} else {
+				success++
 			}
 		}
-		if item.DiscardEarlierVersions() {
-			break
+		if success == 0 {
+			return rerr
 		}
-	}
-	if numVersions == 0 {
-		return nil, ErrKeyNotFound
-	} else if numVersions == 1 {
-		return val, errNoMerge
-	}
-	return val, nil
-}
-
-func (op *MergeOperator) compact() error {
-	op.Lock()
-	defer op.Unlock()
-	err := op.db.Update(func(txn *Txn) error {
-		var (
-			val []byte
-			err error
-		)
-		val, err = op.iterateAndMerge(txn)
-		if err != nil {
-			return err
-		}
-
-		// Write value back to db
-		if err := txn.SetWithDiscard(op.key, val, 0); err != nil {
-			return err
-		}
+		// We could do at least one successful compaction. So, we'll consider this a success.
+		Infof("%d compactor(s) succeeded. One or more tables from level %d compacted.\n",
+			success, cp.level)
 		return nil
-	})
+	}
 
-	if err == ErrKeyNotFound || err == errNoMerge {
-		// pass.
-	} else if err != nil {
-		return err
+	hbytes := func(sz int64) string {
+		return humanize.Bytes(uint64(sz))
+	}
+
+	for {
+		Infof("\n")
+		var levels []int
+		for i, l := range db.lc.levels {
+			sz := l.getTotalSize()
+			Infof("Level: %d. %8s Size. %8s Max.\n",
+				i, hbytes(l.getTotalSize()), hbytes(l.maxTotalSize))
+			if sz > 0 {
+				levels = append(levels, i)
+			}
+		}
+		if len(levels) == 1 {
+			prios := db.lc.pickCompactLevels()
+			if len(prios) == 0 || prios[0].score <= 1.0 {
+				Infof("All tables consolidated into one level. Flattening done.\n")
+				return nil
+			}
+			if err := compactAway(prios[0]); err != nil {
+				return err
+			}
+			continue
+		}
+		// Create an artificial compaction priority, to ensure that we compact the level.
+		cp := compactionPriority{level: levels[0], score: 1.71}
+		if err := compactAway(cp); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (op *MergeOperator) runCompactions(dur time.Duration) {
-	ticker := time.NewTicker(dur)
-	defer op.closer.Done()
-	var stop bool
-	for {
-		select {
-		case <-op.closer.HasBeenClosed():
-			stop = true
-		case <-ticker.C: // wait for tick
-		}
-		if err := op.compact(); err != nil {
-			Errorf("failure while running merge operation: %s", err)
-		}
-		if stop {
-			ticker.Stop()
+// DropAll would drop all the data stored in Badger. It does this in the following way.
+// - Stop accepting new writes.
+// - Pause memtable flushes and compactions.
+// - Pick all tables from all levels, create a changeset to delete all these
+// tables and apply it to manifest.
+// - Pick all log files from value log, and delete all of them. Restart value log files from zero.
+// - Resume memtable flushes and compactions.
+//
+// NOTE: DropAll is resilient to concurrent writes, but not to reads. It is up to the user to not do
+// any reads while DropAll is going on, otherwise they may result in panics. Ideally, both reads and
+// writes are paused before running DropAll, and resumed after it is finished.
+func (db *DB) DropAll() error {
+	Infof("DropAll called. Blocking writes...")
+	// Stop accepting new writes.
+	atomic.StoreInt32(&db.blockWrites, 1)
+
+	// Wait for writeCh to reach size of zero. This is not ideal, but a very
+	// simple way to allow writeCh to flush out, before we proceed.
+	tick := time.NewTicker(100 * time.Millisecond)
+	for range tick.C {
+		if len(db.writeCh) == 0 {
 			break
 		}
 	}
-}
+	tick.Stop()
+	Infof("All previous writes done. Stopping compactions...")
 
-// Add records a value in Badger which will eventually be merged by a background
-// routine into the values that were recorded by previous invocations to Add().
-func (op *MergeOperator) Add(val []byte) error {
-	return op.db.Update(func(txn *Txn) error {
-		return txn.Set(op.key, val)
-	})
-}
+	db.stopCompactions()
+	defer db.startCompactions()
+	Infof("Compactions stopped. Dropping all SSTables...")
 
-// Get returns the latest value for the merge operator, which is derived by
-// applying the merge function to all the values added so far.
-//
-// If Add has not been called even once, Get will return ErrKeyNotFound.
-func (op *MergeOperator) Get() ([]byte, error) {
-	op.RLock()
-	defer op.RUnlock()
-	var existing []byte
-	err := op.db.View(func(txn *Txn) (err error) {
-		existing, err = op.iterateAndMerge(txn)
-		return err
-	})
-	if err == errNoMerge {
-		return existing, nil
+	// Remove inmemory tables. Calling DecrRef for safety. Not sure if they're absolutely needed.
+	db.mt.DecrRef()
+	db.mt = skl.NewSkiplist(arenaSize(db.opt)) // Set it up for future writes.
+	for _, mt := range db.imm {
+		mt.DecrRef()
 	}
-	return existing, err
-}
+	db.imm = db.imm[:0]
 
-// Stop waits for any pending merge to complete and then stops the background
-// goroutine.
-func (op *MergeOperator) Stop() {
-	op.closer.SignalAndWait()
+	num, err := db.lc.deleteLSMTree()
+	if err != nil {
+		return err
+	}
+	Infof("Deleted %d SSTables. Now deleting value logs...\n", num)
+
+	num, err = db.vlog.dropAll()
+	if err != nil {
+		return err
+	}
+	db.vhead = valuePointer{} // Zero it out.
+	Infof("Deleted %d value log files. Resuming operations...\n", num)
+
+	// Resume writes.
+	atomic.StoreInt32(&db.blockWrites, 0)
+
+	Infof("DropAll done")
+	return nil
 }

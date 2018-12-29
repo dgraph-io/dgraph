@@ -19,10 +19,12 @@ package y
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"math"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -159,6 +161,17 @@ func (s *Slice) Resize(sz int) []byte {
 		s.buf = make([]byte, sz)
 	}
 	return s.buf[0:sz]
+}
+
+func FixedDuration(d time.Duration) string {
+	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
+	if d >= time.Minute {
+		str = fmt.Sprintf("%02dm", int(d.Minutes())%60) + str
+	}
+	if d >= time.Hour {
+		str = fmt.Sprintf("%02dh", int(d.Hours())) + str
+	}
+	return str
 }
 
 // Closer holds the two things we need to close a goroutine and wait for it to finish: a chan
