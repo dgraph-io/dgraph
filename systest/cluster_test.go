@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/test"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
@@ -51,9 +50,9 @@ type State struct {
 	Groups map[string]GroupState `json:"groups"`
 }
 
-func waitForConvergence(t *testing.T, c *test.DgraphCluster) {
+func waitForConvergence(t *testing.T, c *DgraphCluster) {
 	for i := 0; i < 60; i++ {
-		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/state", c.ZeroPortOffset+6080))
+		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/state", c.zeroPortOffset+6080))
 		require.NoError(t, err)
 		b, err := ioutil.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -167,7 +166,7 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 	check(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	cluster := test.NewDgraphCluster(tmpDir)
+	cluster := NewDgraphCluster(tmpDir)
 	check(t, cluster.Start())
 	defer cluster.Close()
 
@@ -177,8 +176,8 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--rdfs", data,
 		"--schema", schema,
-		"--dgraph", ":"+cluster.DgraphPort,
-		"--zero", ":"+cluster.ZeroPort,
+		"--dgraph", ":"+cluster.dgraphPort,
+		"--zero", ":"+cluster.zeroPort,
 	)
 	liveCmd.Dir = tmpDir
 	liveCmd.Stdout = os.Stdout
@@ -189,19 +188,19 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 	}
 
 	// So that snapshot happens and everything is persisted to disk.
-	if err := restart(cluster.Dgraph); err != nil {
+	if err := restart(cluster.dgraph); err != nil {
 		//		shutdownCluster()
 		log.Fatal(err)
 	}
-	waitForNodeToBeHealthy(t, cluster.DgraphPortOffset+x.PortHTTP)
+	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+x.PortHTTP)
 	waitForConvergence(t, cluster)
 	// TODO(pawan) - Investigate why the test fails if we remove this export.
 	// The second export has less RDFs than it should if we don't do this export.
 	err = matchExportCount(matchExport{
 		expectedRDF:    2e5,
 		expectedSchema: 10,
-		dir:            cluster.Dir,
-		port:           cluster.DgraphPortOffset + x.PortHTTP,
+		dir:            cluster.dir,
+		port:           cluster.dgraphPortOffset + x.PortHTTP,
 	})
 	if err != nil {
 		//		shutdownCluster()
@@ -214,7 +213,7 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 
 	shutdownCluster := func() {
 		cluster.Close()
-		n.Process.Process.Kill()
+		n.process.Process.Kill()
 	}
 	defer shutdownCluster()
 
@@ -230,13 +229,13 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 		}
 	}
 
-	o, err := strconv.Atoi(n.Offset)
+	o, err := strconv.Atoi(n.offset)
 	quickCheck(err)
 
 	// Wait for snapshot to be transferred.
 	waitForNodeToBeHealthy(t, o+x.PortHTTP)
 
-	cmd := cluster.Dgraph
+	cmd := cluster.dgraph
 	cmd.Process.Signal(syscall.SIGINT)
 	if _, err := cmd.Process.Wait(); err != nil {
 		shutdownCluster()
@@ -253,7 +252,7 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	waitForNodeToBeHealthy(t, cluster.DgraphPortOffset+x.PortHTTP)
+	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+x.PortHTTP)
 	waitForNodeToBeHealthy(t, o+x.PortHTTP)
 	waitForConvergence(t, cluster)
 
