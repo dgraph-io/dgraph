@@ -48,7 +48,7 @@ func (s *Server) Login(ctx context.Context,
 		}, "client ip for login")
 	}
 
-	user, err := s.authenticate(ctx, request)
+	user, err := s.authenticateLogin(ctx, request)
 	if err != nil {
 		errMsg := fmt.Sprintf("authentication from address %s failed: %v", addr, err)
 		glog.Errorf(errMsg)
@@ -87,7 +87,7 @@ func (s *Server) Login(ctx context.Context,
 	return resp, nil
 }
 
-func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*acl.User, error) {
+func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User, error) {
 	if err := validateLoginRequest(request); err != nil {
 		return nil, fmt.Errorf("invalid login request: %v", err)
 	}
@@ -386,26 +386,46 @@ func (s *Server) retrieveAcls() error {
 	return nil
 }
 
-func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
-	return nil
-}
-
-func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+func extractUserAndGroups(ctx context.Context) (string, []string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return fmt.Errorf("no metadata available")
+		return "", nil, fmt.Errorf("no metadata available")
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
 		//glog.Infof("no accessJwt available, type is %v", reflect.TypeOf(ctx.Value("accessJwt")))
-		return fmt.Errorf("no accessJwt available")
+		return "", nil, fmt.Errorf("no accessJwt available")
 	}
 
-	userId, groupIds, err := authenticateToken(accessJwt[0])
+	return authenticateToken(accessJwt[0])
+}
+
+func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
-		return fmt.Errorf("token authentication failed:%v", err)
+		return err
 	}
+
+	if userId == "admin" {
+		// the admin account has access to everything
+		return nil
+	}
+
+	for _, nquad := range gmu.Set {
+		if !s.authorizePredicate(groupIds, nquad.Predicate, acl.Write) {
+			return fmt.Errorf("unauthorized to access the predicate %v", nquad.Predicate)
+		}
+	}
+	return nil
+}
+
+func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+	userId, groupIds, err := extractUserAndGroups(ctx)
+	if err != nil {
+		return err
+	}
+
 	if userId == "admin" {
 		// the admin account has access to everything
 		return nil
