@@ -1803,6 +1803,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 		// The following optimization speeds up this iteration considerably, because it avoids
 		// the need to run ReadPostingList.
+		if item.UserMeta()&posting.BitEmptyPosting > 0 {
+			// This is an empty posting list. So, it should not be included.
+			continue
+		}
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)

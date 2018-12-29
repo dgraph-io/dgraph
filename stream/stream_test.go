@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func value(k int) []byte {
 }
 
 type collector struct {
-	kv []*pb.KV
+	kv []*bpb.KV
 }
 
 func (c *collector) Send(kvs *pb.KVS) error {
@@ -70,13 +71,13 @@ func TestOrchestrate(t *testing.T) {
 		require.NoError(t, txn.CommitAt(5, nil))
 	}
 
-	c := &collector{kv: make([]*pb.KV, 0, 100)}
+	c := &collector{kv: make([]*bpb.KV, 0, 100)}
 	sl := Lists{Stream: c, DB: db}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*bpb.KV, error) {
 		item := itr.Item()
 		val, err := item.ValueCopy(nil)
 		require.NoError(t, err)
-		kv := &pb.KV{Key: item.KeyCopy(nil), Val: val, Version: item.Version()}
+		kv := &bpb.KV{Key: item.KeyCopy(nil), Value: val, Version: item.Version()}
 		itr.Next() // Just for fun.
 		return kv, nil
 	}
@@ -90,7 +91,7 @@ func TestOrchestrate(t *testing.T) {
 	for _, kv := range c.kv {
 		pk := x.Parse(kv.Key)
 		expected := value(int(pk.Uid))
-		require.Equal(t, expected, kv.Val)
+		require.Equal(t, expected, kv.Value)
 		m[pk.Attr]++
 	}
 	require.Equal(t, 3, len(m))
@@ -109,7 +110,7 @@ func TestOrchestrate(t *testing.T) {
 	for _, kv := range c.kv {
 		pk := x.Parse(kv.Key)
 		expected := value(int(pk.Uid))
-		require.Equal(t, expected, kv.Val)
+		require.Equal(t, expected, kv.Value)
 		m[pk.Attr]++
 	}
 	require.Equal(t, 1, len(m))
@@ -131,7 +132,7 @@ func TestOrchestrate(t *testing.T) {
 	for _, kv := range c.kv {
 		pk := x.Parse(kv.Key)
 		expected := value(int(pk.Uid))
-		require.Equal(t, expected, kv.Val)
+		require.Equal(t, expected, kv.Value)
 		m[pk.Attr]++
 	}
 	require.Equal(t, 1, len(m))
@@ -150,7 +151,7 @@ func TestOrchestrate(t *testing.T) {
 	for _, kv := range c.kv {
 		pk := x.Parse(kv.Key)
 		expected := value(int(pk.Uid))
-		require.Equal(t, expected, kv.Val)
+		require.Equal(t, expected, kv.Value)
 		m[pk.Attr]++
 	}
 	require.Equal(t, 3, len(m))

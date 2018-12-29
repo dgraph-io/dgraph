@@ -30,6 +30,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -37,7 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -538,7 +538,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(snap, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -778,24 +778,29 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer := x.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
-	var numKeys uint64
-	sl := stream.Lists{Stream: writer, DB: pstore}
-	sl.ChooseKeyFunc = func(item *badger.Item) bool {
-		if item.UserMeta()&posting.BitSchemaPosting > 0 {
+	stream := pstore.NewStreamAt(readTs)
+	stream.ChooseKey = func(item *badger.Item) bool {
+		switch item.UserMeta() {
+		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			return false
+		default:
+			return true
 		}
-		// Return true if we don't find the BitCompletePosting bit.
-		return item.UserMeta()&posting.BitCompletePosting == 0
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	var numKeys uint64
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}
 		atomic.AddUint64(&numKeys, 1)
-		return l.MarshalToKv()
+		kv, err := l.MarshalToKv()
+		return &bpb.KVList{Kv: []*bpb.KV{kv}}, err
 	}
-	if err := sl.Orchestrate(context.Background(), "Rolling up", readTs); err != nil {
+	stream.Send = func(list *bpb.KVList) error {
+		return writer.Send(&pb.KVS{Kv: list.Kv})
+	}
+	if err := stream.Orchestrate(context.Background(), 16, "Rolling up"); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {

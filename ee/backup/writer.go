@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strings"
 
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -97,7 +98,7 @@ func (w *writer) flush() error {
 
 // write uses the data length as delimiter.
 // XXX: we could use CRC for restore.
-func (w *writer) write(kv *pb.KV) error {
+func (w *writer) write(kv *bpb.KV) error {
 	if err := binary.Write(w.h, binary.LittleEndian, uint64(kv.Size())); err != nil {
 		return err
 	}

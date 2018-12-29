@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/stream"
@@ -54,7 +55,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:password",
 }
 
-func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
+func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KV, error) {
 	var buf bytes.Buffer
 
 	err := pl.Iterate(readTs, 0, func(p *pb.Posting) error {
@@ -132,14 +133,14 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 		buf.WriteString(" .\n")
 		return nil
 	})
-	kv := &pb.KV{
-		Val:     buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
+	kv := &bpb.KV{
+		Value:   buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
 		Version: 1,           // Data value.
 	}
 	return kv, err
 }
 
-func toSchema(attr string, update pb.SchemaUpdate) (*pb.KV, error) {
+func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KV, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
 	if strings.ContainsRune(attr, ':') {
@@ -174,8 +175,8 @@ func toSchema(attr string, update pb.SchemaUpdate) (*pb.KV, error) {
 		buf.WriteString(" @upsert")
 	}
 	buf.WriteString(" . \n")
-	kv := &pb.KV{
-		Val:     buf.Bytes(),
+	kv := &bpb.KV{
+		Value:   buf.Bytes(),
 		Version: 2, // Schema value
 	}
 	return kv, nil
@@ -231,7 +232,7 @@ func (mux *writerMux) Send(kvs *pb.KVS) error {
 		default:
 			glog.Fatalf("Invalid data type found: %x", kv.Key)
 		}
-		if _, err := writer.gw.Write(kv.Val); err != nil {
+		if _, err := writer.gw.Write(kv.Value); err != nil {
 			return err
 		}
 	}
@@ -300,7 +301,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		// written to a different file.
 		return pk.IsData() || pk.IsSchema()
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*bpb.KV, error) {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
 

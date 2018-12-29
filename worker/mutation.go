@@ -257,11 +257,12 @@ func hasEdges(attr string, startTs uint64) bool {
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
-		// Check for non-empty posting
-		// BitEmptyPosting is also a complete posting,
-		// so checking for CompletePosting&BitCompletePosting > 0 would
-		// be wrong
-		if it.Item().UserMeta()&posting.BitEmptyPosting != posting.BitEmptyPosting {
+		// NOTE: This is NOT correct.
+		// An incorrect, but efficient way to quickly check if we have at least one non-empty
+		// posting. This does NOT consider those posting lists which can have multiple deltas
+		// summing up to an empty posting list. I'm leaving it as it is for now. But, this could
+		// cause issues because of this inaccuracy.
+		if it.Item().UserMeta()&posting.BitEmptyPosting == 0 {
 			return true
 		}
 	}

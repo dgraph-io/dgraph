@@ -18,9 +18,11 @@ package alpha
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -34,7 +36,9 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
+
 	"google.golang.org/grpc/metadata"
 )
 
@@ -60,19 +64,71 @@ func extractStartTs(urlPath string) (uint64, error) {
 	}
 }
 
-// This method should just build the request and proxy it to the Query method of dgraph.Server.
-// It can then encode the response as appropriate before sending it back to the user.
-func queryHandler(w http.ResponseWriter, r *http.Request) {
+// Common functionality for these request handlers. Returns true if the request is completely
+// handled here and nothing further needs to be done.
+func commonHandler(w http.ResponseWriter, r *http.Request) bool {
+	// Do these requests really need CORS headers? Doesn't seem like it, but they are probably
+	// harmless aside from the extra size they add to each response.
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method == "OPTIONS" {
-		return
-	}
-
-	if !allowed(r.Method) {
+		return true
+	} else if !allowed(r.Method) {
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return true
+	}
+
+	return false
+}
+
+// Read request body, transparently decompressing if necessary. Return nil on error.
+func readRequest(w http.ResponseWriter, r *http.Request) []byte {
+	var in io.Reader = r.Body
+
+	if enc := r.Header.Get("Content-Encoding"); enc != "" && enc != "identity" {
+		if enc == "gzip" {
+			gz, err := gzip.NewReader(r.Body)
+			if err != nil {
+				x.SetStatus(w, x.Error, "Unable to create decompressor")
+				return nil
+			}
+			defer gz.Close()
+			in = gz
+		} else {
+			x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content encoding")
+			return nil
+		}
+	}
+
+	body, err := ioutil.ReadAll(in)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return nil
+	}
+
+	return body
+}
+
+// Write response body, transparently compressing if necessary.
+func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
+	var out io.Writer = w
+
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gzw := gzip.NewWriter(w)
+		defer gzw.Close()
+		out = gzw
+	}
+
+	return out.Write(b)
+}
+
+// This method should just build the request and proxy it to the Query method of dgraph.Server.
+// It can then encode the response as appropriate before sending it back to the user.
+func queryHandler(w http.ResponseWriter, r *http.Request) {
+	if commonHandler(w, r) {
 		return
 	}
 
@@ -93,13 +149,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	defer r.Body.Close()
-	q, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+	body := readRequest(w, r)
+	if body == nil {
 		return
 	}
-	req.Query = string(q)
+	req.Query = string(body)
 
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), "debug", d)
@@ -159,32 +213,24 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		writeEntry("data", resp.Json)
 	}
 	out.WriteRune('}')
-	w.Write(out.Bytes())
+
+	writeResponse(w, r, out.Bytes())
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
+	if commonHandler(w, r) {
 		return
 	}
 
-	if !allowed(r.Method) {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-	defer r.Body.Close()
-	m, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+	m := readRequest(w, r)
+	if m == nil {
 		return
 	}
 
 	parseStart := time.Now()
 
 	var mu *api.Mutation
+	var err error
 	if mType := r.Header.Get("X-Dgraph-MutationType"); mType == "json" {
 		// Parse JSON.
 		ms := make(map[string]*skipJSONUnmarshal)
@@ -261,20 +307,12 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
-	w.Write(js)
+
+	writeResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		return
-	}
-
-	if !allowed(r.Method) {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if commonHandler(w, r) {
 		return
 	}
 
@@ -296,10 +334,8 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc.StartTs = ts
 
 	// Keys are sent as an array in the body.
-	defer r.Body.Close()
-	keys, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+	keys := readRequest(w, r)
+	if keys == nil {
 		return
 	}
 
@@ -335,20 +371,12 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
-	w.Write(js)
+
+	writeResponse(w, r, js)
 }
 
 func abortHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		return
-	}
-
-	if !allowed(r.Method) {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if commonHandler(w, r) {
 		return
 	}
 
@@ -385,33 +413,23 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
-	w.Write(js)
+
+	writeResponse(w, r, js)
 }
 
 func alterHandler(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		return
-	}
-
-	if !allowed(r.Method) {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if commonHandler(w, r) {
 		return
 	}
 
 	op := &api.Operation{}
 
-	defer r.Body.Close()
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+	b := readRequest(w, r)
+	if b == nil {
 		return
 	}
 
-	err = json.Unmarshal(b, &op)
+	err := json.Unmarshal(b, &op)
 	if err != nil {
 		op.Schema = string(b)
 	}
@@ -442,7 +460,8 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	w.Write(js)
+
+	writeResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.

@@ -20,7 +20,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
@@ -116,7 +115,7 @@ func groupDel(conf *viper.Viper) error {
 }
 
 func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
-	fields ...string) (group *acl.Group, err error) {
+	fields ...string) (group *Group, err error) {
 
 	// write query header
 	query := fmt.Sprintf(`query search($groupid: string){
@@ -133,7 +132,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 		glog.Errorf("Error while query group with id %s: %v", groupid, err)
 		return nil, err
 	}
-	group, err = acl.UnmarshalGroup(queryResp.GetJson(), "group")
+	group, err = UnmarshalGroup(queryResp.GetJson(), "group")
 	if err != nil {
 		return nil, err
 	}

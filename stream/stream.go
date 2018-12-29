@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,7 +43,7 @@ type Lists struct {
 	Predicate     string
 	DB            *badger.DB
 	ChooseKeyFunc func(item *badger.Item) bool
-	ItemToKVFunc  func(key []byte, itr *badger.Iterator) (*pb.KV, error)
+	ItemToKVFunc  func(key []byte, itr *badger.Iterator) (*bpb.KV, error)
 }
 
 // keyRange is [start, end), including start, excluding end. Do ensure that the start,
