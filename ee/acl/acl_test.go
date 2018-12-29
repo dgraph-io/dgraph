@@ -163,7 +163,7 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	// use the admin account to clean the database
 	ctx := context.Background()
 	if err := dg.Login(ctx, "admin", "password"); err != nil {
-		t.Fatalf("unable to login using the admin account")
+		t.Fatalf("unable to login using the admin account:%v", err)
 	}
 	ctxWithAdminJwt := dg.GetContext(ctx)
 	op := api.Operation{

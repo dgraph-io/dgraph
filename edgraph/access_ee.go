@@ -94,7 +94,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
-		userId, _, err := authenticateToken(request.RefreshToken)
+		userId, _, err := validateToken(request.RefreshToken)
 		if err != nil {
 			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
@@ -107,7 +107,8 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("user not found for id %v", request.Userid)
+			return nil, fmt.Errorf("unable to authenticate through refresh token: " +
+				"user not found for id %v", request.Userid)
 		}
 	} else {
 		var err error
@@ -121,7 +122,8 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("user not found for id %v", request.Userid)
+			return nil, fmt.Errorf("unable to authenticate through password " +
+				"user not found for id %v", request.Userid)
 		}
 		if !user.PasswordMatch {
 			return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
@@ -131,9 +133,9 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	return user, nil
 }
 
-func authenticateToken(refreshToken string) (string, []string,
+func validateToken(jwtToken string) (string, []string,
 	error) {
-	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -141,19 +143,19 @@ func authenticateToken(refreshToken string) (string, []string,
 	})
 
 	if err != nil {
-		return "", nil, fmt.Errorf("unable to parse refresh token:%v", err)
+		return "", nil, fmt.Errorf("unable to parse jwt token:%v", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return "", nil, fmt.Errorf("claims in refresh token is not map claims:%v", refreshToken)
+		return "", nil, fmt.Errorf("claims in jwt token is not map claims:%v", jwtToken)
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return "", nil, fmt.Errorf("refresh token has expired: %v", refreshToken)
+		return "", nil, fmt.Errorf("jwt token has expired at %v: %v", now, jwtToken)
 	}
 
 	userId, ok := claims["userid"].(string)
@@ -332,7 +334,7 @@ func ResetAcl() {
 	}
 
 	if _, err := server.Mutate(ctx, mu); err != nil {
-		glog.Errorf("unable to create user: %v", err)
+		glog.Errorf("unable to create admin: %v", err)
 		return
 	}
 	glog.Info("Created the admin account with the default password")
@@ -398,7 +400,7 @@ func extractUserAndGroups(ctx context.Context) (string, []string, error) {
 		return "", nil, fmt.Errorf("no accessJwt available")
 	}
 
-	return authenticateToken(accessJwt[0])
+	return validateToken(accessJwt[0])
 }
 
 func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
