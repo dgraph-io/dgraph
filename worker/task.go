@@ -1505,14 +1505,10 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 				return false, err
 			}
 
-			v, has := ftree.function.convertedVal[typId]
-			if !has {
-				if v, err = types.Convert(ftree.function.val, typId); err != nil {
-					// ignore facet if not of appropriate type
-					return false, nil
-				} else {
-					ftree.function.convertedVal[typId] = v
-				}
+			v, err := types.Convert(ftree.function.val, typId)
+			if err != nil {
+				// ignore facet if not of appropriate type
+				return false, nil
 			}
 			fVal, err := facets.ValFor(fc)
 			if err != nil {
@@ -1599,8 +1595,6 @@ type facetsFunc struct {
 	args   []string
 	tokens []string
 	val    types.Val
-	// convertedVal is used to cache the converted value of val for each type
-	convertedVal map[types.TypeID]types.Val
 }
 type facetsTree struct {
 	op       string
@@ -1616,7 +1610,6 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	ftree.op = tree.Op
 	if tree.Func != nil {
 		ftree.function = &facetsFunc{}
-		ftree.function.convertedVal = make(map[types.TypeID]types.Val)
 		ftree.function.name = tree.Func.Name
 		ftree.function.key = tree.Func.Key
 		ftree.function.args = tree.Func.Args
