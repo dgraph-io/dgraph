@@ -39,6 +39,7 @@ type Request struct {
 func (r *Request) Process(ctx context.Context) error {
 	h, err := r.newHandler()
 	if err != nil {
+		glog.Errorf("Unable to get handler for request: %+v. Error: %v", r, err)
 		return err
 	}
 
@@ -55,6 +56,15 @@ func (r *Request) Process(ctx context.Context) error {
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
 	return err
+}
+
+// handler interface is implemented by URI scheme handlers.
+type handler interface {
+	// Handlers know how to Write and Close to their target.
+	io.WriteCloser
+	// Session receives the host and path of the target. It should get all its configuration
+	// from the environment.
+	Open(*url.URL, *Request) error
 }
 
 // newWriter parses the requested target URI, finds a handler and then tries to create a session.
@@ -106,13 +116,4 @@ func (r *Request) newHandler() (handler, error) {
 		return nil, err
 	}
 	return h, nil
-}
-
-// handler interface is implemented by URI scheme handlers.
-type handler interface {
-	// Handlers know how to Write and Close to their target.
-	io.WriteCloser
-	// Session receives the host and path of the target. It should get all its configuration
-	// from the environment.
-	Open(*url.URL, *Request) error
 }
