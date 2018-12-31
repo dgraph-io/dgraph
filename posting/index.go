@@ -387,7 +387,7 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		writer := x.NewTxnWriter(pstore)
+		writer := NewTxnWriter(pstore)
 		for itr.Rewind(); itr.Valid(); itr.Next() {
 			item := itr.Item()
 			if !remove(item.Key()) {
@@ -507,7 +507,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 	}
 
 	// Now we write all the created posting lists to disk.
-	writer := x.NewTxnWriter(pstore)
+	writer := NewTxnWriter(pstore)
 	for key := range txn.deltas {
 		pl, err := txn.Get([]byte(key))
 		if err != nil {
