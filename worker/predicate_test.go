@@ -83,7 +83,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
-		list, err := posting.Get(k)
+		list, err := posting.GetNoStore(k)
 		require.NoError(t, err)
 
 		de := &pb.DirectedEdge{

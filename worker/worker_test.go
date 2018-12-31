@@ -51,7 +51,7 @@ func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 }
 
 func getOrCreate(key []byte) *posting.List {
-	l, err := posting.Get(key)
+	l, err := posting.GetNoStore(key)
 	x.Checkf(err, "While calling posting.Get")
 	return l
 }
