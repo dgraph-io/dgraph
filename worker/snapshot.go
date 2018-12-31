@@ -24,6 +24,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -55,7 +56,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 	for {
 		kvs, err := stream.Recv()

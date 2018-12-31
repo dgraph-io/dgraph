@@ -435,7 +435,7 @@ func (n *node) processApplyCh() {
 
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil {
@@ -779,7 +779,7 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
 	stream := pstore.NewStreamAt(readTs)
