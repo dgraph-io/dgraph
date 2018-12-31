@@ -210,7 +210,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 		Entity: src,
 		Op:     pb.DirectedEdge_SET,
 	}
-	l, err := Get(x.DataKey(attr, src))
+	l, err := GetNoStore(x.DataKey(attr, src))
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
@@ -226,7 +226,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      pb.DirectedEdge_SET,
 	}
-	l, err := Get(x.DataKey(attr, src))
+	l, err := GetNoStore(x.DataKey(attr, src))
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
@@ -283,7 +283,7 @@ func TestRebuildIndex(t *testing.T) {
 			continue
 		}
 		idxKeys = append(idxKeys, string(key))
-		l, err := Get(key)
+		l, err := GetNoStore(key)
 		require.NoError(t, err)
 		idxVals = append(idxVals, l)
 	}

@@ -31,7 +31,7 @@ func TestRollupTimestamp(t *testing.T) {
 	addEdgeToUID(t, "rollup", 1, 3, 3, 4)
 	addEdgeToUID(t, "rollup", 1, 4, 5, 6)
 
-	l, err := Get(key)
+	l, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	uidList, err := l.Uids(ListOptions{ReadTs: 7})
