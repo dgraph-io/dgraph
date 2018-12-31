@@ -75,7 +75,7 @@ func TestPostingListRead(t *testing.T) {
 	addEdgeToUID(t, "emptypl", 1, 2, 1, 2)
 	addEdgeToUID(t, "emptypl", 1, 3, 3, 4)
 
-	writer := x.NewTxnWriter(pstore)
+	writer := NewTxnWriter(pstore)
 	require.NoError(t, writer.SetAt(key, []byte{}, BitEmptyPosting, 6))
 	require.NoError(t, writer.Flush())
 	assertLength(7, 0)
@@ -87,7 +87,7 @@ func TestPostingListRead(t *testing.T) {
 	data, err := empty.Marshal()
 	require.NoError(t, err)
 
-	writer = x.NewTxnWriter(pstore)
+	writer = NewTxnWriter(pstore)
 	require.NoError(t, writer.SetAt(key, data, BitCompletePosting, 10))
 	require.NoError(t, writer.Flush())
 	assertLength(10, 0)
