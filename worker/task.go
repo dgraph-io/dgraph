@@ -307,7 +307,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
-func handleValuePostings(ctx context.Context, args funcArgs) error {
+func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) error {
 	srcFn := args.srcFn
 	q := args.q
 
@@ -361,7 +361,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			key := x.DataKey(q.Attr, q.UidList.Uids[i])
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := posting.Get(key)
+			pl, err := qs.cache.Get(key)
 			if err != nil {
 				return err
 			}
@@ -511,7 +511,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
 // keys store uid posting lists.
-func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOptions) error {
+func (qs *queryState) handleUidPostings(
+	ctx context.Context, args funcArgs, opts posting.ListOptions) error {
 	srcFn := args.srcFn
 	q := args.q
 
@@ -568,7 +569,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			}
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := posting.Get(key)
+			pl, err := qs.cache.Get(key)
 			if err != nil {
 				return err
 			}
@@ -717,14 +718,24 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if !groups().ServesTablet(q.Attr) {
 		return &emptyResult, errUnservedTablet
 	}
-	out, err := helpProcessTask(ctx, q, gid)
+	qs := queryState{cache: posting.Oracle().CacheAt(q.ReadTs)}
+	if qs.cache == nil {
+		qs.cache = posting.NewLocalCache()
+	}
+
+	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
 		return &emptyResult, err
 	}
 	return out, nil
 }
 
-func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
+type queryState struct {
+	cache *posting.LocalCache
+}
+
+func (qs *queryState) helpProcessTask(
+	ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
 	span := otrace.FromContext(ctx)
 	out := new(pb.Result)
 	attr := q.Attr
@@ -774,26 +785,26 @@ func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, 
 	}
 	if needsValPostings {
 		span.Annotate(nil, "handleValuePostings")
-		if err = handleValuePostings(ctx, args); err != nil {
+		if err = qs.handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}
 	} else {
 		span.Annotate(nil, "handleUidPostings")
-		if err = handleUidPostings(ctx, args, opts); err != nil {
+		if err = qs.handleUidPostings(ctx, args, opts); err != nil {
 			return nil, err
 		}
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleHasFunction")
-		if err := handleHasFunction(ctx, q, out); err != nil {
+		if err := qs.handleHasFunction(ctx, q, out); err != nil {
 			return nil, err
 		}
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleCompareScalarFunction")
-		if err := handleCompareScalarFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleCompareScalarFunction(funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -802,7 +813,7 @@ func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, 
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		span.Annotate(nil, "handleRegexFunction")
-		if err := handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -811,7 +822,7 @@ func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, 
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
 		span.Annotate(nil, "handleCompareFunction")
-		if err := handleCompareFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.handleCompareFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -819,13 +830,13 @@ func helpProcessTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, 
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		filterGeoFunction(funcArgs{q, gid, srcFn, out})
+		qs.filterGeoFunction(funcArgs{q, gid, srcFn, out})
 	}
 
 	// For string matching functions, check the language.
 	if needsStringFiltering(srcFn, q.Langs, attr) {
 		span.Annotate(nil, "filterStringFunction")
-		filterStringFunction(funcArgs{q, gid, srcFn, out})
+		qs.filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
 	out.IntersectDest = srcFn.intersectDest
@@ -848,7 +859,7 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
 }
 
-func handleCompareScalarFunction(arg funcArgs) error {
+func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	if ok := schema.State().HasCount(attr); !ok {
 		return x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
@@ -863,10 +874,10 @@ func handleCompareScalarFunction(arg funcArgs) error {
 		readTs:  arg.q.ReadTs,
 		reverse: arg.q.Reverse,
 	}
-	return cp.evaluate(arg.out)
+	return qs.evaluate(cp, arg.out)
 }
 
-func handleRegexFunction(ctx context.Context, arg funcArgs) error {
+func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	attr := arg.q.Attr
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil || !typ.IsScalar() {
@@ -901,7 +912,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 				return ctx.Err()
 			default:
 			}
-			pl, err := posting.Get(x.DataKey(attr, uid))
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
 			}
@@ -952,7 +963,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	return nil
 }
 
-func handleCompareFunction(ctx context.Context, arg funcArgs) error {
+func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) error {
 	attr := arg.q.Attr
 	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
 	// We should already have checked this in getInequalityTokens.
@@ -1068,13 +1079,13 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 	return nil
 }
 
-func filterGeoFunction(arg funcArgs) error {
+func (qs *queryState) filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	isList := schema.State().IsList(attr)
 	filtered := &pb.List{}
 	for _, uid := range uids.Uids {
-		pl, err := posting.Get(x.DataKey(attr, uid))
+		pl, err := qs.cache.Get(x.DataKey(attr, uid))
 		if err != nil {
 			return err
 		}
@@ -1118,7 +1129,7 @@ func filterGeoFunction(arg funcArgs) error {
 // TODO: This function is really slow when there are a lot of UIDs to filter, for e.g. when used in
 // `has(name)`. We could potentially have a query level cache, which can be used to speed things up
 // a bit. Or, try to reduce the number of UIDs which make it here.
-func filterStringFunction(arg funcArgs) error {
+func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	if glog.V(3) {
 		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
 		defer glog.Infof("Done filterStringFunction")
@@ -1136,7 +1147,7 @@ func filterStringFunction(arg funcArgs) error {
 	// by the handleHasFunction for e.g. for a `has(name)` query.
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, err := posting.Get(key)
+		pl, err := qs.cache.Get(key)
 		if err != nil {
 			return err
 		}
@@ -1664,7 +1675,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluate(out *pb.Result) error {
+func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	count := cp.count
 	var illegal bool
 	switch cp.fn {
@@ -1688,7 +1699,7 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl, err := posting.Get(countKey)
+		pl, err := qs.cache.Get(countKey)
 		if err != nil {
 			return err
 		}
@@ -1723,8 +1734,7 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 
 	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		key := item.KeyCopy(nil)
-		pl, err := posting.Get(key)
+		pl, err := qs.cache.Get(item.Key())
 		if err != nil {
 			return err
 		}
@@ -1737,7 +1747,7 @@ func (cp *countParams) evaluate(out *pb.Result) error {
 	return nil
 }
 
-func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
+func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleHasFunction")
 	defer stop()

@@ -413,9 +413,6 @@ func compareAttrAndType(key []byte, attr string, typ byte) bool {
 }
 
 func DeleteReverseEdges(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteReverse)
-	})
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
@@ -433,12 +430,6 @@ func deleteCountIndex(attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteCount)
-	})
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteCountRev)
-	})
 	// Delete index entries from data store.
 	if err := deleteCountIndex(attr, false); err != nil {
 		return err
@@ -453,21 +444,10 @@ func DeleteCountIndex(attr string) error {
 type rebuild struct {
 	prefix  []byte
 	startTs uint64
-	cache   map[string]*List
 
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
 	fn func(uid uint64, pl *List, txn *Txn) error
-}
-
-// storeList would store the list in the cache.
-func (r *rebuild) storeList(list *List) bool {
-	key := string(list.key)
-	if _, ok := r.cache[key]; ok {
-		return false
-	}
-	r.cache[key] = list
-	return true
 }
 
 func (r *rebuild) Run(ctx context.Context) error {
@@ -485,24 +465,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 	// We create one txn for all the mutations to be housed in. We also create a
 	// localized posting list cache, to avoid stressing or mixing up with the
 	// global lcache (the LRU cache).
-	txn := &Txn{StartTs: r.startTs}
-	r.cache = make(map[string]*List)
-	var numGets uint64
-	txn.getList = func(key []byte) (*List, error) {
-		numGets++
-		if glog.V(2) && numGets%1000 == 0 {
-			glog.Infof("During rebuild, getList hit %d times\n", numGets)
-		}
-		if pl, ok := r.cache[string(key)]; ok {
-			return pl, nil
-		}
-		pl, err := getNew(key, pstore)
-		if err != nil {
-			return nil, err
-		}
-		r.cache[string(key)] = pl
-		return pl, nil
-	}
+	txn := NewTxn(r.startTs)
 
 	var prevKey []byte
 	for it.Rewind(); it.Valid(); {
@@ -680,9 +643,6 @@ func RebuildReverseEdges(ctx context.Context, attr string, startTs uint64) error
 }
 
 func DeleteIndex(attr string) error {
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteIndex)
-	})
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
@@ -699,9 +659,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 	// Let's clear out the cache for anything which belongs to this attribute,
 	// so once we're done, any reads would see the new list type. Note that we
 	// don't use lcache during the rebuild process.
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteData)
-	})
 
 	pk := x.ParsedKey{Attr: attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: startTs}
@@ -730,7 +687,7 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
-		x.AssertTrue(builder.storeList(pl))
+		txn.cache.Set(string(pl.key), pl)
 		if err := pl.AddMutation(ctx, txn, t); err != nil {
 			return err
 		}
@@ -749,7 +706,6 @@ func RebuildListType(ctx context.Context, attr string, startTs uint64) error {
 }
 
 func DeleteAll() error {
-	lcache.clear(func([]byte) bool { return true })
 	return deleteEntries(nil, func(key []byte) bool {
 		pk := x.Parse(key)
 		if pk == nil {
@@ -765,9 +721,6 @@ func DeleteAll() error {
 
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
-	lcache.clear(func(key []byte) bool {
-		return compareAttrAndType(key, attr, x.ByteData)
-	})
 	pk := x.ParsedKey{
 		Attr: attr,
 	}

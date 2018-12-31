@@ -92,6 +92,7 @@ func (tx *Txn) CommitToDisk(writer *x.TxnWriter, commitTs uint64) error {
 	}
 	var keys []string
 	tx.Lock()
+	// TODO: We can remove the deltas here. Now that we're using txn local cache.
 	for key := range tx.deltas {
 		keys = append(keys, key)
 	}
@@ -223,6 +224,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
+// TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l := new(List)
 	l.key = key
@@ -248,6 +250,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	} else {
 		iterOpts := badger.DefaultIteratorOptions
 		iterOpts.AllVersions = true
+		iterOpts.PrefetchValues = false
 		it := txn.NewKeyIterator(key, iterOpts)
 		defer it.Close()
 		it.Seek(key)

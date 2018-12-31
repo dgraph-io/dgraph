@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -464,25 +463,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		x.Errorf("Error while flushing to disk: %v", err)
 		return err
 	}
-
-	// Now let's commit all mutations to memory.
-	toMemory := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		err := x.RetryUntilSuccess(Config.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToMemory(commit)
-		})
-		if err != nil {
-			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
-				start, commit, err)
-		}
-	}
-
-	for _, txn := range delta.Txns {
-		toMemory(txn.StartTs, txn.CommitTs)
-	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
@@ -558,7 +538,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	posting.EvictLRU()
 	if _, err := n.populateSnapshot(snap, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
@@ -803,32 +782,23 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer := x.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
-	var mu sync.Mutex
-	var keys []string
-
-	addKey := func(key []byte) {
-		mu.Lock()
-		keys = append(keys, string(key))
-		mu.Unlock()
-	}
-
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
-		if pk.IsSchema() {
-			// Skip if schema.
+		switch item.UserMeta() {
+		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			return false
+		default:
+			return true
 		}
-		// Return true if we don't find the BitCompletePosting bit.
-		return item.UserMeta()&posting.BitCompletePosting == 0
 	}
+	var numKeys uint64
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}
-		addKey(key)
+		atomic.AddUint64(&numKeys, 1)
 		kv, err := l.MarshalToKv()
 		return listWrap(kv), err
 	}
@@ -842,17 +812,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		return err
 	}
 	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
-	glog.Infof("Rollup on disk done. Rolling up %d keys in LRU cache now...", len(keys))
-	for _, key := range keys {
-		l := posting.GetLru([]byte(key))
-		if l == nil {
-			continue
-		}
-		if err := l.Rollup(readTs); err != nil {
-			glog.Errorf("While rolling up posting.List in LRU cache: %v. Ignoring.", err)
-		}
-	}
-	glog.Infoln("Rollup in LRU cache done.")
+	glog.Infof("Rolled up %d keys. Done", atomic.LoadUint64(&numKeys))
 
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
