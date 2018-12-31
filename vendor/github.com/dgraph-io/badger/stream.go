@@ -30,15 +30,20 @@ import (
 const pageSize = 4 << 20 // 4MB
 
 // Stream provides a framework to concurrently iterate over a snapshot of Badger, pick up
-// key-values, batch them up and call Send. Because, Stream does concurrent iteration over many
-// smaller key ranges, it does NOT send keys in a strictly lexicographical order.
+// key-values, batch them up and call Send. Stream does concurrent iteration over many smaller key
+// ranges. It does NOT send keys in lexicographical sorted order. To get keys in sorted
+// order, use Iterator.
 type Stream struct {
 	// Prefix to only iterate over certain range of keys. If set to nil (default), Stream would
 	// iterate over the entire DB.
 	Prefix []byte
 
-	readTs uint64
-	db     *DB
+	// Number of goroutines to use for iterating over key ranges. Defaults to 16.
+	NumGo int
+
+	// Badger would produce log entries in Infof to indicate the progress of Stream. LogPrefix can
+	// be used to help differentiate them from other activities. Default is "Badger.Stream".
+	LogPrefix string
 
 	// ChooseKey is invoked each time a new key is encountered. Note that this is not called
 	// on every version of the value, only the first encountered version (i.e. the highest version
@@ -61,6 +66,8 @@ type Stream struct {
 	// single goroutine, i.e. logic within Send method can expect single threaded execution.
 	Send func(*pb.KVList) error
 
+	readTs  uint64
+	db      *DB
 	rangeCh chan keyRange
 	kvChan  chan *pb.KVList
 }
@@ -194,7 +201,7 @@ func (st *Stream) produceKVs(ctx context.Context) error {
 	}
 }
 
-func (st *Stream) streamKVs(ctx context.Context, logPrefix string) error {
+func (st *Stream) streamKVs(ctx context.Context) error {
 	var count int
 	var bytesSent uint64
 	t := time.NewTicker(time.Second)
@@ -223,7 +230,7 @@ func (st *Stream) streamKVs(ctx context.Context, logPrefix string) error {
 			return err
 		}
 		Infof("%s Created batch of size: %s in %s.\n",
-			logPrefix, humanize.Bytes(sz), time.Since(t))
+			st.LogPrefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
 
@@ -241,8 +248,8 @@ outer:
 				continue
 			}
 			speed := bytesSent / durSec
-			Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n",
-				logPrefix, y.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
+			Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n", st.LogPrefix,
+				y.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
 		case kvs, ok := <-st.kvChan:
 			if !ok {
@@ -256,23 +263,23 @@ outer:
 		}
 	}
 
-	Infof("%s Sent %d keys\n", logPrefix, count)
+	Infof("%s Sent %d keys\n", st.LogPrefix, count)
 	return nil
 }
 
-// Orchestrate runs Stream. It picks up ranges from the SSTables, then runs numGo number of
-// goroutines to iterate over these ranges and batch up KVs in lists. It then runs a single
+// Orchestrate runs Stream. It picks up ranges from the SSTables, then runs NumGo number of
+// goroutines to iterate over these ranges and batch up KVs in lists. It concurrently runs a single
 // goroutine to pick these lists, batch them up further and send to Output.Send. Orchestrate also
-// spits logs out to Infof, using the logPrefix string provided.  Note that all calls to
-// Output.Send are serial. In case any of these steps encounter an error, Orchestrate would stop
-// execution and return that error. Orchestrate should only be called once on the same Stream
-// object.
-func (st *Stream) Orchestrate(ctx context.Context, numGo int, logPrefix string) error {
+// spits logs out to Infof, using provided LogPrefix. Note that all calls to Output.Send
+// are serial. In case any of these steps encounter an error, Orchestrate would stop execution and
+// return that error. Orchestrate can be called multiple times, but in serial order.
+func (st *Stream) Orchestrate(ctx context.Context) error {
 	st.rangeCh = make(chan keyRange, 3) // Contains keys for posting lists.
 
 	// kvChan should only have a small capacity to ensure that we don't buffer up too much data if
-	// sending is slow. So, setting this to 3.
-	st.kvChan = make(chan *pb.KVList, 3)
+	// sending is slow. Page size is set to 4MB, which is used to lazily cap the size of each
+	// KVList. To get around 64MB buffer, we can set the channel size to 16.
+	st.kvChan = make(chan *pb.KVList, 16)
 
 	if st.KeyToList == nil {
 		st.KeyToList = st.ToList
@@ -283,7 +290,7 @@ func (st *Stream) Orchestrate(ctx context.Context, numGo int, logPrefix string) 
 
 	errCh := make(chan error, 1) // Stores error by consumeKeys.
 	var wg sync.WaitGroup
-	for i := 0; i < numGo; i++ {
+	for i := 0; i < st.NumGo; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -301,7 +308,7 @@ func (st *Stream) Orchestrate(ctx context.Context, numGo int, logPrefix string) 
 	kvErr := make(chan error, 1)
 	go func() {
 		// Picks up KV lists from kvChan, and sends them to Output.
-		kvErr <- st.streamKVs(ctx, logPrefix)
+		kvErr <- st.streamKVs(ctx)
 	}()
 	wg.Wait()        // Wait for produceKVs to be over.
 	close(st.kvChan) // Now we can close kvChan.
@@ -319,12 +326,16 @@ func (st *Stream) Orchestrate(ctx context.Context, numGo int, logPrefix string) 
 	return nil
 }
 
+func (db *DB) newStream() *Stream {
+	return &Stream{db: db, NumGo: 16, LogPrefix: "Badger.Stream"}
+}
+
 // NewStream creates a new Stream.
 func (db *DB) NewStream() *Stream {
 	if db.opt.managedTxns {
 		panic("This API can not be called in managed mode.")
 	}
-	return &Stream{db: db}
+	return db.newStream()
 }
 
 // NewStreamAt creates a new Stream at a particular timestamp. Should only be used with managed DB.
@@ -332,5 +343,7 @@ func (db *DB) NewStreamAt(readTs uint64) *Stream {
 	if !db.opt.managedTxns {
 		panic("This API can only be called in managed mode.")
 	}
-	return &Stream{db: db, readTs: readTs}
+	stream := db.newStream()
+	stream.readTs = readTs
+	return stream
 }
