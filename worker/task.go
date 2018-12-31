@@ -46,9 +46,10 @@ import (
 )
 
 var (
-	emptyUIDList   pb.List
-	emptyResult    pb.Result
-	emptyValueList = pb.ValueList{Values: []*pb.TaskValue{}}
+	emptyUIDList    pb.List
+	emptyFacetsList pb.FacetsList
+	emptyResult     pb.Result
+	emptyValueList  = pb.ValueList{Values: []*pb.TaskValue{}}
 )
 
 func invokeNetworkRequest(
@@ -276,11 +277,6 @@ func needsIndex(fnType FuncType) bool {
 	}
 }
 
-type result struct {
-	uid    uint64
-	facets []*api.Facet
-}
-
 type funcArgs struct {
 	q     *pb.Query
 	gid   uint32
@@ -382,11 +378,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 			if err == posting.ErrNoValue || len(vals) == 0 {
 				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
 					out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 					if q.ExpandAll {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -445,6 +441,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
 					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
+			} else {
+				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
 			}
 
 			switch {
@@ -575,39 +573,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				return err
 			}
 
-			// get filtered uids and facets.
-			var filteredRes []*result
-
-			var perr error
-			filteredRes = make([]*result, 0)
-			err = pl.Postings(opts, func(p *pb.Posting) error {
-				res := true
-				res, perr = applyFacetsTree(p.Facets, facetsTree)
-				if perr != nil {
-					return posting.ErrStopIteration
-				}
-				if res {
-					filteredRes = append(filteredRes, &result{
-						uid:    p.Uid,
-						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-				}
-				return nil // continue iteration.
-			})
-			if err != nil {
-				return err
-			} else if perr != nil {
-				return perr
-			}
-
-			// add facets to result.
-			if q.FacetParam != nil {
-				var fcsList []*pb.Facets
-				for _, fres := range filteredRes {
-					fcsList = append(fcsList, &pb.Facets{Facets: fres.facets})
-				}
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
-			}
-
 			switch {
 			case q.DoCount:
 				if i == 0 {
@@ -667,12 +632,38 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				if i == 0 {
 					span.Annotate(nil, "default")
 				}
-				// The more usual case: Getting the UIDs.
-				uidList := new(pb.List)
-				for _, fres := range filteredRes {
-					uidList.Uids = append(uidList.Uids, fres.uid)
+
+				uidList := &pb.List{
+					Uids: make([]uint64, 0, pl.ApproxLen()),
 				}
+
+				var fcsList []*pb.Facets
+				err = pl.Postings(opts, func(p *pb.Posting) error {
+					pick, err := applyFacetsTree(p.Facets, facetsTree)
+					if err != nil {
+						return err
+					}
+					if pick {
+						// TODO: This way of picking Uids differs from how
+						// pl.Uids works. So, have a look to see if we're
+						// catching all the edge cases here.
+						uidList.Uids = append(uidList.Uids, p.Uid)
+						if q.FacetParam != nil {
+							fcsList = append(fcsList, &pb.Facets{
+								Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+							})
+						}
+					}
+					return nil // continue iteration.
+				})
+				if err != nil {
+					return err
+				}
+
 				out.UidMatrix = append(out.UidMatrix, uidList)
+				if q.FacetParam != nil {
+					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
+				}
 			}
 		}
 		return nil
@@ -1795,6 +1786,10 @@ func handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result) error {
 
 		// The following optimization speeds up this iteration considerably, because it avoids
 		// the need to run ReadPostingList.
+		if item.UserMeta()&posting.BitEmptyPosting > 0 {
+			// This is an empty posting list. So, it should not be included.
+			continue
+		}
 		if item.UserMeta()&posting.BitCompletePosting > 0 {
 			// This bit would only be set if there are valid uids in UidPack.
 			result.Uids = append(result.Uids, pk.Uid)

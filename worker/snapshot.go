@@ -20,13 +20,11 @@ import (
 	"sync/atomic"
 
 	"github.com/coreos/etcd/raft"
-	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	ws "github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -36,7 +34,7 @@ const (
 )
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
-func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) (int, error) {
+func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := pb.NewWorkerClient(conn)
 
@@ -51,13 +49,13 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 		return 0, err
 	}
 	// Before we write anything, we should drop all the data stored in ps.
-	if err := ps.DropAll(); err != nil {
+	if err := pstore.DropAll(); err != nil {
 		return 0, err
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
-	writer := x.NewTxnWriter(ps)
+	writer := x.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 	for {
 		kvs, err := stream.Recv()
@@ -83,6 +81,10 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
+	glog.V(1).Infof("Flushed all writes to Badger. Flattening it now.")
+	if err := pstore.Flatten(1); err != nil {
+		return 0, err
+	}
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
@@ -92,7 +94,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, ps *badger.DB, pl *conn.Pool) 
 	return count, nil
 }
 
-func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) error {
+func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) error {
 	// We choose not to try and match the requested snapshot from the latest snapshot at the leader.
 	// This is the job of the Raft library. At the leader end, we service whatever is asked of us.
 	// If this snapshot is old, Raft should cause the follower to request another one, to overwrite
@@ -105,49 +107,28 @@ func doStreamSnapshot(snap *pb.Snapshot, stream pb.Worker_StreamSnapshotServer) 
 	// might be OK. Otherwise, we'd want to version the schemas as well. Currently, they're stored
 	// at timestamp=1.
 
-	var numKeys uint64
-	sl := ws.Lists{Stream: stream, DB: pstore}
-	sl.ChooseKeyFunc = func(_ *badger.Item) bool {
-		// Pick all keys.
-		return true
+	var num int
+	stream := pstore.NewStreamAt(snap.ReadTs)
+	stream.LogPrefix = "Sending Snapshot"
+	// Use the default implementation. We no longer try to generate a rolled up posting list here.
+	// Instead, we just stream out all the versions as they are.
+	stream.KeyToList = nil
+	stream.Send = func(list *bpb.KVList) error {
+		kvs := &pb.KVS{Kv: list.Kv}
+		num += len(kvs.Kv)
+		return out.Send(kvs)
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
-		atomic.AddUint64(&numKeys, 1)
-		item := itr.Item()
-		pk := x.Parse(key)
-		if pk.IsSchema() {
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return nil, err
-			}
-			kv := &pb.KV{
-				Key:      key,
-				Val:      val,
-				UserMeta: []byte{item.UserMeta()},
-				Version:  item.Version(),
-			}
-			return kv, nil
-		}
-		// We should keep reading the posting list instead of copying the key-value pairs directly,
-		// to consolidate the read logic in one place. This is more robust than trying to replicate
-		// a simplified key-value copy logic here, which still understands the BitCompletePosting
-		// and other bits about the way we store posting lists.
-		l, err := posting.ReadPostingList(key, itr)
-		if err != nil {
-			return nil, err
-		}
-		return l.MarshalToKv()
+	if err := stream.Orchestrate(out.Context()); err != nil {
+		return err
 	}
 
-	if err := sl.Orchestrate(stream.Context(), "Sending SNAPSHOT", snap.ReadTs); err != nil {
-		return err
-	}
 	// Indicate that sending is done.
-	if err := stream.Send(&pb.KVS{Done: true}); err != nil {
+	if err := out.Send(&pb.KVS{Done: true}); err != nil {
 		return err
 	}
-	glog.Infof("Key streaming done. Sent %d keys. Waiting for ACK...", numKeys)
-	ack, err := stream.Recv()
+
+	glog.Infof("Streaming done. Sent %d entries. Waiting for ACK...", num)
+	ack, err := out.Recv()
 	if err != nil {
 		return err
 	}

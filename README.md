@@ -6,8 +6,6 @@
 [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Dgraph_Ci)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph_Ci&buildId=lastFinished&guest=1)
 [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
-[![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
-
 
 Dgraph is a horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
 a rich set of queries. Being a native graph database, it tightly controls how the
@@ -21,7 +19,7 @@ Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-
 
 ## Status
 
-Dgraph is [at version 1.0.0][rel] and is production ready.
+Dgraph is [at version 1.0.x][rel] and is production ready.
 
 [rel]: https://github.com/dgraph-io/dgraph/releases
 

@@ -20,7 +20,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
@@ -159,7 +158,7 @@ func userLogin(conf *viper.Viper) error {
 	return nil
 }
 
-func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User, err error) {
+func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
 	query := `
     query search($userid: string){
       user(func: eq(dgraph.xid, $userid)) {
@@ -179,7 +178,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *acl.User
 	if err != nil {
 		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
 	}
-	user, err = acl.UnmarshalUser(queryResp, "user")
+	user, err = UnmarshalUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}

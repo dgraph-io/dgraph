@@ -31,6 +31,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -38,7 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -559,7 +559,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	posting.EvictLRU()
-	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(snap, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -793,6 +793,10 @@ func (n *node) Run() {
 	}
 }
 
+func listWrap(kv *bpb.KV) *bpb.KVList {
+	return &bpb.KVList{Kv: []*bpb.KV{kv}}
+}
+
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
@@ -808,8 +812,9 @@ func (n *node) rollupLists(readTs uint64) error {
 		mu.Unlock()
 	}
 
-	sl := stream.Lists{Stream: writer, DB: pstore}
-	sl.ChooseKeyFunc = func(item *badger.Item) bool {
+	stream := pstore.NewStreamAt(readTs)
+	stream.LogPrefix = "Rolling up"
+	stream.ChooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.IsSchema() {
 			// Skip if schema.
@@ -818,15 +823,19 @@ func (n *node) rollupLists(readTs uint64) error {
 		// Return true if we don't find the BitCompletePosting bit.
 		return item.UserMeta()&posting.BitCompletePosting == 0
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}
 		addKey(key)
-		return l.MarshalToKv()
+		kv, err := l.MarshalToKv()
+		return listWrap(kv), err
 	}
-	if err := sl.Orchestrate(context.Background(), "Rolling up", readTs); err != nil {
+	stream.Send = func(list *bpb.KVList) error {
+		return writer.Send(&pb.KVS{Kv: list.Kv})
+	}
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
