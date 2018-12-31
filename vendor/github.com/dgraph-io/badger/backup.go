@@ -28,15 +28,23 @@ import (
 	"github.com/dgraph-io/badger/y"
 )
 
+// Backup is a wrapper function over Stream.Backup to generate full and incremental backups of the
+// DB. For more control over how many goroutines are used to generate the backup, or if you wish to
+// backup only a certain range of keys, use Stream.Backup directly.
+func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
+	stream := db.NewStream()
+	stream.LogPrefix = "DB.Backup"
+	return stream.Backup(w, since)
+}
+
 // Backup dumps a protobuf-encoded list of all entries in the database into the
 // given writer, that are newer than the specified version. It returns a
 // timestamp indicating when the entries were dumped which can be passed into a
 // later invocation to generate an incremental dump, of entries that have been
-// added/modified since the last invocation of DB.Backup()
+// added/modified since the last invocation of Stream.Backup().
 //
 // This can be used to backup the data in a database at a given point in time.
-func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
-	stream := db.NewStream()
+func (stream *Stream) Backup(w io.Writer, since uint64) (uint64, error) {
 	stream.KeyToList = func(key []byte, itr *Iterator) (*pb.KVList, error) {
 		list := &pb.KVList{}
 		for ; itr.Valid(); itr.Next() {
@@ -105,7 +113,7 @@ func (db *DB) Backup(w io.Writer, since uint64) (uint64, error) {
 		return nil
 	}
 
-	if err := stream.Orchestrate(context.Background(), 8, "DB.Backup"); err != nil {
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		return 0, err
 	}
 	return maxVersion, nil

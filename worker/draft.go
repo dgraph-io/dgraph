@@ -772,6 +772,10 @@ func (n *node) Run() {
 	}
 }
 
+func listWrap(kv *bpb.KV) *bpb.KVList {
+	return &bpb.KVList{Kv: []*bpb.KV{kv}}
+}
+
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
@@ -779,6 +783,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer.BlindWrite = true // Do overwrite keys.
 
 	stream := pstore.NewStreamAt(readTs)
+	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
@@ -795,12 +800,12 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		atomic.AddUint64(&numKeys, 1)
 		kv, err := l.MarshalToKv()
-		return &bpb.KVList{Kv: []*bpb.KV{kv}}, err
+		return listWrap(kv), err
 	}
 	stream.Send = func(list *bpb.KVList) error {
 		return writer.Send(&pb.KVS{Kv: list.Kv})
 	}
-	if err := stream.Orchestrate(context.Background(), 16, "Rolling up"); err != nil {
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
