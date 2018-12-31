@@ -100,6 +100,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	//
 	// TODO: We should use a particular read timestamp here.
 	stream := pstore.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", predicate)
 	stream.Prefix = x.PredicatePrefix(predicate)
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// For now, just send out full posting lists, because we use delete markers to delete older
@@ -115,8 +116,7 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	stream.Send = func(list *bpb.KVList) error {
 		return s.Send(&pb.KVS{Kv: list.Kv})
 	}
-	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := stream.Orchestrate(ctx, 16, prefix); err != nil {
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
 

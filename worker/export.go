@@ -263,6 +263,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
+	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.Attr == "_predicate_" {
@@ -326,7 +327,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil
 	}
 	// All prepwork done. Time to roll.
-	if err := stream.Orchestrate(ctx, 16, "Export"); err != nil {
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
 	if err := dataWriter.Close(); err != nil {

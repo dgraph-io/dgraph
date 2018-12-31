@@ -109,6 +109,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 	var num int
 	stream := pstore.NewStreamAt(snap.ReadTs)
+	stream.LogPrefix = "Sending Snapshot"
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
 	stream.KeyToList = nil
@@ -117,7 +118,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		num += len(kvs.Kv)
 		return out.Send(kvs)
 	}
-	if err := stream.Orchestrate(out.Context(), 16, "Sending SNAPSHOT"); err != nil {
+	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
 

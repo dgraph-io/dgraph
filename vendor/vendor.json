@@ -421,26 +421,26 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "vRDKit+mtnL6vi4ks+NMBXEZBng=",
+			"checksumSHA1": "jnkDKIKsecAeygL6+wo5GbYsBro=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "599bc292582985f1f95e2b02bf2e3d035ce76be8",
-			"revisionTime": "2018-12-29T00:51:05Z",
+			"revision": "02eca147ea001d92449daa55a2a297f2adb6776a",
+			"revisionTime": "2018-12-30T19:35:11Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "599bc292582985f1f95e2b02bf2e3d035ce76be8",
-			"revisionTime": "2018-12-29T00:51:05Z",
+			"revision": "02eca147ea001d92449daa55a2a297f2adb6776a",
+			"revisionTime": "2018-12-30T19:35:11Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},
 		{
 			"checksumSHA1": "+ntGoPo1TKIFyACmsyNfKzj96FQ=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "599bc292582985f1f95e2b02bf2e3d035ce76be8",
-			"revisionTime": "2018-12-29T00:51:05Z",
+			"revision": "02eca147ea001d92449daa55a2a297f2adb6776a",
+			"revisionTime": "2018-12-30T19:35:11Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},
@@ -455,24 +455,24 @@
 		{
 			"checksumSHA1": "00T6XbLV4d95J7hm6kTXDReaQHM=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "599bc292582985f1f95e2b02bf2e3d035ce76be8",
-			"revisionTime": "2018-12-29T00:51:05Z",
+			"revision": "02eca147ea001d92449daa55a2a297f2adb6776a",
+			"revisionTime": "2018-12-30T19:35:11Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},
 		{
 			"checksumSHA1": "dCvRZ5BRgoLnfrL8rehjYt0Pmj4=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "599bc292582985f1f95e2b02bf2e3d035ce76be8",
-			"revisionTime": "2018-12-29T00:51:05Z",
+			"revision": "02eca147ea001d92449daa55a2a297f2adb6776a",
+			"revisionTime": "2018-12-30T19:35:11Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},
 		{
 			"checksumSHA1": "rjj5C09phChZuyMu0+Wawqud02k=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "599bc292582985f1f95e2b02bf2e3d035ce76be8",
-			"revisionTime": "2018-12-29T00:51:05Z",
+			"revision": "02eca147ea001d92449daa55a2a297f2adb6776a",
+			"revisionTime": "2018-12-30T19:35:11Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},

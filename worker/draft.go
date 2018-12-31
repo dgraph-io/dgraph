@@ -813,6 +813,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	}
 
 	stream := pstore.NewStreamAt(readTs)
+	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.IsSchema() {
@@ -834,7 +835,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	stream.Send = func(list *bpb.KVList) error {
 		return writer.Send(&pb.KVS{Kv: list.Kv})
 	}
-	if err := stream.Orchestrate(context.Background(), 16, "Rolling up"); err != nil {
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
