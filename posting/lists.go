@@ -19,12 +19,12 @@ package posting
 import (
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -110,65 +110,6 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func periodicUpdateStats(lc *y.Closer) {
-	defer lc.Done()
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	setLruMemory := true
-	var maxSize uint64
-	var lastUse float64
-	for {
-		select {
-		case <-lc.HasBeenClosed():
-			return
-		case <-ticker.C:
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
-			inUse := float64(megs)
-
-			stats := lcache.Stats()
-			x.LcacheEvicts.Set(int64(stats.NumEvicts))
-			x.LcacheSize.Set(int64(stats.Size))
-			x.LcacheLen.Set(int64(stats.Length))
-
-			// Okay, we exceed the max memory threshold.
-			// Stop the world, and deal with this first.
-			x.NumGoRoutines.Set(int64(runtime.NumGoroutine()))
-			Config.Mu.Lock()
-			mem := Config.AllottedMemory
-			Config.Mu.Unlock()
-			if setLruMemory {
-				if inUse > 0.75*mem {
-					maxSize = lcache.UpdateMaxSize(0)
-					setLruMemory = false
-					lastUse = inUse
-				}
-				break
-			}
-
-			// If memory has not changed by 100MB.
-			if math.Abs(inUse-lastUse) < 100 {
-				break
-			}
-
-			delta := maxSize / 10
-			if delta > 50<<20 {
-				delta = 50 << 20 // Change lru cache size by max 50mb.
-			}
-			if inUse > 0.85*mem { // Decrease max Size by 10%
-				maxSize -= delta
-				maxSize = lcache.UpdateMaxSize(maxSize)
-				lastUse = inUse
-			} else if inUse < 0.65*mem { // Increase max Size by 10%
-				maxSize += delta
-				maxSize = lcache.UpdateMaxSize(maxSize)
-				lastUse = inUse
-			}
-		}
-	}
-}
-
 func updateMemoryMetrics(lc *y.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
@@ -200,19 +141,13 @@ func updateMemoryMetrics(lc *y.Closer) {
 
 var (
 	pstore *badger.DB
-	lcache *listCache
 	closer *y.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
-	lcache = newListCache(math.MaxUint64)
-	x.LcacheCapacity.Set(math.MaxInt64)
-
-	closer = y.NewCloser(2)
-
-	go periodicUpdateStats(closer)
+	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
 }
 
@@ -230,45 +165,53 @@ func Cleanup() {
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func Get(key []byte) (rlist *List, err error) {
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		x.LcacheHit.Add(1)
-		return lp, nil
-	}
-	x.LcacheMiss.Add(1)
-
-	// Any initialization for l must be done before PutIfMissing. Once it's added
-	// to the map, any other goroutine can retrieve it.
-	l, err := getNew(key, pstore)
-	if err != nil {
-		return nil, err
-	}
-	// We are always going to return lp to caller, whether it is l or not
-	lp = lcache.PutIfMissing(string(key), l)
-	if lp != l {
-		x.LcacheRace.Add(1)
-	}
-	return lp, nil
-}
-
-// GetLru checks the lru map and returns it if it exits
-func GetLru(key []byte) *List {
-	return lcache.Get(string(key))
-}
-
-// GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
-// or it gets from the store and DOES NOT ADD to lru cache.
-func GetNoStore(key []byte) (*List, error) {
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		return lp, nil
-	}
-	return getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+func GetNoStore(key []byte) (rlist *List, err error) {
+	return getNew(key, pstore)
 }
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks
-func EvictLRU() {
-	lcache.Reset()
+type LocalCache struct {
+	sync.RWMutex
+
+	plists map[string]*List
+}
+
+func NewLocalCache() *LocalCache {
+	return &LocalCache{plists: make(map[string]*List)}
+}
+
+func (lc *LocalCache) getNoStore(key string) *List {
+	lc.RLock()
+	defer lc.RUnlock()
+	if l, ok := lc.plists[key]; ok {
+		return l
+	}
+	return nil
+}
+
+func (lc *LocalCache) Set(key string, updated *List) *List {
+	lc.Lock()
+	defer lc.Unlock()
+	if pl, ok := lc.plists[key]; ok {
+		return pl
+	}
+	lc.plists[key] = updated
+	return updated
+}
+
+func (lc *LocalCache) Get(key []byte) (*List, error) {
+	if lc == nil {
+		return getNew(key, pstore)
+	}
+	skey := string(key)
+	if pl := lc.getNoStore(skey); pl != nil {
+		return pl, nil
+	}
+
+	pl, err := getNew(key, pstore)
+	if err != nil {
+		return nil, err
+	}
+	return lc.Set(skey, pl), nil
 }

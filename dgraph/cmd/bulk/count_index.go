@@ -72,7 +72,7 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
-	writer := x.NewTxnWriter(c.db)
+	writer := posting.NewTxnWriter(c.db)
 	writer.BlindWrite = true
 
 	for count, uids := range counts {

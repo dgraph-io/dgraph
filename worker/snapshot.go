@@ -24,6 +24,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -55,7 +56,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 	for {
 		kvs, err := stream.Recv()
@@ -109,6 +110,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 
 	var num int
 	stream := pstore.NewStreamAt(snap.ReadTs)
+	stream.LogPrefix = "Sending Snapshot"
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
 	stream.KeyToList = nil
@@ -117,7 +119,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		num += len(kvs.Kv)
 		return out.Send(kvs)
 	}
-	if err := stream.Orchestrate(out.Context(), 16, "Sending SNAPSHOT"); err != nil {
+	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
 

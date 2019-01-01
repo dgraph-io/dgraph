@@ -319,6 +319,8 @@ func Open(opt Options) (db *DB, err error) {
 // cause panic.
 func (db *DB) Close() (err error) {
 	db.elog.Printf("Closing database")
+	atomic.StoreInt32(&db.blockWrites, 1)
+
 	// Stop value GC first.
 	db.closers.valueGC.SignalAndWait()
 
@@ -573,11 +575,6 @@ func (db *DB) writeRequests(reqs []*request) error {
 			r.Wg.Done()
 		}
 	}
-	if atomic.LoadInt32(&db.blockWrites) > 0 {
-		done(ErrBlockedWrites)
-		return ErrBlockedWrites
-	}
-
 	db.elog.Printf("writeRequests called. Writing to value log")
 
 	err := db.vlog.write(reqs)
@@ -1243,23 +1240,30 @@ func (db *DB) Flatten(workers int) error {
 // any reads while DropAll is going on, otherwise they may result in panics. Ideally, both reads and
 // writes are paused before running DropAll, and resumed after it is finished.
 func (db *DB) DropAll() error {
+	if db.opt.ReadOnly {
+		panic("Attempting to drop data in read-only mode.")
+	}
 	Infof("DropAll called. Blocking writes...")
 	// Stop accepting new writes.
 	atomic.StoreInt32(&db.blockWrites, 1)
 
-	// Wait for writeCh to reach size of zero. This is not ideal, but a very
-	// simple way to allow writeCh to flush out, before we proceed.
-	tick := time.NewTicker(100 * time.Millisecond)
-	for range tick.C {
-		if len(db.writeCh) == 0 {
-			break
-		}
-	}
-	tick.Stop()
-	Infof("All previous writes done. Stopping compactions...")
+	// Make all pending writes finish. The following will also close writeCh.
+	db.closers.writes.SignalAndWait()
+	Infof("Writes flushed. Stopping compactions now...")
 
+	// Stop all compactions.
 	db.stopCompactions()
-	defer db.startCompactions()
+	defer func() {
+		Infof("Resuming writes")
+		db.startCompactions()
+
+		db.writeCh = make(chan *request, kvWriteChCapacity)
+		db.closers.writes = y.NewCloser(1)
+		go db.doWrites(db.closers.writes)
+
+		// Resume writes.
+		atomic.StoreInt32(&db.blockWrites, 0)
+	}()
 	Infof("Compactions stopped. Dropping all SSTables...")
 
 	// Remove inmemory tables. Calling DecrRef for safety. Not sure if they're absolutely needed.
@@ -1281,11 +1285,6 @@ func (db *DB) DropAll() error {
 		return err
 	}
 	db.vhead = valuePointer{} // Zero it out.
-	Infof("Deleted %d value log files. Resuming operations...\n", num)
-
-	// Resume writes.
-	atomic.StoreInt32(&db.blockWrites, 0)
-
-	Infof("DropAll done")
+	Infof("Deleted %d value log files. DropAll done.\n", num)
 	return nil
 }
