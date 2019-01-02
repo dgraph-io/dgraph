@@ -547,7 +547,6 @@ func (s *Server) hasAccess(groupId string, predicate string, operation int32) bo
 	}
 	aclGroup := entry.(*acl.Group)
 	perm, found := aclGroup.MappedAcls[predicate]
-	glog.Infof("acl found %v with perm %d", found, perm)
 	allowed := found && (perm&operation) != 0
 	glog.Infof("authorizing group %v on predicate %v for op %d, allowed %v", groupId,
 		predicate, operation, allowed)
