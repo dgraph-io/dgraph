@@ -414,8 +414,8 @@ func run() {
 		if err != nil {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
-		if len(hmacSecret) == 0 {
-			glog.Errorf("The HMAC secret file should not be empty")
+		if len(hmacSecret) < 32 {
+			glog.Errorf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
 			os.Exit(1)
 		}
 
