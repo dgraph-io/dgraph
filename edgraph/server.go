@@ -281,7 +281,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed by server.")
 	}
-	dropAll, dropAttr, updates, err := s.ParseAndAuthorizeAlter(ctx, op)
+	dropAll, dropAttr, updates, err := s.parseAndAuthorizeAlter(ctx, op)
 	if err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
@@ -368,7 +368,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
 
-	if err := s.AuthorizeMutation(ctx, gmu); err != nil {
+	if err := s.authorizeMutation(ctx, gmu); err != nil {
 		return nil, fmt.Errorf("mutation is not authorized: %v", err)
 	}
 
@@ -476,7 +476,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	if err != nil {
 		return resp, err
 	}
-	if err := s.AuthorizeQuery(ctx, parsedReq); err != nil {
+	if err := s.authorizeQuery(ctx, parsedReq); err != nil {
 		return nil, fmt.Errorf("query is not authorized: %v", err)
 	}
 
@@ -566,31 +566,6 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = x.Errorf("No Auth Token found. Token needed for Alter operations.")
-
-/*
-func isAlterAllowed(ctx context.Context) error {
-	p, ok := peer.FromContext(ctx)
-	if ok {
-		glog.Infof("Got Alter request from %q\n", p.Addr)
-	}
-	if len(Config.AuthToken) == 0 {
-		return nil
-	}
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return errNoAuth
-	}
-	tokens := md.Get("auth-token")
-	if len(tokens) == 0 {
-		return errNoAuth
-	}
-	if tokens[0] != Config.AuthToken {
-		return x.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
-	}
-	return nil
-}
-*/
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {

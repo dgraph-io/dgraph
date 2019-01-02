@@ -278,7 +278,7 @@ func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 		case <-closeCh:
 			return
 		case <-ticker.C:
-			if err := (&Server{}).retrieveAcls(); err != nil {
+			if err := (&Server{}).RetrieveAcls(); err != nil {
 				glog.Errorf("Error while retrieving acls:%v", err)
 			}
 		}
@@ -356,7 +356,7 @@ func appendAdminJwt(ctx context.Context) (context.Context, error) {
 	return metadata.NewIncomingContext(ctx, md), nil
 }
 
-func (s *Server) retrieveAcls() error {
+func (s *Server) RetrieveAcls() error {
 	glog.Infof("Retrieving ACLs")
 	queryRequest := api.Request{
 		Query: queryAcls,
@@ -407,7 +407,7 @@ func extractUserAndGroups(ctx context.Context) (string, []string, error) {
 	return validateToken(accessJwt[0])
 }
 
-func (s *Server) ParseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
+func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
 	string, []*pb.SchemaUpdate, error) {
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
@@ -448,7 +448,7 @@ func (s *Server) ParseAndAuthorizeAlter(ctx context.Context, op *api.Operation) 
 	return false, "", updates, nil
 }
 
-func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
 		return err
@@ -467,7 +467,7 @@ func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error
 	return nil
 }
 
-func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error {
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
 		return err
@@ -479,14 +479,14 @@ func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error
 	}
 	// get the relevant predicates used in the query
 	for _, query := range parsedReq.Query {
-		if !s.authorizeQuery(groupIds, query, acl.Read) {
+		if !s.authorizeSingleQuery(groupIds, query, acl.Read) {
 			return fmt.Errorf("unauthorized to access the predicate %v", query.Attr)
 		}
 	}
 	return nil
 }
 
-func (s *Server) authorizeQuery(groups []string, gq *gql.GraphQuery, operation int32) bool {
+func (s *Server) authorizeSingleQuery(groups []string, gq *gql.GraphQuery, operation int32) bool {
 	if gq.Func != nil {
 		if !s.authorizePredicate(groups, gq.Func.Attr, operation) {
 			return false
@@ -501,7 +501,7 @@ func (s *Server) authorizeQuery(groups []string, gq *gql.GraphQuery, operation i
 
 	// authorize all children queries
 	for _, childQuery := range gq.Children {
-		if !s.authorizeQuery(groups, childQuery, operation) {
+		if !s.authorizeSingleQuery(groups, childQuery, operation) {
 			return false
 		}
 	}

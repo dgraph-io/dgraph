@@ -122,10 +122,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
-	flag.String("auth_token", "",
-		"If set, all Alter requests to Dgraph would need to have this token."+
-			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
-			" For Grpc, in auth-token key in the context.")
 	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
 		" that is used for signing the JWT. Enterprise feature.")
 	flag.Duration("access_jwt_ttl", 6*time.Hour, "The TTL for the access jwt. "+
@@ -400,7 +396,6 @@ func run() {
 		WALDir:     Alpha.Conf.GetString("wal"),
 
 		Nomutations:    Alpha.Conf.GetBool("nomutations"),
-		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 

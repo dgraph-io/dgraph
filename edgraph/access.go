@@ -36,7 +36,7 @@ func (s *Server) Login(ctx context.Context,
 	return &api.Response{}, x.ErrNotSupported
 }
 
-func InitAclCache() {
+func ResetAcl() {
 	// do nothing
 }
 
@@ -44,8 +44,9 @@ func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 	// do nothing
 }
 
-func (s *Server) ParseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
+func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
 	string, []*pb.SchemaUpdate, error) {
+	// only do the parsing, no authorization in oss
 	updates, err := schema.Parse(op.Schema)
 	if err != nil {
 		return false, "", nil, err
@@ -53,11 +54,11 @@ func (s *Server) ParseAndAuthorizeAlter(ctx context.Context, op *api.Operation) 
 	return op.DropAll, op.DropAttr, updates, nil
 }
 
-func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return nil
 }
 
-func (s *Server) AuthorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error {
 	// always allow access
 	return nil
 }

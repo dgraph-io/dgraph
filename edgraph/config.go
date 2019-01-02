@@ -27,13 +27,11 @@ import (
 )
 
 type Options struct {
-	PostingDir   string
-	BadgerTables string
-	BadgerVlog   string
-	WALDir       string
-	Nomutations  bool
-	AuthToken    string
-
+	PostingDir     string
+	BadgerTables   string
+	BadgerVlog     string
+	WALDir         string
+	Nomutations    bool
 	AllottedMemory float64
 
 	HmacSecret    []byte
