@@ -426,10 +426,10 @@ func deleteCountIndexInternal(attr string, reverse bool) error {
 }
 
 func deleteCountIndex(attr string) error {
-	if err := deleteCountIndexInternal(attr, /*reverse*/ false); err != nil {
+	if err := deleteCountIndexInternal(attr /*reverse*/, false); err != nil {
 		return err
 	}
-	if err := deleteCountIndexInternal(attr, /*reverse*/ true); err != nil {
+	if err := deleteCountIndexInternal(attr /*reverse*/, true); err != nil {
 		return err
 	}
 	return nil
