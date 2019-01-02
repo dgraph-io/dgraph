@@ -128,6 +128,8 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
+	flag.Duration("acl_refresh_interval", 30*time.Second, "The interval to refresh acl cache. "+
+		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -409,6 +411,7 @@ func run() {
 		opts.HmacSecret = hmacSecret
 		opts.AccessJwtTtl = Alpha.Conf.GetDuration("access_jwt_ttl")
 		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("refresh_jwt_ttl")
+		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_refresh_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}

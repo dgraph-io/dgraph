@@ -34,9 +34,10 @@ type Options struct {
 	Nomutations    bool
 	AllottedMemory float64
 
-	HmacSecret    []byte
-	AccessJwtTtl  time.Duration
-	RefreshJwtTtl time.Duration
+	HmacSecret         []byte
+	AccessJwtTtl       time.Duration
+	RefreshJwtTtl      time.Duration
+	AclRefreshInterval time.Duration
 }
 
 var Config Options
