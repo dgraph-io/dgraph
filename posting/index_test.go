@@ -245,13 +245,13 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	currentSchema, _ := schema.State().Get("name2")
-	req := RebuildIndicesRequest{
+	rb := IndexRebuild{
 		Attr:          "name2",
 		StartTs:       5,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	require.NoError(t, RebuildIndex(context.Background(), &req))
+	require.NoError(t, RebuildIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(6, false)
@@ -296,14 +296,14 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
 	currentSchema, _ := schema.State().Get("name2")
-	req := RebuildIndicesRequest{
+	rb := IndexRebuild{
 		Attr:          "friend",
 		StartTs:       16,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
 	// TODO: Remove after fixing sync marks.
-	require.NoError(t, RebuildReverseEdges(context.Background(), &req))
+	require.NoError(t, RebuildReverseEdges(context.Background(), &rb))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(17, false)

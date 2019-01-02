@@ -137,13 +137,13 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	// We need watermark for index/reverse edge addition for linearizable reads.
 	// (both applied and synced watermarks).
 	defer glog.Infof("Done schema update %+v\n", update)
-	req := posting.RebuildIndicesRequest{
+	rebuild := posting.IndexRebuild{
 		Attr:          update.Predicate,
 		StartTs:       startTs,
 		OldSchema:     &old,
 		CurrentSchema: &current,
 	}
-	return posting.RebuildAllIndices(ctx, &req)
+	return rebuild.Run(ctx)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
