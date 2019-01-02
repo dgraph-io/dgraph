@@ -275,9 +275,9 @@ func TestToSchema(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		kv, err := toSchema(testCase.skv.attr, testCase.skv.schema)
+		list, err := toSchema(testCase.skv.attr, testCase.skv.schema)
 		require.NoError(t, err)
-		require.Equal(t, testCase.expected, string(kv.Val))
+		require.Equal(t, testCase.expected, string(list.Kv[0].Value))
 	}
 }
 

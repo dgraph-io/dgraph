@@ -56,6 +56,7 @@ type options struct {
 	clientDir           string
 	ignoreIndexConflict bool
 	authToken           string
+	useCompression      bool
 }
 
 var opt options
@@ -79,8 +80,8 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
-	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraphzero gRPC server address")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
+	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
@@ -90,6 +91,8 @@ func init() {
 		"Ignores conflicts on index keys during transaction")
 	flag.StringP("auth_token", "a", "",
 		"The auth token passed to the server for Alter operation of the schema file")
+	flag.BoolP("use_compression", "C", false,
+		"Enable compression on connection to alpha server")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -250,7 +253,8 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
-	connzero, err := x.SetupConnection(opt.zero, &tlsConf)
+	// compression with zero server actually makes things worse
+	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(
@@ -293,6 +297,7 @@ func run() error {
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
+		useCompression:      Live.Conf.GetBool("use_compression"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
@@ -310,7 +315,7 @@ func run() error {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, &tlsConf)
+		conn, err := x.SetupConnection(d, &tlsConf, opt.useCompression)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 		defer conn.Close()
 

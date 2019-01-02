@@ -25,6 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -224,16 +225,9 @@ message Proposal {
 }
 
 message KVS {
- repeated KV kv = 1;
+ repeated pb.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
-}
-
-message KV {
-	bytes key      = 1;
-	bytes val      = 2;
-	bytes userMeta = 3;
-	uint64 version = 4;
 }
 
 // Posting messages.
