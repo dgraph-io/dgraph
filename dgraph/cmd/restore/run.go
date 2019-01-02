@@ -23,7 +23,9 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -95,10 +97,10 @@ func run() error {
 	defer db.Close()
 	fmt.Println("--- Creating new db:", bo.Dir)
 
-	writer := x.NewTxnWriter(db)
+	writer := posting.NewTxnWriter(db)
 	writer.BlindWrite = true
 
-	kvs.Kv = make([]*pb.KV, 0, 1000)
+	kvs.Kv = make([]*bpb.KV, 0, 1000)
 	start := time.Now()
 
 	// start progress ticker
@@ -136,7 +138,7 @@ func run() error {
 		if n != int64(sz) {
 			return x.Errorf("Restore failed read. Expected %d bytes but got %d instead.", sz, n)
 		}
-		e := &pb.KV{}
+		e := &bpb.KV{}
 		if err = e.Unmarshal(bb.Bytes()); err != nil {
 			return err
 		}
@@ -150,7 +152,7 @@ func run() error {
 			if err = writer.Send(&kvs); err != nil {
 				return err
 			}
-			kvs.Kv = make([]*pb.KV, 0, 1000)
+			kvs.Kv = make([]*bpb.KV, 0, 1000)
 			kvs.Done = true
 		}
 	}
