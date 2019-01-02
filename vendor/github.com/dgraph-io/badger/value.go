@@ -385,8 +385,9 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			if bytes.HasPrefix(e.Key, badgerMove) {
 				ne.Key = append([]byte{}, e.Key...)
 			} else {
-				ne.Key = append([]byte{}, badgerMove...)
-				ne.Key = append(ne.Key, e.Key...)
+				ne.Key = make([]byte, len(badgerMove)+len(e.Key))
+				n := copy(ne.Key, badgerMove)
+				copy(ne.Key[n:], e.Key)
 			}
 
 			ne.Value = append([]byte{}, e.Value...)
@@ -449,7 +450,7 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 			vlog.filesLock.Unlock()
 			return errors.Errorf("Unable to find fid: %d", f.fid)
 		}
-		if vlog.numActiveIterators == 0 {
+		if vlog.iteratorCount() == 0 {
 			delete(vlog.filesMap, f.fid)
 			deleteFileNow = true
 		} else {
@@ -526,6 +527,10 @@ func (vlog *valueLog) incrIteratorCount() {
 	atomic.AddInt32(&vlog.numActiveIterators, 1)
 }
 
+func (vlog *valueLog) iteratorCount() int {
+	return int(atomic.LoadInt32(&vlog.numActiveIterators))
+}
+
 func (vlog *valueLog) decrIteratorCount() error {
 	num := atomic.AddInt32(&vlog.numActiveIterators, -1)
 	if num != 0 {
@@ -561,6 +566,47 @@ func (vlog *valueLog) deleteLogFile(lf *logFile) error {
 	return os.Remove(path)
 }
 
+func (vlog *valueLog) dropAll() (int, error) {
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+
+	var loops int
+	for range tick.C {
+		loops++
+		if vlog.iteratorCount() == 0 {
+			if loops%10 == 0 {
+				Infof("Waiting for iterators to get done. Currently active: %d",
+					vlog.iteratorCount())
+			}
+			break
+		}
+	}
+	Infof("No active value log iterators. Deleting value logs...")
+
+	var count int
+	deleteAll := func() error {
+		vlog.filesLock.Lock()
+		defer vlog.filesLock.Unlock()
+		for _, lf := range vlog.filesMap {
+			if err := vlog.deleteLogFile(lf); err != nil {
+				return err
+			}
+			count++
+		}
+		return nil
+	}
+	if err := deleteAll(); err != nil {
+		return count, err
+	}
+
+	Infof("Value logs deleted. Creating value log file: 0")
+	if _, err := vlog.createVlogFile(0); err != nil {
+		return count, err
+	}
+	atomic.StoreUint32(&vlog.maxFid, 0)
+	return count, nil
+}
+
 // lfDiscardStats keeps track of the amount of data that could be discarded for
 // a given logfile.
 type lfDiscardStats struct {
@@ -569,7 +615,6 @@ type lfDiscardStats struct {
 }
 
 type valueLog struct {
-	buf     bytes.Buffer
 	dirPath string
 	elog    trace.EventLog
 
@@ -778,6 +823,12 @@ func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
 		return errFile(err, last.path, "file.Seek to end")
 	}
 	vlog.writableLogOffset = uint32(lastOffset)
+
+	// Update the head to point to the updated tail. Otherwise, even after doing a successful
+	// replay and closing the DB, the value log head does not get updated, which causes the replay
+	// to happen repeatedly.
+	vlog.db.vhead = valuePointer{Fid: vlog.maxFid, Offset: uint32(lastOffset)}
+
 	// Map the file if needed. When we create a file, it is automatically mapped.
 	if err = last.mmap(2 * opt.ValueLogFileSize); err != nil {
 		return errFile(err, last.path, "Map log file")
@@ -886,25 +937,26 @@ func (vlog *valueLog) write(reqs []*request) error {
 	curlf := vlog.filesMap[maxFid]
 	vlog.filesLock.RUnlock()
 
+	var buf bytes.Buffer
 	toDisk := func() error {
-		if vlog.buf.Len() == 0 {
+		if buf.Len() == 0 {
 			return nil
 		}
-		vlog.elog.Printf("Flushing %d blocks of total size: %d", len(reqs), vlog.buf.Len())
-		n, err := curlf.fd.Write(vlog.buf.Bytes())
+		vlog.elog.Printf("Flushing %d blocks of total size: %d", len(reqs), buf.Len())
+		n, err := curlf.fd.Write(buf.Bytes())
 		if err != nil {
 			return errors.Wrapf(err, "Unable to write to value log file: %q", curlf.path)
 		}
+		buf.Reset()
 		y.NumWrites.Add(1)
 		y.NumBytesWritten.Add(int64(n))
 		vlog.elog.Printf("Done")
 		atomic.AddUint32(&vlog.writableLogOffset, uint32(n))
-		vlog.buf.Reset()
 
 		if vlog.woffset() > uint32(vlog.opt.ValueLogFileSize) ||
 			vlog.numEntriesWritten > vlog.opt.ValueLogMaxEntries {
 			var err error
-			if err = curlf.doneWriting(vlog.writableLogOffset); err != nil {
+			if err = curlf.doneWriting(vlog.woffset()); err != nil {
 				return err
 			}
 
@@ -928,8 +980,8 @@ func (vlog *valueLog) write(reqs []*request) error {
 
 			p.Fid = curlf.fid
 			// Use the offset including buffer length so far.
-			p.Offset = vlog.woffset() + uint32(vlog.buf.Len())
-			plen, err := encodeEntry(e, &vlog.buf) // Now encode the entry into buffer.
+			p.Offset = vlog.woffset() + uint32(buf.Len())
+			plen, err := encodeEntry(e, &buf) // Now encode the entry into buffer.
 			if err != nil {
 				return err
 			}
@@ -940,7 +992,7 @@ func (vlog *valueLog) write(reqs []*request) error {
 		// We write to disk here so that all entries that are part of the same transaction are
 		// written to the same vlog file.
 		writeNow :=
-			vlog.woffset()+uint32(vlog.buf.Len()) > uint32(vlog.opt.ValueLogFileSize) ||
+			vlog.woffset()+uint32(buf.Len()) > uint32(vlog.opt.ValueLogFileSize) ||
 				vlog.numEntriesWritten > uint32(vlog.opt.ValueLogMaxEntries)
 		if writeNow {
 			if err := toDisk(); err != nil {
@@ -949,9 +1001,6 @@ func (vlog *valueLog) write(reqs []*request) error {
 		}
 	}
 	return toDisk()
-
-	// Acquire mutex locks around this manipulation, so that the reads don't try to use
-	// an invalid file descriptor.
 }
 
 // Gets the logFile and acquires and RLock() for the mmap. You must call RUnlock on the file

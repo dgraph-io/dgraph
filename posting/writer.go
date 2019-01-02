@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package x
+package posting
 
 import (
 	"math"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -60,7 +61,7 @@ func (w *TxnWriter) Send(kvs *pb.KVS) error {
 		if len(kv.UserMeta) > 0 {
 			meta = kv.UserMeta[0]
 		}
-		if err := w.SetAt(kv.Key, kv.Val, meta, kv.Version); err != nil {
+		if err := w.SetAt(kv.Key, kv.Value, meta, kv.Version); err != nil {
 			return err
 		}
 	}
@@ -99,15 +100,22 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 		} else if item.Version() >= ts {
 			// Found an existing commit at an equal or higher timestamp. So, skip writing.
 			if glog.V(2) {
-				pk := Parse(key)
+				pk := x.Parse(key)
 				glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
 					item.Version(), ts, pk)
 			}
 			return nil
 		}
 	}
-	if err := txn.SetWithMeta(key, val, meta); err != nil {
-		return err
+	switch meta {
+	case BitCompletePosting, BitEmptyPosting:
+		if err := txn.SetWithDiscard(key, val, meta); err != nil {
+			return err
+		}
+	default:
+		if err := txn.SetWithMeta(key, val, meta); err != nil {
+			return err
+		}
 	}
 	w.wg.Add(1)
 	return txn.CommitAt(ts, w.cb)

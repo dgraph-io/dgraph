@@ -67,12 +67,13 @@ func commitTs(startTs uint64) uint64 {
 func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
+	l = txn.Store(l)
 	err := l.AddMutationWithIndex(context.Background(), edge, txn)
 	require.NoError(t, err)
 
 	commit := commitTs(startTs)
 
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commit))
 	require.NoError(t, writer.Flush())
 	require.NoError(t, txn.CommitToMemory(commit))
@@ -82,7 +83,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i+startIdx))
-		list, err := posting.Get(k)
+		list, err := posting.GetNoStore(k)
 		require.NoError(t, err)
 
 		de := &pb.DirectedEdge{
