@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -43,8 +42,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -280,20 +277,23 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err := x.HealthCheck(); err != nil {
 		return empty, err
 	}
+
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed by server.")
 	}
-	if err := isAlterAllowed(ctx); err != nil {
+	dropAll, dropAttr, updates, err := s.ParseAndAuthorizeAlter(ctx, op)
+	if err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
 	}
+
 	// All checks done.
 
 	defer glog.Infof("ALTER op: %+v done", op)
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
-	if op.DropAll {
+	if dropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
 
@@ -301,7 +301,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		ResetAcl()
 		return empty, err
 	}
-	if len(op.DropAttr) > 0 {
+	if len(dropAttr) > 0 {
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
@@ -317,10 +317,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
 	}
-	updates, err := schema.Parse(op.Schema)
-	if err != nil {
-		return empty, err
-	}
+
 	glog.Infof("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = updates
@@ -571,6 +568,7 @@ func isMutationAllowed(ctx context.Context) bool {
 
 var errNoAuth = x.Errorf("No Auth Token found. Token needed for Alter operations.")
 
+/*
 func isAlterAllowed(ctx context.Context) error {
 	p, ok := peer.FromContext(ctx)
 	if ok {
@@ -592,7 +590,7 @@ func isAlterAllowed(ctx context.Context) error {
 	}
 	return nil
 }
-
+*/
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {

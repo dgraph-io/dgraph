@@ -20,6 +20,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
+
+	"github.com/dgraph-io/dgraph/schema"
+
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -107,7 +111,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("unable to authenticate through refresh token: " +
+			return nil, fmt.Errorf("unable to authenticate through refresh token: "+
 				"user not found for id %v", request.Userid)
 		}
 	} else {
@@ -122,7 +126,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("unable to authenticate through password " +
+			return nil, fmt.Errorf("unable to authenticate through password "+
 				"user not found for id %v", request.Userid)
 		}
 		if !user.PasswordMatch {
@@ -401,6 +405,47 @@ func extractUserAndGroups(ctx context.Context) (string, []string, error) {
 	}
 
 	return validateToken(accessJwt[0])
+}
+
+func (s *Server) ParseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
+	string, []*pb.SchemaUpdate, error) {
+	userId, groupIds, err := extractUserAndGroups(ctx)
+	if err != nil {
+		return false, "", nil, err
+	}
+
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return false, "", nil, err
+	}
+
+	if userId == "admin" {
+		// admin is allowed to do anything
+		return op.DropAll, op.DropAttr, updates, nil
+	}
+
+	// if we get here, we know the user is not admin
+	if op.DropAll {
+		return false, "", nil,
+			fmt.Errorf("only the admin is allowed to drop all predicates")
+	}
+
+	if len(op.DropAttr) > 0 {
+		// check that we have the modify permission on the predicate
+		if !s.authorizePredicate(groupIds, op.DropAttr, acl.Modify) {
+			return false, "", nil,
+				fmt.Errorf("unauthorized to modify the predicate %v", op.DropAttr)
+		}
+		return false, op.DropAttr, nil, nil
+	}
+
+	for _, update := range updates {
+		if !s.authorizePredicate(groupIds, update.Predicate, acl.Modify) {
+			return false, "", nil,
+				fmt.Errorf("unauthorized to modify the predicate %v", update.Predicate)
+		}
+	}
+	return false, "", updates, nil
 }
 
 func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {

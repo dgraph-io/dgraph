@@ -23,6 +23,8 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -40,6 +42,15 @@ func InitAclCache() {
 
 func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 	// do nothing
+}
+
+func (s *Server) ParseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
+	string, []*pb.SchemaUpdate, error) {
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return false, "", nil, err
+	}
+	return op.DropAll, op.DropAttr, updates, nil
 }
 
 func (s *Server) AuthorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
