@@ -294,7 +294,7 @@ func createGroupAndAcls(t *testing.T) {
 	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", "localhost:9180",
-		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Modify)), "--adminPassword",
+		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify)), "--adminPassword",
 		"password")
 	if err := addModifyPermCmd.Run(); err != nil {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)
