@@ -37,6 +37,8 @@ func ApplyFilter(u *pb.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
+// IntersectCompressedWith intersects a packed list of UIDs with another list
+// and writes the output to o.
 func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	if pack == nil {
 		return
@@ -50,6 +52,8 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 		n, m = m, n
 	}
 	dst := o.Uids[:0]
+
+	// If n equals 0, set it to 1 to avoid division by zero.
 	if n == 0 {
 		n = 1
 	}
@@ -64,6 +68,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 	o.Uids = dst
 }
 
+// IntersectCompressedWithLinJump performs the intersection linearly.
 func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64) {
 	m := len(v)
 	k := 0
@@ -80,7 +85,7 @@ func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64)
 	}
 }
 
-// IntersectWithBin is based on the paper
+// IntersectCompressedWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
 func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
@@ -151,6 +156,7 @@ func IntersectWith(u, v, o *pb.List) {
 	o.Uids = dst
 }
 
+// IntersectWithLin performs the intersection linearly.
 func IntersectWithLin(u, v []uint64, o *[]uint64) (int, int) {
 	n := len(u)
 	m := len(v)
@@ -173,6 +179,9 @@ func IntersectWithLin(u, v []uint64, o *[]uint64) (int, int) {
 	return i, k
 }
 
+
+// IntersectWithJump performs the intersection linearly but jumping jump steps
+// between iterations.
 func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 	n := len(u)
 	m := len(v)
@@ -253,7 +262,7 @@ func binIntersect(d, q []uint64, final *[]uint64) {
 	if d[midd] == qval {
 		*final = append(*final, qval)
 	} else {
-		midd -= 1
+		midd--
 	}
 
 	dd = d[midd+1:]
@@ -270,6 +279,8 @@ type listInfo struct {
 	length int
 }
 
+// IntersectSorted calculates the intersection of multiple lists and performs
+// the intersections from the smallest to the largest list.
 func IntersectSorted(lists []*pb.List) *pb.List {
 	if len(lists) == 0 {
 		return &pb.List{}
@@ -304,6 +315,7 @@ func IntersectSorted(lists []*pb.List) *pb.List {
 	return out
 }
 
+// Difference returns the difference of two lists.
 func Difference(u, v *pb.List) *pb.List {
 	if u == nil || v == nil {
 		return &pb.List{Uids: make([]uint64, 0)}
