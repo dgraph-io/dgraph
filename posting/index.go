@@ -407,17 +407,6 @@ func deleteAllEntries(prefix []byte) error {
 	})
 }
 
-func compareAttrAndType(key []byte, attr string, typ byte) bool {
-	pk := x.Parse(key)
-	if pk == nil {
-		return true
-	}
-	if pk.Attr == attr && pk.IsType(typ) {
-		return true
-	}
-	return false
-}
-
 func deleteIndex(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
