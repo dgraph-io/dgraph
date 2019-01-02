@@ -179,7 +179,6 @@ func IntersectWithLin(u, v []uint64, o *[]uint64) (int, int) {
 	return i, k
 }
 
-
 // IntersectWithJump performs the intersection linearly but jumping jump steps
 // between iterations.
 func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
