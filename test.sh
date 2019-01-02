@@ -12,12 +12,8 @@ function run {
 }
 
 function runAll {
-  # pushd dgraph/cmd/server
-  # go test -v .
-  # popd
-
   local testsFailed=0
-  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok'); do
+  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok|/_'); do
     echo "Running test for $PKG"
     run $PKG || {
         testsFailed=$((testsFailed+1))
@@ -40,5 +36,10 @@ runAll || exit $?
 echo
 echo "Running load-test.sh"
 ./contrib/scripts/load-test.sh
+
+# Run tests requiring different cluster setup.
+restartCluster "systest/_mutations_mode/docker-compose-mutations-mode.yml"
+run systest/_mutations_mode
+
 
 stopCluster
