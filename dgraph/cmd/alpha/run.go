@@ -404,9 +404,19 @@ func run() {
 
 	secretFile := Alpha.Conf.GetString("hmac_secret_file")
 	if secretFile != "" {
+		if !Alpha.Conf.GetBool("enterprise_features") {
+			glog.Errorf("You must enable Dgraph enterprise features with the " +
+				"--enterprise_features option in order to use ACL.")
+			os.Exit(1)
+		}
+
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
+		}
+		if len(hmacSecret) == 0 {
+			glog.Errorf("The HMAC secret file should not be empty")
+			os.Exit(1)
 		}
 
 		opts.HmacSecret = hmacSecret
