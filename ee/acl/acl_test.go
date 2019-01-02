@@ -120,22 +120,29 @@ func TestAuthorization(t *testing.T) {
 
 	createAccountAndData(t, dg)
 	queryPredicateWithUserAccount(t, dg, true)
+	mutatePredicateWithUserAccount(t, dg, true)
+	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
 	// on all alpha servers
 	log.Println("Sleeping for 35 seconds for acl to catch up")
 	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
+	mutatePredicateWithUserAccount(t, dg, false)
+	alterPredicateWithUserAccount(t, dg, false)
 }
 
 var user = "alice"
 var password = "password123"
-var predicate = "city_name"
+var predicateToRead = "predicate_to_read"
+var queryAttr = "name"
+var predicateToWrite = "predicate_to_write"
+var predicateToAlter = "predicate_to_alter"
 var group = "dev"
 var rootDir = filepath.Join(os.TempDir(), "acl_test")
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
-	// try to query the user whose name is alice
+	// login with alice's account
 	ctx := context.Background()
 	if err := dg.Login(ctx, user, password); err != nil {
 		t.Fatalf("unable to login using the account %v", user)
@@ -146,9 +153,9 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 	query := fmt.Sprintf(`
 	{
 		q(func: eq(%s, "SF")) {
-			name
+			%s
 		}
-	}`, predicate)
+	}`, predicateToRead, queryAttr)
 	txn = dg.NewTxn()
 	_, err := txn.Query(ctxWithUserJwt, query)
 
@@ -156,6 +163,44 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 		require.Error(t, err, "the query should have failed")
 	} else {
 		require.NoError(t, err, "the query should have succeeded")
+	}
+}
+
+func mutatePredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
+	ctx := context.Background()
+	if err := dg.Login(ctx, user, password); err != nil {
+		t.Fatalf("unable to login using the account %v", user)
+	}
+
+	ctxWithUserJwt := dg.GetContext(ctx)
+	txn := dg.NewTxn()
+	_, err := txn.Mutate(ctxWithUserJwt, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`_:a <%s>  "string" .`, predicateToWrite)),
+	})
+
+	if shouldFail {
+		require.Error(t, err, "the mutation should have failed")
+	} else {
+		require.NoError(t, err, "the mutation should have succeeded")
+	}
+}
+
+func alterPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
+	ctx := context.Background()
+	if err := dg.Login(ctx, user, password); err != nil {
+		t.Fatalf("unable to login using the account %v", user)
+	}
+
+	ctxWithUserJwt := dg.GetContext(ctx)
+
+	err := dg.Alter(ctxWithUserJwt, &api.Operation{
+		Schema: fmt.Sprintf(`%s: int .`, predicateToAlter),
+	})
+	if shouldFail {
+		require.Error(t, err, "the alter should have failed")
+	} else {
+		require.NoError(t, err, "the alter should have succeeded")
 	}
 }
 
@@ -184,19 +229,19 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 
 	// create some data, e.g. user with name alice
 	require.NoError(t, dg.Alter(ctxWithAdminJwt, &api.Operation{
-		Schema: `city_name: string @index(exact) .`,
+		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
 
 	txn := dg.NewTxn()
 	_, err := txn.Mutate(ctxWithAdminJwt, &api.Mutation{
-		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"SF\" .", predicate)),
+		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"SF\" .", predicateToRead)),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 }
 
 func createGroupAndAcls(t *testing.T) {
-	// use commands to create users and groups
+	// create a new group
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "groupadd",
 		"-d", "localhost:9180",
@@ -205,30 +250,53 @@ func createGroupAndAcls(t *testing.T) {
 		t.Fatalf("Unable to create group:%v", err)
 	}
 
-	addPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
-		"-d", "localhost:9180",
-		"-g", group, "-p", predicate, "-P", strconv.Itoa(int(Read)), "--adminPassword",
-		"password")
-	if err := addPermCmd1.Run(); err != nil {
-		t.Fatalf("Unable to add permission to group %s:%v", group, err)
-	}
-
-	addPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
-		"-d", "localhost:9180",
-		"-g", group, "-p", "name", "-P", strconv.Itoa(int(Read)), "--adminPassword",
-		"password")
-	if err := addPermCmd2.Run(); err != nil {
-		t.Fatalf("Unable to add permission to group %s:%v", group, err)
-	}
-
-
+	// add the user to the group
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "usermod",
 		"-d", "localhost:9180",
 		"-u", user, "-g", group, "--adminPassword", "password")
 	if err := addUserToGroupCmd.Run(); err != nil {
 		t.Fatalf("Unable to add user %s to group %s:%v", user, group, err)
+	}
+
+	// add READ permission on the predicateToRead to the group
+	addReadPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", "localhost:9180",
+		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read)), "--adminPassword",
+		"password")
+	if err := addReadPermCmd1.Run(); err != nil {
+		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
+			predicateToRead, group, err)
+	}
+
+	// also add read permission to the attribute queryAttr, which is used inside the query block
+	addReadPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", "localhost:9180",
+		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read)), "--adminPassword",
+		"password")
+	if err := addReadPermCmd2.Run(); err != nil {
+		t.Fatalf("Unable to add READ permission on %s to group %s:%v", queryAttr, group, err)
+	}
+
+	// add WRITE permission on the predicateToWrite
+	addWritePermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", "localhost:9180",
+		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write)), "--adminPassword",
+		"password")
+	if err := addWritePermCmd.Run(); err != nil {
+		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToWrite, group, err)
+	}
+
+	// add MODIFY permission on the predicateToAlter
+	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", "localhost:9180",
+		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Modify)), "--adminPassword",
+		"password")
+	if err := addModifyPermCmd.Run(); err != nil {
+		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)
 	}
 }
