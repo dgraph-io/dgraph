@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/test"
@@ -71,15 +73,19 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	t.Logf("Got output when creating user:%v", createUserOutput3)
 }
 
-func TestLogIn(t *testing.T) {
+func resetUser(t *testing.T) {
 	// delete and recreate the user to ensure a clean state
-	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", userid)
-	checkOutput(t, deleteUserCmd, false)
-	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
-		"-p", userpassword)
-	checkOutput(t, createUserCmd, false)
+	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
+		"-u", userid, "--adminPassword", "password")
+	deleteUserCmd.Run()
 
-	// now try to login with the wrong password
+	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u",
+		userid, "-p", userpassword, "--adminPassword", "password")
+	checkOutput(t, createUserCmd, false)
+}
+
+func TestLogIn(t *testing.T) {
+	resetUser(t)
 
 	loginWithCorrectPassword(t)
 	loginWithWrongPassword(t)
@@ -114,6 +120,43 @@ func loginWithWrongPassword(t *testing.T) {
 	checkOutput(t, loginCmd, true)
 }
 
+// test dgo client login with the refresh jwt
+func TestClientLoginWithRefreshJwt(t *testing.T) {
+	resetUser(t)
+
+	dg, close := test.GetDgraphClient()
+	defer close()
+
+	ctx := context.Background()
+	if err := dg.Login(ctx, userid, userpassword); err != nil {
+		t.Fatalf("unable to login using the account %v: %v", userid, err)
+	}
+
+	firstCtxWithUserJwt := dg.GetContext(ctx)
+	firstMd, ok := metadata.FromOutgoingContext(firstCtxWithUserJwt)
+	require.True(t, ok, "unable to get metadata from outgoing context")
+	firstAccessJwt := firstMd.Get("accessJwt")
+	if len(firstAccessJwt) == 0 {
+		t.Fatalf("unable to get accessJwt from outgoing metadata")
+	}
+
+	// now login with the refresh jwt instead of password
+	if err := dg.LoginWithRefreshJwt(ctx); err != nil {
+		t.Fatalf("unable to login using the refresh jwt: %v", err)
+	}
+
+	secondCtxWithUserJwt := dg.GetContext(ctx)
+	secondMd, ok := metadata.FromOutgoingContext(secondCtxWithUserJwt)
+	require.True(t, ok, "unable to get metadata from outgoing context")
+	secondAccessJwt := secondMd.Get("accessJwt")
+	if len(secondAccessJwt) == 0 {
+		t.Fatalf("unable to get accessJwt from outgoing metadata")
+	}
+
+	require.NotEqual(t, firstAccessJwt, secondAccessJwt,
+		"the 2nd access jwt should be different from the first one")
+}
+
 func TestAuthorization(t *testing.T) {
 	dg, close := test.GetDgraphClient()
 	defer close()
@@ -132,8 +175,6 @@ func TestAuthorization(t *testing.T) {
 	alterPredicateWithUserAccount(t, dg, false)
 }
 
-var user = "alice"
-var password = "password123"
 var predicateToRead = "predicate_to_read"
 var queryAttr = "name"
 var predicateToWrite = "predicate_to_write"
@@ -144,8 +185,8 @@ var rootDir = filepath.Join(os.TempDir(), "acl_test")
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	// login with alice's account
 	ctx := context.Background()
-	if err := dg.Login(ctx, user, password); err != nil {
-		t.Fatalf("unable to login using the account %v", user)
+	if err := dg.Login(ctx, userid, userpassword); err != nil {
+		t.Fatalf("unable to login using the account %v", userid)
 	}
 
 	ctxWithUserJwt := dg.GetContext(ctx)
@@ -168,8 +209,8 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 
 func mutatePredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	ctx := context.Background()
-	if err := dg.Login(ctx, user, password); err != nil {
-		t.Fatalf("unable to login using the account %v", user)
+	if err := dg.Login(ctx, userid, userpassword); err != nil {
+		t.Fatalf("unable to login using the account %v", userid)
 	}
 
 	ctxWithUserJwt := dg.GetContext(ctx)
@@ -188,8 +229,8 @@ func mutatePredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail boo
 
 func alterPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	ctx := context.Background()
-	if err := dg.Login(ctx, user, password); err != nil {
-		t.Fatalf("unable to login using the account %v", user)
+	if err := dg.Login(ctx, userid, userpassword); err != nil {
+		t.Fatalf("unable to login using the account %v", userid)
 	}
 
 	ctxWithUserJwt := dg.GetContext(ctx)
@@ -222,7 +263,7 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	createUserCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "useradd",
 		"-d", "localhost:9180",
-		"-u", user, "-p", password, "--adminPassword", "password")
+		"-u", userid, "-p", userpassword, "--adminPassword", "password")
 	if err := createUserCmd.Run(); err != nil {
 		t.Fatalf("Unable to create user:%v", err)
 	}
@@ -254,9 +295,9 @@ func createGroupAndAcls(t *testing.T) {
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "usermod",
 		"-d", "localhost:9180",
-		"-u", user, "-g", group, "--adminPassword", "password")
+		"-u", userid, "-g", group, "--adminPassword", "password")
 	if err := addUserToGroupCmd.Run(); err != nil {
-		t.Fatalf("Unable to add user %s to group %s:%v", user, group, err)
+		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
 	}
 
 	// add READ permission on the predicateToRead to the group

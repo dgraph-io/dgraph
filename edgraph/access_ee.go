@@ -108,15 +108,17 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 				request.RefreshToken, err)
 		}
 
+		if ctx, err = appendAdminJwt(ctx); err != nil {
+			return nil, fmt.Errorf("unable to append admin jwt:%v", err)
+		}
 		user, err = s.queryUser(ctx, userId, "")
 		if err != nil {
-			return nil, fmt.Errorf("error while querying user with id: %v",
-				request.Userid)
+			return nil, fmt.Errorf("error while querying user with id %v: %v", userId, err)
 		}
 
 		if user == nil {
 			return nil, fmt.Errorf("unable to authenticate through refresh token: "+
-				"user not found for id %v", request.Userid)
+				"user not found for id %v", userId)
 		}
 	} else {
 		var err error
