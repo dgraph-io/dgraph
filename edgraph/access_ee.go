@@ -91,8 +91,8 @@ func (s *Server) Login(ctx context.Context,
 	return resp, nil
 }
 
-// authenticate the login request using either the refresh token if present, or the
-// <userId, password> pair, if authentication passes, query the user's uid and associated groups
+// Authenticate the login request using either the refresh token if present, or the
+// <userId, password> pair. If authentication passes, query the user's uid and associated groups
 // from DB and returns the user object
 func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User,
 	error) {
@@ -174,7 +174,6 @@ func validateToken(jwtStr string) (userId string, groupIds []string, err error) 
 
 	groups, ok := claims["groups"].([]interface{})
 	if ok {
-		// copy the group names into an array of acl.Groups
 		groupIds = make([]string, 0, len(groups))
 		for _, group := range groups {
 			groupId, ok := group.(string)
@@ -256,7 +255,7 @@ const queryUser = `
     }`
 
 // query the user with the given userid, and returns associated uid, acl groups,
-// and whether password matches the given password
+// and whether the password stored in DB matches the supplied password
 func (s *Server) queryUser(ctx context.Context, userid string, password string) (user *acl.User,
 	err error) {
 	queryVars := map[string]string{
@@ -305,7 +304,7 @@ const queryAcls = `
 }
 `
 
-// the acl cache mapping group names to the group acl
+// the acl cache mapping group names to the corresponding group acls
 var aclCache sync.Map
 
 // clear the aclCache and upsert the admin account
@@ -356,8 +355,8 @@ func ResetAcl() {
 	glog.Info("Created the admin account with the default password")
 }
 
-// add an admin jwt to the context so that we can perform admin operations such as retrieving acls
-// from other servers
+// add an admin jwt to the context so that we can perform cluster internal operations such as
+// retrieving acls from other servers
 func appendAdminJwt(ctx context.Context) (context.Context, error) {
 	// query the user with admin account
 	adminJwt, err := getAccessJwt("admin", nil)
@@ -394,7 +393,7 @@ func (s *Server) RetrieveAcls() error {
 	storedEntries := 0
 	for _, group := range groups {
 		// convert the serialized acl into a map for easy lookups
-		group.MappedAcls, err = acl.UnmarshalAcls([]byte(group.Acls))
+		group.MappedAcls, err = acl.AclBytesToMap([]byte(group.Acls))
 		if err != nil {
 			glog.Errorf("Error while unmarshalling ACLs for group %v:%v", group, err)
 			continue
@@ -423,7 +422,7 @@ func extractUserAndGroups(ctx context.Context) (string, []string, error) {
 	return validateToken(accessJwt[0])
 }
 
-// parse the Schema in the operation and authorize the operation using aclCache
+// parse the Schema in the operation and authorize the operation using the aclCache
 func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
 	string, []*pb.SchemaUpdate, error) {
 	userId, groupIds, err := extractUserAndGroups(ctx)
@@ -465,7 +464,7 @@ func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) 
 	return false, "", updates, nil
 }
 
-// authorize the mutation using aclCache
+// authorize the mutation using the aclCache
 func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
@@ -485,7 +484,7 @@ func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error
 	return nil
 }
 
-// authorize the query using aclCache
+// authorize the query using the aclCache
 func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error {
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
@@ -496,7 +495,7 @@ func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error
 		// the admin account has access to everything
 		return nil
 	}
-	// get the relevant predicates used in the query
+
 	for _, query := range parsedReq.Query {
 		if !s.authorizeSingleQuery(groupIds, query, acl.Read) {
 			return fmt.Errorf("unauthorized to access the predicate %v", query.Attr)
@@ -537,8 +536,8 @@ func (s *Server) authorizePredicate(groups []string, predicate string, operation
 	return false
 }
 
-// hasAccess checks the aclCache and returns if the specified group is authorized to perform the
-// operation on the given predicate
+// hasAccess checks the aclCache and returns whether the specified group is authorized to perform
+// the operation on the given predicate
 func (s *Server) hasAccess(groupId string, predicate string, operation int32) bool {
 	glog.Infof("authorizing group %v on predicate %v for op %d", groupId, predicate, operation)
 	entry, found := aclCache.Load(groupId)

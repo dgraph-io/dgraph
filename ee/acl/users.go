@@ -27,7 +27,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-func getAdminCtx(conf *viper.Viper) (context.Context, *dgo.Dgraph, CloseFunc, error) {
+func getClientWithAdminCtx(conf *viper.Viper) (context.Context, *dgo.Dgraph, CloseFunc, error) {
 	adminPassword := conf.GetString("adminPassword")
 	if len(adminPassword) == 0 {
 		fmt.Print("Enter admin password:")
@@ -66,7 +66,7 @@ func userAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the password must not be empty")
 	}
 
-	ctx, dc, clean, err := getAdminCtx(conf)
+	ctx, dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
@@ -119,7 +119,7 @@ func userDel(conf *viper.Viper) error {
 		return fmt.Errorf("the user id should not be empty")
 	}
 
-	ctx, dc, clean, err := getAdminCtx(conf)
+	ctx, dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
@@ -208,7 +208,6 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
 
-	glog.Infof("query user with admin jwt %v", ctx.Value("accessJwt"))
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
@@ -227,7 +226,7 @@ func userMod(conf *viper.Viper) error {
 		return fmt.Errorf("the user must not be empty")
 	}
 
-	ctx, dc, clean, err := getAdminCtx(conf)
+	ctx, dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)

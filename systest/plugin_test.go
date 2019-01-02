@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/test"
 )
 
 func TestPlugins(t *testing.T) {
@@ -61,7 +60,7 @@ func TestPlugins(t *testing.T) {
 	check(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	cluster := test.NewDgraphCluster(tmpDir)
+	cluster := NewDgraphCluster(tmpDir)
 	cluster.TokenizerPluginsArg = strings.Join(soFiles, ",")
 	check(t, cluster.Start())
 	defer cluster.Close()
@@ -74,20 +73,20 @@ func TestPlugins(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
-		check(t, cluster.Client.Alter(ctx, &api.Operation{
+		check(t, cluster.client.Alter(ctx, &api.Operation{
 			DropAll: true,
 		}))
-		check(t, cluster.Client.Alter(ctx, &api.Operation{
+		check(t, cluster.client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
 
-		txn := cluster.Client.NewTxn()
+		txn := cluster.client.NewTxn()
 		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
 		check(t, err)
 		check(t, txn.Commit(ctx))
 
 		for _, test := range cases {
-			txn := cluster.Client.NewTxn()
+			txn := cluster.client.NewTxn()
 			reply, err := txn.Query(ctx, test.query)
 			check(t, err)
 			CompareJSON(t, test.wantResult, string(reply.GetJson()))
