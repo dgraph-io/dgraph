@@ -130,6 +130,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		x.Fatalf("Unhandled op: %v", op)
 	}
 	txn := Oracle().RegisterStartTs(startTs)
+	txn.cache.Set(string(l.key), l)
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
@@ -137,7 +138,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 		require.NoError(t, err)
 	}
 
-	writer := x.NewTxnWriter(pstore)
+	writer := NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commitTs))
 	require.NoError(t, writer.Flush())
 	require.NoError(t, txn.CommitToMemory(commitTs))
@@ -158,7 +159,6 @@ func TestTokensTable(t *testing.T) {
 	key := x.DataKey("name", 1)
 	l, err := getNew(key, ps)
 	require.NoError(t, err)
-	lcache.PutIfMissing(string(l.key), l)
 
 	edge := &pb.DirectedEdge{
 		Value:  []byte("david"),
@@ -210,7 +210,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 		Entity: src,
 		Op:     pb.DirectedEdge_SET,
 	}
-	l, err := Get(x.DataKey(attr, src))
+	l, err := GetNoStore(x.DataKey(attr, src))
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
@@ -226,7 +226,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      pb.DirectedEdge_SET,
 	}
-	l, err := Get(x.DataKey(attr, src))
+	l, err := GetNoStore(x.DataKey(attr, src))
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
@@ -283,7 +283,7 @@ func TestRebuildIndex(t *testing.T) {
 			continue
 		}
 		idxKeys = append(idxKeys, string(key))
-		l, err := Get(key)
+		l, err := GetNoStore(key)
 		require.NoError(t, err)
 		idxVals = append(idxVals, l)
 	}

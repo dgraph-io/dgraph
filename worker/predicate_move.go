@@ -28,11 +28,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -44,7 +44,7 @@ var (
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
+func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
 	// single tablet.
@@ -63,7 +63,7 @@ func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
 			first = false
 		}
 		txn := pstore.NewTransactionAt(math.MaxUint64, true)
-		if err := txn.SetWithMeta(kv.Key, kv.Val, kv.UserMeta[0]); err != nil {
+		if err := txn.SetWithMeta(kv.Key, kv.Value, kv.UserMeta[0]); err != nil {
 			return err
 		}
 		err := txn.CommitAt(kv.Version, func(err error) {
@@ -97,17 +97,26 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	sl := stream.Lists{Stream: s, Predicate: predicate, DB: pstore}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	//
+	// TODO: We should use a particular read timestamp here.
+	stream := pstore.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", predicate)
+	stream.Prefix = x.PredicatePrefix(predicate)
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		// For now, just send out full posting lists, because we use delete markers to delete older
+		// data in the prefix range. So, by sending only one version per key, and writing it at a
+		// provided timestamp, we can ensure that these writes are above all the delete markers.
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}
-		return l.MarshalToKv()
+		kv, err := l.MarshalToKv()
+		return listWrap(kv), err
 	}
-
-	prefix := fmt.Sprintf("Sending predicate: [%s]", predicate)
-	if err := sl.Orchestrate(ctx, prefix, math.MaxUint64); err != nil {
+	stream.Send = func(list *bpb.KVList) error {
+		return s.Send(&pb.KVS{Kv: list.Kv})
+	}
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
 
@@ -127,11 +136,12 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 			return err
 		}
 		kvs := &pb.KVS{}
-		kv := &pb.KV{}
-		kv.Key = schemaKey
-		kv.Val = val
-		kv.Version = 1
-		kv.UserMeta = []byte{item.UserMeta()}
+		kv := &bpb.KV{
+			Key:      schemaKey,
+			Value:    val,
+			Version:  1,
+			UserMeta: []byte{item.UserMeta()},
+		}
 		kvs.Kv = append(kvs.Kv, kv)
 		if err := s.Send(kvs); err != nil {
 			return err
@@ -179,7 +189,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				}
 			}
 			proposal.Kv = append(proposal.Kv, kv)
-			size += len(kv.Key) + len(kv.Val)
+			size += len(kv.Key) + len(kv.Value)
 		}
 	}
 	if size > 0 {

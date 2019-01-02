@@ -30,6 +30,7 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
@@ -639,19 +640,19 @@ func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(er
 	}
 }
 
-func (l *List) MarshalToKv() (*pb.KV, error) {
+func (l *List) MarshalToKv() (*bpb.KV, error) {
 	l.Lock()
 	defer l.Unlock()
 	if err := l.rollup(math.MaxUint64); err != nil {
 		return nil, err
 	}
 
-	kv := &pb.KV{}
+	kv := &bpb.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
 	val, meta := marshalPostingList(l.plist)
 	kv.UserMeta = []byte{meta}
-	kv.Val = val
+	kv.Value = val
 	return kv, nil
 }
 
