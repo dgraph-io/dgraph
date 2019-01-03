@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package restore
+package backup
 
 import (
 	"bytes"
@@ -24,7 +24,6 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -78,7 +77,7 @@ func run() error {
 	fmt.Println("Writing postings to:", opt.pdir)
 
 	// Scan location for backup files and load them.
-	reader, err := backup.Load(opt.location)
+	reader, err := Load(opt.location)
 	if err != nil {
 		return err
 	}
