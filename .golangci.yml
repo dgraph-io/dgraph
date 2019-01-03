@@ -1,5 +1,10 @@
 run:
   tests: false
+
+linters-settings:
+  lll:
+    line-length: 100
+
 linters:
   disable-all: true
   enable:
@@ -9,3 +14,4 @@ linters:
     - gas
     - varcheck
     - goimports
+    - lll
