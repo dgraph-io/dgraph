@@ -22,9 +22,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"reflect"
 	"time"
 
-	"github.com/deckarep/golang-set"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
@@ -420,20 +420,13 @@ func deleteReverseEdges(attr string) error {
 	return deleteAllEntries(prefix)
 }
 
-func deleteCountIndexInternal(attr string, reverse bool) error {
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.CountPrefix(reverse)
-	return deleteAllEntries(prefix)
-}
-
 func deleteCountIndex(attr string) error {
-	if err := deleteCountIndexInternal(attr, false /*reverse*/); err != nil {
+	pk := x.ParsedKey{Attr: attr}
+	if err := deleteAllEntries(pk.CountPrefix(false)); err != nil {
 		return err
 	}
-	if err := deleteCountIndexInternal(attr, true /*reverse*/); err != nil {
-		return err
-	}
-	return nil
+
+	return deleteAllEntries(pk.CountPrefix(true))
 }
 
 // Index rebuilding logic here.
@@ -541,6 +534,13 @@ type IndexRebuild struct {
 	CurrentSchema *pb.SchemaUpdate
 }
 
+type indexOp int
+const (
+	indexNoop indexOp = iota
+	indexDelete = iota
+	indexRebuild = iota
+)
+
 // Run rebuilds all indices that need it.
 func (rb *IndexRebuild) Run(ctx context.Context) error {
 	if err := RebuildListType(ctx, rb); err != nil {
@@ -559,53 +559,58 @@ func (rb *IndexRebuild) Run(ctx context.Context) error {
 	return nil
 }
 
-// needsIndexRebuild returns true if the index needs to be rebuilt (or just
-// deleted). It returns false if the index can be left as is.
-func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) bool {
+func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
 	x.AssertTruef(current != nil, "Current schema cannot be nil.")
 
-	// If no previous schema existed, the index needs to be built.
 	if old == nil {
-		return true
+		old = &pb.SchemaUpdate{}
 	}
 
 	currIndex := current.Directive == pb.SchemaUpdate_INDEX
 	prevIndex := old.Directive == pb.SchemaUpdate_INDEX
 
-	// Index needs to be rebuilt if the scheme directive changed.
-	if currIndex != prevIndex {
-		return true
+	// Index does not need to be rebuilt or deleted if the scheme directive
+	// did not require an index before and now.
+	if !currIndex && !prevIndex {
+		return indexNoop
 	}
 
-	// Index does not need to be rebuild if the schema is not currently indexed
-	// and was previously not indexed. Predicate is not checking prevIndex
-	// since the previous if statement guarantees both values are the same.
+	// Index only needs to be deleted if the schema directive changed and the
+	// new directive does not require an index. Predicate is not checking
+	// prevIndex since the previous if statement guarantees both values are
+	// different.
 	if !currIndex {
-		return false
+		return indexDelete
 	}
 
 	// Index needs to be rebuilt if the value types have changed.
 	if currIndex && current.ValueType != old.ValueType {
-		return true
+		return indexRebuild
 	}
 
 	// Index needs to be rebuilt if the tokenizers have changed
-	prevTokens := mapset.NewSet()
+	prevTokens := make(map[string]bool)
 	for _, t := range old.Tokenizer {
-		prevTokens.Add(t)
+		prevTokens[t] = true
 	}
-	currTokens := mapset.NewSet()
+	currTokens := make(map[string]bool)
 	for _, t := range current.Tokenizer {
-		currTokens.Add(t)
+		currTokens[t] = true
 	}
-	return !prevTokens.Equal(currTokens)
+
+	if equal := reflect.DeepEqual(prevTokens, currTokens); equal {
+		return indexNoop
+	}
+	return indexRebuild
 }
 
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	// Exit early if indices do not need to be rebuilt.
-	if !needsIndexRebuild(rb.OldSchema, rb.CurrentSchema) {
+	op := needsIndexRebuild(rb.OldSchema, rb.CurrentSchema)
+
+	if op == indexNoop {
 		return nil
 	}
 
@@ -614,8 +619,8 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	// Exit early if attribute is not indexed in the new schema.
-	if !schema.State().IsIndexed(rb.Attr) {
+	// Exit early if the index only neeed to be deleted and not rebuild.
+	if op == indexDelete {
 		return nil
 	}
 
@@ -645,23 +650,32 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	return builder.Run(ctx)
 }
 
-// needsCountIndexRebuild returns true if the count index needs to be rebuilt
-// (or just deleted). It returns false if the index can be left as is.
-func needsCountIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) bool {
+func needsCountIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
 	x.AssertTruef(current != nil, "Current schema cannot be nil.")
 
 	if old == nil {
-		return true
+		old = &pb.SchemaUpdate{}
 	}
-	if current.Count != old.Count {
-		return true
+
+	// Do nothing if the schema directive did not change.
+	if !current.Count == !old.Count {
+		return indexNoop
+
 	}
-	return false
+
+	// If the new schema does not require an index, delete the current index.
+	if !current.Count {
+		return indexDelete
+	}
+
+	// Otherwise, the index needs to be rebuilt.
+	return indexRebuild
 }
 
 // RebuildCountIndex rebuilds the count index for a given attribute.
 func RebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
-	if !needsCountIndexRebuild(rb.OldSchema, rb.CurrentSchema) {
+	op := needsCountIndexRebuild(rb.OldSchema, rb.CurrentSchema)
+	if op == indexNoop {
 		return nil
 	}
 
@@ -670,8 +684,8 @@ func RebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	// Exit early if attribute is not indexed in the new schema.
-	if !schema.State().HasCount(rb.Attr) {
+	// Exit early if attribute is index only needed to be deleted.
+	if op == indexDelete {
 		return nil
 	}
 
@@ -713,21 +727,33 @@ func RebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	return builder.Run(ctx)
 }
 
-// needsReverseEdgesRebuildl returns true if the reverse edges need to be rebuilt
-// (or just deleted). It returns false if they can be left as is.
-func needsReverseEdgesRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) bool {
+func needsReverseEdgesRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
 	x.AssertTruef(current != nil, "Current schema cannot be nil.")
 
 	if old == nil {
-		return true
+		old = &pb.SchemaUpdate{}
 	}
-	return (current.Directive == pb.SchemaUpdate_REVERSE) !=
-		(old.Directive == pb.SchemaUpdate_REVERSE)
+
+	currIndex := current.Directive == pb.SchemaUpdate_REVERSE
+	prevIndex := old.Directive == pb.SchemaUpdate_REVERSE
+
+	// If the schema directive did not change, return indexNoop. 
+	if currIndex == prevIndex {
+		return indexNoop
+	}
+
+	// If the current schema requires an index, index should be rebuild.
+	if currIndex {
+		return indexRebuild
+	}
+	// Otherwise, index should only be deleted.
+	return indexDelete
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
-	if !needsReverseEdgesRebuild(rb.OldSchema, rb.CurrentSchema) {
+	op := needsReverseEdgesRebuild(rb.OldSchema, rb.CurrentSchema)
+	if op == indexNoop {
 		return nil
 	}
 
@@ -736,8 +762,8 @@ func RebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	// Exit early if attribute is not indexed in the new schema.
-	if !schema.State().IsReversed(rb.Attr) {
+	// Exit early if index only needed to be deleted.
+	if op == indexDelete {
 		return nil
 	}
 

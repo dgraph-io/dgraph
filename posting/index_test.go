@@ -295,7 +295,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 24, uint64(12), uint64(13))
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
-	currentSchema, _ := schema.State().Get("name2")
+	currentSchema, _ := schema.State().Get("friend")
 	rb := IndexRebuild{
 		Attr:          "friend",
 		StartTs:       16,
@@ -346,52 +346,60 @@ func TestRebuildReverseEdges(t *testing.T) {
 func TestNeedsIndexRebuild(t *testing.T) {
 	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
 	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
-	require.False(t, needsIndexRebuild(&s1, &s2))
-	require.True(t, needsIndexRebuild(nil, &s2))
+	require.Equal(t, indexOp(indexNoop), needsIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexNoop), needsIndexRebuild(nil, &s2))
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	require.False(t, needsIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexNoop), needsIndexRebuild(&s1, &s2))
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX}
-	require.True(t, needsIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexRebuild), needsIndexRebuild(&s1, &s2))
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	require.True(t, needsIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexRebuild), needsIndexRebuild(&s1, &s2))
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_NONE}
-	require.True(t, needsIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexDelete), needsIndexRebuild(&s1, &s2))
 }
 
 func TestNeedsCountIndexRebuild(t *testing.T) {
 	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
 	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: true}
-	require.True(t, needsCountIndexRebuild(&s1, &s2))
-	require.True(t, needsCountIndexRebuild(nil, &s2))
+	require.Equal(t, indexOp(indexRebuild), needsCountIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexRebuild), needsCountIndexRebuild(nil, &s2))
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
-	require.False(t, needsCountIndexRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexNoop), needsCountIndexRebuild(&s1, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: true}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Count: false}
+	require.Equal(t, indexOp(indexDelete), needsCountIndexRebuild(&s1, &s2))
 }
 
 func TestNeedsReverseEdgesRebuild(t *testing.T) {
 	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
 	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
-	require.True(t, needsReverseEdgesRebuild(&s1, &s2))
-	require.True(t, needsReverseEdgesRebuild(nil, &s2))
+	require.Equal(t, indexOp(indexRebuild), needsReverseEdgesRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexRebuild), needsReverseEdgesRebuild(nil, &s2))
+
+	s1 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
+	require.Equal(t, indexOp(indexNoop), needsReverseEdgesRebuild(&s1, &s2))
 
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_REVERSE}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_UID, Directive: pb.SchemaUpdate_INDEX}
-	require.False(t, needsReverseEdgesRebuild(&s1, &s2))
+	require.Equal(t, indexOp(indexDelete), needsReverseEdgesRebuild(&s1, &s2))
 }
 
 func TestNeedsListTypeRebuild(t *testing.T) {
