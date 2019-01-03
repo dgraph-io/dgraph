@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+
 	"google.golang.org/grpc"
 )
 
@@ -142,6 +143,7 @@ func mutateExistingAllowed(t *testing.T) {
 func TestMutationsDisallow(t *testing.T) {
 	conn, err = grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
 	x.Check(err)
+	defer conn.Close()
 
 	t.Run("disallow drop all in no mutations mode", dropAllDisallowed)
 	t.Run("disallow mutate new predicate in no mutations mode", mutateNewDisallowed)
@@ -152,6 +154,7 @@ func TestMutationsDisallow(t *testing.T) {
 func TestMutationsStrict(t *testing.T) {
 	conn, err = grpc.Dial(strictModeAlpha, grpc.WithInsecure())
 	x.Check(err)
+	defer conn.Close()
 
 	t.Run("allow drop all in strict mutations mode", dropAllAllowed)
 	t.Run("disallow mutate new predicate in strict mutations mode", mutateNewDisallowed2)

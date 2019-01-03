@@ -11,6 +11,12 @@ function run {
 		GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
 }
 
+function runDir {
+  pushd $1
+  run
+  popd
+}
+
 function runAll {
   local testsFailed=0
   for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok|/_'); do
@@ -30,16 +36,15 @@ echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?
 
-# Run non-go tests.
-./contrib/scripts/test-bulk-schema.sh
-
 echo
 echo "Running load-test.sh"
 ./contrib/scripts/load-test.sh
 
+# Run non-go tests.
+./contrib/scripts/test-bulk-schema.sh
+
 # Run tests requiring different cluster setup.
 restartCluster "systest/_mutations_mode/docker-compose-mutations-mode.yml"
-run systest/_mutations_mode
-
+runDir systest/_mutations_mode
 
 stopCluster
