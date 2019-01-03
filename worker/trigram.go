@@ -42,7 +42,7 @@ func uidsForRegex(attr string, arg funcArgs,
 
 	uidsForTrigram := func(trigram string) (*pb.List, error) {
 		key := x.IndexKey(attr, trigram)
-		pl, err := posting.Get(key)
+		pl, err := posting.GetNoStore(key)
 		if err != nil {
 			return nil, err
 		}

@@ -30,15 +30,17 @@ function runAll {
 # in the pipe returns a non-zero status
 set -o pipefail
 restartCluster
+
 echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?
 
-# Run non-go tests.
-./contrib/scripts/test-bulk-schema.sh
-
 echo
 echo "Running load-test.sh"
 ./contrib/scripts/load-test.sh
+
+echo
+echo "Running bulk loader tests"
+./dgraph/cmd/bulk/systest/test-bulk-schema.sh
 
 stopCluster

@@ -30,6 +30,7 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
@@ -49,9 +50,7 @@ var (
 	ErrNoValue       = fmt.Errorf("No value found")
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
-	errUncommitted   = fmt.Errorf("Posting List has uncommitted data")
 	emptyPosting     = &pb.Posting{}
-	emptyList        = &pb.PostingList{}
 )
 
 const (
@@ -154,36 +153,6 @@ type ListOptions struct {
 	Intersect *pb.List // Intersect results with this list of UIDs.
 }
 
-// samePosting tells whether this is same posting depending upon operation of new posting.
-// if operation is Del, we ignore facets and only care about uid and value.
-// otherwise we match everything.
-func samePosting(oldp *pb.Posting, newp *pb.Posting) bool {
-	if oldp.Uid != newp.Uid {
-		return false
-	}
-	if oldp.ValType != newp.ValType {
-		return false
-	}
-	if !bytes.Equal(oldp.Value, newp.Value) {
-		return false
-	}
-	if oldp.PostingType != newp.PostingType {
-		return false
-	}
-	if bytes.Compare(oldp.LangTag, newp.LangTag) != 0 {
-		return false
-	}
-
-	// Checking source might not be necessary.
-	if oldp.Label != newp.Label {
-		return false
-	}
-	if newp.Op == Del {
-		return true
-	}
-	return facets.SameFacets(oldp.Facets, newp.Facets)
-}
-
 func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	var op uint32
 	if t.Op == pb.DirectedEdge_SET {
@@ -206,7 +175,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	return &pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
-		ValType:     pb.Posting_ValType(t.ValueType),
+		ValType:     t.ValueType,
 		PostingType: postingType,
 		LangTag:     []byte(t.Lang),
 		Label:       t.Label,
@@ -266,7 +235,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 		}
 	}
 	plist.Postings = append(plist.Postings, mpost)
-	return
 }
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
@@ -628,30 +596,19 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
-func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(error)) {
-	txn := pstore.NewTransactionAt(commitTs, true)
-	defer txn.Discard()
-	if err := txn.SetWithDiscard(key, data, meta); err != nil {
-		f(err)
-	}
-	if err := txn.CommitAt(commitTs, f); err != nil {
-		f(err)
-	}
-}
-
-func (l *List) MarshalToKv() (*pb.KV, error) {
+func (l *List) MarshalToKv() (*bpb.KV, error) {
 	l.Lock()
 	defer l.Unlock()
 	if err := l.rollup(math.MaxUint64); err != nil {
 		return nil, err
 	}
 
-	kv := &pb.KV{}
+	kv := &bpb.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
 	val, meta := marshalPostingList(l.plist)
 	kv.UserMeta = []byte{meta}
-	kv.Val = val
+	kv.Value = val
 	return kv, nil
 }
 
@@ -733,16 +690,6 @@ func (l *List) rollup(readTs uint64) error {
 	l.plist = final
 	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
-}
-
-func (l *List) hasPendingTxn() bool {
-	l.AssertRLock()
-	for _, pl := range l.mutationMap {
-		if pl.CommitTs == 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func (l *List) ApproxLen() int {

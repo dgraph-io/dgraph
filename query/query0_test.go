@@ -1590,7 +1590,6 @@ func TestVarInIneq5(t *testing.T) {
 }
 
 func TestNestedFuncRoot(t *testing.T) {
-
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
@@ -1603,7 +1602,6 @@ func TestNestedFuncRoot(t *testing.T) {
 }
 
 func TestNestedFuncRoot2(t *testing.T) {
-
 	query := `
 		{
 			me(func: ge(count(friend), 1)) {
