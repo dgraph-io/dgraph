@@ -63,7 +63,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 	}
 
 	path := filepath.Join(dir,
-		fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+		fmt.Sprintf(backupFmt, req.Backup.ReadTs, req.Backup.GroupId))
 	fp, err := os.Create(path)
 	if err != nil {
 		return err
@@ -76,9 +76,9 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 
 // Load uses tries to load any backup files found.
 // Returns nil on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL) (io.Reader, error) {
+func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
 	if !h.exists(uri.Path) {
-		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// find files and sort.
@@ -86,21 +86,22 @@ func (h *fileHandler) Load(uri *url.URL) (io.Reader, error) {
 		return strings.HasSuffix(path, ".backup")
 	})
 	if len(files) == 0 {
-		return nil, x.Errorf("No backup files found in %q", uri.Path)
+		return x.Errorf("No backup files found in %q", uri.Path)
 	}
 	sort.Strings(files)
 	glog.V(2).Infof("Loading backup file(s): %v", files)
 
-	h.readers = make(multiReader, 0, len(files))
 	for _, file := range files {
 		fp, err := os.Open(file)
 		if err != nil {
-			h.readers.Close()
-			return nil, x.Errorf("Error opening %q: %s", file, err)
+			return x.Errorf("Error opening %q: %s", file, err)
 		}
-		h.readers = append(h.readers, fp)
+		defer fp.Close()
+		if err = fn(fp, file); err != nil {
+			return err
+		}
 	}
-	return io.MultiReader(h.readers...), nil
+	return nil
 }
 
 func (h *fileHandler) Close() error {
