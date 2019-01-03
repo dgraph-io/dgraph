@@ -52,8 +52,6 @@ func init() {
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
-	flag.BoolVar(&opt.progress, "progress", false,
-		"Enable show detailed progress.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
