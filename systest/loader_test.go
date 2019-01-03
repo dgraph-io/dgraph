@@ -114,6 +114,6 @@ func TestLoaderXidmap(t *testing.T) {
 
 	if string(out) != expected {
 		cluster.Close()
-		t.Fatalf("Export is not as expected.")
+		t.Fatalf("Export is not as expected. Want:%v\nGot:%v\n", expected, string(out))
 	}
 }

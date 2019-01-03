@@ -282,8 +282,8 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 }
 
 func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
-	if Config.AclRefreshInterval.Nanoseconds() == 0 {
-		// the acl refresh interval is not configured
+	if len(Config.HmacSecret) == 0 {
+		// the acl feature is not turned on
 		return
 	}
 
@@ -316,8 +316,12 @@ var aclCache sync.Map
 
 // clear the aclCache and upsert the admin account
 func ResetAcl() {
-	aclCache = sync.Map{}
+	if len(Config.HmacSecret) == 0 {
+		// the acl feature is not turned on
+		return
+	}
 
+	aclCache = sync.Map{}
 	// upsert the admin account
 	ctx, err := appendAdminJwt(context.Background())
 	if err != nil {

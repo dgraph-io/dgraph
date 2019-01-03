@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/test"
 
 	"github.com/pkg/errors"
@@ -53,6 +54,16 @@ type suite struct {
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
+	dg, close := test.GetDgraphClient()
+	defer close()
+
+	err := dg.Alter(context.Background(), &api.Operation{
+		DropAll: true,
+	})
+	if err != nil {
+		t.Fatalf("Could not drop old data: %v", err)
+	}
+
 	if testing.Short() {
 		t.Skip("Skipping system test with long runtime.")
 	}
@@ -148,13 +159,6 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 		defer close()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		/*
-			err := dg.Alter(ctx, &api.Operation{
-				DropAll: true,
-			})
-			if err != nil {
-				t.Fatalf("Could not drop old data: %v", err)
-			}*/
 
 		txn := dg.NewTxn()
 		resp, err := txn.Query(ctx, query)
