@@ -81,7 +81,10 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 			if l.Depth >= 2 {
 				return lexTextMutation
 			}
-		case isSpace(r) || isEndOfLine(r):
+		case isEndOfLine(r):
+			l.Line++
+			l.Ignore()
+		case isSpace(r):
 			l.Ignore()
 		case isNameBegin(r):
 			return lexNameMutation
@@ -116,7 +119,10 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftSquare)
 		case r == rightSquare:
 			l.Emit(itemRightSquare)
-		case isSpace(r) || isEndOfLine(r):
+		case isEndOfLine(r):
+			l.Line++
+			l.Ignore()
+		case isSpace(r):
 			l.Ignore()
 		case isNameBegin(r):
 			return lexArgName
@@ -188,7 +194,10 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			}
 		case r == lex.EOF:
 			return l.Errorf("Unclosed Brackets")
-		case isSpace(r) || isEndOfLine(r):
+		case isEndOfLine(r):
+			l.Line++
+			l.Ignore()
+		case isSpace(r):
 			l.Ignore()
 		case r == comma:
 			if empty {
@@ -251,7 +260,10 @@ Loop:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++
 			return lexQuery
-		case isSpace(r) || isEndOfLine(r):
+		case isEndOfLine(r):
+			l.Line++
+			l.Ignore()
+		case isSpace(r):
 			l.Ignore()
 		case isNameBegin(r):
 			l.Backup()
@@ -283,7 +295,10 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed action")
-		case isSpace(r) || isEndOfLine(r):
+		case isEndOfLine(r):
+			l.Line++
+			l.Ignore()
+		case isSpace(r):
 			l.Ignore()
 		case r == comma:
 			l.Emit(itemComma)
@@ -378,6 +393,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if isEndOfLine(r) {
+			l.Line++
 			l.Ignore()
 			return l.Mode
 		}
