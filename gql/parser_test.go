@@ -4293,18 +4293,21 @@ func TestParseMutation(t *testing.T) {
 
 func TestParseMutationTooManyBlocks(t *testing.T) {
 	tests := []struct {
-		m        string
-		hasError bool
+		m      string
+		errStr string
 	}{
-		{hasError: true, m: `
+		{m: `
 			{
 				set { _:a1 <reg> "a1 content" . }
 			}{
 				set { _:b2 <reg> "b2 content" . }
 			}`,
+			errStr: "Unexpected { after the end of the block.",
 		},
-		{hasError: true, m: `{set { _:a1 <reg> "a1 content" . }} something`},
-		{hasError: false, m: `
+		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
+			errStr: "Unexpected error after end of block:",
+		},
+		{m: `
 			# comments are ok
 			{
 				set { _:a1 <reg> "a1 content" . } # comments are ok
@@ -4313,8 +4316,8 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
 	}
 	for _, tc := range tests {
 		mu, err := ParseMutation(tc.m)
-		if tc.hasError {
-			require.EqualError(t, err, ErrMutationTooManyBlocks.Error())
+		if tc.errStr != "" {
+			require.Contains(t, err.Error(), tc.errStr)
 			require.Nil(t, mu)
 		} else {
 			require.NoError(t, err)
