@@ -180,8 +180,8 @@ func DONOTRUN_TestClusterSnapshot(t *testing.T) {
 		"--zero", ":"+cluster.zeroPort,
 	)
 	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
+	//liveCmd.Stdout = os.Stdout
+	//liveCmd.Stderr = os.Stdout
 	if err := liveCmd.Run(); err != nil {
 		cluster.Close()
 		t.Fatalf("Live Loader didn't run: %v\n", err)
