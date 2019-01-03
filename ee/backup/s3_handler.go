@@ -13,7 +13,6 @@
 package backup
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"net/url"
@@ -122,7 +121,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 	// The object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 	object := filepath.Join(h.objectPrefix,
 		fmt.Sprintf("dgraph.%s", req.Backup.UnixTs),
-		fmt.Sprintf("r%d.g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+		fmt.Sprintf(backupFmt, req.Backup.ReadTs, req.Backup.GroupId))
 	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
 
 	h.cerr = make(chan error, 1)
@@ -137,12 +136,12 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 // Load creates an AWS session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL) (io.Reader, error) {
+func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 	var objects []string
 
 	mc, err := h.setup(uri)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	done := make(chan struct{})
@@ -153,18 +152,30 @@ func (h *s3Handler) Load(uri *url.URL) (io.Reader, error) {
 		}
 	}
 	if len(objects) == 0 {
-		return nil, x.Errorf("No backup files found in %q", uri.String())
+		return x.Errorf("No backup files found in %q", uri.String())
 	}
 	sort.Strings(objects)
 	glog.V(2).Infof("Loading from S3: %v", objects)
 
-	h.preader, h.pwriter = io.Pipe()
-	go func() {
-		err := h.download(mc, objects...)
-		_ = h.pwriter.CloseWithError(err)
-	}()
-
-	return h.preader, nil
+	for _, object := range objects {
+		reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
+		if err != nil {
+			return x.Errorf("Restore closing due to error: %s", err)
+		}
+		st, err := reader.Stat()
+		if err != nil {
+			reader.Close()
+			return x.Errorf("Restore got an unexpected error: %s", err)
+		}
+		if st.Size <= 0 {
+			return x.Errorf("Restore remote object is empty or inaccessible: %s", object)
+		}
+		fmt.Printf("--- Downloading %q, %d bytes\n", object, st.Size)
+		if err = fn(reader, object); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // upload will block until it's done or an error occurs.
@@ -187,40 +198,6 @@ func (h *s3Handler) upload(mc *minio.Client, object string) error {
 		h.preader.Close()
 	}
 	return err
-}
-
-// download will try to download objects from a remote bucket.
-// It will read each object sequentially until EOF and send data via the pipe.
-// Returns an error if any object fails to download, else closes the pipe and returns nil.
-func (h *s3Handler) download(mc *minio.Client, objects ...string) error {
-	start := time.Now()
-
-	var tot uint64
-	for _, object := range objects {
-		reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
-		if err != nil {
-			glog.Errorf("Backup: closing due to error: %s", err)
-			return err
-		}
-		st, err := reader.Stat()
-		if err != nil {
-			reader.Close()
-			glog.Errorf("Backup: unexpected error: %s", err)
-			return err
-		}
-		if st.Size <= 0 {
-			return x.Errorf("Backup: invalid file: %s", object)
-		}
-		glog.Infof("Downloading %q, %d bytes", object, st.Size)
-		n, err := io.Copy(h.pwriter, bufio.NewReaderSize(reader, s3ReadBufSize))
-		if err != nil {
-			return err
-		}
-		tot += uint64(n)
-	}
-	glog.V(2).Infof("Restore recv %s bytes. Time elapsed: %s",
-		humanize.Bytes(tot), time.Since(start).Round(time.Second))
-	return nil
 }
 
 func (h *s3Handler) Close() error {
