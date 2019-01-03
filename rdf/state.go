@@ -419,7 +419,11 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	l.Backup()
 	for {
 		r := l.Next()
-		if isEndOfLine(r) || r == lex.EOF {
+		if isEndOfLine(r) {
+			l.Line++
+			break
+		}
+		if r == lex.EOF {
 			break
 		}
 	}
