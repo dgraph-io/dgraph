@@ -19,6 +19,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const backupFmt = "r%d-g%d.backup"
+
 // handler interface is implemented by URI scheme handlers.
 type handler interface {
 	// Handlers know how to Write and Close their location.
@@ -26,7 +28,7 @@ type handler interface {
 	// Create prepares the location for write operations.
 	Create(*url.URL, *Request) error
 	// Load will scan location URI for backup files, then load them with loadFunc.
-	Load(*url.URL) (io.Reader, error)
+	Load(*url.URL, loadFn) error
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -41,18 +43,21 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
+// loadFn is a function that will receive the current file being read.
+type loadFn func(reader io.Reader, object string) error
+
 // Load will scan location l for backup files, then load them sequentially through reader.
 // Returns nil on success, error otherwise.
-func Load(l string) (io.Reader, error) {
+func Load(l string, fn loadFn) error {
 	uri, err := url.Parse(l)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unsupported URI: %v", uri)
+		return x.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri)
+	return h.Load(uri, fn)
 }
