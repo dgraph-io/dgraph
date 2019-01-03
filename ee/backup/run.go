@@ -30,8 +30,8 @@ import (
 var Restore x.SubCommand
 
 var opt struct {
-	location, pdir string
-	progress       bool
+	location string
+	pdir     string
 }
 
 func init() {

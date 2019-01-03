@@ -33,9 +33,6 @@ import (
 const (
 	s3DefaultEndpoint = "s3.amazonaws.com"
 	s3AccelerateHost  = "s3-accelerate"
-	// s3ReadBufSize can't be too large or we'll compete with minio's internal buffer
-	// and the reader will be slower.
-	s3ReadBufSize = 1 << 20
 )
 
 // s3Handler is used for 's3:' URI scheme.
