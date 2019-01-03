@@ -535,10 +535,11 @@ type IndexRebuild struct {
 }
 
 type indexOp int
+
 const (
-	indexNoop indexOp = iota
-	indexDelete = iota
-	indexRebuild = iota
+	indexNoop    indexOp = iota // Index should be left alone.
+	indexDelete          = iota // Index should be deleted.
+	indexRebuild         = iota // Index should be deleted and rebuilt.
 )
 
 // Run rebuilds all indices that need it.
@@ -737,7 +738,7 @@ func needsReverseEdgesRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) in
 	currIndex := current.Directive == pb.SchemaUpdate_REVERSE
 	prevIndex := old.Directive == pb.SchemaUpdate_REVERSE
 
-	// If the schema directive did not change, return indexNoop. 
+	// If the schema directive did not change, return indexNoop.
 	if currIndex == prevIndex {
 		return indexNoop
 	}
