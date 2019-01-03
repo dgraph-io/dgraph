@@ -4245,6 +4245,19 @@ func TestParseUidAsArgument(t *testing.T) {
 	require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
 }
 
+func TestParseUidAsValue(t *testing.T) {
+	// issue #2827
+	query := `
+		{
+			q(func: eq(name, "uid")) {
+				uid
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {

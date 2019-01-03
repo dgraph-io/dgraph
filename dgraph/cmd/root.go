@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
-	"github.com/dgraph-io/dgraph/ee/acl/cmd"
+	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"

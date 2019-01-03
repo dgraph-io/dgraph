@@ -39,7 +39,7 @@ fashion, resulting in an initially semi random predicate distribution.
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgo?status.svg)](https://godoc.org/github.com/dgraph-io/dgo)
 
-The go client communicates with the server on the grpc port (default value 9080).
+The Go client communicates with the server on the gRPC port (default value 9080).
 
 The client can be obtained in the usual way via `go get`:
 
@@ -52,7 +52,7 @@ documentation for the client API along with examples showing how to use it.
 
 ### Create the client
 
-To create a client, dial a connection to Dgraph's external Grpc port (typically
+To create a client, dial a connection to Dgraph's external gRPC port (typically
 9080). The following code snippet shows just one connection. You can connect to multiple Dgraph alphas to distribute the workload evenly.
 
 ```go
@@ -380,55 +380,42 @@ These third-party clients are contributed by the community and are not officiall
 ## Raw HTTP
 
 {{% notice "warning" %}}
-Raw HTTP needs more chops to use than our language clients. We wrote this to be a
-guide to help you build Dgraph client in a new language.
+Raw HTTP needs more chops to use than our language clients. We wrote this guide to help you build a Dgraph client in a new language.
 {{% /notice %}}
 
-It's also possible to interact with dgraph directly via its HTTP endpoints.
+It's also possible to interact with Dgraph directly via its HTTP endpoints.
 This allows clients to be built for languages that don't have access to a
 working gRPC implementation.
 
 In the examples shown here, regular command line tools such as `curl` and
 [`jq`](https://stedolan.github.io/jq/) are used. However, the real intention
 here is to show other programmers how they could implement a client in their
-language on top of the HTTP API.
+language on top of the HTTP API. For an example of how to build a client on top
+of gRPC, refer to the implementation of the Go client.
 
 Similar to the Go client example, we use a bank account transfer example.
 
 ### Create the Client
 
-A client built on top of the HTTP API will need to track state at two different
-levels:
-
-1. Per client. Each client will need to keep a linearized reads (`lin_read`)
-   map. This is a map from dgraph group id to proposal id. This will be needed
-for the system as a whole (client + server) to have
-[linearizability](https://en.wikipedia.org/wiki/Linearizability). Whenever a
-`lin_read` map is received in a server response (*for any transaction*), the
-client should update its version of the map by merging the two maps together.
-The merge operation is simple - the new map gets all key/value pairs from the
-parent maps. Where a key exists in both maps, the max value is taken. The
-client's initial `lin_read` is should be an empty map.
-
-2. Per transaction. There are three pieces of state that need to be maintained
-   for each transaction.
-
-    1. Each transaction needs its own `lin_read` (updated independently of the
-       client level `lin_read`). Any `lin_read` maps received in server
-responses *associated with the transaction* should be merged into the
-transactions `lin_read` map.
+A client built on top of the HTTP API will need to track three pieces of state
+for each transaction.
   
-    2. A start timestamp (`start_ts`). This uniquely identifies a transaction,
-       and doesn't change over the transaction lifecycle.
+1. A start timestamp (`start_ts`). This uniquely identifies a transaction,
+   and doesn't change over the transaction lifecycle.
   
-    3. The set of keys modified by the transaction (`keys`). This aids in
-       transaction conflict detection.
+2. The set of keys modified by the transaction (`keys`). This aids in
+   transaction conflict detection.
 
-{{% notice "note" %}}
-On a dgraph set up with no replication, there is no need to track `lin_read`.
-It can be ignored in responses received from dgraph and doesn't need to be sent
-in any requests.
-{{% /notice %}}
+     Every mutation would send back a neeuatw set of keys. The client must merge them
+     with the existing set. Optionally, a client can de-dup these keys while
+     merging.
+
+3. The set of predicates modified by the transaction (`preds`). This aids in
+   predicate move detection.
+
+     Every mutation would send back a new set of preds. The client must merge them
+     with the existing set. Optionally, a client can de-dup these keys while
+     merging.
 
 ### Alter the database
 
@@ -467,23 +454,22 @@ transfer money from one account to the other. This is done in four steps:
 
 3. Commit the transaction.
 
-Starting a transaction doesn't require any interaction with dgraph itself.
-Some state needs to be set up for the transaction to use. The transaction's
-`lin_read` is initialized by *copying* the client's `lin_read`. The `start_ts`
+Starting a transaction doesn't require any interaction with Dgraph itself.
+Some state needs to be set up for the transaction to use. The `start_ts`
 can initially be set to 0. `keys` can start as an empty set.
 
-**For both query and mutation if the `start_ts` is provided as a path parameter, then the operation
-is performed as part of the ongoing transaction else a new transaction is initiated.**
+**For both query and mutation if the `start_ts` is provided as a path parameter,
+then the operation is performed as part of the ongoing transaction. Otherwise, a
+new transaction is initiated.**
 
 ### Run a query
 
-To query the database, the `/query` endpoint is used. We need to use the
-transaction scoped `lin_read`. Assume that `lin_read` is `{"1": 12}`.
+To query the database, the `/query` endpoint is used.
 
 To get the balances for both accounts:
 
 ```sh
-curl -X POST -H 'X-Dgraph-LinRead: {"1": 12}' localhost:8080/query -d $'
+curl -X POST localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -520,33 +506,22 @@ The result should look like this:
     },
     "txn": {
       "start_ts": 4,
-      "lin_read": {
-        "ids": {
-          "1": 14
-        }
-      }
     }
   }
 }
 ```
 
-Notice that along with the query result under the `data` field, there is some
-additional data in the `extensions -> txn` field. This data will have to be
-tracked by the client.
+Notice that along with the query result under the `data` field is additional
+data in the `extensions -> txn` field. This data will have to be tracked by the
+client.
 
-First, there is a `start_ts` in the response. This `start_ts` will need to be
-used in all subsequent interactions with dgraph for this transaction, and so
+For queries, there is a `start_ts` in the response. This `start_ts` will need to
+be used in all subsequent interactions with Dgraph for this transaction, and so
 should become part of the transaction state.
-
-Second, there is a new `lin_read` map. The `lin_read` map should be merged with
-both the client scoped and transaction scoped `lin_read` maps. Recall that both
-the transaction scoped and client scoped `lin_read` maps are `{"1": 12}`. The
-`lin_read` in the response is `{"1": 14}`. The merged result is `{"1": 14}`,
-since we take the max all of the keys.
 
 ### Run a Mutation
 
-Now that we have the current balances, we need to send a mutation to dgraph
+Now that we have the current balances, we need to send a mutation to Dgraph
 with the updated balances. If Bob transfers $10 to Alice, then the RDFs to send
 are:
 
@@ -554,11 +529,11 @@ are:
 <0x1> <balance> "110" .
 <0x2> <balance> "60" .
 ```
-Note that we have to to refer to the Alice and Bob nodes by UID in the RDF
-format.
+
+Note that we have to refer to the Alice and Bob nodes by UID in the RDF format.
 
 We now send the mutations via the `/mutate` endpoint. We need to provide our
-transaction start timestamp as a path parameter, so that dgraph knows which
+transaction start timestamp as a path parameter, so that Dgraph knows which
 transaction the mutation should be part of.
 
 ```sh
@@ -582,28 +557,28 @@ The result:
     "uids": {}
   },
   "extensions": {
+    "server_latency": {
+      "parsing_ns": 17000,
+      "processing_ns": 4722207
+    },
     "txn": {
       "start_ts": 4,
       "keys": [
-        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
-        "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
-        "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
-        "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="
-      ],
-      "lin_read": {
-        "ids": {
-          "1": 17
-        }
-      }
+        "i4elpex2rwx3",
+        "nkvfdz3ltmvv"
+      ]
+      "preds": [
+        "1-balance",
+        "1-_predicate_"
+      ]
     }
   }
 }
 ```
 
-We get another `lin_read` map, which needs to be merged (the new `lin_read` map
-for **both the client and transaction** becomes `{"1": 17}`). We also get some
-`keys`. These should be added to the set of `keys` stored in the transaction
-state.
+We get some `keys`. These should be added to the set of `keys` stored in the
+transaction state. We also get some `preds`, which should be added to the set of
+`preds` stored in the transaction state.
 
 ### Committing the transaction
 
@@ -622,10 +597,8 @@ keys returned in the responses from the `/mutate` endpoint.
 ```sh
 curl -X POST localhost:8080/commit/4 -d $'
   [
-    "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAI=",
-    "AAAHYmFsYW5jZQAAAAAAAAAAAg==",
-    "AAALX3ByZWRpY2F0ZV8AAAAAAAAAAAE=",
-    "AAAHYmFsYW5jZQAAAAAAAAAAAQ=="
+    "i4elpex2rwx3",
+    "nkvfdz3ltmvv"
   ]' | jq
 ```
 
@@ -654,7 +627,7 @@ successful.  This is indicated in the response when the commit is attempted.
   "errors": [
     {
       "code": "Error",
-      "message": "Transaction aborted"
+      "message": "Transaction has been aborted. Please retry."
     }
   ]
 }

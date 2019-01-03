@@ -172,16 +172,12 @@ func (cs *compactStatus) compareAndAdd(_ thisAndNextLevelRLocked, cd compactDef)
 	}
 	// Check whether this level really needs compaction or not. Otherwise, we'll end up
 	// running parallel compactions for the same level.
-	// NOTE: We can directly call thisLevel.totalSize, because we already have acquire a read lock
-	// over this and the next level.
-	if cd.thisLevel.totalSize-thisLevel.delSize < cd.thisLevel.maxTotalSize {
-		return false
-	}
+	// Update: We should not be checking size here. Compaction priority already did the size checks.
+	// Here we should just be executing the wish of others.
 
 	thisLevel.ranges = append(thisLevel.ranges, cd.thisRange)
 	nextLevel.ranges = append(nextLevel.ranges, cd.nextRange)
 	thisLevel.delSize += cd.thisSize
-
 	return true
 }
 

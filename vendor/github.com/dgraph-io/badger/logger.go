@@ -48,7 +48,7 @@ type defaultLog struct {
 	*log.Logger
 }
 
-var defaultLogger = &defaultLog{Logger: log.New(os.Stderr, "badger", log.LstdFlags)}
+var defaultLogger = &defaultLog{Logger: log.New(os.Stderr, "badger ", log.LstdFlags)}
 
 func UseDefaultLogger() { SetLogger(defaultLogger) }
 

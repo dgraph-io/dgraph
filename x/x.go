@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -34,6 +35,7 @@ import (
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding/gzip"
 )
 
 // Error constants representing different types of errors.
@@ -431,11 +433,18 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
-func SetupConnection(host string, tlsConf *TLSHelperConfig) (*grpc.ClientConn, error) {
-	opts := append([]grpc.DialOption{},
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(GrpcMaxSize),
-			grpc.MaxCallSendMsgSize(GrpcMaxSize)),
+func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.ClientConn, error) {
+	callOpts := append([]grpc.CallOption{},
+		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
+		grpc.MaxCallSendMsgSize(GrpcMaxSize))
+
+	if useGz {
+		fmt.Fprintf(os.Stderr, "Using compression with %s\n", host)
+		callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
+	}
+
+	dialOpts := append([]grpc.DialOption{},
+		grpc.WithDefaultCallOptions(callOpts...),
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 
@@ -445,11 +454,11 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig) (*grpc.ClientConn, e
 		if err != nil {
 			return nil, err
 		}
-		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
-		opts = append(opts, grpc.WithInsecure())
+		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}
-	return grpc.Dial(host, opts...)
+	return grpc.Dial(host, dialOpts...)
 }
 
 func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string, []string) {
