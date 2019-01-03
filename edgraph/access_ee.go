@@ -282,6 +282,11 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 }
 
 func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
+	if Config.AclRefreshInterval.Nanoseconds() == 0 {
+		// the acl refresh interval is not configured
+		return
+	}
+
 	ticker := time.NewTicker(Config.AclRefreshInterval)
 	defer ticker.Stop()
 
@@ -427,16 +432,20 @@ func extractUserAndGroups(ctx context.Context) (string, []string, error) {
 // parse the Schema in the operation and authorize the operation using the aclCache
 func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
 	string, []*pb.SchemaUpdate, error) {
-	userId, groupIds, err := extractUserAndGroups(ctx)
-	if err != nil {
-		return false, "", nil, err
-	}
-
 	updates, err := schema.Parse(op.Schema)
 	if err != nil {
 		return false, "", nil, err
 	}
 
+	if len(Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return op.DropAll, op.DropAttr, updates, nil
+	}
+
+	userId, groupIds, err := extractUserAndGroups(ctx)
+	if err != nil {
+		return false, "", nil, err
+	}
 	if userId == "admin" {
 		// admin is allowed to do anything
 		return op.DropAll, op.DropAttr, updates, nil
@@ -468,6 +477,11 @@ func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) 
 
 // authorize the mutation using the aclCache
 func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+	if len(Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
 		return err
@@ -488,6 +502,11 @@ func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error
 
 // authorize the query using the aclCache
 func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+	if len(Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
 		return err
