@@ -129,6 +129,7 @@ type Lexer struct {
 	Depth    int     // nesting of {}
 	ArgDepth int     // nesting of ()
 	Mode     StateFn // Default state to go back to after reading a token.
+	Line     int     // current line of this item.
 }
 
 func (l *Lexer) Run(f StateFn) *Lexer {
@@ -144,7 +145,8 @@ func (l *Lexer) Run(f StateFn) *Lexer {
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.items = append(l.items, Item{
 		Typ: ItemError,
-		Val: fmt.Sprintf("while lexing %v: "+format, append([]interface{}{l.Input}, args...)...),
+		Val: fmt.Sprintf("line %d:%d: while lexing %v: "+format,
+			append([]interface{}{l.Line + 1, l.Pos + 1, l.Input}, args...)...),
 	})
 	return nil
 }
