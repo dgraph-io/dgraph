@@ -34,28 +34,31 @@ import (
 // $ docker-compose -f docker-compose.yml -f docker-compose-mutations-mode.yml up \
 //                  --force-recreate
 
-var disallowModeAlpha = "localhost:9180"
-var strictModeAlpha = "localhost:9182"
-var conn *grpc.ClientConn
-var err error
+const disallowModeAlpha = "localhost:9180"
+const strictModeAlphaGroup1 = "localhost:9182"
+const strictModeAlphaGroup2 = "localhost:9183"
 
-func dropAllDisallowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
+	return func(t *testing.T) {
+		dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+		fn(t, dg)
+	}
+}
+
+func dropAllDisallowed(t *testing.T, dg *dgo.Dgraph) {
+	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
 
-func dropAllAllowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+func dropAllAllowed(t *testing.T, dg *dgo.Dgraph) {
+	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 
 	require.NoError(t, err)
 }
 
-func mutateNewDisallowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+func mutateNewDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := dg.NewTxn()
@@ -70,8 +73,7 @@ func mutateNewDisallowed(t *testing.T) {
 	require.NoError(t, txn.Discard(ctx))
 }
 
-func mutateNewDisallowed2(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+func mutateNewDisallowed2(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := dg.NewTxn()
@@ -86,11 +88,10 @@ func mutateNewDisallowed2(t *testing.T) {
 	require.NoError(t, txn.Discard(ctx))
 }
 
-func addPredicateDisallowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+func addPredicateDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
-	err = dg.Alter(ctx, &api.Operation{
+	err := dg.Alter(ctx, &api.Operation{
 		Schema: `name: string @index(exact) .`,
 	})
 
@@ -98,19 +99,17 @@ func addPredicateDisallowed(t *testing.T) {
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
 
-func addPredicateAllowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+func addPredicateAllowed(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
-	err = dg.Alter(ctx, &api.Operation{
+	err := dg.Alter(ctx, &api.Operation{
 		Schema: `name: string @index(exact) .`,
 	})
 
 	require.NoError(t, err)
 }
 
-func mutateExistingDisallowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+func mutateExistingDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := dg.NewTxn()
@@ -125,14 +124,13 @@ func mutateExistingDisallowed(t *testing.T) {
 	require.NoError(t, txn.Discard(ctx))
 }
 
-func mutateExistingAllowed(t *testing.T) {
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+func mutateExistingAllowed(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := dg.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
-			_:a <dgraph.xid> "XID00001" .
+			_:a <name> "Allowed" .
 		`),
 	})
 
@@ -141,23 +139,35 @@ func mutateExistingAllowed(t *testing.T) {
 }
 
 func TestMutationsDisallow(t *testing.T) {
-	conn, err = grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
+	conn, err := grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
 	x.Check(err)
 	defer conn.Close()
 
-	t.Run("disallow drop all in no mutations mode", dropAllDisallowed)
-	t.Run("disallow mutate new predicate in no mutations mode", mutateNewDisallowed)
-	t.Run("disallow add predicate in no mutations mode", addPredicateDisallowed)
-	t.Run("disallow mutate existing predicate in no mutations mode", mutateExistingDisallowed)
+	t.Run("disallow drop all in no mutations mode",
+		runOn(conn, dropAllDisallowed))
+	t.Run("disallow mutate new predicate in no mutations mode",
+		runOn(conn, mutateNewDisallowed))
+	t.Run("disallow add predicate in no mutations mode",
+		runOn(conn, addPredicateDisallowed))
+	t.Run("disallow mutate existing predicate in no mutations mode",
+		runOn(conn, mutateExistingDisallowed))
 }
 
 func TestMutationsStrict(t *testing.T) {
-	conn, err = grpc.Dial(strictModeAlpha, grpc.WithInsecure())
+	conn1, err := grpc.Dial(strictModeAlphaGroup1, grpc.WithInsecure())
 	x.Check(err)
-	defer conn.Close()
+	defer conn1.Close()
 
-	t.Run("allow drop all in strict mutations mode", dropAllAllowed)
-	t.Run("disallow mutate new predicate in strict mutations mode", mutateNewDisallowed2)
-	t.Run("allow add predicate in strict mutations mode", addPredicateAllowed)
-	t.Run("allow mutate existing predicate in strict mutations mode", mutateExistingAllowed)
+	//conn2, err := grpc.Dial(strictModeAlpha2, grpc.WithInsecure())
+	//x.Check(err)
+	//defer conn2.Close()
+
+	t.Run("allow drop all in strict mutations mode",
+		runOn(conn1, dropAllAllowed))
+	t.Run("disallow mutate new predicate in strict mutations mode",
+		runOn(conn1, mutateNewDisallowed2))
+	t.Run("allow add predicate in strict mutations mode",
+		runOn(conn1, addPredicateAllowed))
+	t.Run("allow mutate existing predicate in strict mutations mode",
+		runOn(conn1, mutateExistingAllowed))
 }
