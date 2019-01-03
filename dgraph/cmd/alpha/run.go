@@ -104,7 +104,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
-	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
@@ -138,8 +137,8 @@ they form a Raft group and provide synchronous replication.
 			"Actual usage by the process would be more than specified here.")
 	flag.Bool("debugmode", false,
 		"Enable debug mode for more debug information.")
-	flag.String("mutations", "",
-		"Set mutation mode to allow, disallow, or strict. (default \"allow\")")
+	flag.String("mutations", "allow",
+		"Set mutation mode to allow, disallow, or strict.")
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -421,30 +420,16 @@ func run() {
 		glog.Info("HMAC secret loaded successfully.")
 	}
 
-	if Alpha.Conf.GetBool("nomutations") {
-		glog.Warning("--nomutations is deprecated in favor of --mutations=disallow")
+	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
+	case "allow":
+		opts.MutationsMode = edgraph.AllowMutations
+	case "disallow":
 		opts.MutationsMode = edgraph.DisallowMutations
-	}
-	if mutations := Alpha.Conf.GetString("mutations"); mutations != "" {
-		switch strings.ToLower(mutations) {
-		case "allow":
-			if Alpha.Conf.GetBool("nomutations") {
-				glog.Error("--mutations=allow contradicts --nomutations")
-				os.Exit(1)
-			}
-			opts.MutationsMode = edgraph.AllowMutations
-		case "disallow":
-			opts.MutationsMode = edgraph.DisallowMutations
-		case "strict":
-			if Alpha.Conf.GetBool("nomutations") {
-				glog.Error("--mutations=strict contradicts --nomutations")
-				os.Exit(1)
-			}
-			opts.MutationsMode = edgraph.StrictMutations
-		default:
-			glog.Error("--mutations argument must be one of allow, disallow, or strict")
-			os.Exit(1)
-		}
+	case "strict":
+		opts.MutationsMode = edgraph.StrictMutations
+	default:
+		glog.Error("--mutations argument must be one of allow, disallow, or strict")
+		os.Exit(1)
 	}
 
 	edgraph.SetConfiguration(opts)
