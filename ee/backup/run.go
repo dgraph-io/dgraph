@@ -14,8 +14,12 @@ package backup
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"os"
+	"path"
+	"path/filepath"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -60,25 +64,38 @@ func run() error {
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
-	// Scan location for backup files and load them.
-	reader, err := Load(opt.location)
+	// Scan location for backup files and load them. Each file represents a node group,
+	// and we create a new p dir for each.
+	start := time.Now()
+	err := Load(opt.location, func(r io.Reader, object string) error {
+		bo := badger.DefaultOptions
+		bo.SyncWrites = false
+		bo.TableLoadingMode = options.MemoryMap
+		bo.ValueThreshold = 1 << 10
+		bo.NumVersionsToKeep = math.MaxInt32
+		bo.Dir = filepath.Join(opt.pdir, pN(object))
+		bo.ValueDir = bo.Dir
+		db, err := badger.OpenManaged(bo)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		fmt.Println("--- Creating new db:", bo.Dir)
+		return db.Load(r)
+	})
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Restore: Time elapsed: %s", time.Since(start).Round(time.Second))
+	return nil
+}
 
-	bo := badger.DefaultOptions
-	bo.SyncWrites = false
-	bo.TableLoadingMode = options.MemoryMap
-	bo.ValueThreshold = 1 << 10
-	bo.NumVersionsToKeep = math.MaxInt32
-	bo.Dir = opt.pdir
-	bo.ValueDir = bo.Dir
-	db, err := badger.OpenManaged(bo)
+func pN(object string) string {
+	var readTs, groupId int
+	_, err := fmt.Sscanf(path.Base(object), backupFmt, &readTs, &groupId)
 	if err != nil {
-		return err
+		x.Fatalf("Could not scan backup info for %q: %v", object, err)
 	}
-	defer db.Close()
-	fmt.Println("--- Creating new db:", bo.Dir)
-
-	return db.Load(reader)
+	fmt.Println("--- Scanned group ID:", groupId)
+	return fmt.Sprintf("p%d", groupId)
 }
