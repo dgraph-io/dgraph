@@ -659,7 +659,7 @@ func needsCountIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) inde
 	}
 
 	// Do nothing if the schema directive did not change.
-	if !current.Count == !old.Count {
+	if current.Count == old.Count {
 		return indexNoop
 
 	}
