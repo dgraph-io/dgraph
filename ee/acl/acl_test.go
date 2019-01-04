@@ -35,7 +35,8 @@ import (
 const (
 	userid         = "alice"
 	userpassword   = "simplepassword"
-	dgraphEndpoint = "localhost:9180"
+	alphaPort      = 9280
+	dgraphEndpoint = "localhost:9280"
 )
 
 func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
@@ -120,7 +121,7 @@ func loginWithWrongPassword(t *testing.T) {
 func TestClientLoginWithRefreshJwt(t *testing.T) {
 	resetUser(t)
 
-	dg, close := test.GetDgraphClient()
+	dg, close := test.GetDgraphClient(alphaPort)
 	defer close()
 
 	ctx := context.Background()
@@ -154,7 +155,7 @@ func TestClientLoginWithRefreshJwt(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
-	dg, close := test.GetDgraphClient()
+	dg, close := test.GetDgraphClient(alphaPort)
 	defer close()
 
 	createAccountAndData(t, dg)
@@ -258,7 +259,7 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	// use commands to create users and groups
 	createUserCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "useradd",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-u", userid, "-p", userpassword, "--adminPassword", "password")
 	if err := createUserCmd.Run(); err != nil {
 		t.Fatalf("Unable to create user:%v", err)
@@ -281,7 +282,7 @@ func createGroupAndAcls(t *testing.T) {
 	// create a new group
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "groupadd",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-g", group, "--adminPassword", "password")
 	if err := createGroupCmd.Run(); err != nil {
 		t.Fatalf("Unable to create group:%v", err)
@@ -290,7 +291,7 @@ func createGroupAndAcls(t *testing.T) {
 	// add the user to the group
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "usermod",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-u", userid, "-g", group, "--adminPassword", "password")
 	if err := addUserToGroupCmd.Run(); err != nil {
 		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
@@ -299,7 +300,7 @@ func createGroupAndAcls(t *testing.T) {
 	// add READ permission on the predicateToRead to the group
 	addReadPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read)), "--adminPassword",
 		"password")
 	if err := addReadPermCmd1.Run(); err != nil {
@@ -310,7 +311,7 @@ func createGroupAndAcls(t *testing.T) {
 	// also add read permission to the attribute queryAttr, which is used inside the query block
 	addReadPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read)), "--adminPassword",
 		"password")
 	if err := addReadPermCmd2.Run(); err != nil {
@@ -320,7 +321,7 @@ func createGroupAndAcls(t *testing.T) {
 	// add WRITE permission on the predicateToWrite
 	addWritePermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write)), "--adminPassword",
 		"password")
 	if err := addWritePermCmd.Run(); err != nil {
@@ -330,7 +331,7 @@ func createGroupAndAcls(t *testing.T) {
 	// add MODIFY permission on the predicateToAlter
 	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
-		"-d", "localhost:9180",
+		"-d", dgraphEndpoint,
 		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify)), "--adminPassword",
 		"password")
 	if err := addModifyPermCmd.Run(); err != nil {

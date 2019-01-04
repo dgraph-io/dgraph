@@ -1,22 +1,25 @@
 #!/bin/bash
 
 function restartCluster {
-  basedir=$GOPATH/src/github.com/dgraph-io/dgraph
-  pushd $basedir/dgraph
-    sudo rm -Rf /tmp/dg
-    sudo mkdir /tmp/dg
+  dir=$1
+  zeroPort=$2
+  alphaPort=$3
+  dataDir=$4
+  pushd $dir
+    sudo rm -Rf $dataDir
+    sudo mkdir $dataDir
     go build . && go install . && md5sum dgraph $GOPATH/bin/dgraph
     docker-compose down
     DATA="/tmp/dg" docker-compose up --force-recreate --remove-orphans --detach
   popd
-  $basedir/contrib/wait-for-it.sh -t 60 localhost:6080
-  $basedir/contrib/wait-for-it.sh -t 60 localhost:9180
+  $GOPATH/src/github.com/dgraph-io/dgraph/contrib/wait-for-it.sh -t 60 localhost:$zeroPort
+  $GOPATH/src/github.com/dgraph-io/dgraph/contrib/wait-for-it.sh -t 60 localhost:$alphaPort
   sleep 10 # Sleep 10 seconds to get things ready.
 }
 
 function stopCluster {
-  basedir=$GOPATH/src/github.com/dgraph-io/dgraph
-  pushd $basedir/dgraph
+  dir=$1
+  pushd $dir
     docker-compose down
   popd
 }
