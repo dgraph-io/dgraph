@@ -44,7 +44,7 @@ echo "Running load-test.sh"
 ./contrib/scripts/test-bulk-schema.sh
 
 # Run tests requiring different cluster setup.
-restartCluster "systest/_mutations_mode/docker-compose-mutations-mode.yml"
-runDir systest/_mutations_mode
+restartCluster "edgraph/_mutations_mode/docker-compose-mutations-mode.yml"
+runDir edgraph/_mutations_mode
 
 stopCluster
