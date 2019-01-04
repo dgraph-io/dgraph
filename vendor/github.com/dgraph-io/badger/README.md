@@ -581,6 +581,7 @@ Below is a list of known projects that use Badger:
 * [gorush](https://github.com/appleboy/gorush) - A push notification server written in Go.
 * [emitter](https://github.com/emitter-io/emitter) - Scalable, low latency, distributed pub/sub broker with message storage, uses MQTT, gossip and badger.
 * [GarageMQ](https://github.com/valinurovam/garagemq) - AMQP server written in Go.
+* [RedixDB](https://alash3al.github.io/redix/) - A real-time persistent key-value store with the same redis protocol.
 
 If you are using Badger in a project please send a pull request to add it to the list.
 

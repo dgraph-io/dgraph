@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -38,7 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -436,7 +435,7 @@ func (n *node) processApplyCh() {
 
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil {
@@ -463,25 +462,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	if err := writer.Flush(); err != nil {
 		x.Errorf("Error while flushing to disk: %v", err)
 		return err
-	}
-
-	// Now let's commit all mutations to memory.
-	toMemory := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
-		if txn == nil {
-			return
-		}
-		err := x.RetryUntilSuccess(Config.MaxRetries, 10*time.Millisecond, func() error {
-			return txn.CommitToMemory(commit)
-		})
-		if err != nil {
-			glog.Errorf("Error while applying txn status to memory (%d -> %d): %v",
-				start, commit, err)
-		}
-	}
-
-	for _, txn := range delta.Txns {
-		toMemory(txn.StartTs, txn.CommitTs)
 	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -558,8 +538,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// commits up until then have already been written to pstore. And the way we take snapshots, we
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
-	posting.EvictLRU()
-	if _, err := n.populateSnapshot(snap, pstore, pool); err != nil {
+	if _, err := n.populateSnapshot(snap, pool); err != nil {
 		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
@@ -793,57 +772,47 @@ func (n *node) Run() {
 	}
 }
 
+func listWrap(kv *bpb.KV) *bpb.KVList {
+	return &bpb.KVList{Kv: []*bpb.KV{kv}}
+}
+
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
-	var mu sync.Mutex
-	var keys []string
-
-	addKey := func(key []byte) {
-		mu.Lock()
-		keys = append(keys, string(key))
-		mu.Unlock()
-	}
-
-	sl := stream.Lists{Stream: writer, DB: pstore}
-	sl.ChooseKeyFunc = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
-		if pk.IsSchema() {
-			// Skip if schema.
+	stream := pstore.NewStreamAt(readTs)
+	stream.LogPrefix = "Rolling up"
+	stream.ChooseKey = func(item *badger.Item) bool {
+		switch item.UserMeta() {
+		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			return false
+		default:
+			return true
 		}
-		// Return true if we don't find the BitCompletePosting bit.
-		return item.UserMeta()&posting.BitCompletePosting == 0
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	var numKeys uint64
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
 		}
-		addKey(key)
-		return l.MarshalToKv()
+		atomic.AddUint64(&numKeys, 1)
+		kv, err := l.MarshalToKv()
+		return listWrap(kv), err
 	}
-	if err := sl.Orchestrate(context.Background(), "Rolling up", readTs); err != nil {
+	stream.Send = func(list *bpb.KVList) error {
+		return writer.Send(&pb.KVS{Kv: list.Kv})
+	}
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
 		return err
 	}
 	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
-	glog.Infof("Rollup on disk done. Rolling up %d keys in LRU cache now...", len(keys))
-	for _, key := range keys {
-		l := posting.GetLru([]byte(key))
-		if l == nil {
-			continue
-		}
-		if err := l.Rollup(readTs); err != nil {
-			glog.Errorf("While rolling up posting.List in LRU cache: %v. Ignoring.", err)
-		}
-	}
-	glog.Infoln("Rollup in LRU cache done.")
+	glog.Infof("Rolled up %d keys. Done", atomic.LoadUint64(&numKeys))
 
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)

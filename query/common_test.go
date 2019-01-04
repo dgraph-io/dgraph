@@ -57,7 +57,6 @@ func taskValues(t *testing.T, v []*pb.ValueList) []string {
 }
 
 var index uint64
-var writer *x.TxnWriter
 
 func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	// Mutations don't go through normal flow, so default schema for predicate won't be present.
@@ -68,10 +67,10 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 			ValueType: edge.ValueType,
 		})
 	}
-	l, err := posting.Get(x.DataKey(attr, src))
-	require.NoError(t, err)
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
+	l, err := txn.Get(x.DataKey(attr, src))
+	require.NoError(t, err)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, txn))
 
@@ -79,8 +78,11 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	// The following logic is based on node.commitOrAbort in worker/draft.go.
 	// We need to commit to disk, so secondary indices, particularly the ones
 	// which iterate over Badger, would work correctly.
+	writer := posting.NewTxnWriter(ps)
 	require.NoError(t, txn.CommitToDisk(writer, commit))
-	require.NoError(t, txn.CommitToMemory(commit))
+	require.NoError(t, writer.Flush())
+
+	// require.NoError(t, txn.CommitToMemory(commit))
 	delta := &pb.OracleDelta{MaxAssigned: commit}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(delta)
@@ -295,9 +297,6 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
-	// Initialize a TxnWriter, so CommitToDisk can use it to write to Badger.
-	writer = x.NewTxnWriter(ps)
-	defer x.Check(writer.Flush())
 
 	const schemaStr = `
 name                           : string @index(term, exact, trigram) @count @lang .

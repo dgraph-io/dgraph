@@ -4245,6 +4245,19 @@ func TestParseUidAsArgument(t *testing.T) {
 	require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
 }
 
+func TestParseUidAsValue(t *testing.T) {
+	// issue #2827
+	query := `
+		{
+			q(func: eq(name, "uid")) {
+				uid
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
@@ -4289,7 +4302,40 @@ func TestParseMutation(t *testing.T) {
 	require.EqualValues(t, &api.NQuad{
 		Subject: "name", Predicate: "is", ObjectId: "something-else"},
 		dels[0])
+}
 
+func TestParseMutationTooManyBlocks(t *testing.T) {
+	tests := []struct {
+		m      string
+		errStr string
+	}{
+		{m: `
+			{
+				set { _:a1 <reg> "a1 content" . }
+			}{
+				set { _:b2 <reg> "b2 content" . }
+			}`,
+			errStr: "Unexpected { after the end of the block.",
+		},
+		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
+			errStr: "Unexpected error after end of block:",
+		},
+		{m: `
+			# comments are ok
+			{
+				set { _:a1 <reg> "a1 content" . } # comments are ok
+			} # comments are ok`,
+		},
+	}
+	for _, tc := range tests {
+		mu, err := ParseMutation(tc.m)
+		if tc.errStr != "" {
+			require.Contains(t, err.Error(), tc.errStr)
+			require.Nil(t, mu)
+		} else {
+			require.NoError(t, err)
+		}
+	}
 }
 
 func TestParseMissingGraphQLVar(t *testing.T) {
