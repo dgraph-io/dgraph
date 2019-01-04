@@ -165,10 +165,12 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 			return x.Errorf("Restore got an unexpected error: %s", err)
 		}
 		if st.Size <= 0 {
+			reader.Close()
 			return x.Errorf("Restore remote object is empty or inaccessible: %s", object)
 		}
 		fmt.Printf("--- Downloading %q, %d bytes\n", object, st.Size)
 		if err = fn(reader, object); err != nil {
+			reader.Close()
 			return err
 		}
 	}
