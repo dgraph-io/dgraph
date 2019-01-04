@@ -35,7 +35,7 @@ func TestSubCommand(t *testing.T) {
 
 	fname := tmpConfFile(config)
 	defer func() {
-		//os.Remove(fname)
+		os.Remove(fname)
 	}()
 	s := initSubCommand(fname)
 	flag := s.Cmd.Flags()
