@@ -64,6 +64,18 @@ var tlsConf x.TLSHelperConfig
 
 var Live x.SubCommand
 
+var aliasFlag map[string]string = map[string]string{
+	"rdfs":            "r",
+	"schema":          "s",
+	"dgraph":          "d",
+	"zero":            "z",
+	"conc":            "c",
+	"batch":           "b",
+	"xidmap":          "x",
+	"auth_token":      "a",
+	"use_compression": "C",
+}
+
 func init() {
 	Live.Cmd = &cobra.Command{
 		Use:   "live",
@@ -287,6 +299,15 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 
 func run() error {
 	x.PrintVersion()
+
+	flag := Live.Cmd.Flags()
+	if flag != nil {
+		for k, v := range aliasFlag {
+			if Live.Conf.IsSet(v) {
+				flag.Set(k, Live.Conf.GetString(v))
+			}
+		}
+	}
 	opt = options{
 		files:               Live.Conf.GetString("rdfs"),
 		schemaFile:          Live.Conf.GetString("schema"),

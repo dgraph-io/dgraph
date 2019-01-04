@@ -67,6 +67,13 @@ var (
 )
 
 var Alpha x.SubCommand
+var aliasFlag map[string]string = map[string]string{
+	"postings":    "p",
+	"wal":         "w",
+	"zero":        "z",
+	"lru_mb":      "l",
+	"port_offset": "o",
+}
 
 func init() {
 	Alpha.Cmd = &cobra.Command{
@@ -393,6 +400,14 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
+	flag := Alpha.Cmd.Flags()
+	if flag != nil {
+		for k, v := range aliasFlag {
+			if Alpha.Conf.IsSet(v) {
+				flag.Set(k, Alpha.Conf.GetString(v))
+			}
+		}
+	}
 	opts := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),

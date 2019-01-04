@@ -59,6 +59,11 @@ var opts options
 
 var Zero x.SubCommand
 
+var aliasFlag map[string]string = map[string]string{
+	"port_offset": "o",
+	"wal":         "w",
+}
+
 func init() {
 	Zero.Cmd = &cobra.Command{
 		Use:   "zero",
@@ -173,6 +178,15 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 
 func run() {
 	x.PrintVersion()
+
+	flag := Zero.Cmd.Flags()
+	if flag != nil {
+		for k, v := range aliasFlag {
+			if Zero.Conf.IsSet(v) {
+				flag.Set(k, Zero.Conf.GetString(v))
+			}
+		}
+	}
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
