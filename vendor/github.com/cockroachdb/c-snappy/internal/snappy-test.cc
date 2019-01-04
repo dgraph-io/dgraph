@@ -472,7 +472,7 @@ int ZLib::UncompressInit(Bytef *dest, uLongf *destLen,
 
 // If you compressed your data a chunk at a time, with CompressChunk,
 // you can uncompress it a chunk at a time with UncompressChunk.
-// Only difference bewteen chunked and unchunked uncompression
+// Only difference between chunked and unchunked uncompression
 // is the flush mode we use: Z_SYNC_FLUSH (chunked) or Z_FINISH (unchunked).
 int ZLib::UncompressAtMostOrAll(Bytef *dest, uLongf *destLen,
                                 const Bytef *source, uLong *sourceLen,

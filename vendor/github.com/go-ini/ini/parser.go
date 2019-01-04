@@ -1,4 +1,4 @@
-// Copyright 2015 Unknwon
+// Copyright 2015 Unknown
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
 // not use this file except in compliance with the License. You may obtain
@@ -339,7 +339,7 @@ func (f *File) parse(reader io.Reader) (err error) {
 
 	// NOTE: Iterate and increase `currentPeekSize` until
 	// the size of the parser buffer is found.
-	// TODO(unknwon): When Golang 1.10 is the lowest version supported, replace with `parserBufferSize := p.buf.Size()`.
+	// TODO(unknown): When Golang 1.10 is the lowest version supported, replace with `parserBufferSize := p.buf.Size()`.
 	parserBufferSize := 0
 	// NOTE: Peek 1kb at a time.
 	currentPeekSize := 1024

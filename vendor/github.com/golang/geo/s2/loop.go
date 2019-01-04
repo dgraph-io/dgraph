@@ -771,7 +771,7 @@ func (l *Loop) surfaceIntegralPoint(f func(a, b, c Point) Point) Point {
 // the loop. The return value is between 0 and 4*pi. (Note that the return
 // value is not affected by whether this loop is a "hole" or a "shell".)
 func (l *Loop) Area() float64 {
-	// It is suprisingly difficult to compute the area of a loop robustly. The
+	// It is surprisingly difficult to compute the area of a loop robustly. The
 	// main issues are (1) whether degenerate loops are considered to be CCW or
 	// not (i.e., whether their area is close to 0 or 4*pi), and (2) computing
 	// the areas of small loops with good relative accuracy.

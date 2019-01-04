@@ -178,7 +178,7 @@ func (bl *Bloom) HasTS(entry []byte) bool {
 // AddIfNotHas
 // Only Add entry if it's not present in the bloomfilter
 // returns true if entry was added
-// returns false if entry was allready registered in the bloomfilter
+// returns false if entry was already registered in the bloomfilter
 func (bl Bloom) AddIfNotHas(entry []byte) (added bool) {
 	if bl.Has(entry[:]) {
 		return added
@@ -190,7 +190,7 @@ func (bl Bloom) AddIfNotHas(entry []byte) (added bool) {
 // AddIfNotHasTS
 // Tread safe: Only Add entry if it's not present in the bloomfilter
 // returns true if entry was added
-// returns false if entry was allready registered in the bloomfilter
+// returns false if entry was already registered in the bloomfilter
 func (bl *Bloom) AddIfNotHasTS(entry []byte) (added bool) {
 	bl.Mtx.Lock()
 	defer bl.Mtx.Unlock()

@@ -96,7 +96,7 @@ type candidate struct {
 	terminal    bool         // Cell should not be expanded further.
 	numChildren int          // Number of children that intersect the region.
 	children    []*candidate // Actual size may be 0, 4, 16, or 64 elements.
-	priority    int          // Priority of the candiate.
+	priority    int          // Priority of the candidate.
 }
 
 func min(x, y int) int {

@@ -176,9 +176,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 		span.Annotatef(nil, "Applying schema")
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
-			// from badger and new mutation getting commited via raft and getting applied.
+			// from badger and new mutation getting committed via raft and getting applied.
 			// Before Moving the predicate we would flush all and wait for watermark to catch up
-			// but there might be some proposals which got proposed but not comitted yet.
+			// but there might be some proposals which got proposed but not committed yet.
 			// It's ok to reject the proposal here and same would happen on all nodes because we
 			// would have proposed membershipstate, and all nodes would have the proposed state
 			// or some state after that before reaching here.
@@ -276,7 +276,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		n.Id, n.gid, proposal.Key)
 
 	if proposal.Mutations != nil {
-		// syncmarks for this shouldn't be marked done until it's comitted.
+		// syncmarks for this shouldn't be marked done until it's committed.
 		span.Annotate(nil, "Applying mutations")
 		if err := n.applyMutations(ctx, proposal); err != nil {
 			span.Annotatef(nil, "While applying mutations: %v", err)

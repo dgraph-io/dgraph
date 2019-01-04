@@ -804,7 +804,7 @@ func (g *groupi) cleanupTablets() {
 			for itr.Rewind(); itr.Valid(); {
 				item := itr.Item()
 
-				// TODO: Investiage out of bounds.
+				// TODO: Investigate out of bounds.
 				pk := x.Parse(item.Key())
 				if pk == nil {
 					itr.Next()
@@ -948,7 +948,7 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 
 			// We should always sort the txns before applying. Otherwise, we might lose some of
-			// these updates, becuase we never write over a new version.
+			// these updates, because we never write over a new version.
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
