@@ -70,7 +70,7 @@ function BackupRestore
   INFO "backup loading data"
   dgraph restore \
     -l $WORKDIR/dir1/ \
-    -p $WORKDIR/dir2/p \
+    -p $WORKDIR/dir2/ \
     >restore.log 2>&1 </dev/null \
     || FATAL "backup restore failed"
   sleep 1
@@ -119,7 +119,7 @@ BackupRestore
 popd >/dev/null
 
 p0=$(CheckPData "$WORKDIR/dir1/p/")
-p1=$(CheckPData "$WORKDIR/dir2/p/")
+p1=$(CheckPData "$WORKDIR/dir2/p1/")
 
 [ "$p0" != "$p1" ] && FATAL "Restore failed. Expected '$p0' but got '$p1'"
 
