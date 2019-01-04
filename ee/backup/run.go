@@ -39,7 +39,39 @@ func init() {
 		Use:   "restore",
 		Short: "Run Dgraph (EE) Restore backup",
 		Long: `
-		Dgraph Restore is used to load backup files offline.
+The restore command will load objects created using the backup feature in Dgraph Enterprise Edition (EE).
+
+Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
+command. Restore is intended to be used with new Dgraph clusters in offline state.
+
+The --location flag indicates a source URI with Dgraph backup objects. This URI supports all
+the schemes used for backup.
+
+Source URI formats:
+  [scheme]://[host]/[path]?[args]
+  [scheme]:///[path]?[args]
+  /[path]?[args] (only for local or NFS)
+
+Source URI parts:
+  scheme - service handler, one of: "s3", "minio", "file"
+    host - remote address. ex: "dgraph.s3.amazonaws.com"
+    path - directory, bucket or container at target. ex: "/dgraph/backups/"
+    args - specific arguments that are ok to appear in logs.
+
+The --posting flag sets the posting list parent dir to store the loaded backup files.
+
+Dgraph backup creates a unique backup object for each node group, and restore will create
+a posting directory 'p' matching the backup group ID. Such that a backup file
+named '.../r32-g2.backup' will be loaded to posting dir 'p2'.
+
+Usage examples:
+
+# Restore from local dir or NFS mount:
+$ dgraph restore -p . -l /var/backups/dgraph
+
+# Restore from S3:
+$ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
+
 		`,
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
