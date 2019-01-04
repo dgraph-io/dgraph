@@ -39,7 +39,7 @@ func init() {
 		Use:   "restore",
 		Short: "Run Dgraph (EE) Restore backup",
 		Long: `
-The restore command will load objects created using the backup feature in Dgraph Enterprise Edition (EE).
+Restore loads objects created with the backup feature in Dgraph Enterprise Edition (EE).
 
 Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
 command. Restore is intended to be used with new Dgraph clusters in offline state.
