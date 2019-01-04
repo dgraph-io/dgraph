@@ -1,9 +1,16 @@
-# This file should only override services already defined in the main docker-compose.yml file and
-# not add any new ones so that stopCluster still stops and deletes all containers.
+# This file should only override services already defined in the main docker-compose.yml file (and
+# not add any new ones) so that docker-compose.yml still stops and deletes all containers.
 version: "3.5"
 services:
+  zero1:
+    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 1 --idx 1 --logtostderr
+  zero2:
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 1 --idx 2 --logtostderr --peer=zero1:5080
+  zero3:
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 1 --idx 3 --logtostderr --peer=zero1:5080
   dg1:
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --mutations=disallow
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --logtostderr --mutations=disallow
   dg2:
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --mutations=strict
-
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --logtostderr --mutations=strict
+  dg3:
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --logtostderr --mutations=strict

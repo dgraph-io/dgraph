@@ -99,11 +99,21 @@ func addPredicateDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
 
-func addPredicateAllowed(t *testing.T, dg *dgo.Dgraph) {
+func addPredicateAllowed1(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: `name: string @index(exact) .`,
+	})
+
+	require.NoError(t, err)
+}
+
+func addPredicateAllowed2(t *testing.T, dg *dgo.Dgraph) {
+	ctx := context.Background()
+
+	err := dg.Alter(ctx, &api.Operation{
+		Schema: `size: string @index(exact) .`,
 	})
 
 	require.NoError(t, err)
@@ -124,13 +134,27 @@ func mutateExistingDisallowed(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, txn.Discard(ctx))
 }
 
-func mutateExistingAllowed(t *testing.T, dg *dgo.Dgraph) {
+func mutateExistingAllowed1(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	txn := dg.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
-			_:a <name> "Allowed" .
+			_:a <name> "Alice" .
+		`),
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+}
+
+func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := dg.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:s <size> "small" .
 		`),
 	})
 
@@ -158,16 +182,28 @@ func TestMutationsStrict(t *testing.T) {
 	x.Check(err)
 	defer conn1.Close()
 
-	//conn2, err := grpc.Dial(strictModeAlpha2, grpc.WithInsecure())
-	//x.Check(err)
-	//defer conn2.Close()
+	conn2, err := grpc.Dial(strictModeAlphaGroup2, grpc.WithInsecure())
+	x.Check(err)
+	defer conn2.Close()
 
-	t.Run("allow drop all in strict mutations mode",
+	t.Run("allow group1 drop all in strict mutations mode",
 		runOn(conn1, dropAllAllowed))
-	t.Run("disallow mutate new predicate in strict mutations mode",
+	t.Run("allow group2 drop all in strict mutations mode",
+		runOn(conn2, dropAllAllowed))
+	t.Run("disallow group1 mutate new predicate in strict mutations mode",
 		runOn(conn1, mutateNewDisallowed2))
-	t.Run("allow add predicate in strict mutations mode",
-		runOn(conn1, addPredicateAllowed))
-	t.Run("allow mutate existing predicate in strict mutations mode",
-		runOn(conn1, mutateExistingAllowed))
+	t.Run("disallow group2 mutate new predicate in strict mutations mode",
+		runOn(conn2, mutateNewDisallowed2))
+	t.Run("allow group1 add predicate in strict mutations mode",
+		runOn(conn1, addPredicateAllowed1))
+	t.Run("allow group2 add predicate in strict mutations mode",
+		runOn(conn2, addPredicateAllowed2))
+	t.Run("allow group1 mutate group1 predicate in strict mutations mode",
+		runOn(conn1, mutateExistingAllowed1))
+	t.Run("allow group2 mutate group1 predicate in strict mutations mode",
+		runOn(conn2, mutateExistingAllowed1))
+	t.Run("allow group1 mutate group2 predicate in strict mutations mode",
+		runOn(conn1, mutateExistingAllowed2))
+	t.Run("allow group2 mutate group2 predicate in strict mutations mode",
+		runOn(conn2, mutateExistingAllowed2))
 }
