@@ -60,7 +60,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	if !strings.HasSuffix(uri.Host, s3DefaultEndpoint[2:]) {
 		return nil, x.Errorf("Not an S3 endpoint: %s", uri.Host)
 	}
-	glog.V(2).Infof("S3Handler using host: %s, path: %s", uri.Host, uri.Path)
+	glog.V(2).Infof("Backup using S3 host: %s, path: %s", uri.Host, uri.Path)
 
 	if len(uri.Path) < 1 {
 		return nil, x.Errorf("The S3 bucket %q is invalid", uri.Path)
@@ -202,7 +202,7 @@ func (h *s3Handler) Close() error {
 	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
 		glog.Errorf("Unexpected error when closing pipe: %v", err)
 	}
-	glog.V(2).Infof("--- waiting to complete remote transfer.")
+	glog.V(2).Infof("Backup waiting for upload to complete.")
 	return <-h.cerr
 }
 
