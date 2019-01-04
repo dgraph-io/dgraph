@@ -35,6 +35,13 @@ import (
 
 var Bulk x.SubCommand
 
+const (
+	defaultFlagRdfs       = ""
+	defaultFlagZero       = "localhost:5080"
+	defaultFlagSchemaFile = ""
+	defaultFlagStoreXids  = false
+)
+
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
@@ -47,12 +54,12 @@ func init() {
 	Bulk.EnvPrefix = "DGRAPH_BULK"
 
 	flag := Bulk.Cmd.Flags()
-	flag.StringP("rdfs", "r", "",
+	flag.StringP("rdfs", "r", defaultFlagRdfs,
 		"Directory containing *.rdf or *.rdf.gz files to load.")
 	// would be nice to use -j to match -r, but already used by --num_go_routines
 	flag.String("jsons", "",
 		"Directory containing *.json or *.json.gz files to load.")
-	flag.StringP("schema_file", "s", "",
+	flag.StringP("schema_file", "s", defaultFlagSchemaFile,
 		"Location of schema file to load.")
 	flag.String("out", "out",
 		"Location to write the final dgraph data directories.")
@@ -75,8 +82,8 @@ func init() {
 		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
 	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
-	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
-	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
+	flag.BoolP("store_xids", "x", defaultFlagStoreXids, "Generate an xid edge for each node.")
+	flag.StringP("zero", "z", defaultFlagZero, "gRPC address for Dgraph zero")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
@@ -95,20 +102,20 @@ func init() {
 
 func run() {
 	opt := options{
-		RDFDir:           Bulk.Conf.GetString("rdfs"),
+		RDFDir:           Bulk.GetStringP("rdfs", "r", defaultFlagRdfs),
 		JSONDir:          Bulk.Conf.GetString("jsons"),
-		SchemaFile:       Bulk.Conf.GetString("schema_file"),
+		SchemaFile:       Bulk.GetStringP("schema_file", "s", defaultFlagSchemaFile),
 		DgraphsDir:       Bulk.Conf.GetString("out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
-		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
+		NumGoroutines:    Bulk.GetIntP("num_go_routines", "j", runtime.NumCPU()),
 		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
 		ExpandEdges:      Bulk.Conf.GetBool("expand_edges"),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
 		NumShufflers:     Bulk.Conf.GetInt("shufflers"),
 		Version:          Bulk.Conf.GetBool("version"),
-		StoreXids:        Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:         Bulk.Conf.GetString("zero"),
+		StoreXids:        Bulk.GetBoolP("store_xids", "x", defaultFlagStoreXids),
+		ZeroAddr:         Bulk.GetStringP("zero", "z", defaultFlagZero),
 		HttpAddr:         Bulk.Conf.GetString("http"),
 		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
 		MapShards:        Bulk.Conf.GetInt("map_shards"),

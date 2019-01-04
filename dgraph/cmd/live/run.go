@@ -46,6 +46,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	defaultFlagRdfs                = ""
+	defaultFlagSchema              = ""
+	defaultFlagDgraph              = "127.0.0.1:9080"
+	defaultFlagZero                = "127.0.0.1:5080"
+	defaultFlagConc                = 10
+	defaultFlagBatch               = 1000
+	defaultFlagXidmap              = ""
+	defaultFlagIgnoreIndexConflict = true
+	defaultFlagAuthToken           = ""
+	defaultFlagUserCompression     = false
+)
+
 type options struct {
 	files               string
 	schemaFile          string
@@ -78,20 +91,20 @@ func init() {
 	Live.EnvPrefix = "DGRAPH_LIVE"
 
 	flag := Live.Cmd.Flags()
-	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
-	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
-	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
-	flag.IntP("conc", "c", 10,
+	flag.StringP("rdfs", "r", defaultFlagRdfs, "Location of rdf files to load")
+	flag.StringP("schema", "s", defaultFlagSchema, "Location of schema file")
+	flag.StringP("dgraph", "d", defaultFlagDgraph, "Dgraph alpha gRPC server address")
+	flag.StringP("zero", "z", defaultFlagZero, "Dgraph zero gRPC server address")
+	flag.IntP("conc", "c", defaultFlagConc,
 		"Number of concurrent requests to make to Dgraph")
-	flag.IntP("batch", "b", 1000,
+	flag.IntP("batch", "b", defaultFlagBatch,
 		"Number of RDF N-Quads to send as part of a mutation.")
-	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
-	flag.BoolP("ignore_index_conflict", "i", true,
+	flag.StringP("xidmap", "x", defaultFlagXidmap, "Directory to store xid to uid mapping")
+	flag.BoolP("ignore_index_conflict", "i", defaultFlagIgnoreIndexConflict,
 		"Ignores conflicts on index keys during transaction")
-	flag.StringP("auth_token", "a", "",
+	flag.StringP("auth_token", "a", defaultFlagAuthToken,
 		"The auth token passed to the server for Alter operation of the schema file")
-	flag.BoolP("use_compression", "C", false,
+	flag.BoolP("use_compression", "C", defaultFlagUserCompression,
 		"Enable compression on connection to alpha server")
 
 	// TLS configuration
@@ -288,16 +301,16 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 func run() error {
 	x.PrintVersion()
 	opt = options{
-		files:               Live.Conf.GetString("rdfs"),
-		schemaFile:          Live.Conf.GetString("schema"),
-		dgraph:              Live.Conf.GetString("dgraph"),
-		zero:                Live.Conf.GetString("zero"),
-		concurrent:          Live.Conf.GetInt("conc"),
-		numRdf:              Live.Conf.GetInt("batch"),
-		clientDir:           Live.Conf.GetString("xidmap"),
-		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
-		authToken:           Live.Conf.GetString("auth_token"),
-		useCompression:      Live.Conf.GetBool("use_compression"),
+		files:               Live.GetStringP("rdfs", "r", defaultFlagRdfs),
+		schemaFile:          Live.GetStringP("schema", "s", defaultFlagSchema),
+		dgraph:              Live.GetStringP("dgraph", "d", defaultFlagDgraph),
+		zero:                Live.GetStringP("zero", "z", defaultFlagZero),
+		concurrent:          Live.GetIntP("conc", "c", defaultFlagConc),
+		numRdf:              Live.GetIntP("batch", "b", defaultFlagBatch),
+		clientDir:           Live.GetStringP("xidmap", "x", defaultFlagXidmap),
+		ignoreIndexConflict: Live.GetBoolP("ignore_index_conflict", "i", defaultFlagIgnoreIndexConflict),
+		authToken:           Live.GetStringP("auth_token", "a", defaultFlagAuthToken),
+		useCompression:      Live.GetBoolP("use_compression", "C", defaultFlagUserCompression),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")

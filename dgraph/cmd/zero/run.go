@@ -44,6 +44,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	defaultFlagPortOffset = 0
+	defaultFlagWal        = "zw"
+)
+
 type options struct {
 	bindall           bool
 	myAddr            string
@@ -78,13 +83,13 @@ instances to achieve high-availability.
 	flag := Zero.Cmd.Flags()
 	flag.String("my", "",
 		"addr:port of this server, so other Dgraph alphas can talk to this.")
-	flag.IntP("port_offset", "o", 0,
+	flag.IntP("port_offset", "o", defaultFlagPortOffset,
 		"Value added to all listening port numbers. [Grpc=5080, HTTP=6080]")
 	flag.Uint64("idx", 1, "Unique node index for this server.")
 	flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
-	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
+	flag.StringP("wal", "w", defaultFlagWal, "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
 
@@ -176,11 +181,11 @@ func run() {
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
 		myAddr:            Zero.Conf.GetString("my"),
-		portOffset:        Zero.Conf.GetInt("port_offset"),
+		portOffset:        Zero.GetIntP("port_offset", "o", defaultFlagPortOffset),
 		nodeId:            uint64(Zero.Conf.GetInt("idx")),
 		numReplicas:       Zero.Conf.GetInt("replicas"),
 		peer:              Zero.Conf.GetString("peer"),
-		w:                 Zero.Conf.GetString("wal"),
+		w:                 Zero.GetStringP("wal", "w", defaultFlagWal),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
 	}
 

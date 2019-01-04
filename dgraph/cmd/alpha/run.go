@@ -57,8 +57,13 @@ import (
 )
 
 const (
-	tlsNodeCert = "node.crt"
-	tlsNodeKey  = "node.key"
+	tlsNodeCert           = "node.crt"
+	tlsNodeKey            = "node.key"
+	defaultFlagPostings   = "p"
+	defaultFlagWal        = "w"
+	defaultFlagZero       = "localhost:5080"
+	defaultFlagLruMb      = -1
+	defaultFlagPortOffset = 0
 )
 
 var (
@@ -88,7 +93,7 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
-	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
+	flag.StringP("postings", "p", defaultFlagPostings, "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
 	flag.String("badger.tables", "mmap",
@@ -103,7 +108,7 @@ they form a Raft group and provide synchronous replication.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 
-	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
+	flag.StringP("wal", "w", defaultFlagWal, "Directory to store raft write-ahead logs.")
 	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
@@ -113,7 +118,7 @@ they form a Raft group and provide synchronous replication.
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.String("my", "",
 		"IP_ADDRESS:PORT of this Dgraph Alpha, so other Dgraph Alphas can talk to this.")
-	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
+	flag.StringP("zero", "z", defaultFlagZero,
 		"IP_ADDRESS:PORT of a Dgraph Zero.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
@@ -133,14 +138,14 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Float64P("lru_mb", "l", -1,
+	flag.Float64P("lru_mb", "l", defaultFlagLruMb,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 	flag.Bool("debugmode", false,
 		"Enable debug mode for more debug information.")
 
 	// Useful for running multiple servers on the same machine.
-	flag.IntP("port_offset", "o", 0,
+	flag.IntP("port_offset", "o", defaultFlagPortOffset,
 		"Value added to all listening port numbers. [Internal=7080, HTTP=8080, Grpc=9080]")
 
 	flag.Uint64("query_edge_limit", 1e6,
@@ -397,12 +402,12 @@ func run() {
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
 
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		PostingDir: Alpha.GetStringP("postings", "p", defaultFlagPostings),
+		WALDir:     Alpha.GetStringP("wal", "w", defaultFlagWal),
 
 		Nomutations:    Alpha.Conf.GetBool("nomutations"),
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
-		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+		AllottedMemory: Alpha.GetFloat64P("lru_mb", "l", float64(defaultFlagLruMb)),
 	}
 
 	secretFile := Alpha.Conf.GetString("hmac_secret_file")
@@ -427,7 +432,7 @@ func run() {
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
 		Tracing:             Alpha.Conf.GetFloat64("trace"),
 		MyAddr:              Alpha.Conf.GetString("my"),
-		ZeroAddr:            Alpha.Conf.GetString("zero"),
+		ZeroAddr:            Alpha.GetStringP("zero", "z", defaultFlagZero),
 		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
 		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
 		WhiteListedIPRanges: ips,
@@ -440,7 +445,7 @@ func run() {
 	setupCustomTokenizers()
 	x.Init()
 	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
-	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
+	x.Config.PortOffset = Alpha.GetIntP("port_offset", "o", defaultFlagPortOffset)
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()

@@ -17,6 +17,8 @@
 package x
 
 import (
+	"time"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -26,4 +28,107 @@ type SubCommand struct {
 	Conf *viper.Viper
 
 	EnvPrefix string
+}
+
+func (s SubCommand) GetStringSliceP(name, shorthand string, def []string) (v []string) {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetStringSlice(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetStringSlice(shorthand)
+	}
+	return def
+}
+
+func (s SubCommand) GetStringP(name, shorthand, def string) string {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetString(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetString(shorthand)
+	}
+	return def
+}
+
+func (s SubCommand) GetFloat64P(name, shorthand string, def float64) float64 {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetFloat64(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetFloat64(shorthand)
+	}
+	return def
+
+}
+
+func (s SubCommand) GetIntP(name, shorthand string, def int) int {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetInt(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetInt(shorthand)
+	}
+	return def
+}
+
+func (s SubCommand) GetInt64P(name, shorthand string, def int64) int64 {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetInt64(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetInt64(shorthand)
+	}
+	return def
+
+}
+
+func (s SubCommand) GetDurationP(name, shorthand string, def time.Duration) time.Duration {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetDuration(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetDuration(shorthand)
+	}
+	return def
+
+}
+
+func (s SubCommand) GetStringMapP(name, shorthand string, def map[string]interface{}) map[string]interface{} {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetStringMap(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetStringMap(shorthand)
+	}
+	return def
+}
+
+func (s SubCommand) GetStringMapStringP(name, shorthand string, def map[string]string) map[string]string {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetStringMapString(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetStringMapString(shorthand)
+	}
+	return def
+}
+
+func (s SubCommand) GetStringMapStringSliceP(name, shorthand string, def map[string][]string) map[string][]string {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetStringMapStringSlice(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetStringMapStringSlice(shorthand)
+	}
+	return def
+}
+
+func (s SubCommand) GetBoolP(name, shorthand string, def bool) bool {
+	if ok := s.Conf.IsSet(name); ok {
+		return s.Conf.GetBool(name)
+	}
+	if ok := s.Conf.IsSet(shorthand); ok {
+		return s.Conf.GetBool(shorthand)
+	}
+	return def
 }

@@ -36,6 +36,7 @@ const (
 	defaultCACert   = "ca.crt"
 	defaultCAKey    = "ca.key"
 	defaultKeySize  = 2048
+	defaultClient   = ""
 	defaultNodeCert = "node.crt"
 	defaultNodeKey  = "node.key"
 	keySizeTooSmall = 512

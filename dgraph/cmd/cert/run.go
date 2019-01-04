@@ -52,7 +52,7 @@ func init() {
 	flag.Int("keysize", defaultKeySize, "RSA key bit size for creating new keys")
 	flag.Int("duration", defaultDays, "duration of cert validity in days")
 	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes")
-	flag.StringP("client", "c", "", "create cert/key pair for a client name")
+	flag.StringP("client", "c", defaultClient, "create cert/key pair for a client name")
 	flag.Bool("force", false, "overwrite any existing key and cert")
 	flag.Bool("verify", true, "verify certs against root CA when creating")
 
@@ -70,12 +70,12 @@ func init() {
 
 func run() {
 	opt = options{
-		dir:     Cert.Conf.GetString("dir"),
-		caKey:   Cert.Conf.GetString("ca-key"),
-		client:  Cert.Conf.GetString("client"),
+		dir:     Cert.GetStringP("dir", "d", defaultDir),
+		caKey:   Cert.GetStringP("ca-key", "k", defaultCAKey),
+		client:  Cert.GetStringP("client", "c", defaultClient),
 		keySize: Cert.Conf.GetInt("keysize"),
 		days:    Cert.Conf.GetInt("duration"),
-		nodes:   Cert.Conf.GetStringSlice("nodes"),
+		nodes:   Cert.GetStringSliceP("nodes", "n", nil),
 		force:   Cert.Conf.GetBool("force"),
 		verify:  Cert.Conf.GetBool("verify"),
 	}
