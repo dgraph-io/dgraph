@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -92,27 +91,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	return n
 }
 
-type header struct {
-	proposalId uint32
-	msgId      uint16
-}
-
-func (h *header) Length() int {
-	return 6 // 4 bytes for proposalId, 2 bytes for msgId.
-}
-
-func (h *header) Encode() []byte {
-	result := make([]byte, h.Length())
-	binary.LittleEndian.PutUint32(result[0:4], h.proposalId)
-	binary.LittleEndian.PutUint16(result[4:6], h.msgId)
-	return result
-}
-
-func (h *header) Decode(in []byte) {
-	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
-	h.msgId = binary.LittleEndian.Uint16(in[4:6])
-}
-
 func (n *node) Ctx(key string) context.Context {
 	if pctx := n.Proposals.Get(key); pctx != nil {
 		return pctx.Ctx
@@ -122,7 +100,7 @@ func (n *node) Ctx(key string) context.Context {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	cc.Unmarshal(e.Data)
+	x.Check(cc.Unmarshal(e.Data))
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
@@ -176,9 +154,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 		span.Annotatef(nil, "Applying schema")
 		for _, supdate := range proposal.Mutations.Schema {
 			// This is neceassry to ensure that there is no race between when we start reading
-			// from badger and new mutation getting commited via raft and getting applied.
+			// from badger and new mutation getting committed via raft and getting applied.
 			// Before Moving the predicate we would flush all and wait for watermark to catch up
-			// but there might be some proposals which got proposed but not comitted yet.
+			// but there might be some proposals which got proposed but not committed yet.
 			// It's ok to reject the proposal here and same would happen on all nodes because we
 			// would have proposed membershipstate, and all nodes would have the proposed state
 			// or some state after that before reaching here.
@@ -276,7 +254,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		n.Id, n.gid, proposal.Key)
 
 	if proposal.Mutations != nil {
-		// syncmarks for this shouldn't be marked done until it's comitted.
+		// syncmarks for this shouldn't be marked done until it's committed.
 		span.Annotate(nil, "Applying mutations")
 		if err := n.applyMutations(ctx, proposal); err != nil {
 			span.Annotatef(nil, "While applying mutations: %v", err)
@@ -460,8 +438,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		n.lastCommitTs = status.CommitTs
 	}
 	if err := writer.Flush(); err != nil {
-		x.Errorf("Error while flushing to disk: %v", err)
-		return err
+		return x.Errorf("Error while flushing to disk: %v", err)
 	}
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -471,7 +448,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 func (n *node) applyAllMarks(ctx context.Context) {
 	// Get index of last committed.
 	lastIndex := n.Applied.LastIndex()
-	n.Applied.WaitForMark(ctx, lastIndex)
+	x.Check(n.Applied.WaitForMark(ctx, lastIndex))
 }
 
 func (n *node) leaderBlocking() (*conn.Pool, error) {
@@ -618,7 +595,7 @@ func (n *node) Run() {
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
 				if err := n.proposeSnapshot(discardN); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
+					glog.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
 			}
@@ -671,7 +648,7 @@ func (n *node) Run() {
 					maxIndex := n.Applied.LastIndex()
 					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
 						" retrieving snapshot\n", maxIndex)
-					n.Applied.WaitForMark(context.Background(), maxIndex)
+					glog.Error(n.Applied.WaitForMark(context.Background(), maxIndex))
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d\n", snap, n.gid, rc.Id)
@@ -714,17 +691,18 @@ func (n *node) Run() {
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
 
-				if entry.Type == raftpb.EntryConfChange {
+				switch {
+				case entry.Type == raftpb.EntryConfChange:
 					n.applyConfChange(entry)
 					// Not present in proposal map.
 					n.Applied.Done(entry.Index)
 					groups().triggerMembershipSync()
 
-				} else if len(entry.Data) == 0 {
+				case len(entry.Data) == 0:
 					n.elog.Printf("Found empty data at index: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 
-				} else {
+				default:
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
 						x.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
@@ -761,7 +739,7 @@ func (n *node) Run() {
 
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
-				go n.Raft().Campaign(n.ctx)
+				go x.Ignore(n.Raft().Campaign(n.ctx))
 				firstRun = false
 			}
 			if span != nil {

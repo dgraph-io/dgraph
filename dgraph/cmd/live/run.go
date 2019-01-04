@@ -27,7 +27,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
 	"strconv"
@@ -163,7 +163,7 @@ func (l *loader) uid(val string) string {
 	}
 
 	uid, _ := l.alloc.AssignUid(val)
-	return fmt.Sprintf("%#x", uint64(uid))
+	return fmt.Sprintf("%#x", uid)
 }
 
 func fileReader(file string) (io.Reader, *os.File) {
@@ -299,7 +299,7 @@ func run() error {
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
 	}
-	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
+	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TLSClientCert, x.TLSClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	go http.ListenAndServe("localhost:6060", nil)
@@ -374,8 +374,9 @@ func run() error {
 			return err
 		}
 	}
-
+	l.stopTickers()
 	close(l.reqs)
+
 	// First we wait for requestsWg, when it is done we know all retry requests have been added
 	// to retryRequestsWg. We can't have the same waitgroup as by the time we call Wait, we can't
 	// be sure that all retry requests have been added to the waitgroup.

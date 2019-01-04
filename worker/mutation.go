@@ -123,8 +123,8 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	}
 	old, ok := schema.State().Get(update.Predicate)
 	current := *update
-	// Sets only in memory, we will update it on disk only after schema mutations is successful and persisted
-	// to disk.
+	// Sets only in memory, we will update it on disk only after schema mutations is successful
+	// and persisted to disk.
 	schema.State().Set(update.Predicate, current)
 
 	// Once we remove index or reverse edges from schema, even though the values
@@ -241,7 +241,7 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	} else {
 		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
 	}
-	updateSchema(attr, s)
+	x.Warn(updateSchema(attr, s))
 }
 
 func hasEdges(attr string, startTs uint64) bool {
@@ -499,15 +499,6 @@ func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
 		}
 	}
 	return mm
-}
-
-func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
-	txn := posting.Oracle().GetTxn(startTs)
-	if txn == nil {
-		return nil
-	}
-	// Ensures that we wait till prewrite is applied
-	return txn.CommitToMemory(commitTs)
 }
 
 type res struct {

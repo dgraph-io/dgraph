@@ -53,7 +53,9 @@ var (
 )
 
 func invokeNetworkRequest(
-	ctx context.Context, addr string, f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
+	ctx context.Context,
+	addr string,
+	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
@@ -330,7 +332,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 	if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
 		return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
-			" Got type: %s", q.Attr, types.TypeID(srcFn.atype).Name())
+			" Got type: %s", q.Attr, srcFn.atype.Name())
 	}
 	if srcFn.n == 0 {
 		return nil
@@ -366,11 +368,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 			var vals []types.Val
-			if q.ExpandAll {
+			switch {
+			case q.ExpandAll:
 				vals, err = pl.AllValues(args.q.ReadTs)
-			} else if listType && len(q.Langs) == 0 {
+			case listType && len(q.Langs) == 0:
 				vals, err = pl.AllUntaggedValues(args.q.ReadTs)
-			} else {
+			default:
 				var val types.Val
 				val, err = pl.ValueFor(args.q.ReadTs, q.Langs)
 				vals = append(vals, val)
@@ -771,7 +774,7 @@ func (qs *queryState) helpProcessTask(
 
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
-		AfterUID: uint64(q.AfterUid),
+		AfterUID: q.AfterUid,
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
@@ -830,13 +833,13 @@ func (qs *queryState) helpProcessTask(
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		qs.filterGeoFunction(funcArgs{q, gid, srcFn, out})
+		x.Warn(qs.filterGeoFunction(funcArgs{q, gid, srcFn, out}))
 	}
 
 	// For string matching functions, check the language.
 	if needsStringFiltering(srcFn, q.Langs, attr) {
 		span.Annotate(nil, "filterStringFunction")
-		qs.filterStringFunction(funcArgs{q, gid, srcFn, out})
+		x.Warn(qs.filterStringFunction(funcArgs{q, gid, srcFn, out}))
 	}
 
 	out.IntersectDest = srcFn.intersectDest
@@ -918,9 +921,10 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			}
 
 			var val types.Val
-			if lang != "" {
+			switch {
+			case lang != "":
 				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
-			} else if isList {
+			case isList:
 				vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
 				if err == posting.ErrNoValue {
 					continue
@@ -935,9 +939,8 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 						break
 					}
 				}
-
 				continue
-			} else {
+			default:
 				val, err = pl.Value(arg.q.ReadTs)
 			}
 
@@ -1393,6 +1396,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		fc.tokens, err = tok.BuildTokens(valToTok.Value,
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
+		x.Warn(err)
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
 		fc.intersectDest = strings.HasSuffix(fnName, "allof")
@@ -1566,23 +1570,25 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 		for fidx := 0; aidx < len(argTokens) && fidx < len(fcTokens); {
 			if fcTokens[fidx] < argTokens[aidx] {
 				fidx++
+				continue
 			} else if fcTokens[fidx] == argTokens[aidx] {
 				fidx++
 				aidx++
-			} else {
-				// as all of argTokens should match
-				// which is not possible now.
-				break
+				continue
 			}
+			// as all of argTokens should match
+			// which is not possible now.
+			break
 		}
 		return aidx == len(argTokens), nil
 	case "anyofterms":
 		for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
-			if fcTokens[fidx] < argTokens[aidx] {
+			switch {
+			case fcTokens[fidx] < argTokens[aidx]:
 				fidx++
-			} else if fcTokens[fidx] == argTokens[aidx] {
+			case fcTokens[fidx] == argTokens[aidx]:
 				return true, nil
-			} else {
+			default:
 				aidx++
 			}
 		}
@@ -1712,9 +1718,9 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	}
 
 	if cp.fn == "lt" {
-		count -= 1
+		count--
 	} else if cp.fn == "gt" {
-		count += 1
+		count++
 	}
 
 	x.AssertTrue(count >= 1)

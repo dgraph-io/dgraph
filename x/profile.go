@@ -25,11 +25,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-type stopper interface {
+type Stopper interface {
 	Stop()
 }
 
-func StartProfile(conf *viper.Viper) stopper {
+func StartProfile(conf *viper.Viper) Stopper {
 	profileMode := conf.GetString("profile_mode")
 	switch profileMode {
 	case "cpu":

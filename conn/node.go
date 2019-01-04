@@ -260,11 +260,16 @@ func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Sna
 	}
 }
 
-func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
-	var sp raftpb.Snapshot
+func (n *Node) PastLife() (uint64, bool, error) {
+	var (
+		idx     uint64
+		restart bool
+		rerr    error
+		sp      raftpb.Snapshot
+	)
 	sp, rerr = n.Store.Snapshot()
 	if rerr != nil {
-		return
+		return 0, false, rerr
 	}
 	if !raft.IsEmptySnap(sp) {
 		glog.Infof("Found Snapshot.Metadata: %+v\n", sp.Metadata)
@@ -275,7 +280,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	var hd raftpb.HardState
 	hd, rerr = n.Store.HardState()
 	if rerr != nil {
-		return
+		return 0, false, rerr
 	}
 	if !raft.IsEmptyHardState(hd) {
 		glog.Infof("Found hardstate: %+v\n", hd)
@@ -285,14 +290,14 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	var num int
 	num, rerr = n.Store.NumEntries()
 	if rerr != nil {
-		return
+		return 0, false, rerr
 	}
 	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
 		restart = true
 	}
-	return
+	return idx, restart, nil
 }
 
 const (

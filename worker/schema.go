@@ -41,7 +41,7 @@ type resultErr struct {
 // predicates is not specified, then all the predicates belonging to the group
 // are returned
 func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, error) {
-	ctx, span := otrace.StartSpan(ctx, "worker.getSchema")
+	_, span := otrace.StartSpan(ctx, "worker.getSchema")
 	defer span.End()
 
 	var result pb.SchemaResult
@@ -164,7 +164,8 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, 
 
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
-func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api.SchemaNode, error) {
+func GetSchemaOverNetwork(ctx context.Context,
+	schema *pb.SchemaRequest) ([]*api.SchemaNode, error) {
 	ctx, span := otrace.StartSpan(ctx, "worker.GetSchemaOverNetwork")
 	defer span.End()
 

@@ -322,7 +322,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+				go x.Warn(g.Node.ProposePeerRemoval(context.Background(), member.Id))
 			}
 		}
 		conn.Get().RemoveInvalid(g.state)
@@ -447,12 +447,10 @@ func (g *groupi) members(gid uint32) map[uint64]*pb.Member {
 
 func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	members := g.members(gid)
-	if members != nil {
-		for _, m := range members {
-			pl, err := conn.Get().Get(m.Addr)
-			if err == nil {
-				return pl
-			}
+	for _, m := range members {
+		pl, err := conn.Get().Get(m.Addr)
+		if err == nil {
+			return pl
 		}
 	}
 	return nil
@@ -460,11 +458,9 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 
 func (g *groupi) MyPeer() (uint64, bool) {
 	members := g.members(g.groupId())
-	if members != nil {
-		for _, m := range members {
-			if m.Id != g.Node.Id {
-				return m.Id, true
-			}
+	for _, m := range members {
+		if m.Id != g.Node.Id {
+			return m.Id, true
 		}
 	}
 	return 0, false
@@ -737,10 +733,10 @@ OUTER:
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():
-			stream.CloseSend()
+			x.Ignore(stream.CloseSend())
 			break OUTER
 		case <-ctx.Done():
-			stream.CloseSend()
+			x.Ignore(stream.CloseSend())
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
@@ -749,7 +745,7 @@ OUTER:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
+				x.Ignore(stream.CloseSend())
 				break OUTER
 			}
 		}
@@ -804,7 +800,7 @@ func (g *groupi) cleanupTablets() {
 			for itr.Rewind(); itr.Valid(); {
 				item := itr.Item()
 
-				// TODO: Investiage out of bounds.
+				// TODO: Investigate out of bounds.
 				pk := x.Parse(item.Key())
 				if pk == nil {
 					itr.Next()
@@ -824,7 +820,7 @@ func (g *groupi) cleanupTablets() {
 					g.delPred <- struct{}{}
 					glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
 					// Predicate moves are disabled during deletion, deletePredicate purges everything.
-					posting.DeletePredicate(context.Background(), pk.Attr)
+					x.Warn(posting.DeletePredicate(context.Background(), pk.Attr))
 					<-g.delPred
 					return
 				}
@@ -880,7 +876,7 @@ func (g *groupi) processOracleDeltaStream() {
 		go func() {
 			// This would exit when either a Recv() returns error. Or, cancel() is called by
 			// something outside of this goroutine.
-			defer stream.CloseSend()
+			defer x.Ignore(stream.CloseSend())
 			defer close(deltaCh)
 
 			for {
@@ -948,7 +944,7 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 
 			// We should always sort the txns before applying. Otherwise, we might lose some of
-			// these updates, becuase we never write over a new version.
+			// these updates, because we never write over a new version.
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})

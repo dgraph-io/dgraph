@@ -180,7 +180,6 @@ func main() {
 	}
 
 	chunks64 := chunkify64(data)
-	data = nil
 
 	mis := 0
 	const ntrials = 100

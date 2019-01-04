@@ -284,9 +284,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		case pk.IsSchema():
 			// Schema should be handled first. Because schema keys are also considered data keys.
 			var update pb.SchemaUpdate
-			err := item.Value(func(val []byte) error {
-				return update.Unmarshal(val)
-			})
+			err := item.Value(update.Unmarshal)
 			if err != nil {
 				// Let's not propagate this error. We just log this and continue onwards.
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)

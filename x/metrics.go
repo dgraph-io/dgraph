@@ -76,14 +76,11 @@ func init() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if err := HealthCheck(); err == nil {
-					AlphaHealth.Set(1)
-				} else {
-					AlphaHealth.Set(0)
-				}
+		for range ticker.C {
+			if err := HealthCheck(); err == nil {
+				AlphaHealth.Set(1)
+			} else {
+				AlphaHealth.Set(0)
 			}
 		}
 	}()

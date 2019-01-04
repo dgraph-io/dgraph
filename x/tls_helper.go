@@ -43,15 +43,9 @@ const (
 
 // TLSHelperConfig define params used to create a tls.Config
 type TLSHelperConfig struct {
-	ConfigType       tlsConfigType
-	CertDir          string
-	CertRequired     bool
-	Cert             string
-	Key              string
-	ServerName       string
-	RootCACert       string
-	ClientAuth       string
-	UseSystemCACerts bool
+	CertDir, Cert, Key, ServerName, RootCACert, ClientAuth string
+	ConfigType                                             tlsConfigType
+	CertRequired, UseSystemCACerts                         bool
 }
 
 func RegisterTLSFlags(flag *pflag.FlagSet) {

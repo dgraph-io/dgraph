@@ -80,7 +80,7 @@ func RunServer(bindall bool) {
 
 	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
 	pb.RegisterRaftServer(workerServer, &raftServer)
-	workerServer.Serve(ln)
+	x.Warn(workerServer.Serve(ln))
 }
 
 // StoreStats returns stats for data store.

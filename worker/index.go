@@ -25,7 +25,8 @@ import (
 	"github.com/golang/glog"
 )
 
-func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
+func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
+	startTs uint64) error {
 	if schema.State().IsIndexed(attr) != rebuild {
 		return x.Errorf("Predicate %s index mismatch, rebuild %v", attr, rebuild)
 	}
@@ -41,7 +42,8 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool,
 	return nil
 }
 
-func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
+func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool,
+	startTs uint64) error {
 	if schema.State().IsReversed(attr) != rebuild {
 		return x.Errorf("Predicate %s reverse mismatch, rebuild %v", attr, rebuild)
 	}
@@ -57,7 +59,8 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	return nil
 }
 
-func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool, startTs uint64) error {
+func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool,
+	startTs uint64) error {
 	glog.Infof("Deleting count index for %s", attr)
 	if err := posting.DeleteCountIndex(attr); err != nil {
 		return err

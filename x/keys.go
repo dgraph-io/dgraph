@@ -115,12 +115,10 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 }
 
 type ParsedKey struct {
-	byteType   byte
-	Attr       string
-	Uid        uint64
-	Term       string
-	Count      uint32
-	bytePrefix byte
+	Attr, Term           string
+	Uid                  uint64
+	Count                uint32
+	byteType, bytePrefix byte
 }
 
 func (p ParsedKey) IsData() bool {

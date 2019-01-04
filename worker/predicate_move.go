@@ -125,12 +125,15 @@ func movePredicateHelper(ctx context.Context, predicate string, gid uint32) erro
 	// Send schema (if present) now after all keys have been transferred over.
 	schemaKey := x.SchemaKey(predicate)
 	item, err := txn.Get(schemaKey)
-	if err == badger.ErrKeyNotFound {
+	switch {
+	case err == badger.ErrKeyNotFound:
 		// The predicate along with the schema could have been deleted. In that case badger would
 		// return ErrKeyNotFound. We don't want to try and access item.Value() in that case.
-	} else if err != nil {
+
+	case err != nil:
 		return err
-	} else {
+
+	default:
 		val, err := item.ValueCopy(nil)
 		if err != nil {
 			return err

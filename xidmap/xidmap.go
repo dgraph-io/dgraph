@@ -224,7 +224,7 @@ func (s *shard) evict(ratio float64) {
 		if !m.persisted {
 			var uidBuf [binary.MaxVarintLen64]byte
 			n := binary.PutUvarint(uidBuf[:], m.uid)
-			txn.Set([]byte(m.xid), uidBuf[:n])
+			x.Ignore(txn.Set([]byte(m.xid), uidBuf[:n]))
 		}
 
 	}

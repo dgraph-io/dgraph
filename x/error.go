@@ -66,6 +66,13 @@ func Ignore(_ error) {
 	// Do nothing.
 }
 
+// Warn effectively turns errors into warnings, so that we don't completely ignore errors.
+func Warn(err error) {
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 // AssertTrue asserts that b is true. Otherwise, it would log fatal.
 func AssertTrue(b bool) {
 	if !b {

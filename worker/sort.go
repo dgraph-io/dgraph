@@ -55,9 +55,10 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return processSort(ctx, q)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
-		return c.Sort(ctx, q)
-	})
+	result, err := processWithBackupRequest(ctx, gid,
+		func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
+			return c.Sort(ctx, q)
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +158,8 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return &sortresult{&emptySortResult, nil, fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
+		return &sortresult{&emptySortResult, nil,
+			fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
 	}
 
 	// Get the tokenizers and choose the corresponding one.
@@ -315,7 +317,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 		result := or.r
 		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
-		for i, _ := range dest.Uids {
+		for i := range dest.Uids {
 			var sv types.Val
 			if len(result.ValueMatrix[i].Values) == 0 {
 				// Assign nil value which is sorted as greater than all other values.
