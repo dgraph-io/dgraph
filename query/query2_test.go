@@ -975,7 +975,7 @@ func ageSg(uidMatrix []*pb.List, srcUids *pb.List, ages []uint64) *SubGraph {
 		binary.LittleEndian.PutUint64(bs, a)
 		as = append(as, &pb.ValueList{
 			Values: []*pb.TaskValue{
-				&pb.TaskValue{Val: []byte(bs), ValType: 2},
+				{Val: []byte(bs), ValType: 2},
 			},
 		})
 	}

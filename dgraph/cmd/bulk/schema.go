@@ -38,7 +38,7 @@ type schemaStore struct {
 func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
 		m: map[string]*pb.SchemaUpdate{
-			"_predicate_": &pb.SchemaUpdate{
+			"_predicate_": {
 				ValueType: pb.Posting_STRING,
 				List:      true,
 			},
@@ -131,7 +131,7 @@ func (s *schemaStore) write(db *badger.DB) {
 	// Add predicates from the db so that final schema includes predicates
 	// used in the rdf file but not included in the schema file.
 	for _, pred := range s.getPredicates(db) {
-		if _, ok := s.m[pred]; ! ok {
+		if _, ok := s.m[pred]; !ok {
 			preds = append(preds, pred)
 		}
 	}

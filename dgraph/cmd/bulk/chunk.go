@@ -110,7 +110,7 @@ func (_ rdfChunker) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
 		return nil, errors.Wrapf(parseErr, "while parsing line %q", str)
 	}
 
-	return []gql.NQuad{gql.NQuad{NQuad: &nq}}, readErr
+	return []gql.NQuad{{NQuad: &nq}}, readErr
 }
 
 func slurpSpace(r *bufio.Reader) error {
