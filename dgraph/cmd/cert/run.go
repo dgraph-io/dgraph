@@ -26,6 +26,13 @@ import (
 
 var Cert x.SubCommand
 
+var aliasFlag map[string]string = map[string]string{
+	"dir":    "d",
+	"ca-key": "k",
+	"nodes":  "n",
+	"client": "c",
+}
+
 type options struct {
 	dir, caKey, caCert, client string
 	force, verify              bool
@@ -69,6 +76,11 @@ func init() {
 }
 
 func run() {
+	for k, v := range aliasFlag {
+		if Cert.Conf.IsSet(v) {
+			Cert.Cmd.Flags().Set(k, Cert.Conf.GetString(v))
+		}
+	}
 	opt = options{
 		dir:     Cert.Conf.GetString("dir"),
 		caKey:   Cert.Conf.GetString("ca-key"),

@@ -34,6 +34,13 @@ import (
 )
 
 var Bulk x.SubCommand
+var aliasFlag map[string]string = map[string]string{
+	"rdfs":            "r",
+	"schema_file":     "s",
+	"store_xids":      "x",
+	"num_go_routines": "j",
+	"zero":            "z",
+}
 
 func init() {
 	Bulk.Cmd = &cobra.Command{
@@ -94,6 +101,11 @@ func init() {
 }
 
 func run() {
+	for k, v := range aliasFlag {
+		if Bulk.Conf.IsSet(v) {
+			Bulk.Cmd.Flags().Set(k, Bulk.Conf.GetString(v))
+		}
+	}
 	opt := options{
 		RDFDir:           Bulk.Conf.GetString("rdfs"),
 		JSONDir:          Bulk.Conf.GetString("jsons"),
