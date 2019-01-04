@@ -410,7 +410,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 func skipDuplicate(in []uint64, idx int) int {
 	i := idx + 1
 	for i < len(in) && in[i] == in[idx] {
-		i += 1
+		i++
 	}
 	return i
 }

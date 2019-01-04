@@ -32,6 +32,7 @@ function runAll {
 # in the pipe returns a non-zero status
 set -o pipefail
 restartCluster
+
 echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?

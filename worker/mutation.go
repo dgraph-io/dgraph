@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
 	"time"
 
@@ -113,7 +112,6 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	n := groups().Node
 	if !groups().ServesTablet(update.Predicate) {
 		tablet := groups().Tablet(update.Predicate)
 		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
@@ -121,10 +119,10 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	if err := checkSchema(update); err != nil {
 		return err
 	}
-	old, ok := schema.State().Get(update.Predicate)
+	old, _ := schema.State().Get(update.Predicate)
 	current := *update
-	// Sets only in memory, we will update it on disk only after schema mutations is successful and persisted
-	// to disk.
+	// Sets only in memory, we will update it on disk only after schema mutations are successful and
+	// written to disk.
 	schema.State().Set(update.Predicate, current)
 
 	// Once we remove index or reverse edges from schema, even though the values
@@ -139,83 +137,13 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	// We need watermark for index/reverse edge addition for linearizable reads.
 	// (both applied and synced watermarks).
 	defer glog.Infof("Done schema update %+v\n", update)
-	if !ok {
-		if current.Directive == pb.SchemaUpdate_INDEX {
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true, startTs); err != nil {
-				return err
-			}
-		} else if current.Directive == pb.SchemaUpdate_REVERSE {
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true, startTs); err != nil {
-				return err
-			}
-		}
-
-		if current.Count {
-			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true, startTs); err != nil {
-				return err
-			}
-		}
-		return nil
+	rebuild := posting.IndexRebuild{
+		Attr:          update.Predicate,
+		StartTs:       startTs,
+		OldSchema:     &old,
+		CurrentSchema: &current,
 	}
-
-	// schema was present already
-	if current.List && !old.List {
-		if err := posting.RebuildListType(ctx, update.Predicate, startTs); err != nil {
-			return err
-		}
-	} else if old.List && !current.List {
-		return fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", current.Predicate)
-	}
-
-	if needReindexing(old, current) {
-		// Reindex if update.Index is true or remove index
-		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-			current.Directive == pb.SchemaUpdate_INDEX, startTs); err != nil {
-			return err
-		}
-	} else if needsRebuildingReverses(old, current) {
-		// Add or remove reverse edge based on update.Reverse
-		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-			current.Directive == pb.SchemaUpdate_REVERSE, startTs); err != nil {
-			return err
-		}
-	}
-
-	if current.Count != old.Count {
-		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count,
-			startTs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func needsRebuildingReverses(old pb.SchemaUpdate, current pb.SchemaUpdate) bool {
-	return (current.Directive == pb.SchemaUpdate_REVERSE) !=
-		(old.Directive == pb.SchemaUpdate_REVERSE)
-}
-
-func needReindexing(old pb.SchemaUpdate, current pb.SchemaUpdate) bool {
-	if (current.Directive == pb.SchemaUpdate_INDEX) != (old.Directive == pb.SchemaUpdate_INDEX) {
-		return true
-	}
-	// if value types has changed
-	if current.Directive == pb.SchemaUpdate_INDEX && current.ValueType != old.ValueType {
-		return true
-	}
-	// if tokenizer has changed - if same tokenizer works differently
-	// on different types
-	if len(current.Tokenizer) != len(old.Tokenizer) {
-		return true
-	}
-	for i, t := range old.Tokenizer {
-		if current.Tokenizer[i] != t {
-			return true
-		}
-	}
-
-	return false
+	return rebuild.Run(ctx)
 }
 
 // We commit schema to disk in blocking way, should be ok because this happens
@@ -331,8 +259,8 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	return nil
 }
 
-// If storage type is specified, then check compatibility or convert to schema type
-// if no storage type is specified then convert to schema type.
+// ValidateAndConvert checks compatibility or converts to the schema type if the storage type is
+// specified. If no storage type is specified then it converts to the schema type.
 func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	if isDeletePredicateEdge(edge) {
 		return nil
@@ -341,7 +269,8 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 	}
 	// <s> <p> <o> Del on non list scalar type.
-	if edge.ValueId == 0 && !isStarAll(edge.Value) && edge.Op == pb.DirectedEdge_DEL && !su.GetList() {
+	if edge.ValueId == 0 && !isStarAll(edge.Value) && edge.Op == pb.DirectedEdge_DEL &&
+		!su.GetList() {
 		return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
 	}
 

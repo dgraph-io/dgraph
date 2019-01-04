@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.12] - [unreleased]
+
+### Added
+
+- Support gzip compression for gRPC and HTTP requests. (#2843)
+
+### Changed
+
+- Use the new Stream API from Badger instead of Dgraph's Stream framework. (#2852)
+- Discard earlier versions of posting lists. (#2859)
+- Make HTTP JSON response encoding more efficient.
+- Optimize and refactor facet filtering. (#2829)
+- Show badger.Item meta information in `dgraph debug` output.
+- Add new option to `dgraph debug` tool to get a histogram of key and value sizes. (#2844)
+- Add new option to `dgraph debug` tool to get info from a particular read timestamp.
+
+### Removed
+
+- Remove LRU cache from Alpha for big wins in query latency reduction (5-10x)
+  and mutation throughput (live loading 1.7x faster). Setting `--lru_mb`,
+  although still required, will not have any effect since the cache is removed.
+  The flag will be used later when LRU cache is introduced in Badger.
+
+### Fixed
+
+- Use json.Marshal for strings and blobs. Fixes #2662.
+- Let eq use string "uid" as value. Fixes #2827.
+- Skip empty posting lists in `has` function.
+- Fix Rollup to pick max update commit ts.
+- Fix a race condition when processing concurrent queries. Fixes #2849.
+
 ## [1.0.11] - 2018-12-17
 
 ### Added
