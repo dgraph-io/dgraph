@@ -73,7 +73,7 @@
 //   # refers to the users' home dir
 //   home = ${HOME}
 //
-//   # local key takes precedence over env var: u = foo
+//   # local key takes precendence over env var: u = foo
 //   USER = foo
 //   u = ${USER}
 //
@@ -102,7 +102,7 @@
 //   v = p.GetString("key", "def")
 //   v = p.GetDuration("key", 999)
 //
-// As an alternative properties may be applied with the standard
+// As an alterantive properties may be applied with the standard
 // library's flag implementation at any time.
 //
 //   # Standard configuration

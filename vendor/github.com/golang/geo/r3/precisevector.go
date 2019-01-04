@@ -66,7 +66,7 @@ func precMul(a, b *big.Float) *big.Float {
 // PreciseVector represents a point in ℝ³ using high-precision values.
 // Note that this is NOT a complete implementation because there are some
 // operations that Vector supports that are not feasible with arbitrary precision
-// math. (e.g., methods that need division like Normalize, or methods needing a
+// math. (e.g., methods that need divison like Normalize, or methods needing a
 // square root operation such as Norm)
 type PreciseVector struct {
 	X, Y, Z *big.Float

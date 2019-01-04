@@ -222,7 +222,7 @@ func (r Rect) Intersects(other Rect) bool {
 	return r.Lat.Intersects(other.Lat) && r.Lng.Intersects(other.Lng)
 }
 
-// CapBound returns a cap that contains Rect.
+// CapBound returns a cap that countains Rect.
 func (r Rect) CapBound() Cap {
 	// We consider two possible bounding caps, one whose axis passes
 	// through the center of the lat-long rectangle and one whose axis

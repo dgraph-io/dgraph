@@ -366,7 +366,7 @@ a0dalloc(void *ptr)
 }
 
 /*
- * FreeBSD's libc uses the bootstrap_*() functions in bootstrap-sensitive
+ * FreeBSD's libc uses the bootstrap_*() functions in bootstrap-senstive
  * situations that cannot tolerate TLS variable access (TLS allocation and very
  * early internal data structure initialization).
  */

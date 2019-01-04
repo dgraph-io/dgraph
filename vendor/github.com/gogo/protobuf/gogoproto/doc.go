@@ -115,7 +115,7 @@ See below that the field's name is MySize and not Size.
 The is useful when having a protocol buffer message with a field name which conflicts with a generated method.
 As an example, having a field name size and using the sizer plugin to generate a Size method will cause a go compiler error.
 Using customname you can fix this error without changing the field name.
-This is typically useful when working with a protocol buffer that was designed before these methods and/or the go language were available.
+This is typically useful when working with a protocol buffer that was designed before these methods and/or the go language were avialable.
 
 Gogoprotobuf also has some more subtle changes, these could be changed back:
 
@@ -161,8 +161,8 @@ The most complete way to see examples is to look at
 
 	github.com/gogo/protobuf/test/thetest.proto
 
-Gogoprototest is a separate project,
-because we want to keep gogoprotobuf independent of goprotobuf,
+Gogoprototest is a seperate project,
+because we want to keep gogoprotobuf independant of goprotobuf,
 but we still want to test it thoroughly.
 
 */

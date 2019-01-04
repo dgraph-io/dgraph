@@ -247,7 +247,7 @@ func (s *Scanner) scanNumber(ch rune) token.Type {
 }
 
 // scanMantissa scans the mantissa beginning from the rune. It returns the next
-// non decimal rune. It's used to determine whether it's a fraction or exponent.
+// non decimal rune. It's used to determine wheter it's a fraction or exponent.
 func (s *Scanner) scanMantissa(ch rune) rune {
 	scanned := false
 	for isDecimal(ch) {
