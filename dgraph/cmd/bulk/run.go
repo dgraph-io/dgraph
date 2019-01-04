@@ -105,7 +105,9 @@ func run() {
 	if flag != nil {
 		for k, v := range aliasFlag {
 			if Bulk.Conf.IsSet(v) {
-				flag.Set(k, Bulk.Conf.GetString(v))
+				if err := flag.Set(k, Bulk.Conf.GetString(v)); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}

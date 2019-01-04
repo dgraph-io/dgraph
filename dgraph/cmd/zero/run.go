@@ -183,7 +183,9 @@ func run() {
 	if flag != nil {
 		for k, v := range aliasFlag {
 			if Zero.Conf.IsSet(v) {
-				flag.Set(k, Zero.Conf.GetString(v))
+				if err := flag.Set(k, Zero.Conf.GetString(v)); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}

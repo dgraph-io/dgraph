@@ -404,7 +404,9 @@ func run() {
 	if flag != nil {
 		for k, v := range aliasFlag {
 			if Alpha.Conf.IsSet(v) {
-				flag.Set(k, Alpha.Conf.GetString(v))
+				if err := flag.Set(k, Alpha.Conf.GetString(v)); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}

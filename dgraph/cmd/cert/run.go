@@ -18,6 +18,7 @@ package cert
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -80,7 +81,9 @@ func run() {
 	if flag != nil {
 		for k, v := range aliasFlag {
 			if Cert.Conf.IsSet(v) {
-				flag.Set(k, Cert.Conf.GetString(v))
+				if err := flag.Set(k, Cert.Conf.GetString(v)); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}

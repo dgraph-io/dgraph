@@ -304,7 +304,9 @@ func run() error {
 	if flag != nil {
 		for k, v := range aliasFlag {
 			if Live.Conf.IsSet(v) {
-				flag.Set(k, Live.Conf.GetString(v))
+				if err := flag.Set(k, Live.Conf.GetString(v)); err != nil {
+					return err
+				}
 			}
 		}
 	}
