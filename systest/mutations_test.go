@@ -987,7 +987,7 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 
 func testTimeValue(t *testing.T, c *dgo.Dgraph, timeBytes []byte) {
 	nquads := []*api.NQuad{
-		&api.NQuad{
+		{
 			Subject:   "0x01",
 			Predicate: "friend",
 			ObjectId:  "0x02",
