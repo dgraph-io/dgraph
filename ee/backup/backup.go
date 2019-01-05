@@ -14,9 +14,7 @@ package backup
 
 import (
 	"context"
-	"io"
 	"net/url"
-	"strings"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -58,16 +56,7 @@ func (r *Request) Process(ctx context.Context) error {
 	return err
 }
 
-// handler interface is implemented by URI scheme handlers.
-type handler interface {
-	// Handlers know how to Write and Close to their target.
-	io.WriteCloser
-	// Session receives the host and path of the target. It should get all its configuration
-	// from the environment.
-	Open(*url.URL, *Request) error
-}
-
-// newWriter parses the requested target URI, finds a handler and then tries to create a session.
+// newHandler parses the requested target URI, finds a handler and then tries to create a session.
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -90,29 +79,18 @@ type handler interface {
 //   http://backups.dgraph.io/upload
 //   file:///tmp/dgraph/backups or /tmp/dgraph/backups?compress=gzip
 func (r *Request) newHandler() (handler, error) {
-	uri, err := url.Parse(r.Backup.Target)
+	uri, err := url.Parse(r.Backup.Location)
 	if err != nil {
 		return nil, err
 	}
 
 	// find handler for this URI scheme
-	var h handler
-	switch uri.Scheme {
-	case "file":
-		h = &fileHandler{}
-	case "s3":
-		h = &s3Handler{}
-	case "http", "https":
-		if strings.HasPrefix(uri.Host, "s3") &&
-			strings.HasSuffix(uri.Host, ".amazonaws.com") {
-			h = &s3Handler{}
-		}
-	}
+	h := getHandler(uri.Scheme)
 	if h == nil {
 		return nil, x.Errorf("Unable to handle url: %v", uri)
 	}
 
-	if err := h.Open(uri, r); err != nil {
+	if err := h.Create(uri, r); err != nil {
 		return nil, err
 	}
 	return h, nil

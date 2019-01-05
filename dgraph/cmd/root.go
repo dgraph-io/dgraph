@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
-	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -54,6 +53,7 @@ cluster.
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	initCmds()
 	goflag.Parse()
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -63,7 +63,13 @@ func Execute() {
 
 var rootConf = viper.New()
 
-func init() {
+// subcommands initially contains all default sub-commands.
+var subcommands = []*x.SubCommand{
+	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
+	&debug.Debug,
+}
+
+func initCmds() {
 	RootCmd.PersistentFlags().String("profile_mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
 	RootCmd.PersistentFlags().Int("block_rate", 0,
@@ -85,10 +91,6 @@ func init() {
 	x.Check(flag.CommandLine.MarkDeprecated("stderrthreshold",
 		"Dgraph always sets this flag to 0. It can't be overwritten."))
 
-	var subcommands = []*x.SubCommand{
-		&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero,
-		&version.Version, &debug.Debug, &acl.CmdAcl,
-	}
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()

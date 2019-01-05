@@ -3374,7 +3374,7 @@ type BackupRequest struct {
 	ReadTs               uint64   `protobuf:"varint,1,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
 	GroupId              uint32   `protobuf:"varint,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	UnixTs               string   `protobuf:"bytes,3,opt,name=unix_ts,json=unixTs,proto3" json:"unix_ts,omitempty"`
-	Target               string   `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	Location             string   `protobuf:"bytes,4,opt,name=location,proto3" json:"location,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -3434,9 +3434,9 @@ func (m *BackupRequest) GetUnixTs() string {
 	return ""
 }
 
-func (m *BackupRequest) GetTarget() string {
+func (m *BackupRequest) GetLocation() string {
 	if m != nil {
-		return m.Target
+		return m.Location
 	}
 	return ""
 }
@@ -7017,11 +7017,11 @@ func (m *BackupRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintPb(dAtA, i, uint64(len(m.UnixTs)))
 		i += copy(dAtA[i:], m.UnixTs)
 	}
-	if len(m.Target) > 0 {
+	if len(m.Location) > 0 {
 		dAtA[i] = 0x22
 		i++
-		i = encodeVarintPb(dAtA, i, uint64(len(m.Target)))
-		i += copy(dAtA[i:], m.Target)
+		i = encodeVarintPb(dAtA, i, uint64(len(m.Location)))
+		i += copy(dAtA[i:], m.Location)
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -8362,7 +8362,7 @@ func (m *BackupRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovPb(uint64(l))
 	}
-	l = len(m.Target)
+	l = len(m.Location)
 	if l > 0 {
 		n += 1 + l + sovPb(uint64(l))
 	}
@@ -15640,7 +15640,7 @@ func (m *BackupRequest) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Target", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Location", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -15665,7 +15665,7 @@ func (m *BackupRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Target = string(dAtA[iNdEx:postIndex])
+			m.Location = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
