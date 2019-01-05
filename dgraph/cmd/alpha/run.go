@@ -446,6 +446,7 @@ func run() {
 		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
+		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
 	}
 
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)

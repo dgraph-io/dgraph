@@ -30,12 +30,12 @@ import (
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -365,20 +365,6 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
-	}
-
-	if Config.MutationsMode == StrictMutations {
-		checked := make(map[string]struct{})
-		for _, nquad := range gmu.Set {
-			// avoid acquiring a lock to check a predicate already checked
-			if _, ok := checked[nquad.Predicate]; !ok {
-				typ, err := schema.State().TypeOf(nquad.Predicate)
-				if typ == types.UndefinedID {
-					return resp, err
-				}
-				checked[nquad.Predicate] = struct{}{}
-			}
-		}
 	}
 
 	parseEnd := time.Now()

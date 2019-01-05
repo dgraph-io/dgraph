@@ -19,12 +19,15 @@ package worker
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
+	"os"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
+
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -449,10 +452,18 @@ type res struct {
 func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
 	defer span.End()
-
 	tctx := &api.TxnContext{StartTs: m.StartTs}
-	mutationMap := populateMutationMap(m)
 
+	if Config.StrictMutations {
+		for _, edge := range m.Edges {
+			if _, create := groups().GetTablet(edge.Attr); create {
+				return tctx, x.Errorf("schema not defined for predicate: %s")
+			}
+			fmt.Fprintf(os.Stderr, "MUTATE_OVER_NETWORK: found tablet for %s\n", edge.Attr)
+		}
+	}
+
+	mutationMap := populateMutationMap(m)
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {

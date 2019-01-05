@@ -359,14 +359,14 @@ func (g *groupi) ServesTablet(key string) bool {
 	return false
 }
 
-// Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) *pb.Tablet {
+// Get tablet and report if it is new.
+func (g *groupi) GetTablet(key string) (*pb.Tablet, bool) {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 	if ok {
-		return tablet
+		return tablet, false
 	}
 
 	// We don't know about this tablet.
@@ -378,8 +378,23 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
+		return nil, false
+	}
+
+	if out.GroupId == groups().groupId() {
+		return out, true
+	} else {
+		return out, false
+	}
+}
+
+// Do not modify the returned Tablet
+func (g *groupi) Tablet(key string) *pb.Tablet {
+	out, _ := g.GetTablet(key)
+	if out == nil {
 		return nil
 	}
+
 	g.Lock()
 	g.tablets[key] = out
 	g.Unlock()
