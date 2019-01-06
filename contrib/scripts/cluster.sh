@@ -51,8 +51,8 @@ function WaitTilReady
     TIMEOUT=60
     while [[ $NUM_READY -lt $NUM_ALPHAS ]]; do
         sleep 1
-        NUM_READY=$(DockerCompose logs \
-                    | grep -c 'Got Zero leader')
+        #NUM_READY=$(DockerCompose logs | grep -c 'Got Zero leader')
+        NUM_READY=$(DockerCompose logs | grep -c 'HTTP server started')
         TIMEOUT=$((TIMEOUT - 1))
         if [[ $TIMEOUT == 0 ]]; then
             echo >&2 "$ME: timed out waiting for alphas"
@@ -69,7 +69,7 @@ function FollowLogs
         while [[ $TIMEOUT -gt 0 ]]; do
             NUM_DGRAPH=$(DockerCompose ps | grep -c dgraph)
             if [[ $NUM_DGRAPH -gt 0 ]]; then
-                echo -e "\n[CLUSTER RESTARTED]\n"
+                echo -e "\n*** CLUSTER RESTARTED ***\n"
                 sleep 1
                 break
             fi
