@@ -111,9 +111,6 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 				request.RefreshToken, err)
 		}
 
-		if ctx, err = appendAdminJwt(ctx); err != nil {
-			return nil, fmt.Errorf("unable to append admin jwt:%v", err)
-		}
 		user, err = s.queryUser(ctx, userId, "")
 		if err != nil {
 			return nil, fmt.Errorf("error while querying user with id %v: %v", userId, err)
@@ -125,9 +122,6 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 	} else {
 		var err error
-		if ctx, err = appendAdminJwt(ctx); err != nil {
-			return nil, fmt.Errorf("unable to append admin jwt:%v", err)
-		}
 		user, err = s.queryUser(ctx, request.Userid, request.Password)
 		if err != nil {
 			return nil, fmt.Errorf("error while querying user with id: %v",
@@ -272,7 +266,7 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 		Vars:  queryVars,
 	}
 
-	queryResp, err := s.Query(ctx, &queryRequest)
+	queryResp, err := s.doQuery(ctx, &queryRequest)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -326,14 +320,8 @@ func ResetAcl() {
 
 	aclCache = sync.Map{}
 	// upsert the admin account
-	ctx, err := appendAdminJwt(context.Background())
-	if err != nil {
-		glog.Errorf("unable to append admin jwt")
-		return
-	}
-
 	server := &Server{}
-	adminUser, err := server.queryUser(ctx, "admin", "")
+	adminUser, err := server.queryUser(context.Background(), "admin", "")
 	if err != nil {
 		glog.Errorf("error while querying the admin account")
 		return
@@ -362,25 +350,11 @@ func ResetAcl() {
 		Set:       createUserNQuads,
 	}
 
-	if _, err := server.Mutate(ctx, mu); err != nil {
+	if _, err := server.doMutate(context.Background(), mu); err != nil {
 		glog.Errorf("unable to create admin: %v", err)
 		return
 	}
 	glog.Info("Created the admin account with the default password")
-}
-
-// add an admin jwt to the context so that we can perform cluster internal operations such as
-// retrieving acls from other servers
-func appendAdminJwt(ctx context.Context) (context.Context, error) {
-	// query the user with admin account
-	adminJwt, err := getAccessJwt("admin", nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get admin jwt:%v", err)
-	}
-
-	md := metadata.New(nil)
-	md.Append("accessJwt", adminJwt)
-	return metadata.NewIncomingContext(ctx, md), nil
 }
 
 // retrieve the full data set of ACLs from the corresponding alpha server, and update the aclCache
@@ -392,10 +366,7 @@ func (s *Server) RetrieveAcls() error {
 
 	ctx := context.Background()
 	var err error
-	if ctx, err = appendAdminJwt(ctx); err != nil {
-		return fmt.Errorf("unable to append admin jwt:%v", err)
-	}
-	queryResp, err := s.Query(ctx, &queryRequest)
+	queryResp, err := s.doQuery(ctx, &queryRequest)
 	if err != nil {
 		return fmt.Errorf("unable to retrieve acls: %v", err)
 	}
@@ -483,7 +454,7 @@ func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) 
 }
 
 // authorize the mutation using the aclCache
-func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func (s *Server) authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -497,6 +468,11 @@ func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error
 	if userId == "admin" {
 		// the admin account has access to everything
 		return nil
+	}
+
+	gmu, err := parseMutationObject(mu)
+	if err != nil {
+		return err
 	}
 
 	for _, nquad := range gmu.Set {
@@ -508,7 +484,7 @@ func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error
 }
 
 // authorize the query using the aclCache
-func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+func (s *Server) authorizeQuery(ctx context.Context, req *api.Request) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
@@ -522,6 +498,14 @@ func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error
 	if userId == "admin" {
 		// the admin account has access to everything
 		return nil
+	}
+
+	parsedReq, err := gql.Parse(gql.Request{
+		Str:       req.Query,
+		Variables: req.Vars,
+	})
+	if err != nil {
+		return err
 	}
 
 	for _, query := range parsedReq.Query {

@@ -36,7 +36,7 @@ services:
       - 9999:9999
     security_opt:
       - seccomp:unconfined
-    command: /gobin/dgraph alpha --my=dg1:7280 --lru_mb=1024 --zero=zero1:5280 -o 200 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features
+    command: /gobin/dgraph alpha --my=dg1:7280 --lru_mb=1024 --zero=zero1:5280 -o 200 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --access_jwt_ttl 30s
 
 
 

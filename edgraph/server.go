@@ -330,6 +330,14 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
+	if err := s.authorizeMutation(ctx, mu); err != nil {
+		return nil, fmt.Errorf("mutation is not authorized: %v", err)
+	}
+
+	return s.doMutate(ctx, mu)
+}
+
+func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
 	defer span.End()
 
@@ -367,10 +375,6 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	}
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
-
-	if err := s.authorizeMutation(ctx, gmu); err != nil {
-		return nil, fmt.Errorf("mutation is not authorized: %v", err)
-	}
 
 	defer func() {
 		l.Processing = time.Since(parseEnd)
@@ -439,9 +443,18 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return resp, nil
 }
 
+func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
+	if err := s.authorizeQuery(ctx, req); err != nil {
+		return nil, fmt.Errorf("query is not authorized: %v", err)
+	}
+
+	return s.doQuery(ctx, req)
+}
+
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response,
+	err error) {
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
@@ -476,10 +489,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	if err != nil {
 		return resp, err
 	}
-	if err := s.authorizeQuery(ctx, parsedReq); err != nil {
-		return nil, fmt.Errorf("query is not authorized: %v", err)
-	}
-
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}

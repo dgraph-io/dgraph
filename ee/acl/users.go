@@ -178,6 +178,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
 
+	fmt.Printf("query with vars, ctx:%+v\n", ctx)
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)

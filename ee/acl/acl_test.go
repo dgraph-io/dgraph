@@ -20,15 +20,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/test"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,6 +48,12 @@ func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 }
 
 func TestCreateAndDeleteUsers(t *testing.T) {
+	// clean up the user to allow repeated running of this test
+	cleanUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
+		"-u", userid, "--adminPassword", "password")
+	cleanUserCmd.Run()
+	glog.Infof("cleaned up db user state")
+
 	createUserCmd1 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
 		"-p", userpassword, "--adminPassword", "password")
 	checkOutput(t, createUserCmd1, false)
@@ -75,83 +79,12 @@ func resetUser(t *testing.T) {
 	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
 		"-u", userid, "--adminPassword", "password")
 	deleteUserCmd.Run()
+	glog.Infof("deleted user")
 
 	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u",
 		userid, "-p", userpassword, "--adminPassword", "password")
 	checkOutput(t, createUserCmd, false)
-}
-
-func TestLogIn(t *testing.T) {
-	resetUser(t)
-
-	loginWithCorrectPassword(t)
-	loginWithWrongPassword(t)
-}
-
-func loginWithCorrectPassword(t *testing.T) {
-	loginCmd := exec.Command("dgraph", "acl", "login", "-d", dgraphEndpoint, "-u", userid,
-		"-p", userpassword)
-	loginOutput := checkOutput(t, loginCmd, false)
-
-	// parse the output to extract the accessJwt and refreshJwt
-	lines := strings.Split(loginOutput, "\n")
-	var accessJwt string
-	var refreshJwt string
-	for idx := 0; idx < len(lines); idx++ {
-		line := lines[idx]
-		if line == "access jwt:" {
-			accessJwt = lines[idx+1]
-			idx++ // skip the next line
-		} else if line == "refresh jwt:" {
-			refreshJwt = lines[idx+1]
-			idx++
-		}
-	}
-	require.True(t, len(accessJwt) > 0, "The accessJwt should not be empty")
-	require.True(t, len(refreshJwt) > 0, "The refreshJwt should not be empty")
-}
-
-func loginWithWrongPassword(t *testing.T) {
-	loginCmd := exec.Command("dgraph", "acl", "login", "-d", dgraphEndpoint, "-u", userid,
-		"-p", userpassword+"123")
-	checkOutput(t, loginCmd, true)
-}
-
-// test dgo client login with the refresh jwt
-func TestClientLoginWithRefreshJwt(t *testing.T) {
-	resetUser(t)
-
-	dg, close := test.GetDgraphClient(alphaPort)
-	defer close()
-
-	ctx := context.Background()
-	if err := dg.Login(ctx, userid, userpassword); err != nil {
-		t.Fatalf("unable to login using the account %v: %v", userid, err)
-	}
-
-	firstCtxWithUserJwt := dg.GetContext(ctx)
-	firstMd, ok := metadata.FromOutgoingContext(firstCtxWithUserJwt)
-	require.True(t, ok, "unable to get metadata from outgoing context")
-	firstAccessJwt := firstMd.Get("accessJwt")
-	if len(firstAccessJwt) == 0 {
-		t.Fatalf("unable to get accessJwt from outgoing metadata")
-	}
-
-	// now login with the refresh jwt instead of password
-	if err := dg.LoginWithRefreshJwt(ctx); err != nil {
-		t.Fatalf("unable to login using the refresh jwt: %v", err)
-	}
-
-	secondCtxWithUserJwt := dg.GetContext(ctx)
-	secondMd, ok := metadata.FromOutgoingContext(secondCtxWithUserJwt)
-	require.True(t, ok, "unable to get metadata from outgoing context")
-	secondAccessJwt := secondMd.Get("accessJwt")
-	if len(secondAccessJwt) == 0 {
-		t.Fatalf("unable to get accessJwt from outgoing metadata")
-	}
-
-	require.NotEqual(t, firstAccessJwt, secondAccessJwt,
-		"the 2nd access jwt should be different from the first one")
+	glog.Infof("created user")
 }
 
 func TestAuthorization(t *testing.T) {
@@ -164,7 +97,8 @@ func TestAuthorization(t *testing.T) {
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	// on all alpha servers
+	// on all alpha servers, this also tests that the automatic login with refresh
+	// jwt works after the access jwt expires in 30 seconds
 	log.Println("Sleeping for 35 seconds for acl to catch up")
 	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
@@ -186,7 +120,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	ctxWithUserJwt := dg.GetContext(ctx)
 	txn := dg.NewTxn()
 	query := fmt.Sprintf(`
 	{
@@ -195,7 +128,7 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 		}
 	}`, predicateToRead, queryAttr)
 	txn = dg.NewTxn()
-	_, err := txn.Query(ctxWithUserJwt, query)
+	_, err := txn.Query(ctx, query)
 
 	if shouldFail {
 		require.Error(t, err, "the query should have failed")
@@ -210,9 +143,8 @@ func mutatePredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail boo
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	ctxWithUserJwt := dg.GetContext(ctx)
 	txn := dg.NewTxn()
-	_, err := txn.Mutate(ctxWithUserJwt, &api.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(fmt.Sprintf(`_:a <%s>  "string" .`, predicateToWrite)),
 	})
@@ -230,9 +162,7 @@ func alterPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	ctxWithUserJwt := dg.GetContext(ctx)
-
-	err := dg.Alter(ctxWithUserJwt, &api.Operation{
+	err := dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: int .`, predicateToAlter),
 	})
 	if shouldFail {
@@ -248,30 +178,22 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	if err := dg.Login(ctx, "admin", "password"); err != nil {
 		t.Fatalf("unable to login using the admin account:%v", err)
 	}
-	ctxWithAdminJwt := dg.GetContext(ctx)
 	op := api.Operation{
 		DropAll: true,
 	}
-	if err := dg.Alter(ctxWithAdminJwt, &op); err != nil {
+	if err := dg.Alter(ctx, &op); err != nil {
 		t.Fatalf("Unable to cleanup db:%v", err)
 	}
 
-	// use commands to create users and groups
-	createUserCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "useradd",
-		"-d", dgraphEndpoint,
-		"-u", userid, "-p", userpassword, "--adminPassword", "password")
-	if err := createUserCmd.Run(); err != nil {
-		t.Fatalf("Unable to create user:%v", err)
-	}
+	resetUser(t)
 
 	// create some data, e.g. user with name alice
-	require.NoError(t, dg.Alter(ctxWithAdminJwt, &api.Operation{
+	require.NoError(t, dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
 
 	txn := dg.NewTxn()
-	_, err := txn.Mutate(ctxWithAdminJwt, &api.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(fmt.Sprintf("_:a <%s> \"SF\" .", predicateToRead)),
 	})
 	require.NoError(t, err)
