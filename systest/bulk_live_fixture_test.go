@@ -54,7 +54,7 @@ type suite struct {
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
-	dg, close := test.GetDgraphClient(test.DgraphAlphaPort)
+	dg, close := test.GetDgraphClient()
 	defer close()
 
 	err := dg.Alter(context.Background(), &api.Operation{
@@ -155,7 +155,7 @@ func (s *suite) cleanup() {
 
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		dg, close := test.GetDgraphClient(test.DgraphAlphaPort)
+		dg, close := test.GetDgraphClient()
 		defer close()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
