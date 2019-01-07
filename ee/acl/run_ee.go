@@ -98,23 +98,6 @@ func initSubcommands() []*x.SubCommand {
 	userDelFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
 
-	// login command
-	var cmdLogIn x.SubCommand
-	cmdLogIn.Cmd = &cobra.Command{
-		Use:   "login",
-		Short: "Login to dgraph in order to get a jwt token",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := userLogin(cmdLogIn.Conf); err != nil {
-				glog.Errorf("Unable to login:%v", err)
-				os.Exit(1)
-			}
-		},
-	}
-	loginFlags := cmdLogIn.Cmd.Flags()
-	loginFlags.String("adminPassword", "", "The admin password used to authorize this operation")
-	loginFlags.StringP("user", "u", "", "The user id to be created")
-	loginFlags.StringP("password", "p", "", "The password for the user")
-
 	// group creation command
 	var cmdGroupAdd x.SubCommand
 	cmdGroupAdd.Cmd = &cobra.Command{
@@ -201,7 +184,7 @@ func initSubcommands() []*x.SubCommand {
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{
-		&cmdUserAdd, &cmdUserDel, &cmdLogIn, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
+		&cmdUserAdd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
 		&cmdChMod, &cmdInfo,
 	}
 }

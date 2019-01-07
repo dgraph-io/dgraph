@@ -162,37 +162,6 @@ func userDel(conf *viper.Viper) error {
 	return nil
 }
 
-func userLogin(conf *viper.Viper) error {
-	userid := conf.GetString("user")
-	password := conf.GetString("password")
-
-	if len(userid) == 0 {
-		return fmt.Errorf("the user must not be empty")
-	}
-	if len(password) == 0 {
-		return fmt.Errorf("the password must not be empty")
-	}
-
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	txn := dc.NewTxn()
-	defer func() {
-		if err := txn.Discard(ctx); err != nil {
-			glog.Errorf("Unable to discard transaction:%v", err)
-		}
-	}()
-
-	if err := dc.Login(ctx, userid, password); err != nil {
-		return fmt.Errorf("unable to login:%v", err)
-	}
-	updatedContext := dc.GetContext(ctx)
-	glog.Infof("Login successfully.\naccess jwt:\n%v\nrefresh jwt:\n%v",
-		updatedContext.Value("accessJwt"), updatedContext.Value("refreshJwt"))
-	return nil
-}
-
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
 	query := `
     query search($userid: string){
