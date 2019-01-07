@@ -56,7 +56,7 @@ func mutateNewDisallowed(t *testing.T, dg *dgo.Dgraph) {
 		`),
 	})
 
-	require.NoError(t, txn.Commit(ctx))
+	require.NoError(t, txn.Discard(ctx))
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
@@ -82,7 +82,7 @@ func mutateExistingDisallowed(t *testing.T, dg *dgo.Dgraph) {
 		`),
 	})
 
-	require.NoError(t, txn.Commit(ctx))
+	require.NoError(t, txn.Discard(ctx))
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
