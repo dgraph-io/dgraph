@@ -20,6 +20,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/dgraph-io/dgraph/protos/pb"
 
 	"github.com/dgraph-io/dgraph/schema"
@@ -448,7 +451,7 @@ func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) 
 
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
-		return false, "", nil, err
+		return false, "", nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	if userId == "admin" {
 		// admin is allowed to do anything
@@ -488,7 +491,7 @@ func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error
 
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
-		return err
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	if userId == "admin" {
@@ -513,7 +516,7 @@ func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error
 
 	userId, groupIds, err := extractUserAndGroups(ctx)
 	if err != nil {
-		return err
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	if userId == "admin" {
@@ -523,7 +526,8 @@ func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error
 
 	for _, query := range parsedReq.Query {
 		if !s.authorizeSingleQuery(groupIds, query, acl.Read) {
-			return fmt.Errorf("unauthorized to access the predicate %v", query.Attr)
+			return status.Error(codes.PermissionDenied,
+				fmt.Sprintf("unauthorized to access the predicate %v", query.Attr))
 		}
 	}
 	return nil

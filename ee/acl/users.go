@@ -27,13 +27,13 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-func getClientWithAdminCtx(conf *viper.Viper) (context.Context, *dgo.Dgraph, CloseFunc, error) {
+func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
 	adminPassword := conf.GetString("adminPassword")
 	if len(adminPassword) == 0 {
 		fmt.Print("Enter admin password:")
 		password, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return nil, nil, func() {}, fmt.Errorf("error while reading password:%v", err)
+			return nil, func() {}, fmt.Errorf("error while reading password:%v", err)
 		}
 		adminPassword = string(password)
 	}
@@ -47,12 +47,11 @@ func getClientWithAdminCtx(conf *viper.Viper) (context.Context, *dgo.Dgraph, Clo
 	}
 
 	if err := dc.Login(ctx, "admin", adminPassword); err != nil {
-		return nil, dc, cleanFunc, fmt.Errorf("unable to login with the admin account %v", err)
+		return dc, cleanFunc, fmt.Errorf("unable to login with the admin account %v", err)
 	}
 	glog.Infof("login successfully with the admin account")
 	// update the context so that it has the admin jwt token
-	ctx = dc.GetContext(ctx)
-	return ctx, dc, cleanFunc, nil
+	return dc, cleanFunc, nil
 }
 
 func userAdd(conf *viper.Viper) error {
@@ -66,12 +65,13 @@ func userAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the password must not be empty")
 	}
 
-	ctx, dc, clean, err := getClientWithAdminCtx(conf)
+	dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -119,12 +119,13 @@ func userDel(conf *viper.Viper) error {
 		return fmt.Errorf("the user id should not be empty")
 	}
 
-	ctx, dc, clean, err := getClientWithAdminCtx(conf)
+	dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -226,12 +227,13 @@ func userMod(conf *viper.Viper) error {
 		return fmt.Errorf("the user must not be empty")
 	}
 
-	ctx, dc, clean, err := getClientWithAdminCtx(conf)
+	dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {

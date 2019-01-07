@@ -30,12 +30,13 @@ func groupAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	ctx, dc, clean, err := getClientWithAdminCtx(conf)
+	dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -77,12 +78,13 @@ func groupDel(conf *viper.Viper) error {
 		return fmt.Errorf("the group id should not be empty")
 	}
 
-	ctx, dc, clean, err := getClientWithAdminCtx(conf)
+	dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -158,12 +160,13 @@ func chMod(conf *viper.Viper) error {
 		return fmt.Errorf("the predicate must not be empty")
 	}
 
-	ctx, dc, clean, err := getClientWithAdminCtx(conf)
+	dc, clean, err := getClientWithAdminCtx(conf)
 	defer clean()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
 
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
