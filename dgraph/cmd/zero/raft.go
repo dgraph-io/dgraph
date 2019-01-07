@@ -189,6 +189,9 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 			state.Removed = append(state.Removed, m)
 		}
 		// else already removed.
+		if len(group.Members) == 0 {
+			delete(states.Groups, member.GroupId)
+		}
 		return nil
 	}
 	if !has && len(group.Members) >= n.server.NumReplicas {
