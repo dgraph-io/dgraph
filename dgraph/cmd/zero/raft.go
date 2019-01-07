@@ -190,7 +190,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		// else already removed.
 		if len(group.Members) == 0 {
-			delete(states.Groups, member.GroupId)
+			delete(state.Groups, member.GroupId)
 		}
 		return nil
 	}
