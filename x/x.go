@@ -116,13 +116,6 @@ type queryRes struct {
 	Errors []errRes `json:"errors"`
 }
 
-// SetError sets the error logged in this package.
-func SetError(prev *error, n error) {
-	if prev == nil {
-		prev = &n
-	}
-}
-
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {

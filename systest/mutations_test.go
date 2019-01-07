@@ -256,9 +256,9 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	creating the link has completed with a commitTs from zero, and the
 	subsequent deletion is done *AFTER* the link creation.
 	*/
-	c.NewReadOnlyTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
+	_, _ = c.NewReadOnlyTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { link { uid } }}", aId))
 
-	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
+	_, _ = c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(fmt.Sprintf("<%s> <link> * .", aId)),
 	})
@@ -270,6 +270,7 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 		CommitNow: true,
 		SetNquads: []byte(fmt.Sprintf("<%s> <link> _:c .", aId)),
 	})
+	require.NoError(t, err)
 	cId := assignedIds.Uids["c"]
 
 	resp, err = c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", cId))
@@ -580,6 +581,7 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 			_:charlie <name> "Charlie" .
 			`),
 	})
+	require.NoError(t, err)
 
 	michael := assigned.Uids["michael"]
 	resp, err := txn.Query(ctx, `
@@ -610,6 +612,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 			_:michael <friend> _:sang .
 			`),
 	})
+	require.NoError(t, err)
 	michael := assigned.Uids["michael"]
 
 	sortSchema := func(schema []*api.SchemaNode) {

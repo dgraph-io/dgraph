@@ -401,12 +401,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 			}
 
-			valTid := vals[0].Tid
-			newValue := &pb.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
 			uidList := new(pb.List)
 			var vl pb.ValueList
 			for _, val := range vals {
-				newValue, err = convertToType(val, srcFn.atype)
+				newValue, err := convertToType(val, srcFn.atype)
 				if err != nil {
 					return err
 				}
@@ -1391,7 +1389,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(valToTok.Value,
+		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
