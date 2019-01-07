@@ -50,7 +50,7 @@ function RunCustomClusterTests {
         Info "Running tests in directory $DIR"
         pushd $DIR >/dev/null
         Run || TEST_FAILED=1
-        popd 2>/dev/null
+        popd >/dev/null
     done < $CUSTOM_CLUSTER_TESTS
     return $TEST_FAILED
 }
