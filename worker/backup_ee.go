@@ -24,6 +24,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+// NOTE: This file is a self-contained source of callers of 'ee/backup' pkg.
+
 func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 	glog.Infof("Backup request: group %d at %d", req.GroupId, req.ReadTs)
 	if err := ctx.Err(); err != nil {
@@ -89,7 +91,7 @@ func backupGroup(ctx context.Context, in pb.BackupRequest) error {
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, target string) error {
+func BackupOverNetwork(pctx context.Context, dst string) error {
 	ctx, cancel := context.WithCancel(pctx)
 	defer cancel()
 
@@ -108,9 +110,9 @@ func BackupOverNetwork(pctx context.Context, target string) error {
 
 	gids := groups().KnownGroups()
 	req := pb.BackupRequest{
-		ReadTs: ts.ReadOnly,
-		Target: target,
-		UnixTs: time.Now().UTC().Format("20060102.1504"),
+		ReadTs:   ts.ReadOnly,
+		Location: dst,
+		UnixTs:   time.Now().UTC().Format("20060102.1504"),
 	}
 	glog.Infof("Created backup request: %+v. Groups=%v\n", req, gids)
 
@@ -132,6 +134,6 @@ func BackupOverNetwork(pctx context.Context, target string) error {
 		}
 	}
 	req.GroupId = 0
-	glog.Infof("Backup for req: %+v. OK.\n", req)
+	glog.Infof("Backup completed OK.")
 	return nil
 }
