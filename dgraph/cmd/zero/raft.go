@@ -619,9 +619,7 @@ func (n *node) Run() {
 				n.triggerLeaderChange()
 			}
 
-			for _, msg := range rd.Messages {
-				n.Send(msg)
-			}
+			n.Send(rd.Messages)
 			n.Raft().Advance()
 		}
 	}
