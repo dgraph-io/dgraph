@@ -446,9 +446,10 @@ type res struct {
 func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
 	defer span.End()
-	tctx := &api.TxnContext{StartTs: m.StartTs}
 
+	tctx := &api.TxnContext{StartTs: m.StartTs}
 	mutationMap := populateMutationMap(m)
+
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
@@ -503,7 +504,8 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	return tctx.CommitTs, nil
 }
 
-func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext, m *pb.Mutations) (*api.TxnContext, error) {
+func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
+	m *pb.Mutations) (*api.TxnContext, error) {
 	if Config.StrictMutations {
 		for _, edge := range m.Edges {
 			if typ, err := schema.State().TypeOf(edge.Attr); typ == types.UndefinedID {
