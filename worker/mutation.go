@@ -358,7 +358,8 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
-		res.ctx, res.err = (&grpcWorker{}).proposeAndWait(ctx, nil, m)
+		res.ctx = &api.TxnContext{}
+		res.err = (&grpcWorker{}).proposeAndWait(ctx, res.ctx, m)
 		chr <- res
 		return
 	}
@@ -505,23 +506,19 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 }
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
-	m *pb.Mutations) (*api.TxnContext, error) {
+		m *pb.Mutations) error {
 	if Config.StrictMutations {
 		for _, edge := range m.Edges {
 			if typ, err := schema.State().TypeOf(edge.Attr); typ == types.UndefinedID {
-				return txnCtx, err
+				return err
 			}
 		}
-	}
-
-	if txnCtx == nil {
-		txnCtx = &api.TxnContext{}
 	}
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 	fillTxnContext(txnCtx, m.StartTs)
-	return txnCtx, err
+	return err
 }
 
 // Mutate is used to apply mutations over the network on other instances.
@@ -537,7 +534,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 
-	return w.proposeAndWait(ctx, txnCtx, m)
+	return txnCtx, w.proposeAndWait(ctx, txnCtx, m)
 }
 
 func tryAbortTransactions(startTimestamps []uint64) {
