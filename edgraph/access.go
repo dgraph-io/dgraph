@@ -22,9 +22,6 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -40,25 +37,19 @@ func ResetAcl() {
 	// do nothing
 }
 
-func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
+func RefreshAcls(closeCh <-chan struct{}) {
 	// do nothing
 }
 
-func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
-	string, []*pb.SchemaUpdate, error) {
-	// only do the parsing, no authorization in oss
-	updates, err := schema.Parse(op.Schema)
-	if err != nil {
-		return false, "", nil, err
-	}
-	return op.DropAll, op.DropAttr, updates, nil
-}
-
-func (s *Server) authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
+func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	return nil
 }
 
-func (s *Server) authorizeQuery(ctx context.Context, parsedReq gql.Result) error {
+func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+	return nil
+}
+
+func authorizeQuery(ctx context.Context, req *api.Request) error {
 	// always allow access
 	return nil
 }
