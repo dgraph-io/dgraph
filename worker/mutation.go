@@ -19,9 +19,7 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math"
-	"os"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -360,7 +358,6 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
-		fmt.Fprintf(os.Stderr, "SCHEMA STATE: %+v\n", schema.State())
 		res.ctx, res.err = (&grpcWorker{}).proposeAndWait(ctx, nil, m)
 		chr <- res
 		return
