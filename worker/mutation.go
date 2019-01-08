@@ -360,11 +360,8 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
-		node := groups().Node
-		// we don't timeout after proposing
-		res.err = node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
-		res.ctx = &api.TxnContext{}
-		fillTxnContext(res.ctx, m.StartTs)
+		fmt.Fprintf(os.Stderr, "SCHEMA STATE: %+v\n", schema.State())
+		res.ctx, res.err = (&grpcWorker{}).proposeAndWait(ctx, nil, m)
 		chr <- res
 		return
 	}
@@ -525,6 +522,17 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	return tctx.CommitTs, nil
 }
 
+func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext, m *pb.Mutations) (*api.TxnContext, error) {
+	if txnCtx == nil {
+		txnCtx = &api.TxnContext{}
+	}
+
+	node := groups().Node
+	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
+	fillTxnContext(txnCtx, m.StartTs)
+	return txnCtx, err
+}
+
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "worker.Mutate")
@@ -549,10 +557,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 		}
 	}
 
-	node := groups().Node
-	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
-	fillTxnContext(txnCtx, m.StartTs)
-	return txnCtx, err
+	return w.proposeAndWait(ctx, txnCtx, m)
 }
 
 func tryAbortTransactions(startTimestamps []uint64) {
