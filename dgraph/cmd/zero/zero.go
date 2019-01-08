@@ -356,6 +356,10 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	if _, ok := s.state.Groups[groupId].Members[nodeId]; !ok {
 		return x.Errorf("No node with nodeId %d found in group %d", nodeId, groupId)
 	}
+	if len(s.state.Groups[groupId].Members) == 1 && len(s.state.Groups[groupId].Tablets) > 0 {
+		return x.Errorf("Move all tablets from group %d before removing the last node", groupId)
+	}
+
 	return s.Node.proposeAndWait(ctx, zp)
 }
 
