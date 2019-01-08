@@ -94,7 +94,6 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 				SetNquads: bb.Bytes(),
 			})
 			x.Check(err)
-			cnt = 0
 			bb.Reset()
 		}
 	}
