@@ -284,6 +284,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed by server.")
 	}
+	if err := isAlterAllowed(ctx); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return nil, err
+	}
+
 	dropAll, dropAttr, updates, err := s.parseAndAuthorizeAlter(ctx, op)
 	if err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
