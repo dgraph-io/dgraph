@@ -378,7 +378,7 @@ func (s *Server) RetrieveAcls() error {
 	storedEntries := 0
 	for _, group := range groups {
 		// convert the serialized acl into a map for easy lookups
-		group.MappedAcls, err = acl.AclBytesToMap([]byte(group.Acls))
+		group.MappedAcls, err = acl.UnmarshalAcl([]byte(group.Acls))
 		if err != nil {
 			glog.Errorf("Error while unmarshalling ACLs for group %v:%v", group, err)
 			continue

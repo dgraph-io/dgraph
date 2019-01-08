@@ -98,7 +98,7 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 }
 
 // convert the acl blob to a map from predicates to permissions
-func AclBytesToMap(aclBytes []byte) (map[string]int32, error) {
+func UnmarshalAcl(aclBytes []byte) (map[string]int32, error) {
 	var acls []Acl
 	if len(aclBytes) != 0 {
 		if err := json.Unmarshal(aclBytes, &acls); err != nil {
