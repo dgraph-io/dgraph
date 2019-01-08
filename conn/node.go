@@ -60,7 +60,7 @@ type Node struct {
 	Id          uint64
 	peers       map[uint64]string
 	confChanges map[uint64]chan error
-	messages    chan sendmsg
+	messages    chan []raftpb.Message
 	RaftContext *pb.RaftContext
 	Store       *raftwal.DiskStorage
 	Rand        *rand.Rand
@@ -141,7 +141,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		RaftContext: rc,
 		Rand:        rand.New(&lockedSource{src: rand.NewSource(time.Now().UnixNano())}),
 		confChanges: make(map[uint64]chan error),
-		messages:    make(chan sendmsg, 100),
+		messages:    make(chan []raftpb.Message, 100),
 		peers:       make(map[uint64]string),
 		requestCh:   make(chan linReadReq),
 	}
@@ -222,10 +222,11 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
-func (n *Node) Send(m raftpb.Message) {
-	x.AssertTruef(n.Id != m.To, "Sending message to itself")
-	data, err := m.Marshal()
-	x.Check(err)
+func (n *Node) Send(msgs []raftpb.Message) {
+	n.messages <- msgs
+	// x.AssertTruef(n.Id != m.To, "Sending message to itself")
+	// data, err := m.Marshal()
+	// x.Check(err)
 
 	// As long as leadership is stable, any attempted Propose() calls should be reflected in the
 	// next raft.Ready.Messages. Leaders will send MsgApps to the followers; followers will send
@@ -240,7 +241,7 @@ func (n *Node) Send(m raftpb.Message) {
 	// node. But, we shouldn't take the liberty to do that here. It would take us more time to
 	// repropose these dropped messages anyway, than to block here a bit waiting for the messages
 	// channel to clear out.
-	n.messages <- sendmsg{to: m.To, data: data}
+	// n.messages <- sendmsg{to: m.To, data: data}
 }
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
@@ -302,22 +303,33 @@ const (
 func (n *Node) BatchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
 	failedConn := make(map[uint64]bool)
+
+	totalSize := 0
+	writeMsg := func(msg raftpb.Message) {
+		x.AssertTruef(n.Id != msg.To, "Sending message to itself")
+		data, err := msg.Marshal()
+		x.Check(err)
+
+		var buf *bytes.Buffer
+		if b, ok := batches[msg.To]; !ok {
+			buf = new(bytes.Buffer)
+			batches[msg.To] = buf
+		} else {
+			buf = b
+		}
+		totalSize += 4 + len(data)
+		x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(data))))
+		x.Check2(buf.Write(data))
+	}
+
 	for {
-		totalSize := 0
-		sm := <-n.messages
+		totalSize = 0
+		msgs := <-n.messages
 	slurp_loop:
 		for {
-			var buf *bytes.Buffer
-			if b, ok := batches[sm.to]; !ok {
-				buf = new(bytes.Buffer)
-				batches[sm.to] = buf
-			} else {
-				buf = b
+			for _, msg := range msgs {
+				writeMsg(msg)
 			}
-			totalSize += 4 + len(sm.data)
-			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
-			x.Check2(buf.Write(sm.data))
-
 			if totalSize > messageBatchSoftLimit {
 				// We limit the batch size, but we aren't pushing back on
 				// n.messages, because the loop below spawns a goroutine
@@ -327,7 +339,7 @@ func (n *Node) BatchAndSendMessages() {
 			}
 
 			select {
-			case sm = <-n.messages:
+			case msgs = <-n.messages:
 			default:
 				break slurp_loop
 			}

@@ -639,10 +639,8 @@ func (n *node) Run() {
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
-				for _, msg := range rd.Messages {
-					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
-				}
+				// NOTE: We can do some optimizations here to drop messages.
+				n.Send(rd.Messages)
 			}
 			if span != nil {
 				span.Annotate(nil, "Handled ReadStates and SoftState.")
@@ -750,10 +748,8 @@ func (n *node) Run() {
 
 			if !leader {
 				// Followers should send messages later.
-				for _, msg := range rd.Messages {
-					// NOTE: We can do some optimizations here to drop messages.
-					n.Send(msg)
-				}
+				// NOTE: We can do some optimizations here to drop messages.
+				n.Send(rd.Messages)
 			}
 			if span != nil {
 				span.Annotate(nil, "Followed queued messages.")
