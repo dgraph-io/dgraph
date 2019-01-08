@@ -18,6 +18,9 @@ package x
 
 import (
 	"os"
+	"path/filepath"
+
+	"github.com/golang/glog"
 )
 
 // WriteFileSync is the same as bufio.WriteFile, but syncs the data before closing.
@@ -36,4 +39,24 @@ func WriteFileSync(filename string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return nil
+}
+
+// FindFilesFunc walks the directory 'dir' and collects all file names matched by
+// func f. It will skip over directories.
+// Returns empty string slice if nothing found, otherwise returns all matched file names.
+func FindFilesFunc(dir string, f func(string) bool) []string {
+	var files []string
+	err := filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !fi.IsDir() && f(path) {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		glog.Errorf("Error while scanning %q: %s", dir, err)
+	}
+	return files
 }

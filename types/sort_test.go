@@ -109,9 +109,9 @@ func TestSortDateTimes(t *testing.T) {
 
 func TestSortIntAndFloat(t *testing.T) {
 	list := [][]Val{
-		[]Val{Val{Tid: IntID, Value: int64(55)}},
-		[]Val{Val{Tid: FloatID, Value: 21.5}},
-		[]Val{Val{Tid: IntID, Value: int64(100)}},
+		{{Tid: IntID, Value: int64(55)}},
+		{{Tid: FloatID, Value: 21.5}},
+		{{Tid: IntID, Value: int64(100)}},
 	}
 	ul := getUIDList(3)
 	require.NoError(t, Sort(list, ul, []bool{false}))
@@ -160,13 +160,13 @@ func findIndex(t *testing.T, uids []uint64, uid uint64) int {
 
 func TestSortMismatchedTypes(t *testing.T) {
 	list := [][]Val{
-		[]Val{Val{Tid: StringID, Value: "cat"}},
-		[]Val{Val{Tid: IntID, Value: int64(55)}},
-		[]Val{Val{Tid: BoolID, Value: true}},
-		[]Val{Val{Tid: FloatID, Value: 21.5}},
-		[]Val{Val{Tid: StringID, Value: "aardvark"}},
-		[]Val{Val{Tid: StringID, Value: "buffalo"}},
-		[]Val{Val{Tid: FloatID, Value: 33.33}},
+		{{Tid: StringID, Value: "cat"}},
+		{{Tid: IntID, Value: int64(55)}},
+		{{Tid: BoolID, Value: true}},
+		{{Tid: FloatID, Value: 21.5}},
+		{{Tid: StringID, Value: "aardvark"}},
+		{{Tid: StringID, Value: "buffalo"}},
+		{{Tid: FloatID, Value: 33.33}},
 	}
 	ul := getUIDList(7)
 	require.NoError(t, Sort(list, ul, []bool{false}))

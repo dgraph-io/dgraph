@@ -37,6 +37,9 @@ echo
 echo "Running tests. Ignoring vendor folder."
 runAll || exit $?
 
+# Run non-go tests.
+./contrib/scripts/test-backup-restore.sh
+
 echo
 echo "Running load-test.sh"
 ./contrib/scripts/load-test.sh

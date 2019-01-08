@@ -53,7 +53,7 @@ func (s byValue) Less(i, j int) bool {
 	if len(first) == 0 || len(second) == 0 {
 		return false
 	}
-	for vidx, _ := range first {
+	for vidx := range first {
 		// Null value is considered greatest hence comes at first place while doing descending sort
 		// and at last place while doing ascending sort.
 		if first[vidx].Value == nil {

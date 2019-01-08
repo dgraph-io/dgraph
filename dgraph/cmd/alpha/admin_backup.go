@@ -35,13 +35,13 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
-	target := r.FormValue("destination")
-	if target == "" {
+	dst := r.FormValue("destination")
+	if dst == "" {
 		err := x.Errorf("You must specify a 'destination' value")
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
-	if err := worker.BackupOverNetwork(context.Background(), target); err != nil {
+	if err := worker.BackupOverNetwork(context.Background(), dst); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}

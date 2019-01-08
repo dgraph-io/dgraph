@@ -275,7 +275,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
-		path: route{[]pathInfo{pathInfo{uid: sg.Params.From}}},
+		path: route{[]pathInfo{{uid: sg.Params.From}}},
 	}
 	heap.Push(&pq, srcNode)
 
