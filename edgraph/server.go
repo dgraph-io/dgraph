@@ -26,11 +26,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/dgraph-io/dgraph/schema"
-
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -39,14 +34,16 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 

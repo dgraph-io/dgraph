@@ -38,12 +38,12 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
 		adminPassword = string(password)
 	}
 
-	dc, close := getDgraphClient(conf)
+	dc, closeClient := getDgraphClient(conf)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	cleanFunc := func() {
 		cancel()
-		close()
+		closeClient()
 	}
 
 	if err := dc.Login(ctx, "admin", adminPassword); err != nil {
@@ -65,8 +65,8 @@ func userAdd(conf *viper.Viper) error {
 		return fmt.Errorf("the password must not be empty")
 	}
 
-	dc, clean, err := getClientWithAdminCtx(conf)
-	defer clean()
+	dc, cancel, err := getClientWithAdminCtx(conf)
+	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
@@ -119,8 +119,8 @@ func userDel(conf *viper.Viper) error {
 		return fmt.Errorf("the user id should not be empty")
 	}
 
-	dc, clean, err := getClientWithAdminCtx(conf)
-	defer clean()
+	dc, cancel, err := getClientWithAdminCtx(conf)
+	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
@@ -178,7 +178,6 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 	queryVars := make(map[string]string)
 	queryVars["$userid"] = userid
 
-	fmt.Printf("query with vars, ctx:%+v\n", ctx)
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
 		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
@@ -197,8 +196,8 @@ func userMod(conf *viper.Viper) error {
 		return fmt.Errorf("the user must not be empty")
 	}
 
-	dc, clean, err := getClientWithAdminCtx(conf)
-	defer clean()
+	dc, cancel, err := getClientWithAdminCtx(conf)
+	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}

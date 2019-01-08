@@ -554,7 +554,6 @@ func authorizePredicate(groups []string, predicate string, operation int32) bool
 // hasAccess checks the aclCache and returns whether the specified group is authorized to perform
 // the operation on the given predicate
 func hasAccess(groupId string, predicate string, operation int32) bool {
-	glog.Infof("authorizing group %v on predicate %v for op %d", groupId, predicate, operation)
 	entry, found := aclCache.Load(groupId)
 	if !found {
 		glog.Infof("acl not found")

@@ -268,39 +268,6 @@ func TestCountIndex(t *testing.T) {
 	`))
 }
 
-func TestCountIndexNew(t *testing.T) {
-	s := newSuite(t, `
-		name: string @index(exact) .
-		friend: uid @count @reverse .
-	`, `
-		_:alice <friend> _:bob   .
-		_:alice <friend> _:carol .
-		_:alice <friend> _:dave  .
-
-		_:alice <name> "Alice" .
-		_:bob   <name> "Bob" .
-		_:carol <name> "Carol" .
-		_:dave <name> "Dave" .
-	`)
-	defer s.cleanup()
-
-	// Ensures that the index keys are written to disk after commit.
-	time.Sleep(time.Second)
-	t.Run("All queries", s.testCase(`
-	{
-		alice_friend_count(func: eq(name, "Alice")) {
-			count(friend),
-		}
-	}
-	`, `
-	{
-		"alice_friend_count": [
-			{ "count(friend)": 3 }
-		]
-}
-	`))
-}
-
 // TODO: Fix this later.
 func DONOTRUN_TestGoldenData(t *testing.T) {
 	if testing.Short() {

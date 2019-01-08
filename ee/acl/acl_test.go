@@ -88,8 +88,8 @@ func resetUser(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
-	dg, close := test.GetDgraphClient()
-	defer close()
+	dg, cancel := test.GetDgraphClient()
+	defer cancel()
 
 	createAccountAndData(t, dg)
 	queryPredicateWithUserAccount(t, dg, true)
