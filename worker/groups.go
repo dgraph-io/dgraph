@@ -359,42 +359,6 @@ func (g *groupi) ServesTablet(key string) bool {
 	return false
 }
 
-func (g *groupi) GetTablet(key string) *pb.Tablet {
-	// TODO: Remove all this later, create a membership state and apply it
-	g.RLock()
-	tablet, ok := g.tablets[key]
-	g.RUnlock()
-
-	if ok {
-		return tablet
-	} else {
-		return nil
-	}
-}
-
-func (g *groupi) TabletNoAdd(key string) *pb.Tablet {
-	// TODO: Remove all this later, create a membership state and apply it
-	g.RLock()
-	tablet, ok := g.tablets[key]
-	g.RUnlock()
-	if ok {
-		return tablet
-	}
-
-	// We don't know about this tablet.
-	// Check with dgraphzero if we can serve it.
-	pl := g.connToZeroLeader()
-	zc := pb.NewZeroClient(pl.Get())
-
-	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
-	out, err := zc.ShouldServe(context.Background(), tablet)
-	if err != nil {
-		glog.Errorf("Error while ShouldServe grpc call %v", err)
-	}
-
-	return out
-}
-
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) *pb.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
