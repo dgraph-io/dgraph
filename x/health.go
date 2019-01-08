@@ -25,8 +25,8 @@ import (
 var (
 	healthCheck uint32
 	memoryCheck uint32
-	memoryErr   = errors.New("Please retry again, server's memory is at capacity")
-	healthErr   = errors.New("Please retry again, server is not ready to accept requests")
+	errMemory   = errors.New("please retry again, server's memory is at capacity")
+	errHealth   = errors.New("please retry again, server is not ready to accept requests")
 )
 
 func UpdateMemoryStatus(ok bool) {
@@ -50,10 +50,10 @@ func setStatus(v *uint32, ok bool) {
 // returning true
 func HealthCheck() error {
 	if atomic.LoadUint32(&memoryCheck) == 0 {
-		return memoryErr
+		return errMemory
 	}
 	if atomic.LoadUint32(&healthCheck) == 0 {
-		return healthErr
+		return errHealth
 	}
 	return nil
 }

@@ -1710,9 +1710,9 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	}
 
 	if cp.fn == "lt" {
-		count -= 1
+		count--
 	} else if cp.fn == "gt" {
-		count += 1
+		count++
 	}
 
 	x.AssertTrue(count >= 1)

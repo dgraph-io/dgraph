@@ -62,12 +62,12 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		}
 		schema.Directive = pb.SchemaUpdate_REVERSE
 	case "index":
-		if tokenizer, err := parseIndexDirective(it, schema.Predicate, t); err != nil {
+		tokenizer, err := parseIndexDirective(it, schema.Predicate, t)
+		if err != nil {
 			return err
-		} else {
-			schema.Directive = pb.SchemaUpdate_INDEX
-			schema.Tokenizer = tokenizer
 		}
+		schema.Directive = pb.SchemaUpdate_INDEX
+		schema.Tokenizer = tokenizer
 	case "count":
 		schema.Count = true
 	case "upsert":

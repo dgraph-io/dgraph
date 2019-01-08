@@ -842,6 +842,14 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, err
 }
 
+// ContextKey is used to set options in the context object.
+type ContextKey int
+
+const (
+	// DebugKey is the key used to toggle debug mode.
+	DebugKey ContextKey = iota
+)
+
 func isDebug(ctx context.Context) bool {
 	var debug bool
 	// gRPC client passes information about debug as metadata.
@@ -850,7 +858,7 @@ func isDebug(ctx context.Context) bool {
 		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
 	}
 	// HTTP passes information about debug as query parameter which is attached to context.
-	return debug || ctx.Value("debug") == "true"
+	return debug || ctx.Value(DebugKey) == "true"
 }
 
 func (sg *SubGraph) populate(uids []uint64) error {
@@ -2602,15 +2610,15 @@ type ExecuteResult struct {
 	SchemaNode []*api.SchemaNode
 }
 
-func (qr *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err error) {
-	err = qr.ProcessQuery(ctx)
+func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err error) {
+	err = req.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
 	}
-	er.Subgraphs = qr.Subgraphs
+	er.Subgraphs = req.Subgraphs
 
-	if qr.GqlQuery.Schema != nil {
-		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, qr.GqlQuery.Schema); err != nil {
+	if req.GqlQuery.Schema != nil {
+		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
 		}
 	}

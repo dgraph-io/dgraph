@@ -18,7 +18,7 @@ package tok
 
 import (
 	"github.com/blevesearch/bleve/analysis"
-	_ "github.com/blevesearch/bleve/analysis/lang/ar"
+	_ "github.com/blevesearch/bleve/analysis/lang/ar" // Needed for bleve language support.
 	_ "github.com/blevesearch/bleve/analysis/lang/bg"
 	_ "github.com/blevesearch/bleve/analysis/lang/ca"
 	_ "github.com/blevesearch/bleve/analysis/lang/ckb"

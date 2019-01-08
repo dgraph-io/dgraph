@@ -131,19 +131,19 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	return cost, fcs, rerr
 }
 
-func (start *SubGraph) expandOut(ctx context.Context,
+func (sg *SubGraph) expandOut(ctx context.Context,
 	adjacencyMap map[uint64]map[uint64]mapItem, next chan bool, rch chan error) {
 
 	var numEdges uint64
 	var exec []*SubGraph
 	var err error
-	in := []uint64{start.Params.From}
-	start.SrcUIDs = &pb.List{Uids: in}
-	start.uidMatrix = []*pb.List{{Uids: in}}
-	start.DestUIDs = start.SrcUIDs
+	in := []uint64{sg.Params.From}
+	sg.SrcUIDs = &pb.List{Uids: in}
+	sg.uidMatrix = []*pb.List{{Uids: in}}
+	sg.DestUIDs = sg.SrcUIDs
 
-	for _, child := range start.Children {
-		child.SrcUIDs = start.DestUIDs
+	for _, child := range sg.Children {
+		child.SrcUIDs = sg.DestUIDs
 		exec = append(exec, child)
 	}
 	dummy := &SubGraph{}
@@ -153,8 +153,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			return
 		}
 		rrch := make(chan error, len(exec))
-		for _, sg := range exec {
-			go ProcessGraph(ctx, sg, dummy, rrch)
+		for _, subgraph := range exec {
+			go ProcessGraph(ctx, subgraph, dummy, rrch)
 		}
 
 		for range exec {
@@ -170,20 +170,20 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			}
 		}
 
-		for _, sg := range exec {
+		for _, subgraph := range exec {
 			select {
 			case <-ctx.Done():
 				rch <- ctx.Err()
 				return
 			default:
 				// Send the destuids in res chan.
-				for mIdx, fromUID := range sg.SrcUIDs.Uids {
-					for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
+				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
+					for lIdx, toUID := range subgraph.uidMatrix[mIdx].Uids {
 						if adjacencyMap[fromUID] == nil {
 							adjacencyMap[fromUID] = make(map[uint64]mapItem)
 						}
 						// The default cost we'd use is 1.
-						cost, facet, err := sg.getCost(mIdx, lIdx)
+						cost, facet, err := subgraph.getCost(mIdx, lIdx)
 						if err == ErrFacet {
 							// Ignore the edge and continue.
 							continue
@@ -194,7 +194,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 						adjacencyMap[fromUID][toUID] = mapItem{
 							cost:  cost,
 							facet: facet,
-							attr:  sg.Attr,
+							attr:  subgraph.Attr,
 						}
 						numEdges++
 					}
@@ -210,8 +210,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
-		for _, sg := range exec {
-			if len(sg.DestUIDs.Uids) == 0 {
+		for _, subgraph := range exec {
+			if len(subgraph.DestUIDs.Uids) == 0 {
 				continue
 			}
 			select {
@@ -219,11 +219,11 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				rch <- ctx.Err()
 				return
 			default:
-				for _, child := range start.Children {
+				for _, child := range sg.Children {
 					temp := new(SubGraph)
 					temp.copyFiltersRecurse(child)
 
-					temp.SrcUIDs = sg.DestUIDs
+					temp.SrcUIDs = subgraph.DestUIDs
 					// Remove those nodes which we have already traversed. As this cannot be
 					// in the path again.
 					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
@@ -233,7 +233,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					if len(temp.SrcUIDs.Uids) == 0 {
 						continue
 					}
-					sg.Children = append(sg.Children, temp)
+					subgraph.Children = append(subgraph.Children, temp)
 					out = append(out, temp)
 				}
 			}
@@ -248,14 +248,14 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	}
 }
 
-func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
-	*temp = *sg
-	temp.Children = []*SubGraph{}
-	temp.Filters = []*SubGraph{}
-	for _, fc := range sg.Filters {
+func (sg *SubGraph) copyFiltersRecurse(otherSubgraph *SubGraph) {
+	*sg = *otherSubgraph
+	sg.Children = []*SubGraph{}
+	sg.Filters = []*SubGraph{}
+	for _, fc := range otherSubgraph.Filters {
 		tempChild := new(SubGraph)
 		tempChild.copyFiltersRecurse(fc)
-		temp.Filters = append(temp.Filters, tempChild)
+		sg.Filters = append(sg.Filters, tempChild)
 	}
 }
 

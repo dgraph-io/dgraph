@@ -84,7 +84,7 @@ func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
 	if err != nil {
 		return Counter{}, err
 	}
-	counter.Val += 1
+	counter.Val++
 
 	var mu api.Mutation
 	if len(counter.Uid) == 0 {
@@ -124,7 +124,7 @@ func main() {
 			continue
 		}
 		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
-		*num -= 1
+		*num--
 		time.Sleep(waitDur)
 	}
 }

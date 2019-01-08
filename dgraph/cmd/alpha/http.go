@@ -156,7 +156,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	req.Query = string(body)
 
 	d := r.URL.Query().Get("debug")
-	ctx := context.WithValue(context.Background(), "debug", d)
+	ctx := context.WithValue(context.Background(), query.DebugKey, d)
 
 	// If ro is set, run this as a readonly query.
 	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {

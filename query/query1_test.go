@@ -528,7 +528,7 @@ func TestDebugUid(t *testing.T) {
 				}
 			}
 		}`
-	ctx := context.WithValue(defaultContext(), "debug", "true")
+	ctx := context.WithValue(defaultContext(), DebugKey, "true")
 	buf, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.NoError(t, err)
 	var mp map[string]interface{}
