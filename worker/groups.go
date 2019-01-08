@@ -62,7 +62,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.DB, bindall bool, callback func()) {
+func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -136,7 +136,6 @@ func StartRaftNodes(walStore *badger.DB, bindall bool, callback func()) {
 	go gr.processOracleDeltaStream()
 
 	gr.proposeInitialSchema()
-	callback()
 }
 
 func (g *groupi) proposeInitialSchema() {

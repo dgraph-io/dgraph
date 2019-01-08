@@ -20,24 +20,17 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	"github.com/dgraph-io/dgraph/protos/pb"
-
-	"github.com/dgraph-io/dgraph/schema"
-
-	"google.golang.org/grpc/metadata"
-
-	"github.com/dgraph-io/dgraph/gql"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
-	"google.golang.org/grpc/peer"
-
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 func (s *Server) Login(ctx context.Context,
@@ -105,13 +98,14 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
-		userId, _, err := validateToken(request.RefreshToken)
+		userData, err := validateToken(request.RefreshToken)
 		if err != nil {
 			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
 		}
 
-		user, err = s.queryUser(ctx, userId, "")
+		userId := userData[0]
+		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
 			return nil, fmt.Errorf("error while querying user with id %v: %v", userId, err)
 		}
@@ -120,9 +114,11 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 			return nil, fmt.Errorf("unable to authenticate through refresh token: "+
 				"user not found for id %v", userId)
 		}
+
+		return user, nil
 	} else {
 		var err error
-		user, err = s.queryUser(ctx, request.Userid, request.Password)
+		user, err = authorizeUser(ctx, request.Userid, request.Password)
 		if err != nil {
 			return nil, fmt.Errorf("error while querying user with id: %v",
 				request.Userid)
@@ -135,14 +131,13 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		if !user.PasswordMatch {
 			return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
 		}
+		return user, nil
 	}
-
-	return user, nil
 }
 
 // verify signature and expiration of the jwt and if validation passes,
 // return the extracted userId, and groupIds encoded in the jwt
-func validateToken(jwtStr string) (userId string, groupIds []string, err error) {
+func validateToken(jwtStr string) (userData []string, err error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -151,27 +146,28 @@ func validateToken(jwtStr string) (userId string, groupIds []string, err error) 
 	})
 
 	if err != nil {
-		return "", nil, fmt.Errorf("unable to parse jwt token:%v", err)
+		return nil, fmt.Errorf("unable to parse jwt token:%v", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return "", nil, fmt.Errorf("claims in jwt token is not map claims")
+		return nil, fmt.Errorf("claims in jwt token is not map claims")
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return "", nil, fmt.Errorf("jwt token has expired at %v", now)
+		return nil, fmt.Errorf("jwt token has expired at %v", now)
 	}
 
-	userId, ok = claims["userid"].(string)
+	userId, ok := claims["userid"].(string)
 	if !ok {
-		return "", nil, fmt.Errorf("userid in claims is not a string:%v", userId)
+		return nil, fmt.Errorf("userid in claims is not a string:%v", userId)
 	}
 
 	groups, ok := claims["groups"].([]interface{})
+	var groupIds []string
 	if ok {
 		groupIds = make([]string, 0, len(groups))
 		for _, group := range groups {
@@ -183,7 +179,7 @@ func validateToken(jwtStr string) (userId string, groupIds []string, err error) 
 			groupIds = append(groupIds, groupId)
 		}
 	}
-	return userId, groupIds, nil
+	return append([]string{userId}, groupIds...), nil
 }
 
 // validate that the login request has either the refresh token or the <userid, password> pair
@@ -255,7 +251,7 @@ const queryUser = `
 
 // query the user with the given userid, and returns associated uid, acl groups,
 // and whether the password stored in DB matches the supplied password
-func (s *Server) queryUser(ctx context.Context, userid string, password string) (user *acl.User,
+func authorizeUser(ctx context.Context, userid string, password string) (user *acl.User,
 	err error) {
 	queryVars := map[string]string{
 		"$userid":   userid,
@@ -266,7 +262,7 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 		Vars:  queryVars,
 	}
 
-	queryResp, err := s.doQuery(ctx, &queryRequest)
+	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -278,7 +274,7 @@ func (s *Server) queryUser(ctx context.Context, userid string, password string) 
 	return user, nil
 }
 
-func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
+func RefreshAcls(closeCh <-chan struct{}) {
 	if len(Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
@@ -287,12 +283,46 @@ func RetrieveAclsPeriodically(closeCh <-chan struct{}) {
 	ticker := time.NewTicker(Config.AclRefreshInterval)
 	defer ticker.Stop()
 
+	// retrieve the full data set of ACLs from the corresponding alpha server, and update the aclCache
+	RetrieveAcls := func() error {
+		glog.Infof("Retrieving ACLs")
+		queryRequest := api.Request{
+			Query: queryAcls,
+		}
+
+		ctx := context.Background()
+		var err error
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve acls: %v", err)
+		}
+		groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
+		if err != nil {
+			return err
+		}
+
+		storedEntries := 0
+		for _, group := range groups {
+			// convert the serialized acl into a map for easy lookups
+			group.MappedAcls, err = acl.UnmarshalAcl([]byte(group.Acls))
+			if err != nil {
+				glog.Errorf("Error while unmarshalling ACLs for group %v:%v", group, err)
+				continue
+			}
+
+			storedEntries++
+			aclCache.Store(group.GroupID, &group)
+		}
+		glog.Infof("updated the ACL cache with %d entries", storedEntries)
+		return nil
+	}
+
 	for {
 		select {
 		case <-closeCh:
 			return
 		case <-ticker.C:
-			if err := (&Server{}).RetrieveAcls(); err != nil {
+			if err := RetrieveAcls(); err != nil {
 				glog.Errorf("Error while retrieving acls:%v", err)
 			}
 		}
@@ -320,8 +350,7 @@ func ResetAcl() {
 
 	aclCache = sync.Map{}
 	// upsert the admin account
-	server := &Server{}
-	adminUser, err := server.queryUser(context.Background(), "admin", "")
+	adminUser, err := authorizeUser(context.Background(), "admin", "")
 	if err != nil {
 		glog.Errorf("error while querying the admin account")
 		return
@@ -350,121 +379,92 @@ func ResetAcl() {
 		Set:       createUserNQuads,
 	}
 
-	if _, err := server.doMutate(context.Background(), mu); err != nil {
+	if _, err := (&Server{}).doMutate(context.Background(), mu); err != nil {
 		glog.Errorf("unable to create admin: %v", err)
 		return
 	}
 	glog.Info("Created the admin account with the default password")
 }
 
-// retrieve the full data set of ACLs from the corresponding alpha server, and update the aclCache
-func (s *Server) RetrieveAcls() error {
-	glog.Infof("Retrieving ACLs")
-	queryRequest := api.Request{
-		Query: queryAcls,
-	}
-
-	ctx := context.Background()
-	var err error
-	queryResp, err := s.doQuery(ctx, &queryRequest)
-	if err != nil {
-		return fmt.Errorf("unable to retrieve acls: %v", err)
-	}
-	groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
-	if err != nil {
-		return err
-	}
-
-	storedEntries := 0
-	for _, group := range groups {
-		// convert the serialized acl into a map for easy lookups
-		group.MappedAcls, err = acl.UnmarshalAcl([]byte(group.Acls))
-		if err != nil {
-			glog.Errorf("Error while unmarshalling ACLs for group %v:%v", group, err)
-			continue
-		}
-
-		storedEntries++
-		aclCache.Store(group.GroupID, &group)
-	}
-	glog.Infof("updated the ACL cache with %d entries", storedEntries)
-	return nil
-}
-
 // extract the userId, groupIds from the accessJwt in the context
-func extractUserAndGroups(ctx context.Context) (string, []string, error) {
+func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return "", nil, fmt.Errorf("no metadata available")
+		return nil, fmt.Errorf("no metadata available")
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
 		//glog.Infof("no accessJwt available, type is %v", reflect.TypeOf(ctx.Value("accessJwt")))
-		return "", nil, fmt.Errorf("no accessJwt available")
+		return nil, fmt.Errorf("no accessJwt available")
 	}
 
 	return validateToken(accessJwt[0])
 }
 
 // parse the Schema in the operation and authorize the operation using the aclCache
-func (s *Server) parseAndAuthorizeAlter(ctx context.Context, op *api.Operation) (bool,
-	string, []*pb.SchemaUpdate, error) {
+func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	updates, err := schema.Parse(op.Schema)
 	if err != nil {
-		return false, "", nil, err
+		return err
 	}
 
-	if len(Config.HmacSecret) == 0 {
-		// the user has not turned on the acl feature
-		return op.DropAll, op.DropAttr, updates, nil
-	}
-
-	userId, groupIds, err := extractUserAndGroups(ctx)
-	if err != nil {
-		return false, "", nil, status.Error(codes.Unauthenticated, err.Error())
-	}
-	if userId == "admin" {
-		// admin is allowed to do anything
-		return op.DropAll, op.DropAttr, updates, nil
-	}
-
-	// if we get here, we know the user is not admin
-	if op.DropAll {
-		return false, "", nil,
-			fmt.Errorf("only the admin is allowed to drop all predicates")
-	}
-
-	if len(op.DropAttr) > 0 {
-		// check that we have the modify permission on the predicate
-		if !s.authorizePredicate(groupIds, op.DropAttr, acl.Modify) {
-			return false, "", nil,
-				fmt.Errorf("unauthorized to modify the predicate %v", op.DropAttr)
-		}
-		return false, op.DropAttr, nil, nil
-	}
-
-	for _, update := range updates {
-		if !s.authorizePredicate(groupIds, update.Predicate, acl.Modify) {
-			return false, "", nil,
-				fmt.Errorf("unauthorized to modify the predicate %v", update.Predicate)
-		}
-	}
-	return false, "", updates, nil
-}
-
-// authorize the mutation using the aclCache
-func (s *Server) authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	userId, groupIds, err := extractUserAndGroups(ctx)
+	userData, err := extractUserAndGroups(ctx)
+	if err != nil {
+		return status.Error(codes.Unauthenticated, err.Error())
+	}
+	userId := userData[0]
+	if userId == "admin" {
+		// admin is allowed to do anything
+		return nil
+	}
+
+	// if we get here, we know the user is not admin
+	if op.DropAll {
+		return fmt.Errorf("only the admin is allowed to drop all predicates")
+	}
+
+	groupIds := userData[1:]
+	if len(op.DropAttr) > 0 {
+		// check that we have the modify permission on the predicate
+		if !authorizePredicate(groupIds, op.DropAttr, acl.Modify) {
+			return fmt.Errorf("unauthorized to modify the predicate %v", op.DropAttr)
+		}
+		return nil
+	}
+
+	for _, update := range updates {
+		if !authorizePredicate(groupIds, update.Predicate, acl.Modify) {
+			return fmt.Errorf("unauthorized to modify the predicate %v", update.Predicate)
+		}
+	}
+	return nil
+}
+
+func populatePredsFromMutation(nquads []*api.NQuad, preds map[string]struct{}) {
+	for _, nquad := range nquads {
+		preds[nquad.Predicate] = struct{}{}
+	}
+}
+
+// authorize the mutation using the aclCache
+func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+	if len(Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
+	userData, err := extractUserAndGroups(ctx)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
+	userId := userData[0]
 	if userId == "admin" {
 		// the admin account has access to everything
 		return nil
@@ -475,26 +475,46 @@ func (s *Server) authorizeMutation(ctx context.Context, mu *api.Mutation) error 
 		return err
 	}
 
-	for _, nquad := range gmu.Set {
-		if !s.authorizePredicate(groupIds, nquad.Predicate, acl.Write) {
-			return fmt.Errorf("unauthorized to access the predicate %v", nquad.Predicate)
+	preds := make(map[string]struct{})
+	populatePredsFromMutation(gmu.Set, preds)
+
+	groupIds := userData[1:]
+	for pred := range preds {
+		if !authorizePredicate(groupIds, pred, acl.Write) {
+			return fmt.Errorf("unauthorized to access the predicate %v", pred)
 		}
 	}
 	return nil
 }
 
+func populatePredsFromQuery(gqls []*gql.GraphQuery, preds map[string]struct{}) {
+	for _, gq := range gqls {
+
+		if gq.Func != nil {
+			preds[gq.Func.Attr] = struct{}{}
+		}
+
+		if len(gq.Attr) > 0 {
+			preds[gq.Attr] = struct{}{}
+		}
+
+		populatePredsFromQuery(gq.Children, preds)
+	}
+}
+
 // authorize the query using the aclCache
-func (s *Server) authorizeQuery(ctx context.Context, req *api.Request) error {
+func authorizeQuery(ctx context.Context, req *api.Request) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	userId, groupIds, err := extractUserAndGroups(ctx)
+	userData, err := extractUserAndGroups(ctx)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
+	userId := userData[0]
 	if userId == "admin" {
 		// the admin account has access to everything
 		return nil
@@ -508,41 +528,23 @@ func (s *Server) authorizeQuery(ctx context.Context, req *api.Request) error {
 		return err
 	}
 
-	for _, query := range parsedReq.Query {
-		if !s.authorizeSingleQuery(groupIds, query, acl.Read) {
+	preds := make(map[string]struct{})
+	populatePredsFromQuery(parsedReq.Query, preds)
+
+	groupIds := userData[1:]
+	for pred := range preds {
+		if !authorizePredicate(groupIds, pred, acl.Read) {
 			return status.Error(codes.PermissionDenied,
-				fmt.Sprintf("unauthorized to access the predicate %v", query.Attr))
+				fmt.Sprintf("unauthorized to access the predicate %v", pred))
 		}
 	}
+
 	return nil
 }
 
-func (s *Server) authorizeSingleQuery(groups []string, gq *gql.GraphQuery, operation int32) bool {
-	if gq.Func != nil {
-		if !s.authorizePredicate(groups, gq.Func.Attr, operation) {
-			return false
-		}
-	}
-
-	if len(gq.Attr) > 0 {
-		if !s.authorizePredicate(groups, gq.Attr, operation) {
-			return false
-		}
-	}
-
-	// authorize all children queries
-	for _, childQuery := range gq.Children {
-		if !s.authorizeSingleQuery(groups, childQuery, operation) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s *Server) authorizePredicate(groups []string, predicate string, operation int32) bool {
+func authorizePredicate(groups []string, predicate string, operation int32) bool {
 	for _, group := range groups {
-		if s.hasAccess(group, predicate, operation) {
+		if hasAccess(group, predicate, operation) {
 			return true
 		}
 	}
@@ -551,7 +553,7 @@ func (s *Server) authorizePredicate(groups []string, predicate string, operation
 
 // hasAccess checks the aclCache and returns whether the specified group is authorized to perform
 // the operation on the given predicate
-func (s *Server) hasAccess(groupId string, predicate string, operation int32) bool {
+func hasAccess(groupId string, predicate string, operation int32) bool {
 	glog.Infof("authorizing group %v on predicate %v for op %d", groupId, predicate, operation)
 	entry, found := aclCache.Load(groupId)
 	if !found {

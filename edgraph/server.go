@@ -26,6 +26,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/dgraph-io/dgraph/schema"
+
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
@@ -289,7 +291,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return nil, err
 	}
 
-	dropAll, dropAttr, updates, err := s.parseAndAuthorizeAlter(ctx, op)
+	err := authorizeAlter(ctx, op)
 	if err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
@@ -301,7 +303,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
-	if dropAll {
+	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
 
@@ -309,7 +311,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		ResetAcl()
 		return empty, err
 	}
-	if len(dropAttr) > 0 {
+	if len(op.DropAttr) > 0 {
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
@@ -326,6 +328,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return empty, err
+	}
 	glog.Infof("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = updates
@@ -338,7 +344,7 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	if err := s.authorizeMutation(ctx, mu); err != nil {
+	if err := authorizeMutation(ctx, mu); err != nil {
 		return nil, fmt.Errorf("mutation is not authorized: %v", err)
 	}
 
@@ -452,7 +458,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
-	if err := s.authorizeQuery(ctx, req); err != nil {
+	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, fmt.Errorf("query is not authorized: %v", err)
 	}
 

@@ -130,11 +130,11 @@ they form a Raft group and provide synchronous replication.
 
 	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
 		" that is used for signing the JWT. Enterprise feature.")
-	flag.Duration("access_jwt_ttl", 6*time.Hour, "The TTL for the access jwt. "+
+	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
 		"Enterprise feature.")
-	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Duration("acl_refresh_interval", 30*time.Second, "The interval to refresh the acl cache. "+
+	flag.Duration("acl_cache_ttl", 30*time.Second, "The interval to refresh the acl cache. "+
 		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
@@ -426,9 +426,9 @@ func run() {
 		}
 
 		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = Alpha.Conf.GetDuration("access_jwt_ttl")
-		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("refresh_jwt_ttl")
-		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_refresh_interval")
+		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
+		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
+		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_cache_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
@@ -515,12 +515,14 @@ func run() {
 	_ = numShutDownSig
 
 	// Setup external communication.
-	go worker.StartRaftNodes(edgraph.State.WALstore, bindall, func() {
+	go func() {
+		worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl()
-	})
-	go edgraph.RetrieveAclsPeriodically(shutdownCh)
+		edgraph.RefreshAcls(shutdownCh)
+	}()
+
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
 	worker.BlockingStop()
