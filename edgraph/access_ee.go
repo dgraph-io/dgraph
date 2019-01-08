@@ -404,14 +404,14 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 
 // parse the Schema in the operation and authorize the operation using the aclCache
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
-	updates, err := schema.Parse(op.Schema)
-	if err != nil {
-		return err
-	}
-
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
+	}
+
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return err
 	}
 
 	userData, err := extractUserAndGroups(ctx)
