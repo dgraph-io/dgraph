@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -494,7 +495,10 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 
 	var js []byte
 	if len(resp.Schema) > 0 {
-		js, err = json.Marshal(resp.Schema)
+		sort.Slice(resp.Schema, func(i, j int) bool {
+			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+		})
+		js, err = json.Marshal(map[string]interface{}{"schema": resp.Schema})
 	} else {
 		js, err = query.ToJson(&l, er.Subgraphs)
 	}
