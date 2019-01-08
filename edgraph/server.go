@@ -218,7 +218,7 @@ func (s *ServerState) fillTimestampRequests() {
 			if r.readOnly {
 				num.ReadOnly = true
 			} else {
-				num.Val += 1
+				num.Val++
 			}
 		}
 

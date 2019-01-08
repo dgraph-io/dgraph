@@ -537,17 +537,17 @@ func (histogram *HistogramData) Update(value int64) {
 	}
 
 	histogram.Sum += value
-	histogram.Count += 1
+	histogram.Count++
 
 	for index := 0; index <= len(histogram.Bounds); index++ {
 		// Allocate value in the last buckets if we reached the end of the Bounds array.
 		if index == len(histogram.Bounds) {
-			histogram.CountPerBucket[index] += 1
+			histogram.CountPerBucket[index]++
 			break
 		}
 
 		if value < int64(histogram.Bounds[index]) {
-			histogram.CountPerBucket[index] += 1
+			histogram.CountPerBucket[index]++
 			break
 		}
 	}
