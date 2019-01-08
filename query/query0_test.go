@@ -1694,7 +1694,7 @@ func TestMain(m *testing.M) {
 	walStore, err := badger.Open(kvOpt)
 	x.Check(err)
 
-	worker.StartRaftNodes(walStore, false, func() {})
+	worker.StartRaftNodes(walStore, false)
 	// Load schema after nodes have started
 
 	populateGraph(&testing.T{})
