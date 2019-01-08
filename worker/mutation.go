@@ -451,22 +451,6 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	defer span.End()
 	tctx := &api.TxnContext{StartTs: m.StartTs}
 
-	if Config.StrictMutations {
-		for _, edge := range m.Edges {
-			fmt.Fprintf(os.Stderr, "MUTATE_OVER_NETWORK: %s\n", edge.Attr)
-			if groups().GetTablet(edge.Attr) == nil {
-				tablet := groups().TabletNoAdd(edge.Attr)
-				if tablet == nil {
-					return tctx, x.Errorf("Error looking up tablet: %s")
-				}
-				if groups().ServesGroup(tablet.GroupId) {
-					fmt.Fprintf(os.Stderr, "MUTATE_OVER_NETWORK: created new tablet '%s'\n", edge.Attr)
-					return tctx, x.Errorf("Schema not defined for predicate: %s", edge.Attr)
-				}
-			}
-		}
-	}
-
 	mutationMap := populateMutationMap(m)
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
@@ -523,6 +507,14 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 }
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext, m *pb.Mutations) (*api.TxnContext, error) {
+	if Config.StrictMutations {
+		for _, edge := range m.Edges {
+			if typ, err := schema.State().TypeOf(edge.Attr); typ == types.UndefinedID {
+				return txnCtx, err
+			}
+		}
+	}
+
 	if txnCtx == nil {
 		txnCtx = &api.TxnContext{}
 	}
@@ -544,17 +536,6 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	}
 	if !groups().ServesGroup(m.GroupId) {
 		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
-	}
-
-	if Config.StrictMutations {
-		for _, edge := range m.Edges {
-			fmt.Fprintf(os.Stderr, "MUTATE: %s\n", edge.Attr)
-			if tablet := groups().GetTablet(edge.Attr); tablet == nil {
-				fmt.Fprintf(os.Stderr, "MUTATE: undefined tablet '%s'\n", edge.Attr)
-				return txnCtx, x.Errorf("Schema not defined for predicate: %s")
-			}
-			fmt.Fprintf(os.Stderr, "MUTATE: found tablet for %s\n", edge.Attr)
-		}
 	}
 
 	return w.proposeAndWait(ctx, txnCtx, m)
