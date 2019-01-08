@@ -22,6 +22,8 @@ import (
 	"errors"
 	"math"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/coreos/etcd/raft"
 	pb "github.com/coreos/etcd/raft/raftpb"
@@ -69,7 +71,28 @@ type DiskStorage struct {
 	gid  uint32
 	elog trace.EventLog
 
+	numFirst    uint64
+	numLast     uint64
+	numTerms    uint64
+	numSnapshot uint64
+	numHard     uint64
+	numEntries  uint64
+
 	cache localCache
+}
+
+func (w *DiskStorage) printCounters() {
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	for range t.C {
+		glog.Infof("DiskStorage. first: %d. last: %d. terms: %d. snap: %d. hard: %d. entries: %d\n",
+			atomic.LoadUint64(&w.numFirst),
+			atomic.LoadUint64(&w.numLast),
+			atomic.LoadUint64(&w.numTerms),
+			atomic.LoadUint64(&w.numSnapshot),
+			atomic.LoadUint64(&w.numHard),
+			atomic.LoadUint64(&w.numEntries))
+	}
 }
 
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
@@ -90,6 +113,8 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	} else {
 		x.Check(err)
 	}
+	go w.printCounters()
+
 	return w
 }
 
@@ -161,7 +186,10 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 // [FirstIndex()-1, LastIndex()]. The term of the entry before
 // FirstIndex is retained for matching purposes even though the
 // rest of that entry may not be available.
+// TODO: Serve this from cache.
 func (w *DiskStorage) Term(idx uint64) (uint64, error) {
+	atomic.AddUint64(&w.numTerms, 1)
+
 	w.elog.Printf("Term: %d", idx)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
@@ -216,6 +244,8 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
+	atomic.AddUint64(&w.numFirst, 1)
+
 	snap := w.cache.snapshot()
 	if !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
@@ -234,7 +264,10 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 }
 
 // LastIndex returns the index of the last entry in the log.
+// TODO: Serve this from cache.
 func (w *DiskStorage) LastIndex() (uint64, error) {
+	atomic.AddUint64(&w.numLast, 1)
+
 	return w.seekEntry(nil, math.MaxUint64, true)
 }
 
@@ -281,6 +314,7 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 // so raft state machine could know that Storage needs some time to prepare
 // snapshot and call Snapshot later.
 func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
+	atomic.AddUint64(&w.numSnapshot, 1)
 	if s := w.cache.snapshot(); !raft.IsEmptySnap(s) {
 		return s, nil
 	}
@@ -400,6 +434,8 @@ func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 }
 
 func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
+	atomic.AddUint64(&w.numHard, 1)
+
 	w.elog.Printf("HardState")
 	defer w.elog.Printf("Done")
 	err := w.db.View(func(txn *badger.Txn) error {
@@ -509,6 +545,8 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
+	atomic.AddUint64(&w.numEntries, 1)
+
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
