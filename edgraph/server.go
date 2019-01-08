@@ -23,7 +23,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -59,7 +58,6 @@ type ServerState struct {
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
-	mu     sync.Mutex
 	needTs chan tsReq
 }
 
