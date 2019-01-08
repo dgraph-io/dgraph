@@ -34,7 +34,7 @@ const (
 	userid         = "alice"
 	userpassword   = "simplepassword"
 	alphaPort      = 9280
-	dgraphEndpoint = "localhost:9280"
+	dgraphEndpoint = "localhost:9180"
 )
 
 func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
@@ -88,7 +88,7 @@ func resetUser(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
-	dg, close := test.GetDgraphClient(alphaPort)
+	dg, close := test.GetDgraphClient()
 	defer close()
 
 	createAccountAndData(t, dg)

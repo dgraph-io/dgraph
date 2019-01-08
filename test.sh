@@ -1,61 +1,89 @@
 #!/bin/bash
 
-# run from directory containing this script
-cd ${BASH_SOURCE[0]%/*}
+readonly ME=${0##*/}
+readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 
-source ./contrib/scripts/functions.sh
-function run {
-  # check to see if the package has a customized docker-compose file
-  dir="$GOPATH/src/$@"
-  pushd $dir > /dev/null && \
-  if [ -f docker-compose.yml ]; then
-    if ls *_test.go 1>/dev/null 2>&1 ; then
-      echo "Restarting the cluster using the package local docker-compose.yml"
-      restartCluster $dir $(cat testZeroPort.txt) $(cat testAlphaPort.txt) /tmp/dg-acl
-    fi
-  fi && \
-  go test -short=true |\
-		GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' |\
-		GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' |\
-		GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$' && \
-  if [ -f docker-compose.yml ]; then
-    if ls *_test.go 1>/dev/null 2>&1 ; then
-      stopCluster $dir
-    fi
-  fi && \
-  popd > /dev/null
+source $DGRAPH_ROOT/contrib/scripts/functions.sh
+
+PATH+=:$DGRAPH_ROOT/contrib/scripts/
+TEST_FAILED=0
+
+CUSTOM_CLUSTER_TESTS=$(mktemp --tmpdir $ME.tmp-XXXXXX)
+trap "rm -rf $CUSTOM_CLUSTER_TESTS" EXIT
+
+function Info {
+    echo -e "INFO: $*"
 }
 
-function runAll {
-  # pushd dgraph/cmd/server
-  # go test -v .
-  # popd
-
-  local testsFailed=0
-  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok'); do
-  #dir=(github.com/dgraph-io/dgraph/ee/acl)
-  #for PKG in $dir; do
-    echo "Running test for $PKG"
-    run $PKG || {
-        testsFailed=$((testsFailed+1))
-    }
-  done
-  return $testsFailed
+function FindCustomClusterTests {
+    # look for directories containing a docker compose and *_test.go files
+    for FILE in $(find -type f -name docker-compose.yml); do
+        DIR=$(dirname $FILE)
+        if [[ $(ls $DIR/*_test.go 2>/dev/null | wc -l) -gt 0 ]]; then
+            echo "${DIR:1}\$" >> $CUSTOM_CLUSTER_TESTS
+        fi
+    done
 }
 
-# For piped commands return non-zero status if any command
-# in the pipe returns a non-zero status
-set -o pipefail
-restartCluster $GOPATH/src/github.com/dgraph-io/dgraph/dgraph 6080 9180 /tmp/dg
-#echo
-echo "Running tests. Ignoring vendor folder."
-runAll || exit $?
+function Run {
+    set -o pipefail
+    go test -short=true $@ \
+    | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
+    | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
+    | GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
+}
 
-# Run non-go tests.
-./contrib/scripts/test-bulk-schema.sh
+function RunDefaultClusterTests {
+    for PKG in $(go list ./... | grep -v -f $CUSTOM_CLUSTER_TESTS); do
+        Info "Running test for $PKG"
+        Run $PKG || TEST_FAILED=1
+    done
+    return $TEST_FAILED
+}
 
-echo
-echo "Running load-test.sh"
+function RunCustomClusterTests {
+    while read -r LINE; do
+        DIR="${LINE:1:-1}"
+        CFG="$DIR/docker-compose.yml"
+        Info "Restarting cluster with $CFG"
+        restartCluster $DIR/docker-compose.yml
+        Info "Running tests in directory $DIR"
+        pushd $DIR >/dev/null
+        Run || TEST_FAILED=1
+        popd >/dev/null
+        stopCluster $DIR/docker-compose.yml
+    done < $CUSTOM_CLUSTER_TESTS
+    return $TEST_FAILED
+}
+
+#
+# MAIN
+#
+
+cd $DGRAPH_ROOT
+FindCustomClusterTests
+
+Info "Running tests using the default cluster"
+restartCluster "dgraph/docker-compose.yml"
+RunDefaultClusterTests || TEST_FAILED=1
+
+Info "Running load-test.sh"
 ./contrib/scripts/load-test.sh
 
-stopCluster $GOPATH/src/github.com/dgraph-io/dgraph/dgraph
+Info "Running tests using custom clusters"
+RunCustomClusterTests || TEST_FAILED=1
+
+Info "Running custom test scripts"
+./contrib/scripts/test-backup-restore.sh
+./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+
+Info "Stopping cluster"
+stopCluster
+
+if [[ $TEST_FAILED -eq 0 ]]; then
+    Info "\e[1;32mAll tests passed!\e[0m"
+else
+    Info "\e[1;31m*** One or more tests failed! ***\e[0m"
+fi
+
+exit $TEST_FAILED

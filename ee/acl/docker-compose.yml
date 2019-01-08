@@ -9,9 +9,9 @@ services:
     container_name: acl-dg0.1
     working_dir: /data/dg0.1
     ports:
-      - 5280:5280
-      - 6280:6280
-    command: /gobin/dgraph zero --my=zero1:5280 -o 200 --replicas 3 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+      - 5080:5080
+      - 6080:6080
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -31,12 +31,12 @@ services:
         source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
         target: /dgraph-acl
     ports:
-      - 8280:8280
-      - 9280:9280
+      - 8180:8180
+      - 9180:9180
       - 9999:9999
     security_opt:
       - seccomp:unconfined
-    command: /gobin/dgraph alpha --my=dg1:7280 --lru_mb=1024 --zero=zero1:5280 -o 200 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --access_jwt_ttl 30s
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --access_jwt_ttl 30s
 
 
 
