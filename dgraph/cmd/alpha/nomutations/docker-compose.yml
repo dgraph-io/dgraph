@@ -1,16 +1,32 @@
-# This file should only override services already defined in the main docker-compose.yml file (and
-# not add any new ones) so that docker-compose.yml still stops and deletes all containers.
+# This file defines the Dgraph cluster required by the tests in this directory.  All containers
+# must be labeled with "cluster: test" to be controlled with restartCluster/stopCluster.
 version: "3.5"
 services:
   zero1:
-    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 1 --idx 1 --logtostderr
-  zero2:
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 1 --idx 2 --logtostderr --peer=zero1:5080
-  zero3:
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 1 --idx 3 --logtostderr --peer=zero1:5080
+    image: dgraph/dgraph:latest
+    container_name: bank-dg0.1
+    labels:
+      cluster: test
+    ports:
+      - 5080:5080
+      - 6080:6080
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 1 --idx 1 --logtostderr
   dg1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg1
+    labels:
+      cluster: test
+    ports:
+      - 8180:8180
+      - 9180:9180
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
     command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --logtostderr --nomutations
-  dg2:
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --logtostderr --nomutations
-  dg3:
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --logtostderr --nomutations

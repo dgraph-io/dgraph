@@ -1,19 +1,21 @@
 #!/bin/bash
+# Containers MUST be labeled with "cluster:test" to be restarted and stopped
+# by these functions.
 
-# may be called with an argument which is a docker compose file
-# to use *in addition* to the default docker-compose.yml
+# May be called with an argument which is a docker compose file
+# to use *instead of* the default docker-compose.yml.
 function restartCluster {
-  compose_files=("-f" "docker-compose.yml")
-  if [[ -n $1 ]]; then
-    compose_files+=("-f" "$(readlink -f $1)")
+  if [[ -z $1 ]]; then
+    compose_file="docker-compose.yml"
+  else
+    compose_file="$(readlink -f $1)"
   fi
 
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
-    go build . && go install . && md5sum dgraph $GOPATH/bin/dgraph
-    docker-compose --log-level=CRITICAL down
-    docker-compose ${compose_files[@]} up \
-                   --force-recreate --remove-orphans --detach
+  go build . && go install . && md5sum dgraph $GOPATH/bin/dgraph
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker stop
+  docker-compose -f $compose_file -p dgraph up --force-recreate --remove-orphans --detach
   popd >/dev/null
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6080 || exit 1
@@ -25,6 +27,7 @@ function restartCluster {
 function stopCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
-    docker-compose down
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker stop
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm
   popd >/dev/null
 }

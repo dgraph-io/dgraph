@@ -11,42 +11,52 @@ services:
     ports:
       - 5080:5080
       - 6080:6080
-    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --enterprise_features --bindall --expose_trace --profile_mode block --block_rate 10
+    labels:
+      cluster: test
+      service: zero
+      role: leader
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --enterprise_features --bindall --expose_trace --profile_mode block --block_rate 10
 
   zero2:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.2
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --idx 2 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
     depends_on:
       - zero1
     ports:
       - 5082:5082
       - 6082:6082
+    labels:
+      cluster: test
+      service: zero
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --idx 2 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
 
   zero3:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.3
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --idx 3 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
     depends_on:
       - zero2
     ports:
       - 5083:5083
       - 6083:6083
+    labels:
+      cluster: test
+      service: zero
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --idx 3 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
 
   dg1:
     image: dgraph/dgraph:latest
@@ -60,6 +70,9 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
+    labels:
+      cluster: test
+      service: alpha
     command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
 
   dg2:
@@ -76,6 +89,9 @@ services:
     ports:
       - 8182:8182
       - 9182:9182
+    labels:
+      cluster: test
+      service: alpha
     command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
 
   dg3:
@@ -92,4 +108,7 @@ services:
     ports:
       - 8183:8183
       - 9183:9183
+    labels:
+      cluster: test
+      service: alpha
     command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
