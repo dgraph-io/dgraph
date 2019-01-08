@@ -26,6 +26,9 @@ import (
 	"time"
 	"unicode"
 
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -573,6 +576,30 @@ func isMutationAllowed(ctx context.Context) bool {
 		return false
 	}
 	return true
+}
+
+var errNoAuth = x.Errorf("No Auth Token found. Token needed for Alter operations.")
+
+func isAlterAllowed(ctx context.Context) error {
+	p, ok := peer.FromContext(ctx)
+	if ok {
+		glog.Infof("Got Alter request from %q\n", p.Addr)
+	}
+	if len(Config.AuthToken) == 0 {
+		return nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return errNoAuth
+	}
+	tokens := md.Get("auth-token")
+	if len(tokens) == 0 {
+		return errNoAuth
+	}
+	if tokens[0] != Config.AuthToken {
+		return x.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
+	}
+	return nil
 }
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {

@@ -32,6 +32,7 @@ type Options struct {
 	BadgerVlog     string
 	WALDir         string
 	Nomutations    bool
+	AuthToken      string
 	AllottedMemory float64
 
 	HmacSecret         []byte
