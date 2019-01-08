@@ -11,15 +11,13 @@ function run {
 		GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
 }
 
-function runDir {
-  pushd $1
-  run
-  popd
-}
-
 function runAll {
+  # pushd dgraph/cmd/server
+  # go test -v .
+  # popd
+
   local testsFailed=0
-  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok|/_'); do
+  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok'); do
     echo "Running test for $PKG"
     run $PKG || {
         testsFailed=$((testsFailed+1))
@@ -44,11 +42,8 @@ echo
 echo "Running load-test.sh"
 ./contrib/scripts/load-test.sh
 
-# Run non-go tests.
-./contrib/scripts/test-bulk-schema.sh
-
-# Run tests requiring different cluster setup.
-restartCluster "edgraph/_mutations_mode/docker-compose.yml"
-runDir edgraph/_mutations_mode
+echo
+echo "Running bulk loader tests"
+./dgraph/cmd/bulk/systest/test-bulk-schema.sh
 
 stopCluster
