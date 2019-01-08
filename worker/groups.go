@@ -128,6 +128,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode()
 	x.UpdateHealthStatus(true)
+	glog.Infof("Server is ready")
 
 	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
