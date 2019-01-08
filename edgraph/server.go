@@ -18,6 +18,7 @@ package edgraph
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -493,12 +494,17 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 	resp.Schema = er.SchemaNode
 
-	json, err := query.ToJson(&l, er.Subgraphs)
+	var js []byte
+	if len(resp.Schema) > 0 {
+		js, err = json.Marshal(resp.Schema)
+	} else {
+		js, err = query.ToJson(&l, er.Subgraphs)
+	}
 	if err != nil {
 		return resp, err
 	}
-	resp.Json = json
-	span.Annotatef(nil, "Response = %s", json)
+	resp.Json = js
+	span.Annotatef(nil, "Response = %s", js)
 
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
