@@ -18,7 +18,7 @@ package x
 
 import "golang.org/x/crypto/blake2b"
 
-func Fingerprint256(data []byte) []byte {
+func Hash256(data []byte) []byte {
 	h := blake2b.Sum256(data)
 	return h[:]
 }
