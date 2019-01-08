@@ -74,9 +74,8 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 
 	if all {
 		return cnt == len(filter.tokens)
-	} else {
-		return cnt > 0
 	}
+	return cnt > 0
 }
 
 func ineqMatch(value types.Val, filter stringFilter) bool {

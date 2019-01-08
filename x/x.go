@@ -40,7 +40,7 @@ import (
 
 // Error constants representing different types of errors.
 var (
-	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition.")
+	ErrNotSupported = fmt.Errorf("feature available only in Dgraph Enterprise Edition")
 )
 
 const (

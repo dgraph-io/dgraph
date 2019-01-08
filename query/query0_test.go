@@ -267,8 +267,9 @@ func TestGetUIDInDebugMode(t *testing.T) {
 			}
 		}
 	`
+
 	ctx := defaultContext()
-	ctx = context.WithValue(ctx, "debug", "true")
+	ctx = context.WithValue(ctx, DebugKey, "true")
 	js, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.NoError(t, err)
 	require.JSONEq(t,

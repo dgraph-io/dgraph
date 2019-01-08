@@ -83,8 +83,14 @@ func childAttrs(sg *query.SubGraph) []string {
 	return out
 }
 
+type defaultContextKey int
+
+const (
+	mutationAllowedKey defaultContextKey = iota
+)
+
 func defaultContext() context.Context {
-	return context.WithValue(context.Background(), "mutation_allowed", true)
+	return context.WithValue(context.Background(), mutationAllowedKey, true)
 }
 
 var ts uint64

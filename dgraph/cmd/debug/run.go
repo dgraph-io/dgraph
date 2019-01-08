@@ -203,10 +203,9 @@ func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
 	if total := seekTotal(db, midTs); total == 100 {
 		// If no failure, move to higher ts.
 		return findFirstInvalidTxn(db, midTs+1, highTs)
-	} else {
-		// Found an error.
-		return findFirstInvalidTxn(db, lowTs, midTs)
 	}
+	// Found an error.
+	return findFirstInvalidTxn(db, lowTs, midTs)
 }
 
 func showAllPostingsAt(db *badger.DB, readTs uint64) {
@@ -500,9 +499,9 @@ func printKeys(db *badger.DB) {
 
 // Creates bounds for an histogram. The bounds are powers of two of the form
 // [2^min_exponent, ..., 2^max_exponent].
-func getHistogramBounds(min_exponent, max_exponent uint32) []float64 {
+func getHistogramBounds(minExponent, maxExponent uint32) []float64 {
 	var bounds []float64
-	for i := min_exponent; i <= max_exponent; i++ {
+	for i := minExponent; i <= maxExponent; i++ {
 		bounds = append(bounds, float64(int(1)<<i))
 	}
 	return bounds
@@ -561,7 +560,7 @@ func (histogram HistogramData) PrintHistogram() {
 	fmt.Printf("Mean: %.2f\n", float64(histogram.Sum)/float64(histogram.Count))
 	fmt.Printf("%24s %9s\n", "Range", "Count")
 
-	num_bounds := len(histogram.Bounds)
+	numBounds := len(histogram.Bounds)
 	for index, count := range histogram.CountPerBucket {
 		if count == 0 {
 			continue
@@ -571,18 +570,18 @@ func (histogram HistogramData) PrintHistogram() {
 		// the last bound up to infinity so it's processed differently than the
 		// other buckets.
 		if index == len(histogram.CountPerBucket)-1 {
-			lower_bound := int(histogram.Bounds[num_bounds-1])
-			fmt.Printf("[%10d, %10s) %9d\n", lower_bound, "infinity", count)
+			lowerBound := int(histogram.Bounds[numBounds-1])
+			fmt.Printf("[%10d, %10s) %9d\n", lowerBound, "infinity", count)
 			continue
 		}
 
-		upper_bound := int(histogram.Bounds[index])
-		lower_bound := 0
+		upperBound := int(histogram.Bounds[index])
+		lowerBound := 0
 		if index > 0 {
-			lower_bound = int(histogram.Bounds[index-1])
+			lowerBound = int(histogram.Bounds[index-1])
 		}
 
-		fmt.Printf("[%10d, %10d) %9d\n", lower_bound, upper_bound, count)
+		fmt.Printf("[%10d, %10d) %9d\n", lowerBound, upperBound, count)
 	}
 }
 

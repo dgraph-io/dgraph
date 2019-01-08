@@ -241,8 +241,5 @@ func createCerts(opt options) error {
 	if err := createNodePair(opt); err != nil {
 		return err
 	}
-	if err := createClientPair(opt); err != nil {
-		return err
-	}
-	return nil
+	return createClientPair(opt)
 }

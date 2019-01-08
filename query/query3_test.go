@@ -660,7 +660,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	ctx := context.WithValue(defaultContext(), "debug", "true")
+	ctx := context.WithValue(defaultContext(), DebugKey, "true")
 	buf, _ := processToFastJsonCtxVars(t, query, ctx, nil)
 
 	var mp map[string]interface{}
@@ -704,7 +704,7 @@ func TestDebug3(t *testing.T) {
 			}
 		}
 	`
-	ctx := context.WithValue(defaultContext(), "debug", "true")
+	ctx := context.WithValue(defaultContext(), DebugKey, "true")
 	buf, err := processToFastJsonCtxVars(t, query, ctx, nil)
 
 	require.NoError(t, err)

@@ -106,12 +106,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 						_, seen := reachMap[key] // Combine fromUID here.
 						if seen {
 							return false
-						} else {
-							// Mark this edge as taken. We'd disallow this edge later.
-							reachMap[key] = struct{}{}
-							numEdges++
-							return true
 						}
+						// Mark this edge as taken. We'd disallow this edge later.
+						reachMap[key] = struct{}{}
+						numEdges++
+						return true
 					})
 				}
 			}
