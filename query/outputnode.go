@@ -256,7 +256,6 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				cur.encode(out)
 				if cnt != 1 || (cur.isChild || cur.list) {
 					out.WriteRune(']')
-					inArray = false
 				}
 				break
 			}

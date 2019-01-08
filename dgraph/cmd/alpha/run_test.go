@@ -502,7 +502,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	_, err = runQuery(q1)
 	require.Error(t, err)
 }
 
@@ -590,7 +590,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	_, err = runQuery(q1)
 	require.Error(t, err)
 }
 
@@ -686,6 +686,7 @@ func TestJsonMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
+	require.NoError(t, err)
 	q1Result := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
 	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
@@ -738,6 +739,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
+	require.NoError(t, err)
 	var q1Result struct {
 		Data struct {
 			Q []map[string]interface{} `json:"q"`

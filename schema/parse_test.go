@@ -80,7 +80,7 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
 
-	typ, err = State().TypeOf("agea")
+	_, err = State().TypeOf("agea")
 	require.Error(t, err)
 }
 
