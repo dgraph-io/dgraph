@@ -456,10 +456,17 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 
 	if Config.StrictMutations {
 		for _, edge := range m.Edges {
-			if _, create := groups().GetTablet(edge.Attr); create {
-				return tctx, x.Errorf("schema not defined for predicate: %s")
+			fmt.Fprintf(os.Stderr, "MUTATE_OVER_NETWORK: %s\n", edge.Attr)
+			if groups().GetTablet(edge.Attr) == nil {
+				tablet := groups().TabletNoAdd(edge.Attr)
+				if tablet == nil {
+					return tctx, x.Errorf("Error looking up tablet: %s")
+				}
+				if groups().ServesGroup(tablet.GroupId) {
+					fmt.Fprintf(os.Stderr, "MUTATE_OVER_NETWORK: created new tablet '%s'\n", edge.Attr)
+					return tctx, x.Errorf("Schema not defined for predicate: %s", edge.Attr)
+				}
 			}
-			fmt.Fprintf(os.Stderr, "MUTATE_OVER_NETWORK: found tablet for %s\n", edge.Attr)
 		}
 	}
 
@@ -529,6 +536,17 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	}
 	if !groups().ServesGroup(m.GroupId) {
 		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
+	}
+
+	if Config.StrictMutations {
+		for _, edge := range m.Edges {
+			fmt.Fprintf(os.Stderr, "MUTATE: %s\n", edge.Attr)
+			if tablet := groups().GetTablet(edge.Attr); tablet == nil {
+				fmt.Fprintf(os.Stderr, "MUTATE: undefined tablet '%s'\n", edge.Attr)
+				return txnCtx, x.Errorf("Schema not defined for predicate: %s")
+			}
+			fmt.Fprintf(os.Stderr, "MUTATE: found tablet for %s\n", edge.Attr)
+		}
 	}
 
 	node := groups().Node

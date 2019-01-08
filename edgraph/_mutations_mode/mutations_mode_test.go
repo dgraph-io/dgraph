@@ -29,10 +29,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Tests in this file use an externally-run Dgraph cluster for testing that is started with:
-//
-// $ docker-compose -f docker-compose.yml -f docker-compose-mutations-mode.yml up \
-//                  --force-recreate
+// Tests in this file require a cluster running with the --mutations=<mode> option.
 
 const disallowModeAlpha = "localhost:9180"
 const strictModeAlphaGroup1 = "localhost:9182"
@@ -42,7 +39,6 @@ func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testin
 	return func(t *testing.T) {
 		dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 		fn(t, dg)
-		//time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -69,7 +65,6 @@ func mutateNewDisallowed(t *testing.T, dg *dgo.Dgraph) {
 		`),
 	})
 
-	require.NoError(t, txn.Commit(ctx))
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
@@ -84,7 +79,6 @@ func mutateNewDisallowed2(t *testing.T, dg *dgo.Dgraph) {
 		`),
 	})
 
-	//require.NoError(t, txn.Discard(ctx))
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "schema not defined for predicate")
 }
@@ -130,7 +124,7 @@ func mutateExistingDisallowed(t *testing.T, dg *dgo.Dgraph) {
 		`),
 	})
 
-	require.NoError(t, txn.Commit(ctx))
+	require.NoError(t, txn.Discard(ctx))
 	require.Error(t, err)
 	require.Contains(t, strings.ToLower(err.Error()), "no mutations allowed")
 }
@@ -163,7 +157,7 @@ func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, err)
 }
 
-/*func TestMutationsDisallow(t *testing.T) {
+func TestMutationsDisallow(t *testing.T) {
 	conn, err := grpc.Dial(disallowModeAlpha, grpc.WithInsecure())
 	x.Check(err)
 	defer conn.Close()
@@ -176,7 +170,7 @@ func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
 		runOn(conn, addPredicateDisallowed))
 	t.Run("disallow mutate existing predicate in no mutations mode",
 		runOn(conn, mutateExistingDisallowed))
-}*/
+}
 
 func TestMutationsStrict(t *testing.T) {
 	conn1, err := grpc.Dial(strictModeAlphaGroup1, grpc.WithInsecure())
@@ -195,16 +189,16 @@ func TestMutationsStrict(t *testing.T) {
 		runOn(conn1, mutateNewDisallowed2))
 	t.Run("disallow group2 mutate new predicate in strict mutations mode",
 		runOn(conn2, mutateNewDisallowed2))
-	//t.Run("allow group1 add predicate in strict mutations mode",
-	//	runOn(conn1, addPredicateAllowed1))
-	//t.Run("allow group2 add predicate in strict mutations mode",
-	//	runOn(conn2, addPredicateAllowed2))
-	//t.Run("allow group1 mutate group1 predicate in strict mutations mode",
-	//	runOn(conn1, mutateExistingAllowed1))
-	//t.Run("allow group2 mutate group1 predicate in strict mutations mode",
-	//	runOn(conn2, mutateExistingAllowed1))
-	//t.Run("allow group1 mutate group2 predicate in strict mutations mode",
-	//	runOn(conn1, mutateExistingAllowed2))
-	//t.Run("allow group2 mutate group2 predicate in strict mutations mode",
-	//	runOn(conn2, mutateExistingAllowed2))
+	t.Run("allow group1 add predicate in strict mutations mode",
+		runOn(conn1, addPredicateAllowed1))
+	t.Run("allow group2 add predicate in strict mutations mode",
+		runOn(conn2, addPredicateAllowed2))
+	t.Run("allow group1 mutate group1 predicate in strict mutations mode",
+		runOn(conn1, mutateExistingAllowed1))
+	t.Run("allow group2 mutate group1 predicate in strict mutations mode",
+		runOn(conn2, mutateExistingAllowed1))
+	t.Run("allow group1 mutate group2 predicate in strict mutations mode",
+		runOn(conn1, mutateExistingAllowed2))
+	t.Run("allow group2 mutate group2 predicate in strict mutations mode",
+		runOn(conn2, mutateExistingAllowed2))
 }
