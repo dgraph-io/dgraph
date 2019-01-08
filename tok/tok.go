@@ -21,7 +21,6 @@ import (
 	"plugin"
 	"time"
 
-	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 
@@ -344,9 +343,11 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
 	}
-	var hash [8]byte
-	binary.BigEndian.PutUint64(hash[:], farm.Hash64([]byte(term)))
-	return []string{string(hash[:])}, nil
+	hash := x.Hash256([]byte(term))
+	if len(hash) == 0 {
+		return nil, x.Errorf("Hash tokenizer failed to create hash")
+	}
+	return []string{string(hash)}, nil
 }
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }
