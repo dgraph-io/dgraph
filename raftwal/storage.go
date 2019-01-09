@@ -37,6 +37,7 @@ import (
 type localCache struct {
 	sync.RWMutex
 	firstIndex uint64
+	lastIndex  uint64
 	snap       pb.Snapshot
 }
 
@@ -50,6 +51,12 @@ func (c *localCache) first() uint64 {
 	c.RLock()
 	defer c.RUnlock()
 	return c.firstIndex
+}
+
+func (c *localCache) last() uint64 {
+	c.RLock()
+	defer c.RUnlock()
+	return c.lastIndex
 }
 
 func (c *localCache) setSnapshot(s pb.Snapshot) {
@@ -267,7 +274,9 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 // TODO: Serve this from cache.
 func (w *DiskStorage) LastIndex() (uint64, error) {
 	atomic.AddUint64(&w.numLast, 1)
-
+	if l := w.cache.last(); l > 0 {
+		return l, nil
+	}
 	return w.seekEntry(nil, math.MaxUint64, true)
 }
 
@@ -622,7 +631,13 @@ func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) erro
 	if err := w.setSnapshot(batch, snap); err != nil {
 		return err
 	}
-	return batch.Flush()
+	if err := batch.Flush(); err != nil {
+		return err
+	}
+	w.cache.Lock()
+	w.cache.lastIndex = es[len(es)-1].Index
+	w.cache.Unlock()
+	return nil
 }
 
 // Append the new entries to storage.
