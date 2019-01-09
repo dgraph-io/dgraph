@@ -128,7 +128,7 @@ type Counter struct {
 }
 
 // handleError inspects errors and terminates if the errors are non-recoverable.
-// A gRPC code is Internal if there is an unforseen issue that needs attention.
+// A gRPC code is Internal if there is an unforeseen issue that needs attention.
 // A gRPC code is Unavailable when we can't possibly reach the remote server, most likely the
 // server expects TLS and our certificate does not match or the host name is not verified. When
 // the node certificate is created the name much match the request host name. e.g., localhost not
