@@ -32,7 +32,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -41,17 +40,27 @@ func TestNodes(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
 			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
+			require.NoError(t, err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 			fn(t, dg)
 		}
 	}
 
-	t.Run("setup test data", wrap(NodesSetup))
-	t.Run("move tablets from 3", wrap(NodesMoveTablets3))
-	t.Run("test query 1", wrap(NodesTestQuery))
-	t.Run("move tablets from 2", wrap(NodesMoveTablets2))
-	t.Run("test query 2", wrap(NodesTestQuery))
+	tests := []struct {
+		name string
+		fn   func(*testing.T, *dgo.Dgraph)
+	}{
+		{name: "setup test data", fn: NodesSetup},
+		{name: "move tablets from 3", fn: NodesMoveTablets3},
+		{name: "test query 1", fn: NodesTestQuery},
+		{name: "move tablets from 2", fn: NodesMoveTablets2},
+		{name: "test query 2", fn: NodesTestQuery},
+	}
+	for _, tc := range tests {
+		if !t.Run(tc.name, wrap(tc.fn)) {
+			break
+		}
+	}
 	t.Run("cleanup", wrap(NodesCleanup))
 }
 
@@ -65,11 +74,11 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: string(schema)}))
 
 	fp, err := os.Open(`data/goldendata_export.rdf.gz`)
-	x.Check(err)
+	require.NoError(t, err)
 	defer fp.Close()
 
 	gz, err := gzip.NewReader(fp)
-	x.Check(err)
+	require.NoError(t, err)
 	defer gz.Close()
 
 	var (
@@ -84,7 +93,7 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 			if err == io.EOF {
 				break
 			}
-			x.Check(err)
+			require.NoError(t, err)
 		}
 		bb.Write(b)
 		cnt++
@@ -93,7 +102,7 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 				CommitNow: true,
 				SetNquads: bb.Bytes(),
 			})
-			x.Check(err)
+			require.NoError(t, err)
 			bb.Reset()
 		}
 	}
@@ -125,11 +134,27 @@ func getState() (*response, error) {
 		return nil, err
 	}
 
+	if bytes.Contains(b, []byte("Error")) {
+		return nil, fmt.Errorf("Failed to get state: %s", string(b))
+	}
+
 	var st response
 	if err := json.Unmarshal(b, &st); err != nil {
 		return nil, err
 	}
 	return &st, nil
+}
+
+func getError(rc io.ReadCloser) error {
+	defer rc.Close()
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return fmt.Errorf("Read failed: %v", err)
+	}
+	if bytes.Contains(b, []byte("Error")) {
+		return fmt.Errorf("%s", string(b))
+	}
+	return nil
 }
 
 func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
@@ -140,7 +165,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=2", pred)
 		resp, err := http.Get(url)
 		require.NoError(t, err)
-		resp.Body.Close()
+		require.NoError(t, getError(resp.Body))
 		time.Sleep(time.Second)
 	}
 
@@ -153,7 +178,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := http.Get("http://localhost:6080/removeNode?group=3&id=3")
 	require.NoError(t, err)
-	resp.Body.Close()
+	require.NoError(t, getError(resp.Body))
 
 	state2, err = getState()
 	require.NoError(t, err)
@@ -171,7 +196,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=1", pred)
 		resp, err := http.Get(url)
 		require.NoError(t, err)
-		resp.Body.Close()
+		require.NoError(t, getError(resp.Body))
 		time.Sleep(time.Second)
 	}
 
@@ -184,7 +209,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := http.Get("http://localhost:6080/removeNode?group=2&id=2")
 	require.NoError(t, err)
-	resp.Body.Close()
+	require.NoError(t, getError(resp.Body))
 
 	state2, err = getState()
 	require.NoError(t, err)
@@ -196,31 +221,31 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 
 func NodesTestQuery(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().Query(context.Background(), `
-	{
-	q(func:anyofterms(name@en, "good bad"), first: 5) {
-		name@en
-	}
-	}`)
+  {
+  q(func:anyofterms(name@en, "good bad"), first: -5) {
+    name@en
+  }
+  }`)
 	require.NoError(t, err)
 
 	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"name@en": "Such Good People"
-			},
-			{
-				"name@en": "You will come good"
-			},
-			{
-				"name@en": "A Good Match"
-			},
-			{
-				"name@en": "A Good Wife"
-			},
-			{
-				"name@en": "Good"
-			}
-		]
-	}`, string(resp.GetJson()))
+  {
+    "q": [
+      {
+        "name@en": "Good Grief"
+      },
+      {
+        "name@en": "Half Good Killer"
+      },
+      {
+        "name@en": "Bad Friend"
+      },
+      {
+        "name@en": "Ace of Spades: Bad Destiny"
+      },
+      {
+        "name@en": "Bad Girls 6"
+      }
+    ]
+  }`, string(resp.GetJson()))
 }
