@@ -22,8 +22,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types"
@@ -239,7 +237,6 @@ func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
-		glog.Infof("running FacetFor with facetVal: [%s]", facetVal)
 		facet, err := facets.FacetFor(facetKey, facetVal)
 		if err != nil {
 			return err

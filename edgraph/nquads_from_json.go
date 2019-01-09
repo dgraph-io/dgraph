@@ -23,8 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/types"
@@ -359,7 +357,6 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 	}
 
-	glog.Infof("parsing facets from %+v with prefix %s", m, parentPred+query.FacetDelimeter)
 	fts, err := parseFacets(m, parentPred+query.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
