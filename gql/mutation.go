@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ErrInvalidUID = errors.New("UID has to be greater than one.")
+	ErrInvalidUID = errors.New("uid has to be greater than one")
 )
 
 // Mutation stores the strings corresponding to set and delete operations.

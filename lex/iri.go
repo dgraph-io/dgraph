@@ -21,16 +21,16 @@ import (
 	"fmt"
 )
 
-func LexIRIRef(l *Lexer, styp ItemType) error {
+func IRIRef(l *Lexer, styp ItemType) error {
 	l.Ignore() // ignore '<'
 	l.AcceptRunRec(IsIRIChar)
 	l.Emit(styp) // will emit without '<' and '>'
 	r := l.Next()
 	if r == EOF {
-		return errors.New("Unexpected end of IRI.")
+		return errors.New("unexpected end of IRI")
 	}
 	if r != '>' {
-		return fmt.Errorf("Unexpected character %q while parsing IRI", r)
+		return fmt.Errorf("unexpected character %q while parsing IRI", r)
 	}
 	l.Ignore() // ignore '>'
 	return nil

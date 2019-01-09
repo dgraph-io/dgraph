@@ -45,11 +45,11 @@ import (
 var (
 	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
 	// In such a case, retry.
-	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
+	ErrRetry = fmt.Errorf("temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = fmt.Errorf("No value found")
-	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
-	ErrStopIteration = errors.New("Stop iteration")
+	ErrNoValue       = fmt.Errorf("no value found")
+	ErrInvalidTxn    = fmt.Errorf("invalid transaction")
+	ErrStopIteration = errors.New("stop iteration")
 	emptyPosting     = &pb.Posting{}
 )
 

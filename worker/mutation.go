@@ -39,7 +39,7 @@ import (
 
 var (
 	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
-	errPredicateMoving = x.Errorf("Predicate is being moved, please retry later")
+	errPredicateMoving = x.Errorf("Predicate is being moved. Please retry later")
 )
 
 func isStarAll(v []byte) bool {

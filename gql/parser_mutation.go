@@ -31,7 +31,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	var mu api.Mutation
 
 	if !it.Next() {
-		return nil, errors.New("Invalid mutation.")
+		return nil, errors.New("invalid mutation")
 	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {

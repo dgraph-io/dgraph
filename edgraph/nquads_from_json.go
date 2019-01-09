@@ -400,7 +400,7 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	}
 
 	if len(list) == 0 && len(ms) == 0 {
-		return nil, fmt.Errorf("Couldn't parse json as a map or an array.")
+		return nil, fmt.Errorf("couldn't parse json as a map or an array")
 	}
 
 	var idx int

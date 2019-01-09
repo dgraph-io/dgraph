@@ -528,7 +528,8 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
-		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
+		return &api.TxnContext{}, fmt.Errorf(
+			"startTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
 

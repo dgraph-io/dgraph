@@ -109,7 +109,7 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 	}
 
 	if s.nextLeaseId == 0 || s.nextTxnTs == 0 {
-		return nil, errors.New("Server not initialized.")
+		return nil, errors.New("server not initialized")
 	}
 
 	var maxLease, available uint64

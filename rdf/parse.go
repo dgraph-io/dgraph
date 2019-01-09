@@ -31,7 +31,7 @@ import (
 
 var (
 	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
-	ErrInvalidUID = errors.New("UID has to be greater than zero.")
+	ErrInvalidUID = errors.New("uid has to be greater than zero")
 )
 
 // Function to do sanity check for subject, predicate, object and label strings.

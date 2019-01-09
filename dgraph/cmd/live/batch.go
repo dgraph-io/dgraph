@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"strings"
 	"sync"
@@ -56,18 +55,6 @@ type batchMutationOptions struct {
 	Ctx context.Context
 }
 
-var defaultOptions = batchMutationOptions{
-	Size:          100,
-	Pending:       100,
-	PrintCounters: false,
-	MaxRetries:    math.MaxUint32,
-}
-
-type uidProvider struct {
-	zero pb.ZeroClient
-	ctx  context.Context
-}
-
 // loader is the data structure held by the user program for all interactions with the Dgraph
 // server.  After making grpc connection a new Dgraph is created by function NewDgraphClient.
 type loader struct {
@@ -95,7 +82,12 @@ type loader struct {
 	zeroconn *grpc.ClientConn
 }
 
-func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+type uidProvider struct {
+	zero pb.ZeroClient
+	ctx  context.Context
+}
+
+func (p *uidProvider) ReserveUidRange() (uint64, uint64, error) {
 	factor := time.Second
 	for {
 		assignedIds, err := p.zero.AssignUids(context.Background(), &pb.Num{Val: 1000})

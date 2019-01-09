@@ -111,7 +111,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
 		// We can't store NaN as it is because it serializes into invalid JSON.
 		if math.IsNaN(floatVal) {
-			return nil, api.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN.")
+			return nil, api.Facet_FLOAT, fmt.Errorf("got invalid value: NaN")
 		}
 
 		return floatVal, api.Facet_FLOAT, nil

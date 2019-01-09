@@ -164,7 +164,7 @@ Loop:
 
 // Assumes that caller has consumed initial '<'
 func lexIRIRef(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
-	if err := lex.LexIRIRef(l, styp); err != nil {
+	if err := lex.IRIRef(l, styp); err != nil {
 		return l.Errorf(err.Error())
 	}
 	return sfn

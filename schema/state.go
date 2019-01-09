@@ -55,7 +55,7 @@ Loop:
 		case r == ',':
 			l.Emit(itemComma)
 		case r == '<':
-			if err := lex.LexIRIRef(l, itemText); err != nil {
+			if err := lex.IRIRef(l, itemText); err != nil {
 				return l.Errorf("Invalid schema: %v", err)
 			}
 		case r == '{':

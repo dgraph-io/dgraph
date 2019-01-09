@@ -90,7 +90,7 @@ func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 	case DateTimeID, IntID, FloatID, StringID, DefaultID:
 		// Don't do anything, we can sort values of this type.
 	default:
-		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
+		return fmt.Errorf("value of type: %s isn't sortable", typ.Name())
 	}
 	var toBeSorted sort.Interface
 	b := sortBase{v, desc, ul, l}
