@@ -36,8 +36,7 @@ func TestQuery(t *testing.T) {
 			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
 			x.Check(err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-			require.NoError(t, dg.Alter(
-				context.Background(), &api.Operation{DropAll: true}))
+			require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
 		}
 	}
@@ -47,6 +46,11 @@ func TestQuery(t *testing.T) {
 	t.Run("schema predicate names", wrap(SchemaQueryTestPredicate1))
 	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
 	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
+	t.Run("cleanup", wrap(SchemaQueryCleanup))
+}
+
+func SchemaQueryCleanup(t *testing.T, c *dgo.Dgraph) {
+	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
@@ -67,44 +71,44 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	resp, err := txn.Query(ctx, `schema {}`)
 	require.NoError(t, err)
 	js := `
-	{
-		"schema": [
-			{
-				"predicate": "_predicate_",
-				"type": "string",
-				"list": true
-			},
-			{
-				"predicate": "dgraph.group.acl",
-				"type": "string"
-			},
-			{
-				"predicate": "dgraph.password",
-				"type": "password"
-			},
-			{
-				"predicate": "dgraph.user.group",
-				"type": "uid",
-				"reverse": true
-			},
-			{
-				"predicate": "dgraph.xid",
-				"type": "string",
-				"index": true,
-				"tokenizer": [
-					"exact"
-				]
-			},
-			{
-				"predicate": "name",
-				"type": "string",
-				"index": true,
-				"tokenizer": [
-					"exact"
-				]
-			}
-		]
-	}`
+  {
+    "schema": [
+      {
+        "predicate": "_predicate_",
+        "type": "string",
+        "list": true
+      },
+      {
+        "predicate": "dgraph.group.acl",
+        "type": "string"
+      },
+      {
+        "predicate": "dgraph.password",
+        "type": "password"
+      },
+      {
+        "predicate": "dgraph.user.group",
+        "type": "uid",
+        "reverse": true
+      },
+      {
+        "predicate": "dgraph.xid",
+        "type": "string",
+        "index": true,
+        "tokenizer": [
+          "exact"
+        ]
+      },
+      {
+        "predicate": "name",
+        "type": "string",
+        "index": true,
+        "tokenizer": [
+          "exact"
+        ]
+      }
+    ]
+  }`
 	CompareJSON(t, js, string(resp.Json))
 }
 
@@ -113,20 +117,20 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
-			name: string @index(exact) .
-			age: int .
-		`,
+      name: string @index(exact) .
+      age: int .
+    `,
 	}))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
-			_:p1 <name> "srfrog" .
-			_:p1 <age> "25"^^<xs:int> .
-			_:p2 <name> "mary" .
-			_:p2 <age> "22"^^<xs:int> .
-			_:p1 <friends> _:p2 .
-		`),
+      _:p1 <name> "srfrog" .
+      _:p1 <age> "25"^^<xs:int> .
+      _:p2 <name> "mary" .
+      _:p2 <age> "22"^^<xs:int> .
+      _:p1 <friends> _:p2 .
+    `),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
@@ -135,34 +139,34 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	resp, err := txn.Query(ctx, `schema {name}`)
 	require.NoError(t, err)
 	js := `
-	{
-		"schema": [
-			{
-				"predicate": "_predicate_"
-			},
-			{
-				"predicate": "dgraph.group.acl"
-			},
-			{
-				"predicate": "dgraph.password"
-			},
-			{
-				"predicate": "dgraph.user.group"
-			},
-			{
-				"predicate": "dgraph.xid"
-			},
-			{
-				"predicate": "friends"
-			},
-			{
-				"predicate": "name"
-			},
-			{
-				"predicate": "age"
-			}
-		]
-	}`
+  {
+    "schema": [
+      {
+        "predicate": "_predicate_"
+      },
+      {
+        "predicate": "dgraph.group.acl"
+      },
+      {
+        "predicate": "dgraph.password"
+      },
+      {
+        "predicate": "dgraph.user.group"
+      },
+      {
+        "predicate": "dgraph.xid"
+      },
+      {
+        "predicate": "friends"
+      },
+      {
+        "predicate": "name"
+      },
+      {
+        "predicate": "age"
+      }
+    ]
+  }`
 	CompareJSON(t, js, string(resp.Json))
 }
 
@@ -184,18 +188,18 @@ func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
 	resp, err := txn.Query(ctx, `schema(pred: [name]) {}`)
 	require.NoError(t, err)
 	js := `
-	{
-		"schema": [
-			{
-				"predicate": "name",
-				"type": "string",
-				"index": true,
-				"tokenizer": [
-					"exact"
-				]
-			}
-		]
-	}`
+  {
+    "schema": [
+      {
+        "predicate": "name",
+        "type": "string",
+        "index": true,
+        "tokenizer": [
+          "exact"
+        ]
+      }
+    ]
+  }`
 	CompareJSON(t, js, string(resp.Json))
 }
 
@@ -204,40 +208,41 @@ func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
-			name: string @index(exact) .
-			age: int .
-		`,
+      name: string @index(exact) .
+      age: int .
+    `,
 	}))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
-			_:p1 <name> "srfrog" .
-			_:p1 <age> "25"^^<xs:int> .
-			_:p2 <name> "mary" .
-			_:p2 <age> "22"^^<xs:int> .
-			_:p1 <friends> _:p2 .
-		`),
+      _:p1 <name> "srfrog" .
+      _:p1 <age> "25"^^<xs:int> .
+      _:p2 <name> "mary" .
+      _:p2 <age> "22"^^<xs:int> .
+      _:p1 <friends> _:p2 .
+    `),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
 	txn = c.NewTxn()
-	resp, err := txn.Query(ctx,
-		`schema(pred: [age]) {
-			name
-			type
-		}`)
+	resp, err := txn.Query(ctx, `
+    schema(pred: [age]) {
+      name
+      type
+    }
+  `)
 	require.NoError(t, err)
 	js := `
-	{
-		"schema": [
-			{
-				"predicate": "age",
-				"type": "int"
-			}
-		]
-	}`
+  {
+    "schema": [
+      {
+        "predicate": "age",
+        "type": "int"
+      }
+    ]
+  }`
 	CompareJSON(t, js, string(resp.Json))
 }
 
@@ -271,43 +276,43 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	require.NotNil(t, m["extensions"])
 
 	js := `
-	{
-		"schema": [
-			{
-				"predicate": "_predicate_",
-				"type": "string",
-				"list": true
-			},
-			{
-				"predicate": "dgraph.group.acl",
-				"type": "string"
-			},
-			{
-				"predicate": "dgraph.password",
-				"type": "password"
-			},
-			{
-				"predicate": "dgraph.user.group",
-				"type": "uid",
-				"reverse": true
-			},
-			{
-				"predicate": "dgraph.xid",
-				"type": "string",
-				"index": true,
-				"tokenizer": [
-					"exact"
-				]
-			},
-			{
-				"predicate": "name",
-				"type": "string",
-				"index": true,
-				"tokenizer": [
-					"exact"
-				]
-			}
-		]
-	}`
+  {
+    "schema": [
+      {
+        "predicate": "_predicate_",
+        "type": "string",
+        "list": true
+      },
+      {
+        "predicate": "dgraph.group.acl",
+        "type": "string"
+      },
+      {
+        "predicate": "dgraph.password",
+        "type": "password"
+      },
+      {
+        "predicate": "dgraph.user.group",
+        "type": "uid",
+        "reverse": true
+      },
+      {
+        "predicate": "dgraph.xid",
+        "type": "string",
+        "index": true,
+        "tokenizer": [
+          "exact"
+        ]
+      },
+      {
+        "predicate": "name",
+        "type": "string",
+        "index": true,
+        "tokenizer": [
+          "exact"
+        ]
+      }
+    ]
+  }`
 	CompareJSON(t, js, string(m["data"]))
 }
