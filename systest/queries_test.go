@@ -44,6 +44,9 @@ func TestQuery(t *testing.T) {
 
 	t.Run("schema response", wrap(SchemaQueryTest))
 	t.Run("schema response http", wrap(SchemaQueryTestHTTP))
+	t.Run("schema predicate names", wrap(SchemaQueryTestPredicate1))
+	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
+	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
 }
 
 func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
@@ -99,6 +102,139 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 				"tokenizer": [
 					"exact"
 				]
+			}
+		]
+	}`
+	CompareJSON(t, js, string(resp.Json))
+}
+
+func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(exact) .
+			age: int .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:p1 <name> "srfrog" .
+			_:p1 <age> "25"^^<xs:int> .
+			_:p2 <name> "mary" .
+			_:p2 <age> "22"^^<xs:int> .
+			_:p1 <friends> _:p2 .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, `schema {name}`)
+	require.NoError(t, err)
+	js := `
+	{
+		"schema": [
+			{
+				"predicate": "_predicate_"
+			},
+			{
+				"predicate": "dgraph.group.acl"
+			},
+			{
+				"predicate": "dgraph.password"
+			},
+			{
+				"predicate": "dgraph.user.group"
+			},
+			{
+				"predicate": "dgraph.xid"
+			},
+			{
+				"predicate": "friends"
+			},
+			{
+				"predicate": "name"
+			},
+			{
+				"predicate": "age"
+			}
+		]
+	}`
+	CompareJSON(t, js, string(resp.Json))
+}
+
+func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `name: string @index(exact) .`,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`_:n1 <name> "srfrog" .`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, `schema(pred: [name]) {}`)
+	require.NoError(t, err)
+	js := `
+	{
+		"schema": [
+			{
+				"predicate": "name",
+				"type": "string",
+				"index": true,
+				"tokenizer": [
+					"exact"
+				]
+			}
+		]
+	}`
+	CompareJSON(t, js, string(resp.Json))
+}
+
+func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(exact) .
+			age: int .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:p1 <name> "srfrog" .
+			_:p1 <age> "25"^^<xs:int> .
+			_:p2 <name> "mary" .
+			_:p2 <age> "22"^^<xs:int> .
+			_:p1 <friends> _:p2 .
+		`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx,
+		`schema(pred: [age]) {
+			name
+			type
+		}`)
+	require.NoError(t, err)
+	js := `
+	{
+		"schema": [
+			{
+				"predicate": "age",
+				"type": "int"
 			}
 		]
 	}`
