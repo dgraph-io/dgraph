@@ -262,10 +262,10 @@ func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Sna
 
 func (n *Node) PastLife() (uint64, bool, error) {
 	var (
-		sp raftpb.Snapshot
-		idx uint64
+		sp      raftpb.Snapshot
+		idx     uint64
 		restart bool
-		rerr error
+		rerr    error
 	)
 	sp, rerr = n.Store.Snapshot()
 	if rerr != nil {
