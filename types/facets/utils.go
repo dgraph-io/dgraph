@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"unicode"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -134,30 +136,40 @@ func FacetFor(key, val string) (*api.Facet, error) {
 		return nil, err
 	}
 
-	// convert facet val interface{} to binary
-	tid, err := TypeIDFor(&api.Facet{ValType: vt})
+	facet, err := ConvertFacetValueToBinary(key, v, vt)
 	if err != nil {
 		return nil, err
 	}
 
-	fVal := &types.Val{Tid: types.BinaryID}
-	if err = types.Marshal(types.Val{Tid: tid, Value: v}, fVal); err != nil {
+	glog.Infof("facet value type:%v", vt)
+	if vt == api.Facet_STRING {
+		// tokenize val.
+		facet.Tokens, err = tok.GetTermTokens([]string{v.(string)})
+		if err == nil {
+			sort.Strings(facet.Tokens)
+		}
+	}
+	return facet, err
+}
+
+func ConvertFacetValueToBinary(key string, value interface{}, sourceFacetType api.Facet_ValType) (
+	*api.Facet, error) {
+	// convert facet val interface{} to binary
+	sourceTypeId, err := TypeIDFor(&api.Facet{ValType: sourceFacetType})
+	if err != nil {
 		return nil, err
 	}
 
-	fval, ok := fVal.Value.([]byte)
+	targetVal := &types.Val{Tid: types.BinaryID}
+	if err = types.Marshal(types.Val{Tid: sourceTypeId, Value: value}, targetVal); err != nil {
+		return nil, err
+	}
+
+	targetValueBytes, ok := targetVal.Value.([]byte)
 	if !ok {
 		return nil, x.Errorf("Error while marshalling types.Val into binary.")
 	}
-	res := &api.Facet{Key: key, Value: fval, ValType: vt}
-	if vt == api.Facet_STRING {
-		// tokenize val.
-		res.Tokens, err = tok.GetTermTokens([]string{v.(string)})
-		if err == nil {
-			sort.Strings(res.Tokens)
-		}
-	}
-	return res, err
+	return &api.Facet{Key: key, Value: targetValueBytes, ValType: sourceFacetType}, nil
 }
 
 // SameFacets returns whether two facets are same or not.

@@ -23,12 +23,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
@@ -39,7 +41,6 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 	}
 
 	var facetsForPred []*api.Facet
-	var fv interface{}
 	for fname, facetVal := range m {
 		if facetVal == nil {
 			continue
@@ -48,62 +49,47 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 			continue
 		}
 
-		if len(fname) <= len(prefix) {
-			return nil, x.Errorf("Facet key is invalid: %s", fname)
-		}
-		// Prefix includes colon, predicate:
-		f := &api.Facet{Key: fname[len(prefix):]}
+		key := fname[len(prefix):]
+		var jsonValue interface{}
+		var valueType api.Facet_ValType
 		switch v := facetVal.(type) {
 		case string:
-			if t, err := types.ParseTime(v); err == nil {
-				f.ValType = api.Facet_DATETIME
-				fv = t
-			} else {
-				f.ValType = api.Facet_STRING
-				fv = v
+			facet, err := facets.FacetFor(key, strconv.Quote(v))
+			if err != nil {
+				return nil, err
 			}
+
+			// the FacetFor function already converts the value to binary
+			// so there is no need for the conversion again after the switch block
+			facetsForPred = append(facetsForPred, facet)
+			continue
 		case json.Number:
-			valn := facetVal.(json.Number)
-			if strings.Contains(valn.String(), ".") {
-				vf, err := valn.Float64()
-				if err != nil {
-					return nil, err
-				}
-				fv = vf
-				f.ValType = api.Facet_FLOAT
+			jsonNumber := facetVal.(json.Number)
+			if jsonFloat, err := jsonNumber.Float64(); err == nil {
+				jsonValue = jsonFloat
+				valueType = api.Facet_FLOAT
+			} else if jsonInt, err := jsonNumber.Int64(); err == nil {
+				jsonValue = jsonInt
+				valueType = api.Facet_INT
 			} else {
-				vi, err := valn.Int64()
-				if err != nil {
-					return nil, err
-				}
-				fv = vi
-				f.ValType = api.Facet_INT
+				return nil, fmt.Errorf("the json number is neither float64 nor int:%v",
+					jsonNumber)
 			}
 		case bool:
-			fv = v
-			f.ValType = api.Facet_BOOL
+			jsonValue = v
+			valueType = api.Facet_BOOL
 		default:
 			return nil, x.Errorf("Facet value for key: %s can only be string/float64/bool.",
 				fname)
 		}
 
 		// convert facet val interface{} to binary
-		tid, err := facets.TypeIDFor(&api.Facet{ValType: f.ValType})
+		binaryValueFacet, err := facets.ConvertFacetValueToBinary(key, jsonValue,
+			valueType)
 		if err != nil {
 			return nil, err
 		}
-
-		fVal := &types.Val{Tid: types.BinaryID}
-		if err := types.Marshal(types.Val{Tid: tid, Value: fv}, fVal); err != nil {
-			return nil, err
-		}
-
-		fval, ok := fVal.Value.([]byte)
-		if !ok {
-			return nil, x.Errorf("Error while marshalling types.Val into binary.")
-		}
-		f.Value = fval
-		facetsForPred = append(facetsForPred, f)
+		facetsForPred = append(facetsForPred, binaryValueFacet)
 	}
 
 	return facetsForPred, nil
@@ -373,6 +359,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 	}
 
+	glog.Infof("parsing facets from %+v with prefix %s", m, parentPred+query.FacetDelimeter)
 	fts, err := parseFacets(m, parentPred+query.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
