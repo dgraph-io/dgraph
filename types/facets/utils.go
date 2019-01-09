@@ -24,8 +24,6 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/golang/glog"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -141,7 +139,6 @@ func FacetFor(key, val string) (*api.Facet, error) {
 		return nil, err
 	}
 
-	glog.Infof("facet value type:%v", vt)
 	if vt == api.Facet_STRING {
 		// tokenize val.
 		facet.Tokens, err = tok.GetTermTokens([]string{v.(string)})

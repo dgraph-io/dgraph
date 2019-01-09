@@ -398,7 +398,6 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		}
 	}()
 
-	glog.Infof("assign uids with gmu.Set: %+v", gmu.Set)
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
 		return resp, err
@@ -677,7 +676,6 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	// parse facets and convert to the binary format so that
 	// a field of type datetime like "2017-01-01" can be correctly encoded in the
 	// marshaled binary format as done in the time.Marshal method
-	glog.Infof("validating facets")
 	if err := validateAndConvertFacets(res.Set); err != nil {
 		return nil, err
 	}
@@ -692,17 +690,14 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 }
 
 func validateAndConvertFacets(nquads []*api.NQuad) error {
-	glog.Infof("size of set:%v", len(nquads))
 	for _, m := range nquads {
 		encodedFacets := make([]*api.Facet, 0, len(m.Facets))
-		glog.Infof("size of facets:%v", len(m.Facets))
 		for _, f := range m.Facets {
 			// try to interpret the value as binary first
 			if _, err := facets.ValFor(f); err == nil {
 				glog.Infof("facet is interpreted as binary: %+v", f)
 				encodedFacets = append(encodedFacets, f)
 			} else {
-				glog.Infof("facet is encoded as string: %+v", f)
 				encodedFacet, err := facets.FacetFor(f.Key, string(f.Value))
 				if err != nil {
 					return err
