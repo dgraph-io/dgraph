@@ -22,6 +22,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types"
@@ -233,6 +235,7 @@ func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
+		glog.Infof("running FacetFor with facetVal: [%s]", facetVal)
 		facet, err := facets.FacetFor(facetKey, facetVal)
 		if err != nil {
 			return err
@@ -271,17 +274,17 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.TypeID{
-	"xs:password":        types.PasswordID,
-	"xs:string":          types.StringID,
-	"xs:date":            types.DateTimeID,
-	"xs:dateTime":        types.DateTimeID,
-	"xs:int":             types.IntID,
-	"xs:positiveInteger": types.IntID,
-	"xs:boolean":         types.BoolID,
-	"xs:double":          types.FloatID,
-	"xs:float":           types.FloatID,
-	"xs:base64Binary":    types.BinaryID,
-	"geo:geojson":        types.GeoID,
+	"xs:password":                                      types.PasswordID,
+	"xs:string":                                        types.StringID,
+	"xs:date":                                          types.DateTimeID,
+	"xs:dateTime":                                      types.DateTimeID,
+	"xs:int":                                           types.IntID,
+	"xs:positiveInteger":                               types.IntID,
+	"xs:boolean":                                       types.BoolID,
+	"xs:double":                                        types.FloatID,
+	"xs:float":                                         types.FloatID,
+	"xs:base64Binary":                                  types.BinaryID,
+	"geo:geojson":                                      types.GeoID,
 	"http://www.w3.org/2001/XMLSchema#string":          types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":        types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":            types.DateTimeID,
