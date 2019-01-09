@@ -38,8 +38,10 @@ import (
 
 var emptyCountParams countParams
 
-// IndexTokens return tokens, without the predicate prefix and index rune.
-func indexTokens(attr, lang string, src types.Val) ([]string, error) {
+// indexTokensforTokenizers return tokens, without the predicate prefix and
+// index rune, for specific tokenizers.
+func indexTokensForTokenizers(attr, lang string, tokenizers []tok.Tokenizer,
+	src types.Val) ([]string, error) {
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -52,9 +54,9 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Schema will know the mapping from attr to tokenizer.
+
 	var tokens []string
-	for _, it := range schema.State().Tokenizer(attr) {
+	for _, it := range tokenizers {
 		if it.Name() == "exact" && schemaType == types.StringID && len(sv.Value.(string)) > 100 {
 			// Exact index can only be applied for strings so we can safely try to convert Value to
 			// string.
@@ -70,15 +72,28 @@ func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 	return tokens, nil
 }
 
-// addIndexMutations adds mutation(s) for a single term, to maintain index.
-// t represents the original uid -> value edge.
+// indexTokens return tokens, without the predicate prefix and index rune, for
+// all tokenizers. This function is only being used in the tests as the code now
+// calls indexTokensForTokenizers with the complete list of tokenizers in cases
+// where the whole index needs to be rebuilt. This function is being kept for
+// convenience as manually getting the tokenizers in every test that need them
+// would add a lot of extra code.
+func indexTokens(attr, lang string, src types.Val) ([]string, error) {
+	// Get the complete list of tokenizers from the schema.
+	tokenizers := schema.State().Tokenizer(attr)
+	return indexTokensForTokenizers(attr, lang, tokenizers, src)
+}
+
+// addIndexMutationsForTokenizers adds mutation(s) for a single term, to
+// maintain the index, but only for the given tokenizers. t represents the
+// original uid -> value edge.
 // TODO - See if we need to pass op as argument as t should already have Op.
-func (txn *Txn) addIndexMutations(ctx context.Context, t *pb.DirectedEdge, p types.Val,
-	op pb.DirectedEdge_Op) error {
+func (txn *Txn) addIndexMutationsForTokenizers(ctx context.Context, tokenizers []tok.Tokenizer,
+	t *pb.DirectedEdge, p types.Val, op pb.DirectedEdge_Op) error {
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
-	tokens, err := indexTokens(attr, t.GetLang(), p)
+	tokens, err := indexTokensForTokenizers(attr, t.GetLang(), tokenizers, p)
 
 	if err != nil {
 		// This data is not indexable
@@ -98,6 +113,15 @@ func (txn *Txn) addIndexMutations(ctx context.Context, t *pb.DirectedEdge, p typ
 		}
 	}
 	return nil
+}
+
+// addIndexMutations adds mutation(s) for a single term, to maintain index,
+// for all tokenizers.
+func (txn *Txn) addIndexMutations(ctx context.Context, t *pb.DirectedEdge, p types.Val,
+	op pb.DirectedEdge_Op) error {
+	// Get the complete list of tokenizers from the schema.
+	tokenizers := schema.State().Tokenizer(t.Attr)
+	return txn.addIndexMutationsForTokenizers(ctx, tokenizers, t, p, op)
 }
 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
@@ -408,9 +432,24 @@ func deleteAllEntries(prefix []byte) error {
 	})
 }
 
+// deleteIndex deletes the index for the given attribute. All tokenizers are
+// deleted by this function.
 func deleteIndex(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
+	return deleteAllEntries(prefix)
+}
+
+// deleteIndexForTokenizer deletes the index for the given attribute and token.
+func deleteIndexForTokenizer(attr, tokenizerName string) error {
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	tokenizer, ok := tok.GetTokenizer(tokenizerName)
+	if !ok {
+		return fmt.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+	}
+	prefix = append(prefix, tokenizer.Identifier())
+
 	return deleteAllEntries(prefix)
 }
 
@@ -556,7 +595,13 @@ func (rb *IndexRebuild) Run(ctx context.Context) error {
 	return RebuildReverseEdges(ctx, rb)
 }
 
-func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
+type indexRebuildInfo struct {
+	op                  indexOp
+	tokenizersToDelete  []string
+	tokenizersToRebuild []string
+}
+
+func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexRebuildInfo {
 	x.AssertTruef(current != nil, "Current schema cannot be nil.")
 
 	if old == nil {
@@ -569,7 +614,9 @@ func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
 	// Index does not need to be rebuilt or deleted if the scheme directive
 	// did not require an index before and now.
 	if !currIndex && !prevIndex {
-		return indexNoop
+		return indexRebuildInfo{
+			op: indexNoop,
+		}
 	}
 
 	// Index only needs to be deleted if the schema directive changed and the
@@ -577,12 +624,20 @@ func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
 	// prevIndex since the previous if statement guarantees both values are
 	// different.
 	if !currIndex {
-		return indexDelete
+		return indexRebuildInfo{
+			op:                 indexDelete,
+			tokenizersToDelete: old.Tokenizer,
+		}
 	}
 
-	// Index needs to be rebuilt if the value types have changed.
+	// All tokenizers in the index need to be deleted and rebuilt if the value
+	// types have changed.
 	if currIndex && current.ValueType != old.ValueType {
-		return indexRebuild
+		return indexRebuildInfo{
+			op:                  indexRebuild,
+			tokenizersToDelete:  old.Tokenizer,
+			tokenizersToRebuild: current.Tokenizer,
+		}
 	}
 
 	// Index needs to be rebuilt if the tokenizers have changed
@@ -595,33 +650,74 @@ func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
 		currTokens[t] = true
 	}
 
+	// If the tokenizers are the same, nothing needs to be done.
 	if equal := reflect.DeepEqual(prevTokens, currTokens); equal {
-		return indexNoop
+		return indexRebuildInfo{
+			op: indexNoop,
+		}
 	}
-	return indexRebuild
+
+	// Else, the tokenizers from the old schema that do not exist in the schema
+	// need to be deleted and the tokenizers from the current schema that did
+	// not exist in the old one need to be built.
+	tokenizersToDelete := make([]string, 0)
+	for token := range prevTokens {
+		_, ok := currTokens[token]
+		if !ok {
+			tokenizersToDelete = append(tokenizersToDelete, token)
+		}
+	}
+	tokenizersToRebuild := make([]string, 0)
+	for token := range currTokens {
+		_, ok := prevTokens[token]
+		if !ok {
+			tokenizersToRebuild = append(tokenizersToRebuild, token)
+		}
+	}
+	return indexRebuildInfo{
+		op:                  indexRebuild,
+		tokenizersToDelete:  tokenizersToDelete,
+		tokenizersToRebuild: tokenizersToRebuild,
+	}
 }
 
 // RebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	// Exit early if indices do not need to be rebuilt.
-	op := needsIndexRebuild(rb.OldSchema, rb.CurrentSchema)
+	rebuildInfo := needsIndexRebuild(rb.OldSchema, rb.CurrentSchema)
 
-	if op == indexNoop {
+	if rebuildInfo.op == indexNoop {
 		return nil
 	}
 
-	glog.Infof("Deleting index for %s", rb.Attr)
-	if err := deleteIndex(rb.Attr); err != nil {
-		return err
+	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
+		rebuildInfo.tokenizersToDelete)
+	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
+		if err := deleteIndexForTokenizer(rb.Attr, tokenizer); err != nil {
+			return err
+		}
 	}
 
 	// Exit early if the index only neeed to be deleted and not rebuild.
-	if op == indexDelete {
+	if rebuildInfo.op == indexDelete {
 		return nil
 	}
 
-	glog.Infof("Rebuilding index for %s", rb.Attr)
+	glog.Infof("Rebuilding index for attr %s and tokenizers %s", rb.Attr,
+		rebuildInfo.tokenizersToRebuild)
+	// Before rebuilding, the existing index needs to be deleted.
+	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
+		if err := deleteIndexForTokenizer(rb.Attr, tokenizer); err != nil {
+			return err
+		}
+	}
+
+	tokenizers, err := tok.GetTokenizers(rebuildInfo.tokenizersToRebuild)
+	if err != nil {
+		return err
+	}
+
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
@@ -634,7 +730,8 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 			}
 
 			for {
-				err := txn.addIndexMutations(ctx, &edge, val, pb.DirectedEdge_SET)
+				err := txn.addIndexMutationsForTokenizers(ctx, tokenizers, &edge, val,
+					pb.DirectedEdge_SET)
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)

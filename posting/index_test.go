@@ -152,6 +152,13 @@ dob:dateTime @index(year) .
 friend:uid @reverse .
 	`
 
+const mutatedSchemaVal = `
+name:string @index(term) .
+name2:string .
+dob:dateTime @index(year) .
+friend:uid @reverse .
+	`
+
 // TODO(Txn): We can't read index key on disk if it was written in same txn.
 func TestTokensTable(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
@@ -237,13 +244,6 @@ func TestRebuildIndex(t *testing.T) {
 	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
-	{
-		txn := ps.NewTransactionAt(1, true)
-		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname21"), []byte("nothing")))
-		require.NoError(t, txn.Set(x.IndexKey("name2", "wrongname22"), []byte("nothing")))
-		require.NoError(t, txn.CommitAt(1, nil))
-	}
-
 	currentSchema, _ := schema.State().Get("name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
@@ -287,6 +287,60 @@ func TestRebuildIndex(t *testing.T) {
 	require.Len(t, uids2, 1)
 	require.EqualValues(t, 92, uids1[0])
 	require.EqualValues(t, 91, uids2[0])
+}
+
+func TestRebuildIndexWithDeletion(t *testing.T) {
+	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
+	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
+	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
+
+	currentSchema, _ := schema.State().Get("name2")
+	rb := IndexRebuild{
+		Attr:          "name2",
+		StartTs:       5,
+		OldSchema:     nil,
+		CurrentSchema: &currentSchema,
+	}
+	require.NoError(t, RebuildIndex(context.Background(), &rb))
+
+	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
+	require.NoError(t, schema.ParseBytes([]byte(mutatedSchemaVal), 1))
+	newSchema, _ := schema.State().Get("name2")
+	rb = IndexRebuild{
+		Attr:          "name2",
+		StartTs:       6,
+		OldSchema:     &currentSchema,
+		CurrentSchema: &newSchema,
+	}
+	require.NoError(t, RebuildIndex(context.Background(), &rb))
+
+	// Check index entries in data store.
+	txn := ps.NewTransactionAt(7, false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+	pk := x.ParsedKey{Attr: "name2"}
+	prefix := pk.IndexPrefix()
+	var idxKeys []string
+	var idxVals []*List
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		if item.UserMeta()&BitEmptyPosting == BitEmptyPosting {
+			continue
+		}
+		idxKeys = append(idxKeys, string(key))
+		l, err := GetNoStore(key)
+		require.NoError(t, err)
+		idxVals = append(idxVals, l)
+	}
+
+	// The index keys should not be available anymore.
+	require.Len(t, idxKeys, 0)
+	require.Len(t, idxVals, 0)
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
@@ -346,30 +400,49 @@ func TestRebuildReverseEdges(t *testing.T) {
 func TestNeedsIndexRebuild(t *testing.T) {
 	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
 	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
-	require.Equal(t, indexOp(indexNoop), needsIndexRebuild(&s1, &s2))
-	require.Equal(t, indexOp(indexNoop), needsIndexRebuild(nil, &s2))
+	rebuildInfo := needsIndexRebuild(&s1, &s2)
+	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
+
+	rebuildInfo = needsIndexRebuild(nil, &s2)
+	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	require.Equal(t, indexOp(indexNoop), needsIndexRebuild(&s1, &s2))
+	rebuildInfo = needsIndexRebuild(&s1, &s2)
+	require.Equal(t, indexOp(indexNoop), rebuildInfo.op)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToDelete)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"term"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX}
-	require.Equal(t, indexOp(indexRebuild), needsIndexRebuild(&s1, &s2))
+	rebuildInfo = needsIndexRebuild(&s1, &s2)
+	require.Equal(t, indexOp(indexRebuild), rebuildInfo.op)
+	require.Equal(t, []string{"term"}, rebuildInfo.tokenizersToDelete)
+	require.Equal(t, []string{}, rebuildInfo.tokenizersToRebuild)
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
-	require.Equal(t, indexOp(indexRebuild), needsIndexRebuild(&s1, &s2))
+	rebuildInfo = needsIndexRebuild(&s1, &s2)
+	require.Equal(t, indexOp(indexRebuild), rebuildInfo.op)
+	require.Equal(t, []string{"exact"}, rebuildInfo.tokenizersToDelete)
+	require.Equal(t, []string{"exact"}, rebuildInfo.tokenizersToRebuild)
 
 	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"}}
 	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_NONE}
-	require.Equal(t, indexOp(indexDelete), needsIndexRebuild(&s1, &s2))
+	rebuildInfo = needsIndexRebuild(&s1, &s2)
+	require.Equal(t, indexOp(indexDelete), rebuildInfo.op)
+	require.Equal(t, []string{"exact"}, rebuildInfo.tokenizersToDelete)
+	require.Equal(t, []string(nil), rebuildInfo.tokenizersToRebuild)
 }
 
 func TestNeedsCountIndexRebuild(t *testing.T) {

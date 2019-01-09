@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"encoding/hex"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -214,7 +215,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 		} else {
-			x.Fatalf("unexpected meta: %d", item.UserMeta())
+			x.Fatalf("unexpected meta: %d %s", item.UserMeta(), hex.Dump(key))
 		}
 		if item.DiscardEarlierVersions() {
 			break
