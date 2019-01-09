@@ -48,9 +48,6 @@ var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
 
 type suite struct {
 	t *testing.T
-
-	//liveCluster *DgraphCluster
-	//bulkCluster *DgraphCluster
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
@@ -96,9 +93,6 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		makeDirEmpty(liveDir),
 	)
 
-	//s.bulkCluster = NewDgraphCluster(bulkDir)
-	//s.checkFatal(s.bulkCluster.StartZeroOnly())
-
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
 		"-r", rdfFile,
 		"-s", schemaFile,
@@ -107,33 +101,23 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		"-j=1",
 		"-x=true",
 	)
-	//bulkCmd.Stdout = os.Stdout
-	//bulkCmd.Stderr = os.Stdout
 	bulkCmd.Dir = bulkDir
 	if err := bulkCmd.Run(); err != nil {
 		s.cleanup()
 		s.t.Fatalf("Bulkloader didn't run: %v\n", err)
 	}
 
-	//s.bulkCluster.zero.Process.Kill()
-	//s.bulkCluster.zero.Wait()
 	s.checkFatal(os.Rename(
 		filepath.Join(bulkDir, "out", "0", "p"),
 		filepath.Join(bulkDir, "p"),
 	))
 
-	//s.liveCluster = NewDgraphCluster(liveDir)
-	//s.checkFatal(s.liveCluster.Start())
-	//s.checkFatal(s.bulkCluster.Start())
-
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--rdfs", rdfFile,
 		"--schema", schemaFile,
-		"--dgraph", ":"+strconv.Itoa(test.DgraphAlphaPort),
+		"--dgraph", ":9180",
 	)
 	liveCmd.Dir = liveDir
-	//liveCmd.Stdout = os.Stdout
-	//liveCmd.Stderr = os.Stdout
 	if err := liveCmd.Run(); err != nil {
 		s.cleanup()
 		s.t.Fatalf("Live Loader didn't run: %v\n", err)

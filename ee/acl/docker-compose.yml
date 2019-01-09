@@ -17,6 +17,8 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+    labels:
+      cluster: test
 
   dg1:
     image: dgraph/dgraph:latest
@@ -36,7 +38,10 @@ services:
       - 9999:9999
     security_opt:
       - seccomp:unconfined
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --access_jwt_ttl 30s
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 30s
+    labels:
+      cluster: test
+
 
 
 

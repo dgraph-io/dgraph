@@ -12,7 +12,7 @@ CUSTOM_CLUSTER_TESTS=$(mktemp --tmpdir $ME.tmp-XXXXXX)
 trap "rm -rf $CUSTOM_CLUSTER_TESTS" EXIT
 
 function Info {
-    echo -e "INFO: $*"
+    echo -e "\e[1;36mINFO: $*\e[0m"
 }
 
 function FindCustomClusterTests {
@@ -45,13 +45,11 @@ function RunCustomClusterTests {
     while read -r LINE; do
         DIR="${LINE:1:-1}"
         CFG="$DIR/docker-compose.yml"
-        Info "Restarting cluster with $CFG"
-        restartCluster $DIR/docker-compose.yml
         Info "Running tests in directory $DIR"
+        restartCluster $DIR/docker-compose.yml
         pushd $DIR >/dev/null
         Run || TEST_FAILED=1
         popd >/dev/null
-        stopCluster $DIR/docker-compose.yml
     done < $CUSTOM_CLUSTER_TESTS
     return $TEST_FAILED
 }
@@ -64,7 +62,7 @@ cd $DGRAPH_ROOT
 FindCustomClusterTests
 
 Info "Running tests using the default cluster"
-restartCluster "dgraph/docker-compose.yml"
+restartCluster
 RunDefaultClusterTests || TEST_FAILED=1
 
 Info "Running load-test.sh"
@@ -81,9 +79,9 @@ Info "Stopping cluster"
 stopCluster
 
 if [[ $TEST_FAILED -eq 0 ]]; then
-    Info "\e[1;32mAll tests passed!\e[0m"
+    Info "\e[1;32mAll tests passed!"
 else
-    Info "\e[1;31m*** One or more tests failed! ***\e[0m"
+    Info "\e[1;31m*** One or more tests failed! ***"
 fi
 
 exit $TEST_FAILED
