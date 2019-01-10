@@ -17,8 +17,6 @@
 package worker
 
 import (
-	"strings"
-
 	"github.com/dgraph-io/badger"
 
 	"bytes"
@@ -30,35 +28,32 @@ import (
 )
 
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
-	var requiredTokenizer string
-	switch funcType {
-	case FullTextSearchFn:
-		requiredTokenizer = tok.FullTextTokenizer{}.Name()
-	default:
-		requiredTokenizer = tok.TermTokenizer{}.Name()
+	var requiredTokenizer tok.Tokenizer
+	if funcType == FullTextSearchFn {
+		requiredTokenizer = tok.FullTextTokenizer{}
+	} else {
+		requiredTokenizer = tok.TermTokenizer{}
 	}
 
 	if !schema.State().IsIndexed(attr) {
-		return requiredTokenizer, false
+		return requiredTokenizer.Name(), false
 	}
 
-	tokenizers := schema.State().Tokenizer(attr)
-	for _, tokenizer := range tokenizers {
-		// check for prefix, in case of explicit usage of language specific full text tokenizer
-		if strings.HasPrefix(tokenizer.Name(), requiredTokenizer) {
-			return requiredTokenizer, true
+	id := requiredTokenizer.Identifier()
+	for _, t := range schema.State().Tokenizer(attr) {
+		if t.Identifier() == id {
+			return requiredTokenizer.Name(), true
 		}
 	}
-
-	return requiredTokenizer, false
+	return requiredTokenizer.Name(), false
 }
 
 func verifyCustomIndex(attr string, tokenizerName string) bool {
 	if !schema.State().IsIndexed(attr) {
 		return false
 	}
-	for _, tn := range schema.State().TokenizerNames(attr) {
-		if tn == tokenizerName {
+	for _, t := range schema.State().Tokenizer(attr) {
+		if t.Identifier() >= tok.IdentCustom && t.Name() == tokenizerName {
 			return true
 		}
 	}
@@ -71,12 +66,10 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	if lang == "." {
 		lang = "en"
 	}
-	switch funcType {
-	case FullTextSearchFn:
+	if funcType == FullTextSearchFn {
 		return tok.GetFullTextTokens(funcArgs, lang)
-	default:
-		return tok.GetTermTokens(funcArgs)
 	}
+	return tok.GetTermTokens(funcArgs)
 }
 
 func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
@@ -85,22 +78,21 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
 	}
 
+	sortableIdx := -1
 	tokenizers := schema.State().Tokenizer(attr)
-
-	sortIdx := -1
 	for i, t := range tokenizers {
 		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
 		if f == "eq" && !t.IsLossy() {
 			return t, nil
 		}
-		if t.IsSortable() && sortIdx == -1 {
-			sortIdx = i
+		if t.IsSortable() && sortableIdx == -1 {
+			sortableIdx = i
 		}
 	}
 
 	// Check if we found a sortable tokenizer and return that.
-	if sortIdx != -1 {
-		return tokenizers[sortIdx], nil
+	if sortableIdx != -1 {
+		return tokenizers[sortableIdx], nil
 	}
 
 	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
@@ -134,7 +126,8 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		return nil, "", nil
 
 	// Allow eq with term/fulltext tokenizers, even though they give multiple tokens.
-	case f == "eq" && (tokenizer.Name() == "term" || tokenizer.Name() == "fulltext"):
+	case f == "eq" &&
+		(tokenizer.Identifier() == tok.IdentTerm || tokenizer.Identifier() == tok.IdentFullText):
 		break
 
 	case len(ineqTokens) > 1:
@@ -170,18 +163,17 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		item := itr.Item()
 		key := item.Key()
 		k := x.Parse(key)
-		if k == nil {
-			continue
-		}
+
+		switch {
+		case k == nil:
+
 		// if its lossy then we handle inequality comparison later
-		// on in handleCompareFunction
-		if tokenizer.IsLossy() {
+		// in handleCompareFunction
+		case tokenizer.IsLossy():
 			out = append(out, k.Term)
-			continue
-		}
+
 		// for non Lossy lets compare for inequality (gt & lt)
 		// to see if key needs to be included
-		switch {
 		case f == "gt":
 			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) > 0 {
 				out = append(out, k.Term)
