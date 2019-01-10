@@ -35,10 +35,7 @@ func WriteFileSync(filename string, data []byte, perm os.FileMode) error {
 	if err := f.Sync(); err != nil {
 		return err
 	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return nil
+	return f.Close()
 }
 
 // FindFilesFunc walks the directory 'dir' and collects all file names matched by

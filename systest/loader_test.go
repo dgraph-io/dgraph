@@ -87,7 +87,7 @@ func TestLoaderXidmap(t *testing.T) {
 		t.Fatalf("Error while calling export: %v", err)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, _ := ioutil.ReadAll(resp.Body)
 	expected := `{"code": "Success", "message": "Export completed."}`
 	if string(b) != expected {
 		t.Fatalf("Unexpected message while exporting: %v", string(b))

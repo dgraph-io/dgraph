@@ -603,27 +603,27 @@ func checkDependency(vl []*Vars) error {
 	return nil
 }
 
-func (qu *GraphQuery) collectVars(v *Vars) {
-	if qu.Var != "" {
-		v.Defines = append(v.Defines, qu.Var)
+func (gq *GraphQuery) collectVars(v *Vars) {
+	if gq.Var != "" {
+		v.Defines = append(v.Defines, gq.Var)
 	}
-	if qu.FacetVar != nil {
-		for _, va := range qu.FacetVar {
+	if gq.FacetVar != nil {
+		for _, va := range gq.FacetVar {
 			v.Defines = append(v.Defines, va)
 		}
 	}
-	for _, va := range qu.NeedsVar {
+	for _, va := range gq.NeedsVar {
 		v.Needs = append(v.Needs, va.Name)
 	}
 
-	for _, ch := range qu.Children {
+	for _, ch := range gq.Children {
 		ch.collectVars(v)
 	}
-	if qu.Filter != nil {
-		qu.Filter.collectVars(v)
+	if gq.Filter != nil {
+		gq.Filter.collectVars(v)
 	}
-	if qu.MathExp != nil {
-		qu.MathExp.collectVars(v)
+	if gq.MathExp != nil {
+		gq.MathExp.collectVars(v)
 	}
 }
 
@@ -1178,35 +1178,35 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 }
 
 // debugString converts FilterTree to a string. Good for testing, debugging.
-func (t *FilterTree) debugString() string {
+func (f *FilterTree) debugString() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
-	t.stringHelper(buf)
+	f.stringHelper(buf)
 	return buf.String()
 }
 
 // stringHelper does simple DFS to convert FilterTree to string.
-func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
-	x.AssertTrue(t != nil)
-	if t.Func != nil && len(t.Func.Name) > 0 {
+func (f *FilterTree) stringHelper(buf *bytes.Buffer) {
+	x.AssertTrue(f != nil)
+	if f.Func != nil && len(f.Func.Name) > 0 {
 		// Leaf node.
 		buf.WriteRune('(')
-		buf.WriteString(t.Func.Name)
+		buf.WriteString(f.Func.Name)
 
-		if len(t.Func.Attr) > 0 {
+		if len(f.Func.Attr) > 0 {
 			buf.WriteRune(' ')
-			if t.Func.IsCount {
+			if f.Func.IsCount {
 				buf.WriteString("count(")
 			}
-			buf.WriteString(t.Func.Attr)
-			if t.Func.IsCount {
+			buf.WriteString(f.Func.Attr)
+			if f.Func.IsCount {
 				buf.WriteRune(')')
 			}
-			if len(t.Func.Lang) > 0 {
+			if len(f.Func.Lang) > 0 {
 				buf.WriteRune('@')
-				buf.WriteString(t.Func.Lang)
+				buf.WriteString(f.Func.Lang)
 			}
 
-			for _, arg := range t.Func.Args {
+			for _, arg := range f.Func.Args {
 				if arg.IsValueVar {
 					buf.WriteString(" val(")
 				} else {
@@ -1225,7 +1225,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	}
 	// Non-leaf node.
 	buf.WriteRune('(')
-	switch t.Op {
+	switch f.Op {
 	case "and":
 		buf.WriteString("AND")
 	case "or":
@@ -1233,10 +1233,10 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		x.Fatalf("Unknown operator: %q", t.Op)
+		x.Fatalf("Unknown operator: %q", f.Op)
 	}
 
-	for _, c := range t.Child {
+	for _, c := range f.Child {
 		buf.WriteRune(' ')
 		c.stringHelper(buf)
 	}

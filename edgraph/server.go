@@ -18,11 +18,12 @@ package edgraph
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -59,7 +60,6 @@ type ServerState struct {
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
-	mu     sync.Mutex
 	needTs chan tsReq
 }
 
@@ -219,7 +219,7 @@ func (s *ServerState) fillTimestampRequests() {
 			if r.readOnly {
 				num.ReadOnly = true
 			} else {
-				num.Val += 1
+				num.Val++
 			}
 		}
 
@@ -495,12 +495,20 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 	resp.Schema = er.SchemaNode
 
-	json, err := query.ToJson(&l, er.Subgraphs)
+	var js []byte
+	if len(resp.Schema) > 0 {
+		sort.Slice(resp.Schema, func(i, j int) bool {
+			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+		})
+		js, err = json.Marshal(map[string]interface{}{"schema": resp.Schema})
+	} else {
+		js, err = query.ToJson(&l, er.Subgraphs)
+	}
 	if err != nil {
 		return resp, err
 	}
-	resp.Json = json
-	span.Annotatef(nil, "Response = %s", json)
+	resp.Json = js
+	span.Annotatef(nil, "Response = %s", js)
 
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),

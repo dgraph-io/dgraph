@@ -68,7 +68,7 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 		x.Fatalf("Function %v is not binary boolean", ag)
 	}
 
-	isLess, err := types.Less(va, vb)
+	_, err := types.Less(va, vb)
 	if err != nil {
 		//Try to convert values.
 		if va.Tid == types.IntID {
@@ -81,7 +81,7 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 			return false, err
 		}
 	}
-	isLess, err = types.Less(va, vb)
+	isLess, err := types.Less(va, vb)
 	if err != nil {
 		return false, err
 	}
@@ -294,9 +294,8 @@ func (ag *aggregator) Apply(val types.Val) {
 			va.Value = va.Value.(int64) + vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
-		} else {
-			// This pair cannot be summed. So pass.
 		}
+		// Skipping the else case since that means the pair cannot be summed.
 		res = va
 	default:
 		x.Fatalf("Unhandled aggregator function %v", ag.name)

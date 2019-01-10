@@ -341,12 +341,10 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 
 func BenchmarkListIntersectRatio(b *testing.B) {
 	randomTests := func(sz int, overlap float64) {
-		sz1 := sz
-		sz2 := sz
 		rs := []int{1, 10, 50, 100, 500, 1000, 10000, 100000, 1000000}
 		for _, r := range rs {
-			sz1 = sz
-			sz2 = sz * r
+			sz1 := sz
+			sz2 := sz * r
 			if sz2 > 1000000 {
 				break
 			}

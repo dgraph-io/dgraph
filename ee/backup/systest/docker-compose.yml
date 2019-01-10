@@ -8,6 +8,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.1
     working_dir: /data/dg0.1
+    labels:
+      cluster: test
     ports:
       - 5080:5080
       - 6080:6080
@@ -25,6 +27,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg1
     working_dir: /data/dg1
+    labels:
+      cluster: test
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -42,6 +46,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg2
     working_dir: /data/dg2
+    labels:
+      cluster: test
     depends_on:
       - dg1
     volumes:
@@ -61,6 +67,8 @@ services:
     image: dgraph/dgraph:latest
     container_name: bank-dg3
     working_dir: /data/dg3
+    labels:
+      cluster: test
     depends_on:
       - dg2
     volumes:

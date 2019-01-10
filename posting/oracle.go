@@ -221,10 +221,10 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 	return o.pendingTxns[startTs]
 }
 
-func (t *Txn) matchesDelta(ok func(key []byte) bool) bool {
-	t.Lock()
-	defer t.Unlock()
-	for key := range t.deltas {
+func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
+	txn.Lock()
+	defer txn.Unlock()
+	for key := range txn.deltas {
 		if ok([]byte(key)) {
 			return true
 		}

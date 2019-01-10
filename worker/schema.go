@@ -41,7 +41,7 @@ type resultErr struct {
 // predicates is not specified, then all the predicates belonging to the group
 // are returned
 func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, error) {
-	ctx, span := otrace.StartSpan(ctx, "worker.getSchema")
+	_, span := otrace.StartSpan(ctx, "worker.getSchema")
 	defer span.End()
 
 	var result pb.SchemaResult

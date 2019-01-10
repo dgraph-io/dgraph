@@ -553,11 +553,7 @@ func (rb *IndexRebuild) Run(ctx context.Context) error {
 	if err := RebuildCountIndex(ctx, rb); err != nil {
 		return err
 	}
-	if err := RebuildReverseEdges(ctx, rb); err != nil {
-		return err
-	}
-
-	return nil
+	return RebuildReverseEdges(ctx, rb)
 }
 
 func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {

@@ -241,7 +241,7 @@ func (s *levelsController) runWorker(lc *y.Closer) {
 				if err := s.doCompact(p); err == nil {
 					break
 				} else {
-					Errorf("Error while running doCompact: %v\n", err)
+					s.kv.opt.Errorf("Error while running doCompact: %v\n", err)
 				}
 			}
 		case <-lc.HasBeenClosed():
@@ -806,6 +806,7 @@ func (s *levelsController) appendIterators(
 	return iters
 }
 
+// TableInfo represents the information about a table.
 type TableInfo struct {
 	ID    uint64
 	Level int

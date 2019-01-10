@@ -478,7 +478,7 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
 
-	} else if err == servedFromMemory {
+	} else if err == errServedFromMemory {
 		// Avoid calling doneUntil.Done, and storePending.
 		err = nil
 

@@ -323,7 +323,7 @@ message SchemaRequest {
 }
 
 message SchemaResult {
-	repeated api.SchemaNode schema = 1;
+	repeated api.SchemaNode schema = 1 [deprecated=true];
 }
 
 message SchemaUpdate {
