@@ -509,7 +509,7 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 		m *pb.Mutations) error {
 	if Config.StrictMutations {
 		for _, edge := range m.Edges {
-			if typ, err := schema.State().TypeOf(edge.Attr); typ == types.UndefinedID {
+			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
 				return err
 			}
 		}
