@@ -245,7 +245,7 @@ func (n *Node) Send(m raftpb.Message) {
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 	if n == nil || n.Store == nil {
-		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store.")
+		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store")
 	}
 	return n.Store.Snapshot()
 }
@@ -260,11 +260,16 @@ func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Sna
 	}
 }
 
-func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
-	var sp raftpb.Snapshot
+func (n *Node) PastLife() (uint64, bool, error) {
+	var (
+		sp      raftpb.Snapshot
+		idx     uint64
+		restart bool
+		rerr    error
+	)
 	sp, rerr = n.Store.Snapshot()
 	if rerr != nil {
-		return
+		return 0, false, rerr
 	}
 	if !raft.IsEmptySnap(sp) {
 		glog.Infof("Found Snapshot.Metadata: %+v\n", sp.Metadata)
@@ -275,7 +280,7 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	var hd raftpb.HardState
 	hd, rerr = n.Store.HardState()
 	if rerr != nil {
-		return
+		return 0, false, rerr
 	}
 	if !raft.IsEmptyHardState(hd) {
 		glog.Infof("Found hardstate: %+v\n", hd)
@@ -285,14 +290,14 @@ func (n *Node) PastLife() (idx uint64, restart bool, rerr error) {
 	var num int
 	num, rerr = n.Store.NumEntries()
 	if rerr != nil {
-		return
+		return 0, false, rerr
 	}
 	glog.Infof("Group %d found %d entries\n", n.RaftContext.Group, num)
 	// We'll always have at least one entry.
 	if num > 1 {
 		restart = true
 	}
-	return
+	return idx, restart, nil
 }
 
 const (
@@ -500,7 +505,7 @@ type linReadReq struct {
 	indexCh chan<- uint64
 }
 
-var errReadIndex = x.Errorf("cannot get linearized read (time expired or no configured leader)")
+var errReadIndex = x.Errorf("Cannot get linearized read (time expired or no configured leader)")
 
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	indexCh := make(chan uint64, 1)
@@ -540,7 +545,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 	again:
 		select {
 		case <-closer.HasBeenClosed():
-			return 0, errors.New("closer has been called")
+			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
 				goto again

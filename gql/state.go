@@ -313,7 +313,7 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 }
 
 func lexIRIRef(l *lex.Lexer) lex.StateFn {
-	if err := lex.LexIRIRef(l, itemName); err != nil {
+	if err := lex.IRIRef(l, itemName); err != nil {
 		return l.Errorf(err.Error())
 	}
 	return l.Mode

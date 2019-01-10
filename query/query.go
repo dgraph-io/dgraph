@@ -250,8 +250,8 @@ func getValue(tv *pb.TaskValue) (types.Val, error) {
 }
 
 var (
-	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
-	ErrWrongAgg = errors.New("Wrong level for var aggregation.")
+	ErrEmptyVal = errors.New("Query: harmless error, e.g. task.Val is nil")
+	ErrWrongAgg = errors.New("Wrong level for var aggregation")
 )
 
 func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
@@ -395,7 +395,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 		if len(pc.facetsMatrix) > 0 && len(pc.facetsMatrix) != len(pc.uidMatrix) {
-			return x.Errorf("length of facetsMatrix and uidMatrix mismatch: %d vs %d",
+			return x.Errorf("Length of facetsMatrix and uidMatrix mismatch: %d vs %d",
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
@@ -987,7 +987,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		for _, arg := range sg.SrcFunc.Args {
 			srcFunc.Args = append(srcFunc.Args, arg.Value)
 			if arg.IsValueVar {
-				return nil, x.Errorf("unsupported use of value var")
+				return nil, x.Errorf("Unsupported use of value var")
 			}
 		}
 	}
@@ -1578,19 +1578,19 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
 			switch {
-			case (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.ListVar) && l.strList != nil:
 				// TODO: If we support value vars for list type then this needn't be true
 				sg.ExpandPreds = l.strList
 
-			case (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.Uids != nil:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 				lists = append(lists, l.Uids)
 
-			case (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar) && len(l.Vals) != 0:
 				// This should happen only once.
 				// TODO: This allows only one value var per subgraph, change it later
 				sg.Params.uidToVal = l.Vals
 
-			case (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && len(l.Vals) != 0:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
 				// Derive the UID list from value var.
 				uids := make([]uint64, 0, len(l.Vals))
 				for k := range l.Vals {
@@ -1604,7 +1604,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 			default:
 				// This var does not match any uids or vals but we are still trying to access it.
-				if v.Typ == gql.VALUE_VAR {
+				if v.Typ == gql.ValueVar {
 					// Provide a default value for valueVarAggregation() to eval val().
 					// This is a noop for aggregation funcs that would fail.
 					// The zero aggs won't show because there are no uids matched.
@@ -2166,7 +2166,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	for _, it := range sg.Params.NeedsVar {
 		// TODO(pawan) - Return error if user uses var order with predicates.
 		if len(sg.Params.Order) > 0 && it.Name == sg.Params.Order[0].Attr &&
-			(it.Typ == gql.VALUE_VAR) {
+			(it.Typ == gql.ValueVar) {
 			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}

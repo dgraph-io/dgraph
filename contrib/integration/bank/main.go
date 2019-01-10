@@ -45,7 +45,7 @@ var (
 	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
 )
 
-var startBal int = 10
+var startBal = 10
 
 type Account struct {
 	Uid  string `json:"uid"`

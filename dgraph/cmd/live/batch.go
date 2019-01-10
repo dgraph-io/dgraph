@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"strings"
 	"sync"
@@ -41,7 +40,7 @@ import (
 )
 
 var (
-	ErrMaxTries = errors.New("max retries exceeded for request while doing batch mutations")
+	ErrMaxTries = errors.New("Max retries exceeded for request while doing batch mutations")
 )
 
 // batchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.
@@ -54,18 +53,6 @@ type batchMutationOptions struct {
 	MaxRetries    uint32
 	// User could pass a context so that we can stop retrying requests once context is done
 	Ctx context.Context
-}
-
-var defaultOptions = batchMutationOptions{
-	Size:          100,
-	Pending:       100,
-	PrintCounters: false,
-	MaxRetries:    math.MaxUint32,
-}
-
-type uidProvider struct {
-	zero pb.ZeroClient
-	ctx  context.Context
 }
 
 // loader is the data structure held by the user program for all interactions with the Dgraph
@@ -95,7 +82,12 @@ type loader struct {
 	zeroconn *grpc.ClientConn
 }
 
-func (p *uidProvider) ReserveUidRange() (start, end uint64, err error) {
+type uidProvider struct {
+	zero pb.ZeroClient
+	ctx  context.Context
+}
+
+func (p *uidProvider) ReserveUidRange() (uint64, uint64, error) {
 	factor := time.Second
 	for {
 		assignedIds, err := p.zero.AssignUids(context.Background(), &pb.Num{Val: 1000})

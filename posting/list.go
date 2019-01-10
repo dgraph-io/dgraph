@@ -45,7 +45,7 @@ import (
 var (
 	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
 	// In such a case, retry.
-	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
+	ErrRetry = fmt.Errorf("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue       = fmt.Errorf("No value found")
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")

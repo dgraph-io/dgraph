@@ -137,7 +137,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	n.DoneConfChange(cc.ID, nil)
 }
 
-var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation.")
+var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation")
 
 // We must not wait here. Previously, we used to block until we have aborted the
 // transactions. We're now applying all updates serially, so blocking for one
@@ -168,7 +168,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 	}
 
 	if proposal.Mutations.StartTs == 0 {
-		return errors.New("StartTs must be provided.")
+		return errors.New("StartTs must be provided")
 	}
 	startTs := proposal.Mutations.StartTs
 
@@ -539,12 +539,12 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	if _, err := n.populateSnapshot(snap, pool); err != nil {
-		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v\n", err)
+		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	if err := schema.LoadFromDb(); err != nil {
-		return fmt.Errorf("Error while initilizating schema: %+v\n", err)
+		return fmt.Errorf("Error while initilizating schema: %+v", err)
 	}
 	groups().triggerMembershipSync()
 	return nil

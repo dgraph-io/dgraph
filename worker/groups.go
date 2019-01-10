@@ -264,7 +264,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return x.Errorf("don't have the address of any dgraphzero server")
+		return x.Errorf("Don't have the address of any dgraphzero server")
 	}
 
 	c := pb.NewZeroClient(p.Get())
