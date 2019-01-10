@@ -1565,7 +1565,7 @@ func TestParseSchemaAndQuery(t *testing.T) {
 
 	_, err = Parse(Request{Str: query2})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "schema block is not allowed with query block")
+	require.Contains(t, err.Error(), "Schema block is not allowed with query block")
 }
 
 func TestParseSchemaError(t *testing.T) {
