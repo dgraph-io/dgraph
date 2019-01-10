@@ -48,7 +48,7 @@ func TestParseCountValError(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "count of a variable is not allowed")
+	require.Contains(t, err.Error(), "Count of a variable is not allowed")
 }
 
 func TestParseVarError(t *testing.T) {
@@ -1561,7 +1561,7 @@ func TestParseSchemaAndQuery(t *testing.T) {
 
 	_, err := Parse(Request{Str: query1})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "schema block is not allowed with query block")
+	require.Contains(t, err.Error(), "Schema block is not allowed with query block")
 
 	_, err = Parse(Request{Str: query2})
 	require.Error(t, err)
