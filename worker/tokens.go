@@ -87,20 +87,20 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 	tokenizers := schema.State().Tokenizer(attr)
 
-	tokIdx := -1
+	sortIdx := -1
 	for i, t := range tokenizers {
 		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
 		if f == "eq" && !t.IsLossy() {
 			return t, nil
 		}
-		if t.IsSortable() && tokIdx == -1 {
-			tokIdx = i
+		if t.IsSortable() && sortIdx == -1 {
+			sortIdx = i
 		}
 	}
 
 	// Check if we found a sortable tokenizer and return that.
-	if tokIdx != -1 {
-		return tokenizers[tokIdx], nil
+	if sortIdx != -1 {
+		return tokenizers[sortIdx], nil
 	}
 
 	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
@@ -162,7 +162,8 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	itr := txn.NewIterator(itOpt)
 	defer itr.Close()
 
-	ineqTokenInBytes := []byte(ineqToken) //used for inequality comparison below
+	// used for inequality comparison below
+	ineqTokenInBytes := []byte(ineqToken)
 
 	var out []string
 	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
@@ -176,22 +177,22 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		// on in handleCompareFunction
 		if tokenizer.IsLossy() {
 			out = append(out, k.Term)
-		} else {
-			// for non Lossy lets compare for inequality (gt & lt)
-			// to see if key needs to be included
-			switch {
-			case f == "gt":
-				if bytes.Compare([]byte(k.Term), ineqTokenInBytes) > 0 {
-					out = append(out, k.Term)
-				}
-			case f == "lt":
-				if bytes.Compare([]byte(k.Term), ineqTokenInBytes) < 0 {
-					out = append(out, k.Term)
-				}
-			default:
-				// for le or ge or any other fn consider the key
+			continue
+		}
+		// for non Lossy lets compare for inequality (gt & lt)
+		// to see if key needs to be included
+		switch {
+		case f == "gt":
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) > 0 {
 				out = append(out, k.Term)
 			}
+		case f == "lt":
+			if bytes.Compare([]byte(k.Term), ineqTokenInBytes) < 0 {
+				out = append(out, k.Term)
+			}
+		default:
+			// for le or ge or any other fn consider the key
+			out = append(out, k.Term)
 		}
 	}
 	return out, ineqToken, nil
