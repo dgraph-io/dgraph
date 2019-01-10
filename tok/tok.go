@@ -30,7 +30,7 @@ import (
 )
 
 // Tokenizer identifiers are unique and can't be reused.
-// The range 0x00 - 0x79 is system reserved.
+// The range 0x00 - 0x7f is system reserved.
 // The range 0x80 - 0xff is for custom tokenizers.
 // TODO: use these everywhere where we must ensure a system tokenizer.
 const (
@@ -48,6 +48,7 @@ const (
 	IdentBool     = 0x9
 	IdentTrigram  = 0xA
 	IdentHash     = 0xB
+	IdentCustom   = 0x80
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -123,7 +124,7 @@ func LoadCustomTokenizer(soFile string) {
 	tokenizer := symb.(func() interface{})().(PluginTokenizer)
 
 	id := tokenizer.Identifier()
-	x.AssertTruef(id >= 0x80,
+	x.AssertTruef(id < IdentCustom,
 		"custom tokenizer identifier byte must be >= 0x80, but was %#x", id)
 	registerTokenizer(CustomTokenizer{PluginTokenizer: tokenizer})
 }
