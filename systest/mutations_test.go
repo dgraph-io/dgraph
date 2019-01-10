@@ -78,6 +78,78 @@ func TestSystem(t *testing.T) {
 	t.Run("math ge", wrap(MathGe))
 	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
 	t.Run("has should have reverse edges", wrap(HasReverseEdge))
+	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
+}
+
+func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
+	type Node struct {
+		UID string `json:"uid,omitempty"`
+	}
+
+	type Resource struct {
+		Node
+		AccessToPermission string `json:"access.to|permission,omitempty"`
+		AccessToInherit    bool   `json:"access.to|inherit"`
+	}
+
+	type User struct {
+		Node
+		Name     string    `json:"name,omitempty"`
+		AccessTo *Resource `json:"access.to,omitempty"`
+	}
+
+	in := User{
+		Node: Node{
+			UID: "_:a",
+		},
+		AccessTo: &Resource{
+			Node: Node{
+				UID: "_:b",
+			},
+			AccessToPermission: "WRITE",
+			AccessToInherit:    false,
+		},
+	}
+	js, err := json.Marshal(&in)
+	require.NoError(t, err, "the marshaling should have succeeded")
+
+	ctx := context.Background()
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetJson:   js,
+	})
+	require.NoError(t, err, "the mutation should have succeeded")
+
+	q := `{
+  direct(func: uid(%s)) {
+    uid
+    access.to @filter(uid(%s)) @facets(anyofterms(permission, "READ WRITE")) @facets(permission,inherit) {
+      uid
+    }
+  }
+}`
+	query := fmt.Sprintf(q, assigned.Uids["a"], assigned.Uids["b"])
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "the query should have succeeded")
+
+	//var respUser User
+	var respMap map[string]interface{}
+	err = json.Unmarshal(resp.GetJson(), &respMap)
+	require.NoError(t, err, "Unmarshaling the response into an user object should have succeeded")
+	if directVal, ok := respMap["direct"]; ok {
+		firstDirect := directVal.([]interface{})[0]
+		accessTo := firstDirect.(map[string]interface{})["access.to"]
+		firstAccessTo := accessTo.([]interface{})[0]
+
+		inheritVal, ok1 := firstAccessTo.(map[string]interface{})["access.to|inherit"]
+		require.True(t, ok1 && inheritVal == false, "the returned inherit value should be false")
+
+		permissionVal, ok2 := firstAccessTo.(map[string]interface{})["access.to|permission"]
+		require.True(t, ok2 && permissionVal == "WRITE", "the returned permission value should be WRITE")
+	} else {
+		t.Fatalf("unable to get any value under the direct key from the response")
+	}
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
