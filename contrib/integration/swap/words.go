@@ -25,7 +25,7 @@ func nextWord() string {
 	return w
 }
 
-var words []string = []string{
+var words = []string{
 	"information",
 	"available",
 	"copyright",

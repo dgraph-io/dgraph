@@ -17,7 +17,7 @@
 package badger
 
 // OpenManaged returns a new DB, which allows more control over setting
-// transaction timestamps, by setting managedDB=true.
+// transaction timestamps, aka managed mode.
 //
 // This is only useful for databases built on top of Badger (like Dgraph), and
 // can be ignored by most users.

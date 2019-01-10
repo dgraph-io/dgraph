@@ -111,10 +111,10 @@ type fragmentNode struct {
 type fragmentMap map[string]*fragmentNode
 
 const (
-	ANY_VAR   = 0
-	UID_VAR   = 1
-	VALUE_VAR = 2
-	LIST_VAR  = 3
+	AnyVar   = 0
+	UidVar   = 1
+	ValueVar = 2
+	ListVar  = 3
 )
 
 type VarContext struct {
@@ -483,7 +483,7 @@ func Parse(r Request) (res Result, rerr error) {
 					return res, x.Errorf("Only one schema block allowed ")
 				}
 				if res.Query != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, x.Errorf("Schema block is not allowed with query block")
 				}
 				if res.Schema, rerr = getSchema(it); rerr != nil {
 					return res, rerr
@@ -497,7 +497,7 @@ func Parse(r Request) (res Result, rerr error) {
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
 				if res.Schema != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, x.Errorf("Schema block is not allowed with query block")
 				}
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
@@ -714,7 +714,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 	for it.Next() {
 		item = it.Item()
 		if item.Typ != itemName {
-			return fmt.Errorf("Expected key inside @recurse().")
+			return fmt.Errorf("Expected key inside @recurse()")
 		}
 		key = strings.ToLower(item.Val)
 
@@ -723,7 +723,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 
 		if item, ok = tryParseItemType(it, itemName); !ok {
-			return fmt.Errorf("Expected value inside @recurse() for key: %s.", key)
+			return fmt.Errorf("Expected value inside @recurse() for key: %s", key)
 		}
 		val = item.Val
 
@@ -749,7 +749,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 
 		if _, ok := tryParseItemType(it, itemComma); !ok {
-			return fmt.Errorf("Expected comma after value: %s inside recurse block.", val)
+			return fmt.Errorf("Expected comma after value: %s inside recurse block", val)
 		}
 	}
 	return nil
@@ -1131,7 +1131,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if count != 1 {
 				return result, x.Errorf("Only one variable expected. Got %d", count)
 			}
-			gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
+			gq.NeedsVar[len(gq.NeedsVar)-1].Typ = ValueVar
 			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			result = append(result, p)
 			if isSortkey(p.Key) && orderCount > 1 {
@@ -1436,7 +1436,7 @@ L:
 						function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name, IsValueVar: true})
 					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
-					function.NeedsVar[0].Typ = VALUE_VAR
+					function.NeedsVar[0].Typ = ValueVar
 				} else {
 					if nestedFunc.Name != "count" {
 						return nil,
@@ -1577,7 +1577,7 @@ L:
 				// E.g. @filter(gt(val(a), 10))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
-					Typ:  VALUE_VAR,
+					Typ:  ValueVar,
 				})
 			} else if function.Name == uid {
 				// uid function could take variables as well as actual uids.
@@ -1601,7 +1601,7 @@ L:
 				// E.g. @filter(uid(a, b, c))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
 					Name: val,
-					Typ:  UID_VAR,
+					Typ:  UidVar,
 				})
 			}
 		}
@@ -2015,7 +2015,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 			count++
 			gq.NeedsVar = append(gq.NeedsVar, VarContext{
 				Name: item.Val,
-				Typ:  UID_VAR,
+				Typ:  UidVar,
 			})
 			expectArg = false
 		}
@@ -2289,7 +2289,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Expected only one variable but got: %d", count)
 				}
 				// Modify the NeedsVar context here.
-				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
+				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = ValueVar
 			} else {
 				val = collectName(it, val+item.Val)
 				// Get language list, if present
@@ -2506,7 +2506,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if count != 1 {
 						x.Errorf("Expected one variable inside val() of aggregator but got %v", count)
 					}
-					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = ValueVar
 				}
 				child.Func = &Function{
 					Name:     valLower,
@@ -2567,7 +2567,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if count != 1 {
 						return x.Errorf("Invalid use of expand(). Exactly one variable expected.")
 					}
-					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = ListVar
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
 				case "_all_":
 					child.Expand = "_all_"
@@ -2629,7 +2629,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Cannot assign a variable to val()")
 				}
 				if count == seen {
-					return x.Errorf("count of a variable is not allowed")
+					return x.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
 				if err != nil {
@@ -2654,13 +2654,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Invalid use of val(). Exactly one variable expected.")
 				}
 				// Only value vars can be retrieved.
-				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+				child.NeedsVar[len(child.NeedsVar)-1].Typ = ValueVar
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
 			} else if valLower == uid {
 				if count == seen {
-					return x.Errorf("count of a variable is not allowed")
+					return x.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
 				if err != nil {

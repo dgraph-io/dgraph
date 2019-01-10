@@ -30,10 +30,10 @@ func userAdd(conf *viper.Viper) error {
 	password := conf.GetString("password")
 
 	if len(userid) == 0 {
-		return fmt.Errorf("the user must not be empty")
+		return fmt.Errorf("The user must not be empty")
 	}
 	if len(password) == 0 {
-		return fmt.Errorf("the password must not be empty")
+		return fmt.Errorf("The password must not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -49,10 +49,10 @@ func userAdd(conf *viper.Viper) error {
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return fmt.Errorf("Error while querying user:%v", err)
 	}
 	if user != nil {
-		return fmt.Errorf("unable to create user because of conflict: %v", userid)
+		return fmt.Errorf("Unable to create user because of conflict: %v", userid)
 	}
 
 	createUserNQuads := []*api.NQuad{
@@ -73,7 +73,7 @@ func userAdd(conf *viper.Viper) error {
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to create user: %v", err)
+		return fmt.Errorf("Unable to create user: %v", err)
 	}
 
 	glog.Infof("Created new user with id %v", userid)
@@ -84,7 +84,7 @@ func userDel(conf *viper.Viper) error {
 	userid := conf.GetString("user")
 	// validate the userid
 	if len(userid) == 0 {
-		return fmt.Errorf("the user id should not be empty")
+		return fmt.Errorf("The user id should not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -100,11 +100,11 @@ func userDel(conf *viper.Viper) error {
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return fmt.Errorf("Error while querying user:%v", err)
 	}
 
 	if user == nil || len(user.Uid) == 0 {
-		return fmt.Errorf("unable to delete user because it does not exist: %v", userid)
+		return fmt.Errorf("Unable to delete user because it does not exist: %v", userid)
 	}
 
 	deleteUserNQuads := []*api.NQuad{
@@ -120,7 +120,7 @@ func userDel(conf *viper.Viper) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to delete user: %v", err)
+		return fmt.Errorf("Unable to delete user: %v", err)
 	}
 
 	glog.Infof("Deleted user with id %v", userid)
@@ -132,10 +132,10 @@ func userLogin(conf *viper.Viper) error {
 	password := conf.GetString("password")
 
 	if len(userid) == 0 {
-		return fmt.Errorf("the user must not be empty")
+		return fmt.Errorf("The user must not be empty")
 	}
 	if len(password) == 0 {
-		return fmt.Errorf("the password must not be empty")
+		return fmt.Errorf("The password must not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -150,7 +150,7 @@ func userLogin(conf *viper.Viper) error {
 	}()
 
 	if err := dc.Login(ctx, userid, password); err != nil {
-		return fmt.Errorf("unable to login:%v", err)
+		return fmt.Errorf("Unable to login:%v", err)
 	}
 	updatedContext := dc.GetContext(ctx)
 	glog.Infof("Login successfully.\naccess jwt:\n%v\nrefresh jwt:\n%v",
@@ -176,7 +176,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
-		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
+		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
 	}
 	user, err = UnmarshalUser(queryResp, "user")
 	if err != nil {
@@ -189,7 +189,7 @@ func userMod(conf *viper.Viper) error {
 	userId := conf.GetString("user")
 	groups := conf.GetString("groups")
 	if len(userId) == 0 {
-		return fmt.Errorf("the user must not be empty")
+		return fmt.Errorf("The user must not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -205,10 +205,10 @@ func userMod(conf *viper.Viper) error {
 
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return fmt.Errorf("Error while querying user:%v", err)
 	}
 	if user == nil {
-		return fmt.Errorf("the user does not exist: %v", userId)
+		return fmt.Errorf("The user does not exist: %v", userId)
 	}
 
 	targetGroupsMap := make(map[string]struct{})
@@ -234,7 +234,7 @@ func userMod(conf *viper.Viper) error {
 		glog.Infof("Adding user %v to group %v", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("error while getting the user mod nquad:%v", err)
+			return fmt.Errorf("Error while getting the user mod nquad:%v", err)
 		}
 		mu.Set = append(mu.Set, nquad)
 	}
@@ -243,7 +243,7 @@ func userMod(conf *viper.Viper) error {
 		glog.Infof("Deleting user %v from group %v", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("error while getting the user mod nquad:%v", err)
+			return fmt.Errorf("Error while getting the user mod nquad:%v", err)
 		}
 		mu.Del = append(mu.Del, nquad)
 	}
@@ -253,7 +253,7 @@ func userMod(conf *viper.Viper) error {
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("error while mutating the group:%+v", err)
+		return fmt.Errorf("Error while mutating the group:%+v", err)
 	}
 	glog.Infof("Successfully modified groups for user %v", userId)
 	return nil
@@ -266,7 +266,7 @@ func getUserModNQuad(ctx context.Context, txn *dgo.Txn, userId string,
 		return nil, err
 	}
 	if group == nil {
-		return nil, fmt.Errorf("the group does not exist:%v", groupId)
+		return nil, fmt.Errorf("The group does not exist:%v", groupId)
 	}
 
 	createUserGroupNQuads := &api.NQuad{

@@ -76,7 +76,7 @@ func processWithBackupRequest(
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
-		return nil, errors.New("no network connection")
+		return nil, errors.New("No network connection")
 	}
 	if len(addrs) == 1 {
 		reply, err := invokeNetworkRequest(ctx, addrs[0], f)

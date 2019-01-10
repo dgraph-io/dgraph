@@ -229,7 +229,7 @@ func (st *Stream) streamKVs(ctx context.Context) error {
 		if err := st.Send(batch); err != nil {
 			return err
 		}
-		Infof("%s Created batch of size: %s in %s.\n",
+		st.db.opt.Infof("%s Created batch of size: %s in %s.\n",
 			st.LogPrefix, humanize.Bytes(sz), time.Since(t))
 		return nil
 	}
@@ -248,7 +248,7 @@ outer:
 				continue
 			}
 			speed := bytesSent / durSec
-			Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n", st.LogPrefix,
+			st.db.opt.Infof("%s Time elapsed: %s, bytes sent: %s, speed: %s/sec\n", st.LogPrefix,
 				y.FixedDuration(dur), humanize.Bytes(bytesSent), humanize.Bytes(speed))
 
 		case kvs, ok := <-st.kvChan:
@@ -263,7 +263,7 @@ outer:
 		}
 	}
 
-	Infof("%s Sent %d keys\n", st.LogPrefix, count)
+	st.db.opt.Infof("%s Sent %d keys\n", st.LogPrefix, count)
 	return nil
 }
 
@@ -320,10 +320,8 @@ func (st *Stream) Orchestrate(ctx context.Context) error {
 	}
 
 	// Wait for key streaming to be over.
-	if err := <-kvErr; err != nil {
-		return err
-	}
-	return nil
+	err := <-kvErr
+	return err
 }
 
 func (db *DB) newStream() *Stream {

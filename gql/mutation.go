@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ErrInvalidUID = errors.New("UID has to be greater than one.")
+	ErrInvalidUID = errors.New("UID has to be greater than one")
 )
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -112,7 +112,7 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 	if id, present := newToUid[subject]; present {
 		return id, err
 	}
-	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
+	return 0, x.Errorf("UID not found/generated for xid %s\n", subject)
 }
 
 var emptyEdge pb.DirectedEdge
@@ -142,7 +142,7 @@ func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*pb.D
 			return &emptyEdge, err
 		}
 	default:
-		return &emptyEdge, errors.New("unknown value type")
+		return &emptyEdge, errors.New("Unknown value type")
 	}
 	return out, nil
 }
@@ -221,7 +221,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error
 	case x.ValuePlain, x.ValueMulti:
 		edge, err = nq.CreateValueEdge(sUid)
 	default:
-		return &emptyEdge, x.Errorf("unknown value type for nquad: %+v", nq)
+		return &emptyEdge, x.Errorf("Unknown value type for nquad: %+v", nq)
 	}
 	if err != nil {
 		return nil, err

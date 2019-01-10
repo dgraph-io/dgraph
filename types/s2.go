@@ -200,5 +200,5 @@ func convertToGeom(str string) (geom.T, error) {
 		g.Coordinates = &m
 		return g.Decode()
 	}
-	return nil, x.Errorf("invalid coordinates")
+	return nil, x.Errorf("Invalid coordinates")
 }

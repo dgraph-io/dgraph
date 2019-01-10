@@ -41,7 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var passwordCache map[string]string = make(map[string]string, 2)
+var passwordCache = make(map[string]string, 2)
 
 var ts uint64
 var odch chan *pb.OracleDelta

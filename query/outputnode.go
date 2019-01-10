@@ -167,7 +167,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.PasswordID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	default:
-		return nil, errors.New("unsupported types.Val.Tid")
+		return nil, errors.New("Unsupported types.Val.Tid")
 	}
 }
 

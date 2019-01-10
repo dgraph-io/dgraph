@@ -106,6 +106,9 @@ type Options struct {
 
 	// Truncate value log to delete corrupt data, if any. Would not truncate if ReadOnly is set.
 	Truncate bool
+
+	// DB-specific logger which will override the global logger.
+	Logger Logger
 }
 
 // DefaultOptions sets a list of recommended options for good performance.
@@ -135,6 +138,7 @@ var DefaultOptions = Options{
 	ValueLogMaxEntries: 1000000,
 	ValueThreshold:     32,
 	Truncate:           false,
+	Logger:             defaultLogger,
 }
 
 // LSMOnlyOptions follows from DefaultOptions, but sets a higher ValueThreshold

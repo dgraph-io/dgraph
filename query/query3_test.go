@@ -42,7 +42,7 @@ func TestRecurseError(t *testing.T) {
 	ctx := defaultContext()
 	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "depth must be > 0 when loop is true for recurse query.")
+	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query.")
 }
 
 func TestRecurseQuery(t *testing.T) {

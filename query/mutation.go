@@ -130,7 +130,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return newUids, errors.New("Predicate deletion should be called via alter.")
+			return newUids, errors.New("Predicate deletion should be called via alter")
 		}
 
 		if len(nq.Subject) == 0 {
@@ -210,7 +210,7 @@ func ToInternal(gmu *gql.Mutation,
 	}
 	for _, nq := range gmu.Del {
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return edges, errors.New("Predicate deletion should be called via alter.")
+			return edges, errors.New("Predicate deletion should be called via alter")
 		}
 		if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
 			return edges, err

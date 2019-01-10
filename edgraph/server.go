@@ -18,11 +18,12 @@ package edgraph
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -58,7 +59,6 @@ type ServerState struct {
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
-	mu     sync.Mutex
 	needTs chan tsReq
 }
 
@@ -356,7 +356,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
-		return resp, fmt.Errorf("empty mutation")
+		return resp, fmt.Errorf("Empty mutation")
 	}
 
 	var l query.Latency
@@ -457,7 +457,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	resp = new(api.Response)
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
-		return resp, fmt.Errorf("empty query")
+		return resp, fmt.Errorf("Empty query")
 	}
 
 	var l query.Latency
@@ -493,12 +493,20 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 	resp.Schema = er.SchemaNode
 
-	json, err := query.ToJson(&l, er.Subgraphs)
+	var js []byte
+	if len(resp.Schema) > 0 {
+		sort.Slice(resp.Schema, func(i, j int) bool {
+			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+		})
+		js, err = json.Marshal(map[string]interface{}{"schema": resp.Schema})
+	} else {
+		js, err = query.ToJson(&l, er.Subgraphs)
+	}
 	if err != nil {
 		return resp, err
 	}
-	resp.Json = json
-	span.Annotatef(nil, "Response = %s", json)
+	resp.Json = js
+	span.Annotatef(nil, "Response = %s", js)
 
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
@@ -520,7 +528,8 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
-		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
+		return &api.TxnContext{}, fmt.Errorf(
+			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
 
@@ -701,11 +710,11 @@ func validateNQuads(set, del []*api.NQuad) error {
 func validateKey(key string) error {
 	switch {
 	case len(key) == 0:
-		return x.Errorf("has zero length")
+		return x.Errorf("Has zero length")
 	case strings.ContainsAny(key, "~@"):
-		return x.Errorf("has invalid characters")
+		return x.Errorf("Has invalid characters")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
-		return x.Errorf("must not contain spaces")
+		return x.Errorf("Must not contain spaces")
 	}
 	return nil
 }
@@ -720,7 +729,7 @@ func validateKeys(nq *api.NQuad) error {
 			continue
 		}
 		if err := validateKey(nq.Facets[i].Key); err != nil {
-			return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
+			return x.Errorf("Facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}
 	return nil

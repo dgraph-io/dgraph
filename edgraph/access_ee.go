@@ -45,7 +45,7 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.authenticate(ctx, request)
 	if err != nil {
-		errMsg := fmt.Sprintf("authentication from address %s failed: %v", addr, err)
+		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -53,14 +53,14 @@ func (s *Server) Login(ctx context.Context,
 	resp := &api.Response{}
 	accessJwt, err := getAccessJwt(request.Userid, user.Groups)
 	if err != nil {
-		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
+		errMsg := fmt.Sprintf("Unable to get access jwt (userid=%s,addr=%s):%v",
 			request.Userid, addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 	refreshJwt, err := getRefreshJwt(request.Userid)
 	if err != nil {
-		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
+		errMsg := fmt.Sprintf("Unable to get refresh jwt (userid=%s,addr=%s):%v",
 			request.Userid, addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
@@ -73,7 +73,7 @@ func (s *Server) Login(ctx context.Context,
 
 	jwtBytes, err := loginJwt.Marshal()
 	if err != nil {
-		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
+		errMsg := fmt.Sprintf("Unable to marshal jwt (userid=%s,addr=%s):%v",
 			request.Userid, addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
@@ -84,39 +84,39 @@ func (s *Server) Login(ctx context.Context,
 
 func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*acl.User, error) {
 	if err := validateLoginRequest(request); err != nil {
-		return nil, fmt.Errorf("invalid login request: %v", err)
+		return nil, fmt.Errorf("Invalid login request: %v", err)
 	}
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userId, err := authenticateRefreshToken(request.RefreshToken)
 		if err != nil {
-			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
+			return nil, fmt.Errorf("Unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
 		}
 
 		user, err = s.queryUser(ctx, userId, "")
 		if err != nil {
-			return nil, fmt.Errorf("error while querying user with id: %v",
+			return nil, fmt.Errorf("Error while querying user with id: %v",
 				request.Userid)
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("user not found for id %v", request.Userid)
+			return nil, fmt.Errorf("User not found for id %v", request.Userid)
 		}
 	} else {
 		var err error
 		user, err = s.queryUser(ctx, request.Userid, request.Password)
 		if err != nil {
-			return nil, fmt.Errorf("error while querying user with id: %v",
+			return nil, fmt.Errorf("Error while querying user with id: %v",
 				request.Userid)
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("user not found for id %v", request.Userid)
+			return nil, fmt.Errorf("User not found for id %v", request.Userid)
 		}
 		if !user.PasswordMatch {
-			return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
+			return nil, fmt.Errorf("Password mismatch for user: %v", request.Userid)
 		}
 	}
 
@@ -126,37 +126,37 @@ func (s *Server) authenticate(ctx context.Context, request *api.LoginRequest) (*
 func authenticateRefreshToken(refreshToken string) (string, error) {
 	token, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 		return Config.HmacSecret, nil
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("unable to parse refresh token:%v", err)
+		return "", fmt.Errorf("Unable to parse refresh token:%v", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return "", fmt.Errorf("claims in refresh token is not map claims:%v", refreshToken)
+		return "", fmt.Errorf("Claims in refresh token is not map claims:%v", refreshToken)
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return "", fmt.Errorf("refresh token has expired: %v", refreshToken)
+		return "", fmt.Errorf("Refresh token has expired: %v", refreshToken)
 	}
 
 	userId, ok := claims["userid"].(string)
 	if !ok {
-		return "", fmt.Errorf("userid in claims is not a string:%v", userId)
+		return "", fmt.Errorf("User ID in claims is not a string:%v", userId)
 	}
 	return userId, nil
 }
 
 func validateLoginRequest(request *api.LoginRequest) error {
 	if request == nil {
-		return fmt.Errorf("the request should not be nil")
+		return fmt.Errorf("The request should not be nil")
 	}
 	// we will use the refresh token for authentication if it's set
 	if len(request.RefreshToken) > 0 {
@@ -165,10 +165,10 @@ func validateLoginRequest(request *api.LoginRequest) error {
 
 	// otherwise make sure both userid and password are set
 	if len(request.Userid) == 0 {
-		return fmt.Errorf("the userid should not be empty")
+		return fmt.Errorf("The userid should not be empty")
 	}
 	if len(request.Password) == 0 {
-		return fmt.Errorf("the password should not be empty")
+		return fmt.Errorf("The password should not be empty")
 	}
 	return nil
 }
@@ -184,7 +184,7 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
 	if err != nil {
-		return "", fmt.Errorf("unable to encode jwt to string: %v", err)
+		return "", fmt.Errorf("Unable to encode jwt to string: %v", err)
 	}
 	return jwtString, nil
 }
@@ -199,7 +199,7 @@ func getRefreshJwt(userId string) (string, error) {
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
 	if err != nil {
-		return "", fmt.Errorf("unable to encode jwt to string: %v", err)
+		return "", fmt.Errorf("Unable to encode jwt to string: %v", err)
 	}
 	return jwtString, nil
 }

@@ -55,7 +55,7 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *sche
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
 		if _, ok := s.m[p]; ok {
-			x.Check(fmt.Errorf("predicate %q already exists in schema", p))
+			x.Check(fmt.Errorf("Predicate %q already exists in schema", p))
 		}
 		s.m[p] = sch
 	}

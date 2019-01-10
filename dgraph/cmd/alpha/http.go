@@ -25,7 +25,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -195,23 +194,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	out.WriteRune(',')
 
 	// User can either ask for schema or have a query.
-	if len(resp.Schema) > 0 {
-		sort.Slice(resp.Schema, func(i, j int) bool {
-			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
-		})
-		js, err := json.Marshal(resp.Schema)
-		if err != nil {
-			x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
-			return
-		}
-
-		writeEntry("data", nil)
-		out.WriteRune('{')
-		writeEntry("schema", js)
-		out.WriteRune('}')
-	} else {
-		writeEntry("data", resp.Json)
-	}
+	writeEntry("data", resp.Json)
 	out.WriteRune('}')
 
 	writeResponse(w, r, out.Bytes())

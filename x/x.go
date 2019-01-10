@@ -40,7 +40,7 @@ import (
 
 // Error constants representing different types of errors.
 var (
-	ErrNotSupported = fmt.Errorf("feature available only in Dgraph Enterprise Edition")
+	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
@@ -343,7 +343,7 @@ func (b *BytesBuffer) grow(n int) {
 	b.off = 0
 }
 
-// returns a slice of lenght n to be used to writing
+// returns a slice of length n to be used to writing
 func (b *BytesBuffer) Slice(n int) []byte {
 	b.grow(n)
 	last := len(b.data) - 1
