@@ -18,8 +18,10 @@ package badger
 
 import (
 	"sync"
+	"time"
 )
 
+// WriteBatch holds the necessary info to perform batched writes.
 type WriteBatch struct {
 	sync.Mutex
 	txn *Txn
@@ -64,12 +66,12 @@ func (wb *WriteBatch) callback(err error) {
 	wb.err = err
 }
 
-// Set is equivalent of Txn.SetWithMeta.
-func (wb *WriteBatch) Set(k, v []byte, meta byte) error {
+// SetEntry is the equivalent of Txn.SetEntry.
+func (wb *WriteBatch) SetEntry(e *Entry) error {
 	wb.Lock()
 	defer wb.Unlock()
 
-	if err := wb.txn.SetWithMeta(k, v, meta); err != ErrTxnTooBig {
+	if err := wb.txn.SetEntry(e); err != ErrTxnTooBig {
 		return err
 	}
 	// Txn has reached it's zenith. Commit now.
@@ -78,11 +80,24 @@ func (wb *WriteBatch) Set(k, v []byte, meta byte) error {
 	}
 	// This time the error must not be ErrTxnTooBig, otherwise, we make the
 	// error permanent.
-	if err := wb.txn.SetWithMeta(k, v, meta); err != nil {
+	if err := wb.txn.SetEntry(e); err != nil {
 		wb.err = err
 		return err
 	}
 	return nil
+}
+
+// Set is equivalent of Txn.SetWithMeta.
+func (wb *WriteBatch) Set(k, v []byte, meta byte) error {
+	e := &Entry{Key: k, Value: v, UserMeta: meta}
+	return wb.SetEntry(e)
+}
+
+// SetWithTTL is equivalent of Txn.SetWithTTL.
+func (wb *WriteBatch) SetWithTTL(key, val []byte, dur time.Duration) error {
+	expire := time.Now().Add(dur).Unix()
+	e := &Entry{Key: key, Value: val, ExpiresAt: uint64(expire)}
+	return wb.SetEntry(e)
 }
 
 // Delete is equivalent of Txn.Delete.

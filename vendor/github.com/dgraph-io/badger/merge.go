@@ -109,10 +109,7 @@ func (op *MergeOperator) compact() error {
 		}
 
 		// Write value back to db
-		if err := txn.SetWithDiscard(op.key, val, 0); err != nil {
-			return err
-		}
-		return nil
+		return txn.SetWithDiscard(op.key, val, 0)
 	})
 
 	if err == ErrKeyNotFound || err == errNoMerge {
@@ -134,7 +131,7 @@ func (op *MergeOperator) runCompactions(dur time.Duration) {
 		case <-ticker.C: // wait for tick
 		}
 		if err := op.compact(); err != nil {
-			Errorf("failure while running merge operation: %s", err)
+			op.db.opt.Errorf("failure while running merge operation: %s", err)
 		}
 		if stop {
 			ticker.Stop()

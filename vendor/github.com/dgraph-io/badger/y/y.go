@@ -163,6 +163,8 @@ func (s *Slice) Resize(sz int) []byte {
 	return s.buf[0:sz]
 }
 
+// FixedDuration returns a string representation of the given duration with the
+// hours, minutes, and seconds.
 func FixedDuration(d time.Duration) string {
 	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
 	if d >= time.Minute {
