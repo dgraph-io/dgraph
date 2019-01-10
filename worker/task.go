@@ -986,17 +986,6 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 			return x.Errorf("Attribute not scalar: %s %v", attr, typ)
 		}
 
-		var keyFn func(int, uint64) []byte
-		if tokenizer.Identifier() == tok.IdentHash {
-			keyFn = func(row int, _ uint64) []byte {
-				return x.IndexKey(attr, arg.srcFn.tokens[row])
-			}
-		} else {
-			keyFn = func(_ int, uid uint64) []byte {
-				return x.DataKey(attr, uid)
-			}
-		}
-
 		x.AssertTrue(len(arg.out.UidMatrix) > 0)
 		rowsToFilter := 0
 		if arg.srcFn.fname == eq {
@@ -1020,9 +1009,8 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
 				switch lang {
 				case "":
-					// TODO: use hash index in list
 					if isList {
-						pl, err := posting.GetNoStore(keyFn(row, uid))
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
 						if err != nil {
 							filterErr = err
 							return false
@@ -1044,14 +1032,10 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						return false
 					}
 
-					pl, err := posting.GetNoStore(keyFn(row, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
 					if err != nil {
 						filterErr = err
 						return false
-					}
-					if arg.q.SrcFunc.Name == "eq" {
-						span.Annotate(nil, fmt.Sprintf("--- eq token: %d:%s", row, arg.srcFn.eqTokens[row].Value))
-						return true
 					}
 					sv, err := pl.Value(arg.q.ReadTs)
 					if err != nil {
@@ -1064,7 +1048,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					return err == nil &&
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
-					pl, err := posting.GetNoStore(keyFn(row, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
 					if err != nil {
 						filterErr = err
 						return false
@@ -1083,24 +1067,17 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					}
 					return false
 				default:
-					pl, err := posting.GetNoStore(keyFn(row, uid))
+					sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
 							filterErr = err
 						}
 						return false
 					}
-					src, err := pl.ValueFor(arg.q.ReadTs, arg.q.Langs)
-					if err != nil {
-						filterErr = err
+					if sv.Value == nil {
 						return false
 					}
-					dst, err := types.Convert(src, typ)
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					return types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
+					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
 				}
 			})
 			if filterErr != nil {
