@@ -89,27 +89,18 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 	tokIdx := -1
 	for i, t := range tokenizers {
-		if !t.IsLossy() {
-			tokIdx = i
-			break
-		}
-		// prefer hash over other lossy tokenizers.
-		if t.Identifier() == tok.IdentHash {
-			tokIdx = i
-		}
-	}
-
-	// If function is eq and we found a tokenizer thats !Lossy(), lets return
-	// it to avoid the second lookup.
-	if f == "eq" && tokIdx != -1 {
-		return tokenizers[tokIdx], nil
-	}
-
-	// Lets try to find a sortable tokenizer.
-	for _, t := range tokenizers {
-		if t.IsSortable() {
+		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
+		if f == "eq" && !t.IsLossy() {
 			return t, nil
 		}
+		if t.IsSortable() && tokIdx == -1 {
+			tokIdx = i
+		}
+	}
+
+	// Check if we found a sortable tokenizer and return that.
+	if tokIdx != -1 {
+		return tokenizers[tokIdx], nil
 	}
 
 	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
