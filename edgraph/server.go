@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -365,6 +366,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	if err != nil {
 		return resp, err
 	}
+
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
 	defer func() {
@@ -557,7 +559,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
-	if !Config.Nomutations {
+	if Config.MutationsMode != DisallowMutations {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)

@@ -32,28 +32,30 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	DefaultID  = TypeID(pb.Posting_DEFAULT)
-	BinaryID   = TypeID(pb.Posting_BINARY)
-	IntID      = TypeID(pb.Posting_INT)
-	FloatID    = TypeID(pb.Posting_FLOAT)
-	BoolID     = TypeID(pb.Posting_BOOL)
-	DateTimeID = TypeID(pb.Posting_DATETIME)
-	GeoID      = TypeID(pb.Posting_GEO)
-	UidID      = TypeID(pb.Posting_UID)
-	PasswordID = TypeID(pb.Posting_PASSWORD)
-	StringID   = TypeID(pb.Posting_STRING)
+	DefaultID   = TypeID(pb.Posting_DEFAULT)
+	BinaryID    = TypeID(pb.Posting_BINARY)
+	IntID       = TypeID(pb.Posting_INT)
+	FloatID     = TypeID(pb.Posting_FLOAT)
+	BoolID      = TypeID(pb.Posting_BOOL)
+	DateTimeID  = TypeID(pb.Posting_DATETIME)
+	GeoID       = TypeID(pb.Posting_GEO)
+	UidID       = TypeID(pb.Posting_UID)
+	PasswordID  = TypeID(pb.Posting_PASSWORD)
+	StringID    = TypeID(pb.Posting_STRING)
+	UndefinedID = TypeID(100)
 )
 
 var typeNameMap = map[string]TypeID{
+	"default":  DefaultID,
+	"binary":   BinaryID,
 	"int":      IntID,
 	"float":    FloatID,
-	"string":   StringID,
 	"bool":     BoolID,
 	"datetime": DateTimeID,
 	"geo":      GeoID,
 	"uid":      UidID,
+	"string":   StringID,
 	"password": PasswordID,
-	"default":  DefaultID,
 }
 
 type TypeID pb.Posting_ValType
@@ -64,26 +66,26 @@ func (t TypeID) Enum() pb.Posting_ValType {
 
 func (t TypeID) Name() string {
 	switch t {
+	case DefaultID:
+		return "default"
+	case BinaryID:
+		return "binary"
 	case IntID:
 		return "int"
 	case FloatID:
 		return "float"
 	case BoolID:
 		return "bool"
-	case StringID:
-		return "string"
 	case DateTimeID:
 		return "datetime"
 	case GeoID:
 		return "geo"
 	case UidID:
 		return "uid"
+	case StringID:
+		return "string"
 	case PasswordID:
 		return "password"
-	case DefaultID:
-		return "default"
-	case BinaryID:
-		return "binary"
 	}
 	return ""
 }
