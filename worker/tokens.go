@@ -87,18 +87,22 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 	tokenizers := schema.State().Tokenizer(attr)
 
-	var tokenizer tok.Tokenizer
-	for _, t := range tokenizers {
+	tokIdx := -1
+	for i, t := range tokenizers {
 		if !t.IsLossy() {
-			tokenizer = t
+			tokIdx = i
 			break
+		}
+		// prefer hash over other lossy tokenizers.
+		if t.Identifier() == tok.IdentHash {
+			tokIdx = i
 		}
 	}
 
 	// If function is eq and we found a tokenizer thats !Lossy(), lets return
 	// it to avoid the second lookup.
-	if f == "eq" && tokenizer != nil {
-		return tokenizer, nil
+	if f == "eq" && tokIdx != -1 {
+		return tokenizers[tokIdx], nil
 	}
 
 	// Lets try to find a sortable tokenizer.
