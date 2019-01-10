@@ -14,7 +14,6 @@ services:
     labels:
       cluster: test
       service: zero
-      role: leader
     volumes:
       - type: bind
         source: $GOPATH/bin
