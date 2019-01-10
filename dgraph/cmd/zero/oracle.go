@@ -394,8 +394,8 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	return src, err
 }
 
-var errClosed = errors.New("streaming closed by oracle")
-var errNotLeader = errors.New("node is no longer leader")
+var errClosed = errors.New("Streaming closed by oracle")
+var errNotLeader = errors.New("Node is no longer leader")
 
 func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {

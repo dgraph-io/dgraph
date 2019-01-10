@@ -29,7 +29,7 @@ import (
 func groupAdd(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if len(groupId) == 0 {
-		return fmt.Errorf("the group id should not be empty")
+		return fmt.Errorf("The group id should not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -45,10 +45,10 @@ func groupAdd(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return fmt.Errorf("error while querying group:%v", err)
+		return fmt.Errorf("Error while querying group:%v", err)
 	}
 	if group != nil {
-		return fmt.Errorf("the group with id %v already exists", groupId)
+		return fmt.Errorf("The group with id %v already exists", groupId)
 	}
 
 	createGroupNQuads := []*api.NQuad{
@@ -64,7 +64,7 @@ func groupAdd(conf *viper.Viper) error {
 		Set:       createGroupNQuads,
 	}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to create group: %v", err)
+		return fmt.Errorf("Unable to create group: %v", err)
 	}
 
 	glog.Infof("Created new group with id %v", groupId)
@@ -74,7 +74,7 @@ func groupAdd(conf *viper.Viper) error {
 func groupDel(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if len(groupId) == 0 {
-		return fmt.Errorf("the group id should not be empty")
+		return fmt.Errorf("The group id should not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -90,10 +90,10 @@ func groupDel(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return fmt.Errorf("error while querying group:%v", err)
+		return fmt.Errorf("Error while querying group:%v", err)
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("unable to delete group because it does not exist: %v", groupId)
+		return fmt.Errorf("Unable to delete group because it does not exist: %v", groupId)
 	}
 
 	deleteGroupNQuads := []*api.NQuad{
@@ -108,7 +108,7 @@ func groupDel(conf *viper.Viper) error {
 		Del:       deleteGroupNQuads,
 	}
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to delete group: %v", err)
+		return fmt.Errorf("Unable to delete group: %v", err)
 	}
 
 	glog.Infof("Deleted group with id %v", groupId)
@@ -150,10 +150,10 @@ func chMod(conf *viper.Viper) error {
 	predicate := conf.GetString("pred")
 	perm := conf.GetInt("perm")
 	if len(groupId) == 0 {
-		return fmt.Errorf("the groupid must not be empty")
+		return fmt.Errorf("The groupid must not be empty")
 	}
 	if len(predicate) == 0 {
-		return fmt.Errorf("the predicate must not be empty")
+		return fmt.Errorf("The predicate must not be empty")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -169,17 +169,17 @@ func chMod(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
 	if err != nil {
-		return fmt.Errorf("error while querying group:%v", err)
+		return fmt.Errorf("Error while querying group:%v", err)
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("unable to change permission for group because it does not exist: %v",
+		return fmt.Errorf("Unable to change permission for group because it does not exist: %v",
 			groupId)
 	}
 
 	var currentAcls []Acl
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return fmt.Errorf("unable to unmarshal the acls associated with the group %v:%v",
+			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
 				groupId, err)
 		}
 	}
@@ -195,7 +195,7 @@ func chMod(conf *viper.Viper) error {
 
 	newAclBytes, err := json.Marshal(newAcls)
 	if err != nil {
-		return fmt.Errorf("unable to marshal the updated acls:%v", err)
+		return fmt.Errorf("Unable to marshal the updated acls:%v", err)
 	}
 
 	chModNQuads := &api.NQuad{
@@ -209,7 +209,7 @@ func chMod(conf *viper.Viper) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to change mutations for the group %v on predicate %v: %v",
+		return fmt.Errorf("Unable to change mutations for the group %v on predicate %v: %v",
 			groupId, predicate, err)
 	}
 	glog.Infof("Successfully changed permission for group %v on predicate %v to %v",

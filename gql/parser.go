@@ -483,7 +483,7 @@ func Parse(r Request) (res Result, rerr error) {
 					return res, x.Errorf("Only one schema block allowed ")
 				}
 				if res.Query != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, x.Errorf("Schema block is not allowed with query block")
 				}
 				if res.Schema, rerr = getSchema(it); rerr != nil {
 					return res, rerr
@@ -497,7 +497,7 @@ func Parse(r Request) (res Result, rerr error) {
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
 				if res.Schema != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, x.Errorf("Schema block is not allowed with query block")
 				}
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
@@ -714,16 +714,16 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 	for it.Next() {
 		item = it.Item()
 		if item.Typ != itemName {
-			return fmt.Errorf("expected key inside @recurse()")
+			return fmt.Errorf("Expected key inside @recurse()")
 		}
 		key = strings.ToLower(item.Val)
 
 		if ok := trySkipItemTyp(it, itemColon); !ok {
-			return fmt.Errorf("expected colon(:) after %s", key)
+			return fmt.Errorf("Expected colon(:) after %s", key)
 		}
 
 		if item, ok = tryParseItemType(it, itemName); !ok {
-			return fmt.Errorf("expected value inside @recurse() for key: %s", key)
+			return fmt.Errorf("Expected value inside @recurse() for key: %s", key)
 		}
 		val = item.Val
 
@@ -749,7 +749,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 
 		if _, ok := tryParseItemType(it, itemComma); !ok {
-			return fmt.Errorf("expected comma after value: %s inside recurse block", val)
+			return fmt.Errorf("Expected comma after value: %s inside recurse block", val)
 		}
 	}
 	return nil
@@ -2629,7 +2629,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Cannot assign a variable to val()")
 				}
 				if count == seen {
-					return x.Errorf("count of a variable is not allowed")
+					return x.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
 				if err != nil {
@@ -2660,7 +2660,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if valLower == uid {
 				if count == seen {
-					return x.Errorf("count of a variable is not allowed")
+					return x.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
 				if err != nil {

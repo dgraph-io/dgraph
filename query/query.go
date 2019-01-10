@@ -250,8 +250,8 @@ func getValue(tv *pb.TaskValue) (types.Val, error) {
 }
 
 var (
-	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
-	ErrWrongAgg = errors.New("wrong level for var aggregation")
+	ErrEmptyVal = errors.New("Query: harmless error, e.g. task.Val is nil")
+	ErrWrongAgg = errors.New("Wrong level for var aggregation")
 )
 
 func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
@@ -395,7 +395,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 		if len(pc.facetsMatrix) > 0 && len(pc.facetsMatrix) != len(pc.uidMatrix) {
-			return x.Errorf("length of facetsMatrix and uidMatrix mismatch: %d vs %d",
+			return x.Errorf("Length of facetsMatrix and uidMatrix mismatch: %d vs %d",
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
@@ -987,7 +987,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		for _, arg := range sg.SrcFunc.Args {
 			srcFunc.Args = append(srcFunc.Args, arg.Value)
 			if arg.IsValueVar {
-				return nil, x.Errorf("unsupported use of value var")
+				return nil, x.Errorf("Unsupported use of value var")
 			}
 		}
 	}

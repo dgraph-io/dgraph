@@ -245,7 +245,7 @@ func (n *Node) Send(m raftpb.Message) {
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 	if n == nil || n.Store == nil {
-		return raftpb.Snapshot{}, errors.New("uninitialized node or raft store")
+		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store")
 	}
 	return n.Store.Snapshot()
 }
@@ -505,7 +505,7 @@ type linReadReq struct {
 	indexCh chan<- uint64
 }
 
-var errReadIndex = x.Errorf("cannot get linearized read (time expired or no configured leader)")
+var errReadIndex = x.Errorf("Cannot get linearized read (time expired or no configured leader)")
 
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	indexCh := make(chan uint64, 1)
@@ -545,7 +545,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 	again:
 		select {
 		case <-closer.HasBeenClosed():
-			return 0, errors.New("closer has been called")
+			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
 				goto again

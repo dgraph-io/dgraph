@@ -249,7 +249,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	if len(mr.uid) == 0 {
 		if op == delete {
 			// Delete operations with a non-nil value must have a uid specified.
-			return mr, x.Errorf("uid must be present and non-zero while deleting edges.")
+			return mr, x.Errorf("UID must be present and non-zero while deleting edges.")
 		}
 
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
@@ -400,7 +400,7 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	}
 
 	if len(list) == 0 && len(ms) == 0 {
-		return nil, fmt.Errorf("couldn't parse json as a map or an array")
+		return nil, fmt.Errorf("Couldn't parse json as a map or an array")
 	}
 
 	var idx int

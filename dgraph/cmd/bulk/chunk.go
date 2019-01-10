@@ -162,7 +162,7 @@ func (jsonChunker) begin(r *bufio.Reader) error {
 		return err
 	}
 	if ch != '[' {
-		return fmt.Errorf("json file must contain array. Found: %v", ch)
+		return fmt.Errorf("JSON file must contain array. Found: %v", ch)
 	}
 	return nil
 }
@@ -182,7 +182,7 @@ func (jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		return out, err
 	}
 	if ch != '{' {
-		return nil, fmt.Errorf("expected json map start. Found: %v", ch)
+		return nil, fmt.Errorf("Expected JSON map start. Found: %v", ch)
 	}
 	x.Check2(out.WriteRune(ch))
 
@@ -192,7 +192,7 @@ func (jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	for depth > 0 {
 		ch, _, err = r.ReadRune()
 		if err != nil {
-			return nil, errors.New("malformed json")
+			return nil, errors.New("Malformed JSON")
 		}
 		x.Check2(out.WriteRune(ch))
 
@@ -235,7 +235,7 @@ func (jsonChunker) end(r *bufio.Reader) error {
 	if slurpSpace(r) == io.EOF {
 		return nil
 	}
-	return errors.New("not all of json file consumed")
+	return errors.New("Not all of json file consumed")
 }
 
 func (jsonChunker) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {

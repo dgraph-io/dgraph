@@ -83,9 +83,9 @@ func readKey(fn string) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(b)
 	switch {
 	case block == nil:
-		return nil, fmt.Errorf("failed to read key block")
+		return nil, fmt.Errorf("Failed to read key block")
 	case block.Type != "RSA PRIVATE KEY":
-		return nil, fmt.Errorf("unknown PEM type: %s", block.Type)
+		return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
 	}
 
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
@@ -102,9 +102,9 @@ func readCert(fn string) (*x509.Certificate, error) {
 	block, _ := pem.Decode(b)
 	switch {
 	case block == nil:
-		return nil, fmt.Errorf("failed to read cert block")
+		return nil, fmt.Errorf("Failed to read cert block")
 	case block.Type != "CERTIFICATE":
-		return nil, fmt.Errorf("unknown PEM type: %s", block.Type)
+		return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
 	}
 
 	return x509.ParseCertificate(block.Bytes)
@@ -212,7 +212,7 @@ func createClientPair(opt options) error {
 
 func createCerts(opt options) error {
 	if opt.dir == "" {
-		return errors.New("invalid TLS directory")
+		return errors.New("Invalid TLS directory")
 	}
 
 	err := os.Mkdir(opt.dir, 0700)
@@ -222,11 +222,11 @@ func createCerts(opt options) error {
 
 	switch {
 	case opt.keySize < keySizeTooSmall:
-		return errors.New("key size value is too small (x < 512)")
+		return errors.New("Key size value is too small (x < 512)")
 	case opt.keySize > keySizeTooLarge:
-		return errors.New("key size value is too large (x > 4096)")
+		return errors.New("Key size value is too large (x > 4096)")
 	case opt.keySize%2 != 0:
-		return errors.New("key size value must be a factor of 2")
+		return errors.New("Key size value must be a factor of 2")
 	}
 
 	// no path then save it in certsDir.

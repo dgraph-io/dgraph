@@ -31,7 +31,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	var mu api.Mutation
 
 	if !it.Next() {
-		return nil, errors.New("invalid mutation")
+		return nil, errors.New("Invalid mutation")
 	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
@@ -47,7 +47,8 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 			// mutations must be enclosed in a single block.
 			if it.Next() && it.Item().Typ != lex.ItemEOF {
 				if it.Item().Typ == lex.ItemError {
-					return nil, x.Errorf("Unexpected error after end of block: %s", it.Item().String())
+					return nil, x.Errorf("Unexpected error after end of block: %s",
+						it.Item().String())
 				}
 				return nil, x.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
 			}

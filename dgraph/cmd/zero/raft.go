@@ -50,7 +50,7 @@ type node struct {
 	lastQuorum time.Time
 }
 
-var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
+var errReadIndex = x.Errorf("Cannot get linerized read (time expired or no configured leader)")
 
 func (n *node) AmLeader() bool {
 	if n.Raft() == nil {

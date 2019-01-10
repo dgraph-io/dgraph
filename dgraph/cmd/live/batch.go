@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	ErrMaxTries = errors.New("max retries exceeded for request while doing batch mutations")
+	ErrMaxTries = errors.New("Max retries exceeded for request while doing batch mutations")
 )
 
 // batchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.

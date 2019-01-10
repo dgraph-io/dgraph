@@ -280,7 +280,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		DestGroupId:   dstGroup,
 	}
 	if _, err := c.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("while calling MovePredicate: %+v", err)
+		return fmt.Errorf("While calling MovePredicate: %+v", err)
 	}
 
 	// Propose that predicate is served by dstGroup in RW.
