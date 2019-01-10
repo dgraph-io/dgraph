@@ -1,16 +1,104 @@
-# This file should only override services already defined in the main docker-compose.yml file (and
-# not add any new ones) so that docker-compose.yml still stops and deletes all containers.
+# This file sets up the cluster required by the tests in this directory.
 version: "3.5"
 services:
   zero1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg0.1
+    working_dir: /data/dg0.1
+    ports:
+      - 5080:5080
+      - 6080:6080
+    labels:
+      cluster: test
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
     command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 1 --idx 1 --logtostderr
+
   zero2:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg0.2
+    depends_on:
+      - zero1
+    ports:
+      - 5082:5082
+      - 6082:6082
+    labels:
+      cluster: test
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
     command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 1 --idx 2 --logtostderr --peer=zero1:5080
+
   zero3:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg0.3
+    depends_on:
+      - zero2
+    ports:
+      - 5083:5083
+      - 6083:6083
+    labels:
+      cluster: test
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
     command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 1 --idx 3 --logtostderr --peer=zero1:5080
+
   dg1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg1
+    working_dir: /data/dg1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8180:8180
+      - 9180:9180
+    labels:
+      cluster: test
     command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --logtostderr --mutations=disallow
+
   dg2:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg2
+    working_dir: /data/dg2
+    depends_on:
+      - dg1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8182:8182
+      - 9182:9182
+    labels:
+      cluster: test
     command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --logtostderr --mutations=strict
+
   dg3:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg3
+    working_dir: /data/dg3
+    depends_on:
+      - dg2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8183:8183
+      - 9183:9183
+    labels:
+      cluster: test
     command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --logtostderr --mutations=strict
