@@ -63,15 +63,20 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 			continue
 		case json.Number:
 			jsonNumber := facetVal.(json.Number)
-			if jsonFloat, err := jsonNumber.Float64(); err == nil {
+			if strings.Contains(jsonNumber.String(), ".") {
+				jsonFloat, err := jsonNumber.Float64()
+				if err != nil {
+					return nil, err
+				}
 				jsonValue = jsonFloat
 				valueType = api.Facet_FLOAT
-			} else if jsonInt, err := jsonNumber.Int64(); err == nil {
+			} else {
+				jsonInt, err := jsonNumber.Int64()
+				if err != nil {
+					return nil, err
+				}
 				jsonValue = jsonInt
 				valueType = api.Facet_INT
-			} else {
-				return nil, fmt.Errorf("the json number is neither float64 nor int:%v",
-					jsonNumber)
 			}
 		case bool:
 			jsonValue = v
