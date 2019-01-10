@@ -28,6 +28,27 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// Tokenizer identifiers are unique and can't be reused.
+// The range 0x00 - 0x79 is system reserved.
+// The range 0x80 - 0xff is for custom tokenizers.
+// TODO: use these everywhere where we must ensure a system tokenizer.
+const (
+	IdentNone     = 0x0
+	IdentTerm     = 0x1
+	IdentExact    = 0x2
+	IdentYear     = 0x4
+	IdentGeo      = 0x5
+	IdentInt      = 0x6
+	IdentFloat    = 0x7
+	IdentFullText = 0x8
+	IdentBool     = 0x9
+	IdentTrigram  = 0xA
+	IdentHash     = 0xB
+	IdentMonth    = 0x41
+	IdentDay      = 0x42
+	IdentHour     = 0x43
+)
+
 // Tokenizer defines what a tokenizer must provide.
 type Tokenizer interface {
 
