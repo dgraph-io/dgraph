@@ -642,15 +642,14 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		res.Del = append(res.Del, nqs...)
 	}
 
+	res.Set = append(res.Set, mu.Set...)
+	res.Del = append(res.Del, mu.Del...)
 	// parse facets and convert to the binary format so that
 	// a field of type datetime like "2017-01-01" can be correctly encoded in the
 	// marshaled binary format as done in the time.Marshal method
 	if err := validateAndConvertFacets(res.Set); err != nil {
 		return nil, err
 	}
-
-	res.Set = append(res.Set, mu.Set...)
-	res.Del = append(res.Del, mu.Del...)
 
 	if err := validateNQuads(res.Set, res.Del); err != nil {
 		return nil, err
