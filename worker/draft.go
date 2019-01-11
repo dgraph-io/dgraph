@@ -627,11 +627,11 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			var span *otrace.Span
-			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
-				// Optionally, trace this run.
-				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop")
-			}
+			// var span *otrace.Span
+			// if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
+			// 	// Optionally, trace this run.
+			// 	_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop")
+			// }
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
@@ -642,9 +642,9 @@ func (n *node) Run() {
 				// NOTE: We can do some optimizations here to drop messages.
 				n.Send(rd.Messages)
 			}
-			if span != nil {
-				span.Annotate(nil, "Handled ReadStates and SoftState.")
-			}
+			// if span != nil {
+			// 	span.Annotate(nil, "Handled ReadStates and SoftState.")
+			// }
 
 			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
 			// this node fails to get the snapshot, the Raft state would reflect that by not having
@@ -687,19 +687,19 @@ func (n *node) Run() {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
 						snap, n.gid, rc.Id)
 				}
-				if span != nil {
-					span.Annotate(nil, "Applied or retrieved snapshot.")
-				}
+				// if span != nil {
+				// 	span.Annotate(nil, "Applied or retrieved snapshot.")
+				// }
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			if span != nil {
-				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
-					len(rd.Entries),
-					raft.IsEmptySnap(rd.Snapshot),
-					raft.IsEmptyHardState(rd.HardState))
-			}
+			// if span != nil {
+			// 	span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+			// 		len(rd.Entries),
+			// 		raft.IsEmptySnap(rd.Snapshot),
+			// 		raft.IsEmptyHardState(rd.HardState))
+			// }
 
 			// Now schedule or apply committed entries.
 			var proposals []*pb.Proposal
@@ -742,28 +742,28 @@ func (n *node) Run() {
 				n.applyCh <- proposals
 			}
 
-			if span != nil {
-				span.Annotatef(nil, "Handled %d committed entries.", len(rd.CommittedEntries))
-			}
+			// if span != nil {
+			// 	span.Annotatef(nil, "Handled %d committed entries.", len(rd.CommittedEntries))
+			// }
 
 			if !leader {
 				// Followers should send messages later.
 				// NOTE: We can do some optimizations here to drop messages.
 				n.Send(rd.Messages)
 			}
-			if span != nil {
-				span.Annotate(nil, "Followed queued messages.")
-			}
+			// if span != nil {
+			// 	span.Annotate(nil, "Followed queued messages.")
+			// }
 
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
-			if span != nil {
-				span.Annotate(nil, "Advanced Raft. Done.")
-				span.End()
-			}
+			// if span != nil {
+			// 	span.Annotate(nil, "Advanced Raft. Done.")
+			// 	span.End()
+			// }
 		}
 	}
 }
