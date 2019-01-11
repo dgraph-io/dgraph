@@ -78,6 +78,8 @@ type DiskStorage struct {
 	gid  uint32
 	elog trace.EventLog
 
+	mem *raft.MemoryStorage
+
 	numFirst    uint64
 	numLast     uint64
 	numTerms    uint64
@@ -103,7 +105,7 @@ func (w *DiskStorage) printCounters() {
 }
 
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
-	w := &DiskStorage{db: db, id: id, gid: gid}
+	w := &DiskStorage{db: db, id: id, gid: gid, mem: raft.NewMemoryStorage()}
 	x.Check(w.StoreRaftId(id))
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
@@ -195,8 +197,9 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 // rest of that entry may not be available.
 // TODO: Serve this from cache.
 func (w *DiskStorage) Term(idx uint64) (uint64, error) {
-	atomic.AddUint64(&w.numTerms, 1)
+	return w.mem.Term(idx)
 
+	atomic.AddUint64(&w.numTerms, 1)
 	w.elog.Printf("Term: %d", idx)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
@@ -251,8 +254,9 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
-	atomic.AddUint64(&w.numFirst, 1)
+	return w.mem.FirstIndex()
 
+	atomic.AddUint64(&w.numFirst, 1)
 	snap := w.cache.snapshot()
 	if !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
@@ -273,6 +277,8 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 // LastIndex returns the index of the last entry in the log.
 // TODO: Serve this from cache.
 func (w *DiskStorage) LastIndex() (uint64, error) {
+	return w.mem.LastIndex()
+
 	atomic.AddUint64(&w.numLast, 1)
 	if l := w.cache.last(); l > 0 {
 		return l, nil
@@ -323,6 +329,8 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 // so raft state machine could know that Storage needs some time to prepare
 // snapshot and call Snapshot later.
 func (w *DiskStorage) Snapshot() (snap pb.Snapshot, rerr error) {
+	return w.mem.Snapshot()
+
 	atomic.AddUint64(&w.numSnapshot, 1)
 	if s := w.cache.snapshot(); !raft.IsEmptySnap(s) {
 		return s, nil
@@ -554,8 +562,9 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
-	atomic.AddUint64(&w.numEntries, 1)
+	return w.mem.Entries(lo, hi, maxSize)
 
+	atomic.AddUint64(&w.numEntries, 1)
 	w.elog.Printf("Entries: [%d, %d) maxSize:%d", lo, hi, maxSize)
 	defer w.elog.Printf("Done")
 	first, err := w.FirstIndex()
@@ -611,7 +620,11 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 	if err := w.deleteUntil(batch, snap.Metadata.Index); err != nil {
 		return err
 	}
-	return batch.Flush()
+	if err := batch.Flush(); err != nil {
+		return err
+	}
+	_, err = w.mem.CreateSnapshot(i, cs, data)
+	return err
 }
 
 // Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
@@ -634,10 +647,23 @@ func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) erro
 	if err := batch.Flush(); err != nil {
 		return err
 	}
-	w.cache.Lock()
-	w.cache.lastIndex = es[len(es)-1].Index
-	w.cache.Unlock()
+	if err := w.mem.Append(es); err != nil {
+		return err
+	}
+	if !raft.IsEmptyHardState(h) {
+		if err := w.mem.SetHardState(h); err != nil {
+			return err
+		}
+	}
+	if !raft.IsEmptySnap(snap) {
+		return w.mem.ApplySnapshot(snap)
+	}
 	return nil
+
+	// w.cache.Lock()
+	// w.cache.lastIndex = es[len(es)-1].Index
+	// w.cache.Unlock()
+	// return nil
 }
 
 // Append the new entries to storage.
