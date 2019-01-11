@@ -45,6 +45,10 @@ var (
 	MaxPlSize        *expvar.Int
 	MaxPlLength      *expvar.Int
 
+	// Histogram latencies for func timings e.g., Raft funcs
+	RaftReadyDuration   *expvar.Int
+	RaftAdvanceDuration *expvar.Int
+
 	PredicateStats *expvar.Map
 	Conf           *expvar.Map
 
@@ -72,6 +76,8 @@ func init() {
 	Conf = expvar.NewMap("dgraph_config")
 	MaxPlSize = expvar.NewInt("dgraph_max_list_bytes")
 	MaxPlLength = expvar.NewInt("dgraph_max_list_length")
+	RaftReadyDuration = expvar.NewInt("dgraph_raft_ready_durations_nanoseconds")
+	RaftAdvanceDuration = expvar.NewInt("dgraph_raft_advance_durations_nanoseconds")
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
@@ -210,6 +216,16 @@ func init() {
 			"dgraph_predicate_stats",
 			"dgraph_predicate_stats",
 			[]string{"name"}, nil,
+		),
+		"dgraph_raft_ready_durations_nanoseconds": prometheus.NewDesc(
+			"dgraph_raft_ready_durations_nanoseconds",
+			"dgraph_raft_ready_durations_nanoseconds",
+			nil, nil,
+		),
+		"dgraph_raft_advance_durations_nanoseconds": prometheus.NewDesc(
+			"dgraph_raft_advance_durations_nanoseconds",
+			"dgraph_raft_advance_durations_nanoseconds",
+			nil, nil,
 		),
 		"badger_disk_reads_total": prometheus.NewDesc(
 			"badger_disk_reads_total",

@@ -627,6 +627,7 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			now := time.Now()
 			// var span *otrace.Span
 			// if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
 			// 	// Optionally, trace this run.
@@ -755,15 +756,19 @@ func (n *node) Run() {
 			// 	span.Annotate(nil, "Followed queued messages.")
 			// }
 
+			nowAdvance := time.Now()
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
+
+			x.RaftAdvanceDuration.Set(time.Since(nowAdvance).Nanoseconds())
 			// if span != nil {
 			// 	span.Annotate(nil, "Advanced Raft. Done.")
 			// 	span.End()
 			// }
+			x.RaftReadyDuration.Set(time.Since(now).Nanoseconds())
 		}
 	}
 }
