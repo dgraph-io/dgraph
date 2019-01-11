@@ -7,8 +7,8 @@ source $basedir/contrib/scripts/functions.sh
 restartCluster
 
 # Create a temporary directory to use for running live loader.
-tmpdir=`mktemp -p -d loader.tmp-XXXXXX`
-trap "rm -rf $tmpdir"
+tmpdir=`mktemp --tmpdir -d loader.tmp-XXXXXX`
+trap "rm -rf $tmpdir" EXIT
 pushd $tmpdir
 echo "Inside `pwd`"
 
