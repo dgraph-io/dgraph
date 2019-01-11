@@ -127,7 +127,7 @@ func TestPopulateMutationMap(t *testing.T) {
 }
 
 func TestCheckSchema(t *testing.T) {
-	posting.DeleteAll()
+	require.NoError(t, posting.DeleteAll())
 	initTest(t, "name:string @index(term) .")
 	// non uid to uid
 	s1 := &pb.SchemaUpdate{Predicate: "name", ValueType: pb.Posting_UID}
@@ -200,26 +200,4 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, err)
 	err = checkSchema(su[1])
 	require.NoError(t, err)
-}
-
-func TestNeedReindexing(t *testing.T) {
-	s1 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
-	s2 := pb.SchemaUpdate{ValueType: pb.Posting_UID}
-	require.False(t, needReindexing(s1, s2))
-
-	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	require.False(t, needReindexing(s1, s2))
-
-	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"term"}}
-	s2 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX}
-	require.True(t, needReindexing(s1, s2))
-
-	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	require.True(t, needReindexing(s1, s2))
-
-	s1 = pb.SchemaUpdate{ValueType: pb.Posting_STRING, Directive: pb.SchemaUpdate_INDEX, Tokenizer: []string{"exact"}}
-	s2 = pb.SchemaUpdate{ValueType: pb.Posting_FLOAT, Directive: pb.SchemaUpdate_NONE}
-	require.True(t, needReindexing(s1, s2))
 }

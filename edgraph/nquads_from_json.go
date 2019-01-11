@@ -64,20 +64,20 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 			}
 		case json.Number:
 			valn := facetVal.(json.Number)
-			if strings.Index(valn.String(), ".") >= 0 {
-				if vf, err := valn.Float64(); err != nil {
+			if strings.Contains(valn.String(), ".") {
+				vf, err := valn.Float64()
+				if err != nil {
 					return nil, err
-				} else {
-					fv = vf
-					f.ValType = api.Facet_FLOAT
 				}
+				fv = vf
+				f.ValType = api.Facet_FLOAT
 			} else {
-				if vi, err := valn.Int64(); err != nil {
+				vi, err := valn.Int64()
+				if err != nil {
 					return nil, err
-				} else {
-					fv = vi
-					f.ValType = api.Facet_INT
 				}
+				fv = vi
+				f.ValType = api.Facet_INT
 			}
 		case bool:
 			fv = v
@@ -235,10 +235,10 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
 				mr.uid = uidVal
-			} else if u, err := strconv.ParseUint(uidVal, 0, 64); err != nil {
-				return mr, err
-			} else {
+			} else if u, err := strconv.ParseUint(uidVal, 0, 64); err == nil {
 				uid = u
+			} else {
+				return mr, err
 			}
 		}
 		if uid > 0 {
@@ -249,7 +249,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	if len(mr.uid) == 0 {
 		if op == delete {
 			// Delete operations with a non-nil value must have a uid specified.
-			return mr, x.Errorf("uid must be present and non-zero while deleting edges.")
+			return mr, x.Errorf("UID must be present and non-zero while deleting edges.")
 		}
 
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
@@ -400,7 +400,7 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	}
 
 	if len(list) == 0 && len(ms) == 0 {
-		return nil, fmt.Errorf("Couldn't parse json as a map or an array.")
+		return nil, fmt.Errorf("Couldn't parse json as a map or an array")
 	}
 
 	var idx int

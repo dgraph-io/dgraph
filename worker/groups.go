@@ -128,6 +128,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode()
 	x.UpdateHealthStatus(true)
+	glog.Infof("Server is ready")
 
 	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
@@ -264,7 +265,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return x.Errorf("don't have the address of any dgraphzero server")
+		return x.Errorf("Don't have the address of any dgraphzero server")
 	}
 
 	c := pb.NewZeroClient(p.Get())
@@ -804,7 +805,7 @@ func (g *groupi) cleanupTablets() {
 			for itr.Rewind(); itr.Valid(); {
 				item := itr.Item()
 
-				// TODO: Investiage out of bounds.
+				// TODO: Investigate out of bounds.
 				pk := x.Parse(item.Key())
 				if pk == nil {
 					itr.Next()
@@ -948,7 +949,7 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 
 			// We should always sort the txns before applying. Otherwise, we might lose some of
-			// these updates, becuase we never write over a new version.
+			// these updates, because we never write over a new version.
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})

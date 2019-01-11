@@ -19,7 +19,9 @@ Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-
 
 ## Status
 
-Dgraph is [at version 1.0.x][rel] and is production ready.
+Dgraph is [at version 1.0.x][rel] and is production ready. It is being used in
+production at multiple Fortune 500 companies, and by
+[Intuit Katlas](https://github.com/intuit/katlas).
 
 [rel]: https://github.com/dgraph-io/dgraph/releases
 
@@ -117,6 +119,7 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 
 **Elixir**
 
+* [https://github.com/liveforeverx/dlex](https://github.com/liveforeverx/dlex)
 * [https://github.com/ospaarmann/exdgraph](https://github.com/ospaarmann/exdgraph)
 
 ## Contact

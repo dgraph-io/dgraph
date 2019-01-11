@@ -158,7 +158,7 @@ func restart(cmd *exec.Cmd) error {
 }
 
 // TODO: Fix this test later. Also, use Docker instead of directly running Dgraph.
-func DONOTRUN_TestClusterSnapshot(t *testing.T) {
+func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}

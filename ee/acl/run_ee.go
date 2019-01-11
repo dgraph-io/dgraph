@@ -229,7 +229,7 @@ func info(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if (len(userId) == 0 && len(groupId) == 0) ||
 		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("either the user or group should be specified, not both")
+		return fmt.Errorf("Either the user or group should be specified, not both")
 	}
 
 	dc, close := getDgraphClient(conf)
@@ -280,7 +280,7 @@ func info(conf *viper.Viper) error {
 		var aclStrs []string
 		var acls []Acl
 		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return fmt.Errorf("unable to unmarshal the acls associated with the group %v:%v",
+			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
 				groupId, err)
 		}
 

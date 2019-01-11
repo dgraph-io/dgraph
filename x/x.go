@@ -40,7 +40,7 @@ import (
 
 // Error constants representing different types of errors.
 var (
-	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition.")
+	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
@@ -114,13 +114,6 @@ type errRes struct {
 
 type queryRes struct {
 	Errors []errRes `json:"errors"`
-}
-
-// SetError sets the error logged in this package.
-func SetError(prev *error, n error) {
-	if prev == nil {
-		prev = &n
-	}
 }
 
 // SetStatus sets the error code, message and the newly assigned uids
@@ -350,7 +343,7 @@ func (b *BytesBuffer) grow(n int) {
 	b.off = 0
 }
 
-// returns a slice of lenght n to be used to writing
+// returns a slice of length n to be used to writing
 func (b *BytesBuffer) Slice(n int) []byte {
 	b.grow(n)
 	last := len(b.data) - 1

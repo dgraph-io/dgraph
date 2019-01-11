@@ -73,35 +73,46 @@ func (w *WaterMark) Init() {
 	go w.process()
 }
 
+// Begin sets the last index to the given value.
 func (w *WaterMark) Begin(index uint64) {
 	atomic.StoreUint64(&w.lastIndex, index)
 	w.markCh <- mark{index: index, done: false}
 }
+
+// BeginMany works like Begin but accepts multiple indices.
 func (w *WaterMark) BeginMany(indices []uint64) {
 	atomic.StoreUint64(&w.lastIndex, indices[len(indices)-1])
 	w.markCh <- mark{index: 0, indices: indices, done: false}
 }
 
+// Done sets a single index as done.
 func (w *WaterMark) Done(index uint64) {
 	w.markCh <- mark{index: index, done: true}
 }
+
+// DoneMany works like Done but accepts multiple indices.
 func (w *WaterMark) DoneMany(indices []uint64) {
 	w.markCh <- mark{index: 0, indices: indices, done: true}
 }
 
-// DoneUntil returns the maximum index until which all tasks are done.
+// DoneUntil returns the maximum index that has the property that all indices
+// less than or equal to it are done.
 func (w *WaterMark) DoneUntil() uint64 {
 	return atomic.LoadUint64(&w.doneUntil)
 }
 
+// SetDoneUntil sets the maximum index that has the property that all indices
+// less than or equal to it are done.
 func (w *WaterMark) SetDoneUntil(val uint64) {
 	atomic.StoreUint64(&w.doneUntil, val)
 }
 
+// LastIndex returns the last index for which Begin has been called.
 func (w *WaterMark) LastIndex() uint64 {
 	return atomic.LoadUint64(&w.lastIndex)
 }
 
+// WaitForMark waits until the given index is marked as done.
 func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 	if w.DoneUntil() >= index {
 		return nil

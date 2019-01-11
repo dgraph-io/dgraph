@@ -64,7 +64,7 @@ func (stream *Stream) Backup(w io.Writer, since uint64) (uint64, error) {
 				var err error
 				valCopy, err = item.ValueCopy(nil)
 				if err != nil {
-					Errorf("Key [%x, %d]. Error while fetching value [%v]\n",
+					stream.db.opt.Errorf("Key [%x, %d]. Error while fetching value [%v]\n",
 						item.Key(), item.Version(), err)
 					return nil, err
 				}

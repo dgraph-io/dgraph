@@ -1715,7 +1715,7 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 - Ensure it's successful
 - Bring down the cluster
 - Run Dgraph using new data directories.
-- Reload the data via [bulk loader]({{< relref "#Bulk Loader" >}}).
+- Reload the data via [bulk loader]({{< relref "#bulk-loader" >}}).
 - If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.

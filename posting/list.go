@@ -45,7 +45,7 @@ import (
 var (
 	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
 	// In such a case, retry.
-	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
+	ErrRetry = fmt.Errorf("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue       = fmt.Errorf("No value found")
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
@@ -207,7 +207,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star))
 }
 
-// Ensure that you either abort the uncomitted postings or commit them before calling me.
+// Ensure that you either abort the uncommitted postings or commit them before calling me.
 func (l *List) updateMutationLayer(mpost *pb.Posting) {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
@@ -674,7 +674,7 @@ func (l *List) rollup(readTs uint64) error {
 		}
 	}
 
-	// Keep all uncommited Entries or postings with commitTs > l.commitTs
+	// Keep all uncommitted Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
 	// TODO: This could be removed after LRU cache is removed.
 	for startTs, plist := range l.mutationMap {

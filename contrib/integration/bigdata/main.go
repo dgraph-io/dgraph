@@ -231,16 +231,13 @@ func showNode(c *dgo.Dgraph) error {
 	x.AssertTruef(len(result.Q) > 0 && result.Q[0].Count != nil, "%v %+v", string(resp.Json), result)
 
 	var m map[string]interface{}
-	if err := r.query(&m, `
+	return r.query(&m, `
 	{
 		q(func: eq(xid, "%c_%d")) {
 			expand(_all_)
 		}
 	}
-	`, char, rand.Intn(*result.Q[0].Count)); err != nil {
-		return err
-	}
-	return nil
+	`, char, rand.Intn(*result.Q[0].Count))
 }
 
 func (r *runner) query(out interface{}, q string, args ...interface{}) error {

@@ -74,9 +74,8 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 
 	if all {
 		return cnt == len(filter.tokens)
-	} else {
-		return cnt > 0
 	}
+	return cnt > 0
 }
 
 func ineqMatch(value types.Val, filter stringFilter) bool {
@@ -102,7 +101,7 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 	}
 
 	tokenizer, found := tok.GetTokenizer(tokName)
-	// tokenizer was used in previous stages of query proccessing, it has to be available
+	// tokenizer was used in previous stages of query processing, it has to be available
 	x.AssertTrue(found)
 
 	tokens, err := tok.BuildTokens(value.Value, tok.GetLangTokenizer(tokenizer, filter.lang))

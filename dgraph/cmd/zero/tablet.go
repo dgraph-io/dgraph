@@ -190,8 +190,8 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 	for lastGroup := numGroups - 1; lastGroup > 0; lastGroup-- {
 		srcGroup = groups[lastGroup].gid
 		dstGroup = groups[0].gid
-		size_diff := groups[lastGroup].size - groups[0].size
-		glog.Infof("size_diff %v\n", size_diff)
+		sizeDiff := groups[lastGroup].size - groups[0].size
+		glog.Infof("size_diff %v\n", sizeDiff)
 		// Don't move a node unless you receive atleast one update regarding tablet size.
 		// Tablet size would have come up with leader update.
 		if !s.hasLeader(dstGroup) {
@@ -199,7 +199,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		}
 		// We move the predicate only if the difference between size of both machines is
 		// atleast 10% of src group.
-		if float64(size_diff) < 0.1*float64(groups[0].size) {
+		if float64(sizeDiff) < 0.1*float64(groups[0].size) {
 			continue
 		}
 
@@ -209,7 +209,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		for _, tab := range group.Tablets {
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
-			if tab.Space <= size_diff/2 && tab.Space > size {
+			if tab.Space <= sizeDiff/2 && tab.Space > size {
 				predicate = tab.Predicate
 				size = tab.Space
 			}
@@ -280,7 +280,7 @@ func (s *Server) movePredicateHelper(ctx context.Context, predicate string, srcG
 		DestGroupId:   dstGroup,
 	}
 	if _, err := c.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
+		return fmt.Errorf("While calling MovePredicate: %+v", err)
 	}
 
 	// Propose that predicate is served by dstGroup in RW.

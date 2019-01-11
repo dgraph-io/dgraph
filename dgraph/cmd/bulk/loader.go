@@ -194,23 +194,7 @@ func (ld *loader) mapStage() {
 		files = findDataFiles(ld.opt.JSONDir, ext)
 	}
 
-	readers := make(map[string]*bufio.Reader)
-	for _, file := range files {
-		f, err := os.Open(file)
-		x.Check(err)
-		defer f.Close()
-		// TODO detect compressed input instead of relying on filename
-		//      so data can be streamed in
-		if !strings.HasSuffix(file, ".gz") {
-			readers[file] = bufio.NewReaderSize(f, 1<<20)
-		} else {
-			gzr, err := gzip.NewReader(f)
-			x.Checkf(err, "Could not create gzip reader for file %q.", file)
-			readers[file] = bufio.NewReader(gzr)
-		}
-	}
-
-	if len(readers) == 0 {
+	if len(files) == 0 {
 		fmt.Printf("No *%s files found.\n", ext)
 		os.Exit(1)
 	}
@@ -226,14 +210,25 @@ func (ld *loader) mapStage() {
 
 	// This is the main map loop.
 	thr := x.NewThrottle(ld.opt.NumGoroutines)
-	var fileCount int
-	for file, r := range readers {
+	for i, file := range files {
 		thr.Start()
-		fileCount++
-		fmt.Printf("Processing file (%d out of %d): %s\n", fileCount, len(readers), file)
+		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
 		chunker := newChunker(loaderType)
-		go func(r *bufio.Reader) {
+		go func(file string) {
 			defer thr.Done()
+
+			f, err := os.Open(file)
+			x.Check(err)
+			defer f.Close()
+
+			var r *bufio.Reader
+			if !strings.HasSuffix(file, ".gz") {
+				r = bufio.NewReaderSize(f, 1<<20)
+			} else {
+				gzr, err := gzip.NewReader(f)
+				x.Checkf(err, "Could not create gzip reader for file %q.", file)
+				r = bufio.NewReaderSize(gzr, 1<<20)
+			}
 			x.Check(chunker.begin(r))
 			for {
 				chunkBuf, err := chunker.chunk(r)
@@ -247,7 +242,7 @@ func (ld *loader) mapStage() {
 				}
 			}
 			x.Check(chunker.end(r))
-		}(r)
+		}(file)
 	}
 	thr.Wait()
 

@@ -286,7 +286,7 @@ func TestNquadsFromJsonError1(t *testing.T) {
 
 	_, err = nquadsFromJson(b, delete)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "uid must be present and non-zero while deleting edges.")
+	require.Contains(t, err.Error(), "UID must be present and non-zero while deleting edges.")
 }
 
 func TestNquadsFromJsonList(t *testing.T) {

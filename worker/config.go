@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package worker
 
 import "net"
@@ -32,6 +33,7 @@ type Options struct {
 	ExpandEdge          bool
 	WhiteListedIPRanges []IPRange
 	MaxRetries          int
+	StrictMutations     bool
 }
 
 var Config Options

@@ -76,7 +76,7 @@ func processWithBackupRequest(
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
-		return nil, errors.New("no network connection")
+		return nil, errors.New("No network connection")
 	}
 	if len(addrs) == 1 {
 		reply, err := invokeNetworkRequest(ctx, addrs[0], f)
@@ -401,12 +401,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 			}
 
-			valTid := vals[0].Tid
-			newValue := &pb.TaskValue{ValType: valTid.Enum(), Val: x.Nilbyte}
 			uidList := new(pb.List)
 			var vl pb.ValueList
 			for _, val := range vals {
-				newValue, err = convertToType(val, srcFn.atype)
+				newValue, err := convertToType(val, srcFn.atype)
 				if err != nil {
 					return err
 				}
@@ -1400,7 +1398,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !ok {
 			return nil, x.Errorf("Could not find tokenizer with name %q", tokerName)
 		}
-		fc.tokens, err = tok.BuildTokens(valToTok.Value,
+		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
 		fnName := strings.ToLower(q.SrcFunc.Name)
 		x.AssertTrue(fnName == "allof" || fnName == "anyof")
@@ -1721,9 +1719,9 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	}
 
 	if cp.fn == "lt" {
-		count -= 1
+		count--
 	} else if cp.fn == "gt" {
-		count += 1
+		count++
 	}
 
 	x.AssertTrue(count >= 1)

@@ -50,8 +50,6 @@ type node struct {
 	lastQuorum time.Time
 }
 
-var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
-
 func (n *node) AmLeader() bool {
 	if n.Raft() == nil {
 		return false
@@ -189,6 +187,10 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 			state.Removed = append(state.Removed, m)
 		}
 		// else already removed.
+		if len(group.Members) == 0 {
+			glog.V(3).Infof("Deleting group Id %d (no members) ...", member.GroupId)
+			delete(state.Groups, member.GroupId)
+		}
 		return nil
 	}
 	if !has && len(group.Members) >= n.server.NumReplicas {

@@ -27,7 +27,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
 	"strconv"

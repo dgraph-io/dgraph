@@ -394,8 +394,8 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	return src, err
 }
 
-var errClosed = errors.New("Streaming closed by Oracle.")
-var errNotLeader = errors.New("Node is no longer leader.")
+var errClosed = errors.New("Streaming closed by oracle")
+var errNotLeader = errors.New("Node is no longer leader")
 
 func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
@@ -478,7 +478,7 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		s.orc.doneUntil.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(reply)
 
-	} else if err == servedFromMemory {
+	} else if err == errServedFromMemory {
 		// Avoid calling doneUntil.Done, and storePending.
 		err = nil
 
