@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# usage: test.sh [pkg_regex]
+# usage: test.sh [-v] [pkg_regex]
 
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
@@ -10,11 +10,16 @@ source $DGRAPH_ROOT/contrib/scripts/functions.sh
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
 TEST_FAILED=0
 RUN_ALL=
+GO_TEST_OPTS=( "-short=true" )
 
 TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
 MATCHING_TESTS=$TMP_DIR/tests
 CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
 trap "rm -rf $TMP_DIR" EXIT
+
+#
+# Functions
+#
 
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
@@ -32,7 +37,7 @@ function FindCustomClusterTests {
 
 function Run {
     set -o pipefail
-    go test -short=true $@ \
+    go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
     | GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
@@ -62,6 +67,17 @@ function RunCustomClusterTests {
 #
 # MAIN
 #
+
+
+ARGS=$(/usr/bin/getopt -n$ME -o"v" -- "$@") || exit 1
+eval set -- "$ARGS"
+while true; do
+    case "$1" in
+        -v) GO_TEST_OPTS+=( "-v" ) ;;
+        --) shift; break         ;;
+    esac
+    shift
+done
 
 cd $DGRAPH_ROOT
 
