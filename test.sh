@@ -82,15 +82,13 @@ Info "Running tests using the default cluster"
 restartCluster
 RunDefaultClusterTests || TEST_FAILED=1
 
-if [[ $RUN_ALL ]]; then
-    Info "Running load-test.sh"
-    ./contrib/scripts/load-test.sh
-fi
-
 Info "Running tests using custom clusters"
 RunCustomClusterTests || TEST_FAILED=1
 
 if [[ $RUN_ALL ]]; then
+    Info "Running load-test.sh"
+    ./contrib/scripts/load-test.sh
+
     Info "Running custom test scripts"
     ./contrib/scripts/test-backup-restore.sh
     ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
