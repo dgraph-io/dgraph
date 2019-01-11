@@ -26,13 +26,19 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	AllowMutations int = iota
+	DisallowMutations
+	StrictMutations
+)
+
 type Options struct {
-	PostingDir   string
-	BadgerTables string
-	BadgerVlog   string
-	WALDir       string
-	Nomutations  bool
-	AuthToken    string
+	PostingDir    string
+	BadgerTables  string
+	BadgerVlog    string
+	WALDir        string
+	MutationsMode int
+	AuthToken     string
 
 	AllottedMemory float64
 

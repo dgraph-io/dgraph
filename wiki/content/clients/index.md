@@ -375,6 +375,7 @@ These third-party clients are contributed by the community and are not officiall
 
 ### Elixir
 
+- https://github.com/liveforeverx/dlex
 - https://github.com/ospaarmann/exdgraph
 
 ## Raw HTTP

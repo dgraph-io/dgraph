@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
+
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -357,11 +358,8 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
-		node := groups().Node
-		// we don't timeout after proposing
-		res.err = node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
 		res.ctx = &api.TxnContext{}
-		fillTxnContext(res.ctx, m.StartTs)
+		res.err = (&grpcWorker{}).proposeAndWait(ctx, res.ctx, m)
 		chr <- res
 		return
 	}
@@ -507,6 +505,22 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	return tctx.CommitTs, nil
 }
 
+func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
+		m *pb.Mutations) error {
+	if Config.StrictMutations {
+		for _, edge := range m.Edges {
+			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
+				return err
+			}
+		}
+	}
+
+	node := groups().Node
+	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
+	fillTxnContext(txnCtx, m.StartTs)
+	return err
+}
+
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "worker.Mutate")
@@ -520,10 +534,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 
-	node := groups().Node
-	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
-	fillTxnContext(txnCtx, m.StartTs)
-	return txnCtx, err
+	return txnCtx, w.proposeAndWait(ctx, txnCtx, m)
 }
 
 func tryAbortTransactions(startTimestamps []uint64) {

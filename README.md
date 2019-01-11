@@ -119,6 +119,7 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 
 **Elixir**
 
+* [https://github.com/liveforeverx/dlex](https://github.com/liveforeverx/dlex)
 * [https://github.com/ospaarmann/exdgraph](https://github.com/ospaarmann/exdgraph)
 
 ## Contact
