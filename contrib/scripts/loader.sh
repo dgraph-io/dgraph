@@ -7,17 +7,15 @@ source $basedir/contrib/scripts/functions.sh
 restartCluster
 
 # Create a temporary directory to use for running live loader.
-mkdir -p tmp
-pushd tmp
+tmpdir=`mktemp -p -d loader.tmp-XXXXXX`
+trap "rm -rf $tmpdir"
+pushd $tmpdir
 echo "Inside `pwd`"
-rm -f *
 
-if [ ! -f "goldendata.rdf.gz" ]; then
-  cp $basedir/systest/data/goldendata.rdf.gz .
-fi
+ln -s $basedir/systest/data/goldendata.rdf.gz .
 
 # log file size.
-ls -la goldendata.rdf.gz
+ls -laH goldendata.rdf.gz
 
 echo "Setting schema."
 while true; do
@@ -36,7 +34,7 @@ rm -f alter.txt
 echo -e "\nRunning dgraph live."
 dgraph live -r goldendata.rdf.gz -d "127.0.0.1:9180" -z "127.0.0.1:5080" -c 10
 popd
-rm -Rf tmp
+rm -rf $tmpdir
 
 echo "Running queries"
 $basedir/contrib/scripts/goldendata-queries.sh
