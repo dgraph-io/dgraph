@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"reflect"
 	"time"
 
 	"github.com/golang/glog"
@@ -38,10 +37,19 @@ import (
 
 var emptyCountParams countParams
 
+type indexMutationInfo struct {
+	tokenizers []tok.Tokenizer
+	edge       *pb.DirectedEdge // Represents the original uid -> value edge.
+	val        types.Val
+	op         pb.DirectedEdge_Op
+}
+
 // indexTokensforTokenizers return tokens, without the predicate prefix and
 // index rune, for specific tokenizers.
-func indexTokensForTokenizers(attr, lang string, tokenizers []tok.Tokenizer,
-	src types.Val) ([]string, error) {
+func indexTokens(info *indexMutationInfo) ([]string, error) {
+	attr := info.edge.Attr
+	lang := info.edge.GetLang()
+
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -50,13 +58,13 @@ func indexTokensForTokenizers(attr, lang string, tokenizers []tok.Tokenizer,
 	if !schema.State().IsIndexed(attr) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
 	}
-	sv, err := types.Convert(src, schemaType)
+	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
 		return nil, err
 	}
 
 	var tokens []string
-	for _, it := range tokenizers {
+	for _, it := range info.tokenizers {
 		if it.Name() == "exact" && schemaType == types.StringID && len(sv.Value.(string)) > 100 {
 			// Exact index can only be applied for strings so we can safely try to convert Value to
 			// string.
@@ -72,28 +80,18 @@ func indexTokensForTokenizers(attr, lang string, tokenizers []tok.Tokenizer,
 	return tokens, nil
 }
 
-// indexTokens return tokens, without the predicate prefix and index rune, for
-// all tokenizers. This function is only being used in the tests as the code now
-// calls indexTokensForTokenizers with the complete list of tokenizers in cases
-// where the whole index needs to be rebuilt. This function is being kept for
-// convenience as manually getting the tokenizers in every test that need them
-// would add a lot of extra code.
-func indexTokens(attr, lang string, src types.Val) ([]string, error) {
-	// Get the complete list of tokenizers from the schema.
-	tokenizers := schema.State().Tokenizer(attr)
-	return indexTokensForTokenizers(attr, lang, tokenizers, src)
-}
-
-// addIndexMutationsForTokenizers adds mutation(s) for a single term, to
-// maintain the index, but only for the given tokenizers. t represents the
-// original uid -> value edge.
+// addIndexMutations adds mutation(s) for a single term, to maintain the index,
+// but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
-func (txn *Txn) addIndexMutationsForTokenizers(ctx context.Context, tokenizers []tok.Tokenizer,
-	t *pb.DirectedEdge, p types.Val, op pb.DirectedEdge_Op) error {
-	attr := t.Attr
-	uid := t.Entity
+func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
+	if info.tokenizers == nil {
+		info.tokenizers = schema.State().Tokenizer(info.edge.Attr)
+	}
+
+	attr := info.edge.Attr
+	uid := info.edge.Entity
 	x.AssertTrue(uid != 0)
-	tokens, err := indexTokensForTokenizers(attr, t.GetLang(), tokenizers, p)
+	tokens, err := indexTokens(info)
 
 	if err != nil {
 		// This data is not indexable
@@ -104,7 +102,7 @@ func (txn *Txn) addIndexMutationsForTokenizers(ctx context.Context, tokenizers [
 	edge := &pb.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
-		Op:      op,
+		Op:      info.op,
 	}
 
 	for _, token := range tokens {
@@ -113,15 +111,6 @@ func (txn *Txn) addIndexMutationsForTokenizers(ctx context.Context, tokenizers [
 		}
 	}
 	return nil
-}
-
-// addIndexMutations adds mutation(s) for a single term, to maintain index,
-// for all tokenizers.
-func (txn *Txn) addIndexMutations(ctx context.Context, t *pb.DirectedEdge, p types.Val,
-	op pb.DirectedEdge_Op) error {
-	// Get the complete list of tokenizers from the schema.
-	tokenizers := schema.State().Tokenizer(t.Attr)
-	return txn.addIndexMutationsForTokenizers(ctx, tokenizers, t, p, op)
 }
 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
@@ -214,15 +203,15 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 	return nil
 }
 
-func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
+func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 	txn *Txn) error {
-	isReversed := schema.State().IsReversed(t.Attr)
-	isIndexed := schema.State().IsIndexed(t.Attr)
-	hasCount := schema.State().HasCount(t.Attr)
+	isReversed := schema.State().IsReversed(edge.Attr)
+	isIndexed := schema.State().IsIndexed(edge.Attr)
+	hasCount := schema.State().HasCount(edge.Attr)
 	delEdge := &pb.DirectedEdge{
-		Attr:   t.Attr,
-		Op:     t.Op,
-		Entity: t.Entity,
+		Attr:   edge.Attr,
+		Op:     edge.Op,
+		Entity: edge.Entity,
 	}
 	// To calculate length of posting list. Used for deletion of count index.
 	var plen int
@@ -235,11 +224,16 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 			return txn.addReverseMutation(ctx, delEdge)
 		case isIndexed:
 			// Delete index edge of each posting.
-			p := types.Val{
+			val := types.Val{
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			return txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_DEL)
+			return txn.addIndexMutations(ctx, &indexMutationInfo{
+				tokenizers: schema.State().Tokenizer(edge.Attr),
+				edge:       edge,
+				val:        val,
+				op:         pb.DirectedEdge_DEL,
+			})
 		default:
 			return nil
 		}
@@ -251,10 +245,10 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
 		// above.
 		if err := txn.updateCount(ctx, countParams{
-			attr:        t.Attr,
+			attr:        edge.Attr,
 			countBefore: plen,
 			countAfter:  0,
-			entity:      t.Entity,
+			entity:      edge.Entity,
 		}); err != nil {
 			return err
 		}
@@ -262,7 +256,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *pb.DirectedEdge,
 
 	l.Lock()
 	defer l.Unlock()
-	return l.addMutation(ctx, txn, t)
+	return l.addMutation(ctx, txn, edge)
 }
 
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
@@ -353,24 +347,24 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
+func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	txn *Txn) error {
-	if len(t.Attr) == 0 {
+	if len(edge.Attr) == 0 {
 		return x.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
-			" and value: [%v]", t.Entity, t.ValueId, t.Value)
+			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
 	}
 
-	if t.Op == pb.DirectedEdge_DEL && string(t.Value) == x.Star {
-		return l.handleDeleteAll(ctx, t, txn)
+	if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
+		return l.handleDeleteAll(ctx, edge, txn)
 	}
 
-	doUpdateIndex := pstore != nil && schema.State().IsIndexed(t.Attr)
-	hasCountIndex := schema.State().HasCount(t.Attr)
-	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, t)
+	doUpdateIndex := pstore != nil && schema.State().IsIndexed(edge.Attr)
+	hasCountIndex := schema.State().HasCount(edge.Attr)
+	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge)
 	if err != nil {
 		return err
 	}
-	x.PredicateStats.Add(t.Attr, 1)
+	x.PredicateStats.Add(edge.Attr, 1)
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err
@@ -379,24 +373,34 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			if err := txn.addIndexMutations(ctx, t, val, pb.DirectedEdge_DEL); err != nil {
+			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
+				tokenizers: schema.State().Tokenizer(edge.Attr),
+				edge:       edge,
+				val:        val,
+				op:         pb.DirectedEdge_DEL,
+			}); err != nil {
 				return err
 			}
 		}
-		if t.Op == pb.DirectedEdge_SET {
-			p := types.Val{
-				Tid:   types.TypeID(t.ValueType),
-				Value: t.Value,
+		if edge.Op == pb.DirectedEdge_SET {
+			val = types.Val{
+				Tid:   types.TypeID(edge.ValueType),
+				Value: edge.Value,
 			}
-			if err := txn.addIndexMutations(ctx, t, p, pb.DirectedEdge_SET); err != nil {
+			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
+				tokenizers: schema.State().Tokenizer(edge.Attr),
+				edge:       edge,
+				val:        val,
+				op:         pb.DirectedEdge_SET,
+			}); err != nil {
 				return err
 			}
 		}
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
-		if err := txn.addReverseMutation(ctx, t); err != nil {
+	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(edge.Attr) {
+		if err := txn.addReverseMutation(ctx, edge); err != nil {
 			return err
 		}
 	}
@@ -432,9 +436,9 @@ func deleteAllEntries(prefix []byte) error {
 	})
 }
 
-// deleteIndex deletes the index for the given attribute. All tokenizers are
-// deleted by this function.
-func deleteIndex(attr string) error {
+// deleteEntireIndex deletes the index for the given attribute. All tokenizers are
+// used by this function.
+func deleteEntireIndex(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	return deleteAllEntries(prefix)
@@ -601,14 +605,17 @@ type indexRebuildInfo struct {
 	tokenizersToRebuild []string
 }
 
-func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexRebuildInfo {
-	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+func (rb *IndexRebuild) needsIndexRebuild() indexRebuildInfo {
+	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
+	// If the old schema is nil, we can treat it as an empty schema. Copy it
+	// first to avoid overwriting it in rb.
+	old := rb.OldSchema
 	if old == nil {
 		old = &pb.SchemaUpdate{}
 	}
 
-	currIndex := current.Directive == pb.SchemaUpdate_INDEX
+	currIndex := rb.CurrentSchema.Directive == pb.SchemaUpdate_INDEX
 	prevIndex := old.Directive == pb.SchemaUpdate_INDEX
 
 	// Index does not need to be rebuilt or deleted if the scheme directive
@@ -632,48 +639,33 @@ func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexRebu
 
 	// All tokenizers in the index need to be deleted and rebuilt if the value
 	// types have changed.
-	if currIndex && current.ValueType != old.ValueType {
+	if currIndex && rb.CurrentSchema.ValueType != old.ValueType {
 		return indexRebuildInfo{
 			op:                  indexRebuild,
 			tokenizersToDelete:  old.Tokenizer,
-			tokenizersToRebuild: current.Tokenizer,
+			tokenizersToRebuild: rb.CurrentSchema.Tokenizer,
 		}
 	}
 
 	// Index needs to be rebuilt if the tokenizers have changed
-	prevTokens := make(map[string]bool)
+	prevTokens := make(map[string]struct{})
 	for _, t := range old.Tokenizer {
-		prevTokens[t] = true
+		prevTokens[t] = struct{}{}
 	}
-	currTokens := make(map[string]bool)
-	for _, t := range current.Tokenizer {
-		currTokens[t] = true
+	currTokens := make(map[string]struct{})
+	for _, t := range rb.CurrentSchema.Tokenizer {
+		currTokens[t] = struct{}{}
 	}
 
+	tokenizersToRebuild, tokenizersToDelete := x.Diff(currTokens, prevTokens)
+
 	// If the tokenizers are the same, nothing needs to be done.
-	if equal := reflect.DeepEqual(prevTokens, currTokens); equal {
+	if len(tokenizersToRebuild) == 0 && len(tokenizersToDelete) == 0 {
 		return indexRebuildInfo{
 			op: indexNoop,
 		}
 	}
 
-	// Else, the tokenizers from the old schema that do not exist in the schema
-	// need to be deleted and the tokenizers from the current schema that did
-	// not exist in the old one need to be built.
-	tokenizersToDelete := make([]string, 0)
-	for token := range prevTokens {
-		_, ok := currTokens[token]
-		if !ok {
-			tokenizersToDelete = append(tokenizersToDelete, token)
-		}
-	}
-	tokenizersToRebuild := make([]string, 0)
-	for token := range currTokens {
-		_, ok := prevTokens[token]
-		if !ok {
-			tokenizersToRebuild = append(tokenizersToRebuild, token)
-		}
-	}
 	return indexRebuildInfo{
 		op:                  indexRebuild,
 		tokenizersToDelete:  tokenizersToDelete,
@@ -685,7 +677,7 @@ func needsIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexRebu
 // We commit mutations with startTs and ignore the errors.
 func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	// Exit early if indices do not need to be rebuilt.
-	rebuildInfo := needsIndexRebuild(rb.OldSchema, rb.CurrentSchema)
+	rebuildInfo := rb.needsIndexRebuild()
 
 	if rebuildInfo.op == indexNoop {
 		return nil
@@ -701,6 +693,11 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	// Exit early if the index only neeed to be deleted and not rebuild.
 	if rebuildInfo.op == indexDelete {
+		return nil
+	}
+
+	// Exit early if there are no tokenizers to rebuild.
+	if len(rebuildInfo.tokenizersToRebuild) == 0 {
 		return nil
 	}
 
@@ -730,8 +727,12 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 			}
 
 			for {
-				err := txn.addIndexMutationsForTokenizers(ctx, tokenizers, &edge, val,
-					pb.DirectedEdge_SET)
+				err := txn.addIndexMutations(ctx, &indexMutationInfo{
+					tokenizers: tokenizers,
+					edge:       &edge,
+					val:        val,
+					op:         pb.DirectedEdge_SET,
+				})
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
@@ -744,21 +745,24 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	return builder.Run(ctx)
 }
 
-func needsCountIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
-	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
+	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
+	// If the old schema is nil, treat it as an empty schema. Copy it to avoid
+	// overwriting it in rb.
+	old := rb.OldSchema
 	if old == nil {
 		old = &pb.SchemaUpdate{}
 	}
 
 	// Do nothing if the schema directive did not change.
-	if current.Count == old.Count {
+	if rb.CurrentSchema.Count == old.Count {
 		return indexNoop
 
 	}
 
 	// If the new schema does not require an index, delete the current index.
-	if !current.Count {
+	if !rb.CurrentSchema.Count {
 		return indexDelete
 	}
 
@@ -768,7 +772,7 @@ func needsCountIndexRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) inde
 
 // RebuildCountIndex rebuilds the count index for a given attribute.
 func RebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
-	op := needsCountIndexRebuild(rb.OldSchema, rb.CurrentSchema)
+	op := rb.needsCountIndexRebuild()
 	if op == indexNoop {
 		return nil
 	}
@@ -821,14 +825,17 @@ func RebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	return builder.Run(ctx)
 }
 
-func needsReverseEdgesRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) indexOp {
-	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
+	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
+	// If old schema is nil, treat it as an empty schema. Copy it to avoid
+	// overwriting it in rb.
+	old := rb.OldSchema
 	if old == nil {
 		old = &pb.SchemaUpdate{}
 	}
 
-	currIndex := current.Directive == pb.SchemaUpdate_REVERSE
+	currIndex := rb.CurrentSchema.Directive == pb.SchemaUpdate_REVERSE
 	prevIndex := old.Directive == pb.SchemaUpdate_REVERSE
 
 	// If the schema directive did not change, return indexNoop.
@@ -846,7 +853,7 @@ func needsReverseEdgesRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) in
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
-	op := needsReverseEdgesRebuild(rb.OldSchema, rb.CurrentSchema)
+	op := rb.needsReverseEdgesRebuild()
 	if op == indexNoop {
 		return nil
 	}
@@ -890,18 +897,18 @@ func RebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 
 // needsListTypeRebuild returns true if the schema changed from a scalar to a
 // list. It returns true if the index can be left as is.
-func needsListTypeRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) (bool, error) {
-	x.AssertTruef(current != nil, "Current schema cannot be nil.")
+func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
+	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
-	if old == nil {
+	if rb.OldSchema == nil {
 		return false, nil
 	}
-	if current.List && !old.List {
+	if rb.CurrentSchema.List && !rb.OldSchema.List {
 		return true, nil
 	}
-	if old.List && !current.List {
+	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", current.Predicate)
+			" without dropping it first.", rb.CurrentSchema.Predicate)
 	}
 
 	return false, nil
@@ -910,8 +917,7 @@ func needsListTypeRebuild(old *pb.SchemaUpdate, current *pb.SchemaUpdate) (bool,
 // RebuildListType rebuilds the index when the schema is changed from scalar to list type.
 // We need to fingerprint the values to get the new ValueId.
 func RebuildListType(ctx context.Context, rb *IndexRebuild) error {
-	if needsRebuild, err := needsListTypeRebuild(rb.OldSchema, rb.CurrentSchema); !needsRebuild ||
-		err != nil {
+	if needsRebuild, err := rb.needsListTypeRebuild(); !needsRebuild || err != nil {
 		return err
 	}
 
@@ -994,7 +1000,7 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		if err := deleteIndex(attr); err != nil {
+		if err := deleteEntireIndex(attr); err != nil {
 			return err
 		}
 	} else if reversed {
