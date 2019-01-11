@@ -24,7 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgraph-io/dgraph/x"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
@@ -99,6 +100,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, err := validateToken(request.RefreshToken)
+		x.AssertTrue(len(userData) > 0)
 		if err != nil {
 			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
@@ -116,23 +118,24 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		}
 
 		return user, nil
-	} else {
-		var err error
-		user, err = authorizeUser(ctx, request.Userid, request.Password)
-		if err != nil {
-			return nil, fmt.Errorf("error while querying user with id: %v",
-				request.Userid)
-		}
-
-		if user == nil {
-			return nil, fmt.Errorf("unable to authenticate through password: "+
-				"user not found for id %v", request.Userid)
-		}
-		if !user.PasswordMatch {
-			return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
-		}
-		return user, nil
 	}
+
+	// authorize the user using password
+	var err error
+	user, err = authorizeUser(ctx, request.Userid, request.Password)
+	if err != nil {
+		return nil, fmt.Errorf("error while querying user with id: %v",
+			request.Userid)
+	}
+
+	if user == nil {
+		return nil, fmt.Errorf("unable to authenticate through password: "+
+			"user not found for id %v", request.Userid)
+	}
+	if !user.PasswordMatch {
+		return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
+	}
+	return user, nil
 }
 
 // verify signature and expiration of the jwt and if validation passes,
@@ -173,7 +176,7 @@ func validateToken(jwtStr string) (userData []string, err error) {
 		for _, group := range groups {
 			groupId, ok := group.(string)
 			if !ok {
-				glog.Errorf("unable to convert group to string:%v", group)
+				return nil, fmt.Errorf("unable to convert group to string:%v", group)
 			}
 
 			groupIds = append(groupIds, groupId)
@@ -283,9 +286,10 @@ func RefreshAcls(closeCh <-chan struct{}) {
 	ticker := time.NewTicker(Config.AclRefreshInterval)
 	defer ticker.Stop()
 
-	// retrieve the full data set of ACLs from the corresponding alpha server, and update the aclCache
-	RetrieveAcls := func() error {
-		glog.Infof("Retrieving ACLs")
+	// retrieve the full data set of ACLs from the corresponding alpha server,
+	// and update the aclCache
+	retrieveAcls := func() error {
+		glog.V(1).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
 			Query: queryAcls,
 		}
@@ -313,7 +317,7 @@ func RefreshAcls(closeCh <-chan struct{}) {
 			storedEntries++
 			aclCache.Store(group.GroupID, &group)
 		}
-		glog.Infof("updated the ACL cache with %d entries", storedEntries)
+		glog.V(1).Infof("updated the ACL cache with %d entries", storedEntries)
 		return nil
 	}
 
@@ -322,7 +326,7 @@ func RefreshAcls(closeCh <-chan struct{}) {
 		case <-closeCh:
 			return
 		case <-ticker.C:
-			if err := RetrieveAcls(); err != nil {
+			if err := retrieveAcls(); err != nil {
 				glog.Errorf("Error while retrieving acls:%v", err)
 			}
 		}
@@ -409,12 +413,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return nil
 	}
 
-	updates, err := schema.Parse(op.Schema)
-	if err != nil {
-		return err
-	}
-
 	userData, err := extractUserAndGroups(ctx)
+	x.AssertTrue(len(userData) > 0)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -426,30 +426,36 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	// if we get here, we know the user is not admin
 	if op.DropAll {
-		return fmt.Errorf("only the admin is allowed to drop all predicates")
+		return fmt.Errorf("only the admin is allowed to drop all data")
 	}
 
 	groupIds := userData[1:]
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
-		if !authorizePredicate(groupIds, op.DropAttr, acl.Modify) {
-			return fmt.Errorf("unauthorized to modify the predicate %v", op.DropAttr)
+		if err := authorizePredicate(groupIds, op.DropAttr, acl.Modify); err != nil {
+			return fmt.Errorf("unauthorized to modify the predicate:%v", err)
 		}
 		return nil
 	}
 
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return err
+	}
 	for _, update := range updates {
-		if !authorizePredicate(groupIds, update.Predicate, acl.Modify) {
-			return fmt.Errorf("unauthorized to modify the predicate %v", update.Predicate)
+		if err := authorizePredicate(groupIds, update.Predicate, acl.Modify); err != nil {
+			return fmt.Errorf("unauthorized to modify the predicate %v", err)
 		}
 	}
 	return nil
 }
 
-func populatePredsFromMutation(nquads []*api.NQuad, preds map[string]struct{}) {
+func parsePredsFromMutation(nquads []*api.NQuad) map[string]struct{} {
+	preds := make(map[string]struct{})
 	for _, nquad := range nquads {
 		preds[nquad.Predicate] = struct{}{}
 	}
+	return preds
 }
 
 // authorize the mutation using the aclCache
@@ -460,6 +466,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
+	x.AssertTrue(len(userData) > 0)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -475,19 +482,17 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		return err
 	}
 
-	preds := make(map[string]struct{})
-	populatePredsFromMutation(gmu.Set, preds)
-
 	groupIds := userData[1:]
-	for pred := range preds {
-		if !authorizePredicate(groupIds, pred, acl.Write) {
-			return fmt.Errorf("unauthorized to access the predicate %v", pred)
+	for pred := range parsePredsFromMutation(gmu.Set) {
+		if err := authorizePredicate(groupIds, pred, acl.Write); err != nil {
+			return fmt.Errorf("unauthorized to access the predicate: %v", err)
 		}
 	}
 	return nil
 }
 
-func populatePredsFromQuery(gqls []*gql.GraphQuery, preds map[string]struct{}) {
+func parsePredsFromQuery(gqls []*gql.GraphQuery) map[string]struct{} {
+	preds := make(map[string]struct{})
 	for _, gq := range gqls {
 
 		if gq.Func != nil {
@@ -498,8 +503,11 @@ func populatePredsFromQuery(gqls []*gql.GraphQuery, preds map[string]struct{}) {
 			preds[gq.Attr] = struct{}{}
 		}
 
-		populatePredsFromQuery(gq.Children, preds)
+		for childPred := range parsePredsFromQuery(gq.Children) {
+			preds[childPred] = struct{}{}
+		}
 	}
+	return preds
 }
 
 // authorize the query using the aclCache
@@ -510,6 +518,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
+	x.AssertTrue(len(userData) > 0)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -528,41 +537,40 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		return err
 	}
 
-	preds := make(map[string]struct{})
-	populatePredsFromQuery(parsedReq.Query, preds)
-
 	groupIds := userData[1:]
-	for pred := range preds {
-		if !authorizePredicate(groupIds, pred, acl.Read) {
+	for pred := range parsePredsFromQuery(parsedReq.Query) {
+		if err := authorizePredicate(groupIds, pred, acl.Read); err != nil {
 			return status.Error(codes.PermissionDenied,
-				fmt.Sprintf("unauthorized to access the predicate %v", pred))
+				fmt.Sprintf("unauthorized to access the predicate %v", err))
 		}
 	}
-
 	return nil
 }
 
-func authorizePredicate(groups []string, predicate string, operation int32) bool {
+func authorizePredicate(groups []string, predicate string, operation *acl.Operation) error {
 	for _, group := range groups {
-		if hasAccess(group, predicate, operation) {
-			return true
+		if err := hasAccess(group, predicate, operation); err == nil {
+			return nil
 		}
 	}
-	return false
+	return fmt.Errorf("unauthorized to do operation %d on predicate %s", operation, predicate)
 }
 
 // hasAccess checks the aclCache and returns whether the specified group is authorized to perform
 // the operation on the given predicate
-func hasAccess(groupId string, predicate string, operation int32) bool {
+func hasAccess(groupId string, predicate string, operation *acl.Operation) error {
 	entry, found := aclCache.Load(groupId)
 	if !found {
-		glog.Infof("acl not found")
-		return false
+		return fmt.Errorf("acl not found for group %v", groupId)
 	}
 	aclGroup := entry.(*acl.Group)
 	perm, found := aclGroup.MappedAcls[predicate]
-	allowed := found && (perm&operation) != 0
+	allowed := found && (perm&operation.Code) != 0
 	glog.Infof("authorizing group %v on predicate %v for op %d, allowed %v", groupId,
 		predicate, operation, allowed)
-	return allowed
+	if !allowed {
+		return fmt.Errorf("group: %s not allowed to do %s on predicate %s",
+			groupId, operation.Name, predicate)
+	}
+	return nil
 }

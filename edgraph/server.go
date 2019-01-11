@@ -454,7 +454,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	return resp, nil
 }
 
-func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
+func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, fmt.Errorf("query is not authorized: %v", err)
 	}

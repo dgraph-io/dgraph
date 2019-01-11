@@ -34,10 +34,24 @@ func GetGroupIDs(groups []Group) []string {
 	return jwtGroups
 }
 
-const (
-	Read   int32 = 4
-	Write        = 2
-	Modify       = 1
+type Operation struct {
+	Code int32
+	Name string
+}
+
+var (
+	Read = &Operation{
+		Code: 4,
+		Name: "Read",
+	}
+	Write = &Operation{
+		Code: 2,
+		Name: "Write",
+	}
+	Modify = &Operation{
+		Code: 1,
+		Name: "Modify",
+	}
 )
 
 type User struct {

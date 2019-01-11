@@ -33,7 +33,6 @@ import (
 const (
 	userid         = "alice"
 	userpassword   = "simplepassword"
-	alphaPort      = 9280
 	dgraphEndpoint = "localhost:9180"
 )
 
