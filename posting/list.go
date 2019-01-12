@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -288,16 +289,34 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 func (l *List) isUidMutationAllowedBySchema(ctx context.Context, txn *Txn,
 	edge *pb.DirectedEdge) error {
 	l.AssertRLock()
+	glog.Infof("Inside isUidMutationAllowedBySchema")
 
+	// TODO: Make this work.
 	if types.TypeID(edge.ValueType) != types.UidID {
+		glog.Infof("Value type not eq uid: %+v", edge)
 		return nil
 	}
+
+	// if len(edge.Value) > 0 {
+	// 	// This isn't a UID type.
+	// 	return nil
+	// }
+	// su, ok := schema.State().Get(edge.Attr)
+	// if !ok {
+	// 	return nil
+	// }
+	// if types.TypeID(su.GetValueType()) != types.UidID || su.GetList() {
+	// 	return nil
+	// }
 
 	if schema.State().IsList(edge.Attr) {
+		glog.Infof("is list")
 		return nil
 	}
 
-	if err := l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
+	glog.Infof("Going to iterate over posting list")
+	var count int
+	err := l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
 		if obj.Uid != edge.GetValueId() {
 			return fmt.Errorf(
 				"cannot add value with uid %x to predicate %s because one of the existing "+
@@ -305,12 +324,12 @@ func (l *List) isUidMutationAllowedBySchema(ctx context.Context, txn *Txn,
 					"modify the schema to allow multiple uids mapped to this predicate",
 				edge.GetValueId(), edge.Attr)
 		}
+		glog.Infof("key: %s. uid: %d\n", l.key, obj.Uid)
+		count++
 		return nil
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	})
+	glog.Infof("count: %d. key: %s.", count, hex.Dump(l.key))
+	return err
 }
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
