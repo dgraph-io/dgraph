@@ -1,4 +1,6 @@
 #!/bin/bash
+#
+# usage: test.sh [-v] [pkg_regex]
 
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
@@ -7,9 +9,17 @@ source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
 TEST_FAILED=0
+RUN_ALL=
+GO_TEST_OPTS=( "-short=true" )
 
-CUSTOM_CLUSTER_TESTS=$(mktemp --tmpdir $ME.tmp-XXXXXX)
-trap "rm -rf $CUSTOM_CLUSTER_TESTS" EXIT
+TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
+MATCHING_TESTS=$TMP_DIR/tests
+CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
+trap "rm -rf $TMP_DIR" EXIT
+
+#
+# Functions
+#
 
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
@@ -19,7 +29,7 @@ function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
     for FILE in $(find -type f -name docker-compose.yml); do
         DIR=$(dirname $FILE)
-        if [[ $(ls $DIR/*_test.go 2>/dev/null | wc -l) -gt 0 ]]; then
+        if grep -q $DIR $MATCHING_TESTS && ls $DIR | grep -q "_test.go$"; then
             echo "${DIR:1}\$" >> $CUSTOM_CLUSTER_TESTS
         fi
     done
@@ -27,14 +37,14 @@ function FindCustomClusterTests {
 
 function Run {
     set -o pipefail
-    go test -short=true $@ \
+    go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
     | GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
 }
 
 function RunDefaultClusterTests {
-    for PKG in $(go list ./... | grep -v -f $CUSTOM_CLUSTER_TESTS); do
+    for PKG in $(grep -v -f $CUSTOM_CLUSTER_TESTS $MATCHING_TESTS); do
         Info "Running test for $PKG"
         Run $PKG || TEST_FAILED=1
     done
@@ -58,22 +68,47 @@ function RunCustomClusterTests {
 # MAIN
 #
 
+
+ARGS=$(/usr/bin/getopt -n$ME -o"v" -- "$@") || exit 1
+eval set -- "$ARGS"
+while true; do
+    case "$1" in
+        -v) GO_TEST_OPTS+=( "-v" ) ;;
+        --) shift; break         ;;
+    esac
+    shift
+done
+
 cd $DGRAPH_ROOT
+
+if [[ $# -eq 0 ]]; then
+    go list ./... > $MATCHING_TESTS
+    RUN_ALL=yes
+elif [[ $# -eq 1 ]]; then
+    go list ./... | grep $1 > $MATCHING_TESTS
+    Info "Running only tests matching $1"
+else
+    echo >&2 "usage: $ME [regex]"
+    exit 1
+fi
+
 FindCustomClusterTests
 
 Info "Running tests using the default cluster"
 restartCluster
 RunDefaultClusterTests || TEST_FAILED=1
 
-Info "Running load-test.sh"
-./contrib/scripts/load-test.sh
-
 Info "Running tests using custom clusters"
 RunCustomClusterTests || TEST_FAILED=1
 
-Info "Running custom test scripts"
-./contrib/scripts/test-backup-restore.sh
-./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+if [[ $RUN_ALL ]]; then
+    Info "Running load-test.sh"
+    ./contrib/scripts/load-test.sh
+
+    Info "Running custom test scripts"
+    ./contrib/scripts/test-backup-restore.sh
+    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+fi
 
 Info "Stopping cluster"
 stopCluster
