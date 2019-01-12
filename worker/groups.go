@@ -167,6 +167,7 @@ func (g *groupi) proposeInitialSchema() {
 		Predicate: "dgraph.user.group",
 		Directive: pb.SchemaUpdate_REVERSE,
 		ValueType: pb.Posting_UID,
+		List:      true,
 	})
 	g.upsertSchema(&pb.SchemaUpdate{
 		Predicate: "dgraph.group.acl",

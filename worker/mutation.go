@@ -169,6 +169,11 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 		s.ValueType = typ.Enum()
 	} else {
 		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
+		// For type UidID, set List to true. This is done because previously
+		// all predicates of type UidID were implicitly considered lists.
+		if typ == types.UidID {
+			s.List = true
+		}
 	}
 	updateSchema(attr, s)
 }
@@ -506,7 +511,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 }
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
-		m *pb.Mutations) error {
+	m *pb.Mutations) error {
 	if Config.StrictMutations {
 		for _, edge := range m.Edges {
 			if _, err := schema.State().TypeOf(edge.Attr); err != nil {

@@ -27,7 +27,7 @@ function FindCustomClusterTests {
 
 function Run {
     set -o pipefail
-    go test -short=true $@ \
+    go test -v -short=true $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
     | GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
