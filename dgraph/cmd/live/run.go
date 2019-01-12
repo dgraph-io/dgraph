@@ -236,10 +236,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 }
 
 func fileList(files string) []string {
-	if len(files) == 0 {
-		return []string{}
-	}
-	return strings.Split(files, ",")
+	return x.FindDataFiles(files, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
@@ -351,7 +348,10 @@ func run() error {
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
+		fmt.Printf("No files to process\n")
 		return nil
+	} else {
+		fmt.Printf("Processing %d files\n", totalFiles)
 	}
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
