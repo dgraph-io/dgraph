@@ -87,9 +87,20 @@ func resetUser(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
-	dg, cancel := test.GetDgraphClient()
+	glog.Infof("testing with port 9180")
+	dg1, cancel := test.GetDgraphClientOnPort(9180)
 	defer cancel()
+	testAuthorization(t, dg1)
+	glog.Infof("done")
 
+	glog.Infof("testing with port 9182")
+	dg2, cancel := test.GetDgraphClientOnPort(9182)
+	defer cancel()
+	testAuthorization(t, dg2)
+	glog.Infof("done")
+}
+
+func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
@@ -100,6 +111,7 @@ func TestAuthorization(t *testing.T) {
 	// jwt works after the access jwt expires in 30 seconds
 	log.Println("Sleeping for 35 seconds for acl to catch up")
 	time.Sleep(35 * time.Second)
+
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
@@ -222,7 +234,7 @@ func createGroupAndAcls(t *testing.T) {
 	addReadPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read)), "--adminPassword",
+		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read.Code)), "--adminPassword",
 		"password")
 	if err := addReadPermCmd1.Run(); err != nil {
 		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
@@ -233,7 +245,7 @@ func createGroupAndAcls(t *testing.T) {
 	addReadPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read)), "--adminPassword",
+		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read.Code)), "--adminPassword",
 		"password")
 	if err := addReadPermCmd2.Run(); err != nil {
 		t.Fatalf("Unable to add READ permission on %s to group %s:%v", queryAttr, group, err)
@@ -243,7 +255,7 @@ func createGroupAndAcls(t *testing.T) {
 	addWritePermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write)), "--adminPassword",
+		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write.Code)), "--adminPassword",
 		"password")
 	if err := addWritePermCmd.Run(); err != nil {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToWrite, group, err)
@@ -253,7 +265,7 @@ func createGroupAndAcls(t *testing.T) {
 	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify)), "--adminPassword",
+		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify.Code)), "--adminPassword",
 		"password")
 	if err := addModifyPermCmd.Run(); err != nil {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)

@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/y"
+	"github.com/golang/glog"
 	"google.golang.org/grpc"
 )
 
@@ -113,6 +114,40 @@ func doUpserts(c *dgo.Dgraph) {
 		}
 	}
 	wg.Wait()
+
+	// verify uniqueness
+	for _, acct := range accounts {
+		ensureUnique(c, acct)
+	}
+}
+
+func ensureUnique(c *dgo.Dgraph, acc account) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	q := fmt.Sprintf(`
+		{
+			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {
+				uid
+				expand(_all_) {uid}
+			}
+		}
+	`, acc.first, acc.last, acc.age)
+	resp, err := txn.Query(ctx, q)
+	x.Check(err)
+
+	decode := struct {
+		Get []struct {
+			Uid *string
+		}
+	}{}
+
+	x.Check(json.Unmarshal(resp.GetJson(), &decode))
+	glog.Infof("num of account %s %s: %d", acc.first, acc.last, len(decode.Get))
+
+	//x.AssertTrue(len(decode.Get) == 1)
+
 }
 
 var (
