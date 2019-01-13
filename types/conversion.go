@@ -110,7 +110,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				if math.IsNaN(val) {
-					return to, fmt.Errorf("Got invalid value: NaN.")
+					return to, fmt.Errorf("Got invalid value: NaN")
 				}
 				*res = float64(val)
 			case StringID, DefaultID:
@@ -315,9 +315,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				// Marshal Binary
 				*res = []byte(vc)
-			case StringID:
-				*res = vc
-			case PasswordID:
+			case StringID, PasswordID:
 				*res = vc
 			default:
 				return to, cantConvert(fromID, toID)
@@ -520,10 +518,6 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type password. Got : %v", value)
-		}
-		v, err := Encrypt(v)
-		if err != nil {
-			return def, err
 		}
 		return &api.Value{Val: &api.Value_PasswordVal{PasswordVal: v}}, nil
 	default:

@@ -32,9 +32,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -51,10 +51,10 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.BoolID:     "xs:boolean",
 	types.GeoID:      "geo:geojson",
 	types.BinaryID:   "xs:base64Binary",
-	types.PasswordID: "xs:string",
+	types.PasswordID: "xs:password",
 }
 
-func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
+func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) {
 	var buf bytes.Buffer
 
 	err := pl.Iterate(readTs, 0, func(p *pb.Posting) error {
@@ -101,12 +101,29 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 				}
 				buf.WriteString(f.Key)
 				buf.WriteByte('=')
-				fVal := &types.Val{Tid: types.StringID}
-				x.Check(types.Marshal(facets.ValFor(f), fVal))
-				if facets.TypeIDFor(f) == types.StringID {
-					buf.WriteString(strconv.Quote(fVal.Value.(string)))
+
+				fVal, err := facets.ValFor(f)
+				if err != nil {
+					glog.Errorf("Error getting value from facet %#v:%v", f, err)
+					continue
+				}
+
+				fStringVal := &types.Val{Tid: types.StringID}
+				if err = types.Marshal(fVal, fStringVal); err != nil {
+					glog.Errorf("Error while marshaling facet value %v to string: %v",
+						fVal, err)
+					continue
+				}
+				facetTid, err := facets.TypeIDFor(f)
+				if err != nil {
+					glog.Errorf("Error getting type id from facet %#v:%v", f, err)
+					continue
+				}
+
+				if facetTid == types.StringID {
+					buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
 				} else {
-					buf.WriteString(fVal.Value.(string))
+					buf.WriteString(fStringVal.Value.(string))
 				}
 			}
 			buf.WriteByte(')')
@@ -115,14 +132,14 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*pb.KV, error) {
 		buf.WriteString(" .\n")
 		return nil
 	})
-	kv := &pb.KV{
-		Val:     buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
+	kv := &bpb.KV{
+		Value:   buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
 		Version: 1,           // Data value.
 	}
-	return kv, err
+	return listWrap(kv), err
 }
 
-func toSchema(attr string, update pb.SchemaUpdate) (*pb.KV, error) {
+func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
 	if strings.ContainsRune(attr, ':') {
@@ -157,11 +174,11 @@ func toSchema(attr string, update pb.SchemaUpdate) (*pb.KV, error) {
 		buf.WriteString(" @upsert")
 	}
 	buf.WriteString(" . \n")
-	kv := &pb.KV{
-		Val:     buf.Bytes(),
+	kv := &bpb.KV{
+		Value:   buf.Bytes(),
 		Version: 2, // Schema value
 	}
-	return kv, nil
+	return listWrap(kv), nil
 }
 
 type fileWriter struct {
@@ -196,30 +213,6 @@ func (writer *fileWriter) Close() error {
 		return err
 	}
 	return writer.fd.Close()
-}
-
-type writerMux struct {
-	data   *fileWriter
-	schema *fileWriter
-}
-
-func (mux *writerMux) Send(kvs *pb.KVS) error {
-	for _, kv := range kvs.Kv {
-		var writer *fileWriter
-		switch kv.Version {
-		case 1: // data
-			writer = mux.data
-		case 2: // schema
-			writer = mux.schema
-		default:
-			glog.Fatalf("Invalid data type found: %x", kv.Key)
-		}
-		if _, err := writer.gw.Write(kv.Val); err != nil {
-			return err
-		}
-	}
-	// Once all the sends are done, writers must be flushed and closed in order.
-	return nil
 }
 
 // export creates a export of data by exporting it as an RDF gzip.
@@ -269,9 +262,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	mux := writerMux{data: dataWriter, schema: schemaWriter}
-	sl := stream.Lists{Stream: &mux, DB: pstore}
-	sl.ChooseKeyFunc = func(item *badger.Item) bool {
+	stream := pstore.NewStreamAt(in.ReadTs)
+	stream.LogPrefix = "Export"
+	stream.ChooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
 		if pk.Attr == "_predicate_" {
 			return false
@@ -283,7 +276,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		// written to a different file.
 		return pk.IsData() || pk.IsSchema()
 	}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
 
@@ -315,14 +308,32 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil, nil
 	}
 
+	stream.Send = func(list *bpb.KVList) error {
+		for _, kv := range list.Kv {
+			var writer *fileWriter
+			switch kv.Version {
+			case 1: // data
+				writer = dataWriter
+			case 2: // schema
+				writer = schemaWriter
+			default:
+				glog.Fatalf("Invalid data type found: %x", kv.Key)
+			}
+			if _, err := writer.gw.Write(kv.Value); err != nil {
+				return err
+			}
+		}
+		// Once all the sends are done, writers must be flushed and closed in order.
+		return nil
+	}
 	// All prepwork done. Time to roll.
-	if err := sl.Orchestrate(ctx, "Export", in.ReadTs); err != nil {
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	if err := mux.data.Close(); err != nil {
+	if err := dataWriter.Close(); err != nil {
 		return err
 	}
-	if err := mux.schema.Close(); err != nil {
+	if err := schemaWriter.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)

@@ -106,12 +106,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 						_, seen := reachMap[key] // Combine fromUID here.
 						if seen {
 							return false
-						} else {
-							// Mark this edge as taken. We'd disallow this edge later.
-							reachMap[key] = struct{}{}
-							numEdges++
-							return true
 						}
+						// Mark this edge as taken. We'd disallow this edge later.
+						reachMap[key] = struct{}{}
+						numEdges++
+						return true
 					})
 				}
 			}
@@ -181,7 +180,7 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 	depth := sg.Params.RecurseArgs.Depth
 	if depth == 0 {
 		if sg.Params.RecurseArgs.AllowLoop {
-			return x.Errorf("depth must be > 0 when loop is true for recurse query.")
+			return x.Errorf("Depth must be > 0 when loop is true for recurse query.")
 		}
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.

@@ -328,6 +328,7 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	data = formDataPolygon(t, polyOut)
 	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
 	require.False(t, qd.MatchesFilter(poly2))
+	require.NoError(t, err)
 
 	// Multipolygon intersects
 	us, err := loadPolygon("testdata/us.json")

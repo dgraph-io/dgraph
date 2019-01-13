@@ -1,14 +1,15 @@
 #!/bin/bash
 # verify fix of https://github.com/dgraph-io/dgraph/issues/2616
+# uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
-readonly SRCDIR=$(readlink -f ${BASH_SOURCE[0]%/*})
+readonly SRCROOT=$(readlink -f ${BASH_SOURCE[0]%/*}/../../../..)
+readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
+readonly WAIT_FOR_IT=$SRCROOT/contrib/wait-for-it.sh
 
-declare -ri PORT_OFFSET=$((RANDOM % 1000))
-declare -ri ZERO_PORT=$((5080+PORT_OFFSET))
-declare -ri ALPHA_PORT=$((7080+PORT_OFFSET)) HTTP_PORT=$((8080+PORT_OFFSET))
+declare -ri ZERO_PORT=5080 HTTP_PORT=8180
 
-INFO() { echo "$ME: $@"; }
+INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
 FATAL() { ERROR "$@"; exit 1; }
 
@@ -20,41 +21,60 @@ WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
-function StartZero
+trap ForceClean EXIT
+
+function ForceClean
 {
-  INFO "starting zero server on port $ZERO_PORT"
-  dgraph zero -o $PORT_OFFSET --my=localhost:$ZERO_PORT \
-    >zero.log 2>&1 </dev/null &
-  ZERO_PID=$!
-  sleep 1
-  $SRCDIR/../wait-for-it.sh -q -t 30 localhost:$ZERO_PORT \
-    || FATAL "failed to start zero"
+    if [[ ! $DEBUG ]]; then
+        rm -rf $WORKDIR
+    fi
 }
 
-function BulkLoadSampleData
+function StartZero
 {
-  INFO "bulk loading sample data"
-  cat >1million.schema <<EOF
-director.film: uid @reverse .
-genre: uid @reverse .
-initial_release_date: dateTime @index(year) .
-name: string @index(term) @lang .
-EOF
-  mkfifo 1million.rdf.gz
-  curl -LsS 'https://github.com/dgraph-io/tutorial/blob/master/resources/1million.rdf.gz?raw=true' >> 1million.rdf.gz &
-  dgraph bulk -z localhost:$ZERO_PORT -s 1million.schema -r 1million.rdf.gz \
-     >bulk.log 2>&1 </dev/null
+  INFO "starting zero container"
+  docker-compose -f $DOCKER_CONF up --force-recreate --detach zero1
+  TIMEOUT=10
+  while [[ $TIMEOUT > 0 ]]; do
+    if docker logs bank-dg0.1 2>&1 | grep -q 'CID set'; then
+      return
+    else
+      TIMEOUT=$((TIMEOUT - 1))
+      sleep 1
+    fi
+  done
+  FATAL "failed to start zero"
 }
 
 function StartAlpha
 {
-  INFO "starting alpha server on port $ALPHA_PORT"
-  dgraph alpha -o $PORT_OFFSET --my=localhost:$ALPHA_PORT --zero=localhost:$ZERO_PORT --lru_mb=2048 \
-      >alpha.log 2>&1 </dev/null &
-  ALPHA_PID=$!
-  sleep 1
-  $SRCDIR/../wait-for-it.sh -q -t 30 localhost:$ALPHA_PORT \
-    || FATAL "failed to start alpha"
+  local p_dir=$1
+
+  INFO "starting alpha container"
+  docker-compose -f $DOCKER_CONF up --force-recreate --no-start dg1
+  if [[ $p_dir ]]; then
+    docker cp $p_dir bank-dg1:/data/dg1/
+  fi
+  docker-compose -f $DOCKER_CONF up --detach dg1
+
+  TIMEOUT=10
+  while [[ $TIMEOUT > 0 ]]; do
+    if docker logs bank-dg1 2>&1 | grep -q 'Got Zero leader'; then
+      return
+    else
+      TIMEOUT=$((TIMEOUT - 1))
+      sleep 1
+    fi
+  done
+  FATAL "failed to start alpha"
+}
+
+function ResetCluster
+{
+    INFO "restarting cluster with only one zero and alpha"
+    docker-compose -f $DOCKER_CONF down
+    StartZero
+    StartAlpha
 }
 
 function UpdateDatabase
@@ -78,16 +98,17 @@ predicate_with_index_no_uid_count:string @index(exact) .
 function QuerySchema
 {
   INFO "running schema query"
-  local out_file=${1:?no out file}
-  curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2,separators=(',',': '))" > $out_file
+  local out_file="schema.out"
+  curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
-  #INFO "schema is: " && cat $out_file
 }
 
 function DoExport
 {
   INFO "running export"
-  curl localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec -it bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
+  sleep 2
+  docker cp bank-dg1:/data/dg1/export .
   sleep 1
 }
 
@@ -98,7 +119,6 @@ function BulkLoadExportedData
               -s ../dir1/export/*/g01.schema.gz \
               -r ../dir1/export/*/g01.rdf.gz \
      >bulk.log 2>&1 </dev/null
-  mv out/0/p .
 }
 
 function BulkLoadFixtureData
@@ -127,15 +147,12 @@ EOF
 
   dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -r fixture.rdf \
      >bulk.log 2>&1 </dev/null
-  mv out/0/p .
 }
 
 function StopServers
 {
-  INFO "killing zero server at pid $ZERO_PID"
-  INFO "killing alpha server at pid $ALPHA_PID"
-  kill $ZERO_PID $ALPHA_PID
-  sleep 1
+  INFO "stoping containers"
+  docker-compose -f $DOCKER_CONF down
 }
 
 function Cleanup
@@ -147,11 +164,9 @@ function Cleanup
 mkdir dir1
 pushd dir1 >/dev/null
 
-StartZero
-BulkLoadSampleData
-StartAlpha
+ResetCluster
 UpdateDatabase
-QuerySchema "schema.out"
+QuerySchema
 DoExport
 StopServers
 
@@ -161,14 +176,14 @@ pushd dir2 >/dev/null
 
 StartZero
 BulkLoadExportedData
-StartAlpha
-QuerySchema "schema.out"
+StartAlpha "./out/0/p"
+QuerySchema
 StopServers
 
 popd >/dev/null
 
 INFO "verifing schema is same before export and after bulk import"
-diff dir1/schema.out dir2/schema.out || FATAL "schema incorrect"
+diff -b dir1/schema.out dir2/schema.out || FATAL "schema incorrect"
 INFO "schema is correct"
 
 mkdir dir3
@@ -176,8 +191,8 @@ pushd dir3 >/dev/null
 
 StartZero
 BulkLoadFixtureData
-StartAlpha
-QuerySchema "schema.out"
+StartAlpha "./out/0/p"
+QuerySchema
 StopServers
 
 popd >/dev/null
@@ -186,14 +201,9 @@ popd >/dev/null
 # introduced by the schema or rdf file, used or not used, or of default type
 # or non-default type
 INFO "verifying schema contains all predicates"
-diff - dir3/schema.out <<EOF || FATAL "schema incorrect"
+diff -b - dir3/schema.out <<EOF || FATAL "schema incorrect"
 {
   "schema": [
-    {
-      "list": true,
-      "predicate": "_predicate_",
-      "type": "string"
-    },
     {
       "predicate": "genre",
       "type": "default"

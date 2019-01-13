@@ -18,10 +18,10 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -145,10 +145,10 @@ func (fj *fastJsonNode) IsEmpty() bool {
 
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
+	case types.StringID, types.DefaultID:
+		return json.Marshal(v.Value)
 	case types.BinaryID:
-		// Encode to base64 and add "" around the value.
-		b := fmt.Sprintf("%q", v.Value.([]byte))
-		return []byte(b), nil
+		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
@@ -158,8 +158,6 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte("true"), nil
 		}
 		return []byte("false"), nil
-	case types.StringID, types.DefaultID:
-		return []byte(strconv.Quote(v.Value.(string))), nil
 	case types.DateTimeID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:
@@ -169,7 +167,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.PasswordID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	default:
-		return nil, errors.New("unsupported types.Val.Tid")
+		return nil, errors.New("Unsupported types.Val.Tid")
 	}
 }
 
@@ -183,10 +181,10 @@ func (n nodeSlice) Less(i, j int) bool {
 	cmp := strings.Compare(n[i].attr, n[j].attr)
 	if cmp == 0 {
 		return n[i].order < n[j].order
-	} else {
-		return cmp < 0
 	}
+	return cmp < 0
 }
+
 func (n nodeSlice) Swap(i, j int) {
 	n[i], n[j] = n[j], n[i]
 }
@@ -258,7 +256,6 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) {
 				cur.encode(out)
 				if cnt != 1 || (cur.isChild || cur.list) {
 					out.WriteRune(']')
-					inArray = false
 				}
 				break
 			}
@@ -292,9 +289,9 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	return mergedList, nil
 }
 
-func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
+func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
-	for _, a := range n.attrs {
+	for _, a := range fj.attrs {
 		if a.isChild {
 			cnt++
 		}
@@ -302,30 +299,30 @@ func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 
 	if cnt == 0 {
 		// Recursion base case
-		// There are no children, we can just return slice with n.attrs map.
-		return [][]*fastJsonNode{n.attrs}, nil
+		// There are no children, we can just return slice with fj.attrs map.
+		return [][]*fastJsonNode{fj.attrs}, nil
 	}
 
 	parentSlice := make([][]*fastJsonNode, 0, 5)
 	// If the parents has attrs, lets add them to the slice so that it can be
 	// merged with children later.
-	attrs := make([]*fastJsonNode, 0, len(n.attrs)-cnt)
-	for _, a := range n.attrs {
+	attrs := make([]*fastJsonNode, 0, len(fj.attrs)-cnt)
+	for _, a := range fj.attrs {
 		if !a.isChild {
 			attrs = append(attrs, a)
 		}
 	}
 	parentSlice = append(parentSlice, attrs)
 
-	for ci := 0; ci < len(n.attrs); {
-		childNode := n.attrs[ci]
+	for ci := 0; ci < len(fj.attrs); {
+		childNode := fj.attrs[ci]
 		if !childNode.isChild {
 			ci++
 			continue
 		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
-		for ci < len(n.attrs) && childNode.attr == n.attrs[ci].attr {
-			normalized, err := n.attrs[ci].normalize()
+		for ci < len(fj.attrs) && childNode.attr == fj.attrs[ci].attr {
+			normalized, err := fj.attrs[ci].normalize()
 			if err != nil {
 				return nil, err
 			}
@@ -364,12 +361,12 @@ func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	return parentSlice, nil
 }
 
-func (n *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string) {
+func (fj *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string) {
 	// Don't add empty groupby
 	if len(res.group) == 0 {
 		return
 	}
-	g := n.New(fname)
+	g := fj.New(fname)
 	for _, grp := range res.group {
 		uc := g.New("@groupby")
 		for _, it := range grp.keys {
@@ -380,22 +377,22 @@ func (n *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string)
 		}
 		g.AddListChild("@groupby", uc)
 	}
-	n.AddListChild(fname, g)
+	fj.AddListChild(fname, g)
 }
 
-func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
+func (fj *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	c := types.ValueForType(types.IntID)
 	c.Value = int64(len(sg.DestUIDs.Uids))
-	n1 := n.New(sg.Params.Alias)
+	n1 := fj.New(sg.Params.Alias)
 	field := sg.Params.uidCountAlias
 	if field == "" {
 		field = "count"
 	}
 	n1.AddValue(field, c)
-	n.AddListChild(sg.Params.Alias, n1)
+	fj.AddListChild(sg.Params.Alias, n1)
 }
 
-func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
+func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.uidToVal[0]
 		if !ok {
@@ -405,38 +402,38 @@ func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
 			continue
 		}
 		fieldName := aggWithVarFieldName(child)
-		n1 := n.New(fieldName)
+		n1 := fj.New(fieldName)
 		n1.AddValue(fieldName, aggVal)
-		n.AddListChild(sg.Params.Alias, n1)
+		fj.AddListChild(sg.Params.Alias, n1)
 	}
-	if n.IsEmpty() {
-		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
+	if fj.IsEmpty() {
+		fj.AddListChild(sg.Params.Alias, &fastJsonNode{})
 	}
 	return nil
 }
 
-func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
+func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.Params.IsEmpty {
-		return n.addAggregations(sg)
+		return fj.addAggregations(sg)
 	}
 
 	if sg.uidMatrix == nil {
-		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
+		fj.AddListChild(sg.Params.Alias, &fastJsonNode{})
 		return nil
 	}
 
 	hasChild := false
 	if sg.Params.uidCount && !(sg.Params.uidCountAlias == "" && sg.Params.Normalize) {
 		hasChild = true
-		n.addCountAtRoot(sg)
+		fj.addCountAtRoot(sg)
 	}
 
 	if sg.Params.isGroupBy {
 		if len(sg.GroupbyRes) == 0 {
 			return x.Errorf("Expected GroupbyRes to have length > 0.")
 		}
-		n.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
+		fj.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil
 	}
 
@@ -462,7 +459,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 
 		hasChild = true
 		if !sg.Params.Normalize {
-			n.AddListChild(sg.Params.Alias, n1)
+			fj.AddListChild(sg.Params.Alias, n1)
 			continue
 		}
 
@@ -472,13 +469,13 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			return err
 		}
 		for _, c := range normalized {
-			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
+			fj.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
 		}
 	}
 
 	if !hasChild {
 		// So that we return an empty key if the root didn't have any children.
-		n.AddListChild(sg.Params.Alias, &fastJsonNode{})
+		fj.AddListChild(sg.Params.Alias, &fastJsonNode{})
 	}
 	return nil
 }

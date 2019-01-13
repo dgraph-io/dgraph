@@ -21,17 +21,18 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"sync"
+	"sync/atomic"
 
 	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,12 +44,16 @@ var (
 )
 
 // size of kvs won't be too big, we would take care before proposing.
-func populateKeyValues(ctx context.Context, kvs []*pb.KV) error {
+func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
+	// No new deletion/background cleanup would start after we start streaming tablet,
+	// so all the proposals for a particular tablet would atmost wait for deletion of
+	// single tablet.
+	groups().waitForBackgroundDeletion()
 	glog.Infof("Writing %d keys\n", len(kvs))
 	if len(kvs) == 0 {
 		return nil
 	}
-	writer := x.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(pstore)
 	writer.BlindWrite = true
 	if err := writer.Send(&pb.KVS{Kv: kvs}); err != nil {
 		return err
@@ -240,8 +245,15 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	sl := stream.Lists{Stream: s, Predicate: in.Predicate, DB: pstore}
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
+	//
+	// TODO: We should use a particular read timestamp here.
+	stream := pstore.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", predicate)
+	stream.Prefix = x.PredicatePrefix(predicate)
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		// For now, just send out full posting lists, because we use delete markers to delete older
+		// data in the prefix range. So, by sending only one version per key, and writing it at a
+		// provided timestamp, we can ensure that these writes are above all the delete markers.
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, err
@@ -251,14 +263,16 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 			// HACK: Let's set all of them at this timestamp, to see what happens.
 			kv.Version = in.TxnTs
 		}
-		return kv, err
+		return listWrap(kv), err
 	}
-
+	stream.Send = func(list *bpb.KVList) error {
+		return s.Send(&pb.KVS{Kv: list.Kv})
+	}
 	span.Annotatef(nil, "Starting stream list orchestrate")
-	prefix := fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
-	if err := sl.Orchestrate(ctx, prefix, in.TxnTs); err != nil {
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
+
 	payload, err := s.CloseAndRecv()
 	if err != nil {
 		return err

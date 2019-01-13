@@ -129,6 +129,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	raftServer.Node = gr.Node.Node
 	gr.Node.InitAndStartNode()
 	x.UpdateHealthStatus(true)
+	glog.Infof("Server is ready")
 
 	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
@@ -141,11 +142,43 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 }
 
 func (g *groupi) proposeInitialSchema() {
+	// propose the schema for _predicate_
 	if !Config.ExpandEdge {
 		return
 	}
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: x.PredicateListAttr,
+		ValueType: pb.Posting_STRING,
+		List:      true,
+	})
+
+	// propose the schema update for acl predicates
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: "dgraph.xid",
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"},
+	})
+
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: "dgraph.password",
+		ValueType: pb.Posting_PASSWORD,
+	})
+
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: "dgraph.user.group",
+		Directive: pb.SchemaUpdate_REVERSE,
+		ValueType: pb.Posting_UID,
+	})
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: "dgraph.group.acl",
+		ValueType: pb.Posting_STRING,
+	})
+}
+
+func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	g.RLock()
-	_, ok := g.tablets[x.PredicateListAttr]
+	_, ok := g.tablets[schema.Predicate]
 	g.RUnlock()
 	if ok {
 		return
@@ -155,11 +188,7 @@ func (g *groupi) proposeInitialSchema() {
 	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.
 	m.StartTs = 1
-	m.Schema = append(m.Schema, &pb.SchemaUpdate{
-		Predicate: x.PredicateListAttr,
-		ValueType: pb.Posting_STRING,
-		List:      true,
-	})
+	m.Schema = append(m.Schema, schema)
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
@@ -238,7 +267,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return x.Errorf("don't have the address of any dgraphzero server")
+		return x.Errorf("Don't have the address of any dgraphzero server")
 	}
 
 	c := pb.NewZeroClient(p.Get())
@@ -900,7 +929,7 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 
 			// We should always sort the txns before applying. Otherwise, we might lose some of
-			// these updates, becuase we never write over a new version.
+			// these updates, because we never write over a new version.
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})

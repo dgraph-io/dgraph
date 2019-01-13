@@ -133,6 +133,15 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: `_:alice <secret> "password1"^^<xs:password> .`,
+		nq: api.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "secret",
+			ObjectId:    "",
+			ObjectValue: &api.Value{Val: &api.Value_PasswordVal{PasswordVal: "password1"}},
+		},
+	},
+	{
 		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
 		nq: api.NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
@@ -488,7 +497,7 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
-		input: `<alice> <lives> "\x2 wonderland" .`,
+		input:       `<alice> <lives> "\x2 wonderland" .`,
 		expectedErr: true, // should have 2 hex values after \x
 	},
 	{

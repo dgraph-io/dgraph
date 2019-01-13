@@ -110,7 +110,7 @@ func convertGeoFile(input string, output string) error {
 		rdf := fmt.Sprintf("%s <%s> \"%s\"^^<geo:geojson> .\n", bn, opt.geopred, geometry)
 		chb <- []byte(rdf)
 
-		for k, _ := range f.Properties {
+		for k := range f.Properties {
 			// TODO - Support other types later.
 			if str, err := f.PropertyString(k); err == nil {
 				rdfCount++

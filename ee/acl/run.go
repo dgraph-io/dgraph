@@ -16,26 +16,18 @@
  * limitations under the License.
  */
 
-package worker
+package acl
 
 import (
-	"errors"
-
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
+	"github.com/spf13/cobra"
 )
 
-var errNotSupported = errors.New("Feature available only in Dgraph Enterprise Edition.")
+var CmdAcl x.SubCommand
 
-// Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.Infof("Backup failed: %s", errNotSupported)
-	return &pb.Status{}, nil
-}
-
-// BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, target string) error {
-	return x.Errorf("Backup failed: %s", errNotSupported)
+func init() {
+	CmdAcl.Cmd = &cobra.Command{
+		Use:   "acl",
+		Short: "Enterprise feature. Not supported in oss version",
+	}
 }

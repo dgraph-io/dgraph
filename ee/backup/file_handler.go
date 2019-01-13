@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -14,9 +14,12 @@ package backup
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -25,34 +28,87 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp *os.File
+	fp      *os.File
+	readers multiReader
 }
 
-// Open authenticates or prepares a handler session.
+type multiReader []io.Reader
+
+func (mr multiReader) Close() error {
+	var err error
+	for i := range mr {
+		if mr[i] == nil {
+			continue
+		}
+		if fp, ok := mr[i].(*os.File); ok {
+			err = fp.Close()
+		}
+	}
+	return err
+}
+
+// Create prepares the a path to save backup files.
 // Returns error on failure, nil on success.
-func (h *fileHandler) Open(uri *url.URL, req *Request) error {
-	// check that this path exists and we can access it.
+func (h *fileHandler) Create(uri *url.URL, req *Request) error {
+	// check that the path exists and we can access it.
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
 	if err := os.Mkdir(dir, 0700); err != nil {
-		return err
+		if !os.IsExist(err) {
+			return err
+		}
 	}
 
 	path := filepath.Join(dir,
-		fmt.Sprintf("r%d-g%d.backup", req.Backup.ReadTs, req.Backup.GroupId))
+		fmt.Sprintf(backupFmt, req.Backup.ReadTs, req.Backup.GroupId))
 	fp, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	glog.V(2).Infof("Using file path: %q", path)
 	h.fp = fp
+
+	return nil
+}
+
+// Load uses tries to load any backup files found.
+// Returns nil on success, error otherwise.
+func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
+	if !h.exists(uri.Path) {
+		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	// find files and sort.
+	files := x.FindFilesFunc(uri.Path, func(path string) bool {
+		return strings.HasSuffix(path, ".backup")
+	})
+	if len(files) == 0 {
+		return x.Errorf("No backup files found in %q", uri.Path)
+	}
+	sort.Strings(files)
+	glog.V(2).Infof("Loading backup file(s): %v", files)
+
+	for _, file := range files {
+		fp, err := os.Open(file)
+		if err != nil {
+			return x.Errorf("Error opening %q: %s", file, err)
+		}
+		defer fp.Close()
+		if err = fn(fp, file); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (h *fileHandler) Close() error {
+	h.readers.Close()
+	if h.fp == nil {
+		return nil
+	}
 	if err := h.fp.Sync(); err != nil {
 		glog.Errorf("While closing file: %s. Error: %v", h.fp.Name(), err)
 		x.Ignore(h.fp.Close())

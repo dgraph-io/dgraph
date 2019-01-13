@@ -25,6 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -223,16 +224,9 @@ message Proposal {
 }
 
 message KVS {
- repeated KV kv = 1;
+ repeated pb.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
-}
-
-message KV {
-	bytes key      = 1;
-	bytes val      = 2;
-	bytes userMeta = 3;
-	uint64 version = 4;
 }
 
 // Posting messages.
@@ -328,7 +322,7 @@ message SchemaRequest {
 }
 
 message SchemaResult {
-	repeated api.SchemaNode schema = 1;
+	repeated api.SchemaNode schema = 1 [deprecated=true];
 }
 
 message SchemaUpdate {
@@ -420,7 +414,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)							returns (Status) {}
+	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -455,7 +449,7 @@ message BackupRequest {
 	uint64 read_ts  = 1;
 	uint32 group_id = 2;
 	string unix_ts  = 3;
-	string target   = 4;
+	string location = 4;
 }
 
 message ExportRequest {

@@ -60,16 +60,23 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	// getList can be set for a txn, to isolate the retrieval and storage of
-	// posting lists in a separate cache. If nil, global LRU cache is used.
-	getList func(key []byte) (*List, error)
+	cache *LocalCache
+}
+
+func NewTxn(startTs uint64) *Txn {
+	return &Txn{
+		StartTs:    startTs,
+		cache:      NewLocalCache(),
+		lastUpdate: time.Now(),
+	}
 }
 
 func (txn *Txn) Get(key []byte) (*List, error) {
-	if txn.getList == nil {
-		return Get(key)
-	}
-	return txn.getList(key)
+	return txn.cache.Get(key)
+}
+
+func (txn *Txn) Store(pl *List) *List {
+	return txn.cache.Set(string(pl.key), pl)
 }
 
 type oracle struct {
@@ -102,10 +109,20 @@ func (o *oracle) RegisterStartTs(ts uint64) *Txn {
 	if ok {
 		txn.lastUpdate = time.Now()
 	} else {
-		txn = &Txn{StartTs: ts, lastUpdate: time.Now()}
+		txn = NewTxn(ts)
 		o.pendingTxns[ts] = txn
 	}
 	return txn
+}
+
+func (o *oracle) CacheAt(ts uint64) *LocalCache {
+	o.RLock()
+	defer o.RUnlock()
+	txn, ok := o.pendingTxns[ts]
+	if !ok {
+		return nil
+	}
+	return txn.cache
 }
 
 // MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
@@ -140,6 +157,12 @@ func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
 	}
 	o.Lock()
 	defer o.Unlock()
+	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
+	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
+	// moved past startTs.
+	if startTs <= o.MaxAssigned() {
+		return nil, false
+	}
 	ch := make(chan struct{})
 	o.waiters[startTs] = append(o.waiters[startTs], ch)
 	return ch, true
@@ -198,10 +221,10 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 	return o.pendingTxns[startTs]
 }
 
-func (t *Txn) matchesDelta(ok func(key []byte) bool) bool {
-	t.Lock()
-	defer t.Unlock()
-	for key := range t.deltas {
+func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
+	txn.Lock()
+	defer txn.Unlock()
+	for key := range txn.deltas {
 		if ok([]byte(key)) {
 			return true
 		}

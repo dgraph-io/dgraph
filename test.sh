@@ -1,44 +1,122 @@
 #!/bin/bash
+#
+# usage: test.sh [-v] [pkg_regex]
 
-# run from directory containing this script
-cd ${BASH_SOURCE[0]%/*}
+readonly ME=${0##*/}
+readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 
-source ./contrib/scripts/functions.sh
-function run {
-  go test -short=true $@ |\
-		GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' |\
-		GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' |\
-		GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
+source $DGRAPH_ROOT/contrib/scripts/functions.sh
+
+PATH+=:$DGRAPH_ROOT/contrib/scripts/
+TEST_FAILED=0
+RUN_ALL=
+GO_TEST_OPTS=( "-short=true" )
+
+TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
+MATCHING_TESTS=$TMP_DIR/tests
+CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
+trap "rm -rf $TMP_DIR" EXIT
+
+#
+# Functions
+#
+
+function Info {
+    echo -e "\e[1;36mINFO: $*\e[0m"
 }
 
-function runAll {
-  # pushd dgraph/cmd/server
-  # go test -v .
-  # popd
-
-  local testsFailed=0
-  for PKG in $(go list ./...|grep -v -E 'vendor|wiki|customtok'); do
-    echo "Running test for $PKG"
-    run $PKG || {
-        testsFailed=$((testsFailed+1))
-    }
-  done
-  return $testsFailed
+function FindCustomClusterTests {
+    # look for directories containing a docker compose and *_test.go files
+    for FILE in $(find -type f -name docker-compose.yml); do
+        DIR=$(dirname $FILE)
+        if grep -q $DIR $MATCHING_TESTS && ls $DIR | grep -q "_test.go$"; then
+            echo "${DIR:1}\$" >> $CUSTOM_CLUSTER_TESTS
+        fi
+    done
 }
 
-# For piped commands return non-zero status if any command
-# in the pipe returns a non-zero status
-set -o pipefail
+function Run {
+    set -o pipefail
+    go test ${GO_TEST_OPTS[*]} $@ \
+    | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
+    | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
+    | GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
+}
+
+function RunDefaultClusterTests {
+    for PKG in $(grep -v -f $CUSTOM_CLUSTER_TESTS $MATCHING_TESTS); do
+        Info "Running test for $PKG"
+        Run $PKG || TEST_FAILED=1
+    done
+    return $TEST_FAILED
+}
+
+function RunCustomClusterTests {
+    while read -r LINE; do
+        DIR="${LINE:1:-1}"
+        CFG="$DIR/docker-compose.yml"
+        Info "Running tests in directory $DIR"
+        restartCluster $DIR/docker-compose.yml
+        pushd $DIR >/dev/null
+        Run || TEST_FAILED=1
+        popd >/dev/null
+    done < $CUSTOM_CLUSTER_TESTS
+    return $TEST_FAILED
+}
+
+#
+# MAIN
+#
+
+
+ARGS=$(/usr/bin/getopt -n$ME -o"v" -- "$@") || exit 1
+eval set -- "$ARGS"
+while true; do
+    case "$1" in
+        -v) GO_TEST_OPTS+=( "-v" ) ;;
+        --) shift; break         ;;
+    esac
+    shift
+done
+
+cd $DGRAPH_ROOT
+
+if [[ $# -eq 0 ]]; then
+    go list ./... > $MATCHING_TESTS
+    RUN_ALL=yes
+elif [[ $# -eq 1 ]]; then
+    go list ./... | grep $1 > $MATCHING_TESTS
+    Info "Running only tests matching $1"
+else
+    echo >&2 "usage: $ME [regex]"
+    exit 1
+fi
+
+FindCustomClusterTests
+
+Info "Running tests using the default cluster"
 restartCluster
-echo
-echo "Running tests. Ignoring vendor folder."
-runAll || exit $?
+RunDefaultClusterTests || TEST_FAILED=1
 
-# Run non-go tests.
-./contrib/scripts/test-bulk-schema.sh
+Info "Running tests using custom clusters"
+RunCustomClusterTests || TEST_FAILED=1
 
-echo
-echo "Running load-test.sh"
-./contrib/scripts/load-test.sh
+if [[ $RUN_ALL ]]; then
+    Info "Running load-test.sh"
+    ./contrib/scripts/load-test.sh
 
+    Info "Running custom test scripts"
+    ./contrib/scripts/test-backup-restore.sh
+    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+fi
+
+Info "Stopping cluster"
 stopCluster
+
+if [[ $TEST_FAILED -eq 0 ]]; then
+    Info "\e[1;32mAll tests passed!"
+else
+    Info "\e[1;31m*** One or more tests failed! ***"
+fi
+
+exit $TEST_FAILED

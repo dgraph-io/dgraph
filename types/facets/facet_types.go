@@ -44,20 +44,3 @@ func ValTypeForTypeID(typId TypeID) api.Facet_ValType {
 	}
 	panic("Unhandled case in ValTypeForTypeID.")
 }
-
-// TypeIDForValType gives TypeID for api.Facet_ValType
-func TypeIDForValType(valType api.Facet_ValType) TypeID {
-	switch valType {
-	case api.Facet_INT:
-		return IntID
-	case api.Facet_FLOAT:
-		return FloatID
-	case api.Facet_BOOL:
-		return BoolID
-	case api.Facet_DATETIME:
-		return DateTimeID
-	case api.Facet_STRING:
-		return StringID
-	}
-	panic("Unhandled case in TypeIDForValType.")
-}

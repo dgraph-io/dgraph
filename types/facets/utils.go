@@ -111,7 +111,7 @@ func valAndValType(val string) (interface{}, api.Facet_ValType, error) {
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
 		// We can't store NaN as it is because it serializes into invalid JSON.
 		if math.IsNaN(floatVal) {
-			return nil, api.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN.")
+			return nil, api.Facet_FLOAT, fmt.Errorf("Got invalid value: NaN")
 		}
 
 		return floatVal, api.Facet_FLOAT, nil
@@ -135,7 +135,11 @@ func FacetFor(key, val string) (*api.Facet, error) {
 	}
 
 	// convert facet val interface{} to binary
-	tid := TypeIDFor(&api.Facet{ValType: vt})
+	tid, err := TypeIDFor(&api.Facet{ValType: vt})
+	if err != nil {
+		return nil, err
+	}
+
 	fVal := &types.Val{Tid: types.BinaryID}
 	if err = types.Marshal(types.Val{Tid: tid, Value: v}, fVal); err != nil {
 		return nil, err
@@ -174,38 +178,30 @@ func SameFacets(a []*api.Facet, b []*api.Facet) bool {
 }
 
 // TypeIDFor gives TypeID for facet.
-func TypeIDFor(f *api.Facet) types.TypeID {
-	switch TypeIDForValType(f.ValType) {
-	case IntID:
-		return types.IntID
-	case StringID:
-		return types.StringID
-	case BoolID:
-		return types.BoolID
-	case DateTimeID:
-		return types.DateTimeID
-	case FloatID:
-		return types.FloatID
+func TypeIDFor(f *api.Facet) (types.TypeID, error) {
+	switch f.ValType {
+	case api.Facet_INT:
+		return types.IntID, nil
+	case api.Facet_FLOAT:
+		return types.FloatID, nil
+	case api.Facet_BOOL:
+		return types.BoolID, nil
+	case api.Facet_DATETIME:
+		return types.DateTimeID, nil
+	case api.Facet_STRING:
+		return types.StringID, nil
 	default:
-		panic("unhandled case in facetValToTypeVal")
+		return types.DefaultID, fmt.Errorf("Unrecognized facet type: %v", f.ValType)
 	}
 }
 
-// TryValFor tries to convert the facet to the its type from binary format. We use it to validate
-// the facets set directly by the user during mutation.
-func TryValFor(f *api.Facet) error {
-	val := types.Val{Tid: types.BinaryID, Value: f.Value}
-	typId := TypeIDFor(f)
-	_, err := types.Convert(val, typId)
-	return x.Wrapf(err, "Error while parsing facet: [%v]", f)
-}
-
 // ValFor converts Facet into types.Val.
-func ValFor(f *api.Facet) types.Val {
+func ValFor(f *api.Facet) (types.Val, error) {
 	val := types.Val{Tid: types.BinaryID, Value: f.Value}
-	typId := TypeIDFor(f)
-	v, err := types.Convert(val, typId)
-	x.AssertTruef(err == nil,
-		"We should always be able to covert facet into val. %v %v", f.Value, typId)
-	return v
+	facetTid, err := TypeIDFor(f)
+	if err != nil {
+		return types.Val{}, err
+	}
+
+	return types.Convert(val, facetTid)
 }

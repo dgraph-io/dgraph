@@ -51,7 +51,7 @@ func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 }
 
 func getOrCreate(key []byte) *posting.List {
-	l, err := posting.Get(key)
+	l, err := posting.GetNoStore(key)
 	x.Checkf(err, "While calling posting.Get")
 	return l
 }
@@ -110,11 +110,16 @@ func initTest(t *testing.T, schemaStr string) {
 	populateGraph(t)
 }
 
+func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
+	qs := queryState{cache: nil}
+	return qs.helpProcessTask(context.Background(), query, gid)
+}
+
 func TestProcessTask(t *testing.T) {
 	initTest(t, `neighbour: uid .`)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
-	r, err := helpProcessTask(context.Background(), query, 1)
+	r, err := helpProcessTask(query, 1)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		[][]uint64{
@@ -154,11 +159,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	initTest(t, `friend:string @index(term) .`)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := helpProcessTask(context.Background(), query, 1)
+	r, err := helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
+		{},
 		{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -176,13 +181,13 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	r, err = helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
+		{},
 		{12},
-		nil,
+		{},
 		{10},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -206,23 +211,23 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	r, err = helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
 		{12},
-		nil,
-		nil,
+		{},
+		{},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	r, err = helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
 		{12},
-		nil,
-		nil,
+		{},
+		{},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
@@ -232,11 +237,11 @@ func TestProcessTaskIndex(t *testing.T) {
 	initTest(t, `friend:string @index(term) .`)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := helpProcessTask(context.Background(), query, 1)
+	r, err := helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
+		{},
 		{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -254,13 +259,13 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	r, err = helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
+		{},
 		{12},
-		nil,
+		{},
 		{10},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -284,13 +289,13 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(context.Background(), query, 1)
+	r, err = helpProcessTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
 		{12},
-		nil,
-		nil,
+		{},
+		{},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 

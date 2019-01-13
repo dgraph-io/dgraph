@@ -315,7 +315,7 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 
 		result := or.r
 		x.AssertTrue(len(result.ValueMatrix) == len(dest.Uids))
-		for i, _ := range dest.Uids {
+		for i := range dest.Uids {
 			var sv types.Val
 			if len(result.ValueMatrix[i].Values) == 0 {
 				// Assign nil value which is sorted as greater than all other values.

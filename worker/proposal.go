@@ -100,7 +100,7 @@ func uniqueKey() string {
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
-var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later.")
+var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
@@ -146,13 +146,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
 	proposal.Key = key
+	span := otrace.FromContext(ctx)
 
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-
-		cctx, span := otrace.StartSpan(cctx, "node.propose")
-		defer span.End()
 
 		che := make(chan error, 1)
 		pctx := &conn.ProposalCtx{

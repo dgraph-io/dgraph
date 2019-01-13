@@ -1,7 +1,7 @@
 // +build !oss
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
@@ -14,11 +14,10 @@ package backup
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/stream"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -36,44 +35,63 @@ type Request struct {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (r *Request) Process(ctx context.Context) error {
-	w, err := r.newWriter()
+	h, err := r.newHandler()
 	if err != nil {
+		glog.Errorf("Unable to get handler for request: %+v. Error: %v", r, err)
 		return err
 	}
 
-	sl := stream.Lists{Stream: w, DB: r.DB}
-	sl.ChooseKeyFunc = nil
-	sl.ItemToKVFunc = func(key []byte, itr *badger.Iterator) (*pb.KV, error) {
-		item := itr.Item()
-		pk := x.Parse(key)
-		if pk.IsSchema() {
-			val, err := item.ValueCopy(nil)
-			if err != nil {
-				return nil, err
-			}
-			kv := &pb.KV{
-				Key:      key,
-				Val:      val,
-				UserMeta: []byte{item.UserMeta()},
-				Version:  item.Version(),
-			}
-			return kv, nil
-		}
-		l, err := posting.ReadPostingList(key, itr)
-		if err != nil {
-			return nil, err
-		}
-		return l.MarshalToKv()
-	}
-
-	glog.V(2).Infof("Backup started ...")
-	if err = sl.Orchestrate(ctx, "Backup:", r.Backup.ReadTs); err != nil {
+	stream := r.DB.NewStreamAt(r.Backup.ReadTs)
+	stream.LogPrefix = "Dgraph.Backup"
+	// Take full backups for now.
+	if _, err := stream.Backup(h, 0); err != nil {
+		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
-	if err = w.flush(); err != nil {
+	if err := h.Close(); err != nil {
+		glog.Errorf("While closing handler: %v", err)
 		return err
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
+	return err
+}
 
-	return nil
+// newHandler parses the requested target URI, finds a handler and then tries to create a session.
+// Target URI formats:
+//   [scheme]://[host]/[path]?[args]
+//   [scheme]:///[path]?[args]
+//   /[path]?[args] (only for local or NFS)
+//
+// Target URI parts:
+//   scheme - service handler, one of: "s3", "gs", "az", "http", "file"
+//     host - remote address. ex: "dgraph.s3.amazonaws.com"
+//     path - directory, bucket or container at target. ex: "/dgraph/backups/"
+//     args - specific arguments that are ok to appear in logs.
+//
+// Global args (might not be support by all handlers):
+//     secure - true|false turn on/off TLS.
+//   compress - true|false turn on/off data compression.
+//
+// Examples:
+//   s3://dgraph.s3.amazonaws.com/dgraph/backups?secure=true
+//   gs://dgraph/backups/
+//   as://dgraph-container/backups/
+//   http://backups.dgraph.io/upload
+//   file:///tmp/dgraph/backups or /tmp/dgraph/backups?compress=gzip
+func (r *Request) newHandler() (handler, error) {
+	uri, err := url.Parse(r.Backup.Location)
+	if err != nil {
+		return nil, err
+	}
+
+	// find handler for this URI scheme
+	h := getHandler(uri.Scheme)
+	if h == nil {
+		return nil, x.Errorf("Unable to handle url: %v", uri)
+	}
+
+	if err := h.Create(uri, r); err != nil {
+		return nil, err
+	}
+	return h, nil
 }

@@ -120,6 +120,9 @@ func verifyUid(ctx context.Context, uid uint64) error {
 	return nil
 }
 
+// AssignUids tries to assign unique ids to each identity in the subjects and objects in the
+// format of _:xxx. An identity, e.g. _:a, will only be assigned one uid regardless how many times
+// it shows up in the subjects or objects
 func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &pb.Num{}
@@ -127,7 +130,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return newUids, errors.New("Predicate deletion should be called via alter.")
+			return newUids, errors.New("Predicate deletion should be called via alter")
 		}
 
 		if len(nq.Subject) == 0 {
@@ -207,7 +210,7 @@ func ToInternal(gmu *gql.Mutation,
 	}
 	for _, nq := range gmu.Del {
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
-			return edges, errors.New("Predicate deletion should be called via alter.")
+			return edges, errors.New("Predicate deletion should be called via alter")
 		}
 		if err := parse(nq, pb.DirectedEdge_DEL); err != nil {
 			return edges, err

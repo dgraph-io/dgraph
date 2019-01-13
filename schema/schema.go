@@ -59,7 +59,8 @@ func (s *state) DeleteAll() {
 
 	for pred := range s.predicate {
 		// We set schema for _predicate_, hence it shouldn't be deleted.
-		if pred != x.PredicateListAttr {
+		_, isInitialPred := x.InitialPreds[pred]
+		if !isInitialPred {
 			delete(s.predicate, pred)
 		}
 	}
@@ -117,7 +118,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	if schema, ok := s.predicate[pred]; ok {
 		return types.TypeID(schema.ValueType), nil
 	}
-	return types.TypeID(100), x.Errorf("Schema not defined for predicate: %v.", pred)
+	return types.UndefinedID, x.Errorf("Schema not defined for predicate: %v.", pred)
 }
 
 // IsIndexed returns whether the predicate is indexed or not

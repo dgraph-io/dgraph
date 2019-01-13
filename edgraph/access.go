@@ -1,3 +1,5 @@
+// +build oss
+
 /*
  * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
@@ -14,6 +16,19 @@
  * limitations under the License.
  */
 
-//  Package stream
-// TODO: Write a in-depth explanation of what this does, with examples.
-package stream
+package edgraph
+
+import (
+	"context"
+
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+)
+
+func (s *Server) Login(ctx context.Context,
+	request *api.LoginRequest) (*api.Response, error) {
+
+	glog.Warningf("Login failed: %s", x.ErrNotSupported)
+	return &api.Response{}, x.ErrNotSupported
+}

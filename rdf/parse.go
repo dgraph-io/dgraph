@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
-	ErrInvalidUID = errors.New("UID has to be greater than zero.")
+	ErrEmpty      = errors.New("RDF: harmless error, e.g. comment line")
+	ErrInvalidUID = errors.New("UID has to be greater than zero")
 )
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -131,6 +131,10 @@ L:
 			}
 			src := types.ValueForType(types.StringID)
 			src.Value = []byte(oval)
+			// if this is a password value dont re-encrypt. issue#2765
+			if t == types.PasswordID {
+				src.Tid = t
+			}
 			p, err := types.Convert(src, t)
 			if err != nil {
 				return rnq, err
@@ -271,6 +275,7 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.TypeID{
+	"xs:password":        types.PasswordID,
 	"xs:string":          types.StringID,
 	"xs:date":            types.DateTimeID,
 	"xs:dateTime":        types.DateTimeID,

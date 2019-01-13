@@ -42,7 +42,7 @@ func TestRecurseError(t *testing.T) {
 	ctx := defaultContext()
 	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "depth must be > 0 when loop is true for recurse query.")
+	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query.")
 }
 
 func TestRecurseQuery(t *testing.T) {
@@ -660,7 +660,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	ctx := context.WithValue(defaultContext(), "debug", "true")
+	ctx := context.WithValue(defaultContext(), DebugKey, "true")
 	buf, _ := processToFastJsonCtxVars(t, query, ctx, nil)
 
 	var mp map[string]interface{}
@@ -704,7 +704,7 @@ func TestDebug3(t *testing.T) {
 			}
 		}
 	`
-	ctx := context.WithValue(defaultContext(), "debug", "true")
+	ctx := context.WithValue(defaultContext(), DebugKey, "true")
 	buf, err := processToFastJsonCtxVars(t, query, ctx, nil)
 
 	require.NoError(t, err)

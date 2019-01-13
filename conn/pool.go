@@ -36,8 +36,6 @@ import (
 var (
 	ErrNoConnection        = fmt.Errorf("No connection exists")
 	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
-	errNoPeerPoolEntry     = fmt.Errorf("no peerPool entry")
-	errNoPeerPool          = fmt.Errorf("no peerPool pool, could not connect")
 	echoDuration           = time.Second
 )
 

@@ -18,6 +18,7 @@ package alpha
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,16 +29,18 @@ import (
 	"testing"
 	"time"
 
-	context "golang.org/x/net/context"
-	"google.golang.org/grpc"
-
-	"github.com/stretchr/testify/require"
-
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/stretchr/testify/require"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 )
 
 var q0 = `
@@ -80,8 +83,14 @@ func childAttrs(sg *query.SubGraph) []string {
 	return out
 }
 
+type defaultContextKey int
+
+const (
+	mutationAllowedKey defaultContextKey = iota
+)
+
 func defaultContext() context.Context {
-	return context.WithValue(context.Background(), "mutation_allowed", true)
+	return context.WithValue(context.Background(), mutationAllowedKey, true)
 }
 
 var ts uint64
@@ -272,7 +281,12 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(`schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}]}}`, output)
+	require.JSONEq(t, `{"data":{"schema":[`+
+		`{"predicate":"_predicate_","type":"string","list":true},`+
+		`{"predicate":"age","type":"default"},`+
+		x.AclPredsJson+","+
+		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`+
+		`]}}`, output)
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
@@ -494,7 +508,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	_, err = runQuery(q1)
 	require.Error(t, err)
 }
 
@@ -582,7 +596,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	_, err = runQuery(q1)
 	require.Error(t, err)
 }
 
@@ -678,6 +692,7 @@ func TestJsonMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
+	require.NoError(t, err)
 	q1Result := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
 	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
@@ -730,6 +745,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
+	require.NoError(t, err)
 	var q1Result struct {
 		Data struct {
 			Q []map[string]interface{} `json:"q"`
@@ -1273,7 +1289,10 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"occupations","type":"string"}]}}`, res)
+	require.JSONEq(t, `{"data":{"schema":[`+
+		`{"predicate":"_predicate_","type":"string","list":true},`+
+		x.AclPredsJson+","+
+		`{"predicate":"occupations","type":"string"}]}}`, res)
 
 }
 
@@ -1364,7 +1383,9 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q3)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
+			x.AclPredsJson+
+			`]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1431,6 +1452,38 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "count")
 	require.Contains(t, err.Error(), "zero")
+}
+
+// This test is from Github issue #2662.
+// This test couldn't like in query package because that package tries to do some extra JSON
+// marshal, which causes issues for this case.
+func TestJsonUnicode(t *testing.T) {
+	err := runJsonMutation(`{
+  "set": [
+  { "uid": "0x10", "log.message": "\u001b[32mHello World 1!\u001b[39m\n" }
+  ]
+}`)
+	require.NoError(t, err)
+
+	output, err := runQuery(`{ node(func: uid(0x10)) { log.message }}`)
+	require.NoError(t, err)
+	require.Equal(t,
+		`{"data":{"node":[{"log.message":"\u001b[32mHello World 1!\u001b[39m\n"}]}}`, output)
+}
+
+func TestGrpcCompressionSupport(t *testing.T) {
+	conn, err := grpc.Dial("localhost:9180",
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
+	)
+	defer conn.Close()
+	require.NoError(t, err)
+
+	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	q := `schema {}`
+	tx := dc.NewTxn()
+	_, err = tx.Query(context.Background(), q)
+	require.NoError(t, err)
 }
 
 func TestMain(m *testing.M) {

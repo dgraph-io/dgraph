@@ -19,21 +19,32 @@ package edgraph
 import (
 	"expvar"
 	"path/filepath"
+	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	AllowMutations int = iota
+	DisallowMutations
+	StrictMutations
+)
+
 type Options struct {
-	PostingDir   string
-	BadgerTables string
-	BadgerVlog   string
-	WALDir       string
-	Nomutations  bool
-	AuthToken    string
+	PostingDir    string
+	BadgerTables  string
+	BadgerVlog    string
+	WALDir        string
+	MutationsMode int
+	AuthToken     string
 
 	AllottedMemory float64
+
+	HmacSecret    []byte
+	AccessJwtTtl  time.Duration
+	RefreshJwtTtl time.Duration
 }
 
 var Config Options

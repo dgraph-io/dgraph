@@ -35,6 +35,7 @@ few months. The [Changelog] is kept fairly up-to-date.
     + [Iterating over keys](#iterating-over-keys)
       - [Prefix scans](#prefix-scans)
       - [Key-only iteration](#key-only-iteration)
+    + [Stream](#stream)
     + [Garbage Collection](#garbage-collection)
     + [Database backup](#database-backup)
     + [Memory usage](#memory-usage)
@@ -417,6 +418,63 @@ err := db.View(func(txn *badger.Txn) error {
 })
 ```
 
+### Stream
+Badger provides a Stream framework, which concurrently iterates over all or a
+portion of the DB, converting data into custom key-values, and streams it out
+serially to be sent over network, written to disk, or even written back to
+Badger. This is a lot faster way to iterate over Badger than using a single
+Iterator. Stream supports Badger in both managed and normal mode.
+
+Stream uses the natural boundaries created by SSTables within the LSM tree, to
+quickly generate key ranges. Each goroutine then picks a range and runs an
+iterator to iterate over it. Each iterator iterates over all versions of values
+and is created from the same transaction, thus working over a snapshot of the
+DB. Every time a new key is encountered, it calls `ChooseKey(item)`, followed
+by `KeyToList(key, itr)`. This allows a user to select or reject that key, and
+if selected, convert the value versions into custom key-values. The goroutine
+batches up 4MB worth of key-values, before sending it over to a channel.
+Another goroutine further batches up data from this channel using *smart
+batching* algorithm and calls `Send` serially.
+
+This framework is designed for high throughput key-value iteration, spreading
+the work of iteration across many goroutines. `DB.Backup` uses this framework to
+provide full and incremental backups quickly.  Dgraph is a heavy user of this
+framework.  In fact, this framework was developed and used within Dgraph, before
+getting ported over to Badger.
+
+```go
+stream := db.NewStream()
+// db.NewStreamAt(readTs) for managed mode.
+
+// -- Optional settings
+stream.NumGo = 16                     // Set number of goroutines to use for iteration.
+stream.Prefix = []byte("some-prefix") // Leave nil for iteration over the whole DB.
+stream.LogPrefix = "Badger.Streaming" // For identifying stream logs. Outputs to Logger.
+
+// ChooseKey is called concurrently for every key. If left nil, assumes true by default.
+stream.ChooseKey = func(item *badger.Item) bool {
+  return bytes.HasSuffix(item.Key(), []byte("er"))
+}
+
+// KeyToList is called concurrently for chosen keys. This can be used to convert
+// Badger data into custom key-values. If nil, uses stream.ToList, a default
+// implementation, which picks all valid key-values.
+stream.KeyToList = nil
+
+// -- End of optional settings.
+
+// Send is called serially, while Stream.Orchestrate is running.
+stream.Send = func(list *pb.KVList) error {
+  return proto.MarshalText(w, list) // Write to w.
+}
+
+// Run the stream
+if err := stream.Orchestrate(context.Background()); err != nil {
+  return err
+}
+// Done.
+```
+
 ### Garbage Collection
 Badger values need to be garbage collected, because of two reasons:
 
@@ -581,6 +639,7 @@ Below is a list of known projects that use Badger:
 * [gorush](https://github.com/appleboy/gorush) - A push notification server written in Go.
 * [emitter](https://github.com/emitter-io/emitter) - Scalable, low latency, distributed pub/sub broker with message storage, uses MQTT, gossip and badger.
 * [GarageMQ](https://github.com/valinurovam/garagemq) - AMQP server written in Go.
+* [RedixDB](https://alash3al.github.io/redix/) - A real-time persistent key-value store with the same redis protocol.
 
 If you are using Badger in a project please send a pull request to add it to the list.
 

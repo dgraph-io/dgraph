@@ -28,7 +28,7 @@
 
 ### Setup Dgraph from source repo
 
-    $ go get -u -v -t github.com/dgraph-io/dgraph/...
+    $ go get -v -t github.com/dgraph-io/dgraph/...
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and compile the binaries to `$GOPATH/bin`.
 
@@ -156,7 +156,7 @@ Over years of writing big scalable systems, we are convinced that striving for s
 
 Every new source file must begin with a license header.
 
-Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
+Most of Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
 
     /*
      * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors

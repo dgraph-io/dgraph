@@ -41,7 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var passwordCache map[string]string = make(map[string]string, 2)
+var passwordCache = make(map[string]string, 2)
 
 var ts uint64
 var odch chan *pb.OracleDelta
@@ -267,8 +267,9 @@ func TestGetUIDInDebugMode(t *testing.T) {
 			}
 		}
 	`
+
 	ctx := defaultContext()
-	ctx = context.WithValue(ctx, "debug", "true")
+	ctx = context.WithValue(ctx, DebugKey, "true")
 	js, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.NoError(t, err)
 	require.JSONEq(t,
@@ -1590,7 +1591,6 @@ func TestVarInIneq5(t *testing.T) {
 }
 
 func TestNestedFuncRoot(t *testing.T) {
-
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
@@ -1603,7 +1603,6 @@ func TestNestedFuncRoot(t *testing.T) {
 }
 
 func TestNestedFuncRoot2(t *testing.T) {
-
 	query := `
 		{
 			me(func: ge(count(friend), 1)) {
