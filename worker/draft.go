@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"sync/atomic"
 	"time"
 

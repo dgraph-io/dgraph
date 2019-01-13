@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -59,7 +60,7 @@ func (txn *Txn) AddKeys(key, conflictKey string) {
 	}
 }
 
-func (txn *Txn) Fill(ctx *api.TxnContext) {
+func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
 	defer txn.Unlock()
 	ctx.StartTs = txn.StartTs

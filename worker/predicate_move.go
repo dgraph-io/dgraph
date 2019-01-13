@@ -21,10 +21,9 @@ import (
 	"io"
 	"math"
 	"strconv"
-	"sync"
-	"sync/atomic"
 
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -45,10 +44,6 @@ var (
 
 // size of kvs won't be too big, we would take care before proposing.
 func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
-	// No new deletion/background cleanup would start after we start streaming tablet,
-	// so all the proposals for a particular tablet would atmost wait for deletion of
-	// single tablet.
-	groups().waitForBackgroundDeletion()
 	glog.Infof("Writing %d keys\n", len(kvs))
 	if len(kvs) == 0 {
 		return nil
@@ -90,7 +85,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 			}
 
 			proposal.Kv = append(proposal.Kv, kv)
-			size += len(kv.Key) + len(kv.Val)
+			size += len(kv.Key) + len(kv.Value)
 			if size >= 32<<20 { // 32 MB
 				if err := n.proposeAndWait(ctx, proposal); err != nil {
 					return err
@@ -232,9 +227,9 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 			return err
 		}
 		kvs := &pb.KVS{}
-		kv := &pb.KV{}
+		kv := &bpb.KV{}
 		kv.Key = schemaKey
-		kv.Val = val
+		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
 		kvs.Kv = append(kvs.Kv, kv)
@@ -248,8 +243,8 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	//
 	// TODO: We should use a particular read timestamp here.
 	stream := pstore.NewStreamAt(math.MaxUint64)
-	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", predicate)
-	stream.Prefix = x.PredicatePrefix(predicate)
+	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
+	stream.Prefix = x.PredicatePrefix(in.Predicate)
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// For now, just send out full posting lists, because we use delete markers to delete older
 		// data in the prefix range. So, by sending only one version per key, and writing it at a

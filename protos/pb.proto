@@ -200,10 +200,6 @@ message Mutations {
 	bool ignore_index_conflict   = 6;
 }
 
-message KeyValues {
-	repeated KV kv = 1;
-}
-
 message Snapshot {
 	RaftContext context = 1;
 	uint64 index        = 2;
