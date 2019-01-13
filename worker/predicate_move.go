@@ -78,7 +78,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				// Delete on all nodes.
 				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				glog.Infof("Predicate being received: %v", pk.Attr)
-				if err := groups().Node.proposeAndWait(ctx, p); err != nil {
+				if err := n.proposeAndWait(ctx, p); err != nil {
 					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
 					return err
 				}
@@ -211,9 +211,11 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
+	// TODO: We should use a particular read timestamp here.
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
-	// Send schema (if present) now after all keys have been transferred over.
+
+	// Send schema first.
 	schemaKey := x.SchemaKey(in.Predicate)
 	item, err := txn.Get(schemaKey)
 	if err == badger.ErrKeyNotFound {

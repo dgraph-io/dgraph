@@ -53,13 +53,8 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
-	// TODO: Don't think we should check for this here. Otherwise, an Alpha which should be serving
-	// this data won't apply this data.
-	// if !groups().ServesTablet(edge.Attr) {
-	// 	// Don't assert, can happen during replay of raft logs if server crashes immediately
-	// 	// after predicate move and before snapshot.
-	// 	return x.Errorf("runMutation: Tablet isn't being served by this group.")
-	// }
+	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
+	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
 
 	su, ok := schema.State().Get(edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
@@ -511,7 +506,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 }
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
-		m *pb.Mutations) error {
+	m *pb.Mutations) error {
 	if Config.StrictMutations {
 		for _, edge := range m.Edges {
 			if _, err := schema.State().TypeOf(edge.Attr); err != nil {

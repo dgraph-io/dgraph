@@ -142,7 +142,8 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 
 	if !st.node.AmLeader() {
 		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, "This Zero server is not the leader. Re-run command on leader.")
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"This Zero server is not the leader. Re-run command on leader.")
 		return
 	}
 

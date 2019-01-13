@@ -362,7 +362,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			if err != nil {
 				return x.Errorf("Unable to parse group id from %s. Error: %v", pkey, err)
 			}
-			pred := strings.Join(splits[1:], "")
+			pred := strings.Join(splits[1:], "-")
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {
 				return x.Errorf("Tablet for %s is nil", pred)

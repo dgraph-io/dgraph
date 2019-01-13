@@ -115,13 +115,21 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	// timeout.
 	var noTimeout bool
 
+	checkTablet := func(pred string) error {
+		if tablet := groups().Tablet(pred); tablet == nil ||
+			tablet.GroupId != groups().groupId() {
+			return errUnservedTablet
+		}
+		return nil
+	}
+
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
-			if tablet := groups().Tablet(edge.Attr); tablet == nil || tablet.GroupId != groups().groupId() {
-				return errUnservedTablet
+			if err := checkTablet(edge.Attr); err != nil {
+				return err
 			}
 			su, ok := schema.State().Get(edge.Attr)
 			if !ok {
@@ -131,8 +139,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 			}
 		}
 		for _, schema := range proposal.Mutations.Schema {
-			if t := groups().Tablet(schema.Predicate); t == nil || t.GroupId != groups().groupId() {
-				return errUnservedTablet
+			if err := checkTablet(schema.Predicate); err != nil {
+				return err
 			}
 			if err := checkSchema(schema); err != nil {
 				return err

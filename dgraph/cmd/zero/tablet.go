@@ -100,14 +100,12 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Info(msg)
 	span.Annotate([]otrace.Attribute{otrace.StringAttribute("tablet", predicate)}, msg)
 
-	// Now block all commits on this predicate. Keep them blocked until we
-	// return from this function.
+	// Block all commits on this predicate. Keep them blocked until we return from this function.
 	unblock := s.blockTablet(predicate)
 	defer unblock()
 
-	// Now get a new timestamp, beyond which we are sure that no new txns would
-	// be committed for this predicate. Source Alpha leader must reach this
-	// timestamp before streaming the data.
+	// Get a new timestamp, beyond which we are sure that no new txns would be committed for this
+	// predicate. Source Alpha leader must reach this timestamp before streaming the data.
 	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
 	if err != nil || ids.StartId == 0 {
 		return x.Errorf("While leasing txn timestamp. Id: %+v Error: %v", ids, err)
