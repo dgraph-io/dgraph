@@ -371,7 +371,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 				return x.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
 					gid, pred, tablet.GroupId)
 			}
-			if s.tabletBlocked(pred) {
+			if s.isBlocked(pred) {
 				return x.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
 			}
 		}

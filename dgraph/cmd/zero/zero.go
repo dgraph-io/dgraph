@@ -284,7 +284,7 @@ func (s *Server) blockTablet(pred string) func() {
 	}
 }
 
-func (s *Server) tabletBlocked(pred string) bool {
+func (s *Server) isBlocked(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	_, blocked := s.blockCommitsOn[pred]
