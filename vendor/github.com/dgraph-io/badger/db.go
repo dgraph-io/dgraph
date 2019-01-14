@@ -370,7 +370,7 @@ func (db *DB) Close() (err error) {
 	// We don't need to care about cstatus since no parallel compaction is running.
 	if db.opt.CompactL0OnClose {
 		if err := db.lc.doCompact(compactionPriority{level: 0, score: 1.73}); err != nil {
-			db.opt.Warningf("Error while forcing compaction on level 0: %v", err)
+			db.opt.Warningf("While forcing compaction on level 0: %v", err)
 		} else {
 			db.opt.Infof("Force compaction on level 0 done")
 		}
