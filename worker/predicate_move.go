@@ -19,7 +19,6 @@ package worker
 import (
 	"fmt"
 	"io"
-	"math"
 	"strconv"
 
 	"github.com/golang/glog"
@@ -211,8 +210,9 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
 	}
 
-	// TODO: We should use a particular read timestamp here.
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+	// This txn is only reading the schema. Doesn't really matter what read timestamp we use,
+	// because schema keys are always set at ts=1.
+	txn := pstore.NewTransactionAt(in.TxnTs, false)
 	defer txn.Discard()
 
 	// Send schema first.
@@ -242,9 +242,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	//
-	// TODO: We should use a particular read timestamp here.
-	stream := pstore.NewStreamAt(math.MaxUint64)
+	stream := pstore.NewStreamAt(in.TxnTs)
 	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
 	stream.Prefix = x.PredicatePrefix(in.Predicate)
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
