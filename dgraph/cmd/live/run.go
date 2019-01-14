@@ -180,8 +180,25 @@ func fileReader(file string) (io.Reader, *os.File) {
 	return r, f
 }
 
-// processFile sends mutations for a given gz file.
+// forward file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, file string) error {
+	var err error
+
+	if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
+		err = l.processJsonFile(ctx, file)
+	} else {
+		err = l.processRdfFile(ctx, file)
+	}
+
+	return err
+}
+
+func (l *loader) processJsonFile(ctx context.Context, file string) error {
+	return nil
+}
+
+// processFile sends mutations for a given gz file.
+func (l *loader) processRdfFile(ctx context.Context, file string) error {
 	fmt.Printf("\nProcessing %s\n", file)
 	gr, f := fileReader(file)
 	var buf bytes.Buffer
