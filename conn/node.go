@@ -72,21 +72,21 @@ type Node struct {
 	Applied y.WaterMark
 }
 
-type raftLogger struct {
+type ToGlog struct {
 }
 
-func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
-func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
-func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
-func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
-func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }
-func (rl *raftLogger) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
-func (rl *raftLogger) Warning(v ...interface{})                 { glog.Warning(v...) }
-func (rl *raftLogger) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
-func (rl *raftLogger) Fatal(v ...interface{})                   { glog.Fatal(v...) }
-func (rl *raftLogger) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
-func (rl *raftLogger) Panic(v ...interface{})                   { log.Panic(v...) }
-func (rl *raftLogger) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
+func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
+func (rl *ToGlog) Error(v ...interface{})                   { glog.Error(v...) }
+func (rl *ToGlog) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
+func (rl *ToGlog) Info(v ...interface{})                    { glog.Info(v...) }
+func (rl *ToGlog) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
+func (rl *ToGlog) Warning(v ...interface{})                 { glog.Warning(v...) }
+func (rl *ToGlog) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
+func (rl *ToGlog) Fatal(v ...interface{})                   { glog.Fatal(v...) }
+func (rl *ToGlog) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
+func (rl *ToGlog) Panic(v ...interface{})                   { log.Panic(v...) }
+func (rl *ToGlog) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
 
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
@@ -133,7 +133,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// snapshot.
 			Applied: snap.Metadata.Index,
 
-			Logger: &raftLogger{},
+			Logger: &ToGlog{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full

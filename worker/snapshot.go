@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -108,6 +107,15 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	// might be OK. Otherwise, we'd want to version the schemas as well. Currently, they're stored
 	// at timestamp=1.
 
+	// We no longer check if this node is the leader, because the leader can switch between snapshot
+	// requests. Therefore, we wait until this node has reached snap.ReadTs, before servicing the
+	// request. Any other node in the group should have the same data as the leader, once it is past
+	// the read timestamp.
+	glog.Infof("Waiting to reach timestamp: %d", snap.ReadTs)
+	if err := posting.Oracle().WaitForTs(out.Context(), snap.ReadTs); err != nil {
+		return err
+	}
+
 	var num int
 	stream := pstore.NewStreamAt(snap.ReadTs)
 	stream.LogPrefix = "Sending Snapshot"
@@ -150,11 +158,6 @@ func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error
 	atomic.AddInt32(&n.streaming, 1)
 	defer atomic.AddInt32(&n.streaming, -1)
 
-	if !x.IsTestRun() {
-		if !n.AmLeader() {
-			return errNotLeader
-		}
-	}
 	snap, err := stream.Recv()
 	if err != nil {
 		// If we don't even receive a request (here or if no StreamSnapshot is called), we can't

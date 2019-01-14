@@ -53,15 +53,14 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
-	if !groups().ServesTabletRW(edge.Attr) {
-		// Don't assert, can happen during replay of raft logs if server crashes immediately
-		// after predicate move and before snapshot.
-		return x.Errorf("runMutation: Tablet isn't being served by this group.")
-	}
+	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
+	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
 
 	su, ok := schema.State().Get(edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
-		x.AssertTruef(ok, "Schema is not present for predicate %s", edge.Attr)
+		if !ok {
+			return x.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+		}
 	}
 
 	if isDeletePredicateEdge(edge) {
@@ -352,7 +351,7 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.Fill(tctx)
+		txn.Fill(tctx, groups().groupId())
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.
@@ -477,6 +476,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 		}
 		if res.ctx != nil {
 			tctx.Keys = append(tctx.Keys, res.ctx.Keys...)
+			tctx.Preds = append(tctx.Preds, res.ctx.Preds...)
 		}
 	}
 	close(resCh)
