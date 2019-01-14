@@ -162,7 +162,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case FloatID:
 				*res = float64(vc)
 			case BoolID:
-				*res = bool(vc != 1)
+				*res = bool(vc != 0)
 			case StringID, DefaultID:
 				*res = string(strconv.FormatInt(vc, 10))
 			case DateTimeID:
@@ -194,7 +194,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = int64(vc)
 			case BoolID:
-				*res = bool(vc != 1)
+				*res = bool(vc != 0)
 			case StringID, DefaultID:
 				*res = string(strconv.FormatFloat(float64(vc), 'G', -1, 64))
 			case DateTimeID:
