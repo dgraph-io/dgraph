@@ -449,6 +449,7 @@ func TestMutationSingleUid(t *testing.T) {
 	require.Error(t, runMutation(m))
 }
 
+// Verify multiple uids are allowed after mutation.
 func TestSchemaMutationUid(t *testing.T) {
 	// reset Schema
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
@@ -482,6 +483,7 @@ func TestSchemaMutationUid(t *testing.T) {
 	require.NoError(t, runMutation(m2))
 }
 
+// Verify a list uid predicate cannot be converted to a single-element predicate.
 func TestSchemaMutationUidError1(t *testing.T) {
 	// reset Schema
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
