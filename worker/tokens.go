@@ -78,24 +78,24 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
 	}
 
-	sortableIdx := -1
 	tokenizers := schema.State().Tokenizer(attr)
-	for i, t := range tokenizers {
+	for _, t := range tokenizers {
 		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
-		if f == "eq" && !t.IsLossy() {
-			return t, nil
-		}
-		if t.IsSortable() && sortableIdx == -1 {
-			sortableIdx = i
+		switch f {
+		case "eq":
+			// For equality, find a non-lossy tokenizer.
+			if !t.IsLossy() {
+				return t, nil
+			}
+		default:
+			// rest of the cases: ge, gt, le, lt require a sortable tokenizer.
+			if t.IsSortable() {
+				return t, nil
+			}
 		}
 	}
 
-	// Check if we found a sortable tokenizer and return that.
-	if sortableIdx != -1 {
-		return tokenizers[sortableIdx], nil
-	}
-
-	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
+	// TODO: Should we return an error if we don't find a non-lossy tokenizer for eq function.
 	if f != "eq" {
 		return nil, x.Errorf("Attribute:%s does not have proper index for comparison",
 			attr)

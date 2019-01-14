@@ -124,8 +124,8 @@ func LoadCustomTokenizer(soFile string) {
 	tokenizer := symb.(func() interface{})().(PluginTokenizer)
 
 	id := tokenizer.Identifier()
-	x.AssertTruef(id < IdentCustom,
-		"custom tokenizer identifier byte must be >= 0x80, but was %#x", id)
+	x.AssertTruef(id >= IdentCustom,
+		"custom tokenizer identifier byte must be >= %#x, but was %#x", IdentCustom, id)
 	registerTokenizer(CustomTokenizer{PluginTokenizer: tokenizer})
 }
 
@@ -366,6 +366,8 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
 	}
+	// Blake2 is a hash function equivalent of SHA series, but faster. SHA is the best hash function
+	// for doing checksum of content, because they have low collision ratios. See issue #2776.
 	hash := blake2b.Sum256([]byte(term))
 	if len(hash) == 0 {
 		return nil, x.Errorf("Hash tokenizer failed to create hash")
@@ -374,7 +376,12 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 }
 func (t HashTokenizer) Identifier() byte { return IdentHash }
 func (t HashTokenizer) IsSortable() bool { return false }
-func (t HashTokenizer) IsLossy() bool    { return false }
+
+// We have switched HashTokenizer to be non-lossy. This allows us to avoid having to retrieve values
+// for the returned results, and compare them against the value in the query, which is slow. There
+// is very low probability of collisions with a 256-bit hash. We use that fact to speed up equality
+// query operations using the hash index.
+func (t HashTokenizer) IsLossy() bool { return false }
 
 // PluginTokenizer is implemented by external plugins loaded dynamically via
 // *.so files. It follows the implementation semantics of the Tokenizer
