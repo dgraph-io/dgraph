@@ -97,7 +97,6 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		"-r", rdfFile,
 		"-s", schemaFile,
 		"--http", ":"+strconv.Itoa(freePort(0)),
-		//"-z", ":"+s.bulkCluster.zeroPort,
 		"-j=1",
 		"-x=true",
 	)

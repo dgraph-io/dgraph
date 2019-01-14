@@ -44,8 +44,6 @@ func TestLoaderXidmap(t *testing.T) {
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
-	//liveCmd.Stdout = os.Stdout
-	//liveCmd.Stderr = os.Stdout
 	if err := liveCmd.Run(); err != nil {
 		cluster.Close()
 		t.Fatalf("Live Loader didn't run: %v\n", err)

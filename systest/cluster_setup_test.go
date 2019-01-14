@@ -89,8 +89,6 @@ func (d *DgraphCluster) Start() error {
 		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
-	//d.dgraph.Stdout = os.Stdout
-	//d.dgraph.Stderr = os.Stderr
 	if err := d.dgraph.Start(); err != nil {
 		return err
 	}
