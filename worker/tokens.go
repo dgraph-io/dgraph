@@ -18,6 +18,7 @@ package worker
 
 import (
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 
 	"bytes"
 
@@ -95,7 +96,14 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		}
 	}
 
-	return nil, x.Errorf("Attribute:%s does not have proper index for comparison", attr)
+	// Should we return an error if we don't find a non-lossy tokenizer for eq function.
+	if f != "eq" {
+		return nil, x.Errorf("Attribute:%s does not have proper index for comparison", attr)
+	}
+	glog.Infof("Attribute:%s couldn't find a non-lossy tokenizer for 'eq' comparison", attr)
+
+	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
+	return tokenizers[0], nil
 }
 
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
