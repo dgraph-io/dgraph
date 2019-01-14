@@ -64,7 +64,7 @@ popd
 basedir=$GOPATH/src/github.com/dgraph-io
 # Clone Dgraph repo.
 pushd $basedir
-  git clone git@github.com:dgraph-io/dgraph.git
+  git clone https://github.com/dgraph-io/dgraph.git
 popd
 
 pushd $basedir/dgraph
@@ -88,7 +88,7 @@ popd
 
 # Clone ratel repo.
 pushd $basedir
-  git clone git@github.com:dgraph-io/ratel.git
+  git clone https://github.com/dgraph-io/ratel.git
 popd
 
 pushd $basedir/ratel
