@@ -17,6 +17,10 @@
 package x
 
 import (
+	"bufio"
+	"compress/gzip"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,8 +83,8 @@ func FindDataFiles(str string, ext []string) []string {
 
 		if fi.IsDir() {
 			match_fn := func(f string) bool {
-				for _, x := range ext {
-					if strings.HasSuffix(f, x) {
+				for _, e := range ext {
+					if strings.HasSuffix(f, e) {
 						return true
 					}
 				}
@@ -91,4 +95,29 @@ func FindDataFiles(str string, ext []string) []string {
 	}
 
 	return list
+}
+
+// FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
+// and decompressed automatically even without the gz extension.
+func FileReader(file string) (io.Reader, *os.File) {
+	f, err := os.Open(file)
+	x.Check(err)
+
+	var r io.Reader
+	if filepath.Ext(file) == ".gz" {
+		r, err = gzip.NewReader(f)
+		x.Check(err)
+	} else {
+		rd := bufio.NewReader(f)
+		buf, _ := rd.Peek(512)
+
+		typ := http.DetectContentType(buf)
+		if typ == "application/x-gzip" {
+			r, _ = gzip.NewReader(rd)
+		} else {
+			r = rd
+		}
+	}
+
+	return r, f
 }
