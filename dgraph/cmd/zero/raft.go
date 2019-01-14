@@ -248,7 +248,6 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	// only the first one succeeds.
 	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 		if tablet.Force {
-			// TODO: Try and remove this whole Force flag logic.
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
 		} else {
@@ -258,10 +257,9 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 					prev.Predicate, tablet.GroupId, prev.GroupId)
 				return errTabletAlreadyServed
 			}
-			// This update can come from tablet size.
-			tablet.ReadOnly = prev.ReadOnly
 		}
 	}
+	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
 	return nil
 }
