@@ -100,11 +100,11 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, err := validateToken(request.RefreshToken)
-		x.AssertTrue(len(userData) > 0)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to authenticate the refresh token %v: %v",
+			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
 		}
+		x.AssertTrue(len(userData) > 0)
 
 		userId := userData[0]
 		user, err = authorizeUser(ctx, userId, "")
@@ -440,10 +440,10 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	x.AssertTrue(len(userData) > 0)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
+	x.AssertTrue(len(userData) > 0)
 	userId := userData[0]
 	if userId == "admin" {
 		// admin is allowed to do anything
@@ -492,11 +492,10 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	x.AssertTrue(len(userData) > 0)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
-
+	x.AssertTrue(len(userData) > 0)
 	userId := userData[0]
 	if userId == "admin" {
 		// the admin account has access to everything
@@ -544,11 +543,10 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	x.AssertTrue(len(userData) > 0)
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
-
+	x.AssertTrue(len(userData) > 0)
 	userId := userData[0]
 	if userId == "admin" {
 		// the admin account has access to everything
