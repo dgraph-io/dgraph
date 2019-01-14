@@ -95,14 +95,7 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		}
 	}
 
-	// TODO: Should we return an error if we don't find a non-lossy tokenizer for eq function.
-	if f != "eq" {
-		return nil, x.Errorf("Attribute:%s does not have proper index for comparison",
-			attr)
-	}
-
-	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
-	return tokenizers[0], nil
+	return nil, x.Errorf("Attribute:%s does not have proper index for comparison", attr)
 }
 
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
