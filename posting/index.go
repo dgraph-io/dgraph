@@ -339,7 +339,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *pb.DirectedEdge,
 		return x.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", t.Entity, t.ValueId, t.Value)
 	}
-	glog.Infof("HACK. We're in AddMutationWithIndex. t: +%v\n", t)
 
 	if t.Op == pb.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t, txn)
