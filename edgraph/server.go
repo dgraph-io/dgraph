@@ -291,8 +291,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return nil, err
 	}
 
-	err := authorizeAlter(ctx, op)
-	if err != nil {
+	if err := authorizeAlter(ctx, op); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
 	}

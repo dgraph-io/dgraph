@@ -277,62 +277,6 @@ func authorizeUser(ctx context.Context, userid string, password string) (user *a
 	return user, nil
 }
 
-func upsertAdmin(ctx context.Context) error {
-	// upsert the admin account
-
-	queryVars := map[string]string{
-		"$userid":   "admin",
-		"$password": "",
-	}
-	queryRequest := api.Request{
-		Query: queryUser,
-		Vars:  queryVars,
-	}
-
-	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
-	if err != nil {
-		return fmt.Errorf("error while query user with id admin: %v", err)
-	}
-	startTs := queryResp.GetTxn().StartTs
-	glog.Infof("admin txn startTs:%v", startTs)
-
-	adminUser, err := acl.UnmarshalUser(queryResp, "user")
-	if err != nil {
-		return fmt.Errorf("error while unmarshaling the admin user: %v", err)
-	}
-
-	if adminUser != nil {
-		// the admin user already exists, no need to create
-		return nil
-	}
-
-	// insert the admin user
-	createUserNQuads := []*api.NQuad{
-		{
-			Subject:     "_:newuser",
-			Predicate:   "dgraph.xid",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "admin"}},
-		},
-		{
-			Subject:     "_:newuser",
-			Predicate:   "dgraph.password",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "password"}},
-		}}
-
-	mu := &api.Mutation{
-		StartTs:   startTs,
-		CommitNow: true,
-		Set:       createUserNQuads,
-	}
-
-	assigned, err := (&Server{}).doMutate(context.Background(), mu)
-	if err != nil {
-		return fmt.Errorf("unable to create admin: %v", err)
-	}
-	glog.Infof("admin commitTs:%v", assigned.GetContext().GetCommitTs())
-	return nil
-}
-
 func RefreshAcls(closeCh <-chan struct{}) {
 	if len(Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
@@ -406,6 +350,59 @@ func ResetAcl() {
 	if len(Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
+	}
+
+	upsertAdmin := func(ctx context.Context) error {
+		// upsert the admin account
+
+		queryVars := map[string]string{
+			"$userid":   "admin",
+			"$password": "",
+		}
+		queryRequest := api.Request{
+			Query: queryUser,
+			Vars:  queryVars,
+		}
+
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+		if err != nil {
+			return fmt.Errorf("error while query user with id admin: %v", err)
+		}
+		startTs := queryResp.GetTxn().StartTs
+
+		adminUser, err := acl.UnmarshalUser(queryResp, "user")
+		if err != nil {
+			return fmt.Errorf("error while unmarshaling the admin user: %v", err)
+		}
+
+		if adminUser != nil {
+			// the admin user already exists, no need to create
+			return nil
+		}
+
+		// insert the admin user
+		createUserNQuads := []*api.NQuad{
+			{
+				Subject:     "_:newuser",
+				Predicate:   "dgraph.xid",
+				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "admin"}},
+			},
+			{
+				Subject:     "_:newuser",
+				Predicate:   "dgraph.password",
+				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "password"}},
+			}}
+
+		mu := &api.Mutation{
+			StartTs:   startTs,
+			CommitNow: true,
+			Set:       createUserNQuads,
+		}
+
+		if _, err := (&Server{}).doMutate(context.Background(), mu); err != nil {
+			return fmt.Errorf("unable to create admin: %v", err)
+		}
+		return nil
 	}
 
 	aclCache = sync.Map{}
