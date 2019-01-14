@@ -88,9 +88,9 @@ func (s *Server) Login(ctx context.Context,
 	return resp, nil
 }
 
-// Authenticate the login request using either the refresh token if present, or the
-// <userId, password> pair. If authentication passes, query the user's uid and associated groups
-// from DB and returns the user object
+// authenticateLogin authenticates the login request using either the refresh token if present, or
+// the <userId, password> pair. If authentication passes, it queries the user's uid and associated
+// groups from DB and returns the user object
 func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User,
 	error) {
 	if err := validateLoginRequest(request); err != nil {
@@ -138,9 +138,10 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	return user, nil
 }
 
-// verify signature and expiration of the jwt and if validation passes,
-// return the extracted userId, and groupIds encoded in the jwt
-func validateToken(jwtStr string) (userData []string, err error) {
+// validateToken verifies the signature and expiration of the jwt, and if validation passes,
+// returns a slice of strings, where the first element is the extracted userId
+// and the rest are groupIds encoded in the jwt.
+func validateToken(jwtStr string) ([]string, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
@@ -254,8 +255,8 @@ const queryUser = `
 
 // query the user with the given userid, and returns associated uid, acl groups,
 // and whether the password stored in DB matches the supplied password
-func authorizeUser(ctx context.Context, userid string, password string) (user *acl.User,
-	err error) {
+func authorizeUser(ctx context.Context, userid string, password string) (*acl.User,
+	error) {
 	queryVars := map[string]string{
 		"$userid":   userid,
 		"$password": password,
@@ -270,7 +271,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (user *a
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
 	}
-	user, err = acl.UnmarshalUser(queryResp, "user")
+	user, err := acl.UnmarshalUser(queryResp, "user")
 	if err != nil {
 		return nil, err
 	}
