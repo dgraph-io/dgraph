@@ -32,3 +32,24 @@ func (s *Server) Login(ctx context.Context,
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
 	return &api.Response{}, x.ErrNotSupported
 }
+
+func ResetAcl() {
+	// do nothing
+}
+
+func RefreshAcls(closeCh <-chan struct{}) {
+	// do nothing
+}
+
+func authorizeAlter(ctx context.Context, op *api.Operation) error {
+	return nil
+}
+
+func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+	return nil
+}
+
+func authorizeQuery(ctx context.Context, req *api.Request) error {
+	// always allow access
+	return nil
+}

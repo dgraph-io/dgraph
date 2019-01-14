@@ -1,0 +1,78 @@
+# Docker compose file for testing. Use it with:
+# docker-compose up --force-recreate
+# This would pick up dgraph binary from $GOPATH.
+
+version: "3.5"
+services:
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: acl-dg0.1
+    working_dir: /data/dg0.1
+    ports:
+      - 5080:5080
+      - 6080:6080
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 1 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    labels:
+      cluster: test
+
+  dg1:
+    image: dgraph/dgraph:latest
+    container_name: acl-dg1
+    working_dir: /data/dg1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+    ports:
+      - 8180:8180
+      - 9180:9180
+    security_opt:
+      - seccomp:unconfined
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 30s --jaeger.collector http://jaeger:14268
+    labels:
+      cluster: test
+
+  dg2:
+    image: dgraph/dgraph:latest
+    container_name: acl-dg2
+    working_dir: /data/dg2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+    ports:
+      - 8182:8182
+      - 9182:9182
+    security_opt:
+      - seccomp:unconfined
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 30s --jaeger.collector http://jaeger:14268
+    labels:
+      cluster: test
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    hostname: jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "9411:9411"
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
