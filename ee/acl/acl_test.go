@@ -195,13 +195,12 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	if err := dg.Alter(ctx, &op); err != nil {
 		t.Fatalf("Unable to cleanup db:%v", err)
 	}
-
-	resetUser(t)
-
-	// create some data, e.g. user with name alice
 	require.NoError(t, dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
+
+	// create some data, e.g. user with name alice
+	resetUser(t)
 
 	txn := dg.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{

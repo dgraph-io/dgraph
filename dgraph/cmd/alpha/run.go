@@ -33,6 +33,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -530,16 +532,18 @@ func run() {
 	_ = numShutDownSig
 
 	// Setup external communication.
+	aclCloser := y.NewCloser(1)
 	go func() {
 		worker.StartRaftNodes(edgraph.State.WALstore, bindall)
 		// initialization of the admin account can only be done after raft nodes are running
 		// and health check passes
 		edgraph.ResetAcl()
-		edgraph.RefreshAcls(shutdownCh)
+		edgraph.RefreshAcls(aclCloser)
 	}()
 
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
+	aclCloser.SignalAndWait()
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
 }

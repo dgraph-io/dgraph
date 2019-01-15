@@ -94,8 +94,7 @@ type Group struct {
 func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	m := make(map[string][]Group)
 
-	err = json.Unmarshal(input, &m)
-	if err != nil {
+	if err = json.Unmarshal(input, &m); err != nil {
 		glog.Errorf("Unable to unmarshal the query group response:%v", err)
 		return nil, err
 	}
@@ -130,8 +129,7 @@ func UnmarshalAcl(aclBytes []byte) (map[string]int32, error) {
 func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 	m := make(map[string][]Group)
 
-	err = json.Unmarshal(input, &m)
-	if err != nil {
+	if err = json.Unmarshal(input, &m); err != nil {
 		glog.Errorf("Unable to unmarshal the query group response:%v", err)
 		return nil, err
 	}
