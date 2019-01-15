@@ -134,22 +134,13 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err, "the query should have succeeded")
 
 	//var respUser User
-	var respMap map[string]interface{}
-	err = json.Unmarshal(resp.GetJson(), &respMap)
-	require.NoError(t, err, "Unmarshaling the response into an user object should have succeeded")
-	if directVal, ok := respMap["direct"]; ok {
-		firstDirect := directVal.([]interface{})[0]
-		accessTo := firstDirect.(map[string]interface{})["access.to"]
-		firstAccessTo := accessTo.([]interface{})[0]
-
-		inheritVal, ok1 := firstAccessTo.(map[string]interface{})["access.to|inherit"]
-		require.True(t, ok1 && inheritVal == false, "the returned inherit value should be false")
-
-		permissionVal, ok2 := firstAccessTo.(map[string]interface{})["access.to|permission"]
-		require.True(t, ok2 && permissionVal == "WRITE", "the returned permission value should be WRITE")
-	} else {
-		t.Fatalf("unable to get any value under the direct key from the response")
-	}
+	CompareJSON(t, fmt.Sprintf(`
+{"direct":[
+  {
+    "uid":"%s",
+    "access.to":[
+    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}]}]}
+`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
