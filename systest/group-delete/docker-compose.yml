@@ -9,7 +9,7 @@ services:
       - 5080:5080
       - 6080:6080
     labels:
-      cluster: group-delete-test
+      cluster: test
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -30,7 +30,7 @@ services:
       - 8180:8180
       - 9180:9180
     labels:
-      cluster: group-delete-test
+      cluster: test
     command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --logtostderr
 
   dg2:
@@ -48,7 +48,7 @@ services:
       - 8182:8182
       - 9182:9182
     labels:
-      cluster: group-delete-test
+      cluster: test
     command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --logtostderr
 
   dg3:
@@ -66,5 +66,5 @@ services:
       - 8183:8183
       - 9183:9183
     labels:
-      cluster: group-delete-test
+      cluster: test
     command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --logtostderr

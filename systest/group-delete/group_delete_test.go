@@ -69,11 +69,11 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAll: true}))
 
-	schema, err := ioutil.ReadFile(`data/goldendata.schema`)
+	schema, err := ioutil.ReadFile(`../data/goldendata.schema`)
 	require.NoError(t, err)
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: string(schema)}))
 
-	fp, err := os.Open(`data/goldendata_export.rdf.gz`)
+	fp, err := os.Open(`../data/goldendata_export.rdf.gz`)
 	require.NoError(t, err)
 	defer fp.Close()
 
