@@ -8,18 +8,28 @@ readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
+GO_TEST_OPTS=( "-short=true" )
 TEST_FAILED=0
 RUN_ALL=
-GO_TEST_OPTS=( "-short=true" )
-
-TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
-MATCHING_TESTS=$TMP_DIR/tests
-CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
-trap "rm -rf $TMP_DIR" EXIT
 
 #
 # Functions
 #
+
+function Usage {
+    echo \
+"usage: $ME [-v] [pkg_regex]
+
+options:
+
+    -h --help   output this help message
+    -v          run tests in verbose mode
+
+notes:
+
+    Tests are always run with -short=true."
+}
+
 
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
@@ -27,6 +37,7 @@ function Info {
 
 function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
+    touch $CUSTOM_CLUSTER_TESTS
     for FILE in $(find -type f -name docker-compose.yml); do
         DIR=$(dirname $FILE)
         if grep -q $DIR $MATCHING_TESTS && ls $DIR | grep -q "_test.go$"; then
@@ -69,24 +80,30 @@ function RunCustomClusterTests {
 #
 
 
-ARGS=$(/usr/bin/getopt -n$ME -o"v" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"vh" -l"help" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -v) GO_TEST_OPTS+=( "-v" ) ;;
-        --) shift; break         ;;
+        -v)         GO_TEST_OPTS+=( "-v" ) ;;
+        -h|--help)  Usage; exit 0          ;;
+        --)         shift; break           ;;
     esac
     shift
 done
 
 cd $DGRAPH_ROOT
 
+TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
+MATCHING_TESTS=$TMP_DIR/tests
+CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
+trap "rm -rf $TMP_DIR" EXIT
+
 if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
     RUN_ALL=yes
 elif [[ $# -eq 1 ]]; then
     go list ./... | grep $1 > $MATCHING_TESTS
-    Info "Running only tests matching $1"
+    Info "Running only tests matching '$1'"
 else
     echo >&2 "usage: $ME [regex]"
     exit 1
