@@ -1360,6 +1360,18 @@ func TestDeleteScalarValue(t *testing.T) {
 	err := runMutation(m)
 	require.NoError(t, err)
 
+	var d1 = `
+    {
+      delete {
+        <0x12345> <name> "yyy" .
+      }
+    }
+	`
+	err = runMutation(d1)
+	require.NoError(t, err)
+
+	// Verify triple was not deleted because the value in the request did
+	// not match the existing value.
 	q := fmt.Sprintf(`
 	{
 	  me(func: uid(%s)) {
@@ -1368,21 +1380,6 @@ func TestDeleteScalarValue(t *testing.T) {
 	}`, "0x12345")
 
 	output, err := runQuery(q)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
-
-	var d1 = `
-    {
-      delete {
-        <0x12345> <name> "yyy" .
-      }
-    }
-	`
-
-	err = runMutation(d1)
-	require.NoError(t, err)
-
-	output, err = runQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
 
@@ -1396,6 +1393,7 @@ func TestDeleteScalarValue(t *testing.T) {
 	err = runMutation(d2)
 	require.NoError(t, err)
 
+	// Verify triple was actually deleted this time.
 	output, err = runQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
