@@ -10,22 +10,24 @@ source $DGRAPH_ROOT/contrib/scripts/functions.sh
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
 GO_TEST_OPTS=( "-short=true" )
 TEST_FAILED=0
-RUN_ALL=
+RUN_ALL=yes
 
 #
 # Functions
 #
 
 function Usage {
-    echo \
-"usage: $ME [-v] [pkg_regex]
+    echo "usage: $ME [opts] [pkg_regex]
 
 options:
 
     -h --help   output this help message
+    -c          run code tests only and skip integration tests
     -v          run tests in verbose mode
 
 notes:
+
+    Specifying pkg_regex implies -c.
 
     Tests are always run with -short=true."
 }
@@ -80,13 +82,14 @@ function RunCustomClusterTests {
 #
 
 
-ARGS=$(/usr/bin/getopt -n$ME -o"vh" -l"help" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"vhc" -l"help,code-tests" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -v)         GO_TEST_OPTS+=( "-v" ) ;;
-        -h|--help)  Usage; exit 0          ;;
-        --)         shift; break           ;;
+        -v)         GO_TEST_OPTS+=( "-v" )                   ;;
+        -c)         RUN_ALL=; Info "Running only code tests" ;;
+        -h|--help)  Usage; exit 0                            ;;
+        --)         shift; break                             ;;
     esac
     shift
 done
@@ -100,10 +103,10 @@ trap "rm -rf $TMP_DIR" EXIT
 
 if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
-    RUN_ALL=yes
 elif [[ $# -eq 1 ]]; then
     go list ./... | grep $1 > $MATCHING_TESTS
     Info "Running only tests matching '$1'"
+    RUN_ALL=
 else
     echo >&2 "usage: $ME [regex]"
     exit 1
