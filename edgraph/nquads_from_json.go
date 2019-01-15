@@ -52,15 +52,20 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 		var valueType api.Facet_ValType
 		switch v := facetVal.(type) {
 		case string:
-			facet, err := facets.FacetFor(key, strconv.Quote(v))
-			if err != nil {
-				return nil, err
-			}
+			if t, err := types.ParseTime(v); err == nil {
+				valueType = api.Facet_DATETIME
+				jsonValue = t
+			} else {
+				facet, err := facets.FacetFor(key, strconv.Quote(v))
+				if err != nil {
+					return nil, err
+				}
 
-			// the FacetFor function already converts the value to binary
-			// so there is no need for the conversion again after the switch block
-			facetsForPred = append(facetsForPred, facet)
-			continue
+				// the FacetFor function already converts the value to binary
+				// so there is no need for the conversion again after the switch block
+				facetsForPred = append(facetsForPred, facet)
+				continue
+			}
 		case json.Number:
 			jsonNumber := facetVal.(json.Number)
 			if strings.Contains(jsonNumber.String(), ".") {

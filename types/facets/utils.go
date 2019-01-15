@@ -17,7 +17,6 @@
 package facets
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"sort"
@@ -167,23 +166,6 @@ func ConvertFacetValueToBinary(key string, value interface{}, sourceFacetType ap
 		return nil, x.Errorf("Error while marshalling types.Val into binary.")
 	}
 	return &api.Facet{Key: key, Value: targetValueBytes, ValType: sourceFacetType}, nil
-}
-
-// SameFacets returns whether two facets are same or not.
-// both should be sorted by key.
-func SameFacets(a []*api.Facet, b []*api.Facet) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	la := len(a)
-	for i := 0; i < la; i++ {
-		if (a[i].ValType != b[i].ValType) ||
-			(a[i].Key != b[i].Key) ||
-			!bytes.Equal(a[i].Value, b[i].Value) {
-			return false
-		}
-	}
-	return true
 }
 
 // TypeIDFor gives TypeID for facet.
