@@ -553,6 +553,10 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
+	x.AssertTrue(len(userData) > 0)
+	if isAdmin(userData) {
+		return nil
+	}
 
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
