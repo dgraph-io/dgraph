@@ -88,7 +88,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.Check(err)
 		Config.RaftId = id
 	}
-	glog.Infof("Current Raft Id: %d\n", Config.RaftId)
+	glog.Infof("Current Raft Id: %#x\n", Config.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 
@@ -113,6 +113,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	}
 	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
+	glog.Infof("Raft Id after connection to Zero: %#x\n", Config.RaftId)
+
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
@@ -765,7 +767,7 @@ func (g *groupi) cleanupTablets() {
 		if !g.Node.AmLeader() {
 			return
 		}
-		glog.Infof("Running cleaning at Node: %d Group: %d", g.Node.Id, g.groupId())
+		glog.Infof("Running cleaning at Node: %#x Group: %d", g.Node.Id, g.groupId())
 		defer glog.Info("Cleanup Done")
 
 		opt := badger.DefaultIteratorOptions
@@ -827,7 +829,7 @@ func (g *groupi) processOracleDeltaStream() {
 	defer ticker.Stop()
 
 	blockingReceiveAndPropose := func() {
-		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+		glog.Infof("Leader idx=%#x of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.connToZeroLeader()

@@ -68,7 +68,7 @@ type node struct {
 // sufficient. We don't need to wait for proposals to be applied.
 
 func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *node {
-	glog.Infof("Node ID: %v with GroupID: %v\n", id, gid)
+	glog.Infof("Node ID: %#x with GroupID: %d\n", id, gid)
 
 	rc := &pb.RaftContext{
 		Addr:  myAddr,
@@ -661,7 +661,7 @@ func (n *node) Run() {
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d\n", snap, n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n", snap, n.gid, rc.Id)
 					for {
 						err := n.retrieveSnapshot(snap)
 						if err == nil {
@@ -673,7 +673,7 @@ func (n *node) Run() {
 					}
 					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %d [SELF]. Ignoring.\n",
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x [SELF]. Ignoring.\n",
 						snap, n.gid, rc.Id)
 				}
 				if span != nil {
