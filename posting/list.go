@@ -275,7 +275,7 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	return id
 }
 
-// isUidMutationAllowedBySchema returns an error if all the following conditions are met.
+// canMutateUid returns an error if all the following conditions are met.
 // * Predicate is of type UidID.
 // * Predicate is not set to a list of uids in the schema.
 // * The existing posting list has an entry that does not match the proposed
@@ -285,8 +285,7 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 // predicates with single values because previously all uid predicates were
 // considered lists.
 // This functions returns a nil error in all other cases.
-func (l *List) isUidMutationAllowedBySchema(ctx context.Context, txn *Txn,
-	edge *pb.DirectedEdge) error {
+func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
 	l.AssertRLock()
 
 	if types.TypeID(edge.ValueType) != types.UidID {
@@ -302,8 +301,8 @@ func (l *List) isUidMutationAllowedBySchema(ctx context.Context, txn *Txn,
 			return fmt.Errorf(
 				"cannot add value with uid %x to predicate %s because one of the existing "+
 					"values does not match this uid, either delete the existing values first or "+
-					"modify the schema to allow multiple uids mapped to this predicate",
-				edge.GetValueId(), edge.Attr)
+					"modify the schema to '%s: [uid]'",
+				edge.GetValueId(), edge.Attr, edge.Attr)
 		}
 		return nil
 	})

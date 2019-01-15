@@ -295,7 +295,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
-	if err := l.isUidMutationAllowedBySchema(ctx, txn, t); err != nil {
+	if err := l.canMutateUid(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 
