@@ -436,16 +436,16 @@ func deleteAllEntries(prefix []byte) error {
 	})
 }
 
-// deleteEntireIndex deletes the index for the given attribute. All tokenizers are
+// deleteAllTokens deletes the index for the given attribute. All tokenizers are
 // used by this function.
-func deleteEntireIndex(attr string) error {
+func deleteAllTokens(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	return deleteAllEntries(prefix)
 }
 
-// deleteIndexForTokenizer deletes the index for the given attribute and token.
-func deleteIndexForTokenizer(attr, tokenizerName string) error {
+// deleteTokensFor deletes the index for the given attribute and token.
+func deleteTokensFor(attr, tokenizerName string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
@@ -657,10 +657,10 @@ func (rb *IndexRebuild) needsIndexRebuild() indexRebuildInfo {
 		currTokens[t] = struct{}{}
 	}
 
-	tokenizersToRebuild, tokenizersToDelete := x.Diff(currTokens, prevTokens)
+	newTokenizers, deletedTokenizers := x.Diff(currTokens, prevTokens)
 
 	// If the tokenizers are the same, nothing needs to be done.
-	if len(tokenizersToRebuild) == 0 && len(tokenizersToDelete) == 0 {
+	if len(newTokenizers) == 0 && len(deletedTokenizers) == 0 {
 		return indexRebuildInfo{
 			op: indexNoop,
 		}
@@ -668,8 +668,8 @@ func (rb *IndexRebuild) needsIndexRebuild() indexRebuildInfo {
 
 	return indexRebuildInfo{
 		op:                  indexRebuild,
-		tokenizersToDelete:  tokenizersToDelete,
-		tokenizersToRebuild: tokenizersToRebuild,
+		tokenizersToDelete:  deletedTokenizers,
+		tokenizersToRebuild: newTokenizers,
 	}
 }
 
@@ -686,12 +686,12 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		if err := deleteIndexForTokenizer(rb.Attr, tokenizer); err != nil {
+		if err := deleteTokensFor(rb.Attr, tokenizer); err != nil {
 			return err
 		}
 	}
 
-	// Exit early if the index only neeed to be deleted and not rebuild.
+	// Exit early if the index only need to be deleted and not rebuild.
 	if rebuildInfo.op == indexDelete {
 		return nil
 	}
@@ -705,7 +705,7 @@ func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		rebuildInfo.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
 	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		if err := deleteIndexForTokenizer(rb.Attr, tokenizer); err != nil {
+		if err := deleteTokensFor(rb.Attr, tokenizer); err != nil {
 			return err
 		}
 	}
@@ -1000,7 +1000,7 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		if err := deleteEntireIndex(attr); err != nil {
+		if err := deleteAllTokens(attr); err != nil {
 			return err
 		}
 	} else if reversed {
