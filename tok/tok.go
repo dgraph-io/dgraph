@@ -124,7 +124,7 @@ func LoadCustomTokenizer(soFile string) {
 	tokenizer := symb.(func() interface{})().(PluginTokenizer)
 
 	id := tokenizer.Identifier()
-	x.AssertTruef(id < IdentCustom,
+	x.AssertTruef(id >= IdentCustom,
 		"custom tokenizer identifier byte must be >= 0x80, but was %#x", id)
 	registerTokenizer(CustomTokenizer{PluginTokenizer: tokenizer})
 }
