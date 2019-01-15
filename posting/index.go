@@ -295,13 +295,23 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
-	if doUpdateIndex {
-		// Check original value BEFORE any mutation actually happens.
-		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
-		if err != nil {
+	// Check original value BEFORE any mutation actually happens.
+	val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
+	if err != nil {
+		return val, found, emptyCountParams, err
+	}
+
+	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
+	// a value that does not match the existing value.
+	if !schema.State().IsList(t.Attr) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
+		mpost := NewPosting(t)
+		newVal := valueToTypesVal(mpost)
+
+		if found && !reflect.DeepEqual(val, newVal) {
 			return val, found, emptyCountParams, err
 		}
 	}
+
 	countBefore, countAfter := 0, 0
 	if hasCountIndex {
 		countBefore = l.length(txn.StartTs, 0)
