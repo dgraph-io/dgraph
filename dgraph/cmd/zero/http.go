@@ -140,6 +140,13 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !st.node.AmLeader() {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"This Zero server is not the leader. Re-run command on leader.")
+		return
+	}
+
 	tablet := r.URL.Query().Get("tablet")
 	if len(tablet) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -183,11 +190,12 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := st.zero.movePredicate(tablet, srcGroup, dstGroup); err != nil {
+		glog.Errorf("While moving predicate %s from %d -> %d. Error: %v",
+			tablet, srcGroup, dstGroup, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-
 	w.Write([]byte(fmt.Sprintf("Predicate: [%s] moved from group: [%d] to [%d]",
 		tablet, srcGroup, dstGroup)))
 }

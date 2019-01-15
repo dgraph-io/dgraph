@@ -51,6 +51,9 @@ go get -d google.golang.org/grpc
 go get -u github.com/prometheus/client_golang/prometheus
 go get -u github.com/dgraph-io/dgo
 # go get github.com/stretchr/testify/require
+go get -u github.com/dgraph-io/badger
+go get -u github.com/golang/protobuf/protoc-gen-go
+go get -u github.com/gogo/protobuf/protoc-gen-gofast
 go get -u github.com/karalabe/xgo
 docker pull karalabe/xgo-latest
 
@@ -61,7 +64,7 @@ popd
 basedir=$GOPATH/src/github.com/dgraph-io
 # Clone Dgraph repo.
 pushd $basedir
-  git clone git@github.com:dgraph-io/dgraph.git
+  git clone https://github.com/dgraph-io/dgraph.git
 popd
 
 pushd $basedir/dgraph
@@ -74,9 +77,18 @@ pushd $basedir/dgraph
   release_version=$TAG
 popd
 
+# Regenerate protos. Should not be different from what's checked in.
+pushd $basedir/dgraph/protos
+  make regenerate
+  if [[ "$(git status --porcelain)" ]]; then
+      echo >&2 "Generated protos different in release."
+      exit 1
+  fi
+popd
+
 # Clone ratel repo.
 pushd $basedir
-  git clone git@github.com:dgraph-io/ratel.git
+  git clone https://github.com/dgraph-io/ratel.git
 popd
 
 pushd $basedir/ratel

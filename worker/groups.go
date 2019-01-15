@@ -21,6 +21,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -41,15 +41,15 @@ import (
 type groupi struct {
 	x.SafeMutex
 	// TODO: Is this context being used?
-	ctx       context.Context
-	cancel    context.CancelFunc
-	state     *pb.MembershipState
-	Node      *node
-	gid       uint32
-	tablets   map[string]*pb.Tablet
-	triggerCh chan struct{} // Used to trigger membership sync
-	delPred   chan struct{} // Ensures that predicate move doesn't happen when deletion is ongoing.
-	closer    *y.Closer
+	ctx          context.Context
+	cancel       context.CancelFunc
+	state        *pb.MembershipState
+	Node         *node
+	gid          uint32
+	tablets      map[string]*pb.Tablet
+	triggerCh    chan struct{} // Used to trigger membership sync
+	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
+	closer       *y.Closer
 }
 
 var gr *groupi
@@ -63,7 +63,9 @@ func groups() *groupi {
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
-	gr = new(groupi)
+	gr = &groupi{
+		blockDeletes: new(sync.Mutex),
+	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
 	if len(Config.MyAddr) == 0 {
@@ -86,7 +88,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.Check(err)
 		Config.RaftId = id
 	}
-	glog.Infof("Current Raft Id: %d\n", Config.RaftId)
+	glog.Infof("Current Raft Id: %#x\n", Config.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 
@@ -111,6 +113,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	}
 	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
 	Config.RaftId = connState.GetMember().GetId()
+	glog.Infof("Raft Id after connection to Zero: %#x\n", Config.RaftId)
+
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
 	// not get any data.
@@ -118,7 +122,6 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 
 	gid := gr.groupId()
 	gr.triggerCh = make(chan struct{}, 1)
-	gr.delPred = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
 	store := raftwal.Init(walStore, Config.RaftId, gid)
@@ -167,6 +170,7 @@ func (g *groupi) proposeInitialSchema() {
 		Predicate: "dgraph.user.group",
 		Directive: pb.SchemaUpdate_REVERSE,
 		ValueType: pb.Posting_UID,
+		List:      true,
 	})
 	g.upsertSchema(&pb.SchemaUpdate{
 		Predicate: "dgraph.group.acl",
@@ -344,14 +348,6 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	return 0
 }
 
-func (g *groupi) ServesTabletRW(key string) bool {
-	tablet := g.Tablet(key)
-	if tablet != nil && !tablet.ReadOnly && tablet.GroupId == groups().groupId() {
-		return true
-	}
-	return false
-}
-
 func (g *groupi) ServesTablet(key string) bool {
 	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {
@@ -361,6 +357,7 @@ func (g *groupi) ServesTablet(key string) bool {
 }
 
 // Do not modify the returned Tablet
+// TODO: This should return error.
 func (g *groupi) Tablet(key string) *pb.Tablet {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
@@ -759,83 +756,68 @@ OUTER:
 	goto START
 }
 
-func (g *groupi) waitForBackgroundDeletion() {
-	// Waits for background cleanup if any to finish.
-	// No new cleanup on any predicate would start until we finish moving
-	// the predicate because read only flag would be set by now. We start deletion
-	// only when no predicate is being moved.
-	g.delPred <- struct{}{}
-	<-g.delPred
-}
-
-func (g *groupi) hasReadOnlyTablets() bool {
-	g.RLock()
-	defer g.RUnlock()
-	if g.state == nil {
-		return false
-	}
-	for _, group := range g.state.Groups {
-		for _, tab := range group.Tablets {
-			if tab.ReadOnly {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (g *groupi) cleanupTablets() {
 	defer g.closer.Done() // CLOSER:1
+	defer func() {
+		glog.Infof("EXITING cleanupTablets.")
+	}()
 
-	ticker := time.NewTimer(time.Minute * 10)
-	defer ticker.Stop()
+	cleanup := func() {
+		g.blockDeletes.Lock()
+		defer g.blockDeletes.Unlock()
+		if !g.Node.AmLeader() {
+			return
+		}
+		glog.Infof("Running cleaning at Node: %#x Group: %d", g.Node.Id, g.groupId())
+		defer glog.Info("Cleanup Done")
 
-	select {
-	case <-g.closer.HasBeenClosed():
-		return
-	case <-ticker.C:
-		func() {
-			opt := badger.DefaultIteratorOptions
-			opt.PrefetchValues = false
-			txn := pstore.NewTransactionAt(math.MaxUint64, false)
-			defer txn.Discard()
-			itr := txn.NewIterator(opt)
-			defer itr.Close()
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		txn := pstore.NewTransactionAt(math.MaxUint64, false)
+		defer txn.Discard()
+		itr := txn.NewIterator(opt)
+		defer itr.Close()
 
-			for itr.Rewind(); itr.Valid(); {
-				item := itr.Item()
-
-				// TODO: Investigate out of bounds.
-				pk := x.Parse(item.Key())
-				if pk == nil {
-					itr.Next()
-					continue
-				}
-
-				// Delete at most one predicate at a time.
-				// Tablet is not being served by me and is not read only.
-				// Don't use servesTablet function because it can return false even if
-				// request made to group zero fails. We might end up deleting a predicate
-				// on failure of network request even though no one else is serving this
-				// tablet.
-				if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
-					if g.hasReadOnlyTablets() {
-						return
-					}
-					g.delPred <- struct{}{}
-					glog.Warningf("Deleting predicate: %v. Tablet: %+v", pk.Attr, tablet)
-					// Predicate moves are disabled during deletion, deletePredicate purges everything.
-					posting.DeletePredicate(context.Background(), pk.Attr)
-					<-g.delPred
-					return
-				}
-				if pk.IsSchema() {
-					itr.Seek(pk.SkipSchema())
-					continue
-				}
-				itr.Seek(pk.SkipPredicate())
+		for itr.Rewind(); itr.Valid(); {
+			item := itr.Item()
+			pk := x.Parse(item.Key())
+			if pk == nil {
+				itr.Next()
+				continue
 			}
-		}()
+
+			// Delete at most one predicate at a time.
+			// Tablet is not being served by me and is not read only.
+			// Don't use servesTablet function because it can return false even if
+			// request made to group zero fails. We might end up deleting a predicate
+			// on failure of network request even though no one else is serving this
+			// tablet.
+			if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
+				glog.Warningf("Node: %d Group: %d. Proposing predicate delete: %v. Tablet: %+v",
+					g.Node.Id, g.groupId(), pk.Attr, tablet)
+				// Predicate moves are disabled during deletion, deletePredicate purges everything.
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
+				err := groups().Node.proposeAndWait(context.Background(), p)
+				glog.Errorf("Cleaning up predicate: %+v. Error: %v", p, err)
+				return
+			}
+			if pk.IsSchema() {
+				itr.Seek(pk.SkipSchema())
+				continue
+			}
+			itr.Seek(pk.SkipPredicate())
+		}
+	}
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-g.closer.HasBeenClosed():
+			return
+		case <-ticker.C:
+			cleanup()
+		}
 	}
 }
 
@@ -848,7 +830,7 @@ func (g *groupi) processOracleDeltaStream() {
 	defer ticker.Stop()
 
 	blockingReceiveAndPropose := func() {
-		glog.Infof("Leader idx=%d of group=%d is connecting to Zero for txn updates\n",
+		glog.Infof("Leader idx=%#x of group=%d is connecting to Zero for txn updates\n",
 			g.Node.Id, g.groupId())
 
 		pl := g.connToZeroLeader()
