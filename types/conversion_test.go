@@ -17,7 +17,6 @@
 package types
 
 import (
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -47,10 +46,17 @@ func TestConvertToDefault(t *testing.T) {
 		in  Val
 		out Val
 	}{
-		{Val{StringID, []byte("a")}, Val{DefaultID, "a"}},
-		{Val{StringID, []byte("")}, Val{DefaultID, ""}},
-		{Val{DefaultID, []byte("abc")}, Val{DefaultID, "abc"}},
-		{Val{BinaryID, []byte("2016")}, Val{DefaultID, "2016"}},
+		{in: Val{StringID, []byte("a")}, out: Val{DefaultID, "a"}},
+		{in: Val{StringID, []byte("")}, out: Val{DefaultID, ""}},
+		{in: Val{DefaultID, []byte("abc")}, out: Val{DefaultID, "abc"}},
+		{in: Val{BinaryID, []byte("2016")}, out: Val{DefaultID, "2016"}},
+		{in: Val{IntID, []byte{3, 0, 0, 0, 0, 0, 0, 0}}, out: Val{DefaultID, "3"}},
+		{in: Val{FloatID, []byte{0, 0, 0, 0, 0, 0, 12, 192}}, out: Val{DefaultID, "-3.5"}},
+		{in: Val{DateTimeID, []byte{1, 0, 0, 0, 14, 187, 75, 55, 229, 0, 0, 0, 0, 255, 255}},
+			out: Val{DefaultID, "2006-01-02T15:04:05Z"}},
+		// zero time value (0001-01-01 00:00:00 +0000 UTC)
+		{in: Val{DateTimeID, []byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255}},
+			out: Val{DefaultID, ""}},
 	}
 
 	for _, tc := range tests {
@@ -66,9 +72,15 @@ func TestConvertFromDefault(t *testing.T) {
 		out Val
 	}{
 		{in: Val{DefaultID, []byte("1")}, out: Val{IntID, int64(1)}},
-		{in: Val{DefaultID, []byte("1.3")}, out: Val{FloatID, 1.3}},
+		{in: Val{DefaultID, []byte("1.3")}, out: Val{FloatID, float64(1.3)}},
 		{in: Val{DefaultID, []byte("true")}, out: Val{BoolID, true}},
 		{in: Val{DefaultID, []byte("2016")}, out: Val{BinaryID, []byte("2016")}},
+		{in: Val{DefaultID, []byte("hello")}, out: Val{StringID, "hello"}},
+		{in: Val{DefaultID, []byte("2016")},
+			out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		// zero time value (0001-01-01 00:00:00 +0000 UTC)
+		{in: Val{DefaultID, []byte("")},
+			out: Val{DateTimeID, time.Time{}}},
 	}
 
 	for _, tc := range tests {
@@ -92,8 +104,7 @@ func TestConvertStringToDateTime(t *testing.T) {
 		{in: Val{StringID, []byte("2006")},
 			out: Val{DateTimeID, time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC)}},
 		// zero time value (0001-01-01 00:00:00 +0000 UTC)
-		{in: Val{StringID, []byte("")},
-			out: Val{DateTimeID, time.Time{}}},
+		{in: Val{StringID, []byte("")}, out: Val{DateTimeID, time.Time{}}},
 	}
 
 	for _, tc := range tests {
@@ -131,15 +142,26 @@ func TestConvertDateTimeToString(t *testing.T) {
 
 func TestConvertFromPassword(t *testing.T) {
 	tests := []struct {
-		in  Val
-		out Val
+		in   Val
+		out  Val
+		fail bool
 	}{
 		{in: Val{PasswordID, []byte("")}, out: Val{StringID, ""}},
-		{in: Val{PasswordID, []byte("testing")}, out: Val{StringID, "testing"}},
+		{in: Val{PasswordID, []byte("password")}, out: Val{PasswordID, "password"}},
+		{in: Val{PasswordID, []byte("password")}, out: Val{StringID, "password"}},
+		{in: Val{PasswordID, []byte("password")}, out: Val{BinaryID, []byte("password")}},
+		{in: Val{PasswordID, []byte("password")}, out: Val{DefaultID, nil}, fail: true},
+		{in: Val{PasswordID, []byte("password")}, out: Val{IntID, nil}, fail: true},
+		{in: Val{PasswordID, []byte("password")}, out: Val{FloatID, nil}, fail: true},
+		{in: Val{PasswordID, []byte("password")}, out: Val{BoolID, nil}, fail: true},
 	}
 
 	for _, tc := range tests {
-		out, err := Convert(tc.in, StringID)
+		out, err := Convert(tc.in, tc.out.Tid)
+		if tc.fail {
+			require.Error(t, err)
+			continue
+		}
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, out)
 	}
@@ -181,9 +203,9 @@ func TestSameConversionFloat(t *testing.T) {
 		in  Val
 		out Val
 	}{
-		{in: Val{Tid: FloatID, Value: []byte{7, 95, 152, 76, 21, 140, 11, 64}}, out: Val{Tid: FloatID, Value: 3.4434}},
-		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 8, 192}}, out: Val{Tid: FloatID, Value: -3.0}},
-		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 73, 64}}, out: Val{Tid: FloatID, Value: 0.5e2}},
+		{in: Val{Tid: FloatID, Value: []byte{7, 95, 152, 76, 21, 140, 11, 64}}, out: Val{Tid: FloatID, Value: float64(3.4434)}},
+		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 8, 192}}, out: Val{Tid: FloatID, Value: float64(-3.0)}},
+		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 73, 64}}, out: Val{Tid: FloatID, Value: float64(0.5e2)}},
 	}
 	for _, tc := range tests {
 		out, err := Convert(tc.in, FloatID)
@@ -214,8 +236,11 @@ func TestConvertIntToBool(t *testing.T) {
 		in  Val
 		out Val
 	}{
+		// 3
 		{in: Val{Tid: IntID, Value: []byte{3, 0, 0, 0, 0, 0, 0, 0}}, out: Val{Tid: BoolID, Value: true}},
+		// -3
 		{in: Val{Tid: IntID, Value: []byte{253, 255, 255, 255, 255, 255, 255, 255}}, out: Val{Tid: BoolID, Value: true}},
+		// 0
 		{in: Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}}, out: Val{Tid: BoolID, Value: false}},
 	}
 	for _, tc := range tests {
@@ -227,21 +252,26 @@ func TestConvertIntToBool(t *testing.T) {
 
 func TestConvertFloatToBool(t *testing.T) {
 	tests := []struct {
-		n   float64
 		in  Val
 		out Val
 	}{
-		{n: 3.0, in: Val{Tid: FloatID, Value: []byte{7, 95, 152, 76, 21, 140, 11, 64}}, out: Val{Tid: BoolID, Value: true}},
-		{n: -3.5, in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 12, 192}}, out: Val{Tid: BoolID, Value: true}},
-		{n: 0, in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}}, out: Val{Tid: BoolID, Value: false}},
-		{n: math.NaN(), in: Val{Tid: FloatID, Value: []byte{1, 0, 0, 0, 0, 0, 248, 127}}, out: Val{Tid: BoolID, Value: true}},
-		{n: math.Inf(1), in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 240, 127}}, out: Val{Tid: BoolID, Value: true}},
-		{n: math.Inf(-1), in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 240, 255}}, out: Val{Tid: BoolID, Value: true}},
+		// 3.0
+		{in: Val{Tid: FloatID, Value: []byte{7, 95, 152, 76, 21, 140, 11, 64}}, out: Val{Tid: BoolID, Value: true}},
+		// -3.5
+		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 12, 192}}, out: Val{Tid: BoolID, Value: true}},
+		// 0
+		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}}, out: Val{Tid: BoolID, Value: false}},
+		// math.NaN
+		{in: Val{Tid: FloatID, Value: []byte{1, 0, 0, 0, 0, 0, 248, 127}}, out: Val{Tid: BoolID, Value: true}},
+		// math.Inf+
+		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 240, 127}}, out: Val{Tid: BoolID, Value: true}},
+		// math.Inf-
+		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 240, 255}}, out: Val{Tid: BoolID, Value: true}},
 	}
 	for _, tc := range tests {
 		out, err := Convert(tc.in, BoolID)
 		require.NoError(t, err)
-		require.EqualValues(t, tc.out, out, "%f should be %t", tc.n, tc.out.Value)
+		require.EqualValues(t, tc.out, out)
 	}
 }
 
@@ -411,14 +441,22 @@ func TestConvertDateTimeToInt(t *testing.T) {
 
 func TestConvertBoolToFloat(t *testing.T) {
 	tests := []struct {
-		in  Val
-		out Val
+		in      Val
+		out     Val
+		failure string
 	}{
 		{in: Val{Tid: BoolID, Value: []byte{1}}, out: Val{Tid: FloatID, Value: float64(1.0)}},
 		{in: Val{Tid: BoolID, Value: []byte{0}}, out: Val{Tid: FloatID, Value: float64(0.0)}},
+		{in: Val{Tid: BoolID, Value: []byte{3}},
+			failure: "Invalid value for bool 3"},
 	}
 	for _, tc := range tests {
 		out, err := Convert(tc.in, FloatID)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.EqualError(t, err, tc.failure)
+			continue
+		}
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, out)
 	}
@@ -429,10 +467,13 @@ func TestConvertIntToFloat(t *testing.T) {
 		in  Val
 		out Val
 	}{
+		// 3
 		{in: Val{Tid: IntID, Value: []byte{3, 0, 0, 0, 0, 0, 0, 0}},
 			out: Val{Tid: FloatID, Value: float64(3.0)}},
+		// -3
 		{in: Val{Tid: IntID, Value: []byte{253, 255, 255, 255, 255, 255, 255, 255}},
 			out: Val{Tid: FloatID, Value: float64(-3.0)}},
+		// 0
 		{in: Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
 			out: Val{Tid: FloatID, Value: float64(0.0)}},
 	}
@@ -523,7 +564,7 @@ func TestConvertIntToDateTime(t *testing.T) {
 			out: Val{Tid: DateTimeID, Value: time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC)}},
 		// 0
 		{in: Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
-			out: Val{Tid: DateTimeID, Value: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)}},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
 	}
 	for _, tc := range tests {
 		out, err := Convert(tc.in, DateTimeID)
@@ -545,7 +586,7 @@ func TestConvertFloatToDateTime(t *testing.T) {
 			out: Val{Tid: DateTimeID, Value: time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC)}},
 		// 0
 		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
-			out: Val{Tid: DateTimeID, Value: time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)}},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
 		// 2204578800
 		{in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 126, 230, 108, 224, 65}},
 			out: Val{Tid: DateTimeID, Value: time.Date(2039, time.November, 10, 23, 0, 0, 0, time.UTC)}},
