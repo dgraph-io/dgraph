@@ -21,6 +21,7 @@ package edgraph
 import (
 	"context"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -37,7 +38,7 @@ func ResetAcl() {
 	// do nothing
 }
 
-func RefreshAcls(closeCh <-chan struct{}) {
+func RefreshAcls(closer *y.Closer) {
 	// do nothing
 }
 

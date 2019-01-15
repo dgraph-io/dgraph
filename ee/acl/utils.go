@@ -68,7 +68,7 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 
 	err = json.Unmarshal(resp.GetJson(), &m)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal the query user response for user:%v", err)
+		return nil, fmt.Errorf("unable to unmarshal the query user response:%v", err)
 	}
 	users := m[userKey]
 	if len(users) == 0 {
