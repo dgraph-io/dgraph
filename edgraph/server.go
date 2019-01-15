@@ -467,8 +467,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response,
-	err error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
@@ -476,17 +475,17 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	defer span.End()
 
 	if err := x.HealthCheck(); err != nil {
-		return resp, err
+		return nil, err
 	}
 
 	x.PendingQueries.Add(1)
 	x.NumQueries.Add(1)
 	defer x.PendingQueries.Add(-1)
 	if ctx.Err() != nil {
-		return resp, ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	resp = new(api.Response)
+	resp := new(api.Response)
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")
