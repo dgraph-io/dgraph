@@ -694,7 +694,6 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 		for _, f := range m.Facets {
 			// try to interpret the value as binary first
 			if _, err := facets.ValFor(f); err == nil {
-				glog.Infof("facet is interpreted as binary: %+v", f)
 				encodedFacets = append(encodedFacets, f)
 			} else {
 				encodedFacet, err := facets.FacetFor(f.Key, string(f.Value))
