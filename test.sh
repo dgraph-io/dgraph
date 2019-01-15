@@ -37,6 +37,7 @@ function Info {
 
 function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
+    touch $CUSTOM_CLUSTER_TESTS
     for FILE in $(find -type f -name docker-compose.yml); do
         DIR=$(dirname $FILE)
         if grep -q $DIR $MATCHING_TESTS && ls $DIR | grep -q "_test.go$"; then
@@ -102,7 +103,7 @@ if [[ $# -eq 0 ]]; then
     RUN_ALL=yes
 elif [[ $# -eq 1 ]]; then
     go list ./... | grep $1 > $MATCHING_TESTS
-    Info "Running only tests matching $1"
+    Info "Running only tests matching '$1'"
 else
     echo >&2 "usage: $ME [regex]"
     exit 1
