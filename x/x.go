@@ -454,22 +454,22 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 	return grpc.Dial(host, dialOpts...)
 }
 
-func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string, []string) {
-	var newGroups []string
-	var groupsToBeDeleted []string
+func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string) {
+	var add []string
+	var del []string
 
-	for g := range targetMap {
-		if _, ok := existingMap[g]; !ok {
-			newGroups = append(newGroups, g)
+	for g := range dst {
+		if _, ok := src[g]; !ok {
+			add = append(add, g)
 		}
 	}
-	for g := range existingMap {
-		if _, ok := targetMap[g]; !ok {
-			groupsToBeDeleted = append(groupsToBeDeleted, g)
+	for g := range src {
+		if _, ok := dst[g]; !ok {
+			del = append(del, g)
 		}
 	}
 
-	return newGroups, groupsToBeDeleted
+	return add, del
 }
 
 func SpanTimer(span *trace.Span, name string) func() {
