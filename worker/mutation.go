@@ -168,6 +168,11 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 		s.ValueType = typ.Enum()
 	} else {
 		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
+		// For type UidID, set List to true. This is done because previously
+		// all predicates of type UidID were implicitly considered lists.
+		if typ == types.UidID {
+			s.List = true
+		}
 	}
 	updateSchema(attr, s)
 }

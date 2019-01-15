@@ -282,7 +282,7 @@ func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
-		Schema: `link: uid @reverse .`,
+		Schema: `link: [uid] @reverse .`,
 	}))
 
 	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -629,7 +629,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		x.AclPredsJson+","+
-		`{"predicate":"friend","type":"uid"},`+
+		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"}]`, string(b))
 
@@ -652,7 +652,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		x.AclPredsJson+","+
-		`{"predicate":"friend","type":"uid"},`+
+		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"}]`, string(b))
 }
 
@@ -906,7 +906,7 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{}
 	op.Schema = `
 		room: string @index(term) .
-		office.room: uid .
+		office.room: [uid] .
 	`
 	ctx := context.Background()
 	err := c.Alter(ctx, op)
@@ -1076,7 +1076,7 @@ func FacetExpandAll(t *testing.T, c *dgo.Dgraph) {
 
 	check(t, (c.Alter(ctx, &api.Operation{
 		Schema: `name: string @index(hash) .
-				friend: uid @reverse .`,
+				friend: [uid] @reverse .`,
 	})))
 
 	txn := c.NewTxn()
