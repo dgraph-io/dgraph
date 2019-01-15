@@ -40,6 +40,7 @@ import (
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -193,13 +194,64 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return err
 }
 
+func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+	if chunkBuf.Len() == 0 {
+		return nil, io.EOF
+	}
+
+	nqs, err := edgraph.NquadsFromJson(chunkBuf.Bytes())
+	if err != nil && err != io.EOF {
+		x.Check(err)
+	}
+	chunkBuf.Reset()
+
+	return nqs, err
+}
+
 func (l *loader) processJsonFile(ctx context.Context, file string) error {
+	fmt.Printf("\nProcessing JSON file %s\n", file)
+	r, f := x.FileReader(file)
+	rd := bufio.NewReader(r)
+	defer f.Close()
+
+	chunker := x.NewChunker(x.JsonInput)
+	x.Check(chunker.Begin(rd))
+
+	var batchSize int
+	mu := api.Mutation{}
+	for {
+		chunkBuf, err := chunker.Chunk(rd)
+		if chunkBuf != nil && chunkBuf.Len() > 0 {
+			nqs, err := parseJson(chunkBuf)
+			x.Check(err)
+			for _, nq := range nqs {
+				nq.Subject = l.uid(nq.Subject)
+				if len(nq.ObjectId) > 0 {
+					nq.ObjectId = l.uid(nq.ObjectId)
+				}
+			}
+			mu.Set = append(mu.Set, nqs...)
+			batchSize += len(nqs)
+			if batchSize >= opt.numRdf {
+				l.reqs <- mu
+				mu = api.Mutation{}
+				batchSize = 0
+			}
+		}
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			x.Check(err)
+		}
+	}
+	x.Check(chunker.End(rd))
+
 	return nil
 }
 
 // processFile sends mutations for a given gz file.
 func (l *loader) processRdfFile(ctx context.Context, file string) error {
-	fmt.Printf("\nProcessing %s\n", file)
+	fmt.Printf("\nProcessing RDF file %s\n", file)
 	gr, f := fileReader(file)
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
