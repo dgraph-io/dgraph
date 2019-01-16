@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -47,6 +48,8 @@ func TestQuery(t *testing.T) {
 	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
 	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
+	t.Run("shortest path query", wrap(ShortestPathQuery))
+	t.Run("shortest path with uid zero", wrap(ShortestPathWithUidZero))
 }
 
 func SchemaQueryCleanup(t *testing.T, c *dgo.Dgraph) {
@@ -315,4 +318,92 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
     ]
   }`
 	CompareJSON(t, js, string(m["data"]))
+}
+
+func ShortestPathQuery(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(exact) .
+      friend: uid .
+    `,
+	}))
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+_:a <name> "alice" .
+_:b <name> "bob" .
+_:c <name> "charlie" .
+_:a <friend> _:b .
+_:b <friend> _:c .
+`),
+	})
+	require.NoError(t, err, "the mutation should have succeeded")
+
+	aId := assigned.Uids["a"]
+	bId := assigned.Uids["b"]
+	cId := assigned.Uids["c"]
+	resp, err := txn.Query(ctx, fmt.Sprintf(`
+{
+shortest(from: %s, to: %s) {
+  friend
+ }
+}
+`, aId, cId))
+	require.NoError(t, err, "the query should have succeeded")
+
+	CompareJSON(t, fmt.Sprintf(`{
+    "_path_": [
+        {
+            "friend": [
+                {
+                    "friend": [
+                        {
+                            "uid": "%s"
+                        }
+                    ],
+                    "uid": "%s"
+                }
+            ],
+            "uid": "%s"
+        }
+    ]
+}`, cId, bId, aId), string(resp.Json))
+
+	// add a link between a and c should cause the shortest path query
+	// to return them as neighbors
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(fmt.Sprintf("<%s> <friend> <%s> .", aId, cId)),
+	})
+	require.NoError(t, err, "the mutation should have succeeded")
+	resp, err = txn.Query(ctx, fmt.Sprintf(`
+{
+shortest(from: %s, to: %s) {
+  friend
+ }
+}
+`, aId, cId))
+	require.NoError(t, err, "the query should have succeeded")
+
+	CompareJSON(t, fmt.Sprintf(`{
+    "_path_": [
+        {
+            "friend": [
+                {
+                    "uid": "%s"
+                }
+            ],
+            "uid": "%s"
+        }
+    ]
+}`, cId, aId), string(resp.Json))
+}
+
+func ShortestPathWithUidZero(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+
 }
