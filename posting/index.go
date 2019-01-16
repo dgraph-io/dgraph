@@ -65,12 +65,6 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 
 	var tokens []string
 	for _, it := range info.tokenizers {
-		if it.Name() == "exact" && schemaType == types.StringID && len(sv.Value.(string)) > 100 {
-			// Exact index can only be applied for strings so we can safely try to convert Value to
-			// string.
-			glog.Infof("Long term for exact index on predicate: [%s]. "+
-				"Consider switching to hash for better performance.\n", attr)
-		}
 		toks, err := tok.BuildTokens(sv.Value, tok.GetLangTokenizer(it, lang))
 		if err != nil {
 			return tokens, err

@@ -22,12 +22,34 @@ import (
 	"plugin"
 	"time"
 
-	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
+	"golang.org/x/crypto/blake2b"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+// Tokenizer identifiers are unique and can't be reused.
+// The range 0x00 - 0x7f is system reserved.
+// The range 0x80 - 0xff is for custom tokenizers.
+// TODO: use these everywhere where we must ensure a system tokenizer.
+const (
+	IdentNone     = 0x0
+	IdentTerm     = 0x1
+	IdentExact    = 0x2
+	IdentYear     = 0x4
+	IdentMonth    = 0x41
+	IdentDay      = 0x42
+	IdentHour     = 0x43
+	IdentGeo      = 0x5
+	IdentInt      = 0x6
+	IdentFloat    = 0x7
+	IdentFullText = 0x8
+	IdentBool     = 0x9
+	IdentTrigram  = 0xA
+	IdentHash     = 0xB
+	IdentCustom   = 0x80
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -103,7 +125,7 @@ func LoadCustomTokenizer(soFile string) {
 	tokenizer := symb.(func() interface{})().(PluginTokenizer)
 
 	id := tokenizer.Identifier()
-	x.AssertTruef(id >= 0x80,
+	x.AssertTruef(id >= IdentCustom,
 		"custom tokenizer identifier byte must be >= 0x80, but was %#x", id)
 	registerTokenizer(CustomTokenizer{PluginTokenizer: tokenizer})
 }
@@ -142,7 +164,7 @@ func (t GeoTokenizer) Type() string { return "geo" }
 func (t GeoTokenizer) Tokens(v interface{}) ([]string, error) {
 	return types.IndexGeoTokens(v.(geom.T))
 }
-func (t GeoTokenizer) Identifier() byte { return 0x5 }
+func (t GeoTokenizer) Identifier() byte { return IdentGeo }
 func (t GeoTokenizer) IsSortable() bool { return false }
 func (t GeoTokenizer) IsLossy() bool    { return true }
 
@@ -153,7 +175,7 @@ func (t IntTokenizer) Type() string { return "int" }
 func (t IntTokenizer) Tokens(v interface{}) ([]string, error) {
 	return []string{encodeInt(v.(int64))}, nil
 }
-func (t IntTokenizer) Identifier() byte { return 0x6 }
+func (t IntTokenizer) Identifier() byte { return IdentInt }
 func (t IntTokenizer) IsSortable() bool { return true }
 func (t IntTokenizer) IsLossy() bool    { return false }
 
@@ -164,7 +186,7 @@ func (t FloatTokenizer) Type() string { return "float" }
 func (t FloatTokenizer) Tokens(v interface{}) ([]string, error) {
 	return []string{encodeInt(int64(v.(float64)))}, nil
 }
-func (t FloatTokenizer) Identifier() byte { return 0x7 }
+func (t FloatTokenizer) Identifier() byte { return IdentFloat }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
 
@@ -178,7 +200,7 @@ func (t YearTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	return []string{string(buf)}, nil
 }
-func (t YearTokenizer) Identifier() byte { return 0x4 }
+func (t YearTokenizer) Identifier() byte { return IdentYear }
 func (t YearTokenizer) IsSortable() bool { return true }
 func (t YearTokenizer) IsLossy() bool    { return true }
 
@@ -193,7 +215,7 @@ func (t MonthTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
 	return []string{string(buf)}, nil
 }
-func (t MonthTokenizer) Identifier() byte { return 0x41 }
+func (t MonthTokenizer) Identifier() byte { return IdentMonth }
 func (t MonthTokenizer) IsSortable() bool { return true }
 func (t MonthTokenizer) IsLossy() bool    { return true }
 
@@ -209,7 +231,7 @@ func (t DayTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
 	return []string{string(buf)}, nil
 }
-func (t DayTokenizer) Identifier() byte { return 0x42 }
+func (t DayTokenizer) Identifier() byte { return IdentDay }
 func (t DayTokenizer) IsSortable() bool { return true }
 func (t DayTokenizer) IsLossy() bool    { return true }
 
@@ -226,7 +248,7 @@ func (t HourTokenizer) Tokens(v interface{}) ([]string, error) {
 	binary.BigEndian.PutUint16(buf[6:8], uint16(tval.Hour()))
 	return []string{string(buf)}, nil
 }
-func (t HourTokenizer) Identifier() byte { return 0x43 }
+func (t HourTokenizer) Identifier() byte { return IdentHour }
 func (t HourTokenizer) IsSortable() bool { return true }
 func (t HourTokenizer) IsLossy() bool    { return true }
 
@@ -242,7 +264,7 @@ func (t TermTokenizer) Tokens(v interface{}) ([]string, error) {
 	tokens := termAnalyzer.Analyze([]byte(str))
 	return uniqueTerms(tokens), nil
 }
-func (t TermTokenizer) Identifier() byte { return 0x1 }
+func (t TermTokenizer) Identifier() byte { return IdentTerm }
 func (t TermTokenizer) IsSortable() bool { return false }
 func (t TermTokenizer) IsLossy() bool    { return true }
 
@@ -256,7 +278,7 @@ func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
 	}
 	return nil, x.Errorf("Exact indices only supported for string types")
 }
-func (t ExactTokenizer) Identifier() byte { return 0x2 }
+func (t ExactTokenizer) Identifier() byte { return IdentExact }
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
 
@@ -279,7 +301,7 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 	// finally, return the terms.
 	return uniqueTerms(tokens), nil
 }
-func (t FullTextTokenizer) Identifier() byte { return 0x8 }
+func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
@@ -321,7 +343,7 @@ func (t BoolTokenizer) Tokens(v interface{}) ([]string, error) {
 	}
 	return []string{encodeInt(b)}, nil
 }
-func (t BoolTokenizer) Identifier() byte { return 0x9 }
+func (t BoolTokenizer) Identifier() byte { return IdentBool }
 func (t BoolTokenizer) IsSortable() bool { return false }
 func (t BoolTokenizer) IsLossy() bool    { return false }
 
@@ -345,7 +367,7 @@ func (t TrigramTokenizer) Tokens(v interface{}) ([]string, error) {
 	}
 	return nil, nil
 }
-func (t TrigramTokenizer) Identifier() byte { return 0xA }
+func (t TrigramTokenizer) Identifier() byte { return IdentTrigram }
 func (t TrigramTokenizer) IsSortable() bool { return false }
 func (t TrigramTokenizer) IsLossy() bool    { return true }
 
@@ -358,13 +380,22 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
 	}
-	var hash [8]byte
-	binary.BigEndian.PutUint64(hash[:], farm.Hash64([]byte(term)))
+	// Blake2 is a hash function equivalent of SHA series, but faster. SHA is the best hash function
+	// for doing checksum of content, because they have low collision ratios. See issue #2776.
+	hash := blake2b.Sum256([]byte(term))
+	if len(hash) == 0 {
+		return nil, x.Errorf("Hash tokenizer failed to create hash")
+	}
 	return []string{string(hash[:])}, nil
 }
-func (t HashTokenizer) Identifier() byte { return 0xB }
+func (t HashTokenizer) Identifier() byte { return IdentHash }
 func (t HashTokenizer) IsSortable() bool { return false }
-func (t HashTokenizer) IsLossy() bool    { return true }
+
+// We have switched HashTokenizer to be non-lossy. This allows us to avoid having to retrieve values
+// for the returned results, and compare them against the value in the query, which is slow. There
+// is very low probability of collisions with a 256-bit hash. We use that fact to speed up equality
+// query operations using the hash index.
+func (t HashTokenizer) IsLossy() bool { return false }
 
 // PluginTokenizer is implemented by external plugins loaded dynamically via
 // *.so files. It follows the implementation semantics of the Tokenizer
