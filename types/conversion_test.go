@@ -215,7 +215,7 @@ func TestConvertStringToBool(t *testing.T) {
 		{in: Val{Tid: StringID, Value: []byte("false")}, out: Val{Tid: BoolID, Value: false}},
 		{in: Val{Tid: StringID, Value: []byte("False")}, out: Val{Tid: BoolID, Value: false}},
 		{in: Val{Tid: StringID, Value: []byte("srfrog")}, fail: true},
-		{in: Val{Tid: StringID, Value: []byte("")}, fail: true},
+		{in: Val{Tid: StringID, Value: []byte("")}, out: Val{Tid: BoolID, Value: false}},
 		{in: Val{Tid: StringID, Value: []byte("3")}, fail: true},
 		{in: Val{Tid: StringID, Value: []byte("-3")}, fail: true},
 	}
