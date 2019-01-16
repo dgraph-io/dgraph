@@ -14,9 +14,7 @@ package edgraph
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -59,17 +57,17 @@ func (s *Server) Login(ctx context.Context,
 	}
 
 	resp := &api.Response{}
-	accessJwt, err := getAccessJwt(request.Userid, user.Groups)
+	accessJwt, err := getAccessJwt(user.UserID, user.Groups)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
-			request.Userid, addr, err)
+			user.UserID, addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
-	refreshJwt, err := getRefreshJwt(request.Userid)
+	refreshJwt, err := getRefreshJwt(user.UserID)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
-			request.Userid, addr, err)
+			user.UserID, addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -82,7 +80,7 @@ func (s *Server) Login(ctx context.Context,
 	jwtBytes, err := loginJwt.Marshal()
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
-			request.Userid, addr, err)
+			user.UserID, addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
@@ -217,8 +215,7 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 		"userid": userId,
 		"groups": acl.GetGroupIDs(groups),
 		// set the jwt exp according to the ttl
-		"exp": json.Number(
-			strconv.FormatInt(time.Now().Add(Config.AccessJwtTtl).Unix(), 10)),
+		"exp": time.Now().Add(Config.AccessJwtTtl).Unix(),
 	})
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
@@ -233,9 +230,7 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 func getRefreshJwt(userId string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userid": userId,
-		// set the jwt exp according to the ttl
-		"exp": json.Number(
-			strconv.FormatInt(time.Now().Add(Config.RefreshJwtTtl).Unix(), 10)),
+		"exp":    time.Now().Add(Config.RefreshJwtTtl).Unix(),
 	})
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
@@ -249,6 +244,7 @@ const queryUser = `
     query search($userid: string, $password: string){
       user(func: eq(dgraph.xid, $userid)) {
 	    uid
+        dgraph.xid
         password_match: checkpwd(dgraph.password, $password)
         dgraph.user.group {
           uid
@@ -453,14 +449,15 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	// if we get here, we know the user is not Groot.
 	if op.DropAll {
-		return fmt.Errorf("only Groot is allowed to drop all data")
+		return fmt.Errorf("only Groot is allowed to drop all data, current user is %s", userData[0])
 	}
 
 	groupIds := userData[1:]
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
 		if err := authorizePredicate(groupIds, op.DropAttr, acl.Modify); err != nil {
-			return fmt.Errorf("unauthorized to modify the predicate:%v", err)
+			return status.Error(codes.PermissionDenied,
+				fmt.Sprintf("unauthorized to alter the predicate:%v", err))
 		}
 		return nil
 	}
@@ -471,7 +468,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 	for _, update := range updates {
 		if err := authorizePredicate(groupIds, update.Predicate, acl.Modify); err != nil {
-			return fmt.Errorf("unauthorized to modify the predicate: %v", err)
+			return status.Error(codes.PermissionDenied,
+				fmt.Sprintf("unauthorized to alter the predicate: %v", err))
 		}
 	}
 	return nil
@@ -510,7 +508,8 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	groupIds := userData[1:]
 	for pred := range parsePredsFromMutation(gmu.Set) {
 		if err := authorizePredicate(groupIds, pred, acl.Write); err != nil {
-			return fmt.Errorf("unauthorized to access the predicate: %v", err)
+			return status.Error(codes.PermissionDenied,
+				fmt.Sprintf("unauthorized to mutate the predicate: %v", err))
 		}
 	}
 	return nil
@@ -570,7 +569,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
 		if err := authorizePredicate(groupIds, pred, acl.Read); err != nil {
 			return status.Error(codes.PermissionDenied,
-				fmt.Sprintf("unauthorized to access the predicate: %v", err))
+				fmt.Sprintf("unauthorized to query the predicate: %v", err))
 		}
 	}
 	return nil

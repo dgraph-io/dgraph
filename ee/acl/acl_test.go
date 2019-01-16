@@ -112,13 +112,16 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	// on all alpha servers, this also tests that the automatic login with refresh
-	// jwt works after the access jwt expires in 30 seconds
 	log.Println("Sleeping for 35 seconds for acl to catch up")
 	time.Sleep(35 * time.Second)
-
 	queryPredicateWithUserAccount(t, dg, false)
+	// sleep long enough (10s per the docker-compose.yml in this directory)
+	// for the accessJwt to expire in order to test auto login through refresh jwt
+	log.Println("Sleeping for 12 seconds for accessJwt to expire")
+	time.Sleep(12 * time.Second)
 	mutatePredicateWithUserAccount(t, dg, false)
+	log.Println("Sleeping for 12 seconds for accessJwt to expire")
+	time.Sleep(12 * time.Second)
 	alterPredicateWithUserAccount(t, dg, false)
 }
 
@@ -151,10 +154,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 
 func mutatePredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	ctx := context.Background()
-	if err := dg.Login(ctx, userid, userpassword); err != nil {
-		t.Fatalf("unable to login using the account %v", userid)
-	}
-
 	txn := dg.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -170,10 +169,6 @@ func mutatePredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail boo
 
 func alterPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	ctx := context.Background()
-	if err := dg.Login(ctx, userid, userpassword); err != nil {
-		t.Fatalf("unable to login using the account %v", userid)
-	}
-
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: int .`, predicateToAlter),
 	})

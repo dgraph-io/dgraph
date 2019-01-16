@@ -37,7 +37,7 @@ services:
       - 9180:9180
     security_opt:
       - seccomp:unconfined
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 30s
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
     labels:
       cluster: test
 
@@ -58,6 +58,6 @@ services:
       - 9182:9182
     security_opt:
       - seccomp:unconfined
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 30s
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --hmac_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
     labels:
       cluster: test
