@@ -224,6 +224,15 @@ spec:
                   values:
                   - dgraph-alpha
               topologyKey: kubernetes.io/hostname
+      # The init container will wait indefinitely until you signal it to
+      # terminate successfully by running (for each alpha pod):
+      #
+      #    kubectl exec -it dgraph-alpha-0 -c init-alpha touch /dgraph/doneinit
+      #
+      # This can be used to initilaize the Alphas with an existing p directory.
+      # e.g., from an existing copy or from the Dgraph Bulk Loader.
+      #
+      #    kubectl cp /local/path/p dgraph-alpha-0:/dgraph/ -c init-alpha
       initContainers:
         - name: init-alpha
           image: dgraph/dgraph:v1.0.12-rc3
