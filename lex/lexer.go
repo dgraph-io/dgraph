@@ -17,6 +17,7 @@
 package lex
 
 import (
+	"errors"
 	"fmt"
 	"unicode/utf8"
 
@@ -129,6 +130,17 @@ type Lexer struct {
 	Depth    int     // nesting of {}
 	ArgDepth int     // nesting of ()
 	Mode     StateFn // Default state to go back to after reading a token.
+}
+
+func (l *Lexer) ValidateResult() error {
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		if item.Typ == ItemError {
+			return errors.New(item.Val)
+		}
+	}
+	return nil
 }
 
 func (l *Lexer) Run(f StateFn) *Lexer {

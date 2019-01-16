@@ -58,7 +58,9 @@ func Parse(line string) (api.NQuad, error) {
 		Input: line,
 	}
 	l.Run(lexText)
-
+	if err := l.ValidateResult(); err != nil {
+		return rnq, err
+	}
 	it := l.NewIterator()
 	var oval string
 	var seenOval bool
@@ -143,10 +145,6 @@ L:
 			if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
 				return rnq, err
 			}
-
-		case lex.ItemError:
-			return rnq, x.Errorf(item.Val)
-
 		case itemComment:
 			isCommentLine = true
 			vend = true

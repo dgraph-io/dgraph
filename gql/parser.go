@@ -464,6 +464,9 @@ func Parse(r Request) (res Result, rerr error) {
 
 	lexer := lex.Lexer{Input: query}
 	lexer.Run(lexTopLevel)
+	if err := lexer.ValidateResult(); err != nil {
+		return res, err
+	}
 
 	var qu *GraphQuery
 	it := lexer.NewIterator()
@@ -471,9 +474,6 @@ func Parse(r Request) (res Result, rerr error) {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case lex.ItemError:
-			return res, x.Errorf(item.Val)
-
 		case itemOpType:
 			if item.Val == "mutation" {
 				return res, x.Errorf("Mutation block no longer allowed.")
@@ -672,8 +672,6 @@ L2:
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case lex.ItemError:
-			return nil, x.Errorf(item.Val)
 		case itemName:
 			if name != "" {
 				return nil, x.Errorf("Multiple word query name not allowed.")
@@ -2389,8 +2387,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case lex.ItemError:
-			return x.Errorf(item.Val)
 		case lex.ItemEOF:
 			return nil
 		case itemRightCurl:
