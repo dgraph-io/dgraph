@@ -118,6 +118,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 				"user not found for id %v", userId)
 		}
 
+		glog.Infof("authenticated user %s through refresh token", userId)
 		return user, nil
 	}
 
@@ -163,7 +164,7 @@ func validateToken(jwtStr string) ([]string, error) {
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return nil, fmt.Errorf("jwt token has expired at %v", now)
+		return nil, fmt.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
 	userId, ok := claims["userid"].(string)
@@ -470,7 +471,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 	for _, update := range updates {
 		if err := authorizePredicate(groupIds, update.Predicate, acl.Modify); err != nil {
-			return fmt.Errorf("unauthorized to modify the predicate %v", err)
+			return fmt.Errorf("unauthorized to modify the predicate: %v", err)
 		}
 	}
 	return nil
@@ -569,7 +570,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
 		if err := authorizePredicate(groupIds, pred, acl.Read); err != nil {
 			return status.Error(codes.PermissionDenied,
-				fmt.Sprintf("unauthorized to access the predicate %v", err))
+				fmt.Sprintf("unauthorized to access the predicate: %v", err))
 		}
 	}
 	return nil

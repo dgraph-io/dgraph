@@ -102,6 +102,11 @@ func TestAuthorization(t *testing.T) {
 
 func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createAccountAndData(t, dg)
+	ctx := context.Background()
+	if err := dg.Login(ctx, userid, userpassword); err != nil {
+		t.Fatalf("unable to login using the account %v", userid)
+	}
+
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
@@ -127,10 +132,6 @@ var rootDir = filepath.Join(os.TempDir(), "acl_test")
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	// login with alice's account
 	ctx := context.Background()
-	if err := dg.Login(ctx, userid, userpassword); err != nil {
-		t.Fatalf("unable to login using the account %v", userid)
-	}
-
 	txn := dg.NewTxn()
 	query := fmt.Sprintf(`
 	{

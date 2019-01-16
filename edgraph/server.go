@@ -344,7 +344,7 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
 	if err := authorizeMutation(ctx, mu); err != nil {
-		return nil, fmt.Errorf("mutation is not authorized: %v", err)
+		return nil, err
 	}
 
 	return s.doMutate(ctx, mu)
@@ -459,7 +459,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	if err := authorizeQuery(ctx, req); err != nil {
-		return nil, fmt.Errorf("query is not authorized: %v", err)
+		return nil, err
 	}
 
 	return s.doQuery(ctx, req)
