@@ -62,11 +62,11 @@ This should generate the required `.pb.go` file.
 
 ### Testing
 
-**Dgraph**
-Run the `test` script in the root folder.
+#### Dgraph
+Run the `test.sh` script in the root folder.
 
 
-    $ ./test
+    $ ./test.sh
     
     Running tests. Ignoring vendor folder.
     ok      github.com/dgraph-io/dgraph/algo        0.013s
@@ -74,7 +74,17 @@ Run the `test` script in the root folder.
     ok      github.com/dgraph-io/dgraph/client_test 2.841s
     …
 
-**Badger**
+Run `test.sh --help` for more info.
+
+Tests should be written in Go and use the Dgraph cluster set up in `dgraph/docker-compose.yml`
+whenever possible. If the functionality being tested requires a different cluster setup (e.g.
+different commandline options), the `*_test.go` files should be put in a separate directory that
+also contains a `docker-compose.yml` to set up the cluster as needed.
+
+ **IMPORTANT:** All containers should be labeled with `cluster: test` so they may be correctly
+ restarted and cleaned up by the test script.
+
+#### Badger
 Run `go test` in the root folder.
 
 
