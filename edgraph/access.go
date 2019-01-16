@@ -40,6 +40,8 @@ func ResetAcl() {
 
 func RefreshAcls(closer *y.Closer) {
 	// do nothing
+	<-closer.HasBeenClosed()
+	closer.Done()
 }
 
 func authorizeAlter(ctx context.Context, op *api.Operation) error {

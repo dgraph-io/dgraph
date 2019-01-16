@@ -49,39 +49,39 @@ func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 func TestCreateAndDeleteUsers(t *testing.T) {
 	// clean up the user to allow repeated running of this test
 	cleanUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
-		"-u", userid, "--adminPassword", "password")
+		"-u", userid, "-x", "password")
 	cleanUserCmd.Run()
 	glog.Infof("cleaned up db user state")
 
 	createUserCmd1 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
-		"-p", userpassword, "--adminPassword", "password")
+		"-p", userpassword, "-x", "password")
 	checkOutput(t, createUserCmd1, false)
 
 	createUserCmd2 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
-		"-p", userpassword, "--adminPassword", "password")
+		"-p", userpassword, "-x", "password")
 	// create the user again should fail
 	checkOutput(t, createUserCmd2, true)
 
 	// delete the user
 	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", userid,
-		"--adminPassword", "password")
+		"-x", "password")
 	checkOutput(t, deleteUserCmd, false)
 
 	// now we should be able to create the user again
 	createUserCmd3 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
-		"-p", userpassword, "--adminPassword", "password")
+		"-p", userpassword, "-x", "password")
 	checkOutput(t, createUserCmd3, false)
 }
 
 func resetUser(t *testing.T) {
 	// delete and recreate the user to ensure a clean state
 	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
-		"-u", userid, "--adminPassword", "password")
+		"-u", userid, "-x", "password")
 	deleteUserCmd.Run()
 	glog.Infof("deleted user")
 
 	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u",
-		userid, "-p", userpassword, "--adminPassword", "password")
+		userid, "-p", userpassword, "-x", "password")
 	checkOutput(t, createUserCmd, false)
 	glog.Infof("created user")
 }
@@ -215,7 +215,7 @@ func createGroupAndAcls(t *testing.T) {
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "groupadd",
 		"-d", dgraphEndpoint,
-		"-g", group, "--adminPassword", "password")
+		"-g", group, "-x", "password")
 	if err := createGroupCmd.Run(); err != nil {
 		t.Fatalf("Unable to create group:%v", err)
 	}
@@ -224,7 +224,7 @@ func createGroupAndAcls(t *testing.T) {
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "usermod",
 		"-d", dgraphEndpoint,
-		"-u", userid, "-g", group, "--adminPassword", "password")
+		"-u", userid, "-g", group, "-x", "password")
 	if err := addUserToGroupCmd.Run(); err != nil {
 		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
 	}
@@ -233,7 +233,7 @@ func createGroupAndAcls(t *testing.T) {
 	addReadPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read.Code)), "--adminPassword",
+		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read.Code)), "-x",
 		"password")
 	if err := addReadPermCmd1.Run(); err != nil {
 		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
@@ -244,7 +244,7 @@ func createGroupAndAcls(t *testing.T) {
 	addReadPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read.Code)), "--adminPassword",
+		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read.Code)), "-x",
 		"password")
 	if err := addReadPermCmd2.Run(); err != nil {
 		t.Fatalf("Unable to add READ permission on %s to group %s:%v", queryAttr, group, err)
@@ -254,7 +254,7 @@ func createGroupAndAcls(t *testing.T) {
 	addWritePermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write.Code)), "--adminPassword",
+		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write.Code)), "-x",
 		"password")
 	if err := addWritePermCmd.Run(); err != nil {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToWrite, group, err)
@@ -264,7 +264,7 @@ func createGroupAndAcls(t *testing.T) {
 	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify.Code)), "--adminPassword",
+		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify.Code)), "-x",
 		"password")
 	if err := addModifyPermCmd.Run(); err != nil {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)

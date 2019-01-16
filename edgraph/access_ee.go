@@ -106,7 +106,6 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
 				request.RefreshToken, err)
 		}
-		x.AssertTrue(len(userData) > 0)
 
 		userId := userData[0]
 		user, err = authorizeUser(ctx, userId, "")
@@ -179,6 +178,7 @@ func validateToken(jwtStr string) ([]string, error) {
 		for _, group := range groups {
 			groupId, ok := group.(string)
 			if !ok {
+				// This shouldn't happen. So, no need to make the client try to refresh the tokens.
 				return nil, fmt.Errorf("unable to convert group to string:%v", group)
 			}
 
@@ -322,7 +322,7 @@ func RefreshAcls(closer *y.Closer) {
 			storedEntries++
 			aclCache.Store(group.GroupID, &group)
 		}
-		glog.V(1).Infof("updated the ACL cache with %d entries", storedEntries)
+		glog.V(1).Infof("Updated the ACL cache with %d entries", storedEntries)
 		return nil
 	}
 
@@ -350,18 +350,16 @@ const queryAcls = `
 // the acl cache mapping group names to the corresponding group acls
 var aclCache sync.Map
 
-// clear the aclCache and upsert the admin account
+// clear the aclCache and upsert the Groot account.
 func ResetAcl() {
 	if len(Config.HmacSecret) == 0 {
 		// the acl feature is not turned on
 		return
 	}
 
-	upsertAdmin := func(ctx context.Context) error {
-		// upsert the admin account
-
+	upsertGroot := func(ctx context.Context) error {
 		queryVars := map[string]string{
-			"$userid":   "admin",
+			"$userid":   x.GrootId,
 			"$password": "",
 		}
 		queryRequest := api.Request{
@@ -371,26 +369,25 @@ func ResetAcl() {
 
 		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
 		if err != nil {
-			return fmt.Errorf("error while query user with id admin: %v", err)
+			return fmt.Errorf("error while querying user with id %s: %v", x.GrootId, err)
 		}
 		startTs := queryResp.GetTxn().StartTs
 
-		adminUser, err := acl.UnmarshalUser(queryResp, "user")
+		rootUser, err := acl.UnmarshalUser(queryResp, "user")
 		if err != nil {
-			return fmt.Errorf("error while unmarshaling the admin user: %v", err)
+			return fmt.Errorf("error while unmarshaling the root user: %v", err)
 		}
-
-		if adminUser != nil {
-			// the admin user already exists, no need to create
+		if rootUser != nil {
+			// the user already exists, no need to create
 			return nil
 		}
 
-		// insert the admin user
+		// Insert Groot.
 		createUserNQuads := []*api.NQuad{
 			{
 				Subject:     "_:newuser",
 				Predicate:   "dgraph.xid",
-				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "admin"}},
+				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.GrootId}},
 			},
 			{
 				Subject:     "_:newuser",
@@ -399,22 +396,25 @@ func ResetAcl() {
 			}}
 
 		mu := &api.Mutation{
-			StartTs:   startTs,
-			CommitNow: true,
-			Set:       createUserNQuads,
+			StartTs: startTs,
+			Set:     createUserNQuads,
 		}
 
 		if _, err := (&Server{}).doMutate(context.Background(), mu); err != nil {
-			return fmt.Errorf("unable to create admin: %v", err)
+			return err
 		}
 		return nil
 	}
 
 	aclCache = sync.Map{}
-	if err := upsertAdmin(context.Background()); err != nil {
-		glog.Infof("Unable to upsert the admin account:%v", err)
-	} else {
-		glog.Info("Created the admin account with the default password")
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := upsertGroot(ctx); err != nil {
+			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+		} else {
+			return
+		}
 	}
 }
 
@@ -444,14 +444,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
-	x.AssertTrue(len(userData) > 0)
-	if isAdmin(userData) {
+	if isGroot(userData) {
 		return nil
 	}
 
-	// if we get here, we know the user is not admin
+	// if we get here, we know the user is not Groot.
 	if op.DropAll {
-		return fmt.Errorf("only the admin is allowed to drop all data")
+		return fmt.Errorf("only Groot is allowed to drop all data")
 	}
 
 	groupIds := userData[1:]
@@ -495,9 +494,8 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
-	x.AssertTrue(len(userData) > 0)
-	if isAdmin(userData) {
-		// the admin account has access to everything
+	if isGroot(userData) {
+		// Groot has access to everything.
 		return nil
 	}
 
@@ -534,12 +532,12 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) map[string]struct{} {
 	return preds
 }
 
-func isAdmin(userData []string) bool {
+func isGroot(userData []string) bool {
 	if len(userData) == 0 {
 		return false
 	}
 
-	return userData[0] == "admin"
+	return userData[0] == x.GrootId
 }
 
 //authorizeQuery authorizes the query using the aclCache
@@ -553,8 +551,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
-	x.AssertTrue(len(userData) > 0)
-	if isAdmin(userData) {
+	if isGroot(userData) {
 		return nil
 	}
 
@@ -595,10 +592,10 @@ func hasAccess(groupId string, predicate string, operation *acl.Operation) error
 	aclGroup := entry.(*acl.Group)
 	perm, found := aclGroup.MappedAcls[predicate]
 	allowed := found && (perm&operation.Code) != 0
-	glog.V(1).Infof("authorizing group %v on predicate %v for %s, allowed %v", groupId,
+	glog.V(1).Infof("Authorizing group %v on predicate %v for %s, allowed %v", groupId,
 		predicate, operation.Name, allowed)
 	if !allowed {
-		return fmt.Errorf("group: %s not allowed to do %s on predicate %s",
+		return fmt.Errorf("group %s not allowed to do %s on predicate %s",
 			groupId, operation.Name, predicate)
 	}
 	return nil

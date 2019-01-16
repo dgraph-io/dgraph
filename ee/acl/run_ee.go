@@ -32,10 +32,13 @@ type options struct {
 	dgraph string
 }
 
-var opt options
-var tlsConf x.TLSHelperConfig
+var (
+	opt     options
+	tlsConf x.TLSHelperConfig
+	CmdAcl  x.SubCommand
+)
 
-var CmdAcl x.SubCommand
+const gPassword = "gpassword"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
@@ -44,7 +47,8 @@ func init() {
 	}
 
 	flag := CmdAcl.Cmd.PersistentFlags()
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
+	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -78,7 +82,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	userAddFlags := cmdUserAdd.Cmd.Flags()
-	userAddFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	userAddFlags.StringP("user", "u", "", "The user id to be created")
 	userAddFlags.StringP("password", "p", "", "The password for the user")
 
@@ -95,7 +98,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	userDelFlags := cmdUserDel.Cmd.Flags()
-	userDelFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
 
 	// group creation command
@@ -111,7 +113,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	groupAddFlags := cmdGroupAdd.Cmd.Flags()
-	groupAddFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	groupAddFlags.StringP("group", "g", "", "The group id to be created")
 
 	// group deletion command
@@ -127,7 +128,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	groupDelFlags := cmdGroupDel.Cmd.Flags()
-	groupDelFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	groupDelFlags.StringP("group", "g", "", "The group id to be deleted")
 
 	// the usermod command used to set a user's groups
@@ -143,7 +143,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	userModFlags := cmdUserMod.Cmd.Flags()
-	userModFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	userModFlags.StringP("user", "u", "", "The user id to be changed")
 	userModFlags.StringP("groups", "g", "", "The groups to be set for the user")
 
@@ -160,7 +159,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	chModFlags := cmdChMod.Cmd.Flags()
-	chModFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	chModFlags.StringP("group", "g", "", "The group whose permission "+
 		"is to be changed")
 	chModFlags.StringP("pred", "p", "", "The predicates whose acls"+
@@ -180,7 +178,6 @@ func initSubcommands() []*x.SubCommand {
 		},
 	}
 	infoFlags := cmdInfo.Cmd.Flags()
-	infoFlags.String("adminPassword", "", "The admin password used to authorize this operation")
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{

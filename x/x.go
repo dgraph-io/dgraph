@@ -73,6 +73,8 @@ const (
 
 	TlsClientCert = "client.crt"
 	TlsClientKey  = "client.key"
+
+	GrootId = "groot"
 )
 
 var (

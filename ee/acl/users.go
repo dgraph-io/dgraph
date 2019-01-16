@@ -28,9 +28,9 @@ import (
 )
 
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
-	adminPassword := conf.GetString("adminPassword")
+	adminPassword := conf.GetString(gPassword)
 	if len(adminPassword) == 0 {
-		fmt.Print("Enter admin password:")
+		fmt.Print("Enter groot password:")
 		password, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("error while reading password:%v", err)
@@ -46,10 +46,10 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
 		closeClient()
 	}
 
-	if err := dc.Login(ctx, "admin", adminPassword); err != nil {
-		return dc, cleanFunc, fmt.Errorf("unable to login with the admin account %v", err)
+	if err := dc.Login(ctx, x.GrootId, adminPassword); err != nil {
+		return dc, cleanFunc, fmt.Errorf("unable to login to the groot account %v", err)
 	}
-	glog.Infof("login successfully with the admin account")
+	glog.Infof("login successfully to the groot account")
 	// update the context so that it has the admin jwt token
 	return dc, cleanFunc, nil
 }
