@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
+
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
@@ -66,7 +68,7 @@ var rootConf = viper.New()
 // subcommands initially contains all default sub-commands.
 var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
-	&debug.Debug,
+	&debug.Debug, &increment.Increment,
 }
 
 func initCmds() {
