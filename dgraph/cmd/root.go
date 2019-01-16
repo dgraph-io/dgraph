@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
-
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/conv"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/increment"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"

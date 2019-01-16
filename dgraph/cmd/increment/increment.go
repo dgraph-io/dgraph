@@ -26,14 +26,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/spf13/viper"
-
-	"github.com/spf13/cobra"
-
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -55,8 +52,6 @@ func init() {
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 }
-
-var ()
 
 type Counter struct {
 	Uid string `json:"uid"`
