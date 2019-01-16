@@ -48,6 +48,13 @@ function FindCustomClusterTests {
     done
 }
 
+function FindDefaultClusterTests {
+    touch $DEFAULT_CLUSTER_TESTS
+    for PKG in $(grep -v -f $CUSTOM_CLUSTER_TESTS $MATCHING_TESTS); do
+        echo $PKG >> $DEFAULT_CLUSTER_TESTS
+    done
+}
+
 function Run {
     set -o pipefail
     go test ${GO_TEST_OPTS[*]} $@ \
@@ -57,10 +64,10 @@ function Run {
 }
 
 function RunDefaultClusterTests {
-    for PKG in $(grep -v -f $CUSTOM_CLUSTER_TESTS $MATCHING_TESTS); do
+    while read -r PKG; do
         Info "Running test for $PKG"
         Run $PKG || TEST_FAILED=1
-    done
+    done < $DEFAULT_CLUSTER_TESTS
     return $TEST_FAILED
 }
 
@@ -81,15 +88,14 @@ function RunCustomClusterTests {
 # MAIN
 #
 
-
 ARGS=$(/usr/bin/getopt -n$ME -o"vhc" -l"help,code-tests" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -v)         GO_TEST_OPTS+=( "-v" )                   ;;
-        -c)         RUN_ALL=; Info "Running only code tests" ;;
-        -h|--help)  Usage; exit 0                            ;;
-        --)         shift; break                             ;;
+        -v)         GO_TEST_OPTS+=( "-v" )  ;;
+        -c)         RUN_ALL=                ;;
+        -h|--help)  Usage; exit 0           ;;
+        --)         shift; break            ;;
     esac
     shift
 done
@@ -99,27 +105,41 @@ cd $DGRAPH_ROOT
 TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
 MATCHING_TESTS=$TMP_DIR/tests
 CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
+DEFAULT_CLUSTER_TESTS=$TMP_DIR/default
 trap "rm -rf $TMP_DIR" EXIT
 
 if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
+    if [[ ! $RUN_ALL ]]; then
+        Info "Running only code tests"
+    fi
 elif [[ $# -eq 1 ]]; then
     go list ./... | grep $1 > $MATCHING_TESTS
     Info "Running only tests matching '$1'"
     RUN_ALL=
 else
-    echo >&2 "usage: $ME [regex]"
+    echo >&2 "usage: $ME [pkg_regex]"
     exit 1
 fi
 
+# assemble list of tests before executing any
 FindCustomClusterTests
+FindDefaultClusterTests
 
-Info "Running tests using the default cluster"
-restartCluster
-RunDefaultClusterTests || TEST_FAILED=1
+if [[ -s $DEFAULT_CLUSTER_TESTS ]]; then
+    Info "Running tests using the default cluster"
+    restartCluster
+    RunDefaultClusterTests || TEST_FAILED=1
+else
+    Info "Skipping default cluster tests because none match"
+fi
 
-Info "Running tests using custom clusters"
-RunCustomClusterTests || TEST_FAILED=1
+if [[ -s $CUSTOM_CLUSTER_TESTS ]]; then
+    Info "Running tests using custom clusters"
+    RunCustomClusterTests || TEST_FAILED=1
+else
+    Info "Skipping custom cluster tests because none match"
+fi
 
 if [[ $RUN_ALL ]]; then
     Info "Running load-test.sh"
