@@ -68,10 +68,14 @@ Run the `test.sh` script in the root folder.
 
     $ ./test.sh
     
-    Running tests. Ignoring vendor folder.
-    ok      github.com/dgraph-io/dgraph/algo        0.013s
-    ok      github.com/dgraph-io/dgraph/client      0.029s
-    ok      github.com/dgraph-io/dgraph/client_test 2.841s
+    INFO: Running tests using the default cluster
+    …
+    INFO: Running test for github.com/dgraph-io/dgraph/algo
+    ok  	github.com/dgraph-io/dgraph/algo	0.004s
+    INFO: Running test for github.com/dgraph-io/dgraph/codec
+    ok  	github.com/dgraph-io/dgraph/codec	9.308s
+    INFO: Running test for github.com/dgraph-io/dgraph/codec/benchmark
+    ?   	github.com/dgraph-io/dgraph/codec/benchmark	[no test files]
     …
 
 Run `test.sh --help` for more info.

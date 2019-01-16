@@ -8,7 +8,7 @@ readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
-GO_TEST_OPTS=( "-short=true" )
+GO_TEST_OPTS=( "-short=true" "-count=1" )
 TEST_FAILED=0
 RUN_ALL=yes
 
