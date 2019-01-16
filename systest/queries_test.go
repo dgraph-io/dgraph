@@ -406,4 +406,30 @@ func ShortestPathWithUidZero(t *testing.T, c *dgo.Dgraph) {
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(exact) .
+      friend: uid .
+    `,
+	}))
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+_:a <name> "alice" .
+_:b <name> "bob" .
+_:c <name> "charlie" .
+_:a <friend> _:b .
+_:b <friend> _:c .
+`),
+	})
+	require.NoError(t, err, "the mutation should have succeeded")
+
+	cId := assigned.Uids["c"]
+	resp, err := txn.Query(ctx, fmt.Sprintf(`
+{
+shortest(from: 0x0, to: %s) {
+  friend
+ }
+}
+`, cId))
+	CompareJSON(t, `{"_path_":[{"uid":"0x0"}]}`, string(resp.Json))
 }
