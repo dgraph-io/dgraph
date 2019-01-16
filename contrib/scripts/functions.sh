@@ -21,7 +21,6 @@ function restartCluster {
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6080 || exit 1
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
-  echo "Waiting 10 seconds for cluster to come up"
   sleep 10 || exit 1
 }
 
