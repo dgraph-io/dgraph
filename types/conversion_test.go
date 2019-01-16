@@ -269,6 +269,35 @@ func TestConvertBoolToInt(t *testing.T) {
 	}
 }
 
+func TestTruthy(t *testing.T) {
+	tests := []struct {
+		in  Val
+		out Val
+	}{
+		{
+			in:  Val{Tid: StringID, Value: []byte("true")},
+			out: Val{Tid: BoolID, Value: true},
+		},
+		{
+			in:  Val{Tid: DefaultID, Value: []byte("true")},
+			out: Val{Tid: BoolID, Value: true},
+		},
+		{
+			in:  Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 1}},
+			out: Val{Tid: BoolID, Value: true},
+		},
+		{
+			in:  Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 1}},
+			out: Val{Tid: BoolID, Value: true},
+		},
+	}
+	for _, tc := range tests {
+		out, err := Convert(tc.in, tc.out.Tid)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
+	}
+}
+
 /*
 func TestSameConversionFloat(t *testing.T) {
 	data := []struct {
