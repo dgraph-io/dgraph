@@ -62,10 +62,15 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	// Mutations don't go through normal flow, so default schema for predicate won't be present.
 	// Lets add it.
 	if _, ok := schema.State().Get(attr); !ok {
-		schema.State().Set(attr, pb.SchemaUpdate{
+		update := pb.SchemaUpdate{
 			Predicate: attr,
 			ValueType: edge.ValueType,
-		})
+		}
+		// Edges of type pb.Posting_UID should default to a list.
+		if edge.ValueType == pb.Posting_UID {
+			update.List = true
+		}
+		schema.State().Set(attr, update)
 	}
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
@@ -305,19 +310,19 @@ dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
 film.film.initial_release_date : dateTime @index(year) .
 loc                            : geo @index(geo) .
-genre                          : uid @reverse .
+genre                          : [uid] @reverse .
 survival_rate                  : float .
 alive                          : bool @index(bool) .
 age                            : int @index(int) .
 shadow_deep                    : int .
-friend                         : uid @reverse @count .
+friend                         : [uid] @reverse @count .
 geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
 noindex_name                   : string .
-school                         : uid @count .
+school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
@@ -325,7 +330,7 @@ salary                         : float @index(float) .
 password                       : password .
 symbol                         : string @index(exact) .
 room                           : string @index(term) .
-office.room                    : uid .
+office.room                    : [uid] .
 `
 
 	err := schema.ParseBytes([]byte(schemaStr), 1)

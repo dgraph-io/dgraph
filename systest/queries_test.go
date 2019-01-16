@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -46,11 +47,177 @@ func TestQuery(t *testing.T) {
 	t.Run("schema predicate names", wrap(SchemaQueryTestPredicate1))
 	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
 	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
+	t.Run("multiple block eval", wrap(MultipleBlockEval))
+	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
 func SchemaQueryCleanup(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
+}
+
+func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      entity: string @index(exact) .
+      stock: uid @reverse .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:e1 <entity> "672E1D63-4921-420C-90A8-5B39DD77B89F" .
+      _:e1 <entity.type> "chair" .
+      _:e1 <entity.price> "2999.99"^^<xs:float> .
+
+      _:e2 <entity> "03B9CB73-7424-4BE5-AE39-97CC4D2F3A21" .
+      _:e2 <entity.type> "sofa" .
+      _:e2 <entity.price> "899.0"^^<xs:float> .
+
+      _:e1 <combo> _:e2 .
+      _:e2 <combo> _:e1 .
+
+      _:e3 <entity> "BDFD64A3-5CA8-41F0-98D6-E65A9DAE092D" .
+      _:e3 <entity.type> "desk" .
+      _:e3 <entity.price> "578.99"^^<xs:float> .
+
+      _:e4 <entity> "AE1D1A85-9C26-4A1D-9B0B-00A8BBCFDDA0" .
+      _:e4 <entity.type> "lamp" .
+      _:e4 <entity.price> "199.99"^^<xs:float> .
+
+      _:e3 <combo> _:e4 .
+      _:e4 <combo> _:e3 .
+
+      _:e5 <entity> "9021E504-65B7-4939-8C02-F73CFD5635F6" .
+      _:e5 <entity.type> "table" .
+      _:e5 <entity.price> "1899.98"^^<xs:float> .
+
+      # table has no combo
+
+      _:s1 <stock> _:e1 .
+      _:s1 <stock.in> "100"^^<xs:int> .
+      _:s1 <stock.note> "Over-stocked" .
+      _:e1 <stock> _:s1 .
+
+      _:s2 <stock> _:e2 .
+      _:s2 <stock.in> "20"^^<xs:int> .
+      _:s2 <stock.note> "Running low, order more" .
+      _:e2 <stock> _:s2 .
+
+      _:s3 <stock> _:e3 .
+      _:s3 <stock.in> "25"^^<xs:int> .
+      _:s3 <stock.note> "Delicate needs insurance" .
+      _:e3 <stock> _:s3 .
+
+      _:s4 <stock> _:e4 .
+      _:s4 <stock.out> "true"^^<xs:boolean> .
+      _:s4 <stock.note> "Out of stock" .
+      _:e4 <stock> _:s4 .
+
+      _:s5 <stock> _:e5 .
+      _:s5 <stock.out> "true"^^<xs:boolean> .
+      _:s5 <stock.note> "Out of stock" .
+      _:e5 <stock> _:s5 .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	txn = c.NewTxn()
+
+	tests := []struct {
+		in  string
+		out string
+	}{
+		{in: "672E1D63-4921-420C-90A8-5B39DD77B89F",
+			out: `{"q": [{
+        "notes": [{
+          "stock.note": "Over-stocked"
+        }],
+        "sku": "672E1D63-4921-420C-90A8-5B39DD77B89F",
+        "type": "chair",
+        "combos": 1
+      }]}`},
+		{in: "03B9CB73-7424-4BE5-AE39-97CC4D2F3A21",
+			out: `{"q": [{
+        "notes": [{
+          "stock.note": "Running low, order more"
+        }],
+        "sku": "03B9CB73-7424-4BE5-AE39-97CC4D2F3A21",
+        "type": "sofa",
+        "combos": 1
+      }]}`},
+		{in: "BDFD64A3-5CA8-41F0-98D6-E65A9DAE092D",
+			out: `{"q": [{
+        "notes": [{
+          "stock.note": "Delicate needs insurance"
+        }],
+        "sku": "BDFD64A3-5CA8-41F0-98D6-E65A9DAE092D",
+        "type": "desk",
+        "combos": 1
+      }]}`},
+		{in: "AE1D1A85-9C26-4A1D-9B0B-00A8BBCFDDA0",
+			out: `{"q": [{
+      "combos": 1,
+      "notes": [{
+          "stock.note": "Out of stock"
+      }],
+      "sku": "AE1D1A85-9C26-4A1D-9B0B-00A8BBCFDDA0",
+      "type": "lamp"
+    }]}`},
+		{in: "9021E504-65B7-4939-8C02-F73CFD5635F6",
+			out: `{"q":[]}`},
+	}
+	if assigned == nil {
+	}
+
+	queryFmt := `
+  {
+    filter_uids as var(func: eq(entity, "%s"))
+      @filter(has(entity.type) and not(has(stock.out)) and (has(combo)))
+
+    entity_uids as var (func: uid(filter_uids)) @filter()
+
+    var(func: uid(entity_uids)) {
+      stock_uid as stock
+    }
+
+    var(func: uid(entity_uids)) {
+      stock {
+        available as stock @filter(has(entity.price) and not(has(stock.out)))
+      }
+    }
+
+    var(func: uid(available)) @cascade {
+      combo {
+        cnt_combos as math(1)
+        combo {
+          ~stock {
+            ~stock @filter(has(combo))
+          }
+        }
+      }
+      available_combos as sum(val(cnt_combos))
+    }
+
+    q(func: uid(available)) {
+      sku: entity
+      type: entity.type
+      notes: ~stock @filter(uid(stock_uid)) {
+        stock.note
+      }
+      combos: val(available_combos)
+    }
+  }`
+
+	for _, tc := range tests {
+		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
 }
 
 func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
@@ -89,7 +256,8 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.user.group",
         "type": "uid",
-        "reverse": true
+        "reverse": true,
+        "list": true
       },
       {
         "predicate": "dgraph.xid",
@@ -294,7 +462,8 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.user.group",
         "type": "uid",
-        "reverse": true
+        "reverse": true,
+        "list": true
       },
       {
         "predicate": "dgraph.xid",
@@ -315,4 +484,117 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
     ]
   }`
 	CompareJSON(t, js, string(m["data"]))
+}
+
+func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(hash) @lang .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:p0 <name> "" .
+      _:p1 <name> "0" .
+      _:p2 <name> "srfrog" .
+      _:p3 <name> "Lorem ipsum" .
+      _:p4 <name> "Lorem ipsum dolor sit amet" .
+      _:p5 <name> "Lorem ipsum dolor sit amet, consectetur adipiscing elit" .
+      _:p6 <name> "Lorem ipsum"@en .
+      _:p7 <name> "Lorem ipsum dolor sit amet"@en .
+      _:p8 <name> "Lorem ipsum dolor sit amet, consectetur adipiscing elit"@en .
+      _:p9 <name> "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed varius tellus ut sem bibendum, eu tristique augue congue. Praesent eget odio tincidunt, pellentesque ante sit amet, tempus sem. Donec et tellus et diam facilisis egestas ut ac risus. Proin feugiat risus tristique erat condimentum placerat. Nulla eget ligula tempus, blandit leo vel, accumsan tortor. Phasellus et felis in diam ultricies porta nec in ipsum. Phasellus id leo sagittis, bibendum enim ut, pretium lectus. Quisque ac ex viverra, suscipit turpis sed, scelerisque metus. Sed non dui facilisis, viverra leo eget, vulputate erat. Etiam nec enim sed nisi imperdiet cursus. Suspendisse sed ligula non nisi pharetra varius." .
+      _:pa <name> ""@fr .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			in: `schema(pred: [name]) {}`,
+			out: `
+      {
+        "schema": [
+          {
+            "index": true,
+            "lang": true,
+            "predicate": "name",
+            "tokenizer": [
+              "hash"
+            ],
+            "type": "string"
+          }
+        ]
+      }`,
+		},
+		{
+			in:  `{q(func:eq(name,"")){name}}`,
+			out: `{"q": [{"name":""}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"0")){name}}`,
+			out: `{"q": [{"name":"0"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"srfrog")){name}}`,
+			out: `{"q": [{"name":"srfrog"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"Lorem ipsum")){name}}`,
+			out: `{"q": [{"name":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"Lorem ipsum dolor sit amet")){name}}`,
+			out: `{"q": [{"name":"Lorem ipsum dolor sit amet"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@en,"Lorem ipsum")){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@.,"Lorem ipsum dolor sit amet")){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum dolor sit amet"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["srfrog"])){name}}`,
+			out: `{"q": [{"name":"srfrog"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["srfrog","srf","srfrogg","sr","s"])){name}}`,
+			out: `{"q": [{"name":"srfrog"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["Lorem ipsum","Lorem ipsum dolor sit amet, consectetur adipiscing elit",""])){name}}`,
+			out: `{"q": [{"name":""},{"name":"Lorem ipsum"},{"name":"Lorem ipsum dolor sit amet, consectetur adipiscing elit"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum"])){name}}`,
+			out: `{"q": [{"name":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@en,["Lorem ipsum","Lorem ipsum dolor sit amet, consectetur adipiscing elit",""])){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum"},{"name@en":"Lorem ipsum dolor sit amet, consectetur adipiscing elit"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@en,["Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum"])){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@.,"")){name@fr}}`,
+			out: `{"q": [{"name@fr":""}]}`,
+		},
+	}
+
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
 }
