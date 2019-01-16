@@ -512,6 +512,8 @@ again:
 }
 ```
 
+**Note: The RunValueLogGC method would not garbage collect the latest value log.**
+
 ### Database backup
 There are two public API methods `DB.Backup()` and `DB.Load()` which can be
 used to do online backups and restores. Badger v0.9 provides a CLI tool

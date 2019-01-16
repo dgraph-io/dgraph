@@ -14,7 +14,8 @@ function restartCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
   go build . && go install . && md5sum dgraph $GOPATH/bin/dgraph
-  docker ps --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker stop
+  docker ps --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker stop | sed 's/^/Stopped /'
   docker-compose -f $compose_file -p dgraph up --force-recreate --remove-orphans --detach
   popd >/dev/null
 
@@ -27,7 +28,9 @@ function restartCluster {
 function stopCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
-  docker ps --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker stop
-  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm
+  docker ps --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker stop | sed 's/^/Stopped /'
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker rm | sed 's/^/Removed /'
   popd >/dev/null
 }

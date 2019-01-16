@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -110,6 +111,7 @@ func setBadgerOptions(opt badger.Options, dir string) badger.Options {
 	opt.Truncate = true
 	opt.Dir = dir
 	opt.ValueDir = dir
+	opt.Logger = &conn.ToGlog{}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {

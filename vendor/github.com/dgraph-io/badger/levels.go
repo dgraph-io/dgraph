@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -73,61 +75,97 @@ func revertToManifest(kv *DB, mf *Manifest, idMap map[uint64]struct{}) error {
 	return nil
 }
 
-func newLevelsController(kv *DB, mf *Manifest) (*levelsController, error) {
-	y.AssertTrue(kv.opt.NumLevelZeroTablesStall > kv.opt.NumLevelZeroTables)
+func newLevelsController(db *DB, mf *Manifest) (*levelsController, error) {
+	y.AssertTrue(db.opt.NumLevelZeroTablesStall > db.opt.NumLevelZeroTables)
 	s := &levelsController{
-		kv:     kv,
-		elog:   kv.elog,
-		levels: make([]*levelHandler, kv.opt.MaxLevels),
+		kv:     db,
+		elog:   db.elog,
+		levels: make([]*levelHandler, db.opt.MaxLevels),
 	}
-	s.cstatus.levels = make([]*levelCompactStatus, kv.opt.MaxLevels)
+	s.cstatus.levels = make([]*levelCompactStatus, db.opt.MaxLevels)
 
-	for i := 0; i < kv.opt.MaxLevels; i++ {
-		s.levels[i] = newLevelHandler(kv, i)
+	for i := 0; i < db.opt.MaxLevels; i++ {
+		s.levels[i] = newLevelHandler(db, i)
 		if i == 0 {
 			// Do nothing.
 		} else if i == 1 {
 			// Level 1 probably shouldn't be too much bigger than level 0.
-			s.levels[i].maxTotalSize = kv.opt.LevelOneSize
+			s.levels[i].maxTotalSize = db.opt.LevelOneSize
 		} else {
-			s.levels[i].maxTotalSize = s.levels[i-1].maxTotalSize * int64(kv.opt.LevelSizeMultiplier)
+			s.levels[i].maxTotalSize = s.levels[i-1].maxTotalSize * int64(db.opt.LevelSizeMultiplier)
 		}
 		s.cstatus.levels[i] = new(levelCompactStatus)
 	}
 
 	// Compare manifest against directory, check for existent/non-existent files, and remove.
-	if err := revertToManifest(kv, mf, getIDMap(kv.opt.Dir)); err != nil {
+	if err := revertToManifest(db, mf, getIDMap(db.opt.Dir)); err != nil {
 		return nil, err
 	}
 
 	// Some files may be deleted. Let's reload.
-	tables := make([][]*table.Table, kv.opt.MaxLevels)
+	var flags uint32 = y.Sync
+	if db.opt.ReadOnly {
+		flags |= y.ReadOnly
+	}
+
+	var mu sync.Mutex
+	tables := make([][]*table.Table, db.opt.MaxLevels)
 	var maxFileID uint64
+
+	// We found that using 3 goroutines allows disk throughput to be utilized to its max.
+	// Disk utilization is the main thing we should focus on, while trying to read the data. That's
+	// the one factor that remains constant between HDD and SSD.
+	throttle := y.NewThrottle(3)
+
+	start := time.Now()
+	var numOpened int32
+	tick := time.NewTicker(3 * time.Second)
+	defer tick.Stop()
+
 	for fileID, tableManifest := range mf.Tables {
-		fname := table.NewFilename(fileID, kv.opt.Dir)
-		var flags uint32 = y.Sync
-		if kv.opt.ReadOnly {
-			flags |= y.ReadOnly
+		fname := table.NewFilename(fileID, db.opt.Dir)
+		select {
+		case <-tick.C:
+			db.opt.Infof("%d tables out of %d opened in %s\n", atomic.LoadInt32(&numOpened),
+				len(mf.Tables), time.Since(start).Round(time.Millisecond))
+		default:
 		}
-		fd, err := y.OpenExistingFile(fname, flags)
-		if err != nil {
+		if err := throttle.Do(); err != nil {
 			closeAllTables(tables)
-			return nil, errors.Wrapf(err, "Opening file: %q", fname)
+			return nil, err
 		}
-
-		t, err := table.OpenTable(fd, kv.opt.TableLoadingMode)
-		if err != nil {
-			closeAllTables(tables)
-			return nil, errors.Wrapf(err, "Opening table: %q", fname)
-		}
-
-		level := tableManifest.Level
-		tables[level] = append(tables[level], t)
-
 		if fileID > maxFileID {
 			maxFileID = fileID
 		}
+		go func(fname string, level int) {
+			var rerr error
+			defer func() {
+				throttle.Done(rerr)
+				atomic.AddInt32(&numOpened, 1)
+			}()
+			fd, err := y.OpenExistingFile(fname, flags)
+			if err != nil {
+				rerr = errors.Wrapf(err, "Opening file: %q", fname)
+				return
+			}
+
+			t, err := table.OpenTable(fd, db.opt.TableLoadingMode)
+			if err != nil {
+				rerr = errors.Wrapf(err, "Opening table: %q", fname)
+				return
+			}
+
+			mu.Lock()
+			tables[level] = append(tables[level], t)
+			mu.Unlock()
+		}(fname, int(tableManifest.Level))
 	}
+	if err := throttle.Finish(); err != nil {
+		closeAllTables(tables)
+		return nil, err
+	}
+	db.opt.Infof("All %d tables opened in %s\n", atomic.LoadInt32(&numOpened),
+		time.Since(start).Round(time.Millisecond))
 	s.nextFileID = maxFileID + 1
 	for i, tbls := range tables {
 		s.levels[i].initTables(tbls)
@@ -141,7 +179,7 @@ func newLevelsController(kv *DB, mf *Manifest) (*levelsController, error) {
 
 	// Sync directory (because we have at least removed some files, or previously created the
 	// manifest file).
-	if err := syncDir(kv.opt.Dir); err != nil {
+	if err := syncDir(db.opt.Dir); err != nil {
 		_ = s.close()
 		return nil, err
 	}
@@ -240,8 +278,10 @@ func (s *levelsController) runWorker(lc *y.Closer) {
 			for _, p := range prios {
 				if err := s.doCompact(p); err == nil {
 					break
+				} else if err == errFillTables {
+					// pass
 				} else {
-					s.kv.opt.Errorf("Error while running doCompact: %v\n", err)
+					s.kv.opt.Warningf("While running doCompact: %v\n", err)
 				}
 			}
 		case <-lc.HasBeenClosed():
@@ -656,6 +696,8 @@ func (s *levelsController) runCompactDef(l int, cd compactDef) (err error) {
 	return nil
 }
 
+var errFillTables = errors.New("Unable to fill tables")
+
 // doCompact picks some table on level l and compacts it away to the next level.
 func (s *levelsController) doCompact(p compactionPriority) error {
 	l := p.level
@@ -676,13 +718,13 @@ func (s *levelsController) doCompact(p compactionPriority) error {
 	if l == 0 {
 		if !s.fillTablesL0(&cd) {
 			cd.elog.LazyPrintf("fillTables failed for level: %d\n", l)
-			return fmt.Errorf("Unable to fill tables for level: %d\n", l)
+			return errFillTables
 		}
 
 	} else {
 		if !s.fillTables(&cd) {
 			cd.elog.LazyPrintf("fillTables failed for level: %d\n", l)
-			return fmt.Errorf("Unable to fill tables for level: %d\n", l)
+			return errFillTables
 		}
 	}
 	defer s.cstatus.delete(cd) // Remove the ranges from compaction status.

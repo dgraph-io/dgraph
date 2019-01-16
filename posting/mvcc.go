@@ -18,6 +18,8 @@ package posting
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -59,7 +61,7 @@ func (txn *Txn) AddKeys(key, conflictKey string) {
 	}
 }
 
-func (txn *Txn) Fill(ctx *api.TxnContext) {
+func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
 	defer txn.Unlock()
 	ctx.StartTs = txn.StartTs
@@ -74,8 +76,11 @@ func (txn *Txn) Fill(ctx *api.TxnContext) {
 	}
 	for key := range txn.deltas {
 		pk := x.Parse([]byte(key))
-		if !x.HasString(ctx.Preds, pk.Attr) {
-			ctx.Preds = append(ctx.Preds, pk.Attr)
+		// Also send the group id that the predicate was being served by. This is useful when
+		// checking if Zero should allow a commit during a predicate move.
+		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
+		if !x.HasString(ctx.Preds, predKey) {
+			ctx.Preds = append(ctx.Preds, predKey)
 		}
 	}
 }
@@ -214,7 +219,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 		} else {
-			x.Fatalf("unexpected meta: %d", item.UserMeta())
+			x.Fatalf("unexpected meta: %d %s", item.UserMeta(), hex.Dump(key))
 		}
 		if item.DiscardEarlierVersions() {
 			break

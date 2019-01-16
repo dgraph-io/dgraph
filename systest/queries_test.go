@@ -90,7 +90,8 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.user.group",
         "type": "uid",
-        "reverse": true
+        "reverse": true,
+        "list": true
       },
       {
         "predicate": "dgraph.xid",
@@ -295,7 +296,8 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.user.group",
         "type": "uid",
-        "reverse": true
+        "reverse": true,
+        "list": true
       },
       {
         "predicate": "dgraph.xid",

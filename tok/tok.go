@@ -18,6 +18,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"fmt"
 	"plugin"
 	"time"
 
@@ -133,6 +134,19 @@ func LoadCustomTokenizer(soFile string) {
 func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
 	return t, found
+}
+
+// GetTokenizers returns a list of tokenizer given a list of unique names.
+func GetTokenizers(names []string) ([]Tokenizer, error) {
+	var tokenizers []Tokenizer
+	for _, name := range names {
+		t, found := GetTokenizer(name)
+		if !found {
+			return nil, fmt.Errorf("Invalid tokenizer %s", name)
+		}
+		tokenizers = append(tokenizers, t)
+	}
+	return tokenizers, nil
 }
 
 func registerTokenizer(t Tokenizer) {
