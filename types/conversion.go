@@ -116,11 +116,14 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
-				val, err := strconv.ParseBool(vc)
-				if err != nil {
-					return to, err
+				*res = false
+				if vc != "" {
+					val, err := strconv.ParseBool(vc)
+					if err != nil {
+						return to, err
+					}
+					*res = bool(val)
 				}
-				*res = bool(val)
 			case DateTimeID:
 				t, err := ParseTime(vc)
 				if err != nil {
