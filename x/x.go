@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -32,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -488,5 +491,27 @@ func SpanTimer(span *trace.Span, name string) func() {
 
 	return func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
+	}
+}
+
+type CancelFunc func()
+
+const DgraphAlphaPort = 9180
+
+func GetDgraphClient() (*dgo.Dgraph, CancelFunc) {
+	return GetDgraphClientOnPort(DgraphAlphaPort)
+}
+
+func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
+	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", alphaPort), grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
+
+	dc := api.NewDgraphClient(conn)
+	return dgo.NewDgraphClient(dc), func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error while closing connection:%v", err)
+		}
 	}
 }

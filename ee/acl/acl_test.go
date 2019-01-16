@@ -25,7 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/test"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
@@ -88,13 +88,13 @@ func resetUser(t *testing.T) {
 
 func TestAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
-	dg1, cancel := test.GetDgraphClientOnPort(9180)
+	dg1, cancel := x.GetDgraphClientOnPort(9180)
 	defer cancel()
 	testAuthorization(t, dg1)
 	glog.Infof("done")
 
 	glog.Infof("testing with port 9182")
-	dg2, cancel := test.GetDgraphClientOnPort(9182)
+	dg2, cancel := x.GetDgraphClientOnPort(9182)
 	defer cancel()
 	testAuthorization(t, dg2)
 	glog.Infof("done")
@@ -184,10 +184,10 @@ func alterPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 }
 
 func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
-	// use the admin account to clean the database
+	// use the groot account to clean the database
 	ctx := context.Background()
-	if err := dg.Login(ctx, "admin", "password"); err != nil {
-		t.Fatalf("unable to login using the admin account:%v", err)
+	if err := dg.Login(ctx, x.GrootId, "password"); err != nil {
+		t.Fatalf("unable to login using the groot account:%v", err)
 	}
 	op := api.Operation{
 		DropAll: true,

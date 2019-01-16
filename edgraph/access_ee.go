@@ -396,8 +396,9 @@ func ResetAcl() {
 			}}
 
 		mu := &api.Mutation{
-			StartTs: startTs,
-			Set:     createUserNQuads,
+			StartTs:   startTs,
+			CommitNow: true,
+			Set:       createUserNQuads,
 		}
 
 		if _, err := (&Server{}).doMutate(context.Background(), mu); err != nil {
@@ -412,6 +413,7 @@ func ResetAcl() {
 		defer cancel()
 		if err := upsertGroot(ctx); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			time.Sleep(100 * time.Millisecond)
 		} else {
 			return
 		}
