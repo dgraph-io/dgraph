@@ -4421,3 +4421,12 @@ func TestParseGraphQLVarPaginationRootMultiple(t *testing.T) {
 	require.Equal(t, args["after"], "0x123")
 	require.Equal(t, gq.Query[0].Order[0].Attr, "name")
 }
+
+func TestWithFuzzCrasherInput(t *testing.T) {
+	q := "{e(orderasc:#"
+	r := Request{
+		Str: q,
+	}
+	_, err := Parse(r)
+	require.Error(t, err, "should be able to parse the query and return an error:%s", q)
+}
