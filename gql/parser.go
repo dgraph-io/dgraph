@@ -869,7 +869,10 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 		case itemRightSquare:
 			return items, nil
 		case itemName:
-			val := collectName(it, item.Val)
+			val, err := collectName(it, item.Val)
+			if err != nil {
+				return nil, err
+			}
 			items = append(items, val)
 		case itemComma:
 			it.Next()
@@ -877,7 +880,10 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			if item.Typ != itemName {
 				return items, x.Errorf("Invalid scheam block")
 			}
-			val := collectName(it, item.Val)
+			val, err := collectName(it, item.Val)
+			if err != nil {
+				return nil, err
+			}
 			items = append(items, val)
 		default:
 			return items, x.Errorf("Invalid schema block")
@@ -1093,7 +1099,10 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if !expectArg {
 				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
-			p.Key = collectName(it, item.Val)
+			p.Key, rerr = collectName(it, item.Val)
+			if rerr != nil {
+				return nil, rerr
+			}
 			if isSortkey(p.Key) {
 				orderCount++
 			}
@@ -1158,8 +1167,11 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
 
-		p.Val = collectName(it, val+item.Val)
-
+		var err error
+		p.Val, err = collectName(it, val+item.Val)
+		if err != nil {
+			return nil, err
+		}
 		// Get language list, if present
 		items, err := it.Peek(1)
 		if err == nil && items[0].Typ == itemAt {
@@ -1384,7 +1396,10 @@ L:
 
 		}
 
-		name := collectName(it, item.Val)
+		name, err := collectName(it, item.Val)
+		if err != nil {
+			return nil, err
+		}
 		function = &Function{
 			Name: strings.ToLower(name),
 		}
@@ -1514,10 +1529,12 @@ L:
 				return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 			}
 
-			vname := collectName(it, itemInFunc.Val)
+			vname, err := collectName(it, itemInFunc.Val)
+			if err != nil {
+				return nil, err
+			}
 			// TODO - Move this to a function.
 			v := strings.Trim(vname, " \t")
-			var err error
 			v, err = unquoteIfQuoted(v)
 			if err != nil {
 				return nil, err
@@ -1682,7 +1699,10 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 
 	// Now try to consume "as".
 	if !trySkipItemVal(it, "as") {
-		name1 = collectName(it, name1)
+		name1, err = collectName(it, name1)
+		if err != nil {
+			return res, false, err
+		}
 		res.name = name1
 		return res, true, nil
 	}
@@ -1691,7 +1711,10 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 		return res, false, x.Errorf("Expected name in facet list")
 	}
 
-	res.name = collectName(it, item.Val)
+	res.name, err = collectName(it, item.Val)
+	if err != nil {
+		return res, false, err
+	}
 	res.varName = name1
 	return res, true, nil
 }
@@ -1817,10 +1840,13 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
 
-			val := collectName(it, item.Val)
-			peekIt, err := it.Peek(1)
+			val, err := collectName(it, item.Val)
 			if err != nil {
 				return err
+			}
+			peekIt, err := it.Peek(1)
+			if e := checkItems(peekIt, err); e != nil {
+				return e
 			}
 			if peekIt[0].Typ == itemColon {
 				if alias != "" {
@@ -2291,10 +2317,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				// Modify the NeedsVar context here.
 				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = ValueVar
 			} else {
-				val = collectName(it, val+item.Val)
+				val, err = collectName(it, val+item.Val)
+				if err != nil {
+					return nil, err
+				}
 				// Get language list, if present
 				items, err := it.Peek(1)
-				if err == nil && items[0].Typ == itemLeftRound {
+				if e := checkItems(items, err); e != nil {
+					return nil, e
+				}
+
+				if items[0].Typ == itemLeftRound {
 					if (key == "orderasc" || key == "orderdesc") && val != value {
 						return nil, x.Errorf("Expected val(). Got %s() with order.", val)
 					}
@@ -2340,6 +2373,18 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	return gq, nil
+}
+
+func checkItems(items []lex.Item, err error) error {
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if item.Typ == lex.ItemError {
+			return fmt.Errorf(item.Val)
+		}
+	}
+	return nil
 }
 
 func isSortkey(k string) bool {
@@ -2416,8 +2461,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemName:
 			peekIt, err := it.Peek(1)
-			if err != nil {
-				return x.Errorf("Invalid query")
+			if e := checkItems(peekIt, err); e != nil {
+				return e
 			}
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName = item.Val
@@ -2425,12 +2470,15 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			val := collectName(it, item.Val)
+			val, err := collectName(it, item.Val)
+			if err != nil {
+				return err
+			}
 			valLower := strings.ToLower(val)
 
 			peekIt, err = it.Peek(1)
-			if err != nil {
-				return err
+			if e := checkItems(peekIt, err); e != nil {
+				return e
 			}
 			if peekIt[0].Typ == itemColon {
 				alias = val
@@ -2482,10 +2530,16 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				if gq.IsGroupby {
 					item = it.Item()
-					attr := collectName(it, item.Val)
+					attr, err := collectName(it, item.Val)
+					if err != nil {
+						return err
+					}
 					// Get language list, if present
 					items, err := it.Peek(1)
-					if err == nil && items[0].Typ == itemAt {
+					if e := checkItems(peekIt, err); e != nil {
+						return e
+					}
+					if items[0].Typ == itemAt {
 						it.Next() // consume '@'
 						it.Next() // move forward
 						if child.Langs, err = parseLanguageList(it); err != nil {
@@ -2597,8 +2651,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 
 				peekIt, err := it.Peek(2)
-				if err != nil {
-					return err
+				if e := checkItems(peekIt, err); e != nil {
+					return e
 				}
 				if peekIt[0].Typ == itemRightRound {
 					return x.Errorf("Cannot use count(), please use count(uid)")
@@ -2632,9 +2686,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
-				if err != nil {
-					return err
+				if e := checkItems(peekIt, err); e != nil {
+					return e
 				}
+
 				if peekIt[0].Typ != itemLeftRound {
 					goto Fall
 				}
@@ -2663,8 +2718,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
-				if err != nil {
-					return err
+				if e := checkItems(peekIt, err); e != nil {
+					return e
 				}
 				if peekIt[0].Typ != itemLeftRound {
 					goto Fall
@@ -2781,10 +2836,14 @@ func isInequalityFn(name string) bool {
 
 // Name can have dashes or alphanumeric characters. Lexer lexes them as separate items.
 // We put it back together here.
-func collectName(it *lex.ItemIterator, val string) string {
+func collectName(it *lex.ItemIterator, val string) (string, error) {
 	var dashOrName bool // false if expecting dash, true if expecting name
 	for {
 		items, err := it.Peek(1)
+		if e := checkItems(items, err); e != nil {
+			return "", e
+		}
+
 		if err == nil && ((items[0].Typ == itemName && dashOrName) ||
 			(items[0].Val == "-" && !dashOrName)) {
 			it.Next()
@@ -2794,7 +2853,7 @@ func collectName(it *lex.ItemIterator, val string) string {
 			break
 		}
 	}
-	return val
+	return val, nil
 }
 
 // Steps the parser.
