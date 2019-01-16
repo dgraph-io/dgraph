@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
@@ -396,7 +397,9 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.uidToVal[0]
 		if !ok {
-			return x.Errorf("Only aggregated variables allowed within empty block.")
+			aggVal.Tid = types.FloatID
+			aggVal.Value = float64(0)
+			glog.V(3).Info("Only aggregated variables allowed within empty block.")
 		}
 		if child.Params.Normalize && child.Params.Alias == "" {
 			continue
