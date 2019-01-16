@@ -59,7 +59,7 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: string(schema)}))
 
-	fp, err := os.Open(`data/goldendata_export.rdf.gz`)
+	fp, err := os.Open(`../../../systest/data/goldendata_export.rdf.gz`)
 	x.Check(err)
 	defer fp.Close()
 

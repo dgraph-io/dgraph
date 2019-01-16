@@ -237,7 +237,7 @@ func TestDeletePredicate(t *testing.T) {
 	`
 
 	var s1 = `
-	friend: uid @reverse .
+	friend: [uid] @reverse .
 	name: string @index(term) .
 	`
 
@@ -323,18 +323,18 @@ type Received struct {
 func TestSchemaMutation(t *testing.T) {
 	require.NoError(t, dropAll())
 	var m = `
-			name:string @index(term, exact) .
-			alias:string @index(exact, term) .
-			dob:dateTime @index(year) .
-			film.film.initial_release_date:dateTime @index(year) .
-			loc:geo @index(geo) .
-			genre:uid @reverse .
+			name: string @index(term, exact) .
+			alias: string @index(exact, term) .
+			dob: dateTime @index(year) .
+			film.film.initial_release_date: dateTime @index(year) .
+			loc: geo @index(geo) .
+			genre: [uid] @reverse .
 			survival_rate : float .
 			alive         : bool .
 			age           : int .
 			shadow_deep   : int .
-			friend:uid @reverse .
-			geometry:geo @index(geo) . `
+			friend: [uid] @reverse .
+			geometry: geo @index(geo) . `
 
 	expected := S{
 		Predicate: "name",
@@ -410,7 +410,7 @@ func TestSchemaMutation2Error(t *testing.T) {
 // index on uid type
 func TestSchemaMutation3Error(t *testing.T) {
 	var m = `
-            age:uid @index .
+            age: uid @index .
 	`
 	err := alterSchema(m)
 	require.Error(t, err)
@@ -427,6 +427,76 @@ func TestMutation4Error(t *testing.T) {
 	`
 	err := runMutation(m)
 	require.Error(t, err)
+}
+
+func TestMutationSingleUid(t *testing.T) {
+	// reset Schema
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+
+	var s = `
+            friend: uid .
+	`
+	require.NoError(t, alterSchema(s))
+
+	var m = `
+	{
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+		}
+	}
+	`
+	require.Error(t, runMutation(m))
+}
+
+// Verify multiple uids are allowed after mutation.
+func TestSchemaMutationUid(t *testing.T) {
+	// reset Schema
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+
+	var s1 = `
+            friend: uid .
+	`
+	require.NoError(t, alterSchema(s1))
+	var m1 = `
+	{
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+		}
+	}
+	`
+	require.Error(t, runMutation(m1))
+
+	var s2 = `
+            friend: [uid] .
+	`
+	require.NoError(t, alterSchema(s2))
+	var m2 = `
+	{
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+		}
+	}
+	`
+	require.NoError(t, runMutation(m2))
+}
+
+// Verify a list uid predicate cannot be converted to a single-element predicate.
+func TestSchemaMutationUidError1(t *testing.T) {
+	// reset Schema
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+
+	var s1 = `
+            friend: [uid] .
+	`
+	require.NoError(t, alterSchema(s1))
+
+	var s2 = `
+            friend: uid .
+	`
+	require.Error(t, alterSchema(s2))
 }
 
 // add index
@@ -533,7 +603,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	}
 	`
 
-	var s = `friend:uid @reverse .`
+	var s = `friend: [uid] @reverse .`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
@@ -572,11 +642,11 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	`
 
 	var s1 = `
-            friend:uid @reverse .
+            friend: [uid] @reverse .
 	`
 
 	var s2 = `
-            friend:uid .
+            friend: [uid] .
 	`
 
 	// reset Schema
@@ -623,7 +693,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	`
 
 	var s = `
-			friend:uid @count .
+			friend: [uid] @count .
 	`
 
 	// reset Schema
@@ -825,7 +895,7 @@ func TestDeleteAll(t *testing.T) {
 	`
 
 	var s1 = `
-      		friend:uid @reverse .
+      		friend: [uid] @reverse .
 		name: string @index(term) .
 	`
 	schema.ParseBytes([]byte(""), 1)
@@ -1155,7 +1225,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 	m = `
 	mutation {
 		schema {
-            age:uid .
+            age: uid .
 		}
 	}
 	`
@@ -1166,7 +1236,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 // change from uid to scalar or vice versa
 func TestSchemaMutation5Error(t *testing.T) {
 	var m = `
-            friends:uid .
+            friends: [uid] .
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
@@ -1184,7 +1254,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 	require.NoError(t, err)
 
 	m = `
-            friends:string .
+            friends: string .
 	`
 	err = alterSchema(m)
 	require.Error(t, err)
@@ -1439,7 +1509,7 @@ func TestRecurseExpandAll(t *testing.T) {
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
-	s := `friend: uid @count .`
+	s := `friend: [uid] @count .`
 	require.NoError(t, alterSchemaWithRetry(s))
 
 	q := `
