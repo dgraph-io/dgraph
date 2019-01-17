@@ -48,6 +48,7 @@ func TestQuery(t *testing.T) {
 	t.Run("schema specific predicate fields", wrap(SchemaQueryTestPredicate2))
 	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
 	t.Run("multiple block eval", wrap(MultipleBlockEval))
+	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
 	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
@@ -67,7 +68,7 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
 	}))
 
 	txn := c.NewTxn()
-	assigned, err := txn.Mutate(ctx, &api.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
       _:e1 <entity> "672E1D63-4921-420C-90A8-5B39DD77B89F" .
       _:e1 <entity.type> "chair" .
@@ -126,8 +127,6 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
 
-	txn = c.NewTxn()
-
 	tests := []struct {
 		in  string
 		out string
@@ -171,8 +170,6 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
 		{in: "9021E504-65B7-4939-8C02-F73CFD5635F6",
 			out: `{"q":[]}`},
 	}
-	if assigned == nil {
-	}
 
 	queryFmt := `
   {
@@ -213,11 +210,104 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
     }
   }`
 
+	txn = c.NewTxn()
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
 		require.NoError(t, err)
 		CompareJSON(t, tc.out, string(resp.Json))
 	}
+}
+
+func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      item: string @index(hash) .
+      style.type: string .
+      style.name: string .
+      style.cool: bool .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:a <item> "chair" .
+      _:a <style.name> "Modern leather chair" .
+      _:a <style.cool> "true" .
+
+      _:b <item> "chair" .
+      _:b <style.name> "Broken beanbag" .
+      _:b <style.cool> "false"^^<xs:boolean> .
+
+      _:c <item> "sofa" .
+      _:c <style.name> "U-shape sectional" .
+      _:c <style.cool> "true"^^<xs:boolean> .
+
+      _:d <item> "table" .
+      _:d <style.name> "Glass top marble table" .
+      _:d <style.cool> "true"^^<xs:boolean> .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in  string
+		out string
+	}{
+		{
+			in: `
+      {
+        items as var(func: eq(item, "chair")) @filter(has(style.name)) @cascade {
+          is_cool as style.cool
+        }
+        q(func: eq(item, "chair")) @filter(eq(val(is_cool), false) AND uid(items)) {
+          item
+          style.name
+          style.cool
+          is_cool
+        }
+      }`,
+			out: `
+      {
+        "q": [
+          {
+            "item": "chair",
+            "style.cool": false,
+            "style.name": "Broken beanbag"
+          }
+        ]
+      }`,
+		},
+		{
+			// filtering by dummy (no such pred) reduces to empty set.
+			// is_cool would be assigned as default type to aid in filter eval.
+			// @filter(eq(val(is_cool), false) would effectively evaluate: "" eq "false"
+			in: `
+      {
+        items as var(func: eq(item, "chair")) @filter(has(dummy)) @cascade {
+          is_cool as style.cool
+        }
+        q(func: eq(item, "chair")) @filter(eq(val(is_cool), false) AND uid(items)) {
+          item
+          style.name
+          style.cool
+          is_cool
+        }
+      }`,
+			out: `{"q": []}`,
+		},
+	}
+
+	txn = c.NewTxn()
+	for _, tc := range tests {
+		resp, err := txn.Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
+
 }
 
 func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
