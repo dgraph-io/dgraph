@@ -131,7 +131,7 @@ func TestQueryAllLanguages(t *testing.T) {
 	}`
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"people": [{"name@en":"Amit", "name@hi":"अमित"}]}}`,
+		`{"data":{"people": [{"name@en":"Amit", "name@hi":"अमित", "name":""}]}}`,
 		js)
 }
 

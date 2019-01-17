@@ -524,11 +524,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					fieldNameWithTag := fieldName
 					lang := pc.LangTags[idx].Lang[i]
 
-					// Queries of the form pred@* should only return values with a lang tag.
-					if lang == "" && queryAllLangs {
-						continue
-					}
-
 					if lang != "" {
 						fieldNameWithTag += "@" + lang
 					}
