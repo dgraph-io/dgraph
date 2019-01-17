@@ -1267,6 +1267,10 @@ func (db *DB) DropAll() error {
 	}()
 	db.opt.Infof("Compactions stopped. Dropping all SSTables...")
 
+	// Block all foreign interactions with memory tables.
+	db.Lock()
+	defer db.Unlock()
+
 	// Remove inmemory tables. Calling DecrRef for safety. Not sure if they're absolutely needed.
 	db.mt.DecrRef()
 	db.mt = skl.NewSkiplist(arenaSize(db.opt)) // Set it up for future writes.
