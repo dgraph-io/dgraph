@@ -2,7 +2,7 @@
 
 ![Badger mascot](images/diggy-shadow.png)
 
-BadgerDB is an embeddable, persistent, simple and fast key-value (KV) database
+BadgerDB is an embeddable, persistent and fast key-value (KV) database
 written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
@@ -599,18 +599,19 @@ Values in SSD-conscious Storage][wisckey]_.
 [wisckey]: https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf
 
 ### Comparisons
-| Feature             | Badger                                       | RocksDB                       | BoltDB    |
-| -------             | ------                                       | -------                       | ------    |
-| Design              | LSM tree with value log                      | LSM tree only                 | B+ tree   |
-| High Read throughput | Yes                                          | No                           | Yes        |
-| High Write throughput | Yes                                          | Yes                           | No        |
-| Designed for SSDs   | Yes (with latest research <sup>1</sup>)      | Not specifically <sup>2</sup> | No        |
-| Embeddable          | Yes                                          | Yes                           | Yes       |
-| Sorted KV access    | Yes                                          | Yes                           | Yes       |
-| Pure Go (no Cgo)    | Yes                                          | No                            | Yes       |
-| Transactions        | Yes, ACID, concurrent with SSI<sup>3</sup> | Yes (but non-ACID)            | Yes, ACID |
-| Snapshots           | Yes                                           | Yes                           | Yes       |
-| TTL support         | Yes                                           | Yes                           | No       |
+| Feature                        | Badger                                     | RocksDB                       | BoltDB    |
+| -------                        | ------                                     | -------                       | ------    |
+| Design                         | LSM tree with value log                    | LSM tree only                 | B+ tree   |
+| High Read throughput           | Yes                                        | No                            | Yes       |
+| High Write throughput          | Yes                                        | Yes                           | No        |
+| Designed for SSDs              | Yes (with latest research <sup>1</sup>)    | Not specifically <sup>2</sup> | No        |
+| Embeddable                     | Yes                                        | Yes                           | Yes       |
+| Sorted KV access               | Yes                                        | Yes                           | Yes       |
+| Pure Go (no Cgo)               | Yes                                        | No                            | Yes       |
+| Transactions                   | Yes, ACID, concurrent with SSI<sup>3</sup> | Yes (but non-ACID)            | Yes, ACID |
+| Snapshots                      | Yes                                        | Yes                           | Yes       |
+| TTL support                    | Yes                                        | Yes                           | No        |
+| 3D access (key-value-version)  | Yes<sup>4</sup>                            | No                            | No        |
 
 <sup>1</sup> The [WISCKEY paper][wisckey] (on which Badger is based) saw big
 wins with separating values from keys, significantly reducing the write
@@ -620,6 +621,8 @@ amplification compared to a typical LSM tree.
 As such RocksDB's design isn't aimed at SSDs.
 
 <sup>3</sup> SSI: Serializable Snapshot Isolation. For more details, see the blog post [Concurrent ACID Transactions in Badger](https://blog.dgraph.io/post/badger-txn/)
+<sup>4</sup> Badger provides direct access to value versions via its Iterator API.
+Users can also specify how many versions to keep per key via Options.
 
 ### Benchmarks
 We have run comprehensive benchmarks against RocksDB, Bolt and LMDB. The
