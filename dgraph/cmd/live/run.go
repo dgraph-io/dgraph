@@ -217,7 +217,6 @@ func (l *loader) processJsonFile(ctx context.Context, file string) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
 
-	var batchSize int
 	mu := api.Mutation{}
 	for {
 		chunkBuf, err := chunker.Chunk(rd)
@@ -231,14 +230,15 @@ func (l *loader) processJsonFile(ctx context.Context, file string) error {
 				}
 			}
 			mu.Set = append(mu.Set, nqs...)
-			batchSize += len(nqs)
-			if batchSize >= opt.numRdf {
+			if len(mu.Set) >= opt.numRdf {
 				l.reqs <- mu
 				mu = api.Mutation{}
-				batchSize = 0
 			}
 		}
 		if err == io.EOF {
+			if len(mu.Set) >= 0 {
+				l.reqs <- mu
+			}
 			break
 		} else if err != nil {
 			x.Check(err)
