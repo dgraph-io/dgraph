@@ -53,7 +53,7 @@ type options struct {
 	dgraph              string
 	zero                string
 	concurrent          int
-	numRdf              int
+	batchSize           int
 	clientDir           string
 	ignoreIndexConflict bool
 	authToken           string
@@ -86,7 +86,7 @@ func init() {
 	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
-		"Number of RDF N-Quads to send as part of a mutation.")
+		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
@@ -230,7 +230,7 @@ func (l *loader) processJsonFile(ctx context.Context, file string) error {
 				}
 			}
 			mu.Set = append(mu.Set, nqs...)
-			if len(mu.Set) >= opt.numRdf {
+			if len(mu.Set) >= opt.batchSize {
 				l.reqs <- mu
 				mu = api.Mutation{}
 			}
@@ -291,7 +291,7 @@ func (l *loader) processRdfFile(ctx context.Context, file string) error {
 		}
 		mu.Set = append(mu.Set, &nq)
 
-		if batchSize >= opt.numRdf {
+		if batchSize >= opt.batchSize {
 			l.reqs <- mu
 			batchSize = 0
 			mu = api.Mutation{}
@@ -359,7 +359,7 @@ func run() error {
 		dgraph:              Live.Conf.GetString("dgraph"),
 		zero:                Live.Conf.GetString("zero"),
 		concurrent:          Live.Conf.GetInt("conc"),
-		numRdf:              Live.Conf.GetInt("batch"),
+		batchSize:           Live.Conf.GetInt("batch"),
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
@@ -371,7 +371,7 @@ func run() error {
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
-		Size:          opt.numRdf,
+		Size:          opt.batchSize,
 		Pending:       opt.concurrent,
 		PrintCounters: true,
 		Ctx:           ctx,
@@ -420,7 +420,7 @@ func run() error {
 		fmt.Printf("No files to process\n")
 		return nil
 	} else {
-		fmt.Printf("Processing %d files\n", totalFiles)
+		fmt.Printf("Found %d file(s) to process\n", totalFiles)
 	}
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
@@ -453,17 +453,17 @@ func run() error {
 	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
-		rate = c.Rdfs
+		rate = c.Nquads
 	} else {
-		rate = c.Rdfs / uint64(c.Elapsed.Seconds())
+		rate = c.Nquads / uint64(c.Elapsed.Seconds())
 	}
 	// Lets print an empty line, otherwise Interrupted or Number of Mutations overwrites the
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
-	fmt.Printf("Number of TXs run         : %d\n", c.TxnsDone)
-	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
-	fmt.Printf("Time spent                : %v\n", c.Elapsed)
-	fmt.Printf("RDFs processed per second : %d\n", rate)
+	fmt.Printf("Number of TXs run            : %d\n", c.TxnsDone)
+	fmt.Printf("Number of N-Quads processed  : %d\n", c.Nquads)
+	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
+	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
 	return nil
 }

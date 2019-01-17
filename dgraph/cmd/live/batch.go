@@ -109,8 +109,8 @@ func (p *uidProvider) ReserveUidRange() (uint64, uint64, error) {
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
 // if BatchMutationOptions PrintCounters is set to true.
 type Counter struct {
-	// Number of RDF's processed by server.
-	Rdfs uint64
+	// Number of N-Quads processed by server.
+	Nquads uint64
 	// Number of mutations processed by the server.
 	TxnsDone uint64
 	// Number of Aborts
@@ -193,17 +193,17 @@ func (l *loader) printCounters() {
 
 	for range l.ticker.C {
 		counter := l.Counter()
-		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
+		rate := float64(counter.Nquads) / counter.Elapsed.Seconds()
 		elapsed := time.Since(start).Round(time.Second)
 		fmt.Printf("[%6s] Txns: %d RDFs: %d RDFs/sec: %5.0f Aborts: %d\n",
-			elapsed, counter.TxnsDone, counter.Rdfs, rate, counter.Aborts)
+			elapsed, counter.TxnsDone, counter.Nquads, rate, counter.Aborts)
 	}
 }
 
 // Counter returns the current state of the BatchMutation.
 func (l *loader) Counter() Counter {
 	return Counter{
-		Rdfs:     atomic.LoadUint64(&l.rdfs),
+		Nquads:   atomic.LoadUint64(&l.rdfs),
 		TxnsDone: atomic.LoadUint64(&l.txns),
 		Elapsed:  time.Since(l.start),
 		Aborts:   atomic.LoadUint64(&l.aborts),
