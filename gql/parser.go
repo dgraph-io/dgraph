@@ -462,8 +462,11 @@ func Parse(r Request) (res Result, rerr error) {
 	query := r.Str
 	vmap := convertToVarMap(r.Variables)
 
-	lexer := lex.Lexer{Input: query}
+	lexer := lex.NewLexer(query)
 	lexer.Run(lexTopLevel)
+	if err := lexer.ValidateResult(); err != nil {
+		return res, err
+	}
 
 	var qu *GraphQuery
 	it := lexer.NewIterator()
@@ -471,19 +474,16 @@ func Parse(r Request) (res Result, rerr error) {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case lex.ItemError:
-			return res, x.Errorf(item.Val)
-
 		case itemOpType:
 			if item.Val == "mutation" {
-				return res, x.Errorf("Mutation block no longer allowed.")
+				return res, item.Errorf("Mutation block no longer allowed.")
 			}
 			if item.Val == "schema" {
 				if res.Schema != nil {
-					return res, x.Errorf("Only one schema block allowed ")
+					return res, item.Errorf("Only one schema block allowed ")
 				}
 				if res.Query != nil {
-					return res, x.Errorf("Schema block is not allowed with query block")
+					return res, item.Errorf("Schema block is not allowed with query block")
 				}
 				if res.Schema, rerr = getSchema(it); rerr != nil {
 					return res, rerr
@@ -497,7 +497,7 @@ func Parse(r Request) (res Result, rerr error) {
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
 				if res.Schema != nil {
-					return res, x.Errorf("Schema block is not allowed with query block")
+					return res, item.Errorf("Schema block is not allowed with query block")
 				}
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
@@ -672,16 +672,14 @@ L2:
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case lex.ItemError:
-			return nil, x.Errorf(item.Val)
 		case itemName:
 			if name != "" {
-				return nil, x.Errorf("Multiple word query name not allowed.")
+				return nil, item.Errorf("Multiple word query name not allowed.")
 			}
 			name = item.Val
 		case itemLeftRound:
 			if name == "" {
-				return nil, x.Errorf("Variables can be defined only in named queries.")
+				return nil, item.Errorf("Variables can be defined only in named queries.")
 			}
 
 			if rerr = parseGqlVariables(it, vmap); rerr != nil {
@@ -709,21 +707,20 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 	}
 
 	var key, val string
-	var item lex.Item
 	var ok bool
 	for it.Next() {
-		item = it.Item()
+		item := it.Item()
 		if item.Typ != itemName {
-			return fmt.Errorf("Expected key inside @recurse()")
+			return item.Errorf("Expected key inside @recurse()")
 		}
 		key = strings.ToLower(item.Val)
 
 		if ok := trySkipItemTyp(it, itemColon); !ok {
-			return fmt.Errorf("Expected colon(:) after %s", key)
+			return it.Errorf("Expected colon(:) after %s", key)
 		}
 
 		if item, ok = tryParseItemType(it, itemName); !ok {
-			return fmt.Errorf("Expected value inside @recurse() for key: %s", key)
+			return item.Errorf("Expected value inside @recurse() for key: %s", key)
 		}
 		val = item.Val
 
@@ -741,7 +738,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			gq.RecurseArgs.AllowLoop = allowLoop
 		default:
-			return fmt.Errorf("Unexpected key: [%s] inside @recurse block", key)
+			return item.Errorf("Unexpected key: [%s] inside @recurse block", key)
 		}
 
 		if _, ok := tryParseItemType(it, itemRightRound); ok {
@@ -749,7 +746,7 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 
 		if _, ok := tryParseItemType(it, itemComma); !ok {
-			return fmt.Errorf("Expected comma after value: %s inside recurse block", val)
+			return it.Errorf("Expected comma after value: %s inside recurse block", val)
 		}
 	}
 	return nil
@@ -768,7 +765,7 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 L:
 	// Recurse to deeper levels through godeep.
 	if !it.Next() {
-		return nil, x.Errorf("Invalid query")
+		return nil, it.Errorf("Expecting more lexer items while parsing query")
 	}
 
 	item := it.Item()
@@ -783,7 +780,7 @@ L:
 			switch strings.ToLower(item.Val) {
 			case "filter":
 				if seenFilter {
-					return nil, x.Errorf("Repeated filter at root")
+					return nil, item.Errorf("Repeated filter at root")
 				}
 				seenFilter = true
 				filter, err := parseFilter(it)
@@ -807,7 +804,7 @@ L:
 					return nil, err
 				}
 			default:
-				return nil, x.Errorf("Unknown directive [%s]", item.Val)
+				return nil, item.Errorf("Unknown directive [%s]", item.Val)
 			}
 			goto L
 		}
@@ -817,7 +814,7 @@ L:
 		it.Prev()
 		return gq, nil
 	} else {
-		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
+		return nil, item.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
 
 	return gq, nil
@@ -839,11 +836,11 @@ func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 		} else if item.Typ == itemLeftCurl {
 			break
 		} else {
-			return nil, x.Errorf("Unexpected item in fragment: %v %v", item.Typ, item.Val)
+			return nil, item.Errorf("Unexpected item in fragment: %v %v", item.Typ, item.Val)
 		}
 	}
 	if name == "" {
-		return nil, x.Errorf("Empty fragment name")
+		return nil, it.Errorf("Empty fragment name")
 	}
 
 	gq := &GraphQuery{
@@ -875,15 +872,15 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
-				return items, x.Errorf("Invalid scheam block")
+				return items, item.Errorf("Invalid scheam block")
 			}
 			val := collectName(it, item.Val)
 			items = append(items, val)
 		default:
-			return items, x.Errorf("Invalid schema block")
+			return items, item.Errorf("Invalid schema block")
 		}
 	}
-	return items, x.Errorf("Invalid schema block")
+	return items, it.Errorf("Expecting ] to end list but none was found")
 }
 
 // parses till rightround is found
@@ -892,12 +889,12 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemName && item.Val != "pred" {
-		return x.Errorf("Invalid schema block")
+		return item.Errorf("Invalid schema block")
 	}
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemColon {
-		return x.Errorf("Invalid schema block")
+		return item.Errorf("Invalid schema block")
 	}
 
 	// can be a or [a,b]
@@ -911,7 +908,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 			return err
 		}
 	} else {
-		return x.Errorf("Invalid schema block")
+		return item.Errorf("Invalid schema block")
 	}
 
 	it.Next()
@@ -919,7 +916,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	if item.Typ == itemRightRound {
 		return nil
 	}
-	return x.Errorf("Invalid schema blocks")
+	return item.Errorf("Invalid schema blocks")
 }
 
 // parses till rightcurl is found
@@ -932,10 +929,10 @@ func parseSchemaFields(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 		case itemName:
 			s.Fields = append(s.Fields, item.Val)
 		default:
-			return x.Errorf("Invalid schema block.")
+			return item.Errorf("Invalid schema block.")
 		}
 	}
-	return x.Errorf("Invalid schema block.")
+	return it.Errorf("Expecting }  to end fields list, but none was found")
 }
 
 func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
@@ -951,17 +948,17 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 			return &s, nil
 		case itemLeftRound:
 			if leftRoundSeen {
-				return nil, x.Errorf("Too many left rounds in schema block")
+				return nil, item.Errorf("Too many left rounds in schema block")
 			}
 			leftRoundSeen = true
 			if err := parseSchemaPredicates(it, &s); err != nil {
 				return nil, err
 			}
 		default:
-			return nil, x.Errorf("Invalid schema block")
+			return nil, item.Errorf("Invalid schema block")
 		}
 	}
-	return nil, x.Errorf("Invalid schema block.")
+	return nil, it.Errorf("Invalid schema block.")
 }
 
 // parseGqlVariables parses the the graphQL variable declaration.
@@ -973,47 +970,48 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		item := it.Item()
 		if item.Typ == itemDollar {
 			if !expectArg {
-				return x.Errorf("Missing comma in var declaration")
+				return item.Errorf("Missing comma in var declaration")
 			}
 			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
 				varName = fmt.Sprintf("$%s", item.Val)
 			} else {
-				return x.Errorf("Expecting a variable name. Got: %v", item)
+				return item.Errorf("Expecting a variable name. Got: %v", item)
 			}
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return x.Errorf("Invalid comma in var block")
+				return item.Errorf("Invalid comma in var block")
 			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return x.Errorf("Invalid comma in var block")
+				return item.Errorf("Invalid comma in var block")
 			}
 			expectArg = true
 			continue
 		} else {
-			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
+			return item.Errorf("Unexpected item in place of variable. Got: %v %v", item,
+				item.Typ == itemDollar)
 		}
 
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return x.Errorf("Expecting a colon. Got: %v", item)
+			return item.Errorf("Expecting a colon. Got: %v", item)
 		}
 
 		// Get variable type.
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemName {
-			return x.Errorf("Expecting a variable type. Got: %v", item)
+			return item.Errorf("Expecting a variable type. Got: %v", item)
 		}
 
 		// Ensure that the type is not nil.
 		varType := item.Val
 		if varType == "" {
-			return x.Errorf("Type of a variable can't be empty")
+			return item.Errorf("Type of a variable can't be empty")
 		}
 		it.Next()
 		item = it.Item()
@@ -1040,11 +1038,11 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 			it.Next()
 			it := it.Item()
 			if it.Typ != itemName {
-				return x.Errorf("Expecting default value of a variable. Got: %v", item)
+				return item.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
 
 			if varType[len(varType)-1] == '!' {
-				return x.Errorf("Type ending with ! can't have default value: Got: %v", varType)
+				return item.Errorf("Type ending with ! can't have default value: Got: %v", varType)
 			}
 
 			// If value is empty replace, otherwise ignore the default value
@@ -1091,7 +1089,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
+				return result, item.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
 			p.Key = collectName(it, item.Val)
 			if isSortkey(p.Key) {
@@ -1100,23 +1098,23 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return result, x.Errorf("Expected argument but got ')'.")
+				return result, item.Errorf("Expected argument but got ')'.")
 			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return result, x.Errorf("Expected Argument but got comma.")
+				return result, item.Errorf("Expected Argument but got comma.")
 			}
 			expectArg = true
 			continue
 		} else {
-			return result, x.Errorf("Expecting argument name. Got: %v", item)
+			return result, item.Errorf("Expecting argument name. Got: %v", item)
 		}
 
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return result, x.Errorf("Expecting a colon. Got: %v in %v", item, gq.Attr)
+			return result, item.Errorf("Expecting a colon. Got: %v in %v", item, gq.Attr)
 		}
 
 		// Get value.
@@ -1129,13 +1127,14 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 				return result, err
 			}
 			if count != 1 {
-				return result, x.Errorf("Only one variable expected. Got %d", count)
+				return result, item.Errorf("Only one variable expected. Got %d", count)
 			}
 			gq.NeedsVar[len(gq.NeedsVar)-1].Typ = ValueVar
 			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			result = append(result, p)
 			if isSortkey(p.Key) && orderCount > 1 {
-				return result, x.Errorf("Multiple sorting only allowed by predicates. Got: %+v", p.Val)
+				return result, item.Errorf("Multiple sorting only allowed by predicates. Got: %+v",
+					p.Val)
 			}
 			continue
 		}
@@ -1145,17 +1144,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
-				return result, x.Errorf("Expecting argument value. Got: %v", item)
+				return result, item.Errorf("Expecting argument value. Got: %v", item)
 			}
 		} else if item.Typ == itemMathOp {
 			if item.Val != "+" && item.Val != "-" {
-				return result, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+				return result, item.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
+					item.Val)
 			}
 			val = item.Val
 			it.Next()
 			item = it.Item()
 		} else if item.Typ != itemName {
-			return result, x.Errorf("Expecting argument value. Got: %v", item)
+			return result, item.Errorf("Expecting argument value. Got: %v", item)
 		}
 
 		p.Val = collectName(it, val+item.Val)
@@ -1302,7 +1302,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	depth := 1
 	for {
 		if valid := it.Next(); !valid {
-			return x.Errorf("Got EOF while parsing Geo tokens")
+			return it.Errorf("Got EOF while parsing Geo tokens")
 		}
 		item := it.Item()
 		switch item.Typ {
@@ -1316,12 +1316,12 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 			// Writing tokens to buffer.
 			buf.WriteString(item.Val)
 		default:
-			return x.Errorf("Found invalid item: %s while parsing geo arguments.",
+			return item.Errorf("Found invalid item: %s while parsing geo arguments.",
 				item.Val)
 		}
 
 		if depth > 4 || depth < 0 {
-			return x.Errorf("Invalid bracket sequence")
+			return item.Errorf("Invalid bracket sequence")
 		} else if depth == 0 {
 			break
 		}
@@ -1331,11 +1331,11 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	g.Args = append(g.Args, Arg{Value: buf.String()})
 	items, err := it.Peek(1)
 	if err != nil {
-		return x.Errorf("Unexpected EOF while parsing args")
+		return it.Errorf("Unexpected EOF while parsing args")
 	}
 	item := items[0]
 	if item.Typ != itemRightRound && item.Typ != itemComma {
-		return x.Errorf("Expected right round or comma. Got: %+v",
+		return item.Errorf("Expected right round or comma. Got: %+v",
 			items[0])
 	}
 	return nil
@@ -1380,7 +1380,7 @@ L:
 	for it.Next() {
 		item := it.Item()
 		if item.Typ != itemName {
-			return nil, x.Errorf("Expected a function but got %q", item.Val)
+			return nil, item.Errorf("Expected a function but got %q", item.Val)
 
 		}
 
@@ -1389,7 +1389,7 @@ L:
 			Name: strings.ToLower(name),
 		}
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
-			return nil, x.Errorf("Expected ( after func name [%s]", function.Name)
+			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
 
 		attrItemsAgo := -1
@@ -1404,17 +1404,17 @@ L:
 				break L
 			} else if itemInFunc.Typ == itemComma {
 				if expectArg {
-					return nil, x.Errorf("Invalid use of comma.")
+					return nil, itemInFunc.Errorf("Invalid use of comma.")
 				}
 				if isDollar {
-					return nil, x.Errorf("Invalid use of comma after dollar.")
+					return nil, itemInFunc.Errorf("Invalid use of comma after dollar.")
 				}
 				expectArg = true
 				continue
 			} else if itemInFunc.Typ == itemLeftRound {
 				// Function inside a function.
 				if seenFuncArg {
-					return nil, x.Errorf("Multiple functions as arguments not allowed")
+					return nil, itemInFunc.Errorf("Multiple functions as arguments not allowed")
 				}
 				it.Prev()
 				it.Prev()
@@ -1425,7 +1425,7 @@ L:
 				seenFuncArg = true
 				if nestedFunc.Name == value {
 					if len(nestedFunc.NeedsVar) > 1 {
-						return nil, x.Errorf("Multiple variables not allowed in a function")
+						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
 					}
 					// Variable is used in place of attribute, eq(val(a), 5)
 					if len(function.Attr) == 0 {
@@ -1433,14 +1433,15 @@ L:
 						function.IsValueVar = true
 					} else {
 						// eq(name, val(a))
-						function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name, IsValueVar: true})
+						function.Args = append(function.Args,
+							Arg{Value: nestedFunc.NeedsVar[0].Name, IsValueVar: true})
 					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 					function.NeedsVar[0].Typ = ValueVar
 				} else {
 					if nestedFunc.Name != "count" {
-						return nil,
-							x.Errorf("Only val/count allowed as function within another. Got: %s", nestedFunc.Name)
+						return nil, itemInFunc.Errorf("Only val/count allowed as function "+
+							"within another. Got: %s", nestedFunc.Name)
 					}
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
@@ -1449,7 +1450,7 @@ L:
 				continue
 			} else if itemInFunc.Typ == itemAt {
 				if attrItemsAgo != 1 {
-					return nil, x.Errorf("Invalid usage of '@' in function " +
+					return nil, itemInFunc.Errorf("Invalid usage of '@' in function " +
 						"argument, must only appear immediately after attr.")
 				}
 				expectLang = true
@@ -1460,7 +1461,7 @@ L:
 				itemInFunc = it.Item()
 			} else if itemInFunc.Typ == itemDollar {
 				if isDollar {
-					return nil, x.Errorf("Invalid use of $ in func args")
+					return nil, itemInFunc.Errorf("Invalid use of $ in func args")
 				}
 				isDollar = true
 				continue
@@ -1476,7 +1477,7 @@ L:
 			} else if itemInFunc.Typ == itemLeftSquare {
 				isGeo := isGeoFunc(function.Name)
 				if !isGeo && !isInequalityFn(function.Name) {
-					return nil, x.Errorf("Unexpected character [ while parsing request.")
+					return nil, itemInFunc.Errorf("Unexpected character [ while parsing request.")
 				}
 
 				if isGeo {
@@ -1489,29 +1490,33 @@ L:
 
 				if valid := it.Next(); !valid {
 					return nil,
-						x.Errorf("Unexpected EOF while parsing args")
+						itemInFunc.Errorf("Unexpected EOF while parsing args")
 				}
 				itemInFunc = it.Item()
 			} else if itemInFunc.Typ == itemRightSquare {
 				if _, err := it.Peek(1); err != nil {
 					return nil,
-						x.Errorf("Unexpected EOF while parsing args")
+						itemInFunc.Errorf("Unexpected EOF while parsing args")
 				}
 				expectArg = false
 				continue
 			} else if itemInFunc.Typ != itemName {
-				return nil, x.Errorf("Expected arg after func [%s], but got item %v",
+				return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
 					function.Name, itemInFunc)
 			}
 
 			item, ok := it.PeekOne()
+			if !ok {
+				return nil, item.Errorf("Unexpected item: %v", item)
+			}
 			// Part of function continue
-			if ok && item.Typ == itemLeftRound {
+			if item.Typ == itemLeftRound {
 				continue
 			}
 
 			if !expectArg && !expectLang {
-				return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
+				return nil, itemInFunc.Errorf("Expected comma or language but got: %s",
+					itemInFunc.Val)
 			}
 
 			vname := collectName(it, itemInFunc.Val)
@@ -1528,11 +1533,11 @@ L:
 				switch {
 				// allow eq(attr, "")
 				case val == "":
-					return nil, x.Errorf("Empty argument received")
+					return nil, itemInFunc.Errorf("Empty argument received")
 
 				// allow value of "uid" - issue#2827
 				case val == "uid":
-					return nil, x.Errorf("Argument cannot be %q", val)
+					return nil, itemInFunc.Errorf("Argument cannot be %q", val)
 				}
 			}
 
@@ -1541,8 +1546,8 @@ L:
 				isDollar = false
 				if function.Name == uid && gq != nil {
 					if len(gq.Args["id"]) > 0 {
-						return nil,
-							x.Errorf("Only one GraphQL variable allowed inside uid function.")
+						return nil, itemInFunc.Errorf("Only one GraphQL variable " +
+							"allowed inside uid function.")
 					}
 					gq.Args["id"] = val
 				} else {
@@ -1555,8 +1560,8 @@ L:
 			// Unlike other functions, uid function has no attribute, everything is args.
 			if len(function.Attr) == 0 && function.Name != "uid" {
 				if strings.ContainsRune(itemInFunc.Val, '"') {
-					return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
-						itemInFunc.Val)
+					return nil, itemInFunc.Errorf("Attribute in function"+
+						" must not be quoted with \": %s", itemInFunc.Val)
 				}
 				function.Attr = val
 				attrItemsAgo = 0
@@ -1569,7 +1574,7 @@ L:
 			}
 
 			if function.Name == "var" {
-				return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
+				return nil, itemInFunc.Errorf("Unexpected var(). Maybe you want to try using uid()")
 			}
 
 			expectArg = false
@@ -1595,7 +1600,7 @@ L:
 					continue
 				case *strconv.NumError:
 					if e.Err == strconv.ErrRange {
-						return nil, x.Errorf("The uid value %q is too large.", val)
+						return nil, itemInFunc.Errorf("The uid value %q is too large.", val)
 					}
 				}
 				// E.g. @filter(uid(a, b, c))
@@ -1608,7 +1613,7 @@ L:
 	}
 
 	if function.Name != uid && len(function.Attr) == 0 {
-		return nil, x.Errorf("Got empty attr for function: [%s]", function.Name)
+		return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
 	}
 
 	return function, nil
@@ -1672,7 +1677,7 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 		// Step past colon.
 		item, ok = tryParseItemType(it, itemName)
 		if !ok {
-			return res, false, x.Errorf("Expected name after colon")
+			return res, false, item.Errorf("Expected name after colon")
 		}
 	}
 
@@ -1688,7 +1693,7 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 	}
 	item, ok = tryParseItemType(it, itemName)
 	if !ok {
-		return res, false, x.Errorf("Expected name in facet list")
+		return res, false, item.Errorf("Expected name in facet list")
 	}
 
 	res.name = collectName(it, item.Val)
@@ -1732,6 +1737,9 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		// We've just consumed a leftRound or a comma.
 
 		// Parse a facet item.
+		// copy the iterator first to facetItemIt so that it corresponds to the parsed facetItem
+		// facetItemIt is used later for reporting errors with line and column numbers
+		facetItemIt := it
 		facetItem, ok, err := tryParseFacetItem(it)
 		if !ok || err != nil {
 			return res, ok, err
@@ -1741,7 +1749,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		{
 			if facetItem.varName != "" {
 				if _, has := facetVar[facetItem.name]; has {
-					return res, false, x.Errorf("Duplicate variable mappings for facet %v",
+					return res, false, facetItemIt.Errorf("Duplicate variable mappings for facet %v",
 						facetItem.name)
 				}
 				facetVar[facetItem.name] = facetItem.varName
@@ -1752,7 +1760,8 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			})
 			if facetItem.ordered {
 				if orderkey != "" {
-					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
+					return res, false,
+						facetItemIt.Errorf("Invalid use of orderasc/orderdesc in facets")
 				}
 				orderdesc = facetItem.orderdesc
 				orderkey = facetItem.name
@@ -1786,7 +1795,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			}
 			// We've consumed `'@facets' '(' <facetItem> ',' <facetItem>`, so this is definitely
 			// not a filter.  Return an error.
-			return res, false, x.Errorf(
+			return res, false, item.Errorf(
 				"Expected ',' or ')' in facet list: %s", item.Val)
 		}
 	}
@@ -1800,7 +1809,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	item := it.Item()
 	alias := ""
 	if item.Typ != itemLeftRound {
-		return x.Errorf("Expected a left round after groupby")
+		return item.Errorf("Expected a left round after groupby")
 	}
 	for it.Next() {
 		item := it.Item()
@@ -1809,12 +1818,12 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 		if item.Typ == itemComma {
 			if expectArg {
-				return x.Errorf("Expected a predicate but got comma")
+				return item.Errorf("Expected a predicate but got comma")
 			}
 			expectArg = true
 		} else if item.Typ == itemName {
 			if !expectArg {
-				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
+				return item.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
 
 			val := collectName(it, item.Val)
@@ -1824,7 +1833,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			if peekIt[0].Typ == itemColon {
 				if alias != "" {
-					return x.Errorf("Expected predicate after %s:", alias)
+					return item.Errorf("Expected predicate after %s:", alias)
 				}
 				alias = val
 				it.Next() // Consume the itemColon
@@ -1853,10 +1862,11 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 	}
 	if expectArg {
-		return x.Errorf("Unnecessary comma in groupby()")
+		// use the initial item to report error line and column numbers
+		return item.Errorf("Unnecessary comma in groupby()")
 	}
 	if count == 0 {
-		return x.Errorf("Expected atleast one attribute in groupby")
+		return item.Errorf("Expected atleast one attribute in groupby")
 	}
 	return nil
 }
@@ -1866,7 +1876,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected ( after filter directive")
+		return nil, item.Errorf("Expected ( after filter directive")
 	}
 
 	// opStack is used to collect the operators in right order.
@@ -1918,14 +1928,14 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			_, err := opStack.pop() // Pop away the (.
 			if err != nil {
-				return nil, x.Errorf("Invalid filter statement")
+				return nil, item.Errorf("Invalid filter statement")
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
 		} else {
-			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)
+			return nil, item.Errorf("Unexpected item while parsing @filter: %v", item)
 		}
 	}
 
@@ -1935,7 +1945,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	// consumed, we will run a loop like "while opStack is nonempty, evalStack".
 	// This is not needed here.
 	if !opStack.empty() {
-		return nil, x.Errorf("Unbalanced parentheses in @filter statement")
+		return nil, item.Errorf("Unbalanced parentheses in @filter statement")
 	}
 
 	if valueStack.empty() {
@@ -1945,7 +1955,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	}
 
 	if valueStack.size() != 1 {
-		return nil, x.Errorf("Expected one item in value stack, but got %d",
+		return nil, item.Errorf("Expected one item in value stack, but got %d",
 			valueStack.size())
 	}
 	return valueStack.pop()
@@ -1996,7 +2006,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
-		return count, x.Errorf("Expected a left round after var")
+		return count, item.Errorf("Expected a left round after var")
 	}
 	for it.Next() {
 		item := it.Item()
@@ -2005,12 +2015,12 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 		}
 		if item.Typ == itemComma {
 			if expectArg {
-				return count, x.Errorf("Expected a variable but got comma")
+				return count, item.Errorf("Expected a variable but got comma")
 			}
 			expectArg = true
 		} else if item.Typ == itemName {
 			if !expectArg {
-				return count, x.Errorf("Expected a variable but got comma")
+				return count, item.Errorf("Expected a variable but got comma")
 			}
 			count++
 			gq.NeedsVar = append(gq.NeedsVar, VarContext{
@@ -2021,7 +2031,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 		}
 	}
 	if expectArg {
-		return count, x.Errorf("Unnecessary comma in val()")
+		return count, item.Errorf("Unnecessary comma in val()")
 	}
 	return count, nil
 }
@@ -2037,14 +2047,14 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	it.Next()
 	// No directive is allowed on pb.subgraph like expand all, value variables.
 	if !valid || curp == nil || curp.IsInternal {
-		return x.Errorf("Invalid use of directive.")
+		return item.Errorf("Invalid use of directive.")
 	}
 
 	it.Next()
 	item = it.Item()
 	peek, err := it.Peek(1)
 	if err != nil || item.Typ != itemName {
-		return x.Errorf("Expected directive or language list")
+		return item.Errorf("Expected directive or language list")
 	}
 
 	if item.Val == "facets" { // because @facets can come w/t '()'
@@ -2057,27 +2067,28 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			curp.FacetOrder = res.facetOrder
 			curp.FacetDesc = res.orderdesc
 			if curp.Facets != nil {
-				return x.Errorf("Only one facets allowed")
+				return item.Errorf("Only one facets allowed")
 			}
 			curp.Facets = res.f
 		} else if res.ft != nil {
 			if curp.FacetsFilter != nil {
-				return x.Errorf("Only one facets filter allowed")
+				return item.Errorf("Only one facets filter allowed")
 			}
 			if res.ft.hasVars() {
-				return x.Errorf(
+				return item.Errorf(
 					"variables are not allowed in facets filter.")
 			}
 			curp.FacetsFilter = res.ft
 		} else {
-			return x.Errorf("Facets parsing failed.")
+			return item.Errorf("Facets parsing failed.")
 		}
 	} else if peek[0].Typ == itemLeftRound {
 		// this is directive
 		switch item.Val {
 		case "filter":
 			if curp.Filter != nil {
-				return x.Errorf("Use AND, OR and round brackets instead of multiple filter directives.")
+				return item.Errorf("Use AND, OR and round brackets instead" +
+					" of multiple filter directives.")
 			}
 			filter, err := parseFilter(it)
 			if err != nil {
@@ -2086,12 +2097,12 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			curp.Filter = filter
 		case "groupby":
 			if curp.IsGroupby {
-				return x.Errorf("Only one group by directive allowed.")
+				return item.Errorf("Only one group by directive allowed.")
 			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
 		default:
-			return x.Errorf("Unknown directive [%s]", item.Val)
+			return item.Errorf("Unknown directive [%s]", item.Val)
 		}
 	} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
 		// this is language list
@@ -2099,10 +2110,10 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			return err
 		}
 		if len(curp.Langs) == 0 {
-			return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
+			return item.Errorf("Expected at least 1 language in list for %s", curp.Attr)
 		}
 	} else {
-		return x.Errorf("Expected directive or language list, got @%s", item.Val)
+		return item.Errorf("Expected directive or language list, got @%s", item.Val)
 	}
 	return nil
 }
@@ -2125,7 +2136,7 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 			return nil, err
 		}
 		if peekIt[0].Typ == itemPeriod {
-			return nil, x.Errorf("Expected only one dot(.) while parsing language list.")
+			return nil, it.Errorf("Expected only one dot(.) while parsing language list.")
 		}
 	}
 	it.Prev()
@@ -2171,16 +2182,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		Args: make(map[string]string),
 	}
 	if !it.Next() {
-		return nil, x.Errorf("Invalid query")
+		return nil, it.Errorf("Invalid query")
 	}
 	item := it.Item()
 	if item.Typ != itemName {
-		return nil, x.Errorf("Expected some name. Got: %v", item)
+		return nil, item.Errorf("Expected some name. Got: %v", item)
 	}
 
 	peekIt, err := it.Peek(1)
 	if err != nil {
-		return nil, x.Errorf("Invalid Query")
+		return nil, it.Errorf("Invalid Query")
 	}
 	if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 		gq.Var = item.Val
@@ -2191,11 +2202,11 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 	gq.Alias = item.Val
 	if !it.Next() {
-		return nil, x.Errorf("Invalid query")
+		return nil, item.Errorf("Invalid query")
 	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
+		return nil, item.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
 	expectArg := true
@@ -2207,7 +2218,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return nil, x.Errorf("Expecting a comma. Got: %v", item)
+				return nil, item.Errorf("Expecting a comma. Got: %v", item)
 			}
 			key = item.Val
 			expectArg = false
@@ -2219,44 +2230,44 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return nil, x.Errorf("Expected Argument but got comma.")
+				return nil, item.Errorf("Expected Argument but got comma.")
 			}
 			expectArg = true
 			continue
 		} else {
-			return nil, x.Errorf("Expecting argument name. Got: %v", item)
+			return nil, item.Errorf("Expecting argument name. Got: %v", item)
 		}
 
 		if !validKeyAtRoot(key) {
-			return nil, x.Errorf("Got invalid keyword: %s at root", key)
+			return nil, item.Errorf("Got invalid keyword: %s at root", key)
 		}
 
 		if !it.Next() {
-			return nil, x.Errorf("Invalid query")
+			return nil, item.Errorf("Invalid query")
 		}
 		item = it.Item()
 		if item.Typ != itemColon {
-			return nil, x.Errorf("Expecting a colon. Got: %v", item)
+			return nil, item.Errorf("Expecting a colon. Got: %v", item)
 		}
 
 		if key == "func" {
 			// Store the generator function.
 			if gq.Func != nil {
-				return gq, x.Errorf("Only one function allowed at root")
+				return gq, item.Errorf("Only one function allowed at root")
 			}
 			gen, err := parseFunction(it, gq)
 			if err != nil {
 				return gq, err
 			}
 			if !validFuncName(gen.Name) {
-				return nil, x.Errorf("Function name: %s is not valid.", gen.Name)
+				return nil, item.Errorf("Function name: %s is not valid.", gen.Name)
 			}
 			gq.Func = gen
 			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
 		} else {
 			var val string
 			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
+				return nil, it.Errorf("Invalid query")
 			}
 			item := it.Item()
 
@@ -2266,13 +2277,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if item.Typ == itemName {
 					val = fmt.Sprintf("$%s", item.Val)
 				} else {
-					return nil, x.Errorf("Expecting a variable name. Got: %v", item)
+					return nil, item.Errorf("Expecting a variable name. Got: %v", item)
 				}
 				goto ASSIGN
 			} else if item.Typ == itemMathOp {
 				if item.Val != "+" && item.Val != "-" {
 					return nil,
-						x.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
+						item.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
 							item.Val)
 				}
 				val = item.Val
@@ -2286,7 +2297,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, err
 				}
 				if count != 1 {
-					return nil, x.Errorf("Expected only one variable but got: %d", count)
+					return nil, item.Errorf("Expected only one variable but got: %d", count)
 				}
 				// Modify the NeedsVar context here.
 				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = ValueVar
@@ -2296,7 +2307,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				items, err := it.Peek(1)
 				if err == nil && items[0].Typ == itemLeftRound {
 					if (key == "orderasc" || key == "orderdesc") && val != value {
-						return nil, x.Errorf("Expected val(). Got %s() with order.", val)
+						return nil, it.Errorf("Expected val(). Got %s() with order.", val)
 					}
 				}
 				if err == nil && items[0].Typ == itemAt {
@@ -2317,12 +2328,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				// position.
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 				if len(gq.Order) > 0 && isSortkey(key) {
-					return nil, x.Errorf("Multiple sorting only allowed by predicates. Got: %+v", val)
+					return nil, it.Errorf("Multiple sorting only allowed by predicates. "+
+						"Got: %+v", val)
 				}
 			}
 			if isSortkey(key) {
 				if order[val] {
-					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
+					return nil, it.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
 				attr, langs := attrAndLang(val)
 				gq.Order = append(gq.Order,
@@ -2333,7 +2345,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 		ASSIGN:
 			if _, ok := gq.Args[key]; ok {
-				return gq, x.Errorf("Repeated key %q at root", key)
+				return gq, it.Errorf("Repeated key %q at root", key)
 			}
 			gq.Args[key] = val
 		}
@@ -2366,13 +2378,13 @@ func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
 	if skipped {
 		item, ok := tryParseItemType(it, itemName)
 		if !ok {
-			return x.Errorf("Expected name. Got: %s", item.Val)
+			return item.Errorf("Expected name. Got: %s", item.Val)
 		}
 		fname = item.Val
 	}
 	ok := trySkipItemTyp(it, itemLeftRound)
 	if !ok || (!isMathBlock(fname) && !isAggregator(fname)) {
-		return x.Errorf("Only aggregation/math functions allowed inside empty blocks."+
+		return it.Errorf("Only aggregation/math functions allowed inside empty blocks."+
 			" Got: %v", fname)
 	}
 	return nil
@@ -2381,7 +2393,7 @@ func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
-		return x.Errorf("Bad nesting of predicates or functions")
+		return it.Errorf("Bad nesting of predicates or functions")
 	}
 	var count Count
 	var alias, varName string
@@ -2389,8 +2401,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case lex.ItemError:
-			return x.Errorf(item.Val)
 		case lex.ItemEOF:
 			return nil
 		case itemRightCurl:
@@ -2412,12 +2422,12 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					// Unlike itemName, there is no nesting, so do not change "curp".
 				}
 			} else {
-				return x.Errorf("Expected 3 periods (\"...\"), got %d.", dots)
+				return item.Errorf("Expected 3 periods (\"...\"), got %d.", dots)
 			}
 		case itemName:
 			peekIt, err := it.Peek(1)
 			if err != nil {
-				return x.Errorf("Invalid query")
+				return item.Errorf("Invalid query")
 			}
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName = item.Val
@@ -2440,7 +2450,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
-				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
+				return it.Errorf("Only aggregator/count "+
+					"functions allowed inside @groupby. Got: %v", val)
 			}
 
 			if gq.IsEmpty {
@@ -2496,7 +2507,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.IsInternal = false
 				} else {
 					if it.Item().Val != value {
-						return x.Errorf("Only variables allowed in aggregate functions. Got: %v",
+						return it.Errorf("Only variables allowed in aggregate functions. Got: %v",
 							it.Item().Val)
 					}
 					count, err := parseVarList(it, child)
@@ -2504,7 +2515,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return err
 					}
 					if count != 1 {
-						x.Errorf("Expected one variable inside val() of aggregator but got %v", count)
+						return it.Errorf("Expected one variable inside val() of"+
+							" aggregator but got %v", count)
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = ValueVar
 				}
@@ -2518,14 +2530,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isMathBlock(valLower) {
 				if varName == "" && alias == "" {
-					return x.Errorf("Function math should be used with a variable or have an alias")
+					return it.Errorf("Function math should be used with a variable or have an alias")
 				}
 				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
 					return err
 				}
 				if again {
-					return x.Errorf("Comma encountered in math() at unexpected place.")
+					return it.Errorf("Comma encountered in math() at unexpected place.")
 				}
 				child := &GraphQuery{
 					Attr:       val,
@@ -2542,14 +2554,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isExpandFunc(valLower) {
 				if varName != "" {
-					return x.Errorf("expand() cannot be used with a variable: %s", val)
+					return it.Errorf("expand() cannot be used with a variable: %s", val)
 				}
 				if alias != "" {
-					return x.Errorf("expand() cannot have an alias")
+					return it.Errorf("expand() cannot have an alias")
 				}
 				it.Next() // Consume the '('
 				if it.Item().Typ != itemLeftRound {
-					return x.Errorf("Invalid use of expand()")
+					return it.Errorf("Invalid use of expand()")
 				}
 				it.Next()
 				item := it.Item()
@@ -2565,7 +2577,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return err
 					}
 					if count != 1 {
-						return x.Errorf("Invalid use of expand(). Exactly one variable expected.")
+						return item.Errorf("Invalid use of expand(). Exactly one variable expected.")
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = ListVar
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
@@ -2576,7 +2588,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				case "_reverse_":
 					child.Expand = "_reverse_"
 				default:
-					return x.Errorf("Invalid argument %v in expand()", item.Val)
+					return item.Errorf("Invalid argument %v in expand()", item.Val)
 				}
 				it.Next() // Consume ')'
 				gq.Children = append(gq.Children, child)
@@ -2585,7 +2597,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if valLower == "count" {
 				if count != notSeen {
-					return x.Errorf("Invalid mention of function count")
+					return it.Errorf("Invalid mention of function count")
 				}
 				count = seen
 				it.Next()
@@ -2601,7 +2613,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
-					return x.Errorf("Cannot use count(), please use count(uid)")
+					return it.Errorf("Cannot use count(), please use count(uid)")
 				} else if peekIt[0].Val == uid && peekIt[1].Typ == itemRightRound {
 					if gq.IsGroupby {
 						// count(uid) case which occurs inside @groupby
@@ -2613,7 +2625,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					}
 
 					if varName != "" {
-						return x.Errorf("Cannot assign variable to count()")
+						return it.Errorf("Cannot assign variable to count()")
 					}
 					count = notSeen
 					gq.UidCount = true
@@ -2626,10 +2638,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if valLower == value {
 				if varName != "" {
-					return x.Errorf("Cannot assign a variable to val()")
+					return it.Errorf("Cannot assign a variable to val()")
 				}
 				if count == seen {
-					return x.Errorf("Count of a variable is not allowed")
+					return it.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
 				if err != nil {
@@ -2651,7 +2663,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if count != 1 {
-					return x.Errorf("Invalid use of val(). Exactly one variable expected.")
+					return it.Errorf("Invalid use of val(). Exactly one variable expected.")
 				}
 				// Only value vars can be retrieved.
 				child.NeedsVar[len(child.NeedsVar)-1].Typ = ValueVar
@@ -2660,7 +2672,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if valLower == uid {
 				if count == seen {
-					return x.Errorf("Count of a variable is not allowed")
+					return it.Errorf("Count of a variable is not allowed")
 				}
 				peekIt, err = it.Peek(1)
 				if err != nil {
@@ -2669,11 +2681,11 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if peekIt[0].Typ != itemLeftRound {
 					goto Fall
 				}
-				return x.Errorf("Cannot do uid() of a variable")
+				return it.Errorf("Cannot do uid() of a variable")
 			}
 		Fall:
 			if count == seenWithPred {
-				return x.Errorf("Multiple predicates not allowed in single count.")
+				return it.Errorf("Multiple predicates not allowed in single count.")
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
@@ -2684,7 +2696,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 			if gq.IsCount {
-				return x.Errorf("Cannot have children attributes when asking for count.")
+				return it.Errorf("Cannot have children attributes when asking for count.")
 			}
 			gq.Children = append(gq.Children, child)
 			varName, alias = "", ""
@@ -2694,10 +2706,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemLeftCurl:
 			if curp == nil {
-				return x.Errorf("Query syntax invalid.")
+				return it.Errorf("Query syntax invalid.")
 			}
 			if len(curp.Langs) > 0 {
-				return x.Errorf("Cannot have children for attr: %s with lang tags: %v", curp.Attr,
+				return it.Errorf("Cannot have children for attr: %s with lang tags: %v", curp.Attr,
 					curp.Langs)
 			}
 			if err := godeep(it, curp); err != nil {
@@ -2705,10 +2717,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemLeftRound:
 			if curp == nil {
-				return x.Errorf("Query syntax invalid.")
+				return it.Errorf("Query syntax invalid.")
 			}
 			if curp.Attr == "" {
-				return x.Errorf("Predicate name cannot be empty.")
+				return it.Errorf("Predicate name cannot be empty.")
 			}
 			args, err := parseArguments(it, curp)
 			if err != nil {
@@ -2718,17 +2730,18 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			order := make(map[string]bool)
 			for _, p := range args {
 				if !validKey(p.Key) {
-					return x.Errorf("Got invalid keyword: %s", p.Key)
+					return it.Errorf("Got invalid keyword: %s", p.Key)
 				}
 				if _, ok := curp.Args[p.Key]; ok {
-					return x.Errorf("Got repeated key %q at level %q", p.Key, curp.Attr)
+					return it.Errorf("Got repeated key %q at level %q", p.Key, curp.Attr)
 				}
 				if p.Val == "" {
-					return x.Errorf("Got empty argument")
+					return it.Errorf("Got empty argument")
 				}
 				if p.Key == "orderasc" || p.Key == "orderdesc" {
 					if order[p.Val] {
-						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
+						return it.Errorf("Sorting by an attribute: [%s] "+
+							"can only be done once", p.Val)
 					}
 					attr, langs := attrAndLang(p.Val)
 					curp.Order = append(curp.Order,
@@ -2747,7 +2760,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 		case itemRightRound:
 			if count != seenWithPred {
-				return x.Errorf("Invalid mention of brackets")
+				return it.Errorf("Invalid mention of brackets")
 			}
 			count = notSeen
 		}
@@ -2801,7 +2814,7 @@ func collectName(it *lex.ItemIterator, val string) string {
 func tryParseItemType(it *lex.ItemIterator, typ lex.ItemType) (lex.Item, bool) {
 	item, ok := it.PeekOne()
 	if !ok || item.Typ != typ {
-		return lex.Item{}, false
+		return item, false
 	}
 	it.Next()
 	return item, true
