@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
@@ -397,9 +396,12 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.uidToVal[0]
 		if !ok {
-			aggVal.Tid = types.FloatID
-			aggVal.Value = float64(0)
-			glog.V(3).Info("Only aggregated variables allowed within empty block.")
+			if len(child.Params.NeedsVar) == 0 {
+				return x.Errorf("Only aggregated variables allowed within empty block.")
+			}
+			// the aggregation didn't happen, most likely was called with unset vars.
+			// See: query.go:fillVars
+			aggVal = types.Val{Tid: types.FloatID, Value: float64(0)}
 		}
 		if child.Params.Normalize && child.Params.Alias == "" {
 			continue
