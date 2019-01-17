@@ -210,6 +210,7 @@ func processTernary(mNode *mathTree) error {
 	return nil
 }
 
+// Process functions that take any nubmer of arguments (e.g min and max).
 func processNary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggMap := make(map[uint64]*aggregator)
@@ -232,6 +233,7 @@ func processNary(mNode *mathTree) error {
 		return agg.ApplyVal(lVal)
 	}
 
+	// Constant aggreagator to be used when all arguments in the function are constants.
 	constantAgg := aggregator{
 		name: aggName,
 	}
@@ -257,12 +259,15 @@ func processNary(mNode *mathTree) error {
 		}
 	}
 
+	// If all arguments were constants, then set mNode.Const to the value of constAgg.
 	if allConsts {
 		val, err := constantAgg.Value()
 		mNode.Const = val
 		return err
 	}
 
+	// Otherwise, populate destMap with the values of the aggregators in aggMap
+	// and assign mNode.Val to it.
 	for k, agg := range aggMap {
 		val, err := agg.Value()
 		destMap[k] = val
