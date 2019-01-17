@@ -1,0 +1,59 @@
+[
+  {
+    "uid":"_:h",
+    "name":"Homer",
+    "age":"38",
+    "role":"father",
+    "parent_to": [
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m1" }
+    ]
+  },
+  {
+    "uid":"_:m1",
+    "name":"Marge",
+    "age":"34",
+    "role":"mother",
+    "nickname":"Midge",
+    "parent_to": [
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m1" }
+    ]
+  },
+  {
+    "uid":"_:b",
+    "name":"Bart",
+    "age":"10",
+    "role":"son",
+    "nickname":"El Barto",
+    "carries":"slingshot",
+    "sibling_of": [
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:l",
+    "name":"Lisa",
+    "age":"8",
+    "role":"daughter",
+    "carries":"saxomophone",
+    "sibling_of": [
+      { "uid":"_:b" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:m2",
+    "name":"Maggie",
+    "age":"1",
+    "role":"daughter",
+    "carries":"pacifier",
+    "sibling_of": [
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  }
+]

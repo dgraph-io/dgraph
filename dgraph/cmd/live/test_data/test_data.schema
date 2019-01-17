@@ -1,0 +1,7 @@
+name:string @index(term) .
+age: int .
+role:string @index(term) .
+nickname:string @index(term) .
+carries:string @index(term) .
+parent_to: uid @reverse .
+sibling_of: uid @reverse .
