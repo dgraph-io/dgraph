@@ -143,8 +143,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d",
-			attr, gid, q.ReadTs)
+		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d, node id: %d",
+			attr, gid, q.ReadTs, groups().Node.Id)
 	}
 
 	if groups().ServesGroup(gid) {
@@ -962,12 +962,21 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 }
 
 func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleCompareFunction")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
+	}
+
 	attr := arg.q.Attr
+	span.Annotatef(nil, "Attr: %s. Fname: %s", attr, arg.srcFn.fname)
 	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
 	// We should already have checked this in getInequalityTokens.
 	x.Check(err)
 	// Only if the tokenizer that we used IsLossy, then we need to fetch
 	// and compare the actual values.
+	span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
 	if tokenizer.IsLossy() {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.State().TypeOf(attr)

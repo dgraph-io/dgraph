@@ -126,10 +126,6 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 		return nil, x.Errorf("Undefined Type")
 	}
 	if schema.List {
-		if !t.IsScalar() {
-			return nil, x.Errorf("Expected scalar type inside []. Got: [%s] for attr: [%s].",
-				t.Name(), predicate)
-		}
 		if uint32(t) == uint32(types.PasswordID) || uint32(t) == uint32(types.BoolID) {
 			return nil, x.Errorf("Unsupported type for list: [%s].", types.TypeID(t).Name())
 		}

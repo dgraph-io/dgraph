@@ -370,7 +370,7 @@ func (db *DB) Close() (err error) {
 	// We don't need to care about cstatus since no parallel compaction is running.
 	if db.opt.CompactL0OnClose {
 		if err := db.lc.doCompact(compactionPriority{level: 0, score: 1.73}); err != nil {
-			db.opt.Warningf("Error while forcing compaction on level 0: %v", err)
+			db.opt.Warningf("While forcing compaction on level 0: %v", err)
 		} else {
 			db.opt.Infof("Force compaction on level 0 done")
 		}
@@ -1266,6 +1266,10 @@ func (db *DB) DropAll() error {
 		atomic.StoreInt32(&db.blockWrites, 0)
 	}()
 	db.opt.Infof("Compactions stopped. Dropping all SSTables...")
+
+	// Block all foreign interactions with memory tables.
+	db.Lock()
+	defer db.Unlock()
 
 	// Remove inmemory tables. Calling DecrRef for safety. Not sure if they're absolutely needed.
 	db.mt.DecrRef()

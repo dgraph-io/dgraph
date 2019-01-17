@@ -72,21 +72,21 @@ type Node struct {
 	Applied y.WaterMark
 }
 
-type raftLogger struct {
+type ToGlog struct {
 }
 
-func (rl *raftLogger) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
-func (rl *raftLogger) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
-func (rl *raftLogger) Error(v ...interface{})                   { glog.Error(v...) }
-func (rl *raftLogger) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
-func (rl *raftLogger) Info(v ...interface{})                    { glog.Info(v...) }
-func (rl *raftLogger) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
-func (rl *raftLogger) Warning(v ...interface{})                 { glog.Warning(v...) }
-func (rl *raftLogger) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
-func (rl *raftLogger) Fatal(v ...interface{})                   { glog.Fatal(v...) }
-func (rl *raftLogger) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
-func (rl *raftLogger) Panic(v ...interface{})                   { log.Panic(v...) }
-func (rl *raftLogger) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
+func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
+func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
+func (rl *ToGlog) Error(v ...interface{})                   { glog.Error(v...) }
+func (rl *ToGlog) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
+func (rl *ToGlog) Info(v ...interface{})                    { glog.Info(v...) }
+func (rl *ToGlog) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
+func (rl *ToGlog) Warning(v ...interface{})                 { glog.Warning(v...) }
+func (rl *ToGlog) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
+func (rl *ToGlog) Fatal(v ...interface{})                   { glog.Fatal(v...) }
+func (rl *ToGlog) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
+func (rl *ToGlog) Panic(v ...interface{})                   { log.Panic(v...) }
+func (rl *ToGlog) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
 
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
@@ -133,7 +133,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// snapshot.
 			Applied: snap.Metadata.Index,
 
-			Logger: &raftLogger{},
+			Logger: &ToGlog{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -349,7 +349,7 @@ func (n *Node) BatchAndSendMessages() {
 				if exists := failedConn[to]; !exists {
 					// So that we print error only the first time we are not able to connect.
 					// Otherwise, the log is polluted with multiple errors.
-					glog.Warningf("No healthy connection to node Id: %d addr: [%s], err: %v\n",
+					glog.Warningf("No healthy connection to node Id: %#x addr: [%s], err: %v\n",
 						to, addr, err)
 					failedConn[to] = true
 				}
@@ -459,7 +459,7 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 
 func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.Peer(pid)
-	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
+	x.AssertTruef(ok, "Unable to find conn pool for peer: %#x", pid)
 	rc := &pb.RaftContext{
 		Addr:  addr,
 		Group: n.RaftContext.Group,
@@ -475,8 +475,8 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	}
 	err = errInternalRetry
 	for err == errInternalRetry {
-		glog.Infof("Trying to add %d to cluster. Addr: %v\n", pid, addr)
-		glog.Infof("Current confstate at %d: %+v\n", n.Id, n.ConfState())
+		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, addr)
+		glog.Infof("Current confstate at %#x: %+v\n", n.Id, n.ConfState())
 		err = n.proposeConfChange(ctx, cc)
 	}
 	return err
@@ -487,7 +487,7 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 		return ErrNoNode
 	}
 	if _, ok := n.Peer(id); !ok && id != n.RaftContext.Id {
-		return x.Errorf("Node %d not part of group", id)
+		return x.Errorf("Node %#x not part of group", id)
 	}
 	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
@@ -552,7 +552,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			}
 			return rs.Index, nil
 		case <-ctx.Done():
-			glog.Warningf("[%d] Read index context timed out\n", n.Id)
+			glog.Warningf("[%#x] Read index context timed out\n", n.Id)
 			return 0, errInternalRetry
 		}
 	} // end of readIndex func
@@ -584,7 +584,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 				}
 				if err != nil {
 					index = 0
-					glog.Errorf("[%d] While trying to do lin read index: %v", n.Id, err)
+					glog.Errorf("[%#x] While trying to do lin read index: %v", n.Id, err)
 				}
 				for _, req := range requests {
 					req.indexCh <- index

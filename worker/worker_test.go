@@ -116,7 +116,7 @@ func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
 }
 
 func TestProcessTask(t *testing.T) {
-	initTest(t, `neighbour: uid .`)
+	initTest(t, `neighbour: [uid] .`)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
 	r, err := helpProcessTask(query, 1)

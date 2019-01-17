@@ -182,7 +182,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	node.Connect(rc.Id, rc.Addr)
 
 	err := node.AddToCluster(context.Background(), rc.Id)
-	glog.Infof("[%d] Done joining cluster with err: %v", rc.Id, err)
+	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }
 
