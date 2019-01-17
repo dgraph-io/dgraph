@@ -365,8 +365,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			if err != nil {
 				return err
 			}
+
 			var vals []types.Val
-			if q.ExpandAll {
+			queryAllLangs := len(q.Langs) == 1 && q.Langs[0] == "*"
+			if q.ExpandAll || queryAllLangs {
 				vals, err = pl.AllValues(args.q.ReadTs)
 			} else if listType && len(q.Langs) == 0 {
 				vals, err = pl.AllUntaggedValues(args.q.ReadTs)
@@ -383,7 +385,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					out.Counts = append(out.Counts, 0)
 				} else {
 					out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
-					if q.ExpandAll {
+					if q.ExpandAll || queryAllLangs {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
 					}
@@ -393,7 +395,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				return err
 			}
 
-			if q.ExpandAll {
+			if q.ExpandAll || queryAllLangs {
 				langTags, err := pl.GetLangTags(args.q.ReadTs)
 				if err != nil {
 					return err

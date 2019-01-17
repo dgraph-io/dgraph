@@ -123,6 +123,18 @@ func TestQueryNamesInLanguage(t *testing.T) {
 		js)
 }
 
+func TestQueryAllLanguages(t *testing.T) {
+	query := `{
+	  people(func: eq(name@hi, "अमित")) {
+		name@*
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people": [{"name@en":"Amit", "name@hi":"अमित"}]}}`,
+		js)
+}
+
 func TestQueryNamesBeforeA(t *testing.T) {
 	query := `{
 	  people(func: lt(name, "A")) {

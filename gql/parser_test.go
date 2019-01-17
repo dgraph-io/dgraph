@@ -2567,6 +2567,22 @@ func TestLangs(t *testing.T) {
 	require.Equal(t, []string{"en", "ru", "hu"}, gq.Query[0].Children[1].Langs)
 }
 
+func TestAllLangs(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@*
+		}
+	}
+	`
+
+	gq, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "name", gq.Query[0].Children[0].Attr)
+	require.Equal(t, []string{"*"}, gq.Query[0].Children[0].Langs)
+}
+
 func TestLangsInvalid1(t *testing.T) {
 	query := `
 	query {
@@ -2663,6 +2679,36 @@ func TestLangsInvalid7(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Expected only one dot(.) while parsing language list.")
+}
+
+func TestLangsInvalid8(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@*:en
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"If * is used, no other languages are allowed in the language list")
+}
+
+func TestLangsInvalid9(t *testing.T) {
+	query := `
+	query {
+		me(func: eqs(name@*, "Amir")) {
+			name@en
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"The * symbol cannot be used as a valid language inside functions")
 }
 
 func TestLangsFilter(t *testing.T) {

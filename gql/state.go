@@ -38,6 +38,7 @@ const (
 	colon       = ':'
 	lsThan      = '<'
 	grThan      = '>'
+	star        = '*'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -338,7 +339,7 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 func lexDirectiveOrLangList(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	// Check first character.
-	if !isNameBegin(r) && r != period {
+	if !isNameBegin(r) && r != period && r != star {
 		return l.Errorf("Unrecognized character in lexDirective: %#U", r)
 	}
 	l.Backup()
@@ -541,6 +542,9 @@ func isLangOrDirective(r rune) bool {
 		return true
 	}
 	if r >= '0' && r <= '9' {
+		return true
+	}
+	if r == '*' {
 		return true
 	}
 	return false

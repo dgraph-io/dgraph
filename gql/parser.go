@@ -1561,6 +1561,10 @@ L:
 				function.Attr = val
 				attrItemsAgo = 0
 			} else if expectLang {
+				if val == "*" {
+					return nil, x.Errorf(
+						"The * symbol cannot be used as a valid language inside functions")
+				}
 				function.Lang = val
 				expectLang = false
 			} else if function.Name != uid {
@@ -2110,8 +2114,13 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 	item := it.Item()
 	var langs []string
+	var seenStar bool
 	for ; item.Typ == itemName || item.Typ == itemPeriod; item = it.Item() {
 		langs = append(langs, item.Val)
+		if item.Val == string(star) {
+			seenStar = true
+		}
+
 		it.Next()
 		if it.Item().Typ == itemColon {
 			it.Next()
@@ -2130,6 +2139,9 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 	}
 	it.Prev()
 
+	if len(langs) > 1 && seenStar {
+		return nil, x.Errorf("If * is used, no other languages are allowed in the language list")
+	}
 	return langs, nil
 }
 

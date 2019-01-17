@@ -481,7 +481,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
-			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
+			queryAllLangs := len(pc.Params.Langs) == 1 && pc.Params.Langs[0] == "*"
+
+			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 && !queryAllLangs {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
@@ -514,13 +516,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return convErr
 				}
 
-				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
+				if (queryAllLangs || pc.Params.expandAll) && len(pc.LangTags[idx].Lang) != 0 {
 					if i >= len(pc.LangTags[idx].Lang) {
 						return x.Errorf(
 							"pb.error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
 					lang := pc.LangTags[idx].Lang[i]
+
+					// Queries of the form pred@* should only return values with a lang tag.
+					if lang == "" && queryAllLangs {
+						continue
+					}
+
 					if lang != "" {
 						fieldNameWithTag += "@" + lang
 					}
