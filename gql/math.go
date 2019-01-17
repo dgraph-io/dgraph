@@ -74,6 +74,10 @@ func isTernary(f string) bool {
 	return f == "cond"
 }
 
+func isNary(f string) bool {
+	return f == "min" || f == "max"
+}
+
 func isZero(f string, rval types.Val) bool {
 	if rval.Tid != types.FloatID {
 		return false
@@ -112,6 +116,13 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		}
 		topOp.Child = []*MathTree{topVal}
 
+	} else if isNary(topOp.Fn) {
+		var values []*MathTree
+		stackSize := valueStack.size();
+		for i := 0; i < stackSize; i++ {
+			values = append(values, valueStack.popAssert())
+		}
+		topOp.Child = values
 	} else if isTernary(topOp.Fn) {
 		if valueStack.size() < 3 {
 			return x.Errorf("Invalid Math expression. Expected 3 operands")

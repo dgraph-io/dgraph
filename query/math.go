@@ -31,7 +31,7 @@ type mathTree struct {
 }
 
 // processBinary handles the binary operands like
-// +, -, *, /, %, max, min, logbase
+// +, -, *, /, %, logbase
 func processBinary(mNode *mathTree) error {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
@@ -210,6 +210,71 @@ func processTernary(mNode *mathTree) error {
 	return nil
 }
 
+func processNary(mNode *mathTree) error {
+	destMap := make(map[uint64]types.Val)
+	aggMap := make(map[uint64]*aggregator)
+	aggName := mNode.Fn
+
+	f := func(k uint64, val map[uint64]types.Val, constant types.Val) error {
+		if _, ok := aggMap[k]; !ok {
+			aggMap[k] = &aggregator{
+				name: aggName,
+			}
+		}
+		agg := aggMap[k]
+
+		lVal := val[k]
+		if constant.Value != nil {
+			// Use the constant value that was supplied.
+			lVal = constant
+		}
+
+		return agg.ApplyVal(lVal)
+	}
+
+	constantAgg := aggregator{
+		name: aggName,
+	}
+
+	allConsts := true
+	for i := 0; i < len(mNode.Child); i++ {
+		val := mNode.Child[i].Val
+		constant := mNode.Child[i].Const
+
+		if len(val) > 0 {
+			allConsts = false
+			for k := range val {
+				if err := f(k, val, constant); err != nil {
+					return err
+				}
+			}
+		}
+
+		if constant.Value != nil {
+			if err := constantAgg.ApplyVal(constant); err != nil {
+				return err
+			}
+		}
+	}
+
+	if allConsts {
+		val, err := constantAgg.Value()
+		mNode.Const = val
+		return err
+	}
+
+	for k, agg := range aggMap {
+		val, err := agg.Value()
+		destMap[k] = val
+		if err != nil {
+			return err
+		}
+	}
+	mNode.Val = destMap
+
+	return nil
+}
+
 func evalMathTree(mNode *mathTree) error {
 	if mNode.Const.Value != nil {
 		return nil
@@ -257,10 +322,18 @@ func evalMathTree(mNode *mathTree) error {
 
 	if isTernary(aggName) {
 		if len(mNode.Child) != 3 {
-			return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
+			return x.Errorf("Function %v expects 3 arguments. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processTernary(mNode)
+	}
+
+	if isNary(aggName) {
+		if len(mNode.Child) == 0 {
+			return x.Errorf("Function %v expects at least one argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
+		return processNary(mNode)
 	}
 
 	return x.Errorf("Unhandled Math operator: %v", aggName)

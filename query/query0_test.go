@@ -535,8 +535,8 @@ func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
 				}
 				n as min(val(x))
 				s as max(val(x))
-				p as math(max(max(a, s), n))
-				q as math(min(min(a, s), n))
+				p as math(max(a, s, n))
+				q as math(min(a, s, n))
 			}
 
 			MaxMe(func: uid(f), orderasc: val(p)) {

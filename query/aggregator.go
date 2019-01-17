@@ -48,7 +48,11 @@ func isTernary(f string) bool {
 
 func isBinary(f string) bool {
 	return f == "+" || f == "*" || f == "-" || f == "/" || f == "%" ||
-		f == "max" || f == "min" || f == "logbase" || f == "pow"
+		f == "logbase" || f == "pow"
+}
+
+func isNary(f string) bool {
+	return f == "min" || f == "max"
 }
 
 func convertTo(from *pb.TaskValue) (types.Val, error) {
