@@ -15,7 +15,7 @@
     "name":"Marge",
     "age":"34",
     "role":"mother",
-    "nickname":"Midge",
+    "aka":"Midge",
     "parent_to": [
       { "uid":"_:b" },
       { "uid":"_:l" },
@@ -27,7 +27,7 @@
     "name":"Bart",
     "age":"10",
     "role":"son",
-    "nickname":"El Barto",
+    "aka":"El Barto",
     "carries":"slingshot",
     "sibling_of": [
       { "uid":"_:l" },
