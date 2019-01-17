@@ -49,7 +49,6 @@ func TestQuery(t *testing.T) {
 	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
 	t.Run("multiple block eval", wrap(MultipleBlockEval))
 	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
-	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
