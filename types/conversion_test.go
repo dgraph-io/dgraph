@@ -271,59 +271,75 @@ func TestConvertBoolToInt(t *testing.T) {
 
 func TestTruthy(t *testing.T) {
 	tests := []struct {
-		in  Val
-		out Val
+		s  string
+		in Val
 	}{
 		{
-			in:  Val{Tid: StringID, Value: []byte("true")},
-			out: Val{Tid: BoolID, Value: true},
+			s:  "true",
+			in: Val{Tid: StringID, Value: []byte("true")},
 		},
 		{
-			in:  Val{Tid: DefaultID, Value: []byte("true")},
-			out: Val{Tid: BoolID, Value: true},
+			s:  "true",
+			in: Val{Tid: DefaultID, Value: []byte("true")},
 		},
 		{
-			in:  Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 1}},
-			out: Val{Tid: BoolID, Value: true},
+			s:  "1",
+			in: Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 1}},
 		},
 		{
-			in:  Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 1}},
-			out: Val{Tid: BoolID, Value: true},
+			s:  "-1",
+			in: Val{Tid: IntID, Value: []byte{255, 255, 255, 255, 255, 255, 255, 255}},
+		},
+		{
+			s:  "1.0",
+			in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 1}},
+		},
+		{
+			s:  "-1.0",
+			in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 240, 191}},
 		},
 	}
 	for _, tc := range tests {
-		out, err := Convert(tc.in, tc.out.Tid)
+		out, err := Convert(tc.in, BoolID)
 		require.NoError(t, err)
-		require.EqualValues(t, tc.out, out)
+		require.EqualValues(t, true, out.Value, "%s %s should be true", tc.in.Tid.Name(), tc.s)
 	}
 }
 
 func TestFalsy(t *testing.T) {
 	tests := []struct {
-		in  Val
-		out Val
+		s  string
+		in Val
 	}{
 		{
-			in:  Val{Tid: StringID, Value: []byte("false")},
-			out: Val{Tid: BoolID, Value: false},
+			s:  "false",
+			in: Val{Tid: StringID, Value: []byte("false")},
 		},
 		{
-			in:  Val{Tid: DefaultID, Value: []byte("false")},
-			out: Val{Tid: BoolID, Value: false},
+			s:  "<empty>",
+			in: Val{Tid: StringID, Value: []byte("")},
 		},
 		{
-			in:  Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
-			out: Val{Tid: BoolID, Value: false},
+			s:  "false",
+			in: Val{Tid: DefaultID, Value: []byte("false")},
 		},
 		{
-			in:  Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
-			out: Val{Tid: BoolID, Value: false},
+			s:  "<empty>",
+			in: Val{Tid: DefaultID, Value: []byte("")},
+		},
+		{
+			s:  "0",
+			in: Val{Tid: IntID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
+		},
+		{
+			s:  "0.0",
+			in: Val{Tid: FloatID, Value: []byte{0, 0, 0, 0, 0, 0, 0, 0}},
 		},
 	}
 	for _, tc := range tests {
-		out, err := Convert(tc.in, tc.out.Tid)
+		out, err := Convert(tc.in, BoolID)
 		require.NoError(t, err)
-		require.EqualValues(t, tc.out, out)
+		require.EqualValues(t, false, out.Value, "%s %s should be false", tc.in.Tid.Name(), tc.s)
 	}
 }
 
