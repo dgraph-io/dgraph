@@ -844,6 +844,32 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 		js)
 }
 
+func TestQueryMaxMinNary(t *testing.T) {
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne")) {
+                a as math(max(1, 2, 4))
+                b as math(max(max(1, 2), 4))
+                c as math(min(1, 2, 4))
+                d as math(min(min(1, 2), 4))
+                e as math(min(max(3), min(1)))
+            }
+
+			Math(func: uid(f)) {
+				val(a)
+				val(b)
+				val(c)
+				val(d)
+				val(e)
+			}
+	    }
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"Math":[{"val(a)":4, "val(b)":4, "val(c)":1, "val(d)":1, "val(e)": 1}]}}`,
+		js)
+}
+
 func TestQueryVarValOrderAsc(t *testing.T) {
 	query := `
 		{

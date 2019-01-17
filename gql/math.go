@@ -118,7 +118,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 
 	} else if isNary(topOp.Fn) {
 		var values []*MathTree
-		stackSize := valueStack.size();
+		stackSize := valueStack.size()
 		for i := 0; i < stackSize; i++ {
 			values = append(values, valueStack.popAssert())
 		}
