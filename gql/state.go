@@ -225,7 +225,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case r == '.':
 			l.Emit(itemPeriod)
 		default:
-			return l.Errorf("Unrecognized character in inside a func: %#U", r)
+			return l.Errorf("Unrecognized character inside a func: %#U", r)
 		}
 	}
 }
@@ -316,21 +316,6 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 func lexIRIRef(l *lex.Lexer) lex.StateFn {
 	if err := lex.IRIRef(l, itemName); err != nil {
 		return l.Errorf(err.Error())
-	}
-	return l.Mode
-}
-
-// lexFilterFuncName expects input to look like equal("...", "...").
-func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
-	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-		break
 	}
 	return l.Mode
 }
