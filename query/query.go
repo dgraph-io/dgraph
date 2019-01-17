@@ -1608,7 +1608,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 					// Provide a default value for valueVarAggregation() to eval val().
 					// This is a noop for aggregation funcs that would fail.
 					// The zero aggs won't show because there are no uids matched.
-					mp[v.Name].Vals[0] = types.Val{Tid: types.FloatID, Value: 0.0}
+					mp[v.Name].Vals[0] = types.Val{}
 					sg.Params.uidToVal = mp[v.Name].Vals
 				}
 			}
