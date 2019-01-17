@@ -102,11 +102,13 @@ done
 
 cd $DGRAPH_ROOT
 
-TMP_DIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
-MATCHING_TESTS=$TMP_DIR/tests
-CUSTOM_CLUSTER_TESTS=$TMP_DIR/custom
-DEFAULT_CLUSTER_TESTS=$TMP_DIR/default
-trap "rm -rf $TMP_DIR" EXIT
+# all tests should put temp files under this directory for easier cleanup
+export TMPDIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
+trap "rm -rf $TMPDIR" EXIT
+
+MATCHING_TESTS=$TMPDIR/tests
+CUSTOM_CLUSTER_TESTS=$TMPDIR/custom
+DEFAULT_CLUSTER_TESTS=$TMPDIR/default
 
 if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
