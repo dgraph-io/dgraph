@@ -230,9 +230,6 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 						_, ok := adjacencyMap[uid]
 						return !ok
 					})
-					if len(temp.SrcUIDs.Uids) == 0 {
-						continue
-					}
 					subgraph.Children = append(subgraph.Children, temp)
 					out = append(out, temp)
 				}
@@ -285,6 +282,11 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if maxHops == 0 {
 		maxHops = int(math.MaxInt32)
 	}
+	minWeight := sg.Params.MinWeight
+	maxWeight := sg.Params.MaxWeight
+	if maxWeight == 0 {
+		maxWeight = math.MaxFloat64
+	}
 	next := make(chan bool, 2)
 	//cycles := 0
 	expandErr := make(chan error, 2)
@@ -295,9 +297,16 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// node.
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
+
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
+
 		if item.uid == sg.Params.To {
+			// Ignore paths that do not meet the minimum weight requirement.
+			if item.cost < minWeight {
+				continue
+			}
+
 			// Add path to list.
 			kroutes = append(kroutes, item.path)
 			if len(kroutes) == numPaths {
@@ -332,6 +341,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			return nil, ctx.Err()
 		default:
 			if stopExpansion {
+				continue
 				// Allow loops once we have found one path.
 				if !isPossible {
 					continue
@@ -341,6 +351,11 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		neighbours := adjacencyMap[item.uid]
 		for toUid, info := range neighbours {
 			cost := info.cost
+			// Skip neighbour if the cost is greater than the maximum weight allowed.
+			if item.cost+cost > maxWeight {
+				continue
+			}
+
 			curPath := pathPool.Get().([]pathInfo)
 			if cap(curPath) < len(item.path.route)+1 {
 				// We can't use it due to insufficient capacity. Put it back.
@@ -365,6 +380,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if node.uid == sg.Params.To {
 				isPossible = true
 			}
+
 			heap.Push(&pq, node)
 		}
 		// Return the popped nodes path to pool.

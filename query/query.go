@@ -135,6 +135,8 @@ type params struct {
 	FacetOrder     string
 	FacetOrderDesc bool
 	ExploreDepth   uint64
+	MaxWeight      float64
+	MinWeight      float64
 	isInternal     bool   // Determines if processTask has to be called or not.
 	ignoreResult   bool   // Node results are ignored.
 	Expand         string // Value is either _all_/variable-name or empty.
@@ -792,11 +794,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 	}
 
 	if v, ok := gq.Args["depth"]; ok && (args.Alias == "shortest") {
-		from, err := strconv.ParseUint(v, 0, 64)
+		depth, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			return err
 		}
-		args.ExploreDepth = from
+		args.ExploreDepth = depth
 	}
 	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
 		numPaths, err := strconv.ParseUint(v, 0, 64)
@@ -818,6 +820,20 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.To = uint64(to)
+	}
+	if v, ok := gq.Args["maxweight"]; ok && (args.Alias == "shortest") {
+		maxWeight, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return err
+		}
+		args.MaxWeight = maxWeight
+	}
+	if v, ok := gq.Args["minweight"]; ok && (args.Alias == "shortest") {
+		minWeight, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return err
+		}
+		args.MinWeight = minWeight
 	}
 	if v, ok := gq.Args["first"]; ok {
 		first, err := strconv.ParseInt(v, 0, 32)
@@ -2339,7 +2355,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
+		"minweight", "maxweight":
 		return true
 	}
 	return false
