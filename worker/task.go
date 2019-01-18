@@ -913,7 +913,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
 		uids = arg.q.UidList
 
-	// No index and Not at root, we must grab the list (slow)
+	// No index and at root, we must grab the list (slow)
 	// This is basically `has` then filter by `regexp`
 	default:
 		out := &pb.Result{}
