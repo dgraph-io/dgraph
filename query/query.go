@@ -2349,7 +2349,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext",
-		"has", "uid", "uid_in", "anyof", "allof":
+		"has", "uid", "uid_in", "anyof", "allof", "match":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
