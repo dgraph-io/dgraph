@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -32,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"golang.org/x/net/context"
@@ -226,6 +228,18 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	n.server.AssertLock()
 	state := n.server.state
+	defer func() {
+		// Regenerate group checksums. These checksums are solely based on which tablets are being
+		// served by the group. If the tablets that a group is serving changes, and the Alpha does
+		// not know about these changes, then the read request must fail.
+		for _, g := range state.GetGroups() {
+			var buf bytes.Buffer
+			for name := range g.GetTablets() {
+				x.Check2(buf.WriteString(name))
+			}
+			g.Checksum = farm.Fingerprint64(buf.Bytes())
+		}
+	}()
 
 	if tablet.GroupId == 0 {
 		return x.Errorf("Tablet group id is zero: %+v", tablet)

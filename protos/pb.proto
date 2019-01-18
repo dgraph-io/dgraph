@@ -133,6 +133,7 @@ message Group {
 	map<uint64, Member> members = 1; // Raft ID is the key.
 	map<string, Tablet> tablets = 2; // Predicate + others are key.
 	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
+	uint64 checksum             = 4; // Stores a checksum.
 }
 
 message ZeroProposal {
@@ -364,8 +365,9 @@ message TxnStatus {
 }
 
 message OracleDelta {
-	repeated TxnStatus txns = 1;
-	uint64 max_assigned = 2;
+	repeated TxnStatus txns             = 1;
+	uint64 max_assigned                 = 2;
+	map<uint32, uint64> group_checksums = 3;
 	// implement tmax.
 }
 

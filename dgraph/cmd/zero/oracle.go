@@ -443,6 +443,9 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			if !open {
 				return errClosed
 			}
+			// Pass in the latest group checksum as well, so the Alpha can use that to determine
+			// when not to service a read.
+			delta.GroupChecksums = s.groupChecksums()
 			if err := server.Send(delta); err != nil {
 				return err
 			}
