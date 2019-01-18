@@ -20,7 +20,6 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"testing"
@@ -37,26 +36,23 @@ import (
 const alphaService = ":9180"
 
 var testDataDir string
-var conn *grpc.ClientConn
 var dg *dgo.Dgraph
 var tmpDir string
 
-func mkTempDir() string {
-	tmpDir, err := ioutil.TempDir(os.Getenv("TMPDIR"), "test.tmp-")
-	x.Check(err)
-	return tmpDir
-}
-
-func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
-	return func(t *testing.T) {
-		dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-		fn(t, dg)
-	}
-}
-
-func dropAll() {
+// move to z package?
+func dropAll(t *testing.T) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	x.Check(err)
+
+	resp, err := dg.NewTxn().Query(context.Background(), `
+		{
+			q(func: has(name)) {
+				nodes : count(uid)
+			}
+		}
+	`)
+	x.Check(err)
+	z.CompareJSON(t, `{"q":[{"nodes":0}]}`, string(resp.GetJson()))
 }
 
 func checkLoadedData(t *testing.T) {
@@ -107,17 +103,22 @@ func checkLoadedData(t *testing.T) {
 	`, string(resp.GetJson()))
 }
 
-func TestPipeline(t *testing.T) {
+func TestLiveLoadJSONFile(t *testing.T) {
+	dropAll(t)
+
 	pipeline := [][]string{
-		{"echo", "Hello", "world!"},
-		{"xargs", "echo", "GOT:"},
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--schema", testDataDir + "/family.schema", "--rdfs", testDataDir + "/family.json",
+			"--dgraph", alphaService},
 	}
-	_ = z.Pipeline(pipeline)
-	//	require.NoError(t, err, "pipeline ran successfully")
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loader ran successfully")
+
+	checkLoadedData(t)
 }
 
 func TestLiveLoadCompressedJSONStream(t *testing.T) {
-	dropAll()
+	dropAll(t)
 
 	pipeline := [][]string{
 		{"gzip", "-c", testDataDir + "/family.json"},
@@ -129,64 +130,6 @@ func TestLiveLoadCompressedJSONStream(t *testing.T) {
 	require.NoError(t, err, "live loader ran successfully")
 
 	checkLoadedData(t)
-}
-
-func TestLiveLoadJSONFile(t *testing.T) {
-	dropAll()
-	//fmt.Fprintf(os.Stderr, "TEMP DIR = %s\n", tmpDir)
-
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--schema", testDataDir+"/family.schema", "--rdfs", testDataDir+"/family.json",
-		"--dgraph", alphaService,
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout, _ = os.Create(tmpDir + "/live.out")
-	liveCmd.Stderr = liveCmd.Stdout
-	err := liveCmd.Run()
-	require.NoError(t, err, "live loader ran successfully")
-
-	// just check the first and last entries and assume everything in between is okay
-	resp, err := dg.NewTxn().Query(context.Background(), `
-		{
-			q(func: anyofterms(name, "Homer")) {
-				name
-				age
-				role
-			}
-		}
-	`)
-	require.JSONEq(t, `
-		{
-		    "q": [
-					{
-					"name": "Homer",
-					"age": 38,
-					"role": "father"
-			    }
-			]
-		}
-	`, string(resp.GetJson()))
-
-	resp, err = dg.NewTxn().Query(context.Background(), `
-		{
-			q(func: anyofterms(name, "Maggie")) {
-				name
-				role
-				carries
-			}
-		}
-	`)
-	require.JSONEq(t, `
-		{
-		    "q": [
-				{
-					"name": "Maggie",
-					"role": "daughter",
-					"carries": "pacifier"
-			    }
-			]
-		}
-	`, string(resp.GetJson()))
 }
 
 func TestMain(m *testing.M) {
@@ -201,8 +144,9 @@ func TestMain(m *testing.M) {
 	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	x.Check(err)
 
-	tmpDir, err := ioutil.TempDir("", "test.tmp-")
+	tmpDir, err = ioutil.TempDir("", "test.tmp-")
 	x.Check(err)
+	os.Chdir(tmpDir)
 	defer os.RemoveAll(tmpDir)
 
 	os.Exit(m.Run())

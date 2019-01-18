@@ -18,29 +18,28 @@ package z
 
 import (
 	"io"
-	"os"
 	"os/exec"
 )
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
+// TODO: allow capturing output, sending to terminal, etc
 func Pipeline(cmds [][]string) error {
 	var p io.ReadCloser
 	var numCmds = len(cmds)
 
-	p, _ = os.Open("/dev/null")
 	cmd := make([]*exec.Cmd, numCmds)
 
 	// Run all commands in parallel, connecting stdin of each to the stdout of the previous.
 	for i, c := range cmds {
 		cmd[i] = exec.Command(c[0], c[1:]...)
 		cmd[i].Stdin = p
-		cmd[i].Stderr = os.Stderr
+		//cmd[i].Stderr = os.Stderr
 
 		if i < numCmds-1 {
 			p, _ = cmd[i].StdoutPipe()
 		} else {
-			cmd[i].Stdout = os.Stdout
+			//cmd[i].Stdout = os.Stdout
 		}
 
 		cmd[i].Start()
