@@ -348,11 +348,22 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 	return g.gid == gid
 }
 
-func (g *groupi) ChecksumsMatch() error {
+func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 	if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
 		return nil
 	}
-	return fmt.Errorf("Group checksum mismatch for id: %d", g.gid)
+	t := time.NewTicker(100 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("Group checksum mismatch for id: %d", g.gid)
+		}
+	}
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {

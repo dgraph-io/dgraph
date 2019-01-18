@@ -703,7 +703,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
 		return &emptyResult, err
 	}
-	if err := groups().ChecksumsMatch(); err != nil {
+	if err := groups().ChecksumsMatch(ctx); err != nil {
 		return &emptyResult, err
 	}
 	if span != nil {
