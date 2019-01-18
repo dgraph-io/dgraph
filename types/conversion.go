@@ -278,14 +278,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = string(val)
 				}
 			case IntID:
-				if t.IsZero() {
-					*res = int64(0)
-				} else {
-					secs := t.Unix()
-					if secs > math.MaxInt64 || secs < math.MinInt64 {
-						return to, x.Errorf("Time out of int64 range")
-					}
-					*res = secs
+				*res = int64(0)
+				if !t.IsZero() {
+					*res = t.Unix()
 				}
 			case FloatID:
 				if t.IsZero() {
