@@ -220,6 +220,7 @@ const (
 	HasFn
 	UidInFn
 	CustomIndexFn
+	MatchFn
 	StandardFn = 100
 )
 
@@ -260,6 +261,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return UidInFn, f
 	case "anyof", "allof":
 		return CustomIndexFn, f
+	case "match":
+		return MatchFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -270,7 +273,7 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 
 func needsIndex(fnType FuncType) bool {
 	switch fnType {
-	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn, MatchFn:
 		return true
 	default:
 		return false
@@ -294,7 +297,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 			return false, nil
 		}
 		return true, nil
-	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn:
+	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn, MatchFn:
 		// All of these require index, hence would require fetching uid postings.
 		return false, nil
 	case UidInFn, CompareScalarFn:
@@ -558,7 +561,7 @@ func (qs *queryState) handleUidPostings(
 				} else {
 					key = x.DataKey(q.Attr, q.UidList.Uids[i])
 				}
-			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn:
+			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			case CompareAttrFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
@@ -812,6 +815,13 @@ func (qs *queryState) helpProcessTask(
 		// the regex matcher.
 		span.Annotate(nil, "handleRegexFunction")
 		if err := qs.handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+			return nil, err
+		}
+	}
+
+	if srcFn.fnType == MatchFn {
+		span.Annotate(nil, "handleMatchFunction")
+		if err := qs.handleMatchFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -1082,6 +1092,27 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) error {
+	attr := arg.q.Attr
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil || !typ.IsScalar() {
+		return x.Errorf("Attribute not scalar: %s %v", attr, typ)
+	}
+	if typ != types.StringID {
+		return x.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
+	}
+	var found bool
+	for _, t := range schema.State().Tokenizer(attr) {
+		if t.Identifier() == tok.IdentFullText {
+			found = true
+		}
+	}
+	if !found {
+		return x.Errorf("Attribute %v does not have fulltext index for fuzzy matching.", attr)
 	}
 	return nil
 }
@@ -1365,7 +1396,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
-	case StandardFn, FullTextSearchFn:
+	case StandardFn, FullTextSearchFn, MatchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
