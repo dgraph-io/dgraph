@@ -892,12 +892,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	if typ != types.StringID {
 		return x.Errorf("Got non-string type. Regex match is allowed only on string type.")
 	}
-	var useIndex bool
-	for _, t := range schema.State().Tokenizer(attr) {
-		if t.Identifier() == tok.IdentTrigram {
-			useIndex = true
-		}
-	}
+	useIndex := schema.State().HasTokenizer(tok.IdentTrigram, attr)
 	span.Annotatef(nil, "Trigram index found: %t", useIndex)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
