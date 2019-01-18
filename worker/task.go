@@ -893,17 +893,29 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		return x.Errorf("Got non-string type. Regex match is allowed only on string type.")
 	}
 	useIndex := schema.State().HasTokenizer(tok.IdentTrigram, attr)
-	span.Annotatef(nil, "Trigram index found: %t", useIndex)
+	span.Annotatef(nil, "Trigram index found: %t, func at root: %t",
+		useIndex, arg.srcFn.isFuncAtRoot)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := pb.List{}
 	uids := &pb.List{}
-	if useIndex {
+
+	// Here we determine the list of uids to match.
+	switch {
+	// Prefer to use an index (fast)
+	case useIndex:
 		uids, err = uidsForRegex(attr, arg, query, &empty)
 		if err != nil {
 			return err
 		}
-	} else {
+
+	// If this is a filter eval, use the given uid list (good)
+	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+		uids = arg.q.UidList
+
+	// No index and Not at root, we must grab the list (slow)
+	// This is basically `has` then filter by `regexp`
+	default:
 		out := &pb.Result{}
 		err = qs.handleHasFunction(ctx, arg.q, out)
 		if err != nil {
