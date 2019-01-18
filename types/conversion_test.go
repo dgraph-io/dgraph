@@ -69,38 +69,14 @@ func TestConvertToDefault(t *testing.T) {
 		in  Val
 		out string
 	}{
-		{
-			in:  Val{StringID, []byte("a")},
-			out: "a",
-		},
-		{
-			in:  Val{StringID, []byte("")},
-			out: "",
-		},
-		{
-			in:  Val{DefaultID, []byte("abc")},
-			out: "abc",
-		},
-		{
-			in:  Val{BinaryID, []byte("2016")},
-			out: "2016",
-		},
-		{
-			in:  Val{IntID, bs(int64(3))},
-			out: "3",
-		},
-		{
-			in:  Val{FloatID, bs(float64(-3.5))},
-			out: "-3.5",
-		},
-		{
-			in:  Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
-			out: "2006-01-02T15:04:05Z",
-		},
-		{
-			in:  Val{DateTimeID, bs(time.Time{})},
-			out: "",
-		},
+		{in: Val{StringID, []byte("a")}, out: "a"},
+		{in: Val{StringID, []byte("")}, out: ""},
+		{in: Val{DefaultID, []byte("abc")}, out: "abc"},
+		{in: Val{BinaryID, []byte("2016")}, out: "2016"},
+		{in: Val{IntID, bs(int64(3))}, out: "3"},
+		{in: Val{FloatID, bs(float64(-3.5))}, out: "-3.5"},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: "2006-01-02T15:04:05Z"},
+		{in: Val{DateTimeID, bs(time.Time{})}, out: ""},
 	}
 
 	for _, tc := range tests {
@@ -115,42 +91,15 @@ func TestConvertFromDefault(t *testing.T) {
 		in  string
 		out Val
 	}{
-		{
-			in:  "1",
-			out: Val{IntID, int64(1)},
-		},
-		{
-			in:  "1.3",
-			out: Val{FloatID, float64(1.3)},
-		},
-		{
-			in:  "true",
-			out: Val{BoolID, true},
-		},
-		{
-			in:  "2016",
-			out: Val{BinaryID, []byte("2016")},
-		},
-		{
-			in:  "",
-			out: Val{BinaryID, []byte("")},
-		},
-		{
-			in:  "hello",
-			out: Val{StringID, "hello"},
-		},
-		{
-			in:  "",
-			out: Val{StringID, ""},
-		},
-		{
-			in:  "2016",
-			out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)},
-		},
-		{
-			in:  "",
-			out: Val{DateTimeID, time.Time{}},
-		},
+		{in: "1", out: Val{IntID, int64(1)}},
+		{in: "1.3", out: Val{FloatID, float64(1.3)}},
+		{in: "true", out: Val{BoolID, true}},
+		{in: "2016", out: Val{BinaryID, []byte("2016")}},
+		{in: "", out: Val{BinaryID, []byte("")}},
+		{in: "hello", out: Val{StringID, "hello"}},
+		{in: "", out: Val{StringID, ""}},
+		{in: "2016", out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		{in: "", out: Val{DateTimeID, time.Time{}}},
 	}
 
 	for _, tc := range tests {
@@ -230,22 +179,10 @@ func TestConvertFromPassword(t *testing.T) {
 		out     Val
 		failure string
 	}{
-		{
-			in:  "",
-			out: Val{StringID, ""},
-		},
-		{
-			in:  "password",
-			out: Val{PasswordID, "password"},
-		},
-		{
-			in:  "password",
-			out: Val{StringID, "password"},
-		},
-		{
-			in:  "password",
-			out: Val{BinaryID, []byte("password")},
-		},
+		{in: "", out: Val{StringID, ""}},
+		{in: "password", out: Val{PasswordID, "password"}},
+		{in: "password", out: Val{StringID, "password"}},
+		{in: "password", out: Val{BinaryID, []byte("password")}},
 		{
 			in:      "password",
 			failure: `Cannot convert password to type default`,
@@ -282,18 +219,9 @@ func TestConvertToPassword(t *testing.T) {
 		out     string
 		failure string
 	}{
-		{
-			in:  Val{StringID, []byte("testing")},
-			out: "$2a$10$",
-		},
-		{
-			in:  Val{PasswordID, []byte("testing")},
-			out: "testing",
-		},
-		{
-			in:  Val{DefaultID, []byte("testing")},
-			out: "$2a$10$",
-		},
+		{in: Val{StringID, []byte("testing")}, out: "$2a$10$"},
+		{in: Val{PasswordID, []byte("testing")}, out: "testing"},
+		{in: Val{DefaultID, []byte("testing")}, out: "$2a$10$"},
 		{
 			in:      Val{StringID, []byte("")},
 			failure: `Password too short, i.e. should has at least 6 chars`,
@@ -367,18 +295,9 @@ func TestConvertIntToBool(t *testing.T) {
 		in  int64
 		out bool
 	}{
-		{
-			in:  int64(3),
-			out: true,
-		},
-		{
-			in:  int64(-3),
-			out: true,
-		},
-		{
-			in:  int64(0),
-			out: false,
-		},
+		{in: int64(3), out: true},
+		{in: int64(-3), out: true},
+		{in: int64(0), out: false},
 	}
 
 	for _, tc := range tests {
@@ -393,30 +312,12 @@ func TestConvertFloatToBool(t *testing.T) {
 		in  float64
 		out bool
 	}{
-		{
-			in:  float64(3.0),
-			out: true,
-		},
-		{
-			in:  float64(-3.5),
-			out: true,
-		},
-		{
-			in:  float64(0),
-			out: false,
-		},
-		{
-			in:  math.NaN(),
-			out: true,
-		},
-		{
-			in:  math.Inf(0),
-			out: true,
-		},
-		{
-			in:  math.Inf(-1),
-			out: true,
-		},
+		{in: float64(3.0), out: true},
+		{in: float64(-3.5), out: true},
+		{in: float64(0), out: false},
+		{in: math.NaN(), out: true},
+		{in: math.Inf(0), out: true},
+		{in: math.Inf(-1), out: true},
 	}
 
 	for _, tc := range tests {
@@ -432,38 +333,14 @@ func TestConvertStringToBool(t *testing.T) {
 		out     bool
 		failure string
 	}{
-		{
-			in:  "1",
-			out: true,
-		},
-		{
-			in:  "true",
-			out: true,
-		},
-		{
-			in:  "True",
-			out: true,
-		},
-		{
-			in:  "T",
-			out: true,
-		},
-		{
-			in:  "F",
-			out: false,
-		},
-		{
-			in:  "0",
-			out: false,
-		},
-		{
-			in:  "false",
-			out: false,
-		},
-		{
-			in:  "False",
-			out: false,
-		},
+		{in: "1", out: true},
+		{in: "true", out: true},
+		{in: "True", out: true},
+		{in: "T", out: true},
+		{in: "F", out: false},
+		{in: "0", out: false},
+		{in: "false", out: false},
+		{in: "False", out: false},
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseBool: parsing "srfrog": invalid syntax`,
@@ -511,14 +388,8 @@ func TestConvertBoolToFloat(t *testing.T) {
 		in  bool
 		out float64
 	}{
-		{
-			in:  true,
-			out: float64(1.0),
-		},
-		{
-			in:  false,
-			out: float64(0.0),
-		},
+		{in: true, out: float64(1.0)},
+		{in: false, out: float64(0.0)},
 	}
 
 	for _, tc := range tests {
@@ -537,14 +408,8 @@ func TestConvertBoolToInt(t *testing.T) {
 		in  bool
 		out int64
 	}{
-		{
-			in:  true,
-			out: int64(1),
-		},
-		{
-			in:  false,
-			out: int64(0),
-		},
+		{in: true, out: int64(1)},
+		{in: false, out: int64(0)},
 	}
 
 	for _, tc := range tests {
@@ -559,18 +424,9 @@ func TestConvertIntToFloat(t *testing.T) {
 		in  int64
 		out float64
 	}{
-		{
-			in:  int64(3),
-			out: float64(3.0),
-		},
-		{
-			in:  int64(-3),
-			out: float64(-3.0),
-		},
-		{
-			in:  int64(0),
-			out: float64(0.0),
-		},
+		{in: int64(3), out: float64(3.0)},
+		{in: int64(-3), out: float64(-3.0)},
+		{in: int64(0), out: float64(0.0)},
 	}
 
 	for _, tc := range tests {
@@ -586,26 +442,11 @@ func TestConvertFloatToInt(t *testing.T) {
 		out     int64
 		failure string
 	}{
-		{
-			in:  float64(3),
-			out: int64(3),
-		},
-		{
-			in:  float64(-3.0),
-			out: int64(-3),
-		},
-		{
-			in:  float64(0),
-			out: int64(0),
-		},
-		{
-			in:  float64(522638295213.3243),
-			out: int64(522638295213),
-		},
-		{
-			in:  float64(-522638295213.3243),
-			out: int64(-522638295213),
-		},
+		{in: float64(3), out: int64(3)},
+		{in: float64(-3.0), out: int64(-3)},
+		{in: float64(0), out: int64(0)},
+		{in: float64(522638295213.3243), out: int64(522638295213)},
+		{in: float64(-522638295213.3243), out: int64(-522638295213)},
 		{
 			in:      math.NaN(),
 			failure: "Float out of int64 range",
@@ -638,26 +479,11 @@ func TestConvertStringToInt(t *testing.T) {
 		out     int64
 		failure string
 	}{
-		{
-			in:  "1",
-			out: int64(1),
-		},
-		{
-			in:  "13816",
-			out: int64(13816),
-		},
-		{
-			in:  "-1221",
-			out: int64(-1221),
-		},
-		{
-			in:  "0",
-			out: int64(0),
-		},
-		{
-			in:  "203716381366627",
-			out: int64(203716381366627),
-		},
+		{in: "1", out: int64(1)},
+		{in: "13816", out: int64(13816)},
+		{in: "-1221", out: int64(-1221)},
+		{in: "0", out: int64(0)},
+		{in: "203716381366627", out: int64(203716381366627)},
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseInt: parsing "srfrog": invalid syntax`,
@@ -694,30 +520,12 @@ func TestConvertStringToFloat(t *testing.T) {
 		out     float64
 		failure string
 	}{
-		{
-			in:  "1",
-			out: float64(1),
-		},
-		{
-			in:  "13816.251",
-			out: float64(13816.251),
-		},
-		{
-			in:  "-1221.12",
-			out: float64(-1221.12),
-		},
-		{
-			in:  "-0.0",
-			out: float64(-0.0),
-		},
-		{
-			in:  "1e10",
-			out: float64(1e10),
-		},
-		{
-			in:  "1e-2",
-			out: float64(0.01),
-		},
+		{in: "1", out: float64(1)},
+		{in: "13816.251", out: float64(13816.251)},
+		{in: "-1221.12", out: float64(-1221.12)},
+		{in: "-0.0", out: float64(-0.0)},
+		{in: "1e10", out: float64(1e10)},
+		{in: "1e-2", out: float64(0.01)},
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseFloat: parsing "srfrog": invalid syntax`,
