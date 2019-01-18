@@ -7,7 +7,7 @@
     "parent_to": [
       { "uid":"_:b" },
       { "uid":"_:l" },
-      { "uid":"_:m1" }
+      { "uid":"_:m2" }
     ]
   },
   {
@@ -19,7 +19,7 @@
     "parent_to": [
       { "uid":"_:b" },
       { "uid":"_:l" },
-      { "uid":"_:m1" }
+      { "uid":"_:m2" }
     ]
   },
   {
@@ -52,8 +52,8 @@
     "role":"daughter",
     "carries":"pacifier",
     "sibling_of": [
-      { "uid":"_:l" },
-      { "uid":"_:m2" }
+      { "uid":"_:b" },
+      { "uid":"_:l" }
     ]
   }
 ]

@@ -122,7 +122,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 
 // processSchemaFile process schema for a given gz file.
 func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
-	fmt.Printf("\nProcessing %s\n", file)
+	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
 		md.Append("auth-token", opt.authToken)
@@ -183,12 +183,23 @@ func fileReader(file string) (io.Reader, *os.File) {
 
 // forward file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, file string) error {
-	var err error
+	fmt.Printf("Processing data file %q\n", file)
 
-	if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
-		err = l.processJsonFile(ctx, file)
+	rd, cleanup_fn := x.FileReader(file)
+	defer cleanup_fn()
+
+	var err error
+	if strings.HasSuffix(file, ".rdf") || strings.HasSuffix(file, ".rdf.gz") {
+		err = l.processRdfFile(ctx, rd)
+	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
+		err = l.processJsonFile(ctx, rd)
 	} else {
-		err = l.processRdfFile(ctx, file)
+		isJson, err := x.IsJSONData(rd)
+		if isJson {
+			l.processJsonFile(ctx, rd)
+		} else if err == nil {
+			err = fmt.Errorf("Unable to determine file content format: %s", file)
+		}
 	}
 
 	return err
@@ -208,12 +219,7 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func (l *loader) processJsonFile(ctx context.Context, file string) error {
-	fmt.Printf("\nProcessing JSON file %s\n", file)
-	r, f := x.FileReader(file)
-	rd := bufio.NewReader(r)
-	defer f.Close()
-
+func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
 
@@ -250,13 +256,8 @@ func (l *loader) processJsonFile(ctx context.Context, file string) error {
 }
 
 // processFile sends mutations for a given gz file.
-func (l *loader) processRdfFile(ctx context.Context, file string) error {
-	fmt.Printf("\nProcessing RDF file %s\n", file)
-	gr, f := fileReader(file)
+func (l *loader) processRdfFile(ctx context.Context, bufReader *bufio.Reader) error {
 	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
-	defer f.Close()
-
 	var line uint64
 	mu := api.Mutation{}
 	var batchSize int
@@ -411,16 +412,16 @@ func run() error {
 			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
 			return err
 		}
-		fmt.Printf("Processed schema file %q\n", opt.schemaFile)
+		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
 	filesList := fileList(opt.files)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		fmt.Printf("No files to process\n")
+		fmt.Printf("No data files to process\n")
 		return nil
 	} else {
-		fmt.Printf("Found %d file(s) to process\n", totalFiles)
+		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
@@ -439,7 +440,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			fmt.Printf("Error while processing file %q: %s\n", filesList[i], err)
+			fmt.Printf("Error while processing data file %q: %s\n", filesList[i], err)
 			return err
 		}
 	}

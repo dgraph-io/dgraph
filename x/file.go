@@ -18,7 +18,9 @@ package x
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -98,26 +100,45 @@ func FindDataFiles(str string, ext []string) []string {
 }
 
 // FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension.
-func FileReader(file string) (io.Reader, *os.File) {
+// and decompressed automatically even without the gz extension. The caller is responsible for
+// calling the returned cleanup function when done with the reader.
+func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 	f, err := os.Open(file)
 	x.Check(err)
 
-	var r io.Reader
+	cleanup = func() { f.Close() }
+
 	if filepath.Ext(file) == ".gz" {
-		r, err = gzip.NewReader(f)
+		gzr, err := gzip.NewReader(f)
 		x.Check(err)
+		rd = bufio.NewReader(gzr)
+		cleanup = func() { f.Close(); gzr.Close() }
 	} else {
-		rd := bufio.NewReader(f)
+		rd = bufio.NewReader(f)
 		buf, _ := rd.Peek(512)
 
 		typ := http.DetectContentType(buf)
 		if typ == "application/x-gzip" {
-			r, _ = gzip.NewReader(rd)
-		} else {
-			r = rd
+			gzr, err := gzip.NewReader(f)
+			x.Check(err)
+			rd = bufio.NewReader(gzr)
+			cleanup = func() { f.Close(); gzr.Close() }
 		}
 	}
 
-	return r, f
+	return rd, cleanup
+}
+
+// IsJSONData returns true if the reader, which should be at the start of the stream, is reading
+// a JSON stream, false otherwise.
+func IsJSONData(r *bufio.Reader) (bool, error) {
+	buf, err := r.Peek(512)
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+
+	de := json.NewDecoder(bytes.NewReader(buf))
+	_, err = de.Token()
+
+	return err == nil, nil
 }
