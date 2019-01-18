@@ -42,13 +42,13 @@ type StateFn func(*Lexer) StateFn
 type Item struct {
 	Typ    ItemType
 	Val    string
-	Line   int
-	Column int
+	line   int
+	column int
 }
 
 func (i Item) Errorf(format string, args ...interface{}) error {
 	return fmt.Errorf("line %d column %d: "+format,
-		append([]interface{}{i.Line, i.Column}, args...)...)
+		append([]interface{}{i.line, i.column}, args...)...)
 }
 
 func (i Item) String() string {
@@ -56,7 +56,7 @@ func (i Item) String() string {
 	case ItemEOF:
 		return "EOF"
 	}
-	return fmt.Sprintf("lex.Item [%v] %q at %d:%d", i.Typ, i.Val, i.Line, i.Column)
+	return fmt.Sprintf("lex.Item [%v] %q at %d:%d", i.Typ, i.Val, i.line, i.column)
 }
 
 type ItemIterator struct {
@@ -90,8 +90,8 @@ func (p *ItemIterator) Next() bool {
 func (p *ItemIterator) Item() Item {
 	if p.idx < 0 || p.idx >= len(p.l.items) {
 		return Item{
-			Line:   -1, // using negative numbers to indicate out-of-range item
-			Column: -1,
+			line:   -1, // using negative numbers to indicate out-of-range item
+			column: -1,
 		}
 	}
 	return (p.l.items)[p.idx]
@@ -129,8 +129,8 @@ func (p *ItemIterator) Peek(num int) ([]Item, error) {
 func (p *ItemIterator) PeekOne() (Item, bool) {
 	if p.idx+1 >= len(p.l.items) {
 		return Item{
-			Line:   -1,
-			Column: -1, // use negative number to indicate out of range
+			line:   -1,
+			column: -1, // use negative number to indicate out of range
 		}, false
 	}
 	return p.l.items[p.idx+1], true
@@ -186,8 +186,8 @@ func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 		Typ: ItemError,
 		Val: fmt.Sprintf("while lexing %v at line %d column %d: "+format,
 			append([]interface{}{l.Input, l.Line, l.Column}, args...)...),
-		Line:   l.Line,
-		Column: l.Column,
+		line:   l.Line,
+		column: l.Column,
 	})
 	return nil
 }
@@ -201,8 +201,8 @@ func (l *Lexer) Emit(t ItemType) {
 	l.items = append(l.items, Item{
 		Typ:    t,
 		Val:    l.Input[l.Start:l.Pos],
-		Line:   l.Line,
-		Column: l.Column,
+		line:   l.Line,
+		column: l.Column,
 	})
 	l.moveStartToPos()
 }
