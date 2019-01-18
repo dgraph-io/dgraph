@@ -278,7 +278,6 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	numHops := -1
 	maxHops := int(sg.Params.ExploreDepth)
-	isPossible := false
 	if maxHops == 0 {
 		maxHops = int(math.MaxInt32)
 	}
@@ -297,10 +296,8 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// node.
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
-
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
-
 		if item.uid == sg.Params.To {
 			// Ignore paths that do not meet the minimum weight requirement.
 			if item.cost < minWeight {
@@ -342,10 +339,6 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		default:
 			if stopExpansion {
 				continue
-				// Allow loops once we have found one path.
-				if !isPossible {
-					continue
-				}
 			}
 		}
 		neighbours := adjacencyMap[item.uid]
@@ -377,10 +370,6 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				hop:  item.hop + 1,
 				path: route{curPath},
 			}
-			if node.uid == sg.Params.To {
-				isPossible = true
-			}
-
 			heap.Push(&pq, node)
 		}
 		// Return the popped nodes path to pool.
