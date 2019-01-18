@@ -52,8 +52,8 @@ var (
 	emptyValueList  = pb.ValueList{Values: []*pb.TaskValue{}}
 )
 
-func invokeNetworkRequest(
-	ctx context.Context, addr string, f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
+func invokeNetworkRequest(ctx context.Context, addr string,
+	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
@@ -923,11 +923,12 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		}
 		uids = algo.MergeSorted(out.UidMatrix)
 	}
-	span.Annotatef(nil, "Number of uids to match: %d", len(uids.Uids))
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
+	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
+
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
 
 	filtered := &pb.List{}
 	for _, uid := range uids.Uids {
@@ -941,40 +942,30 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			return err
 		}
 
-		var val types.Val
-		if lang != "" {
-			val, err = pl.ValueForTag(arg.q.ReadTs, lang)
-		} else if isList {
-			vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
+		vals := make([]types.Val, 1)
+		switch {
+		case isList:
+			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+		case lang != "":
+			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+		default:
+			vals[0], err = pl.Value(arg.q.ReadTs)
+		}
+		if err != nil {
 			if err == posting.ErrNoValue {
 				continue
-			} else if err != nil {
-				return err
 			}
-			for _, val := range vals {
-				// convert data from binary to appropriate format
-				strVal, err := types.Convert(val, types.StringID)
-				if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-					filtered.Uids = append(filtered.Uids, uid)
-					break
-				}
-			}
-
-			continue
-		} else {
-			val, err = pl.Value(arg.q.ReadTs)
-		}
-
-		if err == posting.ErrNoValue {
-			continue
-		} else if err != nil {
 			return err
 		}
 
-		// convert data from binary to appropriate format
-		strVal, err := types.Convert(val, types.StringID)
-		if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-			filtered.Uids = append(filtered.Uids, uid)
+		for _, val := range vals {
+			// convert data from binary to appropriate format
+			strVal, err := types.Convert(val, types.StringID)
+			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+				filtered.Uids = append(filtered.Uids, uid)
+			}
 		}
 	}
 
