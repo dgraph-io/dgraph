@@ -119,7 +119,7 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 
 		typ := http.DetectContentType(buf)
 		if typ == "application/x-gzip" {
-			gzr, err := gzip.NewReader(f)
+			gzr, err := gzip.NewReader(rd)
 			x.Check(err)
 			rd = bufio.NewReader(gzr)
 			cleanup = func() { f.Close(); gzr.Close() }

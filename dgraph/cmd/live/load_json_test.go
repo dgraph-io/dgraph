@@ -30,15 +30,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	dgtest "github.com/dgraph-io/dgraph/testing"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
-const alphaHost = ":9180"
+const alphaService = ":9180"
 
 var testDataDir string
 var conn *grpc.ClientConn
 var dg *dgo.Dgraph
+var tmpDir string
 
 func mkTempDir() string {
 	tmpDir, err := ioutil.TempDir(os.Getenv("TMPDIR"), "test.tmp-")
@@ -53,22 +54,14 @@ func runOn(conn *grpc.ClientConn, fn func(*testing.T, *dgo.Dgraph)) func(*testin
 	}
 }
 
-func TestLiveLoadJSON(t *testing.T) {
-	tmpDir := mkTempDir()
-	defer os.RemoveAll(tmpDir)
-	//fmt.Fprintf(os.Stderr, "TEMP DIR = %s\n", tmpDir)
+func dropAll() {
+	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+	x.Check(err)
+}
 
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--schema", testDataDir+"/family.schema", "--rdfs", testDataDir+"/family.json",
-		"--dgraph", alphaHost,
-	)
-	liveCmd.Dir = tmpDir
-	liveCmd.Stdout, _ = os.Create(tmpDir + "/live.out")
-	liveCmd.Stderr = liveCmd.Stdout
-	err := liveCmd.Run()
-	require.NoError(t, err, "live loader ran successfully")
-
+func checkLoadedData(t *testing.T) {
 	// just check the first and last entries and assume everything in between is okay
+
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Homer")) {
@@ -78,7 +71,8 @@ func TestLiveLoadJSON(t *testing.T) {
 			}
 		}
 	`)
-	dgtest.CompareJSON(t, `
+	require.NoError(t, err)
+	z.CompareJSON(t, `
 		{
 		    "q": [
 					{
@@ -99,7 +93,90 @@ func TestLiveLoadJSON(t *testing.T) {
 			}
 		}
 	`)
-	dgtest.CompareJSON(t, `
+	require.NoError(t, err)
+	z.CompareJSON(t, `
+		{
+		    "q": [
+				{
+					"name": "Maggie",
+					"role": "daughter",
+					"carries": "pacifier"
+			    }
+			]
+		}
+	`, string(resp.GetJson()))
+}
+
+func TestPipeline(t *testing.T) {
+	pipeline := [][]string{
+		{"echo", "Hello", "world!"},
+		{"xargs", "echo", "GOT:"},
+	}
+	_ = z.Pipeline(pipeline)
+	//	require.NoError(t, err, "pipeline ran successfully")
+}
+
+func TestLiveLoadCompressedJSONStream(t *testing.T) {
+	dropAll()
+
+	pipeline := [][]string{
+		{"gzip", "-c", testDataDir + "/family.json"},
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--schema", testDataDir + "/family.schema", "--rdfs", "/dev/stdin",
+			"--dgraph", alphaService},
+	}
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loader ran successfully")
+
+	checkLoadedData(t)
+}
+
+func TestLiveLoadJSONFile(t *testing.T) {
+	dropAll()
+	//fmt.Fprintf(os.Stderr, "TEMP DIR = %s\n", tmpDir)
+
+	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		"--schema", testDataDir+"/family.schema", "--rdfs", testDataDir+"/family.json",
+		"--dgraph", alphaService,
+	)
+	liveCmd.Dir = tmpDir
+	liveCmd.Stdout, _ = os.Create(tmpDir + "/live.out")
+	liveCmd.Stderr = liveCmd.Stdout
+	err := liveCmd.Run()
+	require.NoError(t, err, "live loader ran successfully")
+
+	// just check the first and last entries and assume everything in between is okay
+	resp, err := dg.NewTxn().Query(context.Background(), `
+		{
+			q(func: anyofterms(name, "Homer")) {
+				name
+				age
+				role
+			}
+		}
+	`)
+	require.JSONEq(t, `
+		{
+		    "q": [
+					{
+					"name": "Homer",
+					"age": 38,
+					"role": "father"
+			    }
+			]
+		}
+	`, string(resp.GetJson()))
+
+	resp, err = dg.NewTxn().Query(context.Background(), `
+		{
+			q(func: anyofterms(name, "Maggie")) {
+				name
+				role
+				carries
+			}
+		}
+	`)
+	require.JSONEq(t, `
 		{
 		    "q": [
 				{
@@ -116,13 +193,17 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile) + "/test_data"
 
-	conn, err := grpc.Dial(alphaHost, grpc.WithInsecure())
+	conn, err := grpc.Dial(alphaService, grpc.WithInsecure())
 	x.Check(err)
 	defer conn.Close()
 
 	dg = dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	x.Check(err)
+
+	tmpDir, err := ioutil.TempDir("", "test.tmp-")
+	x.Check(err)
+	defer os.RemoveAll(tmpDir)
 
 	os.Exit(m.Run())
 }
