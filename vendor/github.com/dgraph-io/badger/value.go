@@ -567,22 +567,8 @@ func (vlog *valueLog) deleteLogFile(lf *logFile) error {
 }
 
 func (vlog *valueLog) dropAll() (int, error) {
-	tick := time.NewTicker(100 * time.Millisecond)
-	defer tick.Stop()
-
-	var loops int
-	for range tick.C {
-		loops++
-		if vlog.iteratorCount() == 0 {
-			if loops%10 == 0 {
-				vlog.db.opt.Infof("Waiting for iterators to get done. Currently active: %d",
-					vlog.iteratorCount())
-			}
-			break
-		}
-	}
-	vlog.db.opt.Infof("No active value log iterators. Deleting value logs...")
-
+	// We don't want to block dropAll on any pending transactions. So, don't worry about iterator
+	// count.
 	var count int
 	deleteAll := func() error {
 		vlog.filesLock.Lock()
@@ -593,12 +579,12 @@ func (vlog *valueLog) dropAll() (int, error) {
 			}
 			count++
 		}
+		vlog.filesMap = make(map[uint32]*logFile)
 		return nil
 	}
 	if err := deleteAll(); err != nil {
 		return count, err
 	}
-	vlog.filesMap = make(map[uint32]*logFile)
 
 	vlog.db.opt.Infof("Value logs deleted. Creating value log file: 0")
 	if _, err := vlog.createVlogFile(0); err != nil {
