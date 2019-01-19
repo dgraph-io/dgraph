@@ -58,7 +58,14 @@ func TestConvertEdgeType(t *testing.T) {
 				Op:    pb.DirectedEdge_DEL,
 			},
 			to:        types.StringID,
-			expectErr: true,
+			expectErr: false,
+			output: &pb.DirectedEdge{
+				Value:     []byte("set edge"),
+				Label:     "test-mutation",
+				Attr:      "name",
+				Op:        pb.DirectedEdge_DEL,
+				ValueType: 9,
+			},
 		},
 		{
 			input: &pb.DirectedEdge{
