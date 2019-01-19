@@ -217,24 +217,29 @@ func assignBlankId(nqs []*api.NQuad) error {
 	}
 
 	md := md5.New()
+	str := ""
 	for _, f := range keyFields {
 		idx, ok := field2idx[f]
 		if !ok {
 			return fmt.Errorf("Key field %s not found: %+v\n", f, nqs)
 		}
-		io.WriteString(md, nqs[idx].ObjectValue.String())
+		//io.WriteString(md, nqs[idx].ObjectValue.String())
+		str += nqs[idx].ObjectValue.String()
 	}
 	hash := md.Sum(nil)
+	//hash := md.Sum([]byte(str))
+	fmt.Fprintf(os.Stderr, "HASH('%s')=%x\n", str, hash)
 
 	var key [md5.Size]byte
 	copy(key[:], hash)
 	id, ok := blankUids[key]
 	if !ok {
-		id := len(blankUids) + 2
+		id := len(blankUids) + 1
 		blankUids[key] = id
 	}
 
-	uid := "_:live-" + string(id)
+	uid := fmt.Sprintf("_:id-%d", id)
+	fmt.Fprintf(os.Stderr, "UID=%s\n", uid)
 	for _, nq := range nqs {
 		nq.Subject = uid
 	}
