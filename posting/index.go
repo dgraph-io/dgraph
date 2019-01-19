@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"reflect"
 	"time"
 
 	"github.com/golang/glog"
@@ -318,19 +317,22 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		return val, found, emptyCountParams, err
 	}
 
-	// Check original value BEFORE any mutation actually happens.
-	val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
-	if err != nil {
-		return val, found, emptyCountParams, err
+	if doUpdateIndex {
+		// Check original value BEFORE any mutation actually happens.
+		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
+		if err != nil {
+			return val, found, emptyCountParams, err
+		}
 	}
 
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
 	// a value that does not match the existing value.
 	if !schema.State().IsList(t.Attr) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
-		mpost := NewPosting(t)
-		newVal := valueToTypesVal(mpost)
+		newPost := NewPosting(t)
+		pFound, currPost, _ := l.findPosting(txn.StartTs, fingerprintEdge(t))
 
-		if found && !reflect.DeepEqual(val, newVal) {
+		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
+			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
 			return val, found, emptyCountParams, err
 		}
 	}
