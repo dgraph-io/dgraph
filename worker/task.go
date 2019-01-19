@@ -367,10 +367,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			}
 
 			var vals []types.Val
-			if len(q.Langs) == 1 && q.Langs[0] == "*" {
-				q.ExpandAll = true
-			}
-
 			if q.ExpandAll {
 				vals, err = pl.AllValues(args.q.ReadTs)
 			} else if listType && len(q.Langs) == 0 {
