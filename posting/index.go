@@ -329,7 +329,10 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	// a value that does not match the existing value.
 	if !schema.State().IsList(t.Attr) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
 		newPost := NewPosting(t)
-		pFound, currPost, _ := l.findPosting(txn.StartTs, fingerprintEdge(t))
+		pFound, currPost, err := l.findPosting(txn.StartTs, fingerprintEdge(t))
+		if err != nil {
+			return val, found, emptyCountParams, err
+		}
 
 		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
