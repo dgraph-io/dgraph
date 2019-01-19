@@ -318,6 +318,22 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, err
 		}
 	}
+
+	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
+	// a value that does not match the existing value.
+	if !schema.State().IsList(t.Attr) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
+		newPost := NewPosting(t)
+		pFound, currPost, err := l.findPosting(txn.StartTs, fingerprintEdge(t))
+		if err != nil {
+			return val, found, emptyCountParams, err
+		}
+
+		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
+			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
+			return val, found, emptyCountParams, err
+		}
+	}
+
 	countBefore, countAfter := 0, 0
 	if hasCountIndex {
 		countBefore = l.length(txn.StartTs, 0)
