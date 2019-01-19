@@ -46,3 +46,10 @@ func GetFullTextTokens(funcArgs []string, lang string) ([]string, error) {
 	}
 	return BuildTokens(funcArgs[0], FullTextTokenizer{lang: lang})
 }
+
+func GetMatchTokens(funcArgs []string) ([]string, error) {
+	if l := len(funcArgs); l != 1 {
+		return nil, x.Errorf("Function requires 1 arguments, but got %d", l)
+	}
+	return BuildTokens(funcArgs[0], NgramTokenizer{})
+}
