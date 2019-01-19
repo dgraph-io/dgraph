@@ -38,6 +38,7 @@ const (
 	IdentNone     = 0x0
 	IdentTerm     = 0x1
 	IdentExact    = 0x2
+	IdentNgram    = 0x3
 	IdentYear     = 0x4
 	IdentMonth    = 0x41
 	IdentDay      = 0x42
@@ -95,6 +96,7 @@ func init() {
 	registerTokenizer(HashTokenizer{})
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
+	registerTokenizer(NgramTokenizer{})
 	setupBleve()
 }
 
@@ -304,6 +306,22 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
+
+type NgramTokenizer struct{}
+
+func (t NgramTokenizer) Name() string { return "ngram" }
+func (t NgramTokenizer) Type() string { return "string" }
+func (t NgramTokenizer) Tokens(v interface{}) ([]string, error) {
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{str}, nil
+	}
+	tokens := ngramAnalyzer.Analyze([]byte(str))
+	return uniqueTerms(tokens), nil
+}
+func (t NgramTokenizer) Identifier() byte { return IdentNgram }
+func (t NgramTokenizer) IsSortable() bool { return false }
+func (t NgramTokenizer) IsLossy() bool    { return true }
 
 func encodeInt(val int64) string {
 	buf := make([]byte, 9)
