@@ -275,9 +275,15 @@ func needsIndex(fnType FuncType) bool {
 	switch fnType {
 	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn, MatchFn:
 		return true
-	default:
-		return false
 	}
+	return false
+}
+
+func needsIntersect(fnName string) bool {
+	fnName = strings.ToLower(fnName)
+	return strings.HasPrefix(fnName, "allof") ||
+		strings.HasPrefix(fnName, "anyof") ||
+		fnName == "match"
 }
 
 type funcArgs struct {
@@ -1097,23 +1103,87 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 }
 
 func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleMatchFunction")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
+	}
+
 	attr := arg.q.Attr
 	typ, err := schema.State().TypeOf(attr)
+	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
 	if err != nil || !typ.IsScalar() {
 		return x.Errorf("Attribute not scalar: %s %v", attr, typ)
 	}
 	if typ != types.StringID {
 		return x.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
 	}
-	var found bool
+	var useIndex bool
 	for _, t := range schema.State().Tokenizer(attr) {
-		if t.Identifier() == tok.IdentFullText {
-			found = true
+		if t.Identifier() == tok.IdentNgram {
+			useIndex = true
 		}
 	}
-	if !found {
-		return x.Errorf("Attribute %v does not have fulltext index for fuzzy matching.", attr)
+	if !useIndex {
+		return x.Errorf("Attribute %v does not have ngram index for fuzzy matching.", attr)
 	}
+
+	uids, err := uidsForMatch(attr, arg)
+	if err != nil {
+		return err
+	}
+
+	isList := schema.State().IsList(attr)
+	lang := langForFunc(arg.q.Langs)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
+	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+
+	filtered := &pb.List{}
+	for _, uid := range uids.Uids {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		pl, err := qs.cache.Get(x.DataKey(attr, uid))
+		if err != nil {
+			return err
+		}
+
+		vals := make([]types.Val, 1)
+		switch {
+		case isList:
+			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+		case lang != "":
+			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+		default:
+			vals[0], err = pl.Value(arg.q.ReadTs)
+		}
+		if err != nil {
+			if err == posting.ErrNoValue {
+				continue
+			} else if err != nil {
+				return err
+			}
+			return err
+		}
+
+		for _, val := range vals {
+			// convert data from binary to appropriate format
+			strVal, err := types.Convert(val, types.StringID)
+			if err == nil && matchFuzzy(strVal, arg.srcFn) {
+				filtered.Uids = append(filtered.Uids, uid)
+			}
+		}
+	}
+
+	for i := 0; i < len(arg.out.UidMatrix); i++ {
+		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	}
+
 	return nil
 }
 
@@ -1409,8 +1479,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
 		}
-		fnName := strings.ToLower(q.SrcFunc.Name)
-		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
+		fc.intersectDest = needsIntersect(q.SrcFunc.Name)
 		fc.n = len(fc.tokens)
 	case CustomIndexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
@@ -1431,9 +1500,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
-		fnName := strings.ToLower(q.SrcFunc.Name)
-		x.AssertTrue(fnName == "allof" || fnName == "anyof")
-		fc.intersectDest = strings.HasSuffix(fnName, "allof")
+		fc.intersectDest = needsIntersect(q.SrcFunc.Name)
+		x.AssertTrue(fc.intersectDest)
 		fc.n = len(fc.tokens)
 	case RegexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
