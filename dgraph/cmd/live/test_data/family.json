@@ -55,5 +55,15 @@
       { "uid":"_:b" },
       { "uid":"_:l" }
     ]
+  },
+  {
+    "uid":"_:a",
+    "name":"Abraham",
+    "age":"83",
+    "role":"father",
+    "aka":"Grampa",
+    "parent_to": [
+      { "uid":"_:h" }
+    ]
   }
 ]

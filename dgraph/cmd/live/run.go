@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/md5"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,7 +30,6 @@ import (
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -58,12 +58,16 @@ type options struct {
 	ignoreIndexConflict bool
 	authToken           string
 	useCompression      bool
+	keyFields           string
 }
 
 var opt options
 var tlsConf x.TLSHelperConfig
 
 var Live x.SubCommand
+
+var keyFields []string
+var blankUids map[[md5.Size]byte]int
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -94,6 +98,7 @@ func init() {
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
+	flag.StringP("key", "k", "", "Comma-separated list of JSON fields to identify a uid")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -167,20 +172,6 @@ func (l *loader) uid(val string) string {
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
-func fileReader(file string) (io.Reader, *os.File) {
-	f, err := os.Open(file)
-	x.Check(err)
-
-	var r io.Reader
-	if filepath.Ext(file) == ".gz" {
-		r, err = gzip.NewReader(f)
-		x.Check(err)
-	} else {
-		r = bufio.NewReader(f)
-	}
-	return r, f
-}
-
 // forward file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, file string) error {
 	fmt.Printf("Processing data file %q\n", file)
@@ -219,6 +210,38 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
+func assignBlankId(nqs []*api.NQuad) error {
+	field2idx := make(map[string]int)
+	for idx, nq := range nqs {
+		field2idx[nq.Predicate] = idx
+	}
+
+	md := md5.New()
+	for _, f := range keyFields {
+		idx, ok := field2idx[f]
+		if !ok {
+			return fmt.Errorf("Key field %s not found: %+v\n", f, nqs)
+		}
+		io.WriteString(md, nqs[idx].ObjectValue.String())
+	}
+	hash := md.Sum(nil)
+
+	var key [md5.Size]byte
+	copy(key[:], hash)
+	id, ok := blankUids[key]
+	if !ok {
+		id := len(blankUids) + 2
+		blankUids[key] = id
+	}
+
+	uid := "_:live-" + string(id)
+	for _, nq := range nqs {
+		nq.Subject = uid
+	}
+
+	return nil
+}
+
 func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
@@ -229,6 +252,12 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
 			nqs, err := parseJson(chunkBuf)
 			x.Check(err)
+			if nqs[0].Subject == "_:blank-0" {
+				if opt.keyFields == "" {
+					return fmt.Errorf("No uid field found: %+v\n", nqs)
+				}
+				assignBlankId(nqs)
+			}
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
 				if len(nq.ObjectId) > 0 {
@@ -365,9 +394,13 @@ func run() error {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
+		keyFields:           Live.Conf.GetString("key"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
+
+	keyFields = strings.Split(opt.keyFields, ",")
+	blankUids = make(map[[md5.Size]byte]int)
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
