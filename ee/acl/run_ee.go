@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -219,11 +218,13 @@ func info(conf *viper.Viper) error {
 		(len(userId) != 0 && len(groupId) != 0) {
 		return fmt.Errorf("Either the user or group should be specified, not both")
 	}
-
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	dc, cancel, err := getClientWithAdminCtx(conf)
 	defer cancel()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {

@@ -16,43 +16,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
-	"golang.org/x/crypto/ssh/terminal"
 )
-
-func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
-	adminPassword := conf.GetString(gPassword)
-	if len(adminPassword) == 0 {
-		fmt.Print("Enter groot password:")
-		password, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return nil, func() {}, fmt.Errorf("error while reading password:%v", err)
-		}
-		adminPassword = string(password)
-	}
-
-	dc, closeClient := getDgraphClient(conf)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-
-	cleanFunc := func() {
-		cancel()
-		closeClient()
-	}
-
-	if err := dc.Login(ctx, x.GrootId, adminPassword); err != nil {
-		return dc, cleanFunc, fmt.Errorf("unable to login to the groot account %v", err)
-	}
-	glog.Infof("login successfully to the groot account")
-	// update the context so that it has the admin jwt token
-	return dc, cleanFunc, nil
-}
 
 func userAdd(conf *viper.Viper) error {
 	userid := conf.GetString("user")
