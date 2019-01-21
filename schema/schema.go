@@ -185,7 +185,7 @@ func (s *state) TokenizerNames(pred string) []string {
 func (s *state) HasTokenizer(id byte, pred string) bool {
 	for _, t := range s.Tokenizer(pred) {
 		if t.Identifier() == id {
-			return false
+			return true
 		}
 	}
 	return false
