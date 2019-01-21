@@ -283,11 +283,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	minWeight := sg.Params.MinWeight
 	maxWeight := sg.Params.MaxWeight
-	if maxWeight == 0 {
-		maxWeight = math.MaxFloat64
-	}
 	next := make(chan bool, 2)
-	//cycles := 0
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)

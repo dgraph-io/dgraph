@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -827,6 +828,8 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.MaxWeight = maxWeight
+	} else if !ok && (args.Alias == "shortest") {
+		args.MaxWeight = math.MaxFloat64
 	}
 	if v, ok := gq.Args["minweight"]; ok && (args.Alias == "shortest") {
 		minWeight, err := strconv.ParseFloat(v, 64)
@@ -834,6 +837,8 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.MinWeight = minWeight
+	} else if !ok && (args.Alias == "shortest") {
+		args.MinWeight = -math.MaxFloat64
 	}
 	if v, ok := gq.Args["first"]; ok {
 		first, err := strconv.ParseInt(v, 0, 32)
