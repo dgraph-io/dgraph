@@ -408,11 +408,11 @@ Following table contains all supported languages, corresponding country-codes, s
 |  Turkish   |      tr      | &#10003; |  &#10003;  |
 
 
-Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
+Query Example: All names that have `dog`, `dogs`, `bark`, `barks`, `barking`, etc.  Stop word removal eliminates `the` and `which`.
 
 {{< runnable >}}
 {
-  movie(func:alloftext(name@en, "the man maybe runs")) {
+  movie(func:alloftext(name@en, "the dog which barks")) {
 	 name@en
   }
 }
