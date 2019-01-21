@@ -1,0 +1,25 @@
+[
+  {
+    "uid":"_:h",
+    "name":"Homer",
+    "age":"38",
+    "role":"father",
+    "parent_to": [
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  },
+  {
+    "uid":"_:m1",
+    "name":"Marge",
+    "age":"34",
+    "role":"mother",
+    "aka":"Midge",
+    "parent_to": [
+      { "uid":"_:b" },
+      { "uid":"_:l" },
+      { "uid":"_:m2" }
+    ]
+  }
+]

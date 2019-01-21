@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo"
@@ -93,12 +94,12 @@ func TestLiveLoadJSONFile(t *testing.T) {
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loader ran successfully")
+	require.NoError(t, err, "live loading JSON file ran successfully")
 
 	checkLoadedData(t)
 }
 
-func TestLiveLoadCompressedJSONStream(t *testing.T) {
+func TestLiveLoadJSONCompressedStream(t *testing.T) {
 	z.DropAll(t, dg)
 
 	pipeline := [][]string{
@@ -108,7 +109,42 @@ func TestLiveLoadCompressedJSONStream(t *testing.T) {
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loader ran successfully")
+	require.NoError(t, err, "live loading JSON stream ran successfully")
+
+	checkLoadedData(t)
+}
+
+func TestLiveLoadJSONMultipleFiles(t *testing.T) {
+	z.DropAll(t, dg)
+
+	files := []string{
+		testDataDir + "/family1.json",
+		testDataDir + "/family2.json",
+		testDataDir + "/family3.json",
+	}
+	fileList := strings.Join(files, ",")
+
+	pipeline := [][]string{
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--schema", testDataDir + "/family.schema", "--rdfs", fileList,
+			"--dgraph", alphaService},
+	}
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loading multiple JSON files ran successfully")
+
+	checkLoadedData(t)
+}
+
+func TestLiveLoadJSONAutoUID(t *testing.T) {
+	z.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--schema", testDataDir + "/family.schema", "--rdfs", testDataDir + "/family.json",
+			"--dgraph", alphaService},
+	}
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file without IDs ran successfully")
 
 	checkLoadedData(t)
 }
@@ -119,8 +155,8 @@ func TestMain(m *testing.M) {
 
 	dg = z.DgraphClient(alphaService)
 
-	// Try to create any files in a dedicated temp directory instead of all over /tmp
-	// or the working directory.
+	// Try to create any files in a dedicated temp directory that gets cleaned up
+	// instead of all over /tmp or the working directory.
 	tmpDir, err := ioutil.TempDir("", "test.tmp-")
 	x.Check(err)
 	os.Chdir(tmpDir)
