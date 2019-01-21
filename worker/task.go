@@ -365,7 +365,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			if err != nil {
 				return err
 			}
-
 			var vals []types.Val
 			if q.ExpandAll {
 				vals, err = pl.AllValues(args.q.ReadTs)

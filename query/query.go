@@ -481,7 +481,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
-			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 && !pc.Params.expandAll {
+			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
@@ -514,14 +514,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return convErr
 				}
 
-				if (pc.Params.expandAll) && len(pc.LangTags[idx].Lang) != 0 {
+				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
 					if i >= len(pc.LangTags[idx].Lang) {
 						return x.Errorf(
 							"pb.error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
 					lang := pc.LangTags[idx].Lang[i]
-
 					if lang != "" {
 						fieldNameWithTag += "@" + lang
 					}
@@ -992,6 +991,13 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 			}
 		}
 	}
+
+	// If the lang is set to *, query all the languages.
+	if len(sg.Params.Langs) == 1 && sg.Params.Langs[0] == "*" {
+		sg.Params.expandAll = true
+		sg.Params.Langs = nil
+	}
+
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Attr:         attr,
@@ -1003,12 +1009,6 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.expandAll,
-	}
-
-	// If the lang is set to *, query all the languages.
-	if len(out.Langs) == 1 && out.Langs[0] == "*" {
-		sg.Params.expandAll = true
-		out.ExpandAll = true
 	}
 
 	if sg.SrcUIDs != nil {
