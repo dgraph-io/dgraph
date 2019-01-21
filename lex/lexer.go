@@ -231,12 +231,15 @@ func (l *Lexer) Peek() rune {
 
 func (l *Lexer) moveStartToPos() {
 	// check if we are about to move Start to a new line
-	startR, _ := utf8.DecodeRuneInString(l.Input[l.Start:])
-	if isEndOfLine(startR) {
-		l.Line++
-		l.Column = 0
-	} else {
-		l.Column += l.Pos - l.Start
+	for offset := l.Start; offset < l.Pos; {
+		r, w := utf8.DecodeRuneInString(l.Input[offset:l.Pos])
+		offset += w
+		if isEndOfLine(r) {
+			l.Line++
+			l.Column = 0
+		} else {
+			l.Column += w
+		}
 	}
 	l.Start = l.Pos
 }
