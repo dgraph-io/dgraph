@@ -4474,3 +4474,20 @@ func TestParseGraphQLVarPaginationRootMultiple(t *testing.T) {
 	require.Equal(t, args["after"], "0x123")
 	require.Equal(t, gq.Query[0].Order[0].Attr, "name")
 }
+
+func TestLineAndColumnNumberInErrorOutput(t *testing.T) {
+	q := `
+	query {
+		me(func: uid(0x0a)) {
+			friends @filter(alloftext(descr@, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}`
+	_, err := Parse(Request{Str: q})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"line 4 column 35: Unrecognized character in lexDirective: U+002C ','")
+}
