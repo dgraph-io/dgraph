@@ -214,6 +214,23 @@ func TestFindFriendsWhoAreBetween15And19(t *testing.T) {
 		js)
 }
 
+func TestGetNonListUidPredicate(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x02)) {
+				uid
+				best_friend {
+					uid
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x2", "best_friend": {"uid": "0x40"}}]}}`,
+		js)
+}
+
 func TestGeAge(t *testing.T) {
 	query := `{
 		  senior_citizens(func: ge(age, 75)) {

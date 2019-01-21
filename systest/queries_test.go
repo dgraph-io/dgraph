@@ -63,7 +63,7 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{
 		Schema: `
       entity: string @index(exact) .
-      stock: uid @reverse .
+      stock: [uid] @reverse .
     `,
 	}))
 
