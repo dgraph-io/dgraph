@@ -266,7 +266,7 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done in two ways.
 
 1. Using the star notation mentioned in the last section.
-1. Setting the object to a specific. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
+1. Setting the object to a specific value. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
 
 ## Mutations using cURL
 
