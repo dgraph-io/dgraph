@@ -234,7 +234,7 @@ func (l *Lexer) moveStartToPos() {
 	for offset := l.Start; offset < l.Pos; {
 		r, w := utf8.DecodeRuneInString(l.Input[offset:l.Pos])
 		offset += w
-		if isEndOfLine(r) {
+		if IsEndOfLine(r) {
 			l.Line++
 			l.Column = 0
 		} else {
@@ -328,8 +328,8 @@ func (l *Lexer) IsEscChar(r rune) bool {
 	return false
 }
 
-// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
-func isEndOfLine(r rune) bool {
+// IsEndOfLine returns true if the rune is a Linefeed or a Carriage return.
+func IsEndOfLine(r rune) bool {
 	return r == '\u000A' || r == '\u000D'
 }
 
