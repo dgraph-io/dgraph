@@ -1561,6 +1561,10 @@ L:
 				function.Attr = val
 				attrItemsAgo = 0
 			} else if expectLang {
+				if val == "*" {
+					return nil, x.Errorf(
+						"The * symbol cannot be used as a valid language inside functions")
+				}
 				function.Lang = val
 				expectLang = false
 			} else if function.Name != uid {
@@ -2129,6 +2133,14 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 		}
 	}
 	it.Prev()
+
+	for _, lang := range langs {
+		if lang == string(star) && len(langs) > 1 {
+			return nil, x.Errorf(
+				"If * is used, no other languages are allowed in the language list. Found %v",
+				langs)
+		}
+	}
 
 	return langs, nil
 }

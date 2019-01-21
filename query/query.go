@@ -991,6 +991,13 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 			}
 		}
 	}
+
+	// If the lang is set to *, query all the languages.
+	if len(sg.Params.Langs) == 1 && sg.Params.Langs[0] == "*" {
+		sg.Params.expandAll = true
+		sg.Params.Langs = nil
+	}
+
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Attr:         attr,
@@ -1003,6 +1010,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.expandAll,
 	}
+
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
