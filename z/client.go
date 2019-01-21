@@ -18,10 +18,12 @@ package z
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -42,13 +44,26 @@ func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	x.Check(err)
 
+	nodes := DbNodeCount(t, dg)
+	require.Equal(t, 0, nodes)
+}
+
+func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
-			q(func: has(name)) {
-				nodes : count(uid)
+			q(func: has(_predicate_)) {
+				count(uid)
 			}
 		}
 	`)
 	x.Check(err)
-	CompareJSON(t, `{"q":[{"nodes":0}]}`, string(resp.GetJson()))
+
+	type Resp struct {
+		Count int
+	}
+	var msg = &Resp{}
+	err = json.Unmarshal(resp.GetJson(), &msg)
+	x.Check(err)
+
+	return msg.Count
 }

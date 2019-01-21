@@ -138,15 +138,18 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 func TestLiveLoadJSONAutoUID(t *testing.T) {
 	z.DropAll(t, dg)
 
+	// Remove UID from test data to verify that live loading it fails.
 	pipeline := [][]string{
+		{"grep", "-v", "uid", testDataDir + "/family.json"},
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", testDataDir + "/family.json",
+			"--schema", testDataDir + "/family.schema", "--rdfs", "/dev/stdin",
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file without IDs ran successfully")
+	require.Error(t, err, "live loading JSON file without uid failed")
+	require.Equal(t, 0, z.DbNodeCount(t, dg), "no data was was loaded")
 
-	checkLoadedData(t)
+	//checkLoadedData(t)
 }
 
 func TestMain(m *testing.M) {

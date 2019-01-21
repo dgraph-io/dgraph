@@ -183,14 +183,15 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	defer cleanup_fn()
 
 	var err error
+	var isJson bool
 	if strings.HasSuffix(file, ".rdf") || strings.HasSuffix(file, ".rdf.gz") {
 		err = l.processRdfFile(ctx, rd)
 	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
 		err = l.processJsonFile(ctx, rd)
 	} else {
-		isJson, err := x.IsJSONData(rd)
+		isJson, err = x.IsJSONData(rd)
 		if isJson {
-			l.processJsonFile(ctx, rd)
+			err = l.processJsonFile(ctx, rd)
 		} else if err == nil {
 			err = fmt.Errorf("Unable to determine file content format: %s", file)
 		}

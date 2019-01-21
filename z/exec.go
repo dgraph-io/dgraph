@@ -18,8 +18,11 @@ package z
 
 import (
 	"io"
+	"os"
 	"os/exec"
 )
+
+const showOutput = false
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
@@ -34,12 +37,15 @@ func Pipeline(cmds [][]string) error {
 	for i, c := range cmds {
 		cmd[i] = exec.Command(c[0], c[1:]...)
 		cmd[i].Stdin = p
-		//cmd[i].Stderr = os.Stderr
+
+		if showOutput {
+			cmd[i].Stderr = os.Stderr
+		}
 
 		if i < numCmds-1 {
 			p, _ = cmd[i].StdoutPipe()
-		} else {
-			//cmd[i].Stdout = os.Stdout
+		} else if showOutput {
+			cmd[i].Stdout = os.Stdout
 		}
 
 		cmd[i].Start()
