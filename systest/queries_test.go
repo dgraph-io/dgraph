@@ -335,28 +335,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-      {
-        "predicate": "dgraph.group.acl",
-        "type": "string"
-      },
-      {
-        "predicate": "dgraph.password",
-        "type": "password"
-      },
-      {
-        "predicate": "dgraph.user.group",
-        "type": "uid",
-        "reverse": true,
-        "list": true
-      },
-      {
-        "predicate": "dgraph.xid",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ]
-      },
+` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
@@ -541,28 +520,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-      {
-        "predicate": "dgraph.group.acl",
-        "type": "string"
-      },
-      {
-        "predicate": "dgraph.password",
-        "type": "password"
-      },
-      {
-        "predicate": "dgraph.user.group",
-        "type": "uid",
-        "reverse": true,
-        "list": true
-      },
-      {
-        "predicate": "dgraph.xid",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ]
-      },
+` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
