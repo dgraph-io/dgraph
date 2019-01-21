@@ -902,16 +902,16 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	// Here we determine the list of uids to match.
 	switch {
+	// If this is a filter eval, use the given uid list (good)
+	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+		uids = arg.q.UidList
+
 	// Prefer to use an index (fast)
 	case useIndex:
 		uids, err = uidsForRegex(attr, arg, query, &empty)
 		if err != nil {
 			return err
 		}
-
-	// If this is a filter eval, use the given uid list (good)
-	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
-		uids = arg.q.UidList
 
 	// No index and at root, we must grab the list (slow)
 	// This is basically `has` then filter by `regexp`
