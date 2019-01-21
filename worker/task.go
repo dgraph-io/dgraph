@@ -270,7 +270,7 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 
 func needsIndex(fnType FuncType) bool {
 	switch fnType {
-	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+	case CompareAttrFn, GeoFn, FullTextSearchFn, StandardFn:
 		return true
 	default:
 		return false
