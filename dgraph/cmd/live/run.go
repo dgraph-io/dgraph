@@ -32,6 +32,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/metadata"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
 	"github.com/spf13/cobra"
 )
 
@@ -67,7 +69,8 @@ var tlsConf x.TLSHelperConfig
 var Live x.SubCommand
 
 var keyFields []string
-var blankUids map[[md5.Size]byte]int
+var blankUids map[[md5.Size]byte]uint32
+var blankCounter uint32
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -216,30 +219,33 @@ func assignBlankId(nqs []*api.NQuad) error {
 		field2idx[nq.Predicate] = idx
 	}
 
-	md := md5.New()
 	str := ""
 	for _, f := range keyFields {
 		idx, ok := field2idx[f]
 		if !ok {
 			return fmt.Errorf("Key field %s not found: %+v\n", f, nqs)
 		}
-		//io.WriteString(md, nqs[idx].ObjectValue.String())
 		str += nqs[idx].ObjectValue.String()
 	}
+
+	// Use MD5, which is smaller and faster than SHA digests, to hash the key fields into a
+	// unique identifier. MD5 is no longer cryptographically secure but that should not be a
+	// problem here. If an "attacker" crafted the JSON file such that a collision occurred, one
+	// entry would overwrite the other, but the attacker could accomplish the same thing by simply
+	// omitting it in the first place.
+	md := md5.New()
+	io.WriteString(md, str)
 	hash := md.Sum(nil)
-	//hash := md.Sum([]byte(str))
-	fmt.Fprintf(os.Stderr, "HASH('%s')=%x\n", str, hash)
 
 	var key [md5.Size]byte
 	copy(key[:], hash)
 	id, ok := blankUids[key]
 	if !ok {
-		id := len(blankUids) + 1
+		id = atomic.AddUint32(&blankCounter, 1)
 		blankUids[key] = id
 	}
 
 	uid := fmt.Sprintf("_:id-%d", id)
-	fmt.Fprintf(os.Stderr, "UID=%s\n", uid)
 	for _, nq := range nqs {
 		nq.Subject = uid
 	}
@@ -247,6 +253,7 @@ func assignBlankId(nqs []*api.NQuad) error {
 	return nil
 }
 
+// TODO This functionality should be shared between this live loader and the bulk loader.
 func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
@@ -405,7 +412,7 @@ func run() error {
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
 	keyFields = strings.Split(opt.keyFields, ",")
-	blankUids = make(map[[md5.Size]byte]int)
+	blankUids = make(map[[md5.Size]byte]uint32)
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()

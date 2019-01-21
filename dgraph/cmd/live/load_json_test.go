@@ -25,9 +25,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
@@ -39,25 +37,8 @@ var testDataDir string
 var dg *dgo.Dgraph
 var tmpDir string
 
-// move to z package?
-func dropAll(t *testing.T) {
-	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	x.Check(err)
-
-	resp, err := dg.NewTxn().Query(context.Background(), `
-		{
-			q(func: has(name)) {
-				nodes : count(uid)
-			}
-		}
-	`)
-	x.Check(err)
-	z.CompareJSON(t, `{"q":[{"nodes":0}]}`, string(resp.GetJson()))
-}
-
+// Just check the first and last entries and assumes everything in between is okay.
 func checkLoadedData(t *testing.T) {
-	// just check the first and last entries and assume everything in between is okay
-
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Homer")) {
@@ -104,7 +85,7 @@ func checkLoadedData(t *testing.T) {
 }
 
 func TestLiveLoadJSONFile(t *testing.T) {
-	dropAll(t)
+	z.DropAll(t, dg)
 
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
@@ -118,7 +99,7 @@ func TestLiveLoadJSONFile(t *testing.T) {
 }
 
 func TestLiveLoadCompressedJSONStream(t *testing.T) {
-	dropAll(t)
+	z.DropAll(t, dg)
 
 	pipeline := [][]string{
 		{"gzip", "-c", testDataDir + "/family.json"},
@@ -136,15 +117,11 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile) + "/test_data"
 
-	conn, err := grpc.Dial(alphaService, grpc.WithInsecure())
-	x.Check(err)
-	defer conn.Close()
+	dg = z.DgraphClient(alphaService)
 
-	dg = dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	x.Check(err)
-
-	tmpDir, err = ioutil.TempDir("", "test.tmp-")
+	// Try to create any files in a dedicated temp directory instead of all over /tmp
+	// or the working directory.
+	tmpDir, err := ioutil.TempDir("", "test.tmp-")
 	x.Check(err)
 	os.Chdir(tmpDir)
 	defer os.RemoveAll(tmpDir)
