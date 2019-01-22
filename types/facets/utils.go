@@ -17,7 +17,6 @@
 package facets
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"sort"
@@ -134,47 +133,35 @@ func FacetFor(key, val string) (*api.Facet, error) {
 		return nil, err
 	}
 
-	// convert facet val interface{} to binary
-	tid, err := TypeIDFor(&api.Facet{ValType: vt})
+	facet, err := ToBinary(key, v, vt)
 	if err != nil {
 		return nil, err
 	}
 
-	fVal := &types.Val{Tid: types.BinaryID}
-	if err = types.Marshal(types.Val{Tid: tid, Value: v}, fVal); err != nil {
+	if vt == api.Facet_STRING {
+		// tokenize val.
+		facet.Tokens, err = tok.GetTermTokens([]string{v.(string)})
+		if err == nil {
+			sort.Strings(facet.Tokens)
+		}
+	}
+	return facet, err
+}
+
+func ToBinary(key string, value interface{}, sourceType api.Facet_ValType) (
+	*api.Facet, error) {
+	// convert facet val interface{} to binary
+	sourceTid, err := TypeIDFor(&api.Facet{ValType: sourceType})
+	if err != nil {
 		return nil, err
 	}
 
-	fval, ok := fVal.Value.([]byte)
-	if !ok {
-		return nil, x.Errorf("Error while marshalling types.Val into binary.")
+	targetVal := &types.Val{Tid: types.BinaryID}
+	if err = types.Marshal(types.Val{Tid: sourceTid, Value: value}, targetVal); err != nil {
+		return nil, err
 	}
-	res := &api.Facet{Key: key, Value: fval, ValType: vt}
-	if vt == api.Facet_STRING {
-		// tokenize val.
-		res.Tokens, err = tok.GetTermTokens([]string{v.(string)})
-		if err == nil {
-			sort.Strings(res.Tokens)
-		}
-	}
-	return res, err
-}
 
-// SameFacets returns whether two facets are same or not.
-// both should be sorted by key.
-func SameFacets(a []*api.Facet, b []*api.Facet) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	la := len(a)
-	for i := 0; i < la; i++ {
-		if (a[i].ValType != b[i].ValType) ||
-			(a[i].Key != b[i].Key) ||
-			!bytes.Equal(a[i].Value, b[i].Value) {
-			return false
-		}
-	}
-	return true
+	return &api.Facet{Key: key, Value: targetVal.Value.([]byte), ValType: sourceType}, nil
 }
 
 // TypeIDFor gives TypeID for facet.
