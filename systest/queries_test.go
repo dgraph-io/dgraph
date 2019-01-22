@@ -335,7 +335,6 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
@@ -520,7 +519,6 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
