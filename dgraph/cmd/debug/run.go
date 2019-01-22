@@ -101,7 +101,7 @@ func readAmount(txn *badger.Txn, uid uint64) int {
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
-		if !pk.IsData() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
+		if !pk.IsData() || pk.IsSchema() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
 			itr.Next()
 			continue
 		}
@@ -235,7 +235,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 
 		var acc *account
-		if pk.Attr == "key_0" || pk.Attr == "amount_0" {
+		if strings.HasPrefix(pk.Attr, "key_") || strings.HasPrefix(pk.Attr, "amount_") {
 			var has bool
 			acc, has = keys[pk.Uid]
 			if !has {
@@ -256,10 +256,10 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 			appendPosting(&buf, p)
 		}
 		if num > 0 && acc != nil {
-			switch pk.Attr {
-			case "key_0":
+			switch {
+			case strings.HasPrefix(pk.Attr, "key_"):
 				acc.Key = num
-			case "amount_0":
+			case strings.HasPrefix(pk.Attr, "amount_"):
 				acc.Amt = num
 			}
 		}

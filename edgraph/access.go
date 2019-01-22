@@ -21,6 +21,7 @@ package edgraph
 import (
 	"context"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -31,4 +32,27 @@ func (s *Server) Login(ctx context.Context,
 
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
 	return &api.Response{}, x.ErrNotSupported
+}
+
+func ResetAcl() {
+	// do nothing
+}
+
+func RefreshAcls(closer *y.Closer) {
+	// do nothing
+	<-closer.HasBeenClosed()
+	closer.Done()
+}
+
+func authorizeAlter(ctx context.Context, op *api.Operation) error {
+	return nil
+}
+
+func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+	return nil
+}
+
+func authorizeQuery(ctx context.Context, req *api.Request) error {
+	// always allow access
+	return nil
 }

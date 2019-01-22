@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -32,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -73,6 +76,8 @@ const (
 
 	TlsClientCert = "client.crt"
 	TlsClientKey  = "client.key"
+
+	GrootId = "groot"
 )
 
 var (
@@ -88,8 +93,8 @@ var (
 	AclPredsJson = `
 {"predicate":"dgraph.group.acl", "type":"string"},
 {"predicate":"dgraph.password", "type":"password"},
-{"reverse":true, "predicate":"dgraph.user.group", "type":"uid"},
-{"index":true, "tokenizer":["exact"], "predicate":"dgraph.xid", "type":"string"}
+{"reverse":true, "predicate":"dgraph.user.group", "type":"uid", "list":true},
+{"index":true, "tokenizer":["exact"], "predicate":"dgraph.xid", "type":"string", "upsert":true}
 `
 	Nilbyte []byte
 )
@@ -454,22 +459,22 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 	return grpc.Dial(host, dialOpts...)
 }
 
-func Diff(targetMap map[string]struct{}, existingMap map[string]struct{}) ([]string, []string) {
-	var newGroups []string
-	var groupsToBeDeleted []string
+func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string) {
+	var add []string
+	var del []string
 
-	for g := range targetMap {
-		if _, ok := existingMap[g]; !ok {
-			newGroups = append(newGroups, g)
+	for g := range dst {
+		if _, ok := src[g]; !ok {
+			add = append(add, g)
 		}
 	}
-	for g := range existingMap {
-		if _, ok := targetMap[g]; !ok {
-			groupsToBeDeleted = append(groupsToBeDeleted, g)
+	for g := range src {
+		if _, ok := dst[g]; !ok {
+			del = append(del, g)
 		}
 	}
 
-	return newGroups, groupsToBeDeleted
+	return add, del
 }
 
 func SpanTimer(span *trace.Span, name string) func() {
@@ -486,5 +491,27 @@ func SpanTimer(span *trace.Span, name string) func() {
 
 	return func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
+	}
+}
+
+type CancelFunc func()
+
+const DgraphAlphaPort = 9180
+
+func GetDgraphClient() (*dgo.Dgraph, CancelFunc) {
+	return GetDgraphClientOnPort(DgraphAlphaPort)
+}
+
+func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
+	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", alphaPort), grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
+
+	dc := api.NewDgraphClient(conn)
+	return dgo.NewDgraphClient(dc), func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error while closing connection:%v", err)
+		}
 	}
 }

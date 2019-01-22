@@ -62,6 +62,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
 			case BoolID:
+				if len(data) == 0 {
+					*res = false
+					break
+				}
 				if data[0] == 0 {
 					*res = false
 					return to, nil
@@ -114,11 +118,14 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
-				val, err := strconv.ParseBool(vc)
-				if err != nil {
-					return to, err
+				*res = false
+				if vc != "" {
+					val, err := strconv.ParseBool(vc)
+					if err != nil {
+						return to, err
+					}
+					*res = bool(val)
 				}
-				*res = val
 			case DateTimeID:
 				*res = time.Time{}
 				if vc != "" {
