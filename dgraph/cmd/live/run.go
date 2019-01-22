@@ -50,7 +50,7 @@ import (
 )
 
 type options struct {
-	files               string
+	dataFiles           string
 	schemaFile          string
 	dgraph              string
 	zero                string
@@ -86,7 +86,7 @@ func init() {
 	Live.EnvPrefix = "DGRAPH_LIVE"
 
 	flag := Live.Cmd.Flags()
-	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
+	flag.StringP("rdfs", "r", "", "Location of RDF or JSON files to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
@@ -397,7 +397,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 func run() error {
 	x.PrintVersion()
 	opt = options{
-		files:               Live.Conf.GetString("rdfs"),
+		dataFiles:           Live.Conf.GetString("rdfs"),
 		schemaFile:          Live.Conf.GetString("schema"),
 		dgraph:              Live.Conf.GetString("dgraph"),
 		zero:                Live.Conf.GetString("zero"),
@@ -461,7 +461,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	filesList := fileList(opt.files)
+	filesList := fileList(opt.dataFiles)
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		fmt.Printf("No data files to process\n")

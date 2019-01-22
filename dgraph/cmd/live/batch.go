@@ -69,8 +69,8 @@ type loader struct {
 	retryRequestsWg sync.WaitGroup
 
 	// Miscellaneous information to print counters.
-	// Num of RDF's sent
-	rdfs uint64
+	// Num of N-Quads sent
+	nquads uint64
 	// Num of txns sent
 	txns uint64
 	// Num of aborts
@@ -148,7 +148,7 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
-			atomic.AddUint64(&l.rdfs, uint64(len(req.Set)))
+			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
@@ -167,7 +167,7 @@ func (l *loader) request(req api.Mutation) {
 	_, err := txn.Mutate(l.opts.Ctx, &req)
 
 	if err == nil {
-		atomic.AddUint64(&l.rdfs, uint64(len(req.Set)))
+		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
 		return
 	}
@@ -203,7 +203,7 @@ func (l *loader) printCounters() {
 // Counter returns the current state of the BatchMutation.
 func (l *loader) Counter() Counter {
 	return Counter{
-		Nquads:   atomic.LoadUint64(&l.rdfs),
+		Nquads:   atomic.LoadUint64(&l.nquads),
 		TxnsDone: atomic.LoadUint64(&l.txns),
 		Elapsed:  time.Since(l.start),
 		Aborts:   atomic.LoadUint64(&l.aborts),
