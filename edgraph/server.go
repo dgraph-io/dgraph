@@ -673,15 +673,14 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		res.Del = append(res.Del, nqs...)
 	}
 
+	res.Set = append(res.Set, mu.Set...)
+	res.Del = append(res.Del, mu.Del...)
 	// parse facets and convert to the binary format so that
 	// a field of type datetime like "2017-01-01" can be correctly encoded in the
 	// marshaled binary format as done in the time.Marshal method
-	if err := validateAndConvertFacets(mu); err != nil {
+	if err := validateAndConvertFacets(res.Set); err != nil {
 		return nil, err
 	}
-
-	res.Set = append(res.Set, mu.Set...)
-	res.Del = append(res.Del, mu.Del...)
 
 	if err := validateNQuads(res.Set, res.Del); err != nil {
 		return nil, err
@@ -689,8 +688,8 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	return res, nil
 }
 
-func validateAndConvertFacets(mu *api.Mutation) error {
-	for _, m := range mu.Set {
+func validateAndConvertFacets(nquads []*api.NQuad) error {
+	for _, m := range nquads {
 		encodedFacets := make([]*api.Facet, 0, len(m.Facets))
 		for _, f := range m.Facets {
 			// try to interpret the value as binary first

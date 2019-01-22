@@ -168,10 +168,11 @@ edge@lang1:...:langN
 ```
 specifies the preference order for returned languages, with the following rules.
 
-* At most one result will be returned.
+* At most one result will be returned (except in the case where the language list is set to *).
 * The preference list is considered left to right: if a value in given language is not found, the next language from the list is considered.
 * If there are no values in any of the specified languages, no value is returned.
 * A final `.` means that a value without a specified language is returned or if there is no value without language, a value in ''some'' language is returned.
+* Setting the language list value to * will return all the values for that predicate along with their language. Values without a language tag are also returned.
 
 For example:
 
@@ -181,9 +182,10 @@ For example:
 - `name@en:.` => Look for `en`, then untagged, then any language.
 - `name@en:pl` => Look for `en`, then `pl`, otherwise nothing.
 - `name@en:pl:.` => Look for `en`, then `pl`, then untagged, then any language.
+- `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists (including the * notation) are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
 
 {{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
 
