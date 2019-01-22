@@ -381,18 +381,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
         "predicate": "_predicate_"
       },
       {
-        "predicate": "dgraph.group.acl"
-      },
-      {
-        "predicate": "dgraph.password"
-      },
-      {
-        "predicate": "dgraph.user.group"
-      },
-      {
-        "predicate": "dgraph.xid"
-      },
-      {
         "predicate": "friends"
       },
       {
