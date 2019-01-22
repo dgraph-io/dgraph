@@ -185,7 +185,7 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above. The @* syntax is also not allowed. {{% /notice %}}
+{{% notice "note" %}}In functions, language lists (including the * notation) are not allowed. Single language, `.` notation and attribute name without language tag works as described above. {{% /notice %}}
 
 {{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
 
