@@ -243,6 +243,12 @@
 			"revisionTime": "2018-11-14T23:20:33Z"
 		},
 		{
+			"checksumSHA1": "sP0qvqWwZgUMRjK8GU9oobghGFM=",
+			"path": "github.com/blevesearch/bleve/analysis/token/ngram",
+			"revision": "d72521093e14a38cb92e22042aed18ca7a1e8fd4",
+			"revisionTime": "2019-01-16T19:08:17Z"
+		},
+		{
 			"checksumSHA1": "QOw3ypU4VTmFT8XYS/52P3RILZw=",
 			"path": "github.com/blevesearch/bleve/analysis/token/porter",
 			"revision": "e1f5e6cdcd76e92b209576b5d9111ccab67bd2fb",
