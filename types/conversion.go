@@ -63,6 +63,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				val := math.Float64frombits(i)
 				*res = float64(val)
 			case BoolID:
+				if len(data) == 0 {
+					*res = false
+					break
+				}
 				if data[0] == 0 {
 					*res = bool(false)
 					return to, nil
@@ -116,11 +120,14 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
-				val, err := strconv.ParseBool(vc)
-				if err != nil {
-					return to, err
+				*res = false
+				if vc != "" {
+					val, err := strconv.ParseBool(vc)
+					if err != nil {
+						return to, err
+					}
+					*res = bool(val)
 				}
-				*res = bool(val)
 			case DateTimeID:
 				t, err := ParseTime(vc)
 				if err != nil {
@@ -162,7 +169,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case FloatID:
 				*res = float64(vc)
 			case BoolID:
-				*res = bool(vc != 1)
+				*res = bool(vc != 0)
 			case StringID, DefaultID:
 				*res = string(strconv.FormatInt(vc, 10))
 			case DateTimeID:
@@ -194,7 +201,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = int64(vc)
 			case BoolID:
-				*res = bool(vc != 1)
+				*res = bool(vc != 0)
 			case StringID, DefaultID:
 				*res = string(strconv.FormatFloat(float64(vc), 'G', -1, 64))
 			case DateTimeID:
