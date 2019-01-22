@@ -941,11 +941,11 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 		vals := make([]types.Val, 1)
 		switch {
-		case isList:
-			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
-
 		case lang != "":
 			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+		case isList:
+			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
 
 		default:
 			vals[0], err = pl.Value(arg.q.ReadTs)
