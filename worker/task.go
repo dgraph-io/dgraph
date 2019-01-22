@@ -1164,8 +1164,6 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		if err != nil {
 			if err == posting.ErrNoValue {
 				continue
-			} else if err != nil {
-				return err
 			}
 			return err
 		}
