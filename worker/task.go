@@ -1175,6 +1175,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchFuzzy(arg.srcFn, strVal.Value.(string)) {
 				filtered.Uids = append(filtered.Uids, uid)
+				// NOTE: We only add the uid once.
 				break
 			}
 		}
