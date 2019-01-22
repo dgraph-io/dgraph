@@ -30,8 +30,6 @@ import (
 
 const unicodenormName = "unicodenorm_nfkc"
 
-var _ = ngram.Name
-
 var (
 	bleveCache = registry.NewCache()
 	termAnalyzer,
@@ -47,6 +45,15 @@ func setupBleve() {
 		map[string]interface{}{
 			"type": unicodenorm.Name,
 			"form": unicodenorm.NFKC,
+		})
+	x.Check(err)
+
+	// bigram filter - breaks up terms into bigram, suitable for fuzzy lookups.
+	_, err = bleveCache.DefineTokenFilter(ngram.Name,
+		map[string]interface{}{
+			"type": ngram.Name,
+			"min":  int(2),
+			"max":  int(2),
 		})
 	x.Check(err)
 
@@ -74,7 +81,7 @@ func setupBleve() {
 		})
 	x.Check(err)
 
-	// ngram analyzer - splits on word boundaries, lowercase, normalize tokens, split into ngrams
+	// ngram analyzer - splits on word boundaries, lowercase, normalize tokens, split into bigrams
 	ngramAnalyzer, err = bleveCache.DefineAnalyzer("ngram_nfkc",
 		map[string]interface{}{
 			"type":      custom.Name,
@@ -84,9 +91,8 @@ func setupBleve() {
 				unicodenormName,
 				ngram.Name,
 			},
-			"min": 2,
-			"max": 3,
-		})
+		},
+	)
 	x.Check(err)
 }
 
