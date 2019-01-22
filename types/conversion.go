@@ -62,11 +62,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
 			case BoolID:
-				if len(data) == 0 {
-					*res = false
-					break
-				}
-				if data[0] == 0 {
+				if len(data) == 0 || data[0] == 0 {
 					*res = false
 					return to, nil
 				} else if data[0] == 1 {
@@ -124,7 +120,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					if err != nil {
 						return to, err
 					}
-					*res = bool(val)
+					*res = val
 				}
 			case DateTimeID:
 				*res = time.Time{}
@@ -290,9 +286,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = t.Unix()
 				}
 			case FloatID:
-				if t.IsZero() {
-					*res = float64(0)
-				} else {
+				*res = float64(0)
+				if !t.IsZero() {
 					*res = float64(t.UnixNano()) / float64(nanoSecondsInSec)
 				}
 			default:
@@ -411,9 +406,8 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(time.Time)
 		switch toID {
 		case StringID, DefaultID:
-			if vc.IsZero() {
-				*res = ""
-			} else {
+			*res = ""
+			if !vc.IsZero() {
 				val, err := vc.MarshalText()
 				if err != nil {
 					return err
@@ -421,9 +415,8 @@ func Marshal(from Val, to *Val) error {
 				*res = string(val)
 			}
 		case BinaryID:
-			if vc.IsZero() {
-				*res = []byte("")
-			} else {
+			*res = []byte("")
+			if !vc.IsZero() {
 				r, err := vc.MarshalBinary()
 				if err != nil {
 					return err
