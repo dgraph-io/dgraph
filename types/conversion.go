@@ -261,9 +261,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case DateTimeID:
 				*res = t
 			case BinaryID:
-				if t.IsZero() {
-					*res = []byte("")
-				} else {
+				*res = []byte("")
+				if !t.IsZero() {
 					r, err := t.MarshalBinary()
 					if err != nil {
 						return to, err
@@ -271,9 +270,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = r
 				}
 			case StringID, DefaultID:
-				if t.IsZero() {
-					*res = ""
-				} else {
+				*res = ""
+				if !t.IsZero() {
 					val, err := t.MarshalText()
 					if err != nil {
 						return to, err
