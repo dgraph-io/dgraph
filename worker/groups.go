@@ -158,6 +158,7 @@ func (g *groupi) proposeInitialSchema() {
 		Predicate: "dgraph.xid",
 		ValueType: pb.Posting_STRING,
 		Directive: pb.SchemaUpdate_INDEX,
+		Upsert:    true,
 		Tokenizer: []string{"exact"},
 	})
 

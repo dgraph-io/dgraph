@@ -17,6 +17,7 @@
 package lex
 
 import (
+	"errors"
 	"fmt"
 	"unicode/utf8"
 
@@ -39,8 +40,15 @@ const (
 type StateFn func(*Lexer) StateFn
 
 type Item struct {
-	Typ ItemType
-	Val string
+	Typ    ItemType
+	Val    string
+	line   int
+	column int
+}
+
+func (i Item) Errorf(format string, args ...interface{}) error {
+	return fmt.Errorf("line %d column %d: "+format,
+		append([]interface{}{i.line, i.column}, args...)...)
 }
 
 func (i Item) String() string {
@@ -48,7 +56,7 @@ func (i Item) String() string {
 	case ItemEOF:
 		return "EOF"
 	}
-	return fmt.Sprintf("lex.Item [%v] %q", i.Typ, i.Val)
+	return fmt.Sprintf("lex.Item [%v] %q at %d:%d", i.Typ, i.Val, i.line, i.column)
 }
 
 type ItemIterator struct {
@@ -64,6 +72,11 @@ func (l *Lexer) NewIterator() *ItemIterator {
 	return it
 }
 
+func (p *ItemIterator) Errorf(format string, args ...interface{}) error {
+	nextItem, _ := p.PeekOne()
+	return nextItem.Errorf(format, args...)
+}
+
 // Next advances the iterator by one.
 func (p *ItemIterator) Next() bool {
 	p.idx++
@@ -76,7 +89,10 @@ func (p *ItemIterator) Next() bool {
 // Item returns the current item.
 func (p *ItemIterator) Item() Item {
 	if p.idx < 0 || p.idx >= len(p.l.items) {
-		return Item{}
+		return Item{
+			line:   -1, // using negative numbers to indicate out-of-range item
+			column: -1,
+		}
 	}
 	return (p.l.items)[p.idx]
 }
@@ -112,7 +128,10 @@ func (p *ItemIterator) Peek(num int) ([]Item, error) {
 // PeekOne returns the next 1 item without consuming it.
 func (p *ItemIterator) PeekOne() (Item, bool) {
 	if p.idx+1 >= len(p.l.items) {
-		return Item{}, false
+		return Item{
+			line:   -1,
+			column: -1, // use negative number to indicate out of range
+		}, false
 	}
 	return p.l.items[p.idx+1], true
 }
@@ -129,6 +148,27 @@ type Lexer struct {
 	Depth    int     // nesting of {}
 	ArgDepth int     // nesting of ()
 	Mode     StateFn // Default state to go back to after reading a token.
+	Line     int     // the current line number corresponding to Start
+	Column   int     // the current column number corresponding to Start
+}
+
+func NewLexer(input string) *Lexer {
+	return &Lexer{
+		Input:  input,
+		Line:   1,
+		Column: 0,
+	}
+}
+
+func (l *Lexer) ValidateResult() error {
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		if item.Typ == ItemError {
+			return errors.New(item.Val)
+		}
+	}
+	return nil
 }
 
 func (l *Lexer) Run(f StateFn) *Lexer {
@@ -144,7 +184,10 @@ func (l *Lexer) Run(f StateFn) *Lexer {
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.items = append(l.items, Item{
 		Typ: ItemError,
-		Val: fmt.Sprintf("while lexing %v: "+format, append([]interface{}{l.Input}, args...)...),
+		Val: fmt.Sprintf("while lexing %v at line %d column %d: "+format,
+			append([]interface{}{l.Input, l.Line, l.Column}, args...)...),
+		line:   l.Line,
+		column: l.Column,
 	})
 	return nil
 }
@@ -156,10 +199,12 @@ func (l *Lexer) Emit(t ItemType) {
 		return
 	}
 	l.items = append(l.items, Item{
-		Typ: t,
-		Val: l.Input[l.Start:l.Pos],
+		Typ:    t,
+		Val:    l.Input[l.Start:l.Pos],
+		line:   l.Line,
+		column: l.Column,
 	})
-	l.Start = l.Pos
+	l.moveStartToPos()
 }
 
 // Next reads the next rune from the Input, sets the Width and advances Pos.
@@ -184,8 +229,23 @@ func (l *Lexer) Peek() rune {
 	return r
 }
 
-func (l *Lexer) Ignore() {
+func (l *Lexer) moveStartToPos() {
+	// check if we are about to move Start to a new line
+	for offset := l.Start; offset < l.Pos; {
+		r, w := utf8.DecodeRuneInString(l.Input[offset:l.Pos])
+		offset += w
+		if IsEndOfLine(r) {
+			l.Line++
+			l.Column = 0
+		} else {
+			l.Column += w
+		}
+	}
 	l.Start = l.Pos
+}
+
+func (l *Lexer) Ignore() {
+	l.moveStartToPos()
 }
 
 // CheckRune is predicate signature for accepting valid runes on input.
@@ -266,6 +326,11 @@ func (l *Lexer) IsEscChar(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// IsEndOfLine returns true if the rune is a Linefeed or a Carriage return.
+func IsEndOfLine(r rune) bool {
+	return r == '\u000A' || r == '\u000D'
 }
 
 func (l *Lexer) LexQuotedString() error {

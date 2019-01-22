@@ -331,6 +331,7 @@ password                       : password .
 symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : [uid] .
+best_friend                    : uid .
 `
 
 	err := schema.ParseBytes([]byte(schemaStr), 1)
@@ -358,6 +359,8 @@ office.room                    : [uid] .
 	addEdgeToUID(t, "friend", 1, 101, nil)
 	addEdgeToUID(t, "friend", 31, 24, nil)
 	addEdgeToUID(t, "friend", 23, 1, nil)
+
+	addEdgeToUID(t, "best_friend", 2, 64, nil)
 
 	addEdgeToUID(t, "school", 1, 5000, nil)
 	addEdgeToUID(t, "school", 23, 5001, nil)
