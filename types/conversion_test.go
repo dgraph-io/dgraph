@@ -64,6 +64,21 @@ func TestSameConversionString(t *testing.T) {
 	}
 }
 
+func TestSameConversionDateTime(t *testing.T) {
+	tests := []struct {
+		in time.Time
+	}{
+		{in: time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC)},
+		{in: time.Time{}},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: BinaryID, Value: bs(tc.in)}, DateTimeID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: DateTimeID, Value: tc.in}, out)
+	}
+}
+
 func TestConvertToDefault(t *testing.T) {
 	tests := []struct {
 		in  Val
@@ -104,6 +119,55 @@ func TestConvertFromDefault(t *testing.T) {
 
 	for _, tc := range tests {
 		out, err := Convert(Val{DefaultID, []byte(tc.in)}, tc.out.Tid)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
+	}
+}
+
+func TestConvertToBinary(t *testing.T) {
+	tests := []struct {
+		in  Val
+		out []byte
+	}{
+		{in: Val{StringID, []byte("a")}, out: []byte("a")},
+		{in: Val{StringID, []byte("")}, out: []byte("")},
+		{in: Val{DefaultID, []byte("abc")}, out: []byte("abc")},
+		{in: Val{BinaryID, []byte("2016")}, out: []byte("2016")},
+		{in: Val{IntID, bs(int64(3))}, out: bs(int64(3))},
+		{in: Val{FloatID, bs(float64(-3.5))}, out: bs(float64(-3.5))},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+		{in: Val{DateTimeID, bs(time.Time{})}, out: []byte("")},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(tc.in, BinaryID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: BinaryID, Value: tc.out}, out)
+	}
+}
+
+func TestConvertFromBinary(t *testing.T) {
+	tests := []struct {
+		in  []byte
+		out Val
+	}{
+		{in: bs(true), out: Val{BoolID, true}},
+		{in: bs(false), out: Val{BoolID, false}},
+		{in: []byte(""), out: Val{BoolID, false}},
+		{in: nil, out: Val{BoolID, false}},
+		{in: bs(int64(1)), out: Val{IntID, int64(1)}},
+		{in: bs(float64(1.3)), out: Val{FloatID, float64(1.3)}},
+		{in: []byte("2016"), out: Val{BinaryID, []byte("2016")}},
+		{in: []byte(""), out: Val{BinaryID, []byte("")}},
+		{in: []byte("hello"), out: Val{StringID, "hello"}},
+		{in: []byte(""), out: Val{StringID, ""}},
+		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)), out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
+		{in: []byte(""), out: Val{DateTimeID, time.Time{}}},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{BinaryID, tc.in}, tc.out.Tid)
 		require.NoError(t, err)
 		require.EqualValues(t, tc.out, out)
 	}
@@ -227,6 +291,21 @@ func TestConvertToPassword(t *testing.T) {
 		}
 		require.True(t, out.Tid == PasswordID)
 		require.NoError(t, VerifyPassword(string(tc.in.Value.([]byte)), out.Value.(string)))
+	}
+}
+
+func TestSameConversionBool(t *testing.T) {
+	tests := []struct {
+		in bool
+	}{
+		{in: true},
+		{in: false},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: BinaryID, Value: bs(tc.in)}, BoolID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: BoolID, Value: tc.in}, out)
 	}
 }
 
