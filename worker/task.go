@@ -962,6 +962,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
 				filtered.Uids = append(filtered.Uids, uid)
+				break
 			}
 		}
 	}
