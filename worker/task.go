@@ -913,15 +913,12 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			return err
 		}
 
-	// No index and at root, we must grab the list (slow)
-	// This is basically `has` then filter by `regexp`
+	// No index and at root, return error instructing user to use `has` or index.
 	default:
-		out := &pb.Result{}
-		err = qs.handleHasFunction(ctx, arg.q, out)
-		if err != nil {
-			return err
-		}
-		uids = algo.MergeSorted(out.UidMatrix)
+		return x.Errorf(
+			"Attribute %v does not have trigram index for regex matching. "+
+				"Please add a trigram index or use has/uid function with regexp() as filter.",
+			attr)
 	}
 
 	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
