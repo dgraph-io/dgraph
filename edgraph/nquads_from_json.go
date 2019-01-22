@@ -92,8 +92,7 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 		}
 
 		// convert facet val interface{} to binary
-		binaryValueFacet, err := facets.ConvertFacetValueToBinary(key, jsonValue,
-			valueType)
+		binaryValueFacet, err := facets.ToBinary(key, jsonValue, valueType)
 		if err != nil {
 			return nil, err
 		}
