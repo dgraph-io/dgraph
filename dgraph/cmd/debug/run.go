@@ -101,7 +101,7 @@ func readAmount(txn *badger.Txn, uid uint64) int {
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
-		if !pk.IsData() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
+		if !pk.IsData() || pk.IsSchema() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
 			itr.Next()
 			continue
 		}

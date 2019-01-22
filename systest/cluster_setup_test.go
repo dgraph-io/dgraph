@@ -64,8 +64,8 @@ func (d *DgraphCluster) StartZeroOnly() error {
 		"--replicas", "3",
 	)
 	d.zero.Dir = d.dir
-	d.zero.Stdout = os.Stdout
-	d.zero.Stderr = os.Stderr
+	//d.zero.Stdout = os.Stdout
+	//d.zero.Stderr = os.Stderr
 
 	if err := d.zero.Start(); err != nil {
 		return err
@@ -89,8 +89,6 @@ func (d *DgraphCluster) Start() error {
 		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
-	d.dgraph.Stdout = os.Stdout
-	d.dgraph.Stderr = os.Stderr
 	if err := d.dgraph.Start(); err != nil {
 		return err
 	}
