@@ -148,24 +148,20 @@ func FacetFor(key, val string) (*api.Facet, error) {
 	return facet, err
 }
 
-func ToBinary(key string, value interface{}, sourceFacetType api.Facet_ValType) (
+func ToBinary(key string, value interface{}, sourceType api.Facet_ValType) (
 	*api.Facet, error) {
 	// convert facet val interface{} to binary
-	sourceTypeId, err := TypeIDFor(&api.Facet{ValType: sourceFacetType})
+	sourceTid, err := TypeIDFor(&api.Facet{ValType: sourceType})
 	if err != nil {
 		return nil, err
 	}
 
 	targetVal := &types.Val{Tid: types.BinaryID}
-	if err = types.Marshal(types.Val{Tid: sourceTypeId, Value: value}, targetVal); err != nil {
+	if err = types.Marshal(types.Val{Tid: sourceTid, Value: value}, targetVal); err != nil {
 		return nil, err
 	}
 
-	targetValueBytes, ok := targetVal.Value.([]byte)
-	if !ok {
-		return nil, x.Errorf("Error while marshalling types.Val into binary.")
-	}
-	return &api.Facet{Key: key, Value: targetValueBytes, ValType: sourceFacetType}, nil
+	return &api.Facet{Key: key, Value: targetVal.Value.([]byte), ValType: sourceType}, nil
 }
 
 // TypeIDFor gives TypeID for facet.
