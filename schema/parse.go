@@ -302,8 +302,11 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) ([]*pb.SchemaUpdate, error) {
 	var schemas []*pb.SchemaUpdate
-	l := lex.Lexer{Input: s}
+	l := lex.NewLexer(s)
 	l.Run(lexText)
+	if err := l.ValidateResult(); err != nil {
+		return nil, err
+	}
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -320,10 +323,6 @@ func Parse(s string) ([]*pb.SchemaUpdate, error) {
 				return nil, err
 			}
 			schemas = append(schemas, schema)
-
-		case lex.ItemError:
-			return nil, x.Errorf(item.Val)
-
 		case itemNewLine:
 			// pass empty line
 

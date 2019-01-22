@@ -1229,7 +1229,8 @@ func TestParseIdListError(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unexpected character [ while parsing request")
+	require.Contains(t, err.Error(),
+		"Unrecognized character in lexText: U+005D ']'")
 }
 
 func TestParseIdListError2(t *testing.T) {
@@ -1241,7 +1242,8 @@ func TestParseIdListError2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unexpected character [ while parsing request.")
+	require.Contains(t, err.Error(),
+		"Unexpected character [ while parsing request.")
 }
 
 func TestParseFirst(t *testing.T) {
@@ -1855,8 +1857,7 @@ func TestParseVariablesError1(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Variable $")
-	require.Contains(t, err.Error(), "should be initialised")
+	require.Contains(t, err.Error(), "Unrecognized character in lexText: U+0034 '4'")
 }
 
 func TestParseFilter_root(t *testing.T) {
@@ -2162,8 +2163,8 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unexpected item while parsing @filter")
-	require.Contains(t, err.Error(), "'{'")
+	require.Contains(t, err.Error(),
+		"Unrecognized character inside a func: U+007B '{'")
 }
 
 func TestParseFilter_Geo1(t *testing.T) {
@@ -2405,7 +2406,8 @@ func TestParseCountError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Multiple predicates not allowed in single count")
+	require.Contains(t, err.Error(),
+		"Unrecognized character inside a func: U+007D '}'")
 }
 
 func TestParseCountError2(t *testing.T) {
@@ -2419,7 +2421,8 @@ func TestParseCountError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Predicate name cannot be empty")
+	require.Contains(t, err.Error(),
+		"Unrecognized character inside a func: U+007D '}'")
 }
 
 func TestParseCheckPwd(t *testing.T) {
@@ -2620,7 +2623,8 @@ func TestLangsInvalid4(t *testing.T) {
 
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected directive or language list")
+	require.Contains(t, err.Error(),
+		"Unrecognized character in lexDirective: U+000A")
 }
 
 func TestLangsInvalid5(t *testing.T) {
@@ -2634,7 +2638,8 @@ func TestLangsInvalid5(t *testing.T) {
 
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected directive or language list")
+	require.Contains(t, err.Error(),
+		"Unrecognized character in lexDirective: U+003C '<'")
 }
 
 func TestLangsInvalid6(t *testing.T) {
@@ -2720,8 +2725,8 @@ func TestLangsFilter_error2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected arg after func [alloftext]")
-	require.Contains(t, err.Error(), "','")
+	require.Contains(t, err.Error(),
+		"Unrecognized character in lexDirective: U+002C ','")
 }
 
 func TestLangsFunction(t *testing.T) {
@@ -2940,7 +2945,8 @@ func TestParseFacetsError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected ( after func name [facet1]")
+	require.Contains(t, err.Error(),
+		"Consecutive commas not allowed.")
 }
 
 func TestParseFacetsVarError(t *testing.T) {
@@ -3259,7 +3265,8 @@ func TestParseFacetsFail1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected ( after func name [key1]")
+	require.Contains(t, err.Error(),
+		"Consecutive commas not allowed.")
 }
 
 func TestParseRepeatArgsError1(t *testing.T) {
@@ -3575,8 +3582,8 @@ func TestParseRegexp6(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected arg after func [regexp]")
-	require.Contains(t, err.Error(), "Unclosed regexp")
+	require.Contains(t, err.Error(),
+		"Unclosed regexp")
 }
 
 func TestMain(m *testing.M) {
@@ -3669,7 +3676,7 @@ func TestDotsEOF(t *testing.T) {
 			..`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected 3 periods")
+	require.Contains(t, err.Error(), "Unclosed action")
 }
 
 func TestMathWithoutVarAlias(t *testing.T) {
@@ -4318,7 +4325,7 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
 			errStr: "Unexpected { after the end of the block.",
 		},
 		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
-			errStr: "Unexpected error after end of block:",
+			errStr: "Invalid operation type: something after the end of the block",
 		},
 		{m: `
 			# comments are ok
@@ -4420,4 +4427,21 @@ func TestParseGraphQLVarPaginationRootMultiple(t *testing.T) {
 	require.Equal(t, args["offset"], "5")
 	require.Equal(t, args["after"], "0x123")
 	require.Equal(t, gq.Query[0].Order[0].Attr, "name")
+}
+
+func TestLineAndColumnNumberInErrorOutput(t *testing.T) {
+	q := `
+	query {
+		me(func: uid(0x0a)) {
+			friends @filter(alloftext(descr@, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}`
+	_, err := Parse(Request{Str: q})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"line 4 column 35: Unrecognized character in lexDirective: U+002C ','")
 }

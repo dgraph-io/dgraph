@@ -25,7 +25,7 @@ import (
 )
 
 func ParseMutation(mutation string) (*api.Mutation, error) {
-	lexer := lex.Lexer{Input: mutation}
+	lexer := lex.NewLexer(mutation)
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
 	var mu api.Mutation
@@ -46,10 +46,6 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
 			if it.Next() && it.Item().Typ != lex.ItemEOF {
-				if it.Item().Typ == lex.ItemError {
-					return nil, x.Errorf("Unexpected error after end of block: %s",
-						it.Item().String())
-				}
 				return nil, x.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
 			}
 			return &mu, nil
