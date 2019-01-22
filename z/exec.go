@@ -17,12 +17,15 @@
 package z
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 )
 
+// for debugging the tests
 const showOutput = false
+const showCommands = false
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
@@ -35,17 +38,30 @@ func Pipeline(cmds [][]string) error {
 
 	// Run all commands in parallel, connecting stdin of each to the stdout of the previous.
 	for i, c := range cmds {
+		lastCmd := i == numCmds-1
+		if showCommands {
+			fmt.Fprintf(os.Stderr, "%+v", c)
+		}
+
 		cmd[i] = exec.Command(c[0], c[1:]...)
 		cmd[i].Stdin = p
+		if !lastCmd {
+			p, _ = cmd[i].StdoutPipe()
+		}
 
 		if showOutput {
 			cmd[i].Stderr = os.Stderr
+			if lastCmd {
+				cmd[i].Stdout = os.Stdout
+			}
 		}
 
-		if i < numCmds-1 {
-			p, _ = cmd[i].StdoutPipe()
-		} else if showOutput {
-			cmd[i].Stdout = os.Stdout
+		if showCommands {
+			if lastCmd {
+				fmt.Fprintf(os.Stderr, "\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "\n| ")
+			}
 		}
 
 		cmd[i].Start()

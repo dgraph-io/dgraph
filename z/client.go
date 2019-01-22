@@ -58,12 +58,15 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	`)
 	x.Check(err)
 
-	type Resp struct {
+	type count struct {
 		Count int
 	}
-	var msg = &Resp{}
-	err = json.Unmarshal(resp.GetJson(), &msg)
+	type root struct {
+		Q []count
+	}
+	var response root
+	err = json.Unmarshal(resp.GetJson(), &response)
 	x.Check(err)
 
-	return msg.Count
+	return response.Q[0].Count
 }
