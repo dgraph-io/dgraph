@@ -25,8 +25,8 @@ import (
 	fuzzstr "github.com/dgryski/go-fuzzstr"
 )
 
-// matchFuzzy takes in a value (from posting) and compares it our list of bigram tokens.
-// All token values must match to be considered a fuzzy match.
+// matchFuzzy takes in a value (from posting) and compares it to our list of bigram tokens.
+// All search tokens must match to be considered a fuzzy match.
 // Returns true if value matches fuzzy tokens, false otherwise.
 func matchFuzzy(srcFn *functionContext, val string) bool {
 	if val == "" {
@@ -40,7 +40,11 @@ func matchFuzzy(srcFn *functionContext, val string) bool {
 	cnt := 0
 	for i := range srcFn.tokens {
 		p := idx.Query(srcFn.tokens[i])
-		cnt += len(p)
+		l := len(p)
+		if l == 0 {
+			return false
+		}
+		cnt++
 	}
 	return cnt > 0
 }
