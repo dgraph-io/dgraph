@@ -33,18 +33,18 @@ const (
 )
 
 type Options struct {
-	PostingDir    string
-	BadgerTables  string
-	BadgerVlog    string
-	WALDir        string
-	MutationsMode int
-	AuthToken     string
-
+	PostingDir     string
+	BadgerTables   string
+	BadgerVlog     string
+	WALDir         string
+	MutationsMode  int
+	AuthToken      string
 	AllottedMemory float64
 
-	HmacSecret    []byte
-	AccessJwtTtl  time.Duration
-	RefreshJwtTtl time.Duration
+	HmacSecret         []byte
+	AccessJwtTtl       time.Duration
+	RefreshJwtTtl      time.Duration
+	AclRefreshInterval time.Duration
 }
 
 var Config Options

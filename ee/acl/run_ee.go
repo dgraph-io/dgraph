@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -32,10 +31,13 @@ type options struct {
 	dgraph string
 }
 
-var opt options
-var tlsConf x.TLSHelperConfig
+var (
+	opt     options
+	tlsConf x.TLSHelperConfig
+	CmdAcl  x.SubCommand
+)
 
-var CmdAcl x.SubCommand
+const gPassword = "gpassword"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
@@ -44,7 +46,8 @@ func init() {
 	}
 
 	flag := CmdAcl.Cmd.PersistentFlags()
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph gRPC server address")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
+	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -95,22 +98,6 @@ func initSubcommands() []*x.SubCommand {
 	}
 	userDelFlags := cmdUserDel.Cmd.Flags()
 	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
-
-	// login command
-	var cmdLogIn x.SubCommand
-	cmdLogIn.Cmd = &cobra.Command{
-		Use:   "login",
-		Short: "Login to dgraph in order to get a jwt token",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := userLogin(cmdLogIn.Conf); err != nil {
-				glog.Errorf("Unable to login:%v", err)
-				os.Exit(1)
-			}
-		},
-	}
-	loginFlags := cmdLogIn.Cmd.Flags()
-	loginFlags.StringP("user", "u", "", "The user id to be created")
-	loginFlags.StringP("password", "p", "", "The password for the user")
 
 	// group creation command
 	var cmdGroupAdd x.SubCommand
@@ -193,7 +180,7 @@ func initSubcommands() []*x.SubCommand {
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{
-		&cmdUserAdd, &cmdUserDel, &cmdLogIn, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
+		&cmdUserAdd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
 		&cmdChMod, &cmdInfo,
 	}
 }
@@ -231,11 +218,13 @@ func info(conf *viper.Viper) error {
 		(len(userId) != 0 && len(groupId) != 0) {
 		return fmt.Errorf("Either the user or group should be specified, not both")
 	}
-
-	dc, close := getDgraphClient(conf)
-	defer close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	dc, cancel, err := getClientWithAdminCtx(conf)
 	defer cancel()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+
+	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {

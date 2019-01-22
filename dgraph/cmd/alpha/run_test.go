@@ -1415,6 +1415,59 @@ func TestDeleteAllSP2(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
+func TestDeleteScalarValue(t *testing.T) {
+	var s = `name: string .`
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+	require.NoError(t, alterSchemaWithRetry(s))
+
+	var m = `
+	{
+	  set {
+	    <0x12345> <name> "xxx" .
+	  }
+	}
+	`
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	var d1 = `
+    {
+      delete {
+        <0x12345> <name> "yyy" .
+      }
+    }
+	`
+	err = runMutation(d1)
+	require.NoError(t, err)
+
+	// Verify triple was not deleted because the value in the request did
+	// not match the existing value.
+	q := fmt.Sprintf(`
+	{
+	  me(func: uid(%s)) {
+		name
+	  }
+	}`, "0x12345")
+
+	output, err := runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
+
+	var d2 = `
+	{
+      delete {
+        <0x12345> <name> "xxx" .
+      }
+    }
+	`
+	err = runMutation(d2)
+	require.NoError(t, err)
+
+	// Verify triple was actually deleted this time.
+	output, err = runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[]}}`, output)
+}
 
 func TestDropAll(t *testing.T) {
 	var m1 = `

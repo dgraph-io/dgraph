@@ -466,7 +466,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
 					}
-					dst.AddListChild(fieldName, uc)
+					if pc.List {
+						dst.AddListChild(fieldName, uc)
+					} else {
+						dst.AddMapChild(fieldName, uc, false)
+					}
 				}
 			}
 			if pc.Params.uidCount && !(pc.Params.uidCountAlias == "" && pc.Params.Normalize) {
@@ -991,6 +995,13 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 			}
 		}
 	}
+
+	// If the lang is set to *, query all the languages.
+	if len(sg.Params.Langs) == 1 && sg.Params.Langs[0] == "*" {
+		sg.Params.expandAll = true
+		sg.Params.Langs = nil
+	}
+
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Attr:         attr,
@@ -1003,6 +1014,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.expandAll,
 	}
+
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
