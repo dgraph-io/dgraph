@@ -261,7 +261,7 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
-### Deletion of non-list predicates.
+### Deletion of non-list predicates
 
 Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done in two ways.
 
