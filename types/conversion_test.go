@@ -495,13 +495,25 @@ func TestConvertBoolToFloat(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		b := []byte{0}
-		if tc.in {
-			b = []byte{1}
-		}
-		out, err := Convert(Val{Tid: BoolID, Value: b}, FloatID)
+		out, err := Convert(Val{Tid: BoolID, Value: bs(tc.in)}, FloatID)
 		require.NoError(t, err)
 		require.EqualValues(t, Val{Tid: FloatID, Value: tc.out}, out)
+	}
+}
+
+func TestConvertBoolToString(t *testing.T) {
+	tests := []struct {
+		in  bool
+		out string
+	}{
+		{in: true, out: "true"},
+		{in: false, out: "false"},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: BoolID, Value: bs(tc.in)}, StringID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: StringID, Value: tc.out}, out)
 	}
 }
 
