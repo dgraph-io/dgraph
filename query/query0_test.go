@@ -123,6 +123,18 @@ func TestQueryNamesInLanguage(t *testing.T) {
 		js)
 }
 
+func TestQueryAllLanguages(t *testing.T) {
+	query := `{
+	  people(func: eq(name@hi, "अमित")) {
+		name@*
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people": [{"name@en":"Amit", "name@hi":"अमित", "name":""}]}}`,
+		js)
+}
+
 func TestQueryNamesBeforeA(t *testing.T) {
 	query := `{
 	  people(func: lt(name, "A")) {
@@ -199,6 +211,23 @@ func TestFindFriendsWhoAreBetween15And19(t *testing.T) {
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"friends_15_and_19":[{"name":"Michonne","friend":[{"name":"Rick Grimes","age":15},{"name":"Glenn Rhee","age":15},{"name":"Daryl Dixon","age":17}]}]}}`,
+		js)
+}
+
+func TestGetNonListUidPredicate(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x02)) {
+				uid
+				best_friend {
+					uid
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x2", "best_friend": {"uid": "0x40"}}]}}`,
 		js)
 }
 

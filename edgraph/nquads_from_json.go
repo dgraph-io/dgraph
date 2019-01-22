@@ -39,7 +39,6 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 	}
 
 	var facetsForPred []*api.Facet
-	var fv interface{}
 	for fname, facetVal := range m {
 		if facetVal == nil {
 			continue
@@ -48,62 +47,56 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 			continue
 		}
 
-		if len(fname) <= len(prefix) {
-			return nil, x.Errorf("Facet key is invalid: %s", fname)
-		}
-		// Prefix includes colon, predicate:
-		f := &api.Facet{Key: fname[len(prefix):]}
+		key := fname[len(prefix):]
+		var jsonValue interface{}
+		var valueType api.Facet_ValType
 		switch v := facetVal.(type) {
 		case string:
 			if t, err := types.ParseTime(v); err == nil {
-				f.ValType = api.Facet_DATETIME
-				fv = t
+				valueType = api.Facet_DATETIME
+				jsonValue = t
 			} else {
-				f.ValType = api.Facet_STRING
-				fv = v
+				facet, err := facets.FacetFor(key, strconv.Quote(v))
+				if err != nil {
+					return nil, err
+				}
+
+				// the FacetFor function already converts the value to binary
+				// so there is no need for the conversion again after the switch block
+				facetsForPred = append(facetsForPred, facet)
+				continue
 			}
 		case json.Number:
-			valn := facetVal.(json.Number)
-			if strings.Contains(valn.String(), ".") {
-				vf, err := valn.Float64()
+			number := facetVal.(json.Number)
+			if strings.Contains(number.String(), ".") {
+				jsonFloat, err := number.Float64()
 				if err != nil {
 					return nil, err
 				}
-				fv = vf
-				f.ValType = api.Facet_FLOAT
+				jsonValue = jsonFloat
+				valueType = api.Facet_FLOAT
 			} else {
-				vi, err := valn.Int64()
+				jsonInt, err := number.Int64()
 				if err != nil {
 					return nil, err
 				}
-				fv = vi
-				f.ValType = api.Facet_INT
+				jsonValue = jsonInt
+				valueType = api.Facet_INT
 			}
 		case bool:
-			fv = v
-			f.ValType = api.Facet_BOOL
+			jsonValue = v
+			valueType = api.Facet_BOOL
 		default:
 			return nil, x.Errorf("Facet value for key: %s can only be string/float64/bool.",
 				fname)
 		}
 
 		// convert facet val interface{} to binary
-		tid, err := facets.TypeIDFor(&api.Facet{ValType: f.ValType})
+		binaryValueFacet, err := facets.ToBinary(key, jsonValue, valueType)
 		if err != nil {
 			return nil, err
 		}
-
-		fVal := &types.Val{Tid: types.BinaryID}
-		if err := types.Marshal(types.Val{Tid: tid, Value: fv}, fVal); err != nil {
-			return nil, err
-		}
-
-		fval, ok := fVal.Value.([]byte)
-		if !ok {
-			return nil, x.Errorf("Error while marshalling types.Val into binary.")
-		}
-		f.Value = fval
-		facetsForPred = append(facetsForPred, f)
+		facetsForPred = append(facetsForPred, binaryValueFacet)
 	}
 
 	return facetsForPred, nil
