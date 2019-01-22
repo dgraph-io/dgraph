@@ -177,7 +177,7 @@ func TestConvertToPassword(t *testing.T) {
 		{in: Val{DefaultID, []byte("testing")}, out: "$2a$10$"},
 		{
 			in:      Val{StringID, []byte("")},
-			failure: `Password too short, i.e. should has at least 6 chars`,
+			failure: `Password too short, i.e. should have at least 6 chars`,
 		},
 		{
 			in:      Val{IntID, bs(int64(1))},
