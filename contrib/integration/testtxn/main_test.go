@@ -572,7 +572,7 @@ func TestSPStar(t *testing.T) {
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
 	op = &api.Operation{}
-	op.Schema = `friend: uid .`
+	op.Schema = `friend: [uid] .`
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
 	txn := s.dg.NewTxn()
@@ -620,7 +620,7 @@ func TestSPStar2(t *testing.T) {
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
 	op = &api.Operation{}
-	op.Schema = `friend: uid .`
+	op.Schema = `friend: [uid] .`
 	require.NoError(t, s.dg.Alter(context.Background(), op))
 
 	// Add edge

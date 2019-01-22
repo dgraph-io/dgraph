@@ -466,7 +466,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if sg.Params.GetUid {
 						uc.SetUID(childUID, "uid")
 					}
-					dst.AddListChild(fieldName, uc)
+					if pc.List {
+						dst.AddListChild(fieldName, uc)
+					} else {
+						dst.AddMapChild(fieldName, uc, false)
+					}
 				}
 			}
 			if pc.Params.uidCount && !(pc.Params.uidCountAlias == "" && pc.Params.Normalize) {
