@@ -133,7 +133,7 @@ func FacetFor(key, val string) (*api.Facet, error) {
 		return nil, err
 	}
 
-	facet, err := ConvertFacetValueToBinary(key, v, vt)
+	facet, err := ToBinary(key, v, vt)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func FacetFor(key, val string) (*api.Facet, error) {
 	return facet, err
 }
 
-func ConvertFacetValueToBinary(key string, value interface{}, sourceFacetType api.Facet_ValType) (
+func ToBinary(key string, value interface{}, sourceFacetType api.Facet_ValType) (
 	*api.Facet, error) {
 	// convert facet val interface{} to binary
 	sourceTypeId, err := TypeIDFor(&api.Facet{ValType: sourceFacetType})

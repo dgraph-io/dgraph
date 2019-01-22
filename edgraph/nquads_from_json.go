@@ -67,16 +67,16 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 				continue
 			}
 		case json.Number:
-			jsonNumber := facetVal.(json.Number)
-			if strings.Contains(jsonNumber.String(), ".") {
-				jsonFloat, err := jsonNumber.Float64()
+			number := facetVal.(json.Number)
+			if strings.Contains(number.String(), ".") {
+				jsonFloat, err := number.Float64()
 				if err != nil {
 					return nil, err
 				}
 				jsonValue = jsonFloat
 				valueType = api.Facet_FLOAT
 			} else {
-				jsonInt, err := jsonNumber.Int64()
+				jsonInt, err := number.Int64()
 				if err != nil {
 					return nil, err
 				}
