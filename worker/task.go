@@ -281,9 +281,7 @@ func needsIndex(fnType FuncType) bool {
 
 func needsIntersect(fnName string) bool {
 	fnName = strings.ToLower(fnName)
-	return strings.HasPrefix(fnName, "allof") ||
-		strings.HasPrefix(fnName, "anyof") ||
-		fnName == "match"
+	return strings.HasPrefix(fnName, "allof") || strings.HasPrefix(fnName, "anyof")
 }
 
 type funcArgs struct {
@@ -1111,27 +1109,28 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	}
 
 	attr := arg.q.Attr
-	typ, err := schema.State().TypeOf(attr)
+	typ := arg.srcFn.atype
 	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	if err != nil || !typ.IsScalar() {
+	uids := &pb.List{}
+	switch {
+	case !typ.IsScalar():
 		return x.Errorf("Attribute not scalar: %s %v", attr, typ)
-	}
-	if typ != types.StringID {
-		return x.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
-	}
-	var useIndex bool
-	for _, t := range schema.State().Tokenizer(attr) {
-		if t.Identifier() == tok.IdentNgram {
-			useIndex = true
-		}
-	}
-	if !useIndex {
-		return x.Errorf("Attribute %v does not have ngram index for fuzzy matching.", attr)
-	}
 
-	uids, err := uidsForMatch(attr, arg)
-	if err != nil {
-		return err
+	case typ != types.StringID:
+		return x.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
+
+	case !schema.State().HasTokenizer(tok.IdentNgram, attr):
+		return x.Errorf("Attribute %v does not have ngram index for fuzzy matching.", attr)
+
+	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+		uids = arg.q.UidList
+
+	default:
+		var err error
+		uids, err = uidsForMatch(attr, arg)
+		if err != nil {
+			return err
+		}
 	}
 
 	isList := schema.State().IsList(attr)
@@ -1174,7 +1173,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		for _, val := range vals {
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchFuzzy(strVal, arg.srcFn) {
+			if err == nil && matchFuzzy(arg.srcFn, strVal.Value.(string)) {
 				filtered.Uids = append(filtered.Uids, uid)
 			}
 		}
