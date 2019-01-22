@@ -229,11 +229,11 @@ func assignBlankId(nqs []*api.NQuad) error {
 		str += nqs[idx].ObjectValue.String()
 	}
 
-	// Use MD5, which is smaller and faster than SHA digests, to hash the key fields into a
-	// unique identifier. MD5 is no longer cryptographically secure but that should not be a
-	// problem here. If an "attacker" crafted the JSON file such that a collision occurred, one
-	// entry would overwrite the other, but the attacker could accomplish the same thing by simply
-	// omitting it in the first place.
+	// Use MD5, because it is smaller and faster than SHA digests, to hash the key fields into a
+	// unique identifier. MD5 is no longer cryptographically secure but that should not matter
+	// here. If an "attacker" crafted a JSON file such that a collision occurs some data may be
+	// overwritten, but the attacker could accomplish the same thing by simply omitting the over-
+	// written data from the load files in the first place.
 	md := md5.New()
 	io.WriteString(md, str)
 	hash := md.Sum(nil)
