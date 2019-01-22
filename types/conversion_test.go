@@ -17,147 +17,339 @@
 package types
 
 import (
-	"reflect"
-	"strings"
+	"encoding/binary"
+	"math"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
+func bs(v interface{}) []byte {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return []byte{1}
+		}
+		return []byte{0}
+	case int64:
+		var bs [8]byte
+		binary.LittleEndian.PutUint64(bs[:], uint64(x))
+		return bs[:]
+	case float64:
+		var bs [8]byte
+		binary.LittleEndian.PutUint64(bs[:], math.Float64bits(x))
+		return bs[:]
+	case time.Time:
+		bs, err := x.MarshalBinary()
+		if err == nil {
+			return bs
+		}
+	}
+	return nil
+}
+
 func TestSameConversionString(t *testing.T) {
-	data := []struct {
-		in  Val
-		out Val
+	tests := []struct {
+		in string
 	}{
-		{Val{StringID, []byte("a")}, Val{StringID, "a"}},
-		{Val{StringID, []byte("")}, Val{StringID, ""}},
-		{Val{DefaultID, []byte("abc")}, Val{StringID, "abc"}},
+		{in: "a"},
+		{in: ""},
 	}
 
-	for _, tc := range data {
-		if v, err := Convert(tc.in, StringID); err != nil {
-			t.Errorf("Unexpected error converting int to bool: %v", err)
-		} else if v != tc.out {
-			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, v)
-		}
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: BinaryID, Value: []byte(tc.in)}, StringID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: StringID, Value: tc.in}, out)
 	}
 }
 
 func TestConvertToDefault(t *testing.T) {
-	data := []struct {
+	tests := []struct {
 		in  Val
-		out Val
+		out string
 	}{
-		{Val{StringID, []byte("a")}, Val{DefaultID, "a"}},
-		{Val{StringID, []byte("")}, Val{DefaultID, ""}},
-		{Val{DefaultID, []byte("abc")}, Val{DefaultID, "abc"}},
-		{Val{BinaryID, []byte("2016")}, Val{DefaultID, "2016"}},
+		{in: Val{StringID, []byte("a")}, out: "a"},
+		{in: Val{StringID, []byte("")}, out: ""},
+		{in: Val{DefaultID, []byte("abc")}, out: "abc"},
+		{in: Val{BinaryID, []byte("2016")}, out: "2016"},
+		{in: Val{IntID, bs(int64(3))}, out: "3"},
+		{in: Val{FloatID, bs(float64(-3.5))}, out: "-3.5"},
+		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
+			out: "2006-01-02T15:04:05Z"},
 	}
 
-	for _, tc := range data {
-		if v, err := Convert(tc.in, DefaultID); err != nil {
-			t.Errorf("Unexpected error converting int to bool: %v", err)
-		} else if !reflect.DeepEqual(v, tc.out) {
-			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, v)
-		}
+	for _, tc := range tests {
+		out, err := Convert(tc.in, DefaultID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: DefaultID, Value: tc.out}, out)
 	}
 }
 
 func TestConvertFromDefault(t *testing.T) {
-	data := []struct {
-		in  Val
+	tests := []struct {
+		in  string
 		out Val
-		typ TypeID
 	}{
-		{Val{DefaultID, []byte("1")}, Val{IntID, int64(1)}, IntID},
-		{Val{DefaultID, []byte("1.3")}, Val{FloatID, 1.3}, FloatID},
-		{Val{DefaultID, []byte("true")}, Val{BoolID, true}, BoolID},
-		{Val{DefaultID, []byte("2016")}, Val{BinaryID, []byte("2016")}, BinaryID},
+		{in: "1", out: Val{IntID, int64(1)}},
+		{in: "1.3", out: Val{FloatID, float64(1.3)}},
+		{in: "true", out: Val{BoolID, true}},
+		{in: "2016", out: Val{BinaryID, []byte("2016")}},
+		{in: "", out: Val{BinaryID, []byte("")}},
+		{in: "hello", out: Val{StringID, "hello"}},
+		{in: "", out: Val{StringID, ""}},
+		{in: "2016", out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 	}
 
-	for _, tc := range data {
-		if v, err := Convert(tc.in, tc.typ); err != nil {
-			t.Errorf("Unexpected error converting int to bool: %v", err)
-		} else if !reflect.DeepEqual(v, tc.out) {
-			t.Errorf("Converting string to string: Expected %+v, got %+v", tc.out, v)
-		}
+	for _, tc := range tests {
+		out, err := Convert(Val{DefaultID, []byte(tc.in)}, tc.out.Tid)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
 	}
 }
 
-func TestConversionToDateTime(t *testing.T) {
-	data := []struct {
-		in  Val
+func TestConvertStringToDateTime(t *testing.T) {
+	tests := []struct {
+		in  string
 		out time.Time
 	}{
-		{
-			Val{StringID, []byte("2006-01-02T15:04:05")},
-			time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC),
-		},
-		{
-			Val{StringID, []byte("2006-01-02")},
-			time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			Val{StringID, []byte("2006-01")},
-			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			Val{StringID, []byte("2006")},
-			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
-		},
+		{in: "2006-01-02T15:04:05", out: time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC)},
+		{in: "2006-01-02", out: time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC)},
+		{in: "2006-01", out: time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC)},
+		{in: "2006", out: time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC)},
 	}
 
-	for _, tc := range data {
-		if val, err := Convert(tc.in, DateTimeID); err != nil {
-			t.Errorf("Unexpected error converting string to datetime: %v", err)
-		} else if !tc.out.Equal(val.Value.(time.Time)) {
-			t.Errorf("Converting string to datetime: Expected %+v, got %+v", tc.out, val.Value)
-		}
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: StringID, Value: []byte(tc.in)}, DateTimeID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: DateTimeID, Value: tc.out}, out)
 	}
 }
 
 func TestConvertFromPassword(t *testing.T) {
-	data := []struct {
-		in  Val
-		out Val
-		typ TypeID
+	tests := []struct {
+		in      string
+		out     Val
+		failure string
 	}{
-		{Val{PasswordID, []byte("")}, Val{StringID, ""}, StringID},
-		{Val{PasswordID, []byte("testing")}, Val{StringID, "testing"}, StringID},
+		{in: "", out: Val{StringID, ""}},
+		{in: "password", out: Val{PasswordID, "password"}},
+		{in: "password", out: Val{StringID, "password"}},
+		{in: "password", out: Val{BinaryID, []byte("password")}},
+		{
+			in:      "password",
+			failure: `Cannot convert password to type default`,
+		},
+		{
+			in: "password", out: Val{IntID, bs(int64(1))},
+			failure: `Cannot convert password to type int`,
+		},
+		{
+			in: "password", out: Val{FloatID, bs(float64(1.0))},
+			failure: `Cannot convert password to type float`,
+		},
+		{
+			in: "password", out: Val{BoolID, bs(true)},
+			failure: `Cannot convert password to type bool`,
+		},
 	}
 
-	for _, tc := range data {
-		if val, err := Convert(tc.in, tc.typ); err != nil {
-			t.Errorf("Unexpected error converting to string: %v", err)
-		} else if !reflect.DeepEqual(val, tc.out) {
-			t.Errorf("Converting password to string: Expected %+v, got %+v", tc.out, val)
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: PasswordID, Value: []byte(tc.in)}, tc.out.Tid)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.EqualError(t, err, tc.failure)
+			continue
 		}
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
 	}
 }
 
 func TestConvertToPassword(t *testing.T) {
-	data := []struct {
-		in       Val
-		out      Val
-		hasError bool
+	tests := []struct {
+		in      Val
+		out     string
+		failure string
 	}{
-		{Val{IntID, []byte{0, 0, 0, 0, 0, 0, 0, 1}}, Val{PasswordID, ""}, true},
-		{Val{FloatID, []byte{0, 0, 0, 0, 0, 0, 0, 1}}, Val{PasswordID, ""}, true},
-		{Val{BoolID, []byte{1}}, Val{PasswordID, ""}, true},
-		{Val{StringID, []byte("")}, Val{PasswordID, ""}, true},
-		{Val{StringID, []byte("testing")}, Val{PasswordID, "$2a$10$"}, false},
-		{Val{PasswordID, []byte("testing")}, Val{PasswordID, "testing"}, false},
-		{Val{DefaultID, []byte("testing")}, Val{PasswordID, "$2a$10$"}, false},
+		{in: Val{StringID, []byte("testing")}, out: "$2a$10$"},
+		{in: Val{PasswordID, []byte("testing")}, out: "testing"},
+		{in: Val{DefaultID, []byte("testing")}, out: "$2a$10$"},
+		{
+			in:      Val{StringID, []byte("")},
+			failure: `Password too short, i.e. should have at least 6 chars`,
+		},
+		{
+			in:      Val{IntID, bs(int64(1))},
+			failure: `Cannot convert int to type password`,
+		},
+		{
+			in:      Val{FloatID, bs(float64(1.0))},
+			failure: `Cannot convert float to type password`,
+		},
+		{
+			in:      Val{BoolID, bs(true)},
+			failure: `Cannot convert bool to type password`,
+		},
 	}
 
-	for i, tc := range data {
-		val, err := Convert(tc.in, PasswordID)
-		if err != nil && !tc.hasError {
-			t.Errorf("test#%d Unexpected error converting to string: %v", i+1, err)
-		} else if err == nil && tc.hasError {
-			t.Errorf("test#%d Expected an error but got instead: %+v", i+1, val)
-		} else if !strings.HasPrefix(val.Value.(string), tc.out.Value.(string)) {
-			t.Errorf("test#%d Converting string to password: Expected %+v, got %+v", i+1, tc.out, val)
+	for _, tc := range tests {
+		out, err := Convert(tc.in, PasswordID)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.EqualError(t, err, tc.failure)
+			continue
 		}
+		require.NoError(t, err)
+		if tc.in.Tid == PasswordID {
+			require.EqualValues(t, Val{Tid: PasswordID, Value: tc.out}, out)
+			continue
+		}
+		require.True(t, out.Tid == PasswordID)
+		require.NoError(t, VerifyPassword(string(tc.in.Value.([]byte)), out.Value.(string)))
+	}
+}
+
+func TestConvertIntToBool(t *testing.T) {
+	tests := []struct {
+		in  int64
+		out bool
+	}{
+		{in: int64(3), out: true},
+		{in: int64(-3), out: true},
+		{in: int64(0), out: false},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: IntID, Value: bs(tc.in)}, BoolID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: BoolID, Value: tc.out}, out)
+	}
+}
+
+func TestConvertFloatToBool(t *testing.T) {
+	tests := []struct {
+		in  float64
+		out bool
+	}{
+		{in: float64(3.0), out: true},
+		{in: float64(-3.5), out: true},
+		{in: float64(0), out: false},
+		{in: math.NaN(), out: true},
+		{in: math.Inf(0), out: true},
+		{in: math.Inf(-1), out: true},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: FloatID, Value: bs(tc.in)}, BoolID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: BoolID, Value: tc.out}, out)
+	}
+}
+
+func TestConvertStringToBool(t *testing.T) {
+	tests := []struct {
+		in      string
+		out     bool
+		failure string
+	}{
+		{in: "1", out: true},
+		{in: "true", out: true},
+		{in: "True", out: true},
+		{in: "T", out: true},
+		{in: "F", out: false},
+		{in: "0", out: false},
+		{in: "false", out: false},
+		{in: "False", out: false},
+		{in: "", out: false},
+		{
+			in:      "srfrog",
+			failure: `strconv.ParseBool: parsing "srfrog": invalid syntax`,
+		},
+		{
+			in:      "3",
+			failure: `strconv.ParseBool: parsing "3": invalid syntax`,
+		},
+		{
+			in:      "-3",
+			failure: `strconv.ParseBool: parsing "-3": invalid syntax`,
+		},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: StringID, Value: []byte(tc.in)}, BoolID)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.EqualError(t, err, tc.failure)
+			continue
+		}
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: BoolID, Value: tc.out}, out)
+	}
+}
+
+func TestConvertDateTimeToBool(t *testing.T) {
+	_, err := Convert(Val{Tid: DateTimeID, Value: bs(time.Now())}, BoolID)
+	require.Error(t, err)
+	require.EqualError(t, err, "Cannot convert datetime to type bool")
+}
+
+func TestConvertBoolToDateTime(t *testing.T) {
+	_, err := Convert(Val{Tid: BoolID, Value: bs(true)}, DateTimeID)
+	require.Error(t, err)
+	require.EqualError(t, err, "Cannot convert bool to type datetime")
+}
+
+func TestConvertBoolToInt(t *testing.T) {
+	tests := []struct {
+		in  bool
+		out int64
+	}{
+		{in: true, out: int64(1)},
+		{in: false, out: int64(0)},
+	}
+
+	for _, tc := range tests {
+		out, err := Convert(Val{Tid: BoolID, Value: bs(tc.in)}, IntID)
+		require.NoError(t, err)
+		require.EqualValues(t, Val{Tid: IntID, Value: tc.out}, out)
+	}
+}
+
+func TestTruthy(t *testing.T) {
+	tests := []struct {
+		in Val
+	}{
+		{in: Val{Tid: StringID, Value: []byte("true")}},
+		{in: Val{Tid: DefaultID, Value: []byte("true")}},
+		{in: Val{Tid: IntID, Value: bs(int64(1))}},
+		{in: Val{Tid: IntID, Value: bs(int64(-1))}},
+		{in: Val{Tid: FloatID, Value: bs(float64(1.0))}},
+		{in: Val{Tid: FloatID, Value: bs(float64(-1.0))}},
+	}
+	for _, tc := range tests {
+		out, err := Convert(tc.in, BoolID)
+		require.NoError(t, err)
+		require.EqualValues(t, true, out.Value)
+	}
+}
+
+func TestFalsy(t *testing.T) {
+	tests := []struct {
+		in Val
+	}{
+		{in: Val{Tid: StringID, Value: []byte("false")}},
+		{in: Val{Tid: StringID, Value: []byte("")}},
+		{in: Val{Tid: DefaultID, Value: []byte("false")}},
+		{in: Val{Tid: DefaultID, Value: []byte("")}},
+		{in: Val{Tid: IntID, Value: bs(int64(0))}},
+		{in: Val{Tid: FloatID, Value: bs(float64(0.0))}},
+		{in: Val{Tid: BinaryID, Value: []byte("")}},
+	}
+	for _, tc := range tests {
+		out, err := Convert(tc.in, BoolID)
+		require.NoError(t, err)
+		require.EqualValues(t, false, out.Value)
 	}
 }
 
