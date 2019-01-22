@@ -321,7 +321,7 @@ func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
 	// The path meets the weight requirements so it does not get filtered.
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3e9","path|weight":0.100000}],"path|weight":0.100000}],"path|weight":0.100000}]}]}}`,
+		`{"data":{"_path_":[{"uid":"0x1","path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3e9","path|weight":0.100000},"path|weight":0.100000},"path|weight":0.100000}}]}}`,
 		js)
 }
 
@@ -390,7 +390,7 @@ func TestKShortestPathWeighted1MinMaxWeight(t *testing.T) {
 		}`
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
-		`{"data":{"_path_":[{"uid":"0x1","path":[{"uid":"0x1f","path":[{"uid":"0x3e8","path":[{"uid":"0x3ea","path":[{"uid":"0x3eb","path|weight":0.600000}],"path|weight":0.700000}],"path|weight":0.100000}],"path|weight":0.100000}]}]}}`,
+		`{"data":{"_path_":[{"uid":"0x1","path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3ea","path":{"uid":"0x3eb","path|weight":0.600000},"path|weight":0.700000},"path|weight":0.100000},"path|weight":0.100000}}]}}`,
 		js)
 }
 
