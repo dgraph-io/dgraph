@@ -141,7 +141,9 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
-	go gr.cleanupTablets()
+
+	// HACK HACK HACK: Do not try to cleanup tablets for now.
+	// go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
 	gr.proposeInitialSchema()
@@ -676,12 +678,17 @@ func (g *groupi) sendMembershipUpdates() {
 					// Found an attribute, which is present in the group state by Zero, but not on
 					// disk. So, we can do some cleanup here by asking Zero to remove this predicate
 					// from the group's state.
-					tablets[attr] = &pb.Tablet{
-						GroupId:   g.gid,
-						Predicate: attr,
-						Remove:    true,
-					}
-					glog.Warningf("Removing tablet: %+v", tablets[attr])
+
+					// ************************
+					// HACK HACK HACK: Let's not try to clean any tablets.
+					// ************************
+					//
+					// tablets[attr] = &pb.Tablet{
+					// 	GroupId:   g.gid,
+					// 	Predicate: attr,
+					// 	Remove:    true,
+					// }
+					// glog.Warningf("Removing tablet: %+v", tablets[attr])
 				}
 			}
 			g.RUnlock()
