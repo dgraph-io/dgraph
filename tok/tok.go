@@ -350,6 +350,12 @@ func EncodeRegexTokens(tokens []string) {
 	}
 }
 
+func EncodeTokens(id byte, tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], id)
+	}
+}
+
 type BoolTokenizer struct{}
 
 func (t BoolTokenizer) Name() string { return "bool" }
