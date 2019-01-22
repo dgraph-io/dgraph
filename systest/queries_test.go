@@ -718,18 +718,6 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 		in, out string
 	}{
 		{
-			in:  `{q(func:regexp(name, /art/)) {name}}`,
-			out: `{"q":[]}`,
-		},
-		{
-			in:  `{q(func:regexp(name@es, /art/)){name@es}}`,
-			out: `{"q":[{"name@es": "Desprenderse de la artificialidad"}]}`,
-		},
-		{
-			in:  `{q(func:regexp(name@fr, /art/)) {name@fr}}`,
-			out: `{"q":[{"name@fr": "L'art est dans les détails"}]}`,
-		},
-		{
 			in:  `{q(func:has(name)) @filter(regexp(name, /art/)) {name}}`,
 			out: `{"q":[]}`,
 		},
@@ -769,10 +757,8 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
     `,
 	}))
 
-	t.Log("testing again without trigram index")
-	for _, tc := range tests {
-		resp, err := c.NewTxn().Query(ctx, tc.in)
-		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
-	}
+	t.Log("testing without trigram index at root")
+	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
 }
