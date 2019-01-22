@@ -273,11 +273,6 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	if types.TypeID(edge.ValueType) == types.DefaultID && isStarAll(edge.Value) {
 		return nil
 	}
-	// <s> <p> <o> Del on non list scalar type.
-	if edge.ValueId == 0 && !isStarAll(edge.Value) && edge.Op == pb.DirectedEdge_DEL &&
-		!su.GetList() {
-		return x.Errorf("Please use * with delete operation for non-list type: [%v]", edge.Attr)
-	}
 
 	storageType := posting.TypeID(edge)
 	schemaType := types.TypeID(su.ValueType)

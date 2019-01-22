@@ -17,13 +17,18 @@
 package edgraph
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -253,14 +258,106 @@ func checkCount(t *testing.T, nq []*api.NQuad, pred string, count int) {
 	}
 }
 
+func getMapOfFacets(facets []*api.Facet) map[string]*api.Facet {
+	res := make(map[string]*api.Facet)
+	for _, f := range facets {
+		res[f.Key] = f
+	}
+	return res
+}
+
+func checkFacets(t *testing.T, nq []*api.NQuad, pred string, facets []*api.Facet) {
+	for _, n := range nq {
+		if n.Predicate == pred {
+			require.Equal(t, len(facets), len(n.Facets),
+				fmt.Sprintf("expected %d facets, got %d", len(facets), len(n.Facets)))
+
+			expectedFacets := getMapOfFacets(facets)
+			actualFacets := getMapOfFacets(n.Facets)
+			for key, f := range expectedFacets {
+				actualF, ok := actualFacets[key]
+				if !ok {
+					t.Fatalf("facet for key %s not found", key)
+				}
+				require.Equal(t, f, actualF, fmt.Sprintf("expected:%v\ngot:%v", f, actualF))
+			}
+		}
+	}
+}
+
 func TestNquadsFromJsonFacets1(t *testing.T) {
-	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123","mobile|since":"2006-01-02T15:04:05Z","car|first":"true"}]`
+	// test the 5 data types on facets, string, bool, int, float and datetime
+	operation := "READ WRITE"
+	operationTokens, err := tok.GetTermTokens([]string{operation})
+	require.NoError(t, err, "unable to get tokens from the string %s", operation)
+
+	timeStr := "2006-01-02T15:04:05Z"
+	time, err := types.ParseTime(timeStr)
+	if err != nil {
+		t.Fatalf("unable to convert string %s to time", timeStr)
+	}
+	timeBinary, err := time.MarshalBinary()
+	if err != nil {
+		t.Fatalf("unable to marshal time %v to binary", time)
+	}
+
+	carPrice := 30000.56
+	var priceBytes [8]byte
+	u := math.Float64bits(float64(carPrice))
+	binary.LittleEndian.PutUint64(priceBytes[:], u)
+
+	carAge := 3
+	var ageBytes [8]byte
+	binary.LittleEndian.PutUint64(ageBytes[:], uint64(carAge))
+
+	json := fmt.Sprintf(`[{"name":"Alice","mobile":"040123456","car":"MA0123",`+
+		`"mobile|operation": "%s",
+         "car|first":true,
+         "car|age": %d,
+         "car|price": %f,
+         "car|since": "%s"
+}]`, operation, carAge, carPrice, timeStr)
 
 	nq, err := nquadsFromJson([]byte(json), set)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
-	checkCount(t, nq, "mobile", 1)
-	checkCount(t, nq, "car", 1)
+
+	for _, n := range nq {
+		glog.Infof("%v", n)
+
+	}
+
+	checkFacets(t, nq, "mobile", []*api.Facet{
+		{
+			Key:     "operation",
+			Value:   []byte(operation),
+			ValType: api.Facet_STRING,
+			Tokens:  operationTokens,
+		},
+	})
+
+	checkFacets(t, nq, "car", []*api.Facet{
+		{
+			Key:     "first",
+			Value:   []byte{1},
+			ValType: api.Facet_BOOL,
+		},
+		{
+			Key:     "age",
+			Value:   ageBytes[:],
+			ValType: api.Facet_INT,
+		},
+		{
+			Key:     "price",
+			Value:   priceBytes[:],
+			ValType: api.Facet_FLOAT,
+		},
+		{
+			Key:     "since",
+			Value:   timeBinary,
+			ValType: api.Facet_DATETIME,
+		},
+	})
 }
 
 func TestNquadsFromJsonFacets2(t *testing.T) {
