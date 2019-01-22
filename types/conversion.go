@@ -63,6 +63,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				val := math.Float64frombits(i)
 				*res = float64(val)
 			case BoolID:
+				if len(data) == 0 {
+					*res = false
+					break
+				}
 				if data[0] == 0 {
 					*res = bool(false)
 					return to, nil
