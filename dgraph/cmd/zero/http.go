@@ -224,6 +224,21 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (st *state) shutdown(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	st.zero.shutDownCh <- struct{}{}
+	w.Write([]byte("Server is shutting down"))
+}
+
 func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
