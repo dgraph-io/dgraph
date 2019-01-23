@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -52,6 +53,18 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.GeoID:      "geo:geojson",
 	types.BinaryID:   "xs:base64Binary",
 	types.PasswordID: "xs:password",
+}
+
+// Having '<' and '>' around all predicates makes the exported schema harder
+// for humans to look at, so only put them on predicates containing "exotic"
+// characters (i.e. ones not in this list).
+var predNonSpecialChars = unicode.RangeTable{
+	R16: []unicode.Range16{
+		unicode.Range16{'.', '.', 1},
+		unicode.Range16{'0', '9', 1},
+		unicode.Range16{'A', 'Z', 1},
+		unicode.Range16{'a', 'z', 1},
+	},
 }
 
 func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) {
@@ -142,7 +155,10 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) 
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	if strings.ContainsRune(attr, ':') {
+	isSpecial := func(r rune) bool {
+		return !(unicode.In(r, &predNonSpecialChars))
+	}
+	if strings.IndexFunc(attr, isSpecial) >= 0 {
 		buf.WriteRune('<')
 		buf.WriteString(attr)
 		buf.WriteRune('>')
