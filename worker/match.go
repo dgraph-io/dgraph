@@ -17,47 +17,45 @@
 package worker
 
 import (
+	"strings"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	fuzzstr "github.com/dgryski/go-fuzzstr"
-	"github.com/golang/glog"
 )
 
 // matchFuzzy takes in a value (from posting) and compares it to our list of ngram tokens.
-// All search tokens must match to be considered a fuzzy match.
 // Returns true if value matches fuzzy tokens, false otherwise.
 func matchFuzzy(srcFn *functionContext, val string) bool {
 	if val == "" {
 		return false
 	}
+
 	terms, err := tok.GetTermTokens([]string{val})
 	if err != nil {
 		return false
 	}
+
+	// match the entire string.
+	terms = append(terms, strings.ToLower(val))
+
 	idx := fuzzstr.NewIndex(terms)
-	cnt := 0
 	for i := range srcFn.tokens {
-		p := idx.Query(srcFn.tokens[i])
-		l := len(p)
-		if l == 0 {
-			return false
+		if len(idx.Query(srcFn.tokens[i])) != 0 {
+			return true
 		}
-		cnt++
 	}
-	return cnt > 0
+	return false
 }
 
 // uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
 // index. matchFuzzy does the actual fuzzy match.
 // Returns the list of uids even if empty, or an error otherwise.
 func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
-	var results *pb.List
-
 	opts := posting.ListOptions{ReadTs: arg.q.ReadTs}
-
 	uidsForNgram := func(ngram string) (*pb.List, error) {
 		key := x.IndexKey(attr, ngram)
 		pl, err := posting.GetNoStore(key)
@@ -71,16 +69,13 @@ func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.Infof("uidsForMatch: tokens: %v", tokens)
-	uidMatrix := make([]*pb.List, len(tokens))
 
+	uidMatrix := make([]*pb.List, len(tokens))
 	for i, t := range tokens {
 		uidMatrix[i], err = uidsForNgram(t)
 		if err != nil {
 			return nil, err
 		}
 	}
-	results = algo.MergeSorted(uidMatrix)
-
-	return results, nil
+	return algo.MergeSorted(uidMatrix), nil
 }
