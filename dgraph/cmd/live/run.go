@@ -268,8 +268,9 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 			if nqs[0].Subject == "_:blank-0" {
 				if opt.keyFields == "" {
 					return fmt.Errorf("No uid field found: %+v\n", nqs)
+				} else if err =	assignBlankId(nqs); err != nil {
+					return err
 				}
-				assignBlankId(nqs)
 			}
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
@@ -412,8 +413,10 @@ func run() error {
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
-	keyFields = strings.Split(opt.keyFields, ",")
 	blankUids = make(map[[md5.Size]byte]uint32)
+	for _, f := range strings.Split(opt.keyFields, ",") {
+		keyFields = append(keyFields, strings.TrimSpace(f))
+	}
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
