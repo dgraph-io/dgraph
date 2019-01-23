@@ -60,9 +60,11 @@ var rdfTypeMap = map[types.TypeID]string{
 // characters (i.e. ones not in this list).
 var predNonSpecialChars = unicode.RangeTable{
 	R16: []unicode.Range16{
+		// Ranges must be in order.
 		unicode.Range16{'.', '.', 1},
 		unicode.Range16{'0', '9', 1},
 		unicode.Range16{'A', 'Z', 1},
+		unicode.Range16{'_', '_', 1},
 		unicode.Range16{'a', 'z', 1},
 	},
 }
