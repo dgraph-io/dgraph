@@ -236,7 +236,7 @@ func (st *state) shutdown(w http.ResponseWriter, r *http.Request) {
 	}
 
 	st.zero.shutDownCh <- struct{}{}
-	w.Write([]byte("Server is shutting down"))
+	w.Write([]byte("Server is shutting down...\n"))
 }
 
 func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
