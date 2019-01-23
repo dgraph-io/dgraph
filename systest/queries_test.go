@@ -50,6 +50,7 @@ func TestQuery(t *testing.T) {
 	t.Run("multiple block eval", wrap(MultipleBlockEval))
 	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
 	t.Run("hash index queries", wrap(QueryHashIndex))
+	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
@@ -532,6 +533,114 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
     ]
   }`
 	CompareJSON(t, js, string(m["data"]))
+}
+
+func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      term: string @index(trigram) .
+      name: string .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:t0 <term> "" .
+      _:t1 <term> "road" .
+      _:t2 <term> "avenue" .
+      _:t3 <term> "street" .
+      _:t4 <term> "boulevard" .
+      _:t5 <term> "drive" .
+      _:t6 <term> "route" .
+      _:t7 <term> "pass" .
+      _:t8 <term> "pathway" .
+      _:t9 <term> "lane" .
+      _:ta <term> "highway" .
+      _:tb <term> "parkway" .
+      _:tc <term> "motorway" .
+      _:td <term> "high road" .
+      _:te <term> "side street" .
+      _:tf <term> "dual carriageway" .
+      _:n0 <name> "srfrog" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out, failure string
+	}{
+		{
+			in:  `{q(func:match(term, "plane")) {term}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in:  `{q(func:match(term, drive)) {term}}`,
+			out: `{"q":[{"term":"drive"}]}`,
+		},
+		{
+			in: `{q(func:match(term, way)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "pathway"},
+        {"term": "parkway"},
+        {"term": "dual carriageway"},
+        {"term": "motorway"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, pway)) {term}}`,
+			out: `{"q":[
+        {"term": "pathway"},
+        {"term": "parkway"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, high)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "high road"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, str)) {term}}`,
+			out: `{"q":[
+        {"term": "street"},
+        {"term": "side street"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, "carr")) {term}}`,
+			out: `{"q":[
+        {"term": "dual carriageway"}
+      ]}`,
+		},
+		{
+			in:  `{q(func:match(term, "dualway")) {term}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in:      `{q(func:match(term, "")) {term}}`,
+			failure: `Empty argument received`,
+		},
+		{
+			in:      `{q(func:match(name, "someone")) {name}}`,
+			failure: `Attribute name is not indexed with type trigram`,
+		},
+	}
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.failure)
+			continue
+		}
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
 }
 
 func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
