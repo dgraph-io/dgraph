@@ -1119,18 +1119,21 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	case typ != types.StringID:
 		return x.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
 
-	case !schema.State().HasTokenizer(tok.IdentNgram, attr):
-		return x.Errorf("Attribute %v does not have ngram index for fuzzy matching.", attr)
-
 	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
 		uids = arg.q.UidList
 
-	default:
+	case schema.State().HasTokenizer(tok.IdentTrigram, attr):
 		var err error
 		uids, err = uidsForMatch(attr, arg)
 		if err != nil {
 			return err
 		}
+
+	default:
+		return x.Errorf(
+			"Attribute %v does not have trigram index for fuzzy matching. "+
+				"Please add a trigram index or use has/uid function with match() as filter.",
+			attr)
 	}
 
 	isList := schema.State().IsList(attr)

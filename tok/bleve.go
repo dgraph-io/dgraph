@@ -22,7 +22,6 @@ import (
 	"github.com/blevesearch/bleve/analysis"
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
-	"github.com/blevesearch/bleve/analysis/token/ngram"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
 	"github.com/blevesearch/bleve/registry"
@@ -32,9 +31,7 @@ const unicodenormName = "unicodenorm_nfkc"
 
 var (
 	bleveCache = registry.NewCache()
-	termAnalyzer,
-	fulltextAnalyzer,
-	ngramAnalyzer *analysis.Analyzer
+	termAnalyzer, fulltextAnalyzer *analysis.Analyzer
 )
 
 // setupBleve creates bleve filters and analyzers that we use for term and fulltext tokenizers.
@@ -45,15 +42,6 @@ func setupBleve() {
 		map[string]interface{}{
 			"type": unicodenorm.Name,
 			"form": unicodenorm.NFKC,
-		})
-	x.Check(err)
-
-	// bigram filter - breaks up terms into bigram, suitable for fuzzy lookups.
-	_, err = bleveCache.DefineTokenFilter(ngram.Name,
-		map[string]interface{}{
-			"type": ngram.Name,
-			"min":  int(2),
-			"max":  int(2),
 		})
 	x.Check(err)
 
@@ -80,21 +68,6 @@ func setupBleve() {
 			},
 		})
 	x.Check(err)
-
-	// ngram analyzer - splits on word boundaries, lowercase, normalize tokens, split into bigrams
-	ngramAnalyzer, err = bleveCache.DefineAnalyzer("ngram_nfkc",
-		map[string]interface{}{
-			"type":      custom.Name,
-			"tokenizer": unicode.Name,
-			"token_filters": []string{
-				lowercase.Name,
-				unicodenormName,
-				ngram.Name,
-			},
-		},
-	)
-	x.Check(err)
-}
 
 // uniqueTerms takes a token stream and returns a string slice of unique terms.
 func uniqueTerms(tokens analysis.TokenStream) []string {

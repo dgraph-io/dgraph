@@ -23,9 +23,10 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	fuzzstr "github.com/dgryski/go-fuzzstr"
+	"github.com/golang/glog"
 )
 
-// matchFuzzy takes in a value (from posting) and compares it to our list of bigram tokens.
+// matchFuzzy takes in a value (from posting) and compares it to our list of ngram tokens.
 // All search tokens must match to be considered a fuzzy match.
 // Returns true if value matches fuzzy tokens, false otherwise.
 func matchFuzzy(srcFn *functionContext, val string) bool {
@@ -49,7 +50,7 @@ func matchFuzzy(srcFn *functionContext, val string) bool {
 	return cnt > 0
 }
 
-// uidsForMatch collects a list of uids that "might" match a fuzzy term based on the bigram
+// uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
 // index. matchFuzzy does the actual fuzzy match.
 // Returns the list of uids even if empty, or an error otherwise.
 func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
@@ -70,6 +71,7 @@ func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 	if err != nil {
 		return nil, err
 	}
+	glog.Infof("uidsForMatch: tokens: %v", tokens)
 	uidMatrix := make([]*pb.List, len(tokens))
 
 	for i, t := range tokens {
