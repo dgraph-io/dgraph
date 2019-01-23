@@ -50,4 +50,6 @@ uninstall:
 	@go clean -i -x
 
 install:
+	@printf "%-8s: %s %s\n" "Old MD5" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
 	@go install $(BUILD_FLAGS)
+	@printf "%-8s: %s %s\n" "New MD5" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
