@@ -32,7 +32,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/metadata"
@@ -69,8 +68,10 @@ var tlsConf x.TLSHelperConfig
 var Live x.SubCommand
 
 var keyFields []string
-var blankUids map[[md5.Size]byte]uint32
-var blankCounter uint32
+type blankUidList struct {
+	keys  map[[md5.Size]byte]uint32
+	count uint32
+}
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -214,13 +215,13 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func assignBlankId(nqs []*api.NQuad) error {
+func assignBlankId(nqs []*api.NQuad, blankUids *blankUidList) error {
 	field2idx := make(map[string]int)
 	for idx, nq := range nqs {
 		field2idx[nq.Predicate] = idx
 	}
 
-	str := ""
+	var str string
 	for _, f := range keyFields {
 		idx, ok := field2idx[f]
 		if !ok {
@@ -240,10 +241,11 @@ func assignBlankId(nqs []*api.NQuad) error {
 
 	var key [md5.Size]byte
 	copy(key[:], hash)
-	id, ok := blankUids[key]
+	id, ok := blankUids.keys[key]
 	if !ok {
-		id = atomic.AddUint32(&blankCounter, 1)
-		blankUids[key] = id
+		blankUids.count += 1
+		id = blankUids.count
+		blankUids.keys[key] = id
 	}
 
 	uid := fmt.Sprintf("_:id-%d", id)
@@ -259,6 +261,8 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
 
+	blankUids := blankUidList{keys: make(map[[md5.Size]byte]uint32)}
+
 	mu := api.Mutation{}
 	for {
 		chunkBuf, err := chunker.Chunk(rd)
@@ -268,7 +272,7 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 			if nqs[0].Subject == "_:blank-0" {
 				if opt.keyFields == "" {
 					return fmt.Errorf("No uid field found: %+v\n", nqs)
-				} else if err =	assignBlankId(nqs); err != nil {
+				} else if err =	assignBlankId(nqs, &blankUids); err != nil {
 					return err
 				}
 			}
@@ -413,7 +417,6 @@ func run() error {
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
 
-	blankUids = make(map[[md5.Size]byte]uint32)
 	for _, f := range strings.Split(opt.keyFields, ",") {
 		keyFields = append(keyFields, strings.TrimSpace(f))
 	}
