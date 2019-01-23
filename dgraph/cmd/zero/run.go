@@ -239,6 +239,7 @@ func run() {
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)
 	http.HandleFunc("/assign", st.assign)
+	http.HandleFunc("/shutdown", st.shutdown)
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
@@ -251,18 +252,34 @@ func run() {
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	// handle signals
+	go func() {
+		for {
+			select {
+			case sig, ok := <-sdCh:
+				if !ok {
+					return
+				}
+				glog.Infof("--- Received %s signal", sig)
+				signal.Stop(sdCh)
+				st.zero.shutDownCh <- struct{}{}
+			}
+		}
+	}()
+
 	go func() {
 		defer wg.Done()
-		<-sdCh
-		glog.Infof("Shutting down...")
+		<-st.zero.shutDownCh
+		glog.Infoln("Shutting down...")
+		close(st.zero.shutDownCh)
+		close(sdCh)
 		// Close doesn't close already opened connections.
 		httpListener.Close()
 		grpcListener.Close()
-		close(st.zero.shutDownCh)
 		st.node.trySnapshot(0)
 	}()
 
-	glog.Infof("Running Dgraph Zero...")
+	glog.Infoln("Running Dgraph Zero...")
 	wg.Wait()
-	glog.Infof("All done.")
+	glog.Infoln("All done.")
 }
