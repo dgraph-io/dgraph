@@ -279,9 +279,12 @@ func needsIndex(fnType FuncType) bool {
 	return false
 }
 
+// needsIntersect checks if the function type needs algo.IntersectSorted() after the results
+// are collected. This is needed for functions that require all values to  match, like
+// "allofterms", "alloftext", and custom functions with "allof".
+// Returns true if function results need intersect, false otherwise.
 func needsIntersect(fnName string) bool {
-	fnName = strings.ToLower(fnName)
-	return strings.HasPrefix(fnName, "allof") || strings.HasPrefix(fnName, "anyof")
+	return strings.HasPrefix(fnName, "allof") || strings.HasSuffix(fnName, "allof")
 }
 
 type funcArgs struct {
@@ -1481,7 +1484,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
 		}
-		fc.intersectDest = needsIntersect(q.SrcFunc.Name)
+		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case CustomIndexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
@@ -1502,8 +1505,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
-		fc.intersectDest = needsIntersect(q.SrcFunc.Name)
-		x.AssertTrue(fc.intersectDest)
+		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case RegexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
