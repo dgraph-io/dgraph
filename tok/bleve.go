@@ -30,7 +30,7 @@ import (
 const unicodenormName = "unicodenorm_nfkc"
 
 var (
-	bleveCache = registry.NewCache()
+	bleveCache                     = registry.NewCache()
 	termAnalyzer, fulltextAnalyzer *analysis.Analyzer
 )
 
@@ -68,6 +68,7 @@ func setupBleve() {
 			},
 		})
 	x.Check(err)
+}
 
 // uniqueTerms takes a token stream and returns a string slice of unique terms.
 func uniqueTerms(tokens analysis.TokenStream) []string {
