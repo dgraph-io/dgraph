@@ -273,6 +273,81 @@ func TestToSchema(t *testing.T) {
 			},
 			expected: "<Alice:best>:string @reverse @lang . \n",
 		},
+		{
+			skv: &skv{
+				attr: "username/password",
+				schema: pb.SchemaUpdate{
+					Predicate: "",
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_NONE,
+					List:      false,
+					Count:     false,
+					Upsert:    false,
+					Lang:      false,
+				},
+			},
+			expected: "<username/password>:string . \n",
+		},
+		{
+			skv: &skv{
+				attr: "B*-tree",
+				schema: pb.SchemaUpdate{
+					Predicate: "",
+					ValueType: pb.Posting_UID,
+					Directive: pb.SchemaUpdate_REVERSE,
+					List:      true,
+					Count:     false,
+					Upsert:    false,
+					Lang:      false,
+				},
+			},
+			expected: "<B*-tree>:[uid] @reverse . \n",
+		},
+		{
+			skv: &skv{
+				attr: "base_de_données",
+				schema: pb.SchemaUpdate{
+					Predicate: "",
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_NONE,
+					List:      false,
+					Count:     false,
+					Upsert:    false,
+					Lang:      true,
+				},
+			},
+			expected: "<base_de_données>:string @lang . \n",
+		},
+		{
+			skv: &skv{
+				attr: "data_base",
+				schema: pb.SchemaUpdate{
+					Predicate: "",
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_NONE,
+					List:      false,
+					Count:     false,
+					Upsert:    false,
+					Lang:      true,
+				},
+			},
+			expected: "data_base:string @lang . \n",
+		},
+		{
+			skv: &skv{
+				attr: "data.base",
+				schema: pb.SchemaUpdate{
+					Predicate: "",
+					ValueType: pb.Posting_STRING,
+					Directive: pb.SchemaUpdate_NONE,
+					List:      false,
+					Count:     false,
+					Upsert:    false,
+					Lang:      true,
+				},
+			},
+			expected: "data.base:string @lang . \n",
+		},
 	}
 	for _, testCase := range testCases {
 		list, err := toSchema(testCase.skv.attr, testCase.skv.schema)
