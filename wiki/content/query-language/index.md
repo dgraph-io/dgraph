@@ -2813,7 +2813,7 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-The k-shortest path algorithm also accepts the arguments minweight and maxweight, which take a float as their value. When they are passed, only paths within the weight range [minweight, maxweight] will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
+The k-shortest path algorithm (used when numPaths > 1)also accepts the arguments ```minweight``` and ```maxweight```, which take a float as their value. When they are passed, only paths within the weight range ```[minweight, maxweight]``` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
