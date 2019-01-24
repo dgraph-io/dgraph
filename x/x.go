@@ -90,12 +90,6 @@ var (
 		"dgraph.user.group": {},
 		"dgraph.group.acl":  {},
 	}
-	AclPredsJson = `
-{"predicate":"dgraph.group.acl", "type":"string"},
-{"predicate":"dgraph.password", "type":"password"},
-{"reverse":true, "predicate":"dgraph.user.group", "type":"uid", "list":true},
-{"index":true, "tokenizer":["exact"], "predicate":"dgraph.xid", "type":"string", "upsert":true}
-`
 	Nilbyte []byte
 )
 

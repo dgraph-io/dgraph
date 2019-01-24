@@ -335,7 +335,6 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
@@ -380,18 +379,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
     "schema": [
       {
         "predicate": "_predicate_"
-      },
-      {
-        "predicate": "dgraph.group.acl"
-      },
-      {
-        "predicate": "dgraph.password"
-      },
-      {
-        "predicate": "dgraph.user.group"
-      },
-      {
-        "predicate": "dgraph.xid"
       },
       {
         "predicate": "friends"
@@ -520,7 +507,6 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
