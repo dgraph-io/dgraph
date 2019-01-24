@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/md5"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -40,6 +39,7 @@ import (
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
@@ -68,10 +68,6 @@ var tlsConf x.TLSHelperConfig
 var Live x.SubCommand
 
 var keyFields []string
-type blankUidList struct {
-	keys  map[[md5.Size]byte]uint32
-	count uint32
-}
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -215,7 +211,7 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func assignBlankId(nqs []*api.NQuad, blankUids *blankUidList) error {
+func assignBlankId(nqs []*api.NQuad) error {
 	field2idx := make(map[string]int)
 	for idx, nq := range nqs {
 		field2idx[nq.Predicate] = idx
@@ -230,27 +226,8 @@ func assignBlankId(nqs []*api.NQuad, blankUids *blankUidList) error {
 		str += nqs[idx].ObjectValue.String()
 	}
 
-	// Use MD5, because it is smaller and faster than SHA digests, to hash the key fields into a
-	// unique identifier. MD5 is no longer cryptographically secure but that should not matter
-	// here. If an "attacker" crafted a JSON file such that a collision occurs some data may be
-	// overwritten, but the attacker could accomplish the same thing by simply omitting the over-
-	// written data from the load files in the first place.
-	md := md5.New()
-	io.WriteString(md, str)
-	hash := md.Sum(nil)
-
-	var key [md5.Size]byte
-	copy(key[:], hash)
-	id, ok := blankUids.keys[key]
-	if !ok {
-		blankUids.count += 1
-		id = blankUids.count
-		blankUids.keys[key] = id
-	}
-
-	uid := fmt.Sprintf("_:id-%d", id)
 	for _, nq := range nqs {
-		nq.Subject = uid
+		nq.Subject = str
 	}
 
 	return nil
@@ -261,8 +238,6 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
 
-	blankUids := blankUidList{keys: make(map[[md5.Size]byte]uint32)}
-
 	mu := api.Mutation{}
 	for {
 		chunkBuf, err := chunker.Chunk(rd)
@@ -272,7 +247,7 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 			if nqs[0].Subject == "_:blank-0" {
 				if opt.keyFields == "" {
 					return fmt.Errorf("No uid field found: %+v\n", nqs)
-				} else if err =	assignBlankId(nqs, &blankUids); err != nil {
+				} else if err = assignBlankId(nqs); err != nil {
 					return err
 				}
 			}
