@@ -52,8 +52,8 @@ var (
 	emptyValueList  = pb.ValueList{Values: []*pb.TaskValue{}}
 )
 
-func invokeNetworkRequest(
-	ctx context.Context, addr string, f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
+func invokeNetworkRequest(ctx context.Context, addr string,
+	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
@@ -270,7 +270,7 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 
 func needsIndex(fnType FuncType) bool {
 	switch fnType {
-	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+	case CompareAttrFn, GeoFn, FullTextSearchFn, StandardFn:
 		return true
 	default:
 		return false
@@ -876,88 +876,102 @@ func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
 }
 
 func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleRegexFunction")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
+	}
+
 	attr := arg.q.Attr
 	typ, err := schema.State().TypeOf(attr)
+	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
 	if err != nil || !typ.IsScalar() {
 		return x.Errorf("Attribute not scalar: %s %v", attr, typ)
 	}
 	if typ != types.StringID {
 		return x.Errorf("Got non-string type. Regex match is allowed only on string type.")
 	}
-	tokenizers := schema.State().TokenizerNames(attr)
-	var found bool
-	for _, t := range tokenizers {
-		if t == "trigram" { // TODO(tzdybal) - maybe just rename to 'regex' tokenizer?
-			found = true
-		}
-	}
-	if !found {
-		return x.Errorf("Attribute %v does not have trigram index for regex matching.", attr)
-	}
+	useIndex := schema.State().HasTokenizer(tok.IdentTrigram, attr)
+	span.Annotatef(nil, "Trigram index found: %t, func at root: %t",
+		useIndex, arg.srcFn.isFuncAtRoot)
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := pb.List{}
-	uids, err := uidsForRegex(attr, arg, query, &empty)
+	uids := &pb.List{}
+
+	// Here we determine the list of uids to match.
+	switch {
+	// If this is a filter eval, use the given uid list (good)
+	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+		uids = arg.q.UidList
+
+	// Prefer to use an index (fast)
+	case useIndex:
+		uids, err = uidsForRegex(attr, arg, query, &empty)
+		if err != nil {
+			return err
+		}
+
+	// No index and at root, return error instructing user to use `has` or index.
+	default:
+		return x.Errorf(
+			"Attribute %v does not have trigram index for regex matching. "+
+				"Please add a trigram index or use has/uid function with regexp() as filter.",
+			attr)
+	}
+
+	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
-	if uids != nil {
-		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
-		filtered := &pb.List{}
-		for _, uid := range uids.Uids {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			pl, err := qs.cache.Get(x.DataKey(attr, uid))
-			if err != nil {
-				return err
-			}
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
 
-			var val types.Val
-			if lang != "" {
-				val, err = pl.ValueForTag(arg.q.ReadTs, lang)
-			} else if isList {
-				vals, err := pl.AllUntaggedValues(arg.q.ReadTs)
-				if err == posting.ErrNoValue {
-					continue
-				} else if err != nil {
-					return err
-				}
-				for _, val := range vals {
-					// convert data from binary to appropriate format
-					strVal, err := types.Convert(val, types.StringID)
-					if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-						filtered.Uids = append(filtered.Uids, uid)
-						break
-					}
-				}
+	filtered := &pb.List{}
+	for _, uid := range uids.Uids {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		pl, err := qs.cache.Get(x.DataKey(attr, uid))
+		if err != nil {
+			return err
+		}
 
-				continue
-			} else {
-				val, err = pl.Value(arg.q.ReadTs)
-			}
+		vals := make([]types.Val, 1)
+		switch {
+		case lang != "":
+			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
 
+		case isList:
+			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+		default:
+			vals[0], err = pl.Value(arg.q.ReadTs)
+		}
+		if err != nil {
 			if err == posting.ErrNoValue {
 				continue
-			} else if err != nil {
-				return err
 			}
+			return err
+		}
 
+		for _, val := range vals {
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
 				filtered.Uids = append(filtered.Uids, uid)
+				// NOTE: We only add the uid once.
+				break
 			}
 		}
-
-		for i := 0; i < len(arg.out.UidMatrix); i++ {
-			algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
-		}
-	} else {
-		return err
 	}
+
+	for i := 0; i < len(arg.out.UidMatrix); i++ {
+		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	}
+
 	return nil
 }
 
