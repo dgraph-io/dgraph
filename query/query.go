@@ -798,52 +798,60 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		args.AfterUID = uint64(after)
 	}
 
-	if v, ok := gq.Args["depth"]; ok && (args.Alias == "shortest") {
-		depth, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+	if args.Alias == "shortest" {
+		if v, ok := gq.Args["depth"]; ok {
+			depth, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.ExploreDepth = depth
 		}
-		args.ExploreDepth = depth
-	}
-	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
-		numPaths, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["numpaths"]; ok {
+			numPaths, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.numPaths = int(numPaths)
 		}
-		args.numPaths = int(numPaths)
-	}
-	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
-		from, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["from"]; ok {
+			from, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.From = uint64(from)
 		}
-		args.From = uint64(from)
-	}
-	if v, ok := gq.Args["to"]; ok && args.Alias == "shortest" {
-		to, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["to"]; ok {
+			to, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.To = uint64(to)
 		}
-		args.To = uint64(to)
-	}
-	if v, ok := gq.Args["maxweight"]; ok && (args.Alias == "shortest") {
-		maxWeight, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["maxweight"]; ok {
+			maxWeight, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return err
+			}
+			args.MaxWeight = maxWeight
+		} else if !ok {
+			args.MaxWeight = math.MaxFloat64
 		}
-		args.MaxWeight = maxWeight
-	} else if !ok && (args.Alias == "shortest") {
-		args.MaxWeight = math.MaxFloat64
-	}
-	if v, ok := gq.Args["minweight"]; ok && (args.Alias == "shortest") {
-		minWeight, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["minweight"]; ok {
+			minWeight, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return err
+			}
+			args.MinWeight = minWeight
+		} else if !ok {
+			args.MinWeight = -math.MaxFloat64
 		}
-		args.MinWeight = minWeight
-	} else if !ok && (args.Alias == "shortest") {
-		args.MinWeight = -math.MaxFloat64
 	}
+
 	if v, ok := gq.Args["first"]; ok {
 		first, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
