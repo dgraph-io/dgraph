@@ -23,9 +23,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 )
 
-const (
-	nanoSecondsInSec = 1000000000
-)
+const nanoSecondsInSec = 1000000000
 
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
@@ -153,12 +151,6 @@ func ValueForType(id TypeID) Val {
 	default:
 		return Val{}
 	}
-}
-
-func createDate(y int, m time.Month, d int) time.Time {
-	var dt time.Time
-	dt = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-	return dt
 }
 
 func ParseTime(val string) (time.Time, error) {

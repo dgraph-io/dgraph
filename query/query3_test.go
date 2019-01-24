@@ -1597,15 +1597,16 @@ func TestFilterRegex1(t *testing.T) {
     {
       me(func: uid(0x01)) {
         name
-        friend @filter(regexp(name, /^[a-z A-Z]+$/)) {
+        friend @filter(regexp(name, /^[Glen Rh]+$/)) {
           name
         }
       }
     }
 `
 
-	_, err := processToFastJson(t, query)
-	require.Error(t, err)
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}}`, js)
 }
 
 func TestFilterRegex2(t *testing.T) {
@@ -1621,8 +1622,9 @@ func TestFilterRegex2(t *testing.T) {
     }
 `
 
-	_, err := processToFastJson(t, query)
-	require.Error(t, err)
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}}`, js)
 }
 
 func TestFilterRegex3(t *testing.T) {
