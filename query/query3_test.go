@@ -309,6 +309,48 @@ func TestKShortestPathWeighted(t *testing.T) {
 		js)
 }
 
+func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
+
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4, minweight:0, maxweight: 1000) {
+				path @facets(weight)
+			}
+		}`
+	// We only get one path in this case as the facet is present only in one path.
+	// The path meets the weight requirements so it does not get filtered.
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"_path_":[{"uid":"0x1","path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3e9","path|weight":0.100000},"path|weight":0.100000},"path|weight":0.100000}}]}}`,
+		js)
+}
+
+func TestKShortestPathWeightedMinWeight(t *testing.T) {
+
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4, minweight: 3) {
+				path @facets(weight)
+			}
+		}`
+	// We get no paths as the only path does not match the weight requirements.
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{}}`, js)
+}
+
+func TestKShortestPathWeightedMaxWeight(t *testing.T) {
+
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4, maxweight: 0.1) {
+				path @facets(weight)
+			}
+		}`
+	// We get no paths as the only path does not match the weight requirements.
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data":{}}`, js)
+}
+
 func TestKShortestPathWeighted_LimitDepth(t *testing.T) {
 
 	query := `
@@ -338,6 +380,20 @@ func TestKShortestPathWeighted1(t *testing.T) {
 		js)
 }
 
+func TestKShortestPathWeighted1MinMaxWeight(t *testing.T) {
+
+	query := `
+		{
+			shortest(from: 1, to:1003, numpaths: 3, minweight: 1.3, maxweight: 1.5) {
+				path @facets(weight)
+			}
+		}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"_path_":[{"uid":"0x1","path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3ea","path":{"uid":"0x3eb","path|weight":0.600000},"path|weight":0.700000},"path|weight":0.100000},"path|weight":0.100000}}]}}`,
+		js)
+}
+
 func TestTwoShortestPath(t *testing.T) {
 
 	query := `
@@ -354,6 +410,38 @@ func TestTwoShortestPath(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"_path_":[{"uid":"0x1","path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3ea"}}}},{"uid":"0x1","path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3e9","path":{"uid":"0x3ea"}}}}}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}}`,
 		js)
+}
+
+func TestTwoShortestPathMaxWeight(t *testing.T) {
+
+	query := `
+		{
+			A as shortest(from: 1, to:1002, numpaths: 2, maxweight:1) {
+				path
+			}
+
+			me(func: uid( A)) {
+				name
+			}
+		}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
+func TestTwoShortestPathMinWeight(t *testing.T) {
+
+	query := `
+		{
+			A as shortest(from: 1, to:1002, numpaths: 2, minweight:10) {
+				path
+			}
+
+			me(func: uid( A)) {
+				name
+			}
+		}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
 func TestShortestPath(t *testing.T) {
