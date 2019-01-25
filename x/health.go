@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+	"go.opencensus.io/stats"
 )
 
 var (
@@ -34,7 +35,13 @@ func UpdateMemoryStatus(ok bool) {
 }
 
 func UpdateHealthStatus(ok bool) {
+	var v int64
 	setStatus(&healthCheck, ok)
+	if ok {
+		v = 1
+	}
+	stats.Record(ObservabilityEnabledParentContext(),
+		AlphaHealth.M(v))
 }
 
 func setStatus(v *uint32, ok bool) {
