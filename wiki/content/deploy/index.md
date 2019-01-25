@@ -1059,6 +1059,114 @@ Stop the cluster. If you used `kops` you can run the following command.
 kops delete cluster ${NAME} --yes
 ```
 
+### Kubernetes Storage
+
+The Kubernetes configurations in the previous sections were configured to run
+Dgraph with any storage type (`storage-class: anything`). On the common cloud
+environments like AWS, GCP, and Azure, the default storage type are slow disks
+like hard disks or low IOPS SSDs. We highly recommend using faster disks for
+ideal performance when running Dgraph.
+
+#### Local storage
+
+The AWS storage-optimized i-class instances provide locally attached NVMe-based
+SSD storage which provide consistent very high IOPS. The Dgraph team uses
+i3.large instances on AWS to test Dgraph.
+
+You can create a Kubernetes `StorageClass` object to provision a specific type
+of storage volume which you can then attach to your Dgraph pods. You can set up
+your cluster with local SSDs by using [Local Persistent
+Volumes](https://kubernetes.io/blog/2018/04/13/local-persistent-volumes-beta/).
+This Kubernetes feature is in beta at the time of this writing (Kubernetes
+v1.13.1). You can first set up an EC2 instance with locally attached storage.
+Once it is formatted and mounted properly, then you can create a StorageClass to
+access it.:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: <your-local-storage-class-name>
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+```
+
+Currently, Kubernetes does not allow automatic provisioning of local storage. So
+a PersistentVolume with a specific mount path should be created:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: <your-local-pv-name>
+spec:
+  capacity:
+    storage: 475Gi
+  volumeMode: Filesystem
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: <your-local-storage-class-name>
+  local:
+    path: /data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - <node-name>
+```
+
+Then, in the StatefulSet configuration you can claim this local storage in
+.spec.volumeClaimTemplate:
+
+```
+kind: StatefulSet
+...
+ volumeClaimTemplates:
+  - metadata:
+      name: datadir
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: <your-local-storage-class-name>
+      resources:
+        requests:
+          storage: 500Gi
+```
+
+You can repeat these steps for each instance that's configured with local
+node storage.
+
+#### Non-local persistent disks
+
+EBS volumes on AWS and PDs on GCP are persistent disks that can be configured
+with Dgraph. The disk performance is much lower than locally attached storage
+but can be sufficient for your workload such as testing environments.
+
+When using EBS volumes on AWS, we recommend using Provisioned IOPS SSD EBS
+volumes (the io1 disk type) which provide consistent IOPS. The available IOPS
+for AWS EBS volumes is based on the total disk size. With Kubernetes, you can
+request io1 disks to be provisioned with this config with 50 IOPS/GB using the
+`iopsPerGB` parameter:
+
+```
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: <your-storage-class-name>
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: io1
+  iopsPerGB: "50"
+  fsType: ext4
+```
+
+Example: Requesting a disk size of 250Gi with this storage class would provide
+12.5K IOPS.
+
 ## More about Dgraph
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
@@ -1097,7 +1205,7 @@ externally to new nodes during data ingestion.
   directory, which already has commits higher than Zero's leased timestamp.
 * `/removeNode?id=3&group=2` If a replica goes down and can't be recovered, you
 can remove it and add a new node to the quorum. This endpoint can be used to
-remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, justjust pass
+remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, pass
 `group=0` and the id of the Zero node.
 
 {{% notice "note" %}}
@@ -1314,9 +1422,9 @@ section below for details.
 
 Dgraph Bulk Loader serves a similar purpose to the Dgraph Live Loader, but can
 only be used to load data into a new cluster. It cannot be run on an existing
-live Dgraph cluster. Dgraph Bulk Loader is **considerably faster** than the
-Dgraph Live Loader and is the recommended way to perform the initial import of
-large datasets into Dgraph.
+Dgraph cluster. Dgraph Bulk Loader is **considerably faster** than the Dgraph
+Live Loader and is the recommended way to perform the initial import of large
+datasets into Dgraph.
 
 Only one or more Dgraph Zeros should be running for bulk loading. Dgraph Alphas
 will be started later.
