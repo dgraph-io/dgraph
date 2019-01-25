@@ -40,7 +40,7 @@ func UpdateHealthStatus(ok bool) {
 	if ok {
 		v = 1
 	}
-	stats.Record(ObservabilityEnabledParentContext(),
+	stats.Record(MetricsContext(),
 		AlphaHealth.M(v))
 }
 

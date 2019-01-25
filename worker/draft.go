@@ -163,7 +163,7 @@ func detectPendingTxns(attr string) error {
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (aerr error) {
 	startTime := time.Now()
 	span := otrace.FromContext(ctx)
-	octx := x.ObservabilityEnabledContextWithMethod(context.Background(),
+	octx := x.MetricsMethodContext(context.Background(),
 		"worker/(*node).applyMutations")
 	tr := trace.New("Dgraph.Node", "ApplyMutations")
 

@@ -160,7 +160,7 @@ func Init(ps *badger.DB) {
 	// At the beginning add some distinguishing information
 	// to the context as tags that will be propagated when
 	// collecting metrics.
-	ctx := x.ObservabilityEnabledParentContext()
+	ctx := x.MetricsContext()
 
 	pstore = ps
 	closer = y.NewCloser(1)

@@ -127,7 +127,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		writes++
 	}
 
-	stats.Record(x.ObservabilityEnabledParentContext(),
+	stats.Record(x.MetricsContext(),
 		x.PostingWrites.M(1), x.BytesWrite.M(size))
 
 	return nil
@@ -280,7 +280,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l.Unlock()
 
 	// Record the size
-	stats.Record(x.ObservabilityEnabledParentContext(),
+	stats.Record(x.MetricsContext(),
 		x.PostingReads.M(1), x.BytesRead.M(int64(size)))
 
 	atomic.StoreInt32(&l.estimatedSize, size)

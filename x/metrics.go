@@ -220,7 +220,7 @@ var allViews = []*view.View{
 func init() {
 	Conf = expvar.NewMap("dgraph_config")
 
-	ctx := ObservabilityEnabledParentContext()
+	ctx := MetricsContext()
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -252,13 +252,10 @@ func init() {
 	http.Handle("/debug/prometheus_metrics", pe)
 }
 
-// ObservabilityEnabledParentContext returns a context with tags that are useful for
-// distinguishing the state of the running system. It contains tags such as:
-// * PID
-// * OS
-// * Architecture
+// MetricsContext returns a context with tags that are useful for
+// distinguishing the state of the running system.
 // This context will be used to derive other contexts.
-func ObservabilityEnabledParentContext() context.Context {
+func MetricsContext() context.Context {
 	// At the beginning add some distinguishing information
 	// to the context as tags that will be propagated when
 	// collecting metrics.
@@ -267,7 +264,7 @@ func ObservabilityEnabledParentContext() context.Context {
 	return ctx
 }
 
-func ObservabilityEnabledContextWithMethod(parent context.Context, method string) context.Context {
+func MetricsMethodContext(parent context.Context, method string) context.Context {
 	ctx, _ := tag.New(parent,
 		tag.Upsert(KeyPid, fmt.Sprint(os.Getpid())),
 		tag.Upsert(KeyMethod, method))
