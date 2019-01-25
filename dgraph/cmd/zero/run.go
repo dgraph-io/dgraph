@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -105,7 +105,7 @@ type state struct {
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.DiskStorage) {
+func (st *state) serveGRPC(l net.Listener, closer *y.Closer, store *raftwal.DiskStorage) {
 	if collector := Zero.Conf.GetString("jaeger.collector"); len(collector) > 0 {
 		// Port details: https://www.jaegertracing.io/docs/getting-started/
 		// Default collectorEndpointURI := "http://localhost:14268"
@@ -148,7 +148,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	pb.RegisterRaftServer(s, st.rs)
 
 	go func() {
-		defer wg.Done()
+		defer closer.Done()
 		err := s.Serve(l)
 		glog.Infof("gRpc server stopped : %v", err)
 		st.node.stop <- struct{}{}
@@ -228,12 +228,12 @@ func run() {
 	defer kv.Close()
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
-	var wg sync.WaitGroup
-	wg.Add(3)
+	closer := y.NewCloser(2)
+
 	// Initialize the servers.
 	var st state
-	st.serveGRPC(grpcListener, &wg, store)
-	st.serveHTTP(httpListener, &wg)
+	st.serveGRPC(grpcListener, closer, store)
+	st.serveHTTP(httpListener, closer)
 
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
@@ -252,8 +252,11 @@ func run() {
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	closer.AddRunning(2)
+
 	// handle signals
 	go func() {
+		defer closer.Done()
 		for {
 			select {
 			case sig, ok := <-sdCh:
@@ -268,7 +271,7 @@ func run() {
 	}()
 
 	go func() {
-		defer wg.Done()
+		defer closer.Done()
 		<-st.zero.shutDownCh
 		glog.Infoln("Shutting down...")
 		close(st.zero.shutDownCh)
@@ -280,6 +283,6 @@ func run() {
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")
-	wg.Wait()
+	closer.SignalAndWait()
 	glog.Infoln("All done.")
 }

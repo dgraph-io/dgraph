@@ -22,9 +22,9 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
@@ -239,7 +239,7 @@ func (st *state) shutdown(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Server is shutting down...\n"))
 }
 
-func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
+func (st *state) serveHTTP(l net.Listener, closer *y.Closer) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
@@ -247,7 +247,7 @@ func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	}
 
 	go func() {
-		defer wg.Done()
+		defer closer.Done()
 		err := srv.Serve(l)
 		glog.Errorf("Stopped taking more http(s) requests. Err: %v", err)
 		ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
