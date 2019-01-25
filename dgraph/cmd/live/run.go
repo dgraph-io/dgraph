@@ -233,16 +233,43 @@ func assignBlankId(nqs []*api.NQuad) error {
 	return nil
 }
 
-// TODO This functionality should be shared between this live loader and the bulk loader.
+func (l *loader) appendToBatch(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
+	for _, nq := range nqs {
+		nq.Subject = l.uid(nq.Subject)
+		if len(nq.ObjectId) > 0 {
+			nq.ObjectId = l.uid(nq.ObjectId)
+		}
+	}
+
+	mu.Set = append(mu.Set, nqs...)
+	if len(mu.Set) >= opt.batchSize {
+		l.finishBatch(mu)
+		mu = &api.Mutation{}
+	}
+
+	return mu
+}
+
+func (l *loader) finishBatch(mu *api.Mutation) {
+	l.reqs <- *mu
+}
+
 func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
 	x.Check(chunker.Begin(rd))
 
-	mu := api.Mutation{}
+	mu := &api.Mutation{}
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		var nqs []*api.NQuad
 		chunkBuf, err := chunker.Chunk(rd)
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err := parseJson(chunkBuf)
+			nqs, err = parseJson(chunkBuf)
 			x.Check(err)
 			if nqs[0].Subject == "_:blank-0" {
 				if opt.keyFields == "" {
@@ -251,24 +278,12 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 					return err
 				}
 			}
-			for _, nq := range nqs {
-				nq.Subject = l.uid(nq.Subject)
-				if len(nq.ObjectId) > 0 {
-					nq.ObjectId = l.uid(nq.ObjectId)
-				}
-			}
-			mu.Set = append(mu.Set, nqs...)
-			if len(mu.Set) >= opt.batchSize {
-				l.reqs <- mu
-				mu = api.Mutation{}
-			}
+			mu = l.appendToBatch(mu, nqs)
 		}
 		if err == io.EOF {
-			if len(mu.Set) >= 0 {
-				l.reqs <- mu
-			}
+			l.finishBatch(mu)
 			break
-		} else if err != nil {
+		} else {
 			x.Check(err)
 		}
 	}
@@ -277,18 +292,20 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	return nil
 }
 
-// processFile sends mutations for a given gz file.
 func (l *loader) processRdfFile(ctx context.Context, bufReader *bufio.Reader) error {
 	var buf bytes.Buffer
 	var line uint64
-	mu := api.Mutation{}
-	var batchSize int
+
+	mu := &api.Mutation{}
+	nqs := make([]*api.NQuad, 1)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
+
+		buf.Reset()
 		err := readLine(bufReader, &buf)
 		if err != nil {
 			if err != io.EOF {
@@ -305,25 +322,11 @@ func (l *loader) processRdfFile(ctx context.Context, bufReader *bufio.Reader) er
 		} else if err != nil {
 			return fmt.Errorf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
-		batchSize++
-		buf.Reset()
-
-		nq.Subject = l.uid(nq.Subject)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = l.uid(nq.ObjectId)
-		}
-		mu.Set = append(mu.Set, &nq)
-
-		if batchSize >= opt.batchSize {
-			l.reqs <- mu
-			batchSize = 0
-			mu = api.Mutation{}
-		}
+		nqs[0] = &nq
+		mu = l.appendToBatch(mu, nqs)
 	}
-	if batchSize > 0 {
-		l.reqs <- mu
-		mu = api.Mutation{}
-	}
+	l.finishBatch(mu)
+
 	return nil
 }
 

@@ -75,7 +75,7 @@ type loader struct {
 	txns uint64
 	// Num of aborts
 	aborts uint64
-	// To get time elapsel.
+	// To get time elapsed
 	start time.Time
 
 	reqs     chan api.Mutation
