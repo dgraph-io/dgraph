@@ -51,6 +51,7 @@ func TestQuery(t *testing.T) {
 	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
 	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("fuzzy matching", wrap(FuzzyMatch))
+	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
@@ -336,7 +337,6 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
@@ -381,18 +381,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
     "schema": [
       {
         "predicate": "_predicate_"
-      },
-      {
-        "predicate": "dgraph.group.acl"
-      },
-      {
-        "predicate": "dgraph.password"
-      },
-      {
-        "predicate": "dgraph.user.group"
-      },
-      {
-        "predicate": "dgraph.xid"
       },
       {
         "predicate": "friends"
@@ -521,7 +509,6 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
         "type": "string",
         "list": true
       },
-` + x.AclPredsJson + `,
       {
         "predicate": "name",
         "type": "string",
@@ -754,4 +741,77 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 		require.NoError(t, err)
 		CompareJSON(t, tc.out, string(resp.Json))
 	}
+}
+
+func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(term) @lang .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "The luck is in the details" .
+      _:x1 <name> "The art is in the details"@en .
+      _:x1 <name> "L'art est dans les détails"@fr .
+
+      _:x2 <name> "Detach yourself from ostentation" .
+      _:x2 <name> "Detach yourself from artificiality"@en .
+      _:x2 <name> "Desprenderse de la artificialidad"@es .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			in:  `{q(func:has(name)) @filter(regexp(name, /art/)) {name}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in:  `{q(func:has(name)) @filter(regexp(name@es, /art/)) {name@es}}`,
+			out: `{"q":[{"name@es": "Desprenderse de la artificialidad"}]}`,
+		},
+		{
+			in:  `{q(func:has(name)) @filter(regexp(name@fr, /art/)) {name@fr}}`,
+			out: `{"q":[{"name@fr": "L'art est dans les détails"}]}`,
+		},
+	}
+
+	t.Log("testing without trigram index")
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(trigram) @lang .
+    `,
+	}))
+
+	t.Log("testing with trigram index")
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(term) @lang .
+    `,
+	}))
+
+	t.Log("testing without trigram index at root")
+	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
 }

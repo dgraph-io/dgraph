@@ -230,9 +230,6 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 						_, ok := adjacencyMap[uid]
 						return !ok
 					})
-					if len(temp.SrcUIDs.Uids) == 0 {
-						continue
-					}
 					subgraph.Children = append(subgraph.Children, temp)
 					out = append(out, temp)
 				}
@@ -281,12 +278,12 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	numHops := -1
 	maxHops := int(sg.Params.ExploreDepth)
-	isPossible := false
 	if maxHops == 0 {
 		maxHops = int(math.MaxInt32)
 	}
+	minWeight := sg.Params.MinWeight
+	maxWeight := sg.Params.MaxWeight
 	next := make(chan bool, 2)
-	//cycles := 0
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
@@ -298,6 +295,11 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
+			// Ignore paths that do not meet the minimum weight requirement.
+			if item.cost < minWeight {
+				continue
+			}
+
 			// Add path to list.
 			kroutes = append(kroutes, item.path)
 			if len(kroutes) == numPaths {
@@ -332,15 +334,17 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			return nil, ctx.Err()
 		default:
 			if stopExpansion {
-				// Allow loops once we have found one path.
-				if !isPossible {
-					continue
-				}
+				continue
 			}
 		}
 		neighbours := adjacencyMap[item.uid]
 		for toUid, info := range neighbours {
 			cost := info.cost
+			// Skip neighbour if the cost is greater than the maximum weight allowed.
+			if item.cost+cost > maxWeight {
+				continue
+			}
+
 			curPath := pathPool.Get().([]pathInfo)
 			if cap(curPath) < len(item.path.route)+1 {
 				// We can't use it due to insufficient capacity. Put it back.
@@ -361,9 +365,6 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				cost: item.cost + cost,
 				hop:  item.hop + 1,
 				path: route{curPath},
-			}
-			if node.uid == sg.Params.To {
-				isPossible = true
 			}
 			heap.Push(&pq, node)
 		}

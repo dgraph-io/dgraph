@@ -463,6 +463,7 @@ func run() {
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
+		AclEnabled:          secretFile != "",
 	}
 
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)

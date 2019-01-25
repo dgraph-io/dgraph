@@ -34,6 +34,7 @@ type Options struct {
 	WhiteListedIPRanges []IPRange
 	MaxRetries          int
 	StrictMutations     bool
+	AclEnabled          bool
 }
 
 var Config Options
