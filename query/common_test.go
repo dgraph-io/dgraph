@@ -363,6 +363,8 @@ type                           : string @index(exact) .
 
 	addEdgeToUID(t, "best_friend", 2, 64, nil)
 	addEdgeToValue(t, "type", 2, "Person", nil)
+	addEdgeToValue(t, "type", 3, "Person", nil)
+	addEdgeToValue(t, "type", 4, "Person", nil)
 
 	addEdgeToUID(t, "school", 1, 5000, nil)
 	addEdgeToUID(t, "school", 23, 5001, nil)

@@ -1879,7 +1879,7 @@ func TestTypeFunction(t *testing.T) {
 	`
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"uid" :"0x2"}]}}`,
+		`{"data": {"me":[{"uid":"0x2"}, {"uid":"0x3"}, {"uid":"0x4"}]}}`,
 		js)
 }
 
