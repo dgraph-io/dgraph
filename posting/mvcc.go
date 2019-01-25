@@ -110,6 +110,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	// Also, if the snapshot read ts is above the commit ts, then we just delete the postings from
 	// memory, instead of writing them back again.
 
+	var size, writes int64
 	for _, key := range keys {
 		plist, err := txn.Get([]byte(key))
 		if err != nil {
@@ -122,7 +123,13 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		if err := writer.SetAt([]byte(key), data, BitDeltaPosting, commitTs); err != nil {
 			return err
 		}
+		size += int64(plist.EstimatedSize())
+		writes++
 	}
+
+	stats.Record(x.ObservabilityEnabledParentContext(),
+		x.PostingWrites.M(1), x.BytesWrite.M(size))
+
 	return nil
 }
 
@@ -274,7 +281,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 
 	// Record the size
 	stats.Record(x.ObservabilityEnabledParentContext(),
-		x.BytesRead.M(int64(size)))
+		x.PostingReads.M(1), x.BytesRead.M(int64(size)))
 
 	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
