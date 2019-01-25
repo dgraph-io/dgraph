@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -105,7 +104,7 @@ type state struct {
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, closer *y.Closer, store *raftwal.DiskStorage) {
+func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	if collector := Zero.Conf.GetString("jaeger.collector"); len(collector) > 0 {
 		// Port details: https://www.jaegertracing.io/docs/getting-started/
 		// Default collectorEndpointURI := "http://localhost:14268"
@@ -148,7 +147,7 @@ func (st *state) serveGRPC(l net.Listener, closer *y.Closer, store *raftwal.Disk
 	pb.RegisterRaftServer(s, st.rs)
 
 	go func() {
-		defer closer.Done()
+		defer st.zero.closer.Done()
 		err := s.Serve(l)
 		glog.Infof("gRpc server stopped : %v", err)
 		st.node.stop <- struct{}{}
@@ -228,12 +227,10 @@ func run() {
 	defer kv.Close()
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
-	closer := y.NewCloser(2)
-
 	// Initialize the servers.
 	var st state
-	st.serveGRPC(grpcListener, closer, store)
-	st.serveHTTP(httpListener, closer)
+	st.serveGRPC(grpcListener, store)
+	st.serveHTTP(httpListener)
 
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
@@ -252,11 +249,8 @@ func run() {
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	closer.AddRunning(2)
-
 	// handle signals
 	go func() {
-		defer closer.Done()
 		for {
 			select {
 			case sig, ok := <-sdCh:
@@ -265,16 +259,17 @@ func run() {
 				}
 				glog.Infof("--- Received %s signal", sig)
 				signal.Stop(sdCh)
-				st.zero.shutDownCh <- struct{}{}
+				st.zero.closer.Signal()
 			}
 		}
 	}()
 
+	st.zero.closer.AddRunning(1)
+
 	go func() {
-		defer closer.Done()
-		<-st.zero.shutDownCh
+		defer st.zero.closer.Done()
+		<-st.zero.closer.HasBeenClosed()
 		glog.Infoln("Shutting down...")
-		close(st.zero.shutDownCh)
 		close(sdCh)
 		// Close doesn't close already opened connections.
 		httpListener.Close()
@@ -283,6 +278,6 @@ func run() {
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")
-	closer.SignalAndWait()
+	st.zero.closer.Wait()
 	glog.Infoln("All done.")
 }
