@@ -20,10 +20,10 @@ import (
 	"context"
 	"expvar"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
-	"runtime"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -35,43 +35,43 @@ import (
 
 var (
 	// These are cumulative
-	PostingReads  = stats.Int64("dgraph/posting_reads", "The number of posting reads", "1")
-	PostingWrites = stats.Int64("dgraph/posting_writes", "The number of posting writes", "1")
-	BytesRead     = stats.Int64("dgraph/bytes_read", "The number of bytes read", "By")
-	BytesWrite    = stats.Int64("dgraph/bytes_written", "The number of bytes written", "By")
-	NumQueries    = stats.Int64("dgraph/queries", "The number of queries", "By")
-	LatencyMs     = stats.Float64("dgrap/latency", "The latency of the various methods", "ms")
+	PostingReads  = stats.Int64("dgraph/posting_reads", "The number of posting reads", stats.UnitDimensionless)
+	PostingWrites = stats.Int64("dgraph/posting_writes", "The number of posting writes", stats.UnitDimensionless)
+	BytesRead     = stats.Int64("dgraph/bytes_read", "The number of bytes read", stats.UnitBytes)
+	BytesWrite    = stats.Int64("dgraph/bytes_written", "The number of bytes written", stats.UnitBytes)
+	NumQueries    = stats.Int64("dgraph/queries", "The number of queries", stats.UnitBytes)
+	LatencyMs     = stats.Float64("dgraph/latency", "The latency of the various methods", stats.UnitMilliseconds)
 
 	// value at particular point of time
-	PendingQueries   = stats.Int64("dgrap/queries_pending", "The number of pending queries", "1")
-	PendingProposals = stats.Int64("dgrap/proposals_pending", "The number of pending proposals", "1")
-	DirtyMapSize     = stats.Int64("dgrap/dirtymap_size", "The number of elements in the dirty map", "1")
-	NumGoRoutines    = stats.Int64("dgraph/goroutines", "The number of goroutines", "1")
-	MemoryInUse      = stats.Int64("dgraph/memory_in_use", "The amount of memory in use", "By")
-	MemoryIdle       = stats.Int64("dgraph/memory_idle", "The amount of memory in idle spans", "By")
-	MemoryProc       = stats.Int64("dgraph/memory_proc", "The amount of memory used in processes", "By")
-	ActiveMutations  = stats.Int64("dgraph/active_mutations", "The number of active mutations", "1")
-	AlphaHealth      = stats.Int64("dgraph/alpha_status", "The status of the alphas", "1")
-	MaxPlSize        = stats.Int64("dgraph/max_list_bytes", "The maximum value of bytes of the list", "By")
-	MaxPlLength      = stats.Int64("dgraph/max_list_length", "The maximum length of the list", "1")
+	PendingQueries   = stats.Int64("dgraph/queries_pending", "The number of pending queries", stats.UnitDimensionless)
+	PendingProposals = stats.Int64("dgraph/proposals_pending", "The number of pending proposals", stats.UnitDimensionless)
+	DirtyMapSize     = stats.Int64("dgraph/dirtymap_size", "The number of elements in the dirty map", stats.UnitDimensionless)
+	NumGoRoutines    = stats.Int64("dgraph/goroutines", "The number of goroutines", stats.UnitDimensionless)
+	MemoryInUse      = stats.Int64("dgraph/memory_in_use", "The amount of memory in use", stats.UnitBytes)
+	MemoryIdle       = stats.Int64("dgraph/memory_idle", "The amount of memory in idle spans", stats.UnitBytes)
+	MemoryProc       = stats.Int64("dgraph/memory_proc", "The amount of memory used in processes", stats.UnitBytes)
+	ActiveMutations  = stats.Int64("dgraph/active_mutations", "The number of active mutations", stats.UnitDimensionless)
+	AlphaHealth      = stats.Int64("dgraph/alpha_status", "The status of the alphas", stats.UnitDimensionless)
+	MaxPlSize        = stats.Int64("dgraph/max_list_bytes", "The maximum value of bytes of the list", stats.UnitBytes)
+	MaxPlLength      = stats.Int64("dgraph/max_list_length", "The maximum length of the list", stats.UnitDimensionless)
 
-	PredicateStats *expvar.Map
-	Conf           *expvar.Map
+	// predicate specific stats
+	MutationAddIndex     = stats.Int64("dgraph/mutation_add_index", "Mutation to add index", stats.UnitDimensionless)
+	MutationAddWithIndex = stats.Int64("dgraph/mutation_add_with_index", "Mutation done with index", stats.UnitDimensionless)
+	MutationAddReverse   = stats.Int64("dgraph/mutation_add_reverse", "Mutation to add reverse", stats.UnitDimensionless)
+	MutationAddCount     = stats.Int64("dgraph/mutation_add_count", "Mutation to add count", stats.UnitDimensionless)
 
-	MaxPlSz int64
 	// TODO: Request statistics, latencies, 500, timeouts
+	Conf *expvar.Map
 )
 
 var (
 	// Tag keys here
-	KeyOS, _        = tag.NewKey("goos")
-	KeyPid, _       = tag.NewKey("pid")
-	KeyArch, _      = tag.NewKey("goarch")
-	KeyStatus, _    = tag.NewKey("status")
-	KeyError, _     = tag.NewKey("error")
-	KeyGoVersion, _ = tag.NewKey("goversion")
-	KeyMethod, _    = tag.NewKey("method")
-	KeyPeriod, _    = tag.NewKey("period")
+	KeyPid, _    = tag.NewKey("pid")
+	KeyStatus, _ = tag.NewKey("status")
+	KeyError, _  = tag.NewKey("error")
+	KeyMethod, _ = tag.NewKey("method")
+	KeyPeriod, _ = tag.NewKey("period")
 
 	// Tag values here
 	TagValueStatusOK    = "ok"
@@ -90,137 +90,134 @@ var (
 )
 
 var allTagKeys = []tag.Key{
-	KeyPid, KeyOS, KeyArch, KeyStatus,
-	KeyError, KeyGoVersion, KeyMethod,
+	KeyPid, KeyStatus, KeyError, KeyMethod,
 }
 
-var AllViews = []*view.View{
-
+var allViews = []*view.View{
 	{
-		Name:        "dgraph/latency",
+		Name:        LatencyMs.Name(),
 		Measure:     LatencyMs,
-		Description: "The latency distributions of the various methods",
+		Description: LatencyMs.Description(),
 		Aggregation: defaultLatencyMsDistribution,
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/posting_reads",
+		Name:        PostingReads.Name(),
 		Measure:     PostingReads,
-		Description: "The number of posting reads",
+		Description: PostingReads.Description(),
 		Aggregation: view.Count(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/posting_writes",
+		Name:        PostingWrites.Name(),
 		Measure:     PostingWrites,
-		Description: "The number of posting writes",
+		Description: PostingWrites.Description(),
 		Aggregation: view.Count(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/bytes_read",
+		Name:        BytesRead.Name(),
 		Measure:     BytesRead,
-		Description: "The number of bytes read",
+		Description: BytesRead.Description(),
 		Aggregation: defaultBytesDistribution,
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/bytes_write",
+		Name:        BytesWrite.Name(),
 		Measure:     BytesWrite,
-		Description: "The number of bytes written",
+		Description: BytesWrite.Description(),
 		Aggregation: defaultBytesDistribution,
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/queries",
+		Name:        NumQueries.Name(),
 		Measure:     NumQueries,
-		Description: "The number of queries",
+		Description: NumQueries.Description(),
 		Aggregation: view.Count(),
 		TagKeys:     allTagKeys,
 	},
 
 	// Last value aggregations
 	{
-		Name:        "dgraph/pending_queries",
+		Name:        PendingQueries.Name(),
 		Measure:     PendingQueries,
-		Description: "The number of pending queries",
+		Description: PendingQueries.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/pending_proposals",
+		Name:        PendingProposals.Name(),
 		Measure:     PendingProposals,
-		Description: "The number of pending proposals",
+		Description: PendingProposals.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/dirtymap_size",
+		Name:        DirtyMapSize.Name(),
 		Measure:     DirtyMapSize,
-		Description: "The number of elements in the dirty map",
+		Description: DirtyMapSize.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/goroutines",
+		Name:        NumGoRoutines.Name(),
 		Measure:     NumGoRoutines,
-		Description: "The number of goroutines",
+		Description: NumGoRoutines.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/memory_in_use",
+		Name:        MemoryInUse.Name(),
 		Measure:     MemoryInUse,
-		Description: "The amount of memory in use",
+		Description: MemoryInUse.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/memory_idle",
+		Name:        MemoryIdle.Name(),
 		Measure:     MemoryIdle,
-		Description: "The amount of memory in idle spans",
+		Description: MemoryIdle.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/memory_proc",
+		Name:        MemoryProc.Name(),
 		Measure:     MemoryProc,
-		Description: "The amount of memory used in processes",
+		Description: MemoryProc.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/active_mutations",
+		Name:        ActiveMutations.Name(),
 		Measure:     ActiveMutations,
-		Description: "The number of active mutations",
+		Description: ActiveMutations.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/alpha_status",
+		Name:        AlphaHealth.Name(),
 		Measure:     AlphaHealth,
-		Description: "The status of the alphas",
+		Description: AlphaHealth.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/max_list_bytes",
+		Name:        MaxPlSize.Name(),
 		Measure:     MaxPlSize,
-		Description: "The maximum value of bytes of the list",
+		Description: MaxPlSize.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        "dgraph/max_list_length",
+		Name:        MaxPlLength.Name(),
 		Measure:     MaxPlLength,
-		Description: "The maximum length of the list",
+		Description: MaxPlLength.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
 }
 
 func init() {
-	PredicateStats = expvar.NewMap("dgraph_predicate_stats")
 	Conf = expvar.NewMap("dgraph_config")
 
 	ctx := ObservabilityEnabledParentContext()
@@ -243,13 +240,13 @@ func init() {
 		}
 	}()
 
+	CheckfNoTrace(view.Register(allViews...))
+
 	pe, err := prometheus.NewExporter(prometheus.Options{
-		Namespace: "dgraph", // TODO: read this namespace from flags
+		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
-	if err != nil {
-		log.Fatalf("Failed to create OpenCensus Prometheus exporter: %v", err)
-	}
+	Checkf(err, "Failed to create OpenCensus Prometheus exporter: %v", err)
 	view.RegisterExporter(pe)
 
 	http.Handle("/debug/prometheus_metrics", pe)
@@ -266,31 +263,57 @@ func ObservabilityEnabledParentContext() context.Context {
 	// to the context as tags that will be propagated when
 	// collecting metrics.
 	ctx, _ := tag.New(context.Background(),
-		tag.Upsert(KeyPid, fmt.Sprintf("%d", os.Getpid())),
-		tag.Upsert(KeyOS, runtime.GOOS),
-		tag.Upsert(KeyGoVersion, runtime.Version()),
-		tag.Upsert(KeyArch, runtime.GOARCH))
-
+		tag.Upsert(KeyPid, fmt.Sprint(os.Getpid())))
 	return ctx
 }
 
 func ObservabilityEnabledContextWithMethod(parent context.Context, method string) context.Context {
 	ctx, _ := tag.New(parent,
-		tag.Upsert(KeyPid, fmt.Sprintf("%d", os.Getpid())),
-		tag.Upsert(KeyOS, runtime.GOOS),
-		tag.Upsert(KeyGoVersion, runtime.Version()),
-		tag.Upsert(KeyArch, runtime.GOARCH),
+		tag.Upsert(KeyPid, fmt.Sprint(os.Getpid())),
 		tag.Upsert(KeyMethod, method))
 	return ctx
 }
 
 func SinceInMilliseconds(startTime time.Time) float64 {
-	durNs := time.Since(startTime)
-	return float64(durNs) / 1e6
+	return float64(time.Since(startTime)) / 1e6
 }
 
-// RegisterAllViews is a convenience function to be invoked when the
-// OpenCensus stats exporter is registered, to allow collection of stats.
-func RegisterAllViews() error {
-	return view.Register(AllViews...)
+// MapInt64Measure tracks the collection of grouped Int64 measures.
+type MapInt64Measure struct {
+	sync.Mutex
+	name, desc, unit string
+	measures         map[string]*stats.Int64Measure
+}
+
+// MapInt64 used to define the collection
+func MapInt64(name, desc, unit string) *MapInt64Measure {
+	return &MapInt64Measure{
+		name:     name,
+		desc:     desc,
+		unit:     unit,
+		measures: make(map[string]*stats.Int64Measure),
+	}
+}
+
+// M creates a new Int64 measure or uses an existing one and returns it for recording.
+func (m *MapInt64Measure) M(key string, v int64) stats.Measurement {
+	m.Lock()
+	defer m.Unlock()
+	mi, ok := m.measures[key]
+	if !ok {
+		name := strings.TrimSpace(key)
+		mi = stats.Int64(
+			strings.Replace(m.name, "{key}", name, -1),
+			m.desc, m.unit)
+		CheckfNoTrace(view.Register(
+			&view.View{
+				Name:        mi.Name(),
+				Measure:     mi,
+				Description: mi.Description(),
+				Aggregation: view.Count(),
+				TagKeys:     allTagKeys,
+			}))
+		m.measures[key] = mi
+	}
+	return mi.M(v)
 }
