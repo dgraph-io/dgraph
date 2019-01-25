@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/golang/glog"
 	"go.opencensus.io/exporter/prometheus"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -233,7 +234,8 @@ func init() {
 				if err := HealthCheck(); err == nil {
 					tags = append(tags, tag.Upsert(KeyStatus, TagValueStatusOK))
 				} else {
-					tags = append(tags, tag.Upsert(KeyStatus, TagValueStatusError), tag.Upsert(KeyError, err.Error()))
+					tags = append(tags, tag.Upsert(KeyStatus, TagValueStatusError),
+						tag.Upsert(KeyError, err.Error()))
 				}
 				cctx, _ := tag.New(ctx, tags...)
 				stats.Record(cctx, AlphaHealth.M(1))
@@ -243,7 +245,7 @@ func init() {
 
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "dgraph", // TODO: read this namespace from flags
-		// TODO: Enable an on error that logs to Dgraph's logging output.
+		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
 	if err != nil {
 		log.Fatalf("Failed to create OpenCensus Prometheus exporter: %v", err)
