@@ -250,6 +250,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("Failed to create OpenCensus Prometheus exporter: %v", err)
 	}
+	view.RegisterExporter(pe)
 
 	http.Handle("/debug/prometheus_metrics", pe)
 }
