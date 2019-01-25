@@ -1,3 +1,5 @@
+// +build oss
+
 /*
  * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
@@ -14,6 +16,18 @@
  * limitations under the License.
  */
 
-//  Package stream
-// TODO: Write a in-depth explanation of what this does, with examples.
-package stream
+package acl
+
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/cobra"
+)
+
+var CmdAcl x.SubCommand
+
+func init() {
+	CmdAcl.Cmd = &cobra.Command{
+		Use:   "acl",
+		Short: "Enterprise feature. Not supported in oss version",
+	}
+}

@@ -72,10 +72,10 @@ func addMutationHelper(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32, 
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 2)
 
-	l, err := Get(key)
+	txn := NewTxn(1)
+	l, err := txn.Get(key)
 	require.NoError(t, err)
 
-	txn := &Txn{StartTs: uint64(1)}
 	edge := &pb.DirectedEdge{
 		ValueId: 9,
 		Label:   "testing",
@@ -118,11 +118,6 @@ func TestAddMutation(t *testing.T) {
 	p = getFirst(l, 3)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "anti-testing", p.Label)
-
-	// Try reading the same data in another PostingList.
-	dl, err := Get(key)
-	require.NoError(t, err)
-	checkUids(t, dl, uids, 3)
 }
 
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
@@ -165,7 +160,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 12)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -212,7 +207,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_DelSet(t *testing.T) {
 	key := x.DataKey("value", 1534)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// DO sp*, don't commit
@@ -237,7 +232,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 }
 func TestAddMutation_DelRead(t *testing.T) {
 	key := x.DataKey("value", 1543)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// Set value to newcars, and commit it
@@ -276,7 +271,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 15)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
@@ -300,7 +295,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	key := x.DataKey("value", 16)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
@@ -327,7 +322,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 29)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -371,7 +366,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 21)
-	ol, err := Get(key)
+	ol, err := GetNoStore(key)
 	require.NoError(t, err)
 
 	// Set a value cars and merge.

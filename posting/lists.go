@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	ostats "go.opencensus.io/stats"
@@ -220,7 +221,6 @@ func updateMemoryMetrics(ctx context.Context, lc *y.Closer) {
 
 var (
 	pstore *badger.DB
-	lcache *listCache
 	closer *y.Closer
 )
 
@@ -249,69 +249,59 @@ func Cleanup() {
 // to lru cache and returns it.
 //
 // plist := Get(key, group)
-// ... // Use plist
+// ... Use plist
 // TODO: This should take a node id and index. And just append all indices to a list.
 // When doing a commit, it should update all the sync index watermarks.
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func Get(key []byte) (rlist *List, err error) {
-	ctx := x.ObservabilityEnabledParentContext()
-	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "lcache.Get"),
-		// For majority of the cases, the status is OK,
-		// if an error occurs this will be changed anyways.
-		tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
-
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		ostats.Record(ctx, x.LcacheHit.M(1))
-		return lp, nil
-	}
-
-	// From this point on we encountered a cache miss.
-
-	// Any initialization for l must be done before PutIfMissing. Once it's added
-	// to the map, any other goroutine can retrieve it.
-	l, err := getNew(key, pstore)
-	if err != nil {
-		ctx, _ = tag.New(ctx,
-			tag.Upsert(x.KeyStatus, x.TagValueStatusError),
-			// TODO: Examine if the backends can accept long err.Error
-			// values since that helps with better root cause analyses
-			// and can easily be grouped/filtered.
-			tag.Upsert(x.KeyError, "Get failed"))
-		ostats.Record(ctx, x.LcacheMiss.M(1))
-		return nil, err
-	}
-	// We are always going to return lp to caller, whether it is l or not
-	lp = lcache.PutIfMissing(string(key), l)
-	if lp != l {
-		ostats.Record(ctx, x.LcacheRace.M(1), x.LcacheMiss.M(1))
-	} else {
-		// We didn't race, so record the previously encountered cache niss.
-		ostats.Record(ctx, x.LcacheMiss.M(1))
-	}
-	return lp, nil
-}
-
-// GetLru checks the lru map and returns it if it exits
-func GetLru(key []byte) *List {
-	return lcache.Get(string(key))
-}
-
-// GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
-// or it gets from the store and DOES NOT ADD to lru cache.
-func GetNoStore(key []byte) (*List, error) {
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		return lp, nil
-	}
-	return getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+func GetNoStore(key []byte) (rlist *List, err error) {
+	return getNew(key, pstore)
 }
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks
-func EvictLRU() {
-	lcache.Reset()
+type LocalCache struct {
+	sync.RWMutex
+
+	plists map[string]*List
+}
+
+func NewLocalCache() *LocalCache {
+	return &LocalCache{plists: make(map[string]*List)}
+}
+
+func (lc *LocalCache) getNoStore(key string) *List {
+	lc.RLock()
+	defer lc.RUnlock()
+	if l, ok := lc.plists[key]; ok {
+		return l
+	}
+	return nil
+}
+
+func (lc *LocalCache) Set(key string, updated *List) *List {
+	lc.Lock()
+	defer lc.Unlock()
+	if pl, ok := lc.plists[key]; ok {
+		return pl
+	}
+	lc.plists[key] = updated
+	return updated
+}
+
+func (lc *LocalCache) Get(key []byte) (*List, error) {
+	if lc == nil {
+		return getNew(key, pstore)
+	}
+	skey := string(key)
+	if pl := lc.getNoStore(skey); pl != nil {
+		return pl, nil
+	}
+
+	pl, err := getNew(key, pstore)
+	if err != nil {
+		return nil, err
+	}
+	return lc.Set(skey, pl), nil
 }

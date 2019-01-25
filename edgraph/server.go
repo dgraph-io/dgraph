@@ -18,11 +18,12 @@ package edgraph
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -30,6 +31,8 @@ import (
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
+
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -38,7 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -61,7 +63,6 @@ type ServerState struct {
 	vlogTicker          *time.Ticker // runs every 1m, check size of vlog and run GC conditionally.
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
-	mu     sync.Mutex
 	needTs chan tsReq
 }
 
@@ -112,6 +113,7 @@ func setBadgerOptions(opt badger.Options, dir string) badger.Options {
 	opt.Truncate = true
 	opt.Dir = dir
 	opt.ValueDir = dir
+	opt.Logger = &conn.ToGlog{}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -221,7 +223,7 @@ func (s *ServerState) fillTimestampRequests() {
 			if r.readOnly {
 				num.ReadOnly = true
 			} else {
-				num.Val += 1
+				num.Val++
 			}
 		}
 
@@ -283,6 +285,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err := x.HealthCheck(); err != nil {
 		return empty, err
 	}
+
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed by server.")
 	}
@@ -290,6 +293,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
 	}
+
+	if err := authorizeAlter(ctx, op); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return nil, err
+	}
+
 	// All checks done.
 
 	defer glog.Infof("ALTER op: %+v done", op)
@@ -299,6 +308,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
+
+		// recreate the admin account after a drop all operation
+		ResetAcl()
 		return empty, err
 	}
 	if len(op.DropAttr) > 0 {
@@ -317,6 +329,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
 	}
+
 	updates, err := schema.Parse(op.Schema)
 	if err != nil {
 		return empty, err
@@ -333,6 +346,14 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
+	if err := authorizeMutation(ctx, mu); err != nil {
+		return nil, err
+	}
+
+	return s.doMutate(ctx, mu)
+}
+
+func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
 	defer span.End()
 
@@ -359,7 +380,7 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
-		return resp, fmt.Errorf("empty mutation")
+		return resp, fmt.Errorf("Empty mutation")
 	}
 
 	var l query.Latency
@@ -368,8 +389,10 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	if err != nil {
 		return resp, err
 	}
+
 	parseEnd := time.Now()
 	l.Parsing = parseEnd.Sub(l.Start)
+
 	defer func() {
 		l.Processing = time.Since(parseEnd)
 		resp.Latency = &api.Latency{
@@ -437,11 +460,17 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return resp, nil
 }
 
+func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	if err := authorizeQuery(ctx, req); err != nil {
+		return nil, err
+	}
+
+	return s.doQuery(ctx, req)
+}
+
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Response, err error) {
-	startTime := time.Now()
-
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
@@ -466,7 +495,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}()
 
 	if err := x.HealthCheck(); err != nil {
-		return resp, err
+		return nil, err
 	}
 
 	// TODO: Perhaps use a global atomic int and then at the end
@@ -478,13 +507,13 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}()
 
 	if ctx.Err() != nil {
-		return resp, ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	resp = new(api.Response)
+	resp := new(api.Response)
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
-		return resp, fmt.Errorf("empty query")
+		return resp, fmt.Errorf("Empty query")
 	}
 
 	var l query.Latency
@@ -498,7 +527,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	if err != nil {
 		return resp, err
 	}
-
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
@@ -520,12 +548,20 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 	}
 	resp.Schema = er.SchemaNode
 
-	json, err := query.ToJson(&l, er.Subgraphs)
+	var js []byte
+	if len(resp.Schema) > 0 {
+		sort.Slice(resp.Schema, func(i, j int) bool {
+			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+		})
+		js, err = json.Marshal(map[string]interface{}{"schema": resp.Schema})
+	} else {
+		js, err = query.ToJson(&l, er.Subgraphs)
+	}
 	if err != nil {
 		return resp, err
 	}
-	resp.Json = json
-	span.Annotatef(nil, "Response = %s", json)
+	resp.Json = js
+	span.Annotatef(nil, "Response = %s", js)
 
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
@@ -547,7 +583,8 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
-		return &api.TxnContext{}, fmt.Errorf("StartTs cannot be zero while committing a transaction.")
+		return &api.TxnContext{}, fmt.Errorf(
+			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
 
@@ -575,7 +612,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
-	if !Config.Nomutations {
+	if Config.MutationsMode != DisallowMutations {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)
@@ -625,6 +662,11 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	return nqs, nil
 }
 
+// parseMutationObject tries to consolidate fields of the api.Mutation into the
+// corresponding field of the returned gql.Mutation. For example, the 3 fields,
+// api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
+// gql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
+// and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
@@ -656,22 +698,40 @@ func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 		res.Del = append(res.Del, nqs...)
 	}
 
-	// We check that the facet value is in the right format based on the facet type.
-	for _, m := range mu.Set {
-		for _, f := range m.Facets {
-			if err := facets.TryValFor(f); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	res.Set = append(res.Set, mu.Set...)
 	res.Del = append(res.Del, mu.Del...)
+	// parse facets and convert to the binary format so that
+	// a field of type datetime like "2017-01-01" can be correctly encoded in the
+	// marshaled binary format as done in the time.Marshal method
+	if err := validateAndConvertFacets(res.Set); err != nil {
+		return nil, err
+	}
 
 	if err := validateNQuads(res.Set, res.Del); err != nil {
 		return nil, err
 	}
 	return res, nil
+}
+
+func validateAndConvertFacets(nquads []*api.NQuad) error {
+	for _, m := range nquads {
+		encodedFacets := make([]*api.Facet, 0, len(m.Facets))
+		for _, f := range m.Facets {
+			// try to interpret the value as binary first
+			if _, err := facets.ValFor(f); err == nil {
+				encodedFacets = append(encodedFacets, f)
+			} else {
+				encodedFacet, err := facets.FacetFor(f.Key, string(f.Value))
+				if err != nil {
+					return err
+				}
+				encodedFacets = append(encodedFacets, encodedFacet)
+			}
+		}
+
+		m.Facets = encodedFacets
+	}
+	return nil
 }
 
 func validateNQuads(set, del []*api.NQuad) error {
@@ -704,11 +764,11 @@ func validateNQuads(set, del []*api.NQuad) error {
 func validateKey(key string) error {
 	switch {
 	case len(key) == 0:
-		return x.Errorf("has zero length")
+		return x.Errorf("Has zero length")
 	case strings.ContainsAny(key, "~@"):
-		return x.Errorf("has invalid characters")
+		return x.Errorf("Has invalid characters")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
-		return x.Errorf("must not contain spaces")
+		return x.Errorf("Must not contain spaces")
 	}
 	return nil
 }
@@ -723,7 +783,7 @@ func validateKeys(nq *api.NQuad) error {
 			continue
 		}
 		if err := validateKey(nq.Facets[i].Key); err != nil {
-			return x.Errorf("facet %q, %s", nq.Facets[i].Key, err)
+			return x.Errorf("Facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}
 	return nil

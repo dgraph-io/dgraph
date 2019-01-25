@@ -193,6 +193,7 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 | &#60;xs:double&#62;                                     | `float`          |
 | &#60;xs:float&#62;                                      | `float`          |
 | &#60;geo:geojson&#62;                                   | `geo`            |
+| &#60;xs:password&#62;                                   | `password`       |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
@@ -259,6 +260,13 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
+
+### Deletion of non-list predicates
+
+Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done in two ways.
+
+1. Using the star notation mentioned in the last section.
+1. Setting the object to a specific value. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
 
 ## Mutations using cURL
 
@@ -523,7 +531,7 @@ testList: [string] .
 Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 
 ```JSON
-{  
+{
    "uid": "0xd", #UID of the list.
    "testList": "Apple"
 }
@@ -647,4 +655,3 @@ Mutation with a JSON file:
 ```
 curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
 ```
-

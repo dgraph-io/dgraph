@@ -44,8 +44,6 @@ func TestLoaderXidmap(t *testing.T) {
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
-	liveCmd.Stdout = os.Stdout
-	liveCmd.Stderr = os.Stdout
 	if err := liveCmd.Run(); err != nil {
 		cluster.Close()
 		t.Fatalf("Live Loader didn't run: %v\n", err)
@@ -87,7 +85,7 @@ func TestLoaderXidmap(t *testing.T) {
 		t.Fatalf("Error while calling export: %v", err)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, _ := ioutil.ReadAll(resp.Body)
 	expected := `{"code": "Success", "message": "Export completed."}`
 	if string(b) != expected {
 		t.Fatalf("Unexpected message while exporting: %v", string(b))
@@ -114,6 +112,6 @@ func TestLoaderXidmap(t *testing.T) {
 
 	if string(out) != expected {
 		cluster.Close()
-		t.Fatalf("Export is not as expected.")
+		t.Fatalf("Export is not as expected. Want:%v\nGot:%v\n", expected, string(out))
 	}
 }

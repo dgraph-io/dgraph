@@ -6,8 +6,6 @@
 [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Dgraph_Ci)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph_Ci&buildId=lastFinished&guest=1)
 [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
-[![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
-
 
 Dgraph is a horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
 a rich set of queries. Being a native graph database, it tightly controls how the
@@ -21,7 +19,9 @@ Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-
 
 ## Status
 
-Dgraph is [at version 1.0.0][rel] and is production ready.
+Dgraph is [at version 1.0.x][rel] and is production ready. It is being used in
+production at multiple Fortune 500 companies, and by
+[Intuit Katlas](https://github.com/intuit/katlas).
 
 [rel]: https://github.com/dgraph-io/dgraph/releases
 
@@ -46,7 +46,7 @@ docker pull dgraph/dgraph:latest
 If you want to install from source, you can use `go get` to install to `$GOPATH/bin`.
 
 ```bash
-go get -u -v github.com/dgraph-io/dgraph/dgraph
+go get -v github.com/dgraph-io/dgraph/dgraph
 ```
 
 ## Get Started
@@ -113,8 +113,13 @@ The Dgraph team maintain a number of [officially supported client libraries](htt
 * [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
 * [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)
 
+**Dart**
+
+* [https://github.com/katutz/dgraph](https://github.com/katutz/dgraph)
+
 **Elixir**
 
+* [https://github.com/liveforeverx/dlex](https://github.com/liveforeverx/dlex)
 * [https://github.com/ospaarmann/exdgraph](https://github.com/ospaarmann/exdgraph)
 
 ## Contact

@@ -33,7 +33,7 @@ const (
 )
 
 type progress struct {
-	rdfCount        int64
+	nquadCount      int64
 	errCount        int64
 	mapEdgeCount    int64
 	reduceEdgeCount int64
@@ -79,10 +79,10 @@ func (p *progress) reportOnce() {
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
 	case nothing:
 	case mapPhase:
-		rdfCount := atomic.LoadInt64(&p.rdfCount)
+		rdfCount := atomic.LoadInt64(&p.nquadCount)
 		errCount := atomic.LoadInt64(&p.errCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("MAP %s rdf_count:%s err_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
+		fmt.Printf("MAP %s nquad_count:%s err_count:%s nquad_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
 			x.FixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
 			niceFloat(float64(errCount)),

@@ -18,6 +18,7 @@ package alpha
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,16 +29,16 @@ import (
 	"testing"
 	"time"
 
-	context "golang.org/x/net/context"
-	"google.golang.org/grpc"
-
-	"github.com/stretchr/testify/require"
-
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/stretchr/testify/require"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 )
 
 var q0 = `
@@ -80,8 +81,14 @@ func childAttrs(sg *query.SubGraph) []string {
 	return out
 }
 
+type defaultContextKey int
+
+const (
+	mutationAllowedKey defaultContextKey = iota
+)
+
 func defaultContext() context.Context {
-	return context.WithValue(context.Background(), "mutation_allowed", true)
+	return context.WithValue(context.Background(), mutationAllowedKey, true)
 }
 
 var ts uint64
@@ -228,7 +235,7 @@ func TestDeletePredicate(t *testing.T) {
 	`
 
 	var s1 = `
-	friend: uid @reverse .
+	friend: [uid] @reverse .
 	name: string @index(term) .
 	`
 
@@ -272,7 +279,11 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(`schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"age","type":"default"},{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}]}}`, output)
+	require.JSONEq(t, `{"data":{"schema":[`+
+		`{"predicate":"_predicate_","type":"string","list":true},`+
+		`{"predicate":"age","type":"default"},`+
+		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`+
+		`]}}`, output)
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
@@ -309,18 +320,18 @@ type Received struct {
 func TestSchemaMutation(t *testing.T) {
 	require.NoError(t, dropAll())
 	var m = `
-			name:string @index(term, exact) .
-			alias:string @index(exact, term) .
-			dob:dateTime @index(year) .
-			film.film.initial_release_date:dateTime @index(year) .
-			loc:geo @index(geo) .
-			genre:uid @reverse .
+			name: string @index(term, exact) .
+			alias: string @index(exact, term) .
+			dob: dateTime @index(year) .
+			film.film.initial_release_date: dateTime @index(year) .
+			loc: geo @index(geo) .
+			genre: [uid] @reverse .
 			survival_rate : float .
 			alive         : bool .
 			age           : int .
 			shadow_deep   : int .
-			friend:uid @reverse .
-			geometry:geo @index(geo) . `
+			friend: [uid] @reverse .
+			geometry: geo @index(geo) . `
 
 	expected := S{
 		Predicate: "name",
@@ -396,7 +407,7 @@ func TestSchemaMutation2Error(t *testing.T) {
 // index on uid type
 func TestSchemaMutation3Error(t *testing.T) {
 	var m = `
-            age:uid @index .
+            age: uid @index .
 	`
 	err := alterSchema(m)
 	require.Error(t, err)
@@ -413,6 +424,76 @@ func TestMutation4Error(t *testing.T) {
 	`
 	err := runMutation(m)
 	require.Error(t, err)
+}
+
+func TestMutationSingleUid(t *testing.T) {
+	// reset Schema
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+
+	var s = `
+            friend: uid .
+	`
+	require.NoError(t, alterSchema(s))
+
+	var m = `
+	{
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+		}
+	}
+	`
+	require.Error(t, runMutation(m))
+}
+
+// Verify multiple uids are allowed after mutation.
+func TestSchemaMutationUid(t *testing.T) {
+	// reset Schema
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+
+	var s1 = `
+            friend: uid .
+	`
+	require.NoError(t, alterSchema(s1))
+	var m1 = `
+	{
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+		}
+	}
+	`
+	require.Error(t, runMutation(m1))
+
+	var s2 = `
+            friend: [uid] .
+	`
+	require.NoError(t, alterSchema(s2))
+	var m2 = `
+	{
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+		}
+	}
+	`
+	require.NoError(t, runMutation(m2))
+}
+
+// Verify a list uid predicate cannot be converted to a single-element predicate.
+func TestSchemaMutationUidError1(t *testing.T) {
+	// reset Schema
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+
+	var s1 = `
+            friend: [uid] .
+	`
+	require.NoError(t, alterSchema(s1))
+
+	var s2 = `
+            friend: uid .
+	`
+	require.Error(t, alterSchema(s2))
 }
 
 // add index
@@ -494,7 +575,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	_, err = runQuery(q1)
 	require.Error(t, err)
 }
 
@@ -519,7 +600,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	}
 	`
 
-	var s = `friend:uid @reverse .`
+	var s = `friend: [uid] @reverse .`
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
@@ -558,11 +639,11 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	`
 
 	var s1 = `
-            friend:uid @reverse .
+            friend: [uid] @reverse .
 	`
 
 	var s2 = `
-            friend:uid .
+            friend: [uid] .
 	`
 
 	// reset Schema
@@ -582,7 +663,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	_, err = runQuery(q1)
 	require.Error(t, err)
 }
 
@@ -609,7 +690,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	`
 
 	var s = `
-			friend:uid @count .
+			friend: [uid] @count .
 	`
 
 	// reset Schema
@@ -678,6 +759,7 @@ func TestJsonMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
+	require.NoError(t, err)
 	q1Result := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
 	queryResults := q1Result["data"].(map[string]interface{})["q"].([]interface{})
@@ -730,6 +812,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
+	require.NoError(t, err)
 	var q1Result struct {
 		Data struct {
 			Q []map[string]interface{} `json:"q"`
@@ -809,7 +892,7 @@ func TestDeleteAll(t *testing.T) {
 	`
 
 	var s1 = `
-      		friend:uid @reverse .
+      		friend: [uid] @reverse .
 		name: string @index(term) .
 	`
 	schema.ParseBytes([]byte(""), 1)
@@ -1139,7 +1222,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 	m = `
 	mutation {
 		schema {
-            age:uid .
+            age: uid .
 		}
 	}
 	`
@@ -1150,7 +1233,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 // change from uid to scalar or vice versa
 func TestSchemaMutation5Error(t *testing.T) {
 	var m = `
-            friends:uid .
+            friends: [uid] .
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
@@ -1168,7 +1251,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 	require.NoError(t, err)
 
 	m = `
-            friends:string .
+            friends: string .
 	`
 	err = alterSchema(m)
 	require.Error(t, err)
@@ -1273,7 +1356,9 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"occupations","type":"string"}]}}`, res)
+	require.JSONEq(t, `{"data":{"schema":[`+
+		`{"predicate":"_predicate_","type":"string","list":true},`+
+		`{"predicate":"occupations","type":"string"}]}}`, res)
 
 }
 
@@ -1326,6 +1411,59 @@ func TestDeleteAllSP2(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
+func TestDeleteScalarValue(t *testing.T) {
+	var s = `name: string .`
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+	require.NoError(t, alterSchemaWithRetry(s))
+
+	var m = `
+	{
+	  set {
+	    <0x12345> <name> "xxx" .
+	  }
+	}
+	`
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	var d1 = `
+    {
+      delete {
+        <0x12345> <name> "yyy" .
+      }
+    }
+	`
+	err = runMutation(d1)
+	require.NoError(t, err)
+
+	// Verify triple was not deleted because the value in the request did
+	// not match the existing value.
+	q := fmt.Sprintf(`
+	{
+	  me(func: uid(%s)) {
+		name
+	  }
+	}`, "0x12345")
+
+	output, err := runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
+
+	var d2 = `
+	{
+      delete {
+        <0x12345> <name> "xxx" .
+      }
+    }
+	`
+	err = runMutation(d2)
+	require.NoError(t, err)
+
+	// Verify triple was actually deleted this time.
+	output, err = runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[]}}`, output)
+}
 
 func TestDropAll(t *testing.T) {
 	var m1 = `
@@ -1364,7 +1502,8 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q3)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}`+
+			`]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1418,7 +1557,7 @@ func TestRecurseExpandAll(t *testing.T) {
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
-	s := `friend: uid @count .`
+	s := `friend: [uid] @count .`
 	require.NoError(t, alterSchemaWithRetry(s))
 
 	q := `
@@ -1431,6 +1570,38 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "count")
 	require.Contains(t, err.Error(), "zero")
+}
+
+// This test is from Github issue #2662.
+// This test couldn't like in query package because that package tries to do some extra JSON
+// marshal, which causes issues for this case.
+func TestJsonUnicode(t *testing.T) {
+	err := runJsonMutation(`{
+  "set": [
+  { "uid": "0x10", "log.message": "\u001b[32mHello World 1!\u001b[39m\n" }
+  ]
+}`)
+	require.NoError(t, err)
+
+	output, err := runQuery(`{ node(func: uid(0x10)) { log.message }}`)
+	require.NoError(t, err)
+	require.Equal(t,
+		`{"data":{"node":[{"log.message":"\u001b[32mHello World 1!\u001b[39m\n"}]}}`, output)
+}
+
+func TestGrpcCompressionSupport(t *testing.T) {
+	conn, err := grpc.Dial("localhost:9180",
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
+	)
+	defer conn.Close()
+	require.NoError(t, err)
+
+	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	q := `schema {}`
+	tx := dc.NewTxn()
+	_, err = tx.Query(context.Background(), q)
+	require.NoError(t, err)
 }
 
 func TestMain(m *testing.M) {

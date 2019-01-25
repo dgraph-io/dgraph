@@ -4,6 +4,94 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.12] - [unreleased]
+
+### Added
+
+- Support gzip compression for gRPC and HTTP requests. (#2843)
+
+### Changed
+
+- Use the new Stream API from Badger instead of Dgraph's Stream framework. (#2852)
+- Discard earlier versions of posting lists. (#2859)
+- Make HTTP JSON response encoding more efficient.
+- Optimize and refactor facet filtering. (#2829)
+- Show badger.Item meta information in `dgraph debug` output.
+- Add new option to `dgraph debug` tool to get a histogram of key and value sizes. (#2844)
+- Add new option to `dgraph debug` tool to get info from a particular read timestamp.
+
+### Removed
+
+- Remove LRU cache from Alpha for big wins in query latency reduction (5-10x)
+  and mutation throughput (live loading 1.7x faster). Setting `--lru_mb`,
+  although still required, will not have any effect since the cache is removed.
+  The flag will be used later when LRU cache is introduced in Badger.
+
+### Fixed
+
+- Use json.Marshal for strings and blobs. Fixes #2662.
+- Let eq use string "uid" as value. Fixes #2827.
+- Skip empty posting lists in `has` function.
+- Fix Rollup to pick max update commit ts.
+- Fix a race condition when processing concurrent queries. Fixes #2849.
+
+## [1.0.11] - 2018-12-17
+
+### Added
+
+- Integrate OpenCensus in Dgraph. (#2739) (eccd2506, 9e7fa056)
+- Add Dgraph Community License for proprietary features.
+- Feature: Full binary backups. This is an enterprise feature licensed under the Dgraph Community License. (#2710)
+- Add `--enterprise_features` flag to enable enterprise features. By enabling enterprise features, you accept the terms of the Dgraph Community License.
+- Add minio dep and its deps in govendor. (94daeaf7, 35a73e81)
+- Add network partitioning tests with blockade tool. (fd4e3872, dada74f4, e59cbfb2, 50b0484f, 3c4df36c, bec18bc8, c8ccb943)
+- Add Zero endpoints `/assign?what=uids&num=10` and `/assign?what=timestamps&num=10` to assign UIDs or transaction timestamp leases.
+- Adding the acl subcommand to support acl features (still work-in-progress). (#2795)
+- Support custom tokenizer in bulk loader (#2820)
+- Support JSON data with Dgraph Bulk Loader. (#2799)
+
+### Changed
+
+- Make posting list memory rollup happen right after disk. (#2731)
+- Do not retry proposal if already found in CommittedEntries. (#2740)
+- Remove ExportPayload from protos. Export returns Status and ExportRequest. (#2741)
+- Allow more escape runes to be skipped over when parsing string literal. (#2734)
+- Clarify message of overloaded pending proposals for live loader. (#2732)
+- Posting List Evictions. (e2bcfdad)
+- Log when removing a tablet. (#2746)
+- Deal better with network partitions in leaders. (#2749)
+- Keep maxDelay during timestamp req to 1s.
+- Updates to the version output info.
+  - Print the go version used to build Dgraph when running `dgraph version` and in the logs when Dgraph runs. (#2768)
+  - Print the Dgraph version when running live or bulk loader. (#2736)
+- Checking nil values in the equal function (#2769)
+- Optimize query: UID expansion. (#2772)
+- Split membership sync endpoints and remove PurgeTs endpoint. (#2773)
+- Set the Prefix option during iteration. (#2780)
+- Replace Zero's `/assignIds?num=10` endpoint with `/assign?what=uids&num=10` (see Added section).
+
+### Removed
+
+- Remove type hinting for JSON and RDF schema-less types. (#2742)
+- Remove deprecated logic that was found using vet. (#2758)
+- Remove assert for zero-length posting lists. (#2763)
+
+### Fixed
+
+- Restore schema states on error. (#2730)
+- Refactor bleve tokenizer usage (#2738). Fixes #2622 and #2601.
+- Switch to Badger's Watermark library, which has a memory leak fix. (0cd9d82e)
+- Fix tiny typo. (#2761)
+- Fix Test: TestMillion.
+- Fix Jepsen bank test. (#2764)
+- Fix link to help_wanted. (#2774)
+- Fix invalid division by zero error. Fixes #2733.
+- Fix missing predicates after export and bulk load. Fixes #2616.
+- Handle various edge cases around cluster memberships. (#2791)
+- Change Encrypt to not re-encrypt password values. Fixes #2765.
+- Correctly parse facet types for both JSON and RDF formats. Previously the
+  parsing was handled differently depending on the input format. (#2797)
+
 ## [1.0.10] - 2018-11-05
 
 **Note: This release requires you to export and re-import data. We have changed the underlying storage format.**

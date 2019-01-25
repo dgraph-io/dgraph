@@ -28,7 +28,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var regexTooWideErr = errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
+var errRegexTooWide = errors.New(
+	"regular expression is too wide-ranging and can't be executed efficiently")
 
 func uidsForRegex(attr string, arg funcArgs,
 	query *cindex.Query, intersect *pb.List) (*pb.List, error) {
@@ -42,7 +43,7 @@ func uidsForRegex(attr string, arg funcArgs,
 
 	uidsForTrigram := func(trigram string) (*pb.List, error) {
 		key := x.IndexKey(attr, trigram)
-		pl, err := posting.Get(key)
+		pl, err := posting.GetNoStore(key)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +104,7 @@ func uidsForRegex(attr string, arg funcArgs,
 			results = algo.MergeSorted([]*pb.List{results, subUids})
 		}
 	default:
-		return nil, regexTooWideErr
+		return nil, errRegexTooWide
 	}
 	return results, nil
 }

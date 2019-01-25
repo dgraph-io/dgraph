@@ -60,22 +60,22 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, x.Errorf("Invalid data for float %v", data)
 				}
 				i := binary.LittleEndian.Uint64(data)
-				val := math.Float64frombits(i)
-				*res = float64(val)
+				*res = math.Float64frombits(i)
 			case BoolID:
-				if data[0] == 0 {
-					*res = bool(false)
+				if len(data) == 0 || data[0] == 0 {
+					*res = false
 					return to, nil
 				} else if data[0] == 1 {
-					*res = bool(true)
+					*res = true
 					return to, nil
-				} else {
-					return to, x.Errorf("Invalid value for bool %v", data[0])
 				}
+				return to, x.Errorf("Invalid value for bool %v", data[0])
 			case DateTimeID:
 				var t time.Time
-				if err := t.UnmarshalBinary(data); err != nil {
-					return to, err
+				if !bytes.Equal(data, []byte("")) {
+					if err := t.UnmarshalBinary(data); err != nil {
+						return to, err
+					}
 				}
 				*res = t
 			case GeoID:
@@ -95,38 +95,42 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			vc := string(data)
 			switch toID {
 			case BinaryID:
-				// Marshal Binary
 				*res = []byte(vc)
 			case IntID:
-				// Marshal text.
 				val, err := strconv.ParseInt(vc, 10, 64)
 				if err != nil {
 					return to, err
 				}
-				*res = int64(val)
+				*res = val
 			case FloatID:
 				val, err := strconv.ParseFloat(vc, 64)
 				if err != nil {
 					return to, err
 				}
 				if math.IsNaN(val) {
-					return to, fmt.Errorf("Got invalid value: NaN.")
+					return to, fmt.Errorf("Got invalid value: NaN")
 				}
-				*res = float64(val)
+				*res = val
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
-				val, err := strconv.ParseBool(vc)
-				if err != nil {
-					return to, err
+				*res = false
+				if vc != "" {
+					val, err := strconv.ParseBool(vc)
+					if err != nil {
+						return to, err
+					}
+					*res = val
 				}
-				*res = bool(val)
 			case DateTimeID:
-				t, err := ParseTime(vc)
-				if err != nil {
-					return to, err
+				*res = time.Time{}
+				if vc != "" {
+					t, err := ParseTime(vc)
+					if err != nil {
+						return to, err
+					}
+					*res = t
 				}
-				*res = t
 			case GeoID:
 				var g geom.T
 				text := bytes.Replace([]byte(vc), []byte("'"), []byte("\""), -1)
@@ -155,18 +159,20 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case IntID:
 				*res = vc
 			case BinaryID:
-				// Marshal Binary
 				var bs [8]byte
 				binary.LittleEndian.PutUint64(bs[:], uint64(vc))
 				*res = bs[:]
 			case FloatID:
 				*res = float64(vc)
 			case BoolID:
-				*res = bool(vc != 1)
+				*res = vc != 0
 			case StringID, DefaultID:
-				*res = string(strconv.FormatInt(vc, 10))
+				*res = strconv.FormatInt(vc, 10)
 			case DateTimeID:
-				*res = time.Unix(vc, 0).UTC()
+				*res = time.Time{}
+				if vc != 0 {
+					*res = time.Unix(vc, 0).UTC()
+				}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -177,31 +183,32 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, x.Errorf("Invalid data for float %v", data)
 			}
 			i := binary.LittleEndian.Uint64(data)
-			val := math.Float64frombits(i)
-			vc := float64(val)
+			vc := math.Float64frombits(i)
 			switch toID {
 			case FloatID:
 				*res = vc
 			case BinaryID:
-				// Marshal Binary
 				var bs [8]byte
-				u := math.Float64bits(float64(vc))
+				u := math.Float64bits(vc)
 				binary.LittleEndian.PutUint64(bs[:], u)
 				*res = bs[:]
 			case IntID:
-				if vc > math.MaxInt64 || vc < math.MinInt64 || math.IsNaN(float64(vc)) {
+				if vc > math.MaxInt64 || vc < math.MinInt64 || math.IsNaN(vc) {
 					return to, x.Errorf("Float out of int64 range")
 				}
 				*res = int64(vc)
 			case BoolID:
-				*res = bool(vc != 1)
+				*res = vc != 0
 			case StringID, DefaultID:
-				*res = string(strconv.FormatFloat(float64(vc), 'G', -1, 64))
+				*res = strconv.FormatFloat(vc, 'G', -1, 64)
 			case DateTimeID:
-				secs := int64(vc)
-				fracSecs := vc - float64(secs)
-				nsecs := int64(fracSecs * nanoSecondsInSec)
-				*res = time.Unix(secs, nsecs).UTC()
+				*res = time.Time{}
+				if vc != 0 {
+					secs := int64(vc)
+					fracSecs := vc - float64(secs)
+					nsecs := int64(fracSecs * nanoSecondsInSec)
+					*res = time.Unix(secs, nsecs).UTC()
+				}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -209,11 +216,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case BoolID:
 		{
 			var vc bool
-			if data[0] == 0 {
-				vc = bool(false)
-			} else if data[0] == 1 {
-				vc = bool(true)
-			} else {
+			switch {
+			case data[0] == 0:
+				vc = false
+			case data[0] == 1:
+				vc = true
+			default:
 				return to, x.Errorf("Invalid value for bool %v", data[0])
 			}
 
@@ -221,13 +229,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BoolID:
 				*res = vc
 			case BinaryID:
-				// Marshal Binary
-				var bs [1]byte
-				bs[0] = 0
+				*res = []byte{0}
 				if vc {
-					bs[0] = 1
+					*res = []byte{1}
 				}
-				*res = bs[:]
 			case IntID:
 				*res = int64(0)
 				if vc {
@@ -239,7 +244,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = float64(1)
 				}
 			case StringID, DefaultID:
-				*res = string(strconv.FormatBool(bool(vc)))
+				*res = strconv.FormatBool(vc)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -250,34 +255,39 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			if err := t.UnmarshalBinary(data); err != nil {
 				return to, err
 			}
-			vc := t
+			// NOTE: when converting datetime values to anything else, we must
+			// check for zero-time value and return the zero value of the new type.
 			switch toID {
 			case DateTimeID:
-				*res = vc
+				*res = t
 			case BinaryID:
-				// Marshal Binary
-				r, err := vc.MarshalBinary()
-				if err != nil {
-					return to, err
+				*res = []byte("")
+				if !t.IsZero() {
+					r, err := t.MarshalBinary()
+					if err != nil {
+						return to, err
+					}
+					*res = r
 				}
-				*res = r
 			case StringID, DefaultID:
-				val, err := vc.MarshalText()
-				if err != nil {
-					return to, err
+				*res = ""
+				if !t.IsZero() {
+					val, err := t.MarshalText()
+					if err != nil {
+						return to, err
+					}
+					*res = string(val)
 				}
-				*res = string(val)
 			case IntID:
-				secs := vc.Unix()
-				if secs > math.MaxInt64 || secs < math.MinInt64 {
-					return to, x.Errorf("Time out of int64 range")
+				*res = int64(0)
+				if !t.IsZero() {
+					*res = t.Unix()
 				}
-				*res = int64(secs)
 			case FloatID:
-				secs := float64(vc.Unix())
-				nano := float64(vc.Nanosecond())
-				val := secs + nano/nanoSecondsInSec
-				*res = float64(val)
+				*res = float64(0)
+				if !t.IsZero() {
+					*res = float64(t.UnixNano()) / float64(nanoSecondsInSec)
+				}
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -292,7 +302,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case GeoID:
 				*res = vc
 			case BinaryID:
-				// Marshal Binary
 				r, err := wkb.Marshal(vc, binary.LittleEndian)
 				if err != nil {
 					return to, err
@@ -313,11 +322,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			vc := string(data)
 			switch toID {
 			case BinaryID:
-				// Marshal Binary
 				*res = []byte(vc)
-			case StringID:
-				*res = vc
-			case PasswordID:
+			case StringID, PasswordID:
 				*res = vc
 			default:
 				return to, cantConvert(fromID, toID)
@@ -342,8 +348,7 @@ func Marshal(from Val, to *Val) error {
 		case StringID, DefaultID:
 			*res = string(vc)
 		case BinaryID:
-			// Marshal Binary
-			*res = []byte(vc)
+			*res = vc
 		default:
 			return cantConvert(fromID, toID)
 		}
@@ -353,7 +358,6 @@ func Marshal(from Val, to *Val) error {
 		case StringID, DefaultID:
 			*res = vc
 		case BinaryID:
-			// Marshal Binary
 			*res = []byte(vc)
 		default:
 			return cantConvert(fromID, toID)
@@ -362,9 +366,8 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(int64)
 		switch toID {
 		case StringID, DefaultID:
-			*res = strconv.FormatInt(int64(vc), 10)
+			*res = strconv.FormatInt(vc, 10)
 		case BinaryID:
-			// Marshal Binary
 			var bs [8]byte
 			binary.LittleEndian.PutUint64(bs[:], uint64(vc))
 			*res = bs[:]
@@ -375,11 +378,10 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(float64)
 		switch toID {
 		case StringID, DefaultID:
-			*res = strconv.FormatFloat(float64(vc), 'G', -1, 64)
+			*res = strconv.FormatFloat(vc, 'G', -1, 64)
 		case BinaryID:
-			// Marshal Binary
 			var bs [8]byte
-			u := math.Float64bits(float64(vc))
+			u := math.Float64bits(vc)
 			binary.LittleEndian.PutUint64(bs[:], u)
 			*res = bs[:]
 		default:
@@ -389,15 +391,12 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(bool)
 		switch toID {
 		case StringID, DefaultID:
-			*res = strconv.FormatBool(bool(vc))
+			*res = strconv.FormatBool(vc)
 		case BinaryID:
-			// Marshal Binary
-			var bs [1]byte
-			bs[0] = 0
+			*res = []byte{0}
 			if vc {
-				bs[0] = 1
+				*res = []byte{1}
 			}
-			*res = bs[:]
 		default:
 			return cantConvert(fromID, toID)
 		}
@@ -405,18 +404,23 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(time.Time)
 		switch toID {
 		case StringID, DefaultID:
-			val, err := vc.MarshalText()
-			if err != nil {
-				return err
+			*res = ""
+			if !vc.IsZero() {
+				val, err := vc.MarshalText()
+				if err != nil {
+					return err
+				}
+				*res = string(val)
 			}
-			*res = string(val)
 		case BinaryID:
-			// Marshal Binary
-			r, err := vc.MarshalBinary()
-			if err != nil {
-				return err
+			*res = []byte("")
+			if !vc.IsZero() {
+				r, err := vc.MarshalBinary()
+				if err != nil {
+					return err
+				}
+				*res = r
 			}
-			*res = r
 		default:
 			return cantConvert(fromID, toID)
 		}
@@ -427,7 +431,6 @@ func Marshal(from Val, to *Val) error {
 		}
 		switch toID {
 		case BinaryID:
-			// Marshal Binary
 			r, err := wkb.Marshal(vc, binary.LittleEndian)
 			if err != nil {
 				return err
@@ -448,12 +451,10 @@ func Marshal(from Val, to *Val) error {
 		case StringID:
 			*res = vc
 		case BinaryID:
-			// Marshal Binary
 			*res = []byte(vc)
 		default:
 			return cantConvert(fromID, toID)
 		}
-
 	default:
 		return cantConvert(fromID, toID)
 	}
@@ -520,10 +521,6 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type password. Got : %v", value)
-		}
-		v, err := Encrypt(v)
-		if err != nil {
-			return def, err
 		}
 		return &api.Value{Val: &api.Value_PasswordVal{PasswordVal: v}}, nil
 	default:

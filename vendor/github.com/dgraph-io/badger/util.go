@@ -17,6 +17,7 @@
 package badger
 
 import (
+	"encoding/hex"
 	"io/ioutil"
 	"math/rand"
 	"sync/atomic"
@@ -77,8 +78,9 @@ func (s *levelHandler) validate() error {
 
 		if y.CompareKeys(s.tables[j-1].Biggest(), s.tables[j].Smallest()) >= 0 {
 			return errors.Errorf(
-				"Inter: %q vs %q: level=%d j=%d numTables=%d",
-				string(s.tables[j-1].Biggest()), string(s.tables[j].Smallest()), s.level, j, numTables)
+				"Inter: Biggest(j-1) \n%s\n vs Smallest(j): \n%s\n: level=%d j=%d numTables=%d",
+				hex.Dump(s.tables[j-1].Biggest()), hex.Dump(s.tables[j].Smallest()),
+				s.level, j, numTables)
 		}
 
 		if y.CompareKeys(s.tables[j].Smallest(), s.tables[j].Biggest()) > 0 {

@@ -80,8 +80,13 @@ type Options struct {
 	// determined by the smaller of its file size and max entries.
 	ValueLogMaxEntries uint32
 
-	// Number of compaction workers to run concurrently.
+	// Number of compaction workers to run concurrently. Setting this to zero would stop compactions
+	// to happen within LSM tree. If set to zero, writes could block forever.
 	NumCompactors int
+
+	// When closing the DB, force compact Level 0. This ensures that both reads and writes are
+	// efficient when the DB is opened later.
+	CompactL0OnClose bool
 
 	// Transaction start and commit timestamps are managed by end-user.
 	// This is only useful for databases built on top of Badger (like Dgraph).
@@ -90,8 +95,6 @@ type Options struct {
 
 	// 4. Flags for testing purposes
 	// ------------------------------
-	DoNotCompact bool // Stops LSM tree from compactions.
-
 	maxBatchCount int64 // max entries in batch
 	maxBatchSize  int64 // max batch size in bytes
 
@@ -103,12 +106,14 @@ type Options struct {
 
 	// Truncate value log to delete corrupt data, if any. Would not truncate if ReadOnly is set.
 	Truncate bool
+
+	// DB-specific logger which will override the global logger.
+	Logger Logger
 }
 
 // DefaultOptions sets a list of recommended options for good performance.
 // Feel free to modify these to suit your needs.
 var DefaultOptions = Options{
-	DoNotCompact:        false,
 	LevelOneSize:        256 << 20,
 	LevelSizeMultiplier: 10,
 	TableLoadingMode:    options.LoadToRAM,
@@ -117,12 +122,13 @@ var DefaultOptions = Options{
 	// table.Nothing to not preload the tables.
 	MaxLevels:               7,
 	MaxTableSize:            64 << 20,
-	NumCompactors:           3,
+	NumCompactors:           2, // Compactions can be expensive. Only run 2.
 	NumLevelZeroTables:      5,
 	NumLevelZeroTablesStall: 10,
 	NumMemtables:            5,
 	SyncWrites:              true,
 	NumVersionsToKeep:       1,
+	CompactL0OnClose:        true,
 	// Nothing to read/write value log using standard File I/O
 	// MemoryMap to mmap() the value log files
 	// (2^30 - 1)*2 when mmapping < 2^31 - 1, max int32.
@@ -132,6 +138,7 @@ var DefaultOptions = Options{
 	ValueLogMaxEntries: 1000000,
 	ValueThreshold:     32,
 	Truncate:           false,
+	Logger:             defaultLogger,
 }
 
 // LSMOnlyOptions follows from DefaultOptions, but sets a higher ValueThreshold

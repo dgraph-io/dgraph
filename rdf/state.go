@@ -164,7 +164,7 @@ Loop:
 
 // Assumes that caller has consumed initial '<'
 func lexIRIRef(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
-	if err := lex.LexIRIRef(l, styp); err != nil {
+	if err := lex.IRIRef(l, styp); err != nil {
 		return l.Errorf(err.Error())
 	}
 	return sfn
@@ -419,7 +419,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	l.Backup()
 	for {
 		r := l.Next()
-		if isEndOfLine(r) || r == lex.EOF {
+		if lex.IsEndOfLine(r) || r == lex.EOF {
 			break
 		}
 	}
@@ -479,11 +479,6 @@ func isClosingBracket(r rune) bool {
 // isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
-}
-
-// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
-func isEndOfLine(r rune) bool {
-	return r == '\u000A' || r == '\u000D'
 }
 
 func isEndLiteral(r rune) bool {

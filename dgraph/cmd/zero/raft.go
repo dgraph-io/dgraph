@@ -50,8 +50,6 @@ type node struct {
 	lastQuorum time.Time
 }
 
-var errReadIndex = x.Errorf("cannot get linerized read (time expired or no configured leader)")
-
 func (n *node) AmLeader() bool {
 	if n.Raft() == nil {
 		return false
@@ -71,7 +69,7 @@ func (n *node) AmLeader() bool {
 }
 
 func (n *node) uniqueKey() string {
-	return fmt.Sprintf("z%d-%d", n.Id, n.Rand.Uint64())
+	return fmt.Sprintf("z%x-%d", n.Id, n.Rand.Uint64())
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
@@ -189,6 +187,10 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 			state.Removed = append(state.Removed, m)
 		}
 		// else already removed.
+		if len(group.Members) == 0 {
+			glog.V(3).Infof("Deleting group Id %d (no members) ...", member.GroupId)
+			delete(state.Groups, member.GroupId)
+		}
 		return nil
 	}
 	if !has && len(group.Members) >= n.server.NumReplicas {
@@ -246,7 +248,6 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	// only the first one succeeds.
 	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
 		if tablet.Force {
-			// TODO: Try and remove this whole Force flag logic.
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
 		} else {
@@ -256,10 +257,9 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 					prev.Predicate, tablet.GroupId, prev.GroupId)
 				return errTabletAlreadyServed
 			}
-			// This update can come from tablet size.
-			tablet.ReadOnly = prev.ReadOnly
 		}
 	}
+	tablet.Force = false
 	group.Tablets[tablet.Predicate] = tablet
 	return nil
 }
@@ -347,7 +347,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		if cc.NodeID == n.Id {
-			glog.Fatalf("I [id:%d group:0] have been removed. Goodbye!", n.Id)
+			glog.Fatalf("I [id:%#x group:0] have been removed. Goodbye!", n.Id)
 		}
 		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
@@ -440,7 +440,7 @@ func (n *node) initAndStartNode() error {
 			}
 			time.Sleep(timeout) // This is useful because JoinCluster can exit immediately.
 		}
-		glog.Infof("[%d] Starting node\n", n.Id)
+		glog.Infof("[%#x] Starting node\n", n.Id)
 		n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 	} else {
@@ -505,7 +505,7 @@ func (n *node) checkQuorum(closer *y.Closer) {
 			conn.Get().RemoveInvalid(state)
 
 		} else if glog.V(1) {
-			glog.Warningf("Zero node: %d unable to reach quorum.", n.Id)
+			glog.Warningf("Zero node: %#x unable to reach quorum.", n.Id)
 		}
 	}
 
@@ -593,7 +593,7 @@ func (n *node) Run() {
 				n.Applied.Begin(entry.Index)
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
-					glog.Infof("Done applying conf change at %d", n.Id)
+					glog.Infof("Done applying conf change at %#x", n.Id)
 
 				} else if entry.Type == raftpb.EntryNormal {
 					key, err := n.applyProposal(entry)

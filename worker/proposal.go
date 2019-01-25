@@ -113,7 +113,7 @@ func uniqueKey() string {
 }
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
-var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later.")
+var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later")
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
@@ -146,18 +146,22 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// timeout.
 	var noTimeout bool
 
+	checkTablet := func(pred string) error {
+		if tablet := groups().Tablet(pred); tablet == nil ||
+			tablet.GroupId != groups().groupId() {
+			return errUnservedTablet
+		}
+		return nil
+	}
+
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
-			if tablet := groups().Tablet(edge.Attr); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
-			} else if tablet.GroupId != groups().groupId() {
-				// Tablet can move by the time request reaches here.
-				return errUnservedTablet
+			if err := checkTablet(edge.Attr); err != nil {
+				return err
 			}
-
 			su, ok := schema.State().Get(edge.Attr)
 			if !ok {
 				continue
@@ -166,8 +170,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			}
 		}
 		for _, schema := range proposal.Mutations.Schema {
-			if tablet := groups().Tablet(schema.Predicate); tablet != nil && tablet.ReadOnly {
-				return errPredicateMoving
+			if err := checkTablet(schema.Predicate); err != nil {
+				return err
 			}
 			if err := checkSchema(schema); err != nil {
 				return err
@@ -181,13 +185,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// whether it has already done this work, and if so, skip it.
 	key := uniqueKey()
 	proposal.Key = key
+	span := otrace.FromContext(ctx)
 
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-
-		cctx, span := otrace.StartSpan(cctx, "node.propose")
-		defer span.End()
 
 		che := make(chan error, 1)
 		pctx := &conn.ProposalCtx{

@@ -28,7 +28,7 @@ const (
 
 func Encrypt(plain string) (string, error) {
 	if len(plain) < pwdLenLimit {
-		return "", x.Errorf("Password too short, i.e. should has at least 6 chars")
+		return "", x.Errorf("Password too short, i.e. should have at least 6 chars")
 	}
 
 	encrypted, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
@@ -41,7 +41,7 @@ func Encrypt(plain string) (string, error) {
 
 func VerifyPassword(plain, encrypted string) error {
 	if len(plain) < pwdLenLimit || len(encrypted) == 0 {
-		return x.Errorf("invalid password/crypted string")
+		return x.Errorf("Invalid password/crypted string")
 	}
 
 	return bcrypt.CompareHashAndPassword([]byte(encrypted), []byte(plain))

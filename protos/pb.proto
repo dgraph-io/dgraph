@@ -25,6 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
+import "github.com/dgraph-io/badger/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -170,7 +171,6 @@ message Tablet {
 	uint32 group_id  = 1; // Served by which group.
 	string predicate = 2;
 	bool force       = 3; // Used while moving predicate.
-	bool read_only   = 4;  // Used to block mutations on this predicate.
 	int64 space      = 7;
 	bool remove      = 8;
 }
@@ -200,10 +200,6 @@ message Mutations {
 	bool ignore_index_conflict   = 6;
 }
 
-message KeyValues {
-	repeated KV kv = 1;
-}
-
 message Snapshot {
 	RaftContext context = 1;
 	uint64 index        = 2;
@@ -224,16 +220,9 @@ message Proposal {
 }
 
 message KVS {
- repeated KV kv = 1;
+ repeated pb.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
-}
-
-message KV {
-	bytes key      = 1;
-	bytes val      = 2;
-	bytes userMeta = 3;
-	uint64 version = 4;
 }
 
 // Posting messages.
@@ -329,7 +318,7 @@ message SchemaRequest {
 }
 
 message SchemaResult {
-	repeated api.SchemaNode schema = 1;
+	repeated api.SchemaNode schema = 1 [deprecated=true];
 }
 
 message SchemaUpdate {
@@ -363,10 +352,10 @@ message MapEntry {
 }
 
 message MovePredicatePayload {
-	string predicate = 1;
-	uint32 source_group_id = 2;
-	uint32 dest_group_id = 3;
-	MembershipState state = 4;
+	string predicate  = 1;
+	uint32 source_gid = 2;
+	uint32 dest_gid   = 3;
+	uint64 txn_ts     = 4;
 }
 
 message TxnStatus {
@@ -421,7 +410,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)							returns (Status) {}
+	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -456,7 +445,7 @@ message BackupRequest {
 	uint64 read_ts  = 1;
 	uint32 group_id = 2;
 	string unix_ts  = 3;
-	string target   = 4;
+	string location = 4;
 }
 
 message ExportRequest {

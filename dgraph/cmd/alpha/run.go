@@ -21,16 +21,19 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // http profiler
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -50,8 +53,14 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	_ "google.golang.org/grpc/encoding/gzip" // grpc compression
 	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
+)
+
+const (
+	tlsNodeCert = "node.crt"
+	tlsNodeKey  = "node.key"
 )
 
 var (
@@ -97,7 +106,6 @@ they form a Raft group and provide synchronous replication.
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
-	flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	flag.String("whitelist", "",
 		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
 			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
@@ -120,11 +128,22 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+
+	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
+		" that is used for signing the JWT. Enterprise feature.")
+	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
+		"Enterprise feature.")
+	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+		"Enterprise feature.")
+	flag.Duration("acl_cache_ttl", 30*time.Second, "The interval to refresh the acl cache. "+
+		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
 	flag.Bool("debugmode", false,
 		"Enable debug mode for more debug information.")
+	flag.String("mutations", "allow",
+		"Set mutation mode to allow, disallow, or strict.")
 
 	// Useful for running multiple servers on the same machine.
 	flag.IntP("port_offset", "o", 0,
@@ -380,17 +399,56 @@ var shutdownCh chan struct{}
 func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
-	edgraph.SetConfiguration(edgraph.Options{
+	opts := edgraph.Options{
 		BadgerTables: Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:   Alpha.Conf.GetString("badger.vlog"),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),
 
-		Nomutations:    Alpha.Conf.GetBool("nomutations"),
+		MutationsMode:  edgraph.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	})
+	}
+
+	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	if secretFile != "" {
+		if !Alpha.Conf.GetBool("enterprise_features") {
+			glog.Errorf("You must enable Dgraph enterprise features with the " +
+				"--enterprise_features option in order to use ACL.")
+			os.Exit(1)
+		}
+
+		hmacSecret, err := ioutil.ReadFile(secretFile)
+		if err != nil {
+			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
+		}
+		if len(hmacSecret) < 32 {
+			glog.Errorf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
+			os.Exit(1)
+		}
+
+		opts.HmacSecret = hmacSecret
+		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
+		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
+		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_cache_ttl")
+
+		glog.Info("HMAC secret loaded successfully.")
+	}
+
+	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
+	case "allow":
+		opts.MutationsMode = edgraph.AllowMutations
+	case "disallow":
+		opts.MutationsMode = edgraph.DisallowMutations
+	case "strict":
+		opts.MutationsMode = edgraph.StrictMutations
+	default:
+		glog.Error("--mutations argument must be one of allow, disallow, or strict")
+		os.Exit(1)
+	}
+
+	edgraph.SetConfiguration(opts)
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
@@ -404,9 +462,11 @@ func run() {
 		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
+		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
+		AclEnabled:          secretFile != "",
 	}
 
-	x.LoadTLSConfig(&tlsConf, Alpha.Conf)
+	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)
 	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
 	setupCustomTokenizers()
@@ -473,9 +533,18 @@ func run() {
 	_ = numShutDownSig
 
 	// Setup external communication.
-	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+	aclCloser := y.NewCloser(1)
+	go func() {
+		worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+		// initialization of the admin account can only be done after raft nodes are running
+		// and health check passes
+		edgraph.ResetAcl()
+		edgraph.RefreshAcls(aclCloser)
+	}()
+
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
+	aclCloser.SignalAndWait()
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
 }

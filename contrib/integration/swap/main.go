@@ -58,7 +58,7 @@ func main() {
 	for _, s := range sents {
 		words := strings.Split(s, " ")
 		for _, w := range words {
-			wordCount[w] += 1
+			wordCount[w]++
 		}
 	}
 	type wc struct {

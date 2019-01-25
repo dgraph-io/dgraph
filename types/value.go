@@ -24,7 +24,7 @@ import (
 // TypeForValue tries to determine the most likely type based on a value. We only want to use this
 // function when there's no schema type and no suggested storage type.
 // Returns the guessed type or DefaultID if it couldn't be determined.
-// If retval is non-nil, the parsed value is returned, useful in conjuction with ObjectValue().
+// If retval is non-nil, the parsed value is returned, useful in conjunction with ObjectValue().
 func TypeForValue(v []byte) (TypeID, interface{}) {
 	s := string(v)
 	switch {

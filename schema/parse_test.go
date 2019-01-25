@@ -80,7 +80,7 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
 
-	typ, err = State().TypeOf("agea")
+	_, err = State().TypeOf("agea")
 	require.Error(t, err)
 }
 
@@ -136,15 +136,15 @@ func TestSchemaIndex_Error1(t *testing.T) {
 }
 
 var schemaIndexVal3Uid = `
-person:uid @index .
+person: uid @index .
 `
 
 var schemaIndexVal3Default = `
-value:default @index .
+value: default @index .
 `
 
 var schemaIndexVal3Password = `
-pass:password @index .
+pass: password @index .
 `
 
 // Object types cant be indexed.
@@ -305,16 +305,6 @@ func TestParseScalarList(t *testing.T) {
 func TestParseScalarListError1(t *testing.T) {
 	reset()
 	schemas, err := Parse(`
-		friend: [uid] .
-	`)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected scalar type inside []. Got: [uid] for attr: [friend].")
-	require.Nil(t, schemas)
-}
-
-func TestParseScalarListError2(t *testing.T) {
-	reset()
-	schemas, err := Parse(`
 		friend: [string .
 	`)
 	require.Error(t, err)
@@ -322,7 +312,7 @@ func TestParseScalarListError2(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
-func TestParseScalarListError3(t *testing.T) {
+func TestParseScalarListError2(t *testing.T) {
 	reset()
 	schemas, err := Parse(`
 		friend: string] .
@@ -332,13 +322,41 @@ func TestParseScalarListError3(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
-func TestParseScalarListError4(t *testing.T) {
+func TestParseScalarListError3(t *testing.T) {
 	reset()
 	_, err := Parse(`
 		friend: [bool] .
 	`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Unsupported type for list: [bool]")
+}
+
+func TestParseUidList(t *testing.T) {
+	reset()
+	schemas, err := Parse(`
+		friend: [uid] .
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(schemas))
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: "friend",
+		ValueType: 7,
+		List:      true,
+	}, schemas[0])
+}
+
+func TestParseUidSingleValue(t *testing.T) {
+	reset()
+	schemas, err := Parse(`
+		friend: uid .
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(schemas))
+	require.EqualValues(t, &pb.SchemaUpdate{
+		Predicate: "friend",
+		ValueType: 7,
+		List:      false,
+	}, schemas[0])
 }
 
 var ps *badger.DB

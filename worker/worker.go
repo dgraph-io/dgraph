@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"go.opencensus.io/plugin/ocgrpc"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -56,7 +57,8 @@ func Init(ps *badger.DB) {
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
-		grpc.MaxConcurrentStreams(math.MaxInt32))
+		grpc.MaxConcurrentStreams(math.MaxInt32),
+		grpc.StatsHandler(&ocgrpc.ServerHandler{}))
 }
 
 // grpcWorker struct implements the gRPC server interface.

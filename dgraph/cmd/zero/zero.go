@@ -37,7 +37,7 @@ var (
 	emptyMembershipState pb.MembershipState
 	emptyConnectionState pb.ConnectionState
 	errInternalError     = errors.New("Internal server error")
-	errServerShutDown    = errors.New("Server is being shut down.")
+	errServerShutDown    = errors.New("Server is being shut down")
 )
 
 type Server struct {
@@ -58,6 +58,8 @@ type Server struct {
 	leaderChangeCh chan struct{}
 	shutDownCh     chan struct{} // Used to tell stream to close.
 	connectLock    sync.Mutex    // Used to serialize connect requests from servers.
+
+	blockCommitsOn map[string]struct{}
 }
 
 func (s *Server) Init() {
@@ -75,6 +77,7 @@ func (s *Server) Init() {
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.shutDownCh = make(chan struct{}, 1)
+	s.blockCommitsOn = make(map[string]struct{})
 	go s.rebalanceTablets()
 }
 
@@ -270,6 +273,24 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	return nil
 }
 
+func (s *Server) blockTablet(pred string) func() {
+	s.Lock()
+	s.blockCommitsOn[pred] = struct{}{}
+	s.Unlock()
+	return func() {
+		s.Lock()
+		delete(s.blockCommitsOn, pred)
+		s.Unlock()
+	}
+}
+
+func (s *Server) isBlocked(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	_, blocked := s.blockCommitsOn[pred]
+	return blocked
+}
+
 func (s *Server) servingTablet(tablet string) *pb.Tablet {
 	s.AssertRLock()
 
@@ -356,6 +377,10 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	if _, ok := s.state.Groups[groupId].Members[nodeId]; !ok {
 		return x.Errorf("No node with nodeId %d found in group %d", nodeId, groupId)
 	}
+	if len(s.state.Groups[groupId].Members) == 1 && len(s.state.Groups[groupId].Tablets) > 0 {
+		return x.Errorf("Move all tablets from group %d before removing the last node", groupId)
+	}
+
 	return s.Node.proposeAndWait(ctx, zp)
 }
 

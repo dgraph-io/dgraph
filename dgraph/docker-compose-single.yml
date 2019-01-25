@@ -1,0 +1,83 @@
+# Docker compose file for testing. Use it with:
+# docker-compose up --force-recreate
+# This would pick up dgraph binary from $GOPATH.
+
+version: "3.5"
+services:
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg0.1
+    working_dir: /data/dg0.1
+    ports:
+      - 5080:5080
+      - 6080:6080
+    environment:
+      - GOPATH=$GOPATH
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 # --jaeger.collector http://jaeger:14268
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+
+  dg1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg1
+    working_dir: /data/dg1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8180:8180
+      - 9180:9180
+      - 9999:9999
+    security_opt:
+      - seccomp:unconfined
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 --expose_trace -o 100 --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 # --jaeger.collector http://jaeger:14268
+    #command: /gobin/dlv --listen=:9999 --headless=true --api-version=2 --init $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dlv.init exec /gobin/dgraph -- alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=3 --jaeger.collector http://jaeger:14268
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    hostname: jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "9411:9411"
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+
+  # node-exporter:
+  #   image: quay.io/prometheus/node-exporter
+  #   container_name: node-exporter
+  #   pid: "host"
+  #   volumes:
+  #     - type: bind
+  #       source: /
+  #       target: /host
+  #       read_only: true
+
+  # prometheus:
+  #   image: prom/prometheus
+  #   container_name: prometheus
+  #   hostname: prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - type: bind
+  #       source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/prometheus.yml
+  #       target: /etc/prometheus/prometheus.yml
+  #       read_only: true
+
+  # grafana:
+  #   image: grafana/grafana
+  #   container_name: grafana
+  #   hostname: grafana
+  #   ports:
+  #    - "3000:3000"

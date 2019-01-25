@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
-	ErrInvalidUID = errors.New("UID has to be greater than zero.")
+	ErrEmpty      = errors.New("RDF: harmless error, e.g. comment line")
+	ErrInvalidUID = errors.New("UID has to be greater than zero")
 )
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -54,11 +54,11 @@ func sane(s string) bool {
 // Parse parses a mutation string and returns the NQuad representation for it.
 func Parse(line string) (api.NQuad, error) {
 	var rnq api.NQuad
-	l := lex.Lexer{
-		Input: line,
-	}
+	l := lex.NewLexer(line)
 	l.Run(lexText)
-
+	if err := l.ValidateResult(); err != nil {
+		return rnq, err
+	}
 	it := l.NewIterator()
 	var oval string
 	var seenOval bool
@@ -131,6 +131,10 @@ L:
 			}
 			src := types.ValueForType(types.StringID)
 			src.Value = []byte(oval)
+			// if this is a password value dont re-encrypt. issue#2765
+			if t == types.PasswordID {
+				src.Tid = t
+			}
 			p, err := types.Convert(src, t)
 			if err != nil {
 				return rnq, err
@@ -139,10 +143,6 @@ L:
 			if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
 				return rnq, err
 			}
-
-		case lex.ItemError:
-			return rnq, x.Errorf(item.Val)
-
 		case itemComment:
 			isCommentLine = true
 			vend = true
@@ -271,6 +271,7 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.TypeID{
+	"xs:password":        types.PasswordID,
 	"xs:string":          types.StringID,
 	"xs:date":            types.DateTimeID,
 	"xs:dateTime":        types.DateTimeID,

@@ -16,26 +16,43 @@
  * limitations under the License.
  */
 
-package worker
+package edgraph
 
 import (
-	"errors"
+	"context"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
-var errNotSupported = errors.New("Feature available only in Dgraph Enterprise Edition.")
+func (s *Server) Login(ctx context.Context,
+	request *api.LoginRequest) (*api.Response, error) {
 
-// Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.Infof("Backup failed: %s", errNotSupported)
-	return &pb.Status{}, nil
+	glog.Warningf("Login failed: %s", x.ErrNotSupported)
+	return &api.Response{}, x.ErrNotSupported
 }
 
-// BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, target string) error {
-	return x.Errorf("Backup failed: %s", errNotSupported)
+func ResetAcl() {
+	// do nothing
+}
+
+func RefreshAcls(closer *y.Closer) {
+	// do nothing
+	<-closer.HasBeenClosed()
+	closer.Done()
+}
+
+func authorizeAlter(ctx context.Context, op *api.Operation) error {
+	return nil
+}
+
+func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+	return nil
+}
+
+func authorizeQuery(ctx context.Context, req *api.Request) error {
+	// always allow access
+	return nil
 }

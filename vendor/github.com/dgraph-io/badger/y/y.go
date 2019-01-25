@@ -19,10 +19,12 @@ package y
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"math"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -161,6 +163,19 @@ func (s *Slice) Resize(sz int) []byte {
 	return s.buf[0:sz]
 }
 
+// FixedDuration returns a string representation of the given duration with the
+// hours, minutes, and seconds.
+func FixedDuration(d time.Duration) string {
+	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
+	if d >= time.Minute {
+		str = fmt.Sprintf("%02dm", int(d.Minutes())%60) + str
+	}
+	if d >= time.Hour {
+		str = fmt.Sprintf("%02dh", int(d.Hours())) + str
+	}
+	return str
+}
+
 // Closer holds the two things we need to close a goroutine and wait for it to finish: a chan
 // to tell the goroutine to shut down, and a WaitGroup with which to wait for it to finish shutting
 // down.
@@ -206,4 +221,66 @@ func (lc *Closer) Wait() {
 func (lc *Closer) SignalAndWait() {
 	lc.Signal()
 	lc.Wait()
+}
+
+// Throttle allows a limited number of workers to run at a time. It also
+// provides a mechanism to check for errors encountered by workers and wait for
+// them to finish.
+type Throttle struct {
+	wg    sync.WaitGroup
+	ch    chan struct{}
+	errCh chan error
+}
+
+// NewThrottle creates a new throttle with a max number of workers.
+func NewThrottle(max int) *Throttle {
+	return &Throttle{
+		ch:    make(chan struct{}, max),
+		errCh: make(chan error, max),
+	}
+}
+
+// Do should be called by workers before they start working. It blocks if there
+// are already maximum number of workers working. If it detects an error from
+// previously Done workers, it would return it.
+func (t *Throttle) Do() error {
+	for {
+		select {
+		case t.ch <- struct{}{}:
+			t.wg.Add(1)
+			return nil
+		case err := <-t.errCh:
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// Done should be called by workers when they finish working. They can also
+// pass the error status of work done.
+func (t *Throttle) Done(err error) {
+	if err != nil {
+		t.errCh <- err
+	}
+	select {
+	case <-t.ch:
+	default:
+		panic("Throttle Do Done mismatch")
+	}
+	t.wg.Done()
+}
+
+// Finish waits until all workers have finished working. It would return any
+// error passed by Done.
+func (t *Throttle) Finish() error {
+	t.wg.Wait()
+	close(t.ch)
+	close(t.errCh)
+	for err := range t.errCh {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

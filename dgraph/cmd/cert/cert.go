@@ -72,8 +72,8 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		NotAfter:              time.Now().AddDate(0, 0, c.until).UTC(),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		BasicConstraintsValid: c.isCA,
-		IsCA:           c.isCA,
-		MaxPathLenZero: c.isCA,
+		IsCA:                  c.isCA,
+		MaxPathLenZero:        c.isCA,
 	}
 
 	switch {

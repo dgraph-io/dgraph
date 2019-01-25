@@ -41,7 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var passwordCache map[string]string = make(map[string]string, 2)
+var passwordCache = make(map[string]string, 2)
 
 var ts uint64
 var odch chan *pb.OracleDelta
@@ -120,6 +120,18 @@ func TestQueryNamesInLanguage(t *testing.T) {
 	js := processToFastJsonNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"people": [{"name@en":"Amit"}]}}`,
+		js)
+}
+
+func TestQueryAllLanguages(t *testing.T) {
+	query := `{
+	  people(func: eq(name@hi, "अमित")) {
+		name@*
+	  }
+	}`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"people": [{"name@en":"Amit", "name@hi":"अमित", "name":""}]}}`,
 		js)
 }
 
@@ -202,6 +214,23 @@ func TestFindFriendsWhoAreBetween15And19(t *testing.T) {
 		js)
 }
 
+func TestGetNonListUidPredicate(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x02)) {
+				uid
+				best_friend {
+					uid
+				}
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x2", "best_friend": {"uid": "0x40"}}]}}`,
+		js)
+}
+
 func TestGeAge(t *testing.T) {
 	query := `{
 		  senior_citizens(func: ge(age, 75)) {
@@ -267,8 +296,9 @@ func TestGetUIDInDebugMode(t *testing.T) {
 			}
 		}
 	`
+
 	ctx := defaultContext()
-	ctx = context.WithValue(ctx, "debug", "true")
+	ctx = context.WithValue(ctx, DebugKey, "true")
 	js, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.NoError(t, err)
 	require.JSONEq(t,
@@ -1590,7 +1620,6 @@ func TestVarInIneq5(t *testing.T) {
 }
 
 func TestNestedFuncRoot(t *testing.T) {
-
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
@@ -1603,7 +1632,6 @@ func TestNestedFuncRoot(t *testing.T) {
 }
 
 func TestNestedFuncRoot2(t *testing.T) {
-
 	query := `
 		{
 			me(func: ge(count(friend), 1)) {

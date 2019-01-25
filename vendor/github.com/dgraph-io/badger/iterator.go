@@ -60,12 +60,6 @@ func (item *Item) String() string {
 	return fmt.Sprintf("key=%q, version=%d, meta=%x", item.Key(), item.Version(), item.meta)
 }
 
-// Deprecated
-// ToString returns a string representation of Item
-func (item *Item) ToString() string {
-	return item.String()
-}
-
 // Key returns the key.
 //
 // Key is only valid as long as item is valid, or transaction is valid.  If you need to use it
@@ -100,7 +94,9 @@ func (item *Item) Value(fn func(val []byte) error) error {
 	item.wg.Wait()
 	if item.status == prefetched {
 		if item.err == nil && fn != nil {
-			fn(item.val)
+			if err := fn(item.val); err != nil {
+				return err
+			}
 		}
 		return item.err
 	}
@@ -144,6 +140,8 @@ func (item *Item) IsDeletedOrExpired() bool {
 	return isDeletedOrExpired(item.meta, item.expiresAt)
 }
 
+// DiscardEarlierVersions returns whether the iterator was created with the
+// option to discard earlier versions of a key when multiple are available.
 func (item *Item) DiscardEarlierVersions() bool {
 	return item.meta&bitDiscardEarlierVersions > 0
 }
@@ -182,8 +180,10 @@ func (item *Item) yieldItemValue() ([]byte, func(), error) {
 		// move key and read that instead.
 		runCallback(cb)
 		// Do not put badgerMove on the left in append. It seems to cause some sort of manipulation.
-		key = append([]byte{}, badgerMove...)
-		key = append(key, y.KeyWithTs(item.Key(), item.Version())...)
+		keyTs := y.KeyWithTs(item.Key(), item.Version())
+		key = make([]byte, len(badgerMove)+len(keyTs))
+		n := copy(key, badgerMove)
+		copy(key[n:], keyTs)
 		// Note that we can't set item.key to move key, because that would
 		// change the key user sees before and after this call. Also, this move
 		// logic is internal logic and should not impact the external behavior
@@ -331,7 +331,7 @@ type IteratorOptions struct {
 	internalAccess bool // Used to allow internal access to badger keys.
 }
 
-func (opt *IteratorOptions) PickTable(t table.TableInterface) bool {
+func (opt *IteratorOptions) pickTable(t table.TableInterface) bool {
 	if len(opt.Prefix) == 0 {
 		return true
 	}

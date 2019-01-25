@@ -20,8 +20,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.
@@ -271,7 +269,7 @@ func TestCountIndex(t *testing.T) {
 }
 
 // TODO: Fix this later.
-func DONOTRUN_TestGoldenData(t *testing.T) {
+func DONOTRUNTestGoldenData(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}
@@ -285,8 +283,6 @@ func DONOTRUN_TestGoldenData(t *testing.T) {
 	err := matchExportCount(matchExport{
 		expectedRDF:    1120879,
 		expectedSchema: 10,
-		dir:            s.liveCluster.dir,
-		port:           s.liveCluster.dgraphPortOffset + x.PortHTTP,
 	})
 	if err != nil {
 		t.Fatal(err)

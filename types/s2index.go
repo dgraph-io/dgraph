@@ -20,7 +20,7 @@ import (
 	"log"
 
 	"github.com/golang/geo/s2"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -48,6 +48,7 @@ func IndexGeoTokens(g geom.T) ([]string, error) {
 }
 
 // IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
+/*
 func indexCellsForCap(c s2.Cap) s2.CellUnion {
 	rc := &s2.RegionCoverer{
 		MinLevel: MinCellLevel,
@@ -57,6 +58,7 @@ func indexCellsForCap(c s2.Cap) s2.CellUnion {
 	}
 	return rc.Covering(c)
 }
+*/
 
 const (
 	parentPrefix = "p/"

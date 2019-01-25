@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // http profiler
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 )
@@ -47,6 +49,9 @@ func init() {
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("rdfs", "r", "",
 		"Directory containing *.rdf or *.rdf.gz files to load.")
+	// would be nice to use -j to match -r, but already used by --num_go_routines
+	flag.String("jsons", "",
+		"Directory containing *.json or *.json.gz files to load.")
 	flag.StringP("schema_file", "s", "",
 		"Location of schema file to load.")
 	flag.String("out", "out",
@@ -84,35 +89,48 @@ func init() {
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
+	flag.String("custom_tokenizers", "",
+		"Comma separated list of tokenizer plugins")
 }
 
 func run() {
 	opt := options{
-		RDFDir:        Bulk.Conf.GetString("rdfs"),
-		SchemaFile:    Bulk.Conf.GetString("schema_file"),
-		DgraphsDir:    Bulk.Conf.GetString("out"),
-		TmpDir:        Bulk.Conf.GetString("tmp"),
-		NumGoroutines: Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:    int64(Bulk.Conf.GetInt("mapoutput_mb")),
-		ExpandEdges:   Bulk.Conf.GetBool("expand_edges"),
-		SkipMapPhase:  Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:    Bulk.Conf.GetBool("cleanup_tmp"),
-		NumShufflers:  Bulk.Conf.GetInt("shufflers"),
-		Version:       Bulk.Conf.GetBool("version"),
-		StoreXids:     Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:      Bulk.Conf.GetString("zero"),
-		HttpAddr:      Bulk.Conf.GetString("http"),
-		IgnoreErrors:  Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:     Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:  Bulk.Conf.GetInt("reduce_shards"),
+		RDFDir:           Bulk.Conf.GetString("rdfs"),
+		JSONDir:          Bulk.Conf.GetString("jsons"),
+		SchemaFile:       Bulk.Conf.GetString("schema_file"),
+		DgraphsDir:       Bulk.Conf.GetString("out"),
+		TmpDir:           Bulk.Conf.GetString("tmp"),
+		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
+		ExpandEdges:      Bulk.Conf.GetBool("expand_edges"),
+		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
+		NumShufflers:     Bulk.Conf.GetInt("shufflers"),
+		Version:          Bulk.Conf.GetBool("version"),
+		StoreXids:        Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:         Bulk.Conf.GetString("zero"),
+		HttpAddr:         Bulk.Conf.GetString("http"),
+		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:        Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 	}
 
 	x.PrintVersion()
 	if opt.Version {
 		os.Exit(0)
 	}
-	if opt.RDFDir == "" || opt.SchemaFile == "" {
-		fmt.Fprint(os.Stderr, "RDF and schema file(s) must be specified.\n")
+	if opt.SchemaFile == "" {
+		fmt.Fprint(os.Stderr, "schema file must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.RDFDir == "" && opt.JSONDir == "" {
+		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
+		os.Exit(1)
+	}
+	if opt.RDFDir != "" && opt.JSONDir != "" {
+		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
+			opt.RDFDir, opt.JSONDir)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {
@@ -124,6 +142,11 @@ func run() {
 		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
 			opt.NumShufflers, opt.ReduceShards)
 		os.Exit(1)
+	}
+	if opt.CustomTokenizers != "" {
+		for _, soFile := range strings.Split(opt.CustomTokenizers, ",") {
+			tok.LoadCustomTokenizer(soFile)
+		}
 	}
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
@@ -166,26 +189,23 @@ func run() {
 }
 
 func maxOpenFilesWarning() {
-	maxOpenFiles, err := queryMaxOpenFiles()
 	const (
 		red    = "\x1b[31m"
 		green  = "\x1b[32m"
 		yellow = "\x1b[33m"
 		reset  = "\x1b[0m"
 	)
-	if err != nil {
-		fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+	maxOpenFiles, err := queryMaxOpenFiles()
+	if err != nil || maxOpenFiles < 1e6 {
+		fmt.Println(green + "\nThe bulk loader needs to open many files at once. This number depends" +
+			" on the size of the data set loaded, the map file output size, and the level" +
+			" of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
+			" details of how to change the limit.")
+		if err != nil {
+			fmt.Printf(red+"Nonfatal error: max open file limit could not be detected: %v\n"+reset, err)
+		} else {
+			fmt.Printf(yellow+"Current max open files limit: %d\n"+reset, maxOpenFiles)
+		}
+		fmt.Println()
 	}
-	fmt.Println("The bulk loader needs to open many files at once. This number depends" +
-		" on the size of the data set loaded, the map file output size, and the level " +
-		"of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for" +
-		" details of how to change the limit.")
-	if err != nil {
-		return
-	}
-	colour := green
-	if maxOpenFiles < 1e5 {
-		colour = yellow
-	}
-	fmt.Printf(colour+"Current max open files limit: %d\n"+reset, maxOpenFiles)
 }

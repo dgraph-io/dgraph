@@ -30,6 +30,7 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/algo"
@@ -44,14 +45,12 @@ import (
 var (
 	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
 	// In such a case, retry.
-	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
+	ErrRetry = fmt.Errorf("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue       = fmt.Errorf("No value found")
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
-	errUncommitted   = fmt.Errorf("Posting List has uncommitted data")
 	emptyPosting     = &pb.Posting{}
-	emptyList        = &pb.PostingList{}
 )
 
 const (
@@ -64,7 +63,7 @@ const (
 	BitSchemaPosting   byte = 0x01
 	BitDeltaPosting    byte = 0x04
 	BitCompletePosting byte = 0x08
-	BitEmptyPosting    byte = 0x10 | BitCompletePosting
+	BitEmptyPosting    byte = 0x10
 )
 
 type List struct {
@@ -154,36 +153,6 @@ type ListOptions struct {
 	Intersect *pb.List // Intersect results with this list of UIDs.
 }
 
-// samePosting tells whether this is same posting depending upon operation of new posting.
-// if operation is Del, we ignore facets and only care about uid and value.
-// otherwise we match everything.
-func samePosting(oldp *pb.Posting, newp *pb.Posting) bool {
-	if oldp.Uid != newp.Uid {
-		return false
-	}
-	if oldp.ValType != newp.ValType {
-		return false
-	}
-	if !bytes.Equal(oldp.Value, newp.Value) {
-		return false
-	}
-	if oldp.PostingType != newp.PostingType {
-		return false
-	}
-	if bytes.Compare(oldp.LangTag, newp.LangTag) != 0 {
-		return false
-	}
-
-	// Checking source might not be necessary.
-	if oldp.Label != newp.Label {
-		return false
-	}
-	if newp.Op == Del {
-		return true
-	}
-	return facets.SameFacets(oldp.Facets, newp.Facets)
-}
-
 func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	var op uint32
 	if t.Op == pb.DirectedEdge_SET {
@@ -206,7 +175,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	return &pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
-		ValType:     pb.Posting_ValType(t.ValueType),
+		ValType:     t.ValueType,
 		PostingType: postingType,
 		LangTag:     []byte(t.Lang),
 		Label:       t.Label,
@@ -238,7 +207,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star))
 }
 
-// Ensure that you either abort the uncomitted postings or commit them before calling me.
+// Ensure that you either abort the uncommitted postings or commit them before calling me.
 func (l *List) updateMutationLayer(mpost *pb.Posting) {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
@@ -266,7 +235,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 		}
 	}
 	plist.Postings = append(plist.Postings, mpost)
-	return
 }
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
@@ -305,6 +273,39 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 		id = farm.Fingerprint64(t.Value)
 	}
 	return id
+}
+
+// canMutateUid returns an error if all the following conditions are met.
+// * Predicate is of type UidID.
+// * Predicate is not set to a list of uids in the schema.
+// * The existing posting list has an entry that does not match the proposed
+//   mutation's uid.
+// In this case, the user should delete the existing predicate and retry, or mutate
+// the schema to allow for multiple uids. This method is necessary to support uid
+// predicates with single values because previously all uid predicates were
+// considered lists.
+// This functions returns a nil error in all other cases.
+func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
+	l.AssertRLock()
+
+	if types.TypeID(edge.ValueType) != types.UidID {
+		return nil
+	}
+
+	if schema.State().IsList(edge.Attr) {
+		return nil
+	}
+
+	return l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
+		if obj.Uid != edge.GetValueId() {
+			return fmt.Errorf(
+				"cannot add value with uid %x to predicate %s because one of the existing "+
+					"values does not match this uid, either delete the existing values first or "+
+					"modify the schema to '%s: [uid]'",
+				edge.GetValueId(), edge.Attr, edge.Attr)
+		}
+		return nil
+	})
 }
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
@@ -494,7 +495,11 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	storedList := l.plist
 	if deleteBelow > 0 {
 		// There was a delete all marker. So, trim down the list of postings.
-		storedList = emptyList
+
+		// Create an empty posting list at the same commit ts as the deletion marker. This is
+		// important, so that after rollup happens, we are left with a posting list at the
+		// highest commit timestamp.
+		storedList = &pb.PostingList{CommitTs: deleteBelow}
 		result := posts[:0]
 		// Trim the posts.
 		for _, post := range posts {
@@ -624,30 +629,19 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
-func doAsyncWrite(commitTs uint64, key []byte, data []byte, meta byte, f func(error)) {
-	txn := pstore.NewTransactionAt(commitTs, true)
-	defer txn.Discard()
-	if err := txn.SetWithDiscard(key, data, meta); err != nil {
-		f(err)
-	}
-	if err := txn.CommitAt(commitTs, f); err != nil {
-		f(err)
-	}
-}
-
-func (l *List) MarshalToKv() (*pb.KV, error) {
+func (l *List) MarshalToKv() (*bpb.KV, error) {
 	l.Lock()
 	defer l.Unlock()
 	if err := l.rollup(math.MaxUint64); err != nil {
 		return nil, err
 	}
 
-	kv := &pb.KV{}
+	kv := &bpb.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
 	val, meta := marshalPostingList(l.plist)
 	kv.UserMeta = []byte{meta}
-	kv.Val = val
+	kv.Value = val
 	return kv, nil
 }
 
@@ -682,8 +676,6 @@ func (l *List) rollup(readTs uint64) error {
 
 	final := new(pb.PostingList)
 	enc := codec.Encoder{BlockSize: blockSize}
-
-	maxCommitTs := l.minTs
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
 		// So, we don't need to do any filtering here. In fact, doing filtering here could result
@@ -697,14 +689,27 @@ func (l *List) rollup(readTs uint64) error {
 			// underlying data wouldn't be changed.
 			final.Postings = append(final.Postings, p)
 		}
-		maxCommitTs = x.Max(maxCommitTs, p.CommitTs)
 		return nil
 	})
 	x.Check(err)
 	final.Pack = enc.Done()
 
-	// Keep all uncommited Entries or postings with commitTs > l.commitTs
+	maxCommitTs := l.minTs
+	{
+		// We can't rely upon iterate to give us the max commit timestamp, because it can skip over
+		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
+		// way to get the max commit timestamp is to pick all the relevant postings for the given
+		// readTs and calculate the maxCommitTs.
+		plist, mposts := l.pickPostings(readTs)
+		maxCommitTs = x.Max(maxCommitTs, plist.CommitTs)
+		for _, mp := range mposts {
+			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
+		}
+	}
+
+	// Keep all uncommitted Entries or postings with commitTs > l.commitTs
 	// in mutation map. Discard all else.
+	// TODO: This could be removed after LRU cache is removed.
 	for startTs, plist := range l.mutationMap {
 		cl := plist.CommitTs
 		if cl == 0 || cl > maxCommitTs {
@@ -720,14 +725,10 @@ func (l *List) rollup(readTs uint64) error {
 	return nil
 }
 
-func (l *List) hasPendingTxn() bool {
-	l.AssertRLock()
-	for _, pl := range l.mutationMap {
-		if pl.CommitTs == 0 {
-			return true
-		}
-	}
-	return false
+func (l *List) ApproxLen() int {
+	l.RLock()
+	defer l.RUnlock()
+	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
 // Uids returns the UIDs given some query params.
