@@ -35,31 +35,52 @@ import (
 
 var (
 	// These are cumulative
-	PostingReads  = stats.Int64("dgraph/posting_reads", "The number of posting reads", stats.UnitDimensionless)
-	PostingWrites = stats.Int64("dgraph/posting_writes", "The number of posting writes", stats.UnitDimensionless)
-	BytesRead     = stats.Int64("dgraph/bytes_read", "The number of bytes read", stats.UnitBytes)
-	BytesWrite    = stats.Int64("dgraph/bytes_written", "The number of bytes written", stats.UnitBytes)
-	NumQueries    = stats.Int64("dgraph/queries", "The number of queries", stats.UnitBytes)
-	LatencyMs     = stats.Float64("dgraph/latency", "The latency of the various methods", stats.UnitMilliseconds)
+	PostingReads = stats.Int64("dgraph/posting_reads",
+		"The number of posting reads", stats.UnitDimensionless)
+	PostingWrites = stats.Int64("dgraph/posting_writes",
+		"The number of posting writes", stats.UnitDimensionless)
+	BytesRead = stats.Int64("dgraph/bytes_read",
+		"The number of bytes read", stats.UnitBytes)
+	BytesWrite = stats.Int64("dgraph/bytes_written",
+		"The number of bytes written", stats.UnitBytes)
+	NumQueries = stats.Int64("dgraph/queries",
+		"The number of queries", stats.UnitBytes)
+	LatencyMs = stats.Float64("dgraph/latency",
+		"The latency of the various methods", stats.UnitMilliseconds)
 
 	// value at particular point of time
-	PendingQueries   = stats.Int64("dgraph/queries_pending", "The number of pending queries", stats.UnitDimensionless)
-	PendingProposals = stats.Int64("dgraph/proposals_pending", "The number of pending proposals", stats.UnitDimensionless)
-	DirtyMapSize     = stats.Int64("dgraph/dirtymap_size", "The number of elements in the dirty map", stats.UnitDimensionless)
-	NumGoRoutines    = stats.Int64("dgraph/goroutines", "The number of goroutines", stats.UnitDimensionless)
-	MemoryInUse      = stats.Int64("dgraph/memory_in_use", "The amount of memory in use", stats.UnitBytes)
-	MemoryIdle       = stats.Int64("dgraph/memory_idle", "The amount of memory in idle spans", stats.UnitBytes)
-	MemoryProc       = stats.Int64("dgraph/memory_proc", "The amount of memory used in processes", stats.UnitBytes)
-	ActiveMutations  = stats.Int64("dgraph/active_mutations", "The number of active mutations", stats.UnitDimensionless)
-	AlphaHealth      = stats.Int64("dgraph/alpha_status", "The status of the alphas", stats.UnitDimensionless)
-	MaxPlSize        = stats.Int64("dgraph/max_list_bytes", "The maximum value of bytes of the list", stats.UnitBytes)
-	MaxPlLength      = stats.Int64("dgraph/max_list_length", "The maximum length of the list", stats.UnitDimensionless)
+	PendingQueries = stats.Int64("dgraph/queries_pending",
+		"The number of pending queries", stats.UnitDimensionless)
+	PendingProposals = stats.Int64("dgraph/proposals_pending",
+		"The number of pending proposals", stats.UnitDimensionless)
+	DirtyMapSize = stats.Int64("dgraph/dirtymap_size",
+		"The number of elements in the dirty map", stats.UnitDimensionless)
+	NumGoRoutines = stats.Int64("dgraph/goroutines",
+		"The number of goroutines", stats.UnitDimensionless)
+	MemoryInUse = stats.Int64("dgraph/memory_in_use",
+		"The amount of memory in use", stats.UnitBytes)
+	MemoryIdle = stats.Int64("dgraph/memory_idle",
+		"The amount of memory in idle spans", stats.UnitBytes)
+	MemoryProc = stats.Int64("dgraph/memory_proc",
+		"The amount of memory used in processes", stats.UnitBytes)
+	ActiveMutations = stats.Int64("dgraph/active_mutations",
+		"The number of active mutations", stats.UnitDimensionless)
+	AlphaHealth = stats.Int64("dgraph/alpha_status",
+		"The status of the alphas", stats.UnitDimensionless)
+	MaxPlSize = stats.Int64("dgraph/max_list_bytes",
+		"The maximum value of bytes of the list", stats.UnitBytes)
+	MaxPlLength = stats.Int64("dgraph/max_list_length",
+		"The maximum length of the list", stats.UnitDimensionless)
 
 	// predicate specific stats
-	MutationAddIndex     = stats.Int64("dgraph/mutation_add_index", "Mutation to add index", stats.UnitDimensionless)
-	MutationAddWithIndex = stats.Int64("dgraph/mutation_add_with_index", "Mutation done with index", stats.UnitDimensionless)
-	MutationAddReverse   = stats.Int64("dgraph/mutation_add_reverse", "Mutation to add reverse", stats.UnitDimensionless)
-	MutationAddCount     = stats.Int64("dgraph/mutation_add_count", "Mutation to add count", stats.UnitDimensionless)
+	MutationAddIndex = stats.Int64("dgraph/mutation_add_index",
+		"Mutation to add index", stats.UnitDimensionless)
+	MutationAddWithIndex = stats.Int64("dgraph/mutation_add_with_index",
+		"Mutation done with index", stats.UnitDimensionless)
+	MutationAddReverse = stats.Int64("dgraph/mutation_add_reverse",
+		"Mutation to add reverse", stats.UnitDimensionless)
+	MutationAddCount = stats.Int64("dgraph/mutation_add_count",
+		"Mutation to add count", stats.UnitDimensionless)
 
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
@@ -275,7 +296,7 @@ func SinceInMilliseconds(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
 }
 
-// MapInt64Measure tracks the collection of grouped Int64 measures.
+// MapInt64Measure tracks a collection of Int64 measures.
 type MapInt64Measure struct {
 	sync.Mutex
 	name, desc, unit string
