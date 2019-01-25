@@ -1167,6 +1167,30 @@ parameters:
 Example: Requesting a disk size of 250Gi with this storage class would provide
 12.5K IOPS.
 
+### Removing a Dgraph Pod
+
+In the event that you need to completely remove a pod (e.g., its disk got
+corrupted and data cannot be recovered), you can use the `/removeNode` API to
+remove the node from the cluster. With a Kubernetes StatefulSet, you'll need to
+remove the node in this order:
+
+1. Call `/removeNode` to remove the Dgraph instance from the cluster (see [More
+   about Dgraph Zero]({{< relref "#more-about-dgraph-zero" >}})). The removed
+   instance will immediately stop running. Any further attempts to join the
+   cluster will fail for that instance since it has been removed.
+2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
+   This prepares the pod to join with a clean state.
+3. Restart the pod. This will create a new PersistentVolumeClaim to create new
+   data directories.
+
+When an Alpha pod restarts in a replicated cluster, it will join as a new member
+of the cluster, be assigned a group and an unused index from Zero, and receive
+the latest snapshot from the Alpha leader of the group.
+
+When a Zero pod restarts, it must join the existing group with an unused index
+ID. The index ID is set with the `--idx` flag. This may require the StatefulSet
+configuration to be updated.
+
 ## More about Dgraph
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
