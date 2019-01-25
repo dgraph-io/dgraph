@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -115,74 +114,6 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func periodicUpdateStats(ctx context.Context, lc *y.Closer) {
-	defer lc.Done()
-
-	period := 10 * time.Second
-	ctx, _ = tag.New(ctx,
-		tag.Insert(x.KeyMethod, "periodicUpdateStats"),
-		tag.Insert(x.KeyPeriod, period.String()))
-
-	ticker := time.NewTicker(period)
-	defer ticker.Stop()
-
-	setLruMemory := true
-	var maxSize uint64
-	var lastUse float64
-	for {
-		select {
-		case <-lc.HasBeenClosed():
-			return
-		case <-ticker.C:
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
-			inUse := float64(megs)
-
-			stats := lcache.Stats()
-
-			ostats.Record(ctx,
-				x.LcacheEvicts.M(int64(stats.NumEvicts)),
-				x.LcacheSize.M(int64(stats.Size)),
-				x.LcacheLen.M(int64(stats.Length)),
-				x.NumGoRoutines.M(int64(runtime.NumGoroutine())))
-
-			// Okay, we exceed the max memory threshold.
-			// Stop the world, and deal with this first.
-			Config.Mu.Lock()
-			mem := Config.AllottedMemory
-			Config.Mu.Unlock()
-			if setLruMemory {
-				if inUse > 0.75*mem {
-					maxSize = lcache.UpdateMaxSize(0)
-					setLruMemory = false
-					lastUse = inUse
-				}
-				break
-			}
-
-			// If memory has not changed by 100MB.
-			if math.Abs(inUse-lastUse) < 100 {
-				break
-			}
-
-			delta := maxSize / 10
-			if delta > 50<<20 {
-				delta = 50 << 20 // Change lru cache size by max 50mb.
-			}
-			if inUse > 0.85*mem { // Decrease max Size by 10%
-				maxSize -= delta
-				maxSize = lcache.UpdateMaxSize(maxSize)
-				lastUse = inUse
-			} else if inUse < 0.65*mem { // Increase max Size by 10%
-				maxSize += delta
-				maxSize = lcache.UpdateMaxSize(maxSize)
-				lastUse = inUse
-			}
-		}
-	}
-}
-
 func updateMemoryMetrics(ctx context.Context, lc *y.Closer) {
 	defer lc.Done()
 	period := time.Minute
@@ -232,12 +163,7 @@ func Init(ps *badger.DB) {
 	ctx := x.ObservabilityEnabledParentContext()
 
 	pstore = ps
-	lcache = newListCache(math.MaxUint64)
-	ostats.Record(ctx, x.LcacheCapacity.M(math.MaxInt64))
-
-	closer = y.NewCloser(2)
-
-	go periodicUpdateStats(ctx, closer)
+	closer = y.NewCloser(1)
 	go updateMemoryMetrics(ctx, closer)
 }
 

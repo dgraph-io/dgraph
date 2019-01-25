@@ -39,18 +39,11 @@ var (
 	BytesRead     = stats.Int64("dgraph/bytes_read", "The number of bytes read", "By")
 	BytesWrite    = stats.Int64("dgraph/bytes_written", "The number of bytes written", "By")
 	NumQueries    = stats.Int64("dgraph/queries", "The number of queries", "By")
-	LcacheHit     = stats.Int64("dgrap/lcache_hit", "The number of hits from the LRU cache", "1")
-	LcacheMiss    = stats.Int64("dgrap/lcache_miss", "The number of misses from the LRU cache", "1")
-	LcacheRace    = stats.Int64("dgrap/lcache_race", "The number of races from the LRU cache", "1")
-	LcacheEvicts  = stats.Int64("dgrap/lcache_evicts", "The number of evictions from the LRU cache", "1")
 	LatencyMs     = stats.Float64("dgrap/latency", "The latency of the various methods", "ms")
 
 	// value at particular point of time
 	PendingQueries   = stats.Int64("dgrap/queries_pending", "The number of pending queries", "1")
 	PendingProposals = stats.Int64("dgrap/proposals_pending", "The number of pending proposals", "1")
-	LcacheSize       = stats.Int64("dgraph/lcache_size", "The size of the LRU cache", "By")
-	LcacheLen        = stats.Int64("dgraph/lcache_len", "The length of the LRU cache", "By")
-	LcacheCapacity   = stats.Int64("dgraph/lcache_capacity", "The number of items in LRU cache", "1")
 	DirtyMapSize     = stats.Int64("dgrap/dirtymap_size", "The number of elements in the dirty map", "1")
 	NumGoRoutines    = stats.Int64("dgraph/goroutines", "The number of goroutines", "1")
 	MemoryInUse      = stats.Int64("dgraph/memory_in_use", "The amount of memory in use", "By")
@@ -144,34 +137,6 @@ var AllViews = []*view.View{
 		Aggregation: view.Count(),
 		TagKeys:     allTagKeys,
 	},
-	{
-		Name:        "dgraph/lcache_hit",
-		Measure:     LcacheHit,
-		Description: "The number of hits from the LRU cache",
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        "dgraph/lcache_miss",
-		Measure:     LcacheMiss,
-		Description: "The number of misses from the LRU cache",
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        "dgraph/lcache_evict",
-		Measure:     LcacheEvicts,
-		Description: "The number of evictions from the LRU cache",
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        "dgraph/lcache_race",
-		Measure:     LcacheRace,
-		Description: "The number of races in the LRU cache",
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
 
 	// Last value aggregations
 	{
@@ -185,27 +150,6 @@ var AllViews = []*view.View{
 		Name:        "dgraph/pending_proposals",
 		Measure:     PendingProposals,
 		Description: "The number of pending proposals",
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        "dgraph/lcache_size",
-		Measure:     LcacheSize,
-		Description: "The size of the LRU cache",
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        "dgraph/lcache_len",
-		Measure:     LcacheLen,
-		Description: "The length of the LRU cache",
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        "dgraph/lcache_capcaity",
-		Measure:     LcacheCapacity,
-		Description: "The number of items in the LRU cache",
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},

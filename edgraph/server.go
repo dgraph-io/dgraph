@@ -471,6 +471,8 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
+	startTime := time.Now()
+
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
@@ -478,7 +480,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 	var measurements []ostats.Measurement
 	methodName := "Server.Query"
 	ctx, span := otrace.StartSpan(ctx, methodName)
-	ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, methodName))
+	ctx, err := tag.New(ctx, tag.Upsert(x.KeyMethod, methodName))
 	defer func() {
 		span.End()
 		if err == nil {
