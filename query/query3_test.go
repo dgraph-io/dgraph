@@ -1868,3 +1868,55 @@ func TestFilterRegex16(t *testing.T) {
 		`{"data": {"me":[{"name@ru":"Артём Ткаченко"}]}}`,
 		js)
 }
+
+func TestTypeFunction(t *testing.T) {
+	query := `
+		{
+			me(func: type(Person)) {
+				uid
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x2"}, {"uid":"0x3"}, {"uid":"0x4"}]}}`,
+		js)
+}
+
+func TestTypeFunctionUnknownType(t *testing.T) {
+	query := `
+		{
+			me(func: type(UnknownType)) {
+				uid
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
+func TestTypeFilter(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x2)) @filter(type(Person)) {
+				uid
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid" :"0x2"}]}}`,
+		js)
+}
+
+func TestTypeFilterUnknownType(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x2)) @filter(type(UnknownType)) {
+				uid
+			}
+		}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}

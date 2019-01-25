@@ -32,6 +32,7 @@ import (
 const (
 	uid   = "uid"
 	value = "val"
+	typ   = "type"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -1348,7 +1349,7 @@ func validFuncName(name string) bool {
 
 	switch name {
 	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext",
-		"has", "uid", "uid_in", "anyof", "allof":
+		"has", "uid", "uid_in", "anyof", "allof", "type":
 		return true
 	}
 	return false
@@ -1558,7 +1559,7 @@ L:
 			}
 
 			// Unlike other functions, uid function has no attribute, everything is args.
-			if len(function.Attr) == 0 && function.Name != "uid" {
+			if len(function.Attr) == 0 && function.Name != uid && function.Name != typ {
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
 						" must not be quoted with \": %s", itemInFunc.Val)
@@ -1616,8 +1617,12 @@ L:
 		}
 	}
 
-	if function.Name != uid && len(function.Attr) == 0 {
+	if function.Name != uid && function.Name != typ && len(function.Attr) == 0 {
 		return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
+	}
+
+	if function.Name == typ && len(function.Args) != 1 {
+		return nil, it.Errorf("type function only supports one argument. Got: %v", function.Args)
 	}
 
 	return function, nil
