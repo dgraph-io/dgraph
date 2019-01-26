@@ -45,7 +45,7 @@ type node struct {
 	ctx         context.Context
 	reads       map[uint64]chan uint64
 	subscribers map[uint32]chan struct{}
-	stop        chan struct{} // to send stop signal to Run
+	closer      *y.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
@@ -587,7 +587,11 @@ func (n *node) Run() {
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 10)
 	closer := y.NewCloser(4)
-	defer closer.SignalAndWait()
+	defer func() {
+		closer.SignalAndWait()
+		n.closer.Done()
+		glog.Infof("Zero Node.Run finished.")
+	}()
 
 	go n.snapshotPeriodically(closer)
 	go n.updateZeroMembershipPeriodically(closer)
@@ -598,7 +602,7 @@ func (n *node) Run() {
 
 	for {
 		select {
-		case <-n.stop:
+		case <-n.closer.HasBeenClosed():
 			n.Raft().Stop()
 			return
 		case <-ticker.C:
