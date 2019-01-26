@@ -1191,6 +1191,17 @@ When a Zero pod restarts, it must join the existing group with an unused index
 ID. The index ID is set with the `--idx` flag. This may require the StatefulSet
 configuration to be updated.
 
+### Kubernetes and Bulk Loader
+
+You may want to initialize a new cluster with an existing data set such as data
+from the [Dgraph Bulk Loader]({{< relref "#bulk-loader" >}}). You can use [Init
+Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
+to copy the data to the pod volume before the Alpha process runs.
+
+See the `initContainers` configuration in
+[dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml)
+to learn more.
+
 ## More about Dgraph
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
