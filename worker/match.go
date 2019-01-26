@@ -17,14 +17,12 @@
 package worker
 
 import (
-	"strings"
-
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
-	fuzzstr "github.com/dgryski/go-fuzzstr"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 // matchFuzzy takes in a value (from posting) and compares it to our list of ngram tokens.
@@ -39,12 +37,9 @@ func matchFuzzy(srcFn *functionContext, val string) bool {
 		return false
 	}
 
-	// match the entire string.
-	terms = append(terms, strings.ToLower(val))
-
-	idx := fuzzstr.NewIndex(terms)
 	for i := range srcFn.tokens {
-		if len(idx.Query(srcFn.tokens[i])) != 0 {
+		r := fuzzy.RankFind(srcFn.tokens[i], terms)
+		if len(r) != 0 {
 			return true
 		}
 	}
