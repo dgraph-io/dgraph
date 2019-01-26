@@ -600,7 +600,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
       ]}`,
 		},
 		{
-			in: `{q(func:match(term, "carr")) {term}}`,
+			in: `{q(func:match(term, "carigeway")) {term}}`,
 			out: `{"q":[
         {"term": "dual carriageway"}
       ]}`,
