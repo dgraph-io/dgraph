@@ -152,6 +152,13 @@ func (g *groupi) proposeInitialSchema() {
 		})
 	}
 
+	g.upsertSchema(&pb.SchemaUpdate{
+		Predicate: "type",
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"},
+	})
+
 	if Config.AclEnabled {
 		// propose the schema update for acl predicates
 		g.upsertSchema(&pb.SchemaUpdate{

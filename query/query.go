@@ -213,6 +213,19 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 	if gf == nil {
 		return
 	}
+
+	// type function is just an alias for eq("type", type).
+	if gf.Name == "type" {
+		sg.Attr = "type"
+		sg.SrcFunc = &Function{
+			Name:       "eq",
+			Args:       append(gf.Args[:0:0], gf.Args...),
+			IsCount:    false,
+			IsValueVar: false,
+		}
+		return
+	}
+
 	sg.SrcFunc = &Function{
 		Name:       gf.Name,
 		Args:       append(gf.Args[:0:0], gf.Args...),
@@ -949,6 +962,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}
+
 		sg.createSrcFunction(gq.Func)
 	}
 
@@ -2391,7 +2405,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext",
-		"has", "uid", "uid_in", "anyof", "allof", "match":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)

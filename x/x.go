@@ -89,6 +89,7 @@ var (
 		"dgraph.password":   {},
 		"dgraph.user.group": {},
 		"dgraph.group.acl":  {},
+		"type":              {},
 	}
 	Nilbyte []byte
 )

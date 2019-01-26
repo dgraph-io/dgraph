@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -105,7 +105,7 @@ type state struct {
 	zero *Server
 }
 
-func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.DiskStorage) {
+func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	if collector := Zero.Conf.GetString("jaeger.collector"); len(collector) > 0 {
 		// Port details: https://www.jaegertracing.io/docs/getting-started/
 		// Default collectorEndpointURI := "http://localhost:14268"
@@ -139,7 +139,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	m.Cfg.DisableProposalForwarding = true
 	st.rs = &conn.RaftServer{Node: m}
 
-	st.node = &node{Node: m, ctx: context.Background(), stop: make(chan struct{})}
+	st.node = &node{Node: m, ctx: context.Background(), closer: y.NewCloser(1)}
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
 	st.zero.Init()
 	st.node.server = st.zero
@@ -148,10 +148,9 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup, store *raftwal.Di
 	pb.RegisterRaftServer(s, st.rs)
 
 	go func() {
-		defer wg.Done()
+		defer st.zero.closer.Done()
 		err := s.Serve(l)
-		glog.Infof("gRpc server stopped : %v", err)
-		st.node.stop <- struct{}{}
+		glog.Infof("gRPC server stopped : %v", err)
 
 		// Attempt graceful stop (waits for pending RPCs), but force a stop if
 		// it doesn't happen in a reasonable amount of time.
@@ -228,12 +227,10 @@ func run() {
 	defer kv.Close()
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
-	var wg sync.WaitGroup
-	wg.Add(3)
 	// Initialize the servers.
 	var st state
-	st.serveGRPC(grpcListener, &wg, store)
-	st.serveHTTP(httpListener, &wg)
+	st.serveGRPC(grpcListener, store)
+	st.serveHTTP(httpListener)
 
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
@@ -251,18 +248,40 @@ func run() {
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	// handle signals
 	go func() {
-		defer wg.Done()
-		<-sdCh
-		glog.Infof("Shutting down...")
+		for {
+			select {
+			case sig, ok := <-sdCh:
+				if !ok {
+					return
+				}
+				glog.Infof("--- Received %s signal", sig)
+				signal.Stop(sdCh)
+				st.zero.closer.Signal()
+			}
+		}
+	}()
+
+	st.zero.closer.AddRunning(1)
+
+	go func() {
+		defer st.zero.closer.Done()
+		<-st.zero.closer.HasBeenClosed()
+		glog.Infoln("Shutting down...")
+		close(sdCh)
 		// Close doesn't close already opened connections.
+
+		// Stop all HTTP requests.
 		httpListener.Close()
+		// Stop Raft.
+		st.node.closer.SignalAndWait()
+		// Stop all internal requests.
 		grpcListener.Close()
-		close(st.zero.shutDownCh)
 		st.node.trySnapshot(0)
 	}()
 
-	glog.Infof("Running Dgraph Zero...")
-	wg.Wait()
-	glog.Infof("All done.")
+	glog.Infoln("Running Dgraph Zero...")
+	st.zero.closer.Wait()
+	glog.Infoln("All done.")
 }
