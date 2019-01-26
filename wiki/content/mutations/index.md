@@ -261,6 +261,13 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
+### Deletion of non-list predicates
+
+Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done in two ways.
+
+1. Using the star notation mentioned in the last section.
+1. Setting the object to a specific value. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
+
 ## Mutations using cURL
 
 Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl.

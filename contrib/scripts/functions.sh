@@ -13,15 +13,14 @@ function restartCluster {
 
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
-  go build . && go install . && md5sum dgraph $GOPATH/bin/dgraph
-  docker ps --filter label="cluster=test" --format "{{.Names}}" \
-  | xargs -r docker stop | sed 's/^/Stopped /'
-  docker-compose -f $compose_file -p dgraph up --force-recreate --remove-orphans --detach
+  echo "Rebuilding dgraph ..."
+  make install
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
+  docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach
   popd >/dev/null
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6080 || exit 1
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
-  echo "Waiting 10 seconds for cluster to come up"
   sleep 10 || exit 1
 }
 

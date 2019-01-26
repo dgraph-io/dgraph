@@ -168,10 +168,11 @@ edge@lang1:...:langN
 ```
 specifies the preference order for returned languages, with the following rules.
 
-* At most one result will be returned.
+* At most one result will be returned (except in the case where the language list is set to *).
 * The preference list is considered left to right: if a value in given language is not found, the next language from the list is considered.
 * If there are no values in any of the specified languages, no value is returned.
 * A final `.` means that a value without a specified language is returned or if there is no value without language, a value in ''some'' language is returned.
+* Setting the language list value to * will return all the values for that predicate along with their language. Values without a language tag are also returned.
 
 For example:
 
@@ -181,9 +182,10 @@ For example:
 - `name@en:.` => Look for `en`, then untagged, then any language.
 - `name@en:pl` => Look for `en`, then `pl`, otherwise nothing.
 - `name@en:pl:.` => Look for `en`, then `pl`, then untagged, then any language.
+- `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists (including the * notation) are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
 
 {{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
 
@@ -408,11 +410,11 @@ Following table contains all supported languages, corresponding country-codes, s
 |  Turkish   |      tr      | &#10003; |  &#10003;  |
 
 
-Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
+Query Example: All names that have `dog`, `dogs`, `bark`, `barks`, `barking`, etc.  Stop word removal eliminates `the` and `which`.
 
 {{< runnable >}}
 {
-  movie(func:alloftext(name@en, "the man maybe runs")) {
+  movie(func:alloftext(name@en, "the dog which barks")) {
 	 name@en
   }
 }
@@ -2736,8 +2738,6 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-
-
 Edges weights are included by using facets on the edges as follows.
 
 {{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
@@ -2813,6 +2813,18 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
+The k-shortest path algorithm (used when numPaths > 1)also accepts the arguments ```minweight``` and ```maxweight```, which take a float as their value. When they are passed, only paths within the weight range ```[minweight, maxweight]``` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
+
+```
+curl localhost:8080/query -XPOST -d $'{
+ path as shortest(from: 0x2, to: 0x5, numpaths: 2, minweight: 2, maxweight: 4) {
+  friend
+ }
+ path(func: uid(path)) {
+   name
+ }
+}' | python -m json.tool | less
+```
 
 ## Recurse Query
 

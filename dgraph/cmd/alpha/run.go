@@ -33,6 +33,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -126,11 +128,14 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+
 	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
 		" that is used for signing the JWT. Enterprise feature.")
-	flag.Duration("access_jwt_ttl", 6*time.Hour, "The TTL for the access jwt. "+
+	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
 		"Enterprise feature.")
-	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
+		"Enterprise feature.")
+	flag.Duration("acl_cache_ttl", 30*time.Second, "The interval to refresh the acl cache. "+
 		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
@@ -408,14 +413,25 @@ func run() {
 
 	secretFile := Alpha.Conf.GetString("hmac_secret_file")
 	if secretFile != "" {
+		if !Alpha.Conf.GetBool("enterprise_features") {
+			glog.Errorf("You must enable Dgraph enterprise features with the " +
+				"--enterprise_features option in order to use ACL.")
+			os.Exit(1)
+		}
+
 		hmacSecret, err := ioutil.ReadFile(secretFile)
 		if err != nil {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
+		if len(hmacSecret) < 32 {
+			glog.Errorf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
+			os.Exit(1)
+		}
 
 		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = Alpha.Conf.GetDuration("access_jwt_ttl")
-		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("refresh_jwt_ttl")
+		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
+		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
+		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_cache_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
@@ -447,6 +463,7 @@ func run() {
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
+		AclEnabled:          secretFile != "",
 	}
 
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)
@@ -516,9 +533,18 @@ func run() {
 	_ = numShutDownSig
 
 	// Setup external communication.
-	go worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+	aclCloser := y.NewCloser(1)
+	go func() {
+		worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+		// initialization of the admin account can only be done after raft nodes are running
+		// and health check passes
+		edgraph.ResetAcl()
+		edgraph.RefreshAcls(aclCloser)
+	}()
+
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
+	aclCloser.SignalAndWait()
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
 }

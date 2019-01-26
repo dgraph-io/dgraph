@@ -78,6 +78,69 @@ func TestSystem(t *testing.T) {
 	t.Run("math ge", wrap(MathGe))
 	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
 	t.Run("has should have reverse edges", wrap(HasReverseEdge))
+	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
+}
+
+func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
+	type Node struct {
+		UID string `json:"uid,omitempty"`
+	}
+
+	type Resource struct {
+		Node
+		AccessToPermission string `json:"access.to|permission,omitempty"`
+		AccessToInherit    bool   `json:"access.to|inherit"`
+	}
+
+	type User struct {
+		Node
+		Name     string    `json:"name,omitempty"`
+		AccessTo *Resource `json:"access.to,omitempty"`
+	}
+
+	in := User{
+		Node: Node{
+			UID: "_:a",
+		},
+		AccessTo: &Resource{
+			Node: Node{
+				UID: "_:b",
+			},
+			AccessToPermission: "WRITE",
+			AccessToInherit:    false,
+		},
+	}
+	js, err := json.Marshal(&in)
+	require.NoError(t, err, "the marshaling should have succeeded")
+
+	ctx := context.Background()
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetJson:   js,
+	})
+	require.NoError(t, err, "the mutation should have succeeded")
+
+	q := `{
+  direct(func: uid(%s)) {
+    uid
+    access.to @filter(uid(%s)) @facets(anyofterms(permission, "READ WRITE")) @facets(permission,inherit) {
+      uid
+    }
+  }
+}`
+	query := fmt.Sprintf(q, assigned.Uids["a"], assigned.Uids["b"])
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "the query should have succeeded")
+
+	//var respUser User
+	CompareJSON(t, fmt.Sprintf(`
+{"direct":[
+  {
+    "uid":"%s",
+    "access.to":[
+    {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}]}]}
+`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
 func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
@@ -233,7 +296,7 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 
 func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: uid @reverse ."}))
+	require.NoError(t, c.Alter(ctx, &api.Operation{Schema: "link: [uid] @reverse ."}))
 	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte("_:a <link> _:b ."),
@@ -628,10 +691,10 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
-		`{"predicate":"name","type":"default"}]`, string(b))
+		`{"predicate":"name","type":"default"},`+
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`, string(b))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -651,9 +714,9 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
-		`{"predicate":"name","type":"default"}]`, string(b))
+		`{"predicate":"name","type":"default"},`+
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`, string(b))
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
