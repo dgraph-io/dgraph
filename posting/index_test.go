@@ -268,7 +268,7 @@ func TestRebuildIndex(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	require.NoError(t, RebuildIndex(context.Background(), &rb))
+	require.NoError(t, rebuildIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(6, false)
@@ -318,7 +318,7 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	require.NoError(t, RebuildIndex(context.Background(), &rb))
+	require.NoError(t, rebuildIndex(context.Background(), &rb))
 
 	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
 	require.NoError(t, schema.ParseBytes([]byte(mutatedSchemaVal), 1))
@@ -329,7 +329,7 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 		OldSchema:     &currentSchema,
 		CurrentSchema: &newSchema,
 	}
-	require.NoError(t, RebuildIndex(context.Background(), &rb))
+	require.NoError(t, rebuildIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(7, false)
@@ -374,7 +374,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		CurrentSchema: &currentSchema,
 	}
 	// TODO: Remove after fixing sync marks.
-	require.NoError(t, RebuildReverseEdges(context.Background(), &rb))
+	require.NoError(t, rebuildReverseEdges(context.Background(), &rb))
 
 	// Check index entries in data store.
 	txn := ps.NewTransactionAt(17, false)
