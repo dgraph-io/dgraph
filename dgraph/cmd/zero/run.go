@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -138,7 +139,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	m.Cfg.DisableProposalForwarding = true
 	st.rs = &conn.RaftServer{Node: m}
 
-	st.node = &node{Node: m, ctx: context.Background(), stop: make(chan struct{})}
+	st.node = &node{Node: m, ctx: context.Background(), closer: y.NewCloser(1)}
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}
 	st.zero.Init()
 	st.node.server = st.zero
@@ -149,8 +150,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	go func() {
 		defer st.zero.closer.Done()
 		err := s.Serve(l)
-		glog.Infof("gRpc server stopped : %v", err)
-		st.node.stop <- struct{}{}
+		glog.Infof("gRPC server stopped : %v", err)
 
 		// Attempt graceful stop (waits for pending RPCs), but force a stop if
 		// it doesn't happen in a reasonable amount of time.
@@ -236,7 +236,6 @@ func run() {
 	http.HandleFunc("/removeNode", st.removeNode)
 	http.HandleFunc("/moveTablet", st.moveTablet)
 	http.HandleFunc("/assign", st.assign)
-	http.HandleFunc("/shutdown", st.shutdown)
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
@@ -272,7 +271,12 @@ func run() {
 		glog.Infoln("Shutting down...")
 		close(sdCh)
 		// Close doesn't close already opened connections.
+
+		// Stop all HTTP requests.
 		httpListener.Close()
+		// Stop Raft.
+		st.node.closer.SignalAndWait()
+		// Stop all internal requests.
 		grpcListener.Close()
 		st.node.trySnapshot(0)
 	}()

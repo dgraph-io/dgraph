@@ -223,21 +223,6 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (st *state) shutdown(w http.ResponseWriter, r *http.Request) {
-	x.AddCorsHeaders(w)
-	if r.Method == "OPTIONS" {
-		return
-	}
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
-	}
-
-	st.zero.closer.Signal()
-	w.Write([]byte("Server is shutting down...\n"))
-}
-
 func (st *state) serveHTTP(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
