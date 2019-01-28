@@ -243,7 +243,7 @@ func (l *loader) appendToBatch(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation
 
 	mu.Set = append(mu.Set, nqs...)
 	if len(mu.Set) >= opt.batchSize {
-		l.finishBatch(mu)
+		l.reqs <- *mu
 		mu = &api.Mutation{}
 	}
 
@@ -251,7 +251,9 @@ func (l *loader) appendToBatch(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation
 }
 
 func (l *loader) finishBatch(mu *api.Mutation) {
-	l.reqs <- *mu
+	if len(mu.Set) > 0 {
+		l.reqs <- *mu
+	}
 }
 
 func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
