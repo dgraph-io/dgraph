@@ -211,7 +211,7 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func (l *loader) appendToBatch(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
+func (l *loader) nextNquads(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
 	for _, nq := range nqs {
 		nq.Subject = l.uid(nq.Subject)
 		if len(nq.ObjectId) > 0 {
@@ -228,7 +228,7 @@ func (l *loader) appendToBatch(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation
 	return mu
 }
 
-func (l *loader) finishBatch(mu *api.Mutation) {
+func (l *loader) finalNquads(mu *api.Mutation) {
 	if len(mu.Set) > 0 {
 		l.reqs <- *mu
 	}
@@ -236,7 +236,7 @@ func (l *loader) finishBatch(mu *api.Mutation) {
 
 func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := x.NewChunker(x.JsonInput)
-	x.Check(chunker.Begin(rd))
+	x.CheckfNoTrace(chunker.Begin(rd))
 
 	mu := &api.Mutation{}
 	for {
@@ -250,17 +250,17 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 		chunkBuf, err := chunker.Chunk(rd)
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
 			nqs, err = parseJson(chunkBuf)
-			x.Check(err)
-			mu = l.appendToBatch(mu, nqs)
+			x.CheckfNoTrace(err)
+			mu = l.nextNquads(mu, nqs)
 		}
 		if err == io.EOF {
-			l.finishBatch(mu)
+			l.finalNquads(mu)
 			break
 		} else {
 			x.Check(err)
 		}
 	}
-	x.Check(chunker.End(rd))
+	x.CheckfNoTrace(chunker.End(rd))
 
 	return nil
 }
@@ -296,9 +296,9 @@ func (l *loader) processRdfFile(ctx context.Context, bufReader *bufio.Reader) er
 			return fmt.Errorf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
 		nqs[0] = &nq
-		mu = l.appendToBatch(mu, nqs)
+		mu = l.nextNquads(mu, nqs)
 	}
-	l.finishBatch(mu)
+	l.finalNquads(mu)
 
 	return nil
 }
