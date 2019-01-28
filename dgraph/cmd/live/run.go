@@ -211,6 +211,28 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
+func parseRdf(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+	if chunkBuf.Len() == 0 {
+		return nil, io.EOF
+	}
+
+	var nquads []*api.NQuad
+	var err error
+	for _, line := range strings.Split(chunkBuf.String(), "\n") {
+		nq, err := rdf.Parse(line)
+		if err == rdf.ErrEmpty {
+			// special case: comment/empty line
+			continue
+		} else if err != nil {
+			err = fmt.Errorf("Error while parsing RDF: %v, on line: %v", err, line)
+			break
+		}
+		nquads = append(nquads, &nq)
+	}
+
+	return nquads, err
+}
+
 func (l *loader) nextNquads(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
 	for _, nq := range nqs {
 		nq.Subject = l.uid(nq.Subject)
@@ -265,12 +287,11 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 	return nil
 }
 
-func (l *loader) processRdfFile(ctx context.Context, bufReader *bufio.Reader) error {
-	var buf bytes.Buffer
-	var line uint64
+func (l *loader) processRdfFile(ctx context.Context, rd *bufio.Reader) error {
+	chunker := x.NewChunker(x.RdfInput)
+	x.CheckfNoTrace(chunker.Begin(rd))
 
 	mu := &api.Mutation{}
-	nqs := make([]*api.NQuad, 1)
 	for {
 		select {
 		case <-ctx.Done():
@@ -278,27 +299,28 @@ func (l *loader) processRdfFile(ctx context.Context, bufReader *bufio.Reader) er
 		default:
 		}
 
-		buf.Reset()
-		err := readLine(bufReader, &buf)
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
-			break
-		}
-		line++
+		var nqs []*api.NQuad
+		nqArray := []*api.NQuad{nil}
+		chunkBuf, err := chunker.Chunk(rd)
+		if chunkBuf != nil && chunkBuf.Len() > 0 {
+			nqs, err = parseRdf(chunkBuf)
+			x.CheckfNoTrace(err)
 
-		nq, err := rdf.Parse(buf.String())
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			buf.Reset()
-			continue
-		} else if err != nil {
-			return fmt.Errorf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
+			// An RDF chunk could contain many more nquads than the batch size,
+			// so add them one at a time so the batch size is respected.
+			for _, nq := range nqs {
+				nqArray[0] = nq
+				mu = l.nextNquads(mu, nqArray)
+			}
 		}
-		nqs[0] = &nq
-		mu = l.nextNquads(mu, nqs)
+		if err == io.EOF {
+			l.finalNquads(mu)
+			break
+		} else {
+			x.Check(err)
+		}
 	}
-	l.finalNquads(mu)
+	x.CheckfNoTrace(chunker.End(rd))
 
 	return nil
 }
