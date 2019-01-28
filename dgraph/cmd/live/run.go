@@ -202,35 +202,13 @@ func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		return nil, io.EOF
 	}
 
-	nqs, err := edgraph.NquadsFromJson(chunkBuf.Bytes())
+	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes(), &keyFields)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}
 	chunkBuf.Reset()
 
 	return nqs, err
-}
-
-func assignBlankId(nqs []*api.NQuad) error {
-	field2idx := make(map[string]int)
-	for idx, nq := range nqs {
-		field2idx[nq.Predicate] = idx
-	}
-
-	var str string
-	for _, f := range keyFields {
-		idx, ok := field2idx[f]
-		if !ok {
-			return fmt.Errorf("Key field %s not found: %+v\n", f, nqs)
-		}
-		str += nqs[idx].ObjectValue.String()
-	}
-
-	for _, nq := range nqs {
-		nq.Subject = str
-	}
-
-	return nil
 }
 
 func (l *loader) appendToBatch(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
@@ -273,13 +251,6 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
 			nqs, err = parseJson(chunkBuf)
 			x.Check(err)
-			if nqs[0].Subject == "_:blank-0" {
-				if opt.keyFields == "" {
-					return fmt.Errorf("No uid field found: %+v\n", nqs)
-				} else if err = assignBlankId(nqs); err != nil {
-					return err
-				}
-			}
 			mu = l.appendToBatch(mu, nqs)
 		}
 		if err == io.EOF {
