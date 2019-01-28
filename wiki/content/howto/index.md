@@ -106,7 +106,7 @@ txn := client.NewTxn()
 defer txn.Discard(ctx)
 
 // Create and execute a query to looks up an email and checks if the password
-matches.
+// matches.
 q := fmt.Sprintf(`
     {
         login_attempt(func: eq(email, %q)) {
