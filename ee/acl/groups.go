@@ -32,10 +32,10 @@ func groupAdd(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
@@ -80,10 +80,10 @@ func groupDel(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
@@ -162,10 +162,10 @@ func chMod(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()

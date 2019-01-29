@@ -24,21 +24,87 @@ import (
 	"github.com/spf13/viper"
 )
 
-func userAdd(conf *viper.Viper) error {
+func userPasswd(conf *viper.Viper) error {
 	userid := conf.GetString("user")
-	password := conf.GetString("password")
-
 	if len(userid) == 0 {
 		return fmt.Errorf("The user must not be empty")
 	}
-	if len(password) == 0 {
-		return fmt.Errorf("The password must not be empty")
+
+	// 1. get the dgo client with appropriete access JWT
+	var dc *dgo.Dgraph
+	var err error
+	var cancel CloseFunc
+	// get the dgo client using the groot credentials
+	dc, cancel, err = getClientWithAdminCtx(conf)
+	if err != nil {
+		return fmt.Errorf("unable to get dgo client:%v", err)
+	}
+	defer cancel()
+
+	// 2. get the new password
+	newPassword := conf.GetString("new_password")
+	if len(newPassword) == 0 {
+		var err error
+		newPassword, err = askUserPassword(userid, 2)
+		if err != nil {
+			return err
+		}
+	}
+
+	ctx := context.Background()
+	txn := dc.NewTxn()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
+
+	// 3. query the user's current uid
+	user, err := queryUser(ctx, txn, userid)
+	if err != nil {
+		return fmt.Errorf("Error while querying user:%v", err)
+	}
+	if user == nil {
+		return fmt.Errorf("The user does not exist: %v", userid)
+	}
+
+	// 4. mutate the user's password
+	chPdNQuads := []*api.NQuad{
+		{
+			Subject:     user.Uid,
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: newPassword}},
+		}}
+	mu := &api.Mutation{
+		CommitNow: true,
+		Set:       chPdNQuads,
+	}
+	if _, err := txn.Mutate(ctx, mu); err != nil {
+		return fmt.Errorf("Unable to change password for user %v: %v", userid, err)
+	}
+	glog.Infof("Successfully changed password for %v", userid)
+	return nil
+}
+
+func userAdd(conf *viper.Viper) error {
+	userid := conf.GetString("user")
+	password := conf.GetString("password")
+	if len(userid) == 0 {
+		return fmt.Errorf("The user must not be empty")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+	defer cancel()
+
+	if len(password) == 0 {
+		var err error
+		password, err = askUserPassword(userid, 2)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx := context.Background()
@@ -90,10 +156,10 @@ func userDel(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
@@ -167,10 +233,10 @@ func userMod(conf *viper.Viper) error {
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()

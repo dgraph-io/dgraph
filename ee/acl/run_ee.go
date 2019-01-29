@@ -84,6 +84,23 @@ func initSubcommands() []*x.SubCommand {
 	userAddFlags.StringP("user", "u", "", "The user id to be created")
 	userAddFlags.StringP("password", "p", "", "The password for the user")
 
+	// user change password command
+	var cmdPasswd x.SubCommand
+	cmdPasswd.Cmd = &cobra.Command{
+		Use:   "passwd",
+		Short: "Run Dgraph acl tool to change a user's password",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := userPasswd(cmdPasswd.Conf); err != nil {
+				glog.Errorf("Unable to change password for user:%v", err)
+				os.Exit(1)
+			}
+		},
+	}
+	chPdFlags := cmdPasswd.Cmd.Flags()
+	chPdFlags.StringP("user", "u", "", "The user id to be created")
+	chPdFlags.StringP("old_password", "", "", "The old(current) password for the user")
+	chPdFlags.StringP("new_password", "", "", "The new password for the user")
+
 	// user deletion command
 	var cmdUserDel x.SubCommand
 	cmdUserDel.Cmd = &cobra.Command{
@@ -180,7 +197,7 @@ func initSubcommands() []*x.SubCommand {
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{
-		&cmdUserAdd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
+		&cmdUserAdd, &cmdPasswd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
 		&cmdChMod, &cmdInfo,
 	}
 }

@@ -147,15 +147,41 @@ type JwtGroup struct {
 	Group string
 }
 
-func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
-	adminPassword := conf.GetString(gPassword)
-	if len(adminPassword) == 0 {
-		fmt.Print("Enter groot password:")
-		password, err := terminal.ReadPassword(int(syscall.Stdin))
+func askUserPassword(userid string, times int) (string, error) {
+	x.AssertTrue(times == 1 || times == 2)
+	// ask for the user's password
+	fmt.Printf("Password for %v:", userid)
+	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", fmt.Errorf("error while reading password:%v", err)
+	}
+	password := string(pd)
+
+	if times == 2 {
+		fmt.Printf("\nRetype password for %v:", userid)
+		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return nil, func() {}, fmt.Errorf("error while reading password:%v", err)
+			return "", fmt.Errorf("error while reading password:%v", err)
 		}
-		adminPassword = string(password)
+		fmt.Println()
+
+		password2 := string(pd2)
+		if password2 != password {
+			return "", fmt.Errorf("the two typed passwords do not match")
+		}
+	}
+	return password, nil
+}
+
+func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) (*dgo.Dgraph,
+	CloseFunc, error) {
+	password := conf.GetString(passwordOpt)
+	if len(password) == 0 {
+		var err error
+		password, err = askUserPassword(userid, 1)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	dc, closeClient := getDgraphClient(conf)
@@ -166,10 +192,14 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
 		closeClient()
 	}
 
-	if err := dc.Login(ctx, x.GrootId, adminPassword); err != nil {
-		return dc, cleanFunc, fmt.Errorf("unable to login to the groot account %v", err)
+	if err := dc.Login(ctx, userid, password); err != nil {
+		return dc, cleanFunc, fmt.Errorf("unable to login to the %v account:%v", userid, err)
 	}
-	glog.Infof("login successfully to the groot account")
+	glog.Infof("login successfully to the %v account", userid)
 	// update the context so that it has the admin jwt token
 	return dc, cleanFunc, nil
+}
+
+func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
+	return getClientWithUserCtx(x.GrootId, gPassword, conf)
 }
