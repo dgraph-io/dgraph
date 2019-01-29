@@ -358,15 +358,15 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return s.doMutate(ctx, mu)
 }
 
-func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
+func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
 	startTime := time.Now()
 
 	ctx, span := otrace.StartSpan(ctx, methodMutate)
-	ctx, err := tag.New(ctx, tag.Upsert(x.KeyMethod, methodMutate))
+	ctx = x.MetricsMethodContext(ctx, methodMutate)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
-		if err != nil {
+		if rerr != nil {
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
@@ -374,9 +374,8 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (*api.Assigned,
 		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
 	}()
 
-	resp := &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
-		return resp, err
+		return nil, err
 	}
 
 	ostats.Record(ctx, x.NumMutations.M(1))
@@ -494,7 +493,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
 	startTime := time.Now()
 
 	if glog.V(3) {
@@ -503,11 +502,11 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 
 	var measurements []ostats.Measurement
 	ctx, span := otrace.StartSpan(ctx, methodQuery)
-	ctx, err := tag.New(ctx, tag.Upsert(x.KeyMethod, methodQuery))
+	ctx = x.MetricsMethodContext(ctx, methodQuery)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
-		if err != nil {
+		if rerr != nil {
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
@@ -532,7 +531,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 		return nil, ctx.Err()
 	}
 
-	resp := &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")
