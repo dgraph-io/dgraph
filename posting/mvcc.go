@@ -123,12 +123,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		if err := writer.SetAt([]byte(key), data, BitDeltaPosting, commitTs); err != nil {
 			return err
 		}
-		size += int64(plist.EstimatedSize())
+		size += int64(len(data))
 		writes++
 	}
 
 	stats.Record(x.MetricsContext(),
-		x.PostingWrites.M(1), x.BytesWrite.M(size))
+		x.PostingWrites.M(writes), x.BytesWrite.M(size))
 
 	return nil
 }
@@ -205,6 +205,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
+			l.estimatedSize = int32(item.EstimatedSize())
 			// No need to do Next here. The outer loop can take care of skipping more versions of
 			// the same key.
 			return l, nil
@@ -275,14 +276,9 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		return l, err
 	}
 
-	l.Lock()
-	size := l.calculateSize()
-	l.Unlock()
-
 	// Record the size
 	stats.Record(x.MetricsContext(),
-		x.PostingReads.M(1), x.BytesRead.M(int64(size)))
+		x.PostingReads.M(1), x.BytesRead.M(int64(l.estimatedSize)))
 
-	atomic.StoreInt32(&l.estimatedSize, size)
 	return l, nil
 }
