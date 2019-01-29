@@ -160,23 +160,21 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (aerr error) {
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	startTime := time.Now()
 	span := otrace.FromContext(ctx)
 	octx := x.MetricsMethodContext(context.Background(),
-		"worker/(*node).applyMutations")
-	tr := trace.New("Dgraph.Node", "ApplyMutations")
+		"worker/node.applyMutations")
 
 	var measurements []ostats.Measurement
 	defer func() {
-		tr.Finish()
-		if aerr == nil {
+		if rerr == nil {
 			octx, _ = tag.New(octx,
 				tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
 		} else {
 			octx, _ = tag.New(octx,
 				tag.Upsert(x.KeyStatus, x.TagValueStatusError),
-				tag.Upsert(x.KeyError, aerr.Error()))
+				tag.Upsert(x.KeyError, rerr.Error()))
 		}
 
 		timeSpentMs := x.SinceInMilliseconds(startTime)

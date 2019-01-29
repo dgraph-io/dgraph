@@ -121,7 +121,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	startTime := time.Now()
 	var measurements []ostats.Measurement
 
-	ctx = x.MetricsMethodContext(ctx, "worker/(*node).proposeAndWait")
+	ctx = x.MetricsMethodContext(ctx, "worker/node.proposeAndWait")
 	defer func() {
 		if perr == nil {
 			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
