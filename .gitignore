@@ -12,3 +12,12 @@
 
 ### Go Patch ###
 /vendor/
+
+# IdeaIDE
+.idea
+
+# VS Code
+.vscode
+
+# Code Templates
+.github
