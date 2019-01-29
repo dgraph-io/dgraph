@@ -282,7 +282,8 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"age","type":"default"},`+
-		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`+
+		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}`+
 		`]}}`, output)
 
 	output, err = runQuery(q1)
@@ -1358,8 +1359,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		`{"predicate":"occupations","type":"string"}]}}`, res)
-
+		`{"predicate":"occupations","type":"string"},`+
+		`{"predicate":"type", "type":"string", "index":true, "tokenizer": ["exact"]}]}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1502,8 +1503,8 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q3)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}`+
-			`]}}`, output)
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},
+			{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1602,6 +1603,52 @@ func TestGrpcCompressionSupport(t *testing.T) {
 	tx := dc.NewTxn()
 	_, err = tx.Query(context.Background(), q)
 	require.NoError(t, err)
+}
+
+func TestTypeMutationAndQuery(t *testing.T) {
+	var m = `
+	{
+		"set": [
+			{
+				"name": "Alice",
+				"type": "Employee"
+			},
+			{
+				"name": "Bob",
+				"type": "Employer"
+			}
+		]
+	}
+	`
+
+	var q = `
+	{
+		q(func: has(name)) @filter(type(Employee)){
+			uid
+			name
+		}
+	}
+	`
+
+	var s = `
+            name: string @index(exact) .
+	`
+
+	require.NoError(t, dropAll())
+	err := alterSchemaWithRetry(s)
+	require.NoError(t, err)
+
+	err = runJsonMutation(m)
+	require.NoError(t, err)
+
+	output, err := runQuery(q)
+	require.NoError(t, err)
+	result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	queryResults := result["data"].(map[string]interface{})["q"].([]interface{})
+	require.Equal(t, 1, len(queryResults))
+	name := queryResults[0].(map[string]interface{})["name"].(string)
+	require.Equal(t, "Alice", name)
 }
 
 func TestMain(m *testing.M) {
