@@ -235,19 +235,17 @@ func init() {
 
 	ctx := MetricsContext()
 	go func() {
+		var v string
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				var tags []tag.Mutator
-				if err := HealthCheck(); err == nil {
-					tags = append(tags, tag.Upsert(KeyStatus, TagValueStatusOK))
-				} else {
-					tags = append(tags, tag.Upsert(KeyStatus, TagValueStatusError),
-						tag.Upsert(KeyError, err.Error()))
+				v = TagValueStatusOK
+				if err := HealthCheck(); err != nil {
+					v = TagValueStatusError
 				}
-				cctx, _ := tag.New(ctx, tags...)
+				cctx, _ := tag.New(ctx, tag.Upsert(KeyStatus, v))
 				stats.Record(cctx, AlphaHealth.M(1))
 			}
 		}
