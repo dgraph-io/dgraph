@@ -44,7 +44,9 @@ var (
 	BytesWrite = stats.Int64("dgraph/bytes_written",
 		"The number of bytes written", stats.UnitBytes)
 	NumQueries = stats.Int64("dgraph/queries",
-		"The number of queries", stats.UnitBytes)
+		"The number of queries", stats.UnitDimensionless)
+	NumMutations = stats.Int64("dgraph/mutations",
+		"The number of mutations", stats.UnitDimensionless)
 	LatencyMs = stats.Float64("dgraph/latency",
 		"The latency of the various methods", stats.UnitMilliseconds)
 
@@ -71,16 +73,6 @@ var (
 		"The maximum value of bytes of the list", stats.UnitBytes)
 	MaxPlLength = stats.Int64("dgraph/max_list_length",
 		"The maximum length of the list", stats.UnitDimensionless)
-
-	// predicate specific stats
-	MutationAddIndex = stats.Int64("dgraph/mutation_add_index",
-		"Mutation to add index", stats.UnitDimensionless)
-	MutationAddWithIndex = stats.Int64("dgraph/mutation_add_with_index",
-		"Mutation done with index", stats.UnitDimensionless)
-	MutationAddReverse = stats.Int64("dgraph/mutation_add_reverse",
-		"Mutation to add reverse", stats.UnitDimensionless)
-	MutationAddCount = stats.Int64("dgraph/mutation_add_count",
-		"Mutation to add count", stats.UnitDimensionless)
 
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
