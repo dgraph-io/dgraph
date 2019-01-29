@@ -53,6 +53,11 @@ import (
 	otrace "go.opencensus.io/trace"
 )
 
+const (
+	methodMutate = "Server.Mutate"
+	methodQuery  = "Server.Query"
+)
+
 type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
@@ -353,13 +358,31 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return s.doMutate(ctx, mu)
 }
 
-func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
-	defer span.End()
+func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
+	startTime := time.Now()
 
-	resp = &api.Assigned{}
+	ctx, span := otrace.StartSpan(ctx, methodMutate)
+	ctx, err := tag.New(ctx, tag.Upsert(x.KeyMethod, methodMutate))
+	defer func() {
+		span.End()
+		v := x.TagValueStatusOK
+		if err != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
+		timeSpentMs := x.SinceInMilliseconds(startTime)
+		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
+	}()
+
+	resp := &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
 		return resp, err
+	}
+
+	ostats.Record(ctx, x.NumMutations.M(1))
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	if len(mu.SetJson) > 0 {
@@ -380,6 +403,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
+		span.Annotate(nil, "Empty mutation")
 		return resp, fmt.Errorf("Empty mutation")
 	}
 
@@ -478,19 +502,15 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 	}
 
 	var measurements []ostats.Measurement
-	methodName := "Server.Query"
-	ctx, span := otrace.StartSpan(ctx, methodName)
-	ctx, err := tag.New(ctx, tag.Upsert(x.KeyMethod, methodName))
+	ctx, span := otrace.StartSpan(ctx, methodQuery)
+	ctx, err := tag.New(ctx, tag.Upsert(x.KeyMethod, methodQuery))
 	defer func() {
 		span.End()
-		if err == nil {
-			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
-		} else {
-			ctx, _ = tag.New(ctx,
-				tag.Upsert(x.KeyStatus, x.TagValueStatusError),
-				tag.Upsert(x.KeyError, err.Error()))
+		v := x.TagValueStatusOK
+		if err != nil {
+			v = x.TagValueStatusError
 		}
-
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		timeSpentMs := x.SinceInMilliseconds(startTime)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
@@ -512,7 +532,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 		return nil, ctx.Err()
 	}
 
-	resp := new(api.Response)
+	resp := &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")
