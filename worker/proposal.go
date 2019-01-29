@@ -60,7 +60,7 @@ type rateLimiter struct {
 // number of ops to remain pending, and not anymore.
 func (rl *rateLimiter) bleed(ctx context.Context) {
 	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "worker/proposal/(*rateLimiter).bleed"))
+		tag.Upsert(x.KeyMethod, "worker/rateLimiter.bleed"))
 
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -77,7 +77,7 @@ func (rl *rateLimiter) bleed(ctx context.Context) {
 
 func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "worker/proposal/(*rateLimiter).incr"))
+		tag.Upsert(x.KeyMethod, "worker/rateLimiter.incr"))
 
 	// Let's not wait here via time.Sleep or similar. Let pendingProposals
 	// channel do its natural rate limiting.
@@ -96,7 +96,7 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 // Done would slowly bleed the retries out.
 func (rl *rateLimiter) decr(ctx context.Context, retry int) {
 	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "worker/proposal/(*rateLimiter).deccr"))
+		tag.Upsert(x.KeyMethod, "worker/rateLimiter.decr"))
 
 	if retry == 0 {
 		<-pendingProposals
@@ -119,21 +119,15 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
 	startTime := time.Now()
-	var measurements []ostats.Measurement
-
 	ctx = x.MetricsMethodContext(ctx, "worker/node.proposeAndWait")
 	defer func() {
-		if perr == nil {
-			ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, x.TagValueStatusOK))
-		} else {
-			ctx, _ = tag.New(ctx,
-				tag.Upsert(x.KeyStatus, x.TagValueStatusError),
-				tag.Upsert(x.KeyError, perr.Error()))
+		v := x.TagValueStatusOK
+		if perr != nil {
+			v = x.TagValueStatusError
 		}
-
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		timeMs := x.SinceInMilliseconds(startTime)
-		measurements = append(measurements, x.LatencyMs.M(timeMs))
-		ostats.Record(ctx, measurements...)
+		ostats.Record(ctx, x.LatencyMs.M(timeMs))
 	}()
 
 	if n.Raft() == nil {
