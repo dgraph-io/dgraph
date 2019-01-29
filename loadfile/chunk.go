@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bulk
+package loadfile
 
 import (
 	"bufio"
@@ -24,44 +24,45 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dgraph-io/dgo/x"
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/rdf"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
-type chunker interface {
-	begin(r *bufio.Reader) error
-	chunk(r *bufio.Reader) (*bytes.Buffer, error)
-	end(r *bufio.Reader) error
-	parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error)
+type Chunker interface {
+	Begin(r *bufio.Reader) error
+	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
+	End(r *bufio.Reader) error
+	Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error)
 }
 
 type rdfChunker struct{}
 type jsonChunker struct{}
 
 const (
-	rdfInput int = iota
-	jsonInput
+	RdfInput int = iota
+	JsonInput
 )
 
-func newChunker(inputFormat int) chunker {
+func NewChunker(inputFormat int) Chunker {
 	switch inputFormat {
-	case rdfInput:
+	case RdfInput:
 		return &rdfChunker{}
-	case jsonInput:
+	case JsonInput:
 		return &jsonChunker{}
 	default:
 		panic("unknown loader type")
 	}
 }
 
-func (rdfChunker) begin(r *bufio.Reader) error {
+func (rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
-func (rdfChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
@@ -93,11 +94,11 @@ func (rdfChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func (rdfChunker) end(r *bufio.Reader) error {
+func (rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
-func (rdfChunker) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
+func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
 	str, readErr := chunkBuf.ReadString('\n')
 	if readErr != nil && readErr != io.EOF {
 		x.Check(readErr)
@@ -149,7 +150,7 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 	}
 }
 
-func (jsonChunker) begin(r *bufio.Reader) error {
+func (jsonChunker) Begin(r *bufio.Reader) error {
 	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
@@ -167,7 +168,7 @@ func (jsonChunker) begin(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.Grow(1 << 20)
 
@@ -231,19 +232,19 @@ func (jsonChunker) chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) end(r *bufio.Reader) error {
+func (jsonChunker) End(r *bufio.Reader) error {
 	if slurpSpace(r) == io.EOF {
 		return nil
 	}
 	return errors.New("Not all of json file consumed")
 }
 
-func (jsonChunker) parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
+func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
 
-	nqs, err := edgraph.NquadsFromJson(chunkBuf.Bytes())
+	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes(), nil)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}

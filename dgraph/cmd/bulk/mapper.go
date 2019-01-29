@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/loadfile"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -117,11 +118,11 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 }
 
 func (m *mapper) run(inputFormat int) {
-	chunker := newChunker(inputFormat)
+	chunker := loadfile.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			nqs, err := chunker.parse(chunkBuf)
+			nqs, err := chunker.Parse(chunkBuf)
 			if err == io.EOF {
 				done = true
 			} else if err != nil {

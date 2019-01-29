@@ -418,11 +418,6 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	return mr.nquads, err
 }
 
-// XXX REMOVE ME
-func NquadsFromJson(b []byte) ([]*api.NQuad, error) {
-	return nquadsFromJson(b, set)
-}
-
 func replaceBlankIds(nqs []*api.NQuad, keyFields *[]string) error {
 	field2idx := make(map[string]int)
 	for idx, nq := range nqs {

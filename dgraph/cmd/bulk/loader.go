@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgraph/loadfile"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -185,11 +186,11 @@ func (ld *loader) mapStage() {
 	var ext string
 	var loaderType int
 	if ld.opt.RDFDir != "" {
-		loaderType = rdfInput
+		loaderType = loadfile.RdfInput
 		ext = ".rdf"
 		files = findDataFiles(ld.opt.RDFDir, ext)
 	} else {
-		loaderType = jsonInput
+		loaderType = loadfile.JsonInput
 		ext = ".json"
 		files = findDataFiles(ld.opt.JSONDir, ext)
 	}
@@ -213,7 +214,7 @@ func (ld *loader) mapStage() {
 	for i, file := range files {
 		thr.Start()
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
-		chunker := newChunker(loaderType)
+		chunker := loadfile.NewChunker(loaderType)
 		go func(file string) {
 			defer thr.Done()
 
@@ -229,9 +230,9 @@ func (ld *loader) mapStage() {
 				x.Checkf(err, "Could not create gzip reader for file %q.", file)
 				r = bufio.NewReaderSize(gzr, 1<<20)
 			}
-			x.Check(chunker.begin(r))
+			x.Check(chunker.Begin(r))
 			for {
-				chunkBuf, err := chunker.chunk(r)
+				chunkBuf, err := chunker.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
 					ld.readerChunkCh <- chunkBuf
 				}
@@ -241,7 +242,7 @@ func (ld *loader) mapStage() {
 					x.Check(err)
 				}
 			}
-			x.Check(chunker.end(r))
+			x.Check(chunker.End(r))
 		}(file)
 	}
 	thr.Wait()

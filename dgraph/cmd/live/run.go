@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/loadfile"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -257,7 +258,7 @@ func (l *loader) finalNquads(mu *api.Mutation) {
 }
 
 func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
-	chunker := x.NewChunker(x.JsonInput)
+	chunker := loadfile.NewChunker(loadfile.JsonInput)
 	x.CheckfNoTrace(chunker.Begin(rd))
 
 	mu := &api.Mutation{}
@@ -288,7 +289,7 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 }
 
 func (l *loader) processRdfFile(ctx context.Context, rd *bufio.Reader) error {
-	chunker := x.NewChunker(x.RdfInput)
+	chunker := loadfile.NewChunker(loadfile.RdfInput)
 	x.CheckfNoTrace(chunker.Begin(rd))
 
 	mu := &api.Mutation{}
