@@ -49,7 +49,7 @@ type flagOptions struct {
 	readOnly      bool
 	pdir          string
 	itemMeta      bool
-	jepsen        bool
+	jepsen        string
 	readTs        uint64
 	sizeHistogram bool
 }
@@ -66,7 +66,7 @@ func init() {
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
-	flag.BoolVar(&opt.jepsen, "jepsen", false, "Disect Jepsen output.")
+	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
@@ -175,6 +175,14 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 		})
 		x.Checkf(err, "during iterate")
 	}
+	// keys[3] = 0
+	// keys[292] = 3
+	// keys[330] = 4
+	// keys[335] = 7
+	// keys[370] = 6
+	// keys[374] = 1
+	// keys[376] = 5
+	// keys[377] = 2
 
 	var total int
 	for uid, key := range keys {
@@ -184,6 +192,28 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 	}
 	fmt.Printf("Total @ %d = %d\n", readTs, total)
 	return total
+}
+
+func findFirstValidTxn(db *badger.DB) uint64 {
+	readTs := opt.readTs
+	var wrong uint64
+	for {
+		min, max := getMinMax(db, readTs-1)
+		if max <= min {
+			fmt.Println("Can't find it. Max: %d\n", max)
+			return 0
+		}
+		readTs = max
+		if total := seekTotal(db, readTs); total != 100 {
+			fmt.Printf("===> VIOLATION at ts: %d\n", readTs)
+			showAllPostingsAt(db, readTs)
+			wrong = readTs
+		} else {
+			fmt.Printf("===> Found first correct version at %d\n", readTs)
+			showAllPostingsAt(db, readTs)
+			return wrong
+		}
+	}
 }
 
 func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
@@ -296,7 +326,13 @@ func jepsen(db *badger.DB) {
 	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("min=%d. max=%d\n", min, max)
 
-	ts := findFirstInvalidTxn(db, min, max)
+	var ts uint64
+	switch opt.jepsen {
+	case "binary":
+		ts = findFirstInvalidTxn(db, min, max)
+	case "linear":
+		ts = findFirstValidTxn(db)
+	}
 	fmt.Println()
 	if ts == 0 {
 		fmt.Println("Nothing found. Exiting.")
@@ -315,6 +351,8 @@ func jepsen(db *badger.DB) {
 
 func history(lookup []byte, itr *badger.Iterator) {
 	var buf bytes.Buffer
+	pk := x.Parse(lookup)
+	fmt.Fprintf(&buf, "==> key: %x. PK: %+v\n", lookup, pk)
 	for ; itr.Valid(); itr.Next() {
 		item := itr.Item()
 		if !bytes.Equal(item.Key(), lookup) {
@@ -640,10 +678,16 @@ func run() {
 	x.Check(err)
 	defer db.Close()
 
+	min, max := getMinMax(db, opt.readTs)
+	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
+
 	switch {
 	case len(opt.keyLookup) > 0:
 		lookup(db)
-	case opt.jepsen:
+	case opt.vals:
+		total := seekTotal(db, opt.readTs)
+		fmt.Printf("Total: %d\n", total)
+	case len(opt.jepsen) > 0:
 		jepsen(db)
 	case opt.sizeHistogram:
 		sizeHistogram(db)
