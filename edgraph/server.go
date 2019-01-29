@@ -374,8 +374,9 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
 	}()
 
+	resp = &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
-		return nil, err
+		return resp, err
 	}
 
 	ostats.Record(ctx, x.NumMutations.M(1))
@@ -531,6 +532,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return nil, ctx.Err()
 	}
 
+	resp = &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")
