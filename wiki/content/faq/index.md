@@ -46,7 +46,7 @@ Dgraph v0.7.x and below used RocksDB for the key-value store. RocksDB is written
 ### Why doesn't Dgraph use BoltDB or RocksDB?
 BoltDB depends on a single global <code>RWMutex</code> lock for all reads and writes; this negatively affects concurrency of iteration and modification of posting lists for Dgraph. For this reason, we decided at that time not to use it and instead use RocksDB. On the other hand, RocksDB supports concurrent writes and is being used in production both at Google and Facebook.
 
-Later middle 2017, We've decided to built an efficient and persistent log structured merge (LSM) tree based key-value store, purely in Go language, for Dgraph. We called it Badger. We have a Blog post covering the whole motives to built Badger in ["Introducing Badger: A fast key-value store written purely in Go"](https://blog.dgraph.io/post/badger/). Today (2019) not only Dgraph uses Badger, as you can see several others use it too. See [Projects Using Badger](https://github.com/dgraph-io/badger#other-projects-using-badger)
+Today we use [Badger](https://github.com/dgraph-io/badger), an efficient and persistent key-value database we built that's written in Go. Our blog covers our rationale for choosing Badger in ["Why we choose Badger over RocksDB in Dgraph"](https://blog.dgraph.io/post/badger-over-rocksdb-in-dgraph/). Today, Badger is used in Dgraph as well as [many other projects](https://github.com/dgraph-io/badger#other-projects-using-badger).
 
 ### Can Dgraph run on other databases, like Cassandra, MySQL, etc.?
 No. Dgraph stores and handles data natively to ensure it has complete control over performance and latency. The only thing between Dgraph and disk is the key-value application library, [Badger](https://github.com/dgraph-io/badger).
