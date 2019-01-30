@@ -176,6 +176,98 @@ func setupCustomTokenizers() {
 	}
 }
 
+// Parses a comma-delimited list of IP addresses, IP ranges, CIDR blocks, or hostnames
+// and returns a slice of []IPRange.
+//
+// e.g. "144.142.126.222:144.142.126.244,144.124.126.254,192.168.0.0/16,host.docker.internal"
+func getIPsFromString(str string) ([]worker.IPRange, error) {
+	if str == "" {
+		return []worker.IPRange{}, nil
+	}
+
+	var ipRanges []worker.IPRange
+	rangeStrings := strings.Split(str, ",")
+
+	for _, s := range rangeStrings {
+		tuple := strings.Split(s, ":")
+		if len(tuple) == 1 {
+			if strings.Index(s, "/") < 0 {
+				// string is IP address or hostname like 144.124.126.254 or host.docker.internal
+				ipAddr := net.ParseIP(s)
+				if ipAddr != nil {
+					ipRanges = append(ipRanges, worker.IPRange{Lower: ipAddr, Upper: ipAddr})
+				} else {
+					ipAddrs, err := net.LookupIP(s)
+					if err != nil {
+						return nil, fmt.Errorf("invalid IP address or hostname: %s", s)
+					}
+
+					for _, addr := range ipAddrs {
+						ipRanges = append(ipRanges, worker.IPRange{Lower: addr, Upper: addr})
+					}
+				}
+			} else {
+				// string is CIDR block like 192.168.0.0/16
+				rangeLo, network, err := net.ParseCIDR(s)
+				if err != nil {
+					return nil, fmt.Errorf("invalid CIDR block: %s", s)
+				}
+
+				rangeHi := rangeLo
+				for i := 0; i < len(rangeHi); i++ {
+					rangeHi[i] |= ^network.Mask[i]
+				}
+
+				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+			}
+
+			//tuple = strings.Split(s, "/")
+			//if len(tuple) == 1 {
+			//
+			//} else if len(tuple) == 2 {
+			//	// string is CIDR block like 192.168.0.0/16
+			//	rangeLo := net.ParseIP(tuple[0])
+			//	if rangeLo == nil {
+			//		return nil, fmt.Errorf("invalid IP address: %s", tuple[0])
+			//	}
+			//
+			//	maskLen, err := strconv.ParseInt(s, 10, 8)
+			//	if err != nil || maskLen < 1 || maskLen > 31 {
+			//		return nil, fmt.Errorf("invalid CIDR block: %s", s)
+			//	}
+			//
+			//	mask := net.CIDRMask(int(maskLen), 32)
+			//	rangeLo = rangeLo.Mask(mask)
+			//	rangeHi := rangeLo
+			//	for i := 0; i < len(rangeHi); i++ {
+			//		rangeHi[i] |= ^mask[i]
+			//	}
+			//
+			//	ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+			//} else {
+			//	return nil, fmt.Errorf("invalid IP address, CIDR block, or hostname: %s", s)
+			//}
+		} else if len(tuple) == 2 {
+			// string is range like a.b.c.d:v.x.y.z
+			rangeLo := net.ParseIP(tuple[0])
+			rangeHi := net.ParseIP(tuple[1])
+			if rangeLo == nil {
+				return nil, fmt.Errorf("invalid IP address: %s", tuple[0])
+			} else if rangeHi == nil {
+				return nil, fmt.Errorf("invalid IP address: %s", tuple[1])
+			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
+				return nil, fmt.Errorf("inverted IP address range: %s", s)
+			} else {
+				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+			}
+		} else {
+			return nil, fmt.Errorf("invalid IP address range: %s", s)
+		}
+	}
+
+	return ipRanges, nil
+}
+
 // Parses the comma-delimited whitelist ip-range string passed in as an argument
 // from the command line and returns slice of []IPRange
 //
