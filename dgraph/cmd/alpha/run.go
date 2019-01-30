@@ -190,7 +190,8 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 	for _, s := range rangeStrings {
 		isIPv6 := strings.Index(s, "::") >= 0
 		tuple := strings.Split(s, ":")
-		if isIPv6 || len(tuple) == 1 {
+		switch {
+		case isIPv6 || len(tuple) == 1:
 			if strings.Index(s, "/") < 0 {
 				// string is hostname like host.docker.internal,
 				// or IPv4 address like 144.124.126.254,
@@ -224,7 +225,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 
 				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
-		} else if len(tuple) == 2 {
+		case len(tuple) == 2:
 			// string is range like a.b.c.d:v.x.y.z
 			rangeLo := net.ParseIP(tuple[0])
 			rangeHi := net.ParseIP(tuple[1])
@@ -237,7 +238,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 			} else {
 				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
-		} else {
+		default:
 			return nil, fmt.Errorf("invalid IP address range: %s", s)
 		}
 	}
