@@ -23,7 +23,7 @@ SUBDIRS = dgraph
 
 ###############
 
-.PHONY: $(SUBDIRS) all oss version install uninstall test help
+.PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help
 all: $(SUBDIRS)
 
 $(SUBDIRS):
@@ -45,6 +45,9 @@ install:
 		$(MAKE) -C $$i install; \
 	done)
 
+install_oss oss_install:
+	$(MAKE) BUILD_TAGS=oss install
+
 uninstall:
 	@(set -e;for i in $(SUBDIRS); do \
 		echo Uninstalling $$i ...; \
@@ -52,7 +55,7 @@ uninstall:
 	done)
 
 test:
-	@echo running ./test.sh
+	@echo Running ./test.sh
 	./test.sh
 
 help:

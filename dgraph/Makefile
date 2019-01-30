@@ -20,6 +20,7 @@ BUILD_DATE    ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION ?= $(shell git describe --always --tags)
 BUILD_TAGS    ?=
+GOPATH        ?= $(shell go env GOPATH)
 
 # Build-time Go variables
 dgraphVersion  = github.com/dgraph-io/dgraph/x.dgraphVersion
@@ -50,6 +51,6 @@ uninstall:
 	@go clean -i -x
 
 install:
-	@printf "%-8s: %s %s\n" "Old MD5" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+	@echo "Old MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
 	@go install $(BUILD_FLAGS)
-	@printf "%-8s: %s %s\n" "New MD5" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+	@echo "New MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
