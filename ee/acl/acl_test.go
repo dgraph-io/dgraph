@@ -266,3 +266,29 @@ func createGroupAndAcls(t *testing.T) {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)
 	}
 }
+
+func TestPasswordReset(t *testing.T) {
+	glog.Infof("testing with port 9180")
+	dg, cancel := x.GetDgraphClientOnPort(9180)
+	defer cancel()
+	createAccountAndData(t, dg)
+	// test login using the current password
+	ctx := context.Background()
+	err := dg.Login(ctx, userid, userpassword)
+	require.NoError(t, err, "Logging in with the current password should have succeeded")
+
+	// reset password for the user alice
+	newPassword := userpassword + "123"
+	chPdCmd := exec.Command("dgraph", "acl", "passwd", "-d", dgraphEndpoint, "-u",
+		userid, "--new_password", newPassword, "-x", "password")
+	checkOutput(t, chPdCmd, false)
+	glog.Infof("Successfully changed password for %v", userid)
+
+	// test that logging in using the old password should now fail
+	err = dg.Login(ctx, userid, userpassword)
+	require.Error(t, err, "Logging in with old password should no longer work")
+
+	// test logging in using the new password
+	err = dg.Login(ctx, userid, newPassword)
+	require.NoError(t, err, "Logging in with new password should work now")
+}

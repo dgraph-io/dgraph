@@ -98,7 +98,6 @@ func initSubcommands() []*x.SubCommand {
 	}
 	chPdFlags := cmdPasswd.Cmd.Flags()
 	chPdFlags.StringP("user", "u", "", "The user id to be created")
-	chPdFlags.StringP("old_password", "", "", "The old(current) password for the user")
 	chPdFlags.StringP("new_password", "", "", "The new password for the user")
 
 	// user deletion command
