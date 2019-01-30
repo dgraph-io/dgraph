@@ -19,7 +19,6 @@ package alpha
 import (
 	"bytes"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -220,33 +219,6 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 
 				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
-
-			//tuple = strings.Split(s, "/")
-			//if len(tuple) == 1 {
-			//
-			//} else if len(tuple) == 2 {
-			//	// string is CIDR block like 192.168.0.0/16
-			//	rangeLo := net.ParseIP(tuple[0])
-			//	if rangeLo == nil {
-			//		return nil, fmt.Errorf("invalid IP address: %s", tuple[0])
-			//	}
-			//
-			//	maskLen, err := strconv.ParseInt(s, 10, 8)
-			//	if err != nil || maskLen < 1 || maskLen > 31 {
-			//		return nil, fmt.Errorf("invalid CIDR block: %s", s)
-			//	}
-			//
-			//	mask := net.CIDRMask(int(maskLen), 32)
-			//	rangeLo = rangeLo.Mask(mask)
-			//	rangeHi := rangeLo
-			//	for i := 0; i < len(rangeHi); i++ {
-			//		rangeHi[i] |= ^mask[i]
-			//	}
-			//
-			//	ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
-			//} else {
-			//	return nil, fmt.Errorf("invalid IP address, CIDR block, or hostname: %s", s)
-			//}
 		} else if len(tuple) == 2 {
 			// string is range like a.b.c.d:v.x.y.z
 			rangeLo := net.ParseIP(tuple[0])
@@ -265,47 +237,6 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 		}
 	}
 
-	return ipRanges, nil
-}
-
-// Parses the comma-delimited whitelist ip-range string passed in as an argument
-// from the command line and returns slice of []IPRange
-//
-// ex. "144.142.126.222:144.124.126.400,190.59.35.57:190.59.35.99"
-func parseIPsFromString(str string) ([]worker.IPRange, error) {
-	if str == "" {
-		return []worker.IPRange{}, nil
-	}
-
-	var ipRanges []worker.IPRange
-	ipRangeStrings := strings.Split(str, ",")
-
-	// Check that the each of the ranges are valid
-	for _, s := range ipRangeStrings {
-		ipsTuple := strings.Split(s, ":")
-
-		// Assert that the range consists of an upper and lower bound
-		if len(ipsTuple) != 2 {
-			return nil, errors.New("IP range must have a lower and upper bound")
-		}
-
-		lowerBoundIP := net.ParseIP(ipsTuple[0])
-		upperBoundIP := net.ParseIP(ipsTuple[1])
-
-		if lowerBoundIP == nil || upperBoundIP == nil {
-			// Assert that both upper and lower bound are valid IPs
-			return nil, errors.New(
-				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
-			)
-		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
-			// Assert that the lower bound is less than the upper bound
-			return nil, errors.New(
-				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
-			)
-		} else {
-			ipRanges = append(ipRanges, worker.IPRange{Lower: lowerBoundIP, Upper: upperBoundIP})
-		}
-	}
 	return ipRanges, nil
 }
 
@@ -542,7 +473,7 @@ func run() {
 
 	edgraph.SetConfiguration(opts)
 
-	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
+	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
 	worker.Config = worker.Options{
 		ExportPath:          Alpha.Conf.GetString("export"),
