@@ -416,7 +416,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		if idx < 0 {
+		if idx == -1 {
 			continue
 		}
 		if pc.Params.isGroupBy {
@@ -1371,8 +1371,7 @@ func (sg *SubGraph) updateUidMatrix() {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				i := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
-				return i >= 0
+				return algo.IndexOf(sg.DestUIDs, uid) != -1 // Binary search.
 			})
 		} else {
 			// If we didn't order on UIDmatrix, it'll be sorted.
@@ -1753,12 +1752,12 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 }
 
 func (sg *SubGraph) appendDummyValues() {
-	if sg.SrcUIDs == nil {
+	if sg.SrcUIDs == nil || len(sg.SrcUIDs.Uids) == 0 {
 		return
 	}
 	var l pb.List
 	var val pb.ValueList
-	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
+	for range sg.SrcUIDs.Uids {
 		// This is necessary so that preTraverse can be processed smoothly.
 		sg.uidMatrix = append(sg.uidMatrix, &l)
 		sg.valueMatrix = append(sg.valueMatrix, &val)
