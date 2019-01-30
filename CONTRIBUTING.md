@@ -4,7 +4,7 @@ Thanks for checking out our Polkadot Runtime Implementation! We're excited to he
 
 We've put together the following guidelines to help you figure out where you can best be helpful. The Web3 foundation has a comprehensive collection of [Polkadot Resources](https://github.com/w3f/web3/blob/537a2518c24e96b05ceadd9f31348669e72b8841/docs/layer_1/platforms/polkadot.md) for both part-time and core contributors to the project in order to get up to speed.
 
-Additionally, the [Polkadot Specification Doc](https://github.com/w3f/polkadot-spec/blob/master/spec.md) serves source of truth for all things related to our implementation, however it is currently in its final draft status so things may be subject to change.
+Additionally, the [Polkadot Specification Doc](https://github.com/w3f/polkadot-spec/blob/master/spec.md) serves as the primary specification, however it is currently in its final draft status so things may be subject to change.
 
 Feel free to fork our repo and start creating PR’s after assigning yourself to an issue of interest.
 
@@ -64,116 +64,33 @@ Changes that only affect a single file can be tested with
 $ go test <file_you_are_working_on>
 ```
 
-Changes that affect multiple files can be tested with ...
+**10. Lint your changes.**
+
+Before opening a pull request be sure to run the linter
 
 ```
-$ gometallinter
+$ gometallinter ./...
 ```
 
-**10. Stage the file or files that you want to commit.**
-
-```
-$ git add --all
-```
-
-This command stages all of the files that you have changed. You can add individual files by specifying the file name or names and eliminating the “-- all”.
-
-**11. Commit the file or files.**
-
-```
-$ git commit  -m “Message to explain what the commit covers”
-```
-
-**12. Fetch any changes that have occurred in the ChainSafe Systems Go-pre repo since you started work.**
-
-```
-$ git fetch go-pre
-```
-
-**13. Rebase your branch atop of the latest version of Go-pre.**
-
-```
-$ git rebase go-pre/development
-```
-
-If there are conflicts between your edits and those made by others since you started work Git will ask you to resolve them. To find out which files have conflicts run ...
-
-```
-$ git status
-```
-
-Open those files one at a time and you
-will see lines inserted by Git that identify the conflicts:
-
-```
-<<<<<< HEAD
-Other developers’ version of the conflicting code
-======
-Your version of the conflicting code
-'>>>>> Your Commit
-```
-
-The code from the Go-pre repo is inserted between <<< and === while the change you have made is inserted between === and >>>>. Remove everything between <<<< and >>> and replace it with code that resolves the conflict. Repeat the process for all files listed by git status that have conflicts.
-
-**14. Push your changes to your fork of the Go-pre repo.**
-
-Rebasing a pull request changes the history on your branch, so Git will reject a normal git push after a rebase. Use a force push to move your changes to your fork of the repo.
-
-```
-$ git push myrepo feature-in-progress-branch -f
-```
-
-**15. Check to be sure your fork of the Go-pre repo contains your feature branch with the latest edits.**
-
-Navigate to your fork of the repo on Github. On the upper left where the current branch is listed, change the branch to your feature-in-progress-branch. Open the files that you have worked on and check to make sure they include your changes.
-
-**16. Create a pull request.**
+**11. Create a pull request.**
 
 Navigate your browser to [https://github.com/ChainSafeSystems/go-pre](https://github.com/ChainSafeSystems/go-pre) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafeSystems/go-pre/pulls](https://github.com/ChainSafeSystems/go-pre/pulls).
 
-**17. Respond to comments by Core Contributors.**
+**12. Respond to comments by Core Contributors.**
 
 Core Contributors may ask questions and request that you make edits. If you set notifications at the top of the page to “not watching,” you will still be notified by email whenever someone comments on the page of a pull request you have created. If you are asked to modify your pull request, repeat steps 8 through 15, then leave a comment to notify the Core Contributors that the pull request is ready for further review.
 
-**18. If the number of commits becomes excessive, you may be asked to squash your commits.**
+**13. If the number of commits becomes excessive, you may be asked to squash your commits.**
 
- You can do this with an interactive rebase. Start by running the following command to determine the commit that is the base of your branch...
-
-```
-$ git merge-base feature-in-progress-branch go-pre/development
-```
-
-**19. The previous command will return a commit-hash that you should use in the following command.**
-
-```
-$ git rebase -i commit-hash
-```
-
-Your text editor will open with a file that lists the commits in your branch with the word pick in front of each branch such as the following …
-
-```
-pick 	hash	do some work
-pick 	hash 	fix a bug
-pick 	hash 	add a feature
-```
-
-Replace the word pick with the word “squash” for every line but the first so you end with ….
-
-```
-pick    hash	do some work
-squash  hash 	fix a bug
-squash  hash 	add a feature
-```
-
-Save and close the file, then a commit command will appear in the terminal that squashes the smaller commits into one. Check to be sure the commit message accurately reflects your changes and then hit enter to execute it.
-
-**20. Update your pull request with the following command.**
+ You can do this with an interactive rebase. 
+ 
+**14. Update your pull request with the squashed commits.**
 
 ```
 $ git push myrepo feature-in-progress-branch -f
 ```
 
-**21.  Finally, again leave a comment to the Core Contributors on the pull request to let them know that the pull request has been updated.**
+**15.  Finally, again leave a comment to the Core Contributors on the pull request to let them know that the pull request has been updated.**
 
 ## Contributor Responsibilities
 
