@@ -422,7 +422,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		if idx < 0 {
+		if idx == -1 {
 			continue
 		}
 		if pc.Params.isGroupBy {
