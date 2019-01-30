@@ -150,7 +150,7 @@ type params struct {
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll      bool     // expand all languages
 	shortest       bool
-	pathSource     bool // true if the node represents the first node in a path.
+	pathSource     bool     // true if the node represents the first node in a path.
 	totalWeight    float64
 }
 
