@@ -6,7 +6,7 @@ First, create a system account for `dgraph` service:
 
 ```
 groupadd --system dgraph
-useradd --system -d /var/run/dgraph -s /bin/bash -g dgraph dgraph
+useradd --system -d /var/run/dgraph -s /bin/false -g dgraph dgraph
 mkdir -p /var/log/dgraph
 mkdir -p /var/run/dgraph/{p,w,zw}
 chown -R dgraph:dgraph /var/{run,log}/dgraph
@@ -15,22 +15,23 @@ chown -R dgraph:dgraph /var/{run,log}/dgraph
 Next, copy the `systemd` unit files, i.e. `dgraph.service`, `dgraph-zero.service`,
 and `dgraph-ui.service`, in this directory to `/usr/lib/systemd/system/`.
 
+> **NOTE** These unit files expect that Dgraph is installed as `/usr/local/bin/dgraph`.
+
 ```
 cp dgraph.service /usr/lib/systemd/system/
 cp dgraph-zero.service /usr/lib/systemd/system/
 cp dgraph-ui.service /usr/lib/systemd/system/
 ```
 
-Next, enable and start the `dgraph` services. Please note that when a user
-starts the `dgraph` service, the `systemd` starts `dgraph-zero` service
-automatically, as a prerequisite.
+Next, enable and start the `dgraph` service. Systemd will also automatically start the
+`dgraph-zero` service as a prerequisite.
 
 ```
 systemctl enable dgraph
 systemctl start dgraph
 ```
 
-The `dgraph-ui` service is optional, and, therefore, it will not start
+The `dgraph-ui` service is optional and, unlike `dgraph-zero`, will not be started
 automatically.
 
 ```
@@ -61,3 +62,6 @@ journalctl -u dgraph-zero.service -r
 journalctl -u dgraph.service -r
 journalctl -u dgraph-ui.service -r
 ```
+
+> **NOTE** When `dgraph` exits with an error, `systemctl status` may not show the entire error
+ output. In that case it may be necessary to use `journald`.

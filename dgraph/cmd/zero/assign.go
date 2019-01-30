@@ -26,10 +26,7 @@ import (
 	"github.com/golang/glog"
 )
 
-var (
-	emptyNum         pb.Num
-	emptyAssignedIds pb.AssignedIds
-)
+var emptyAssignedIds pb.AssignedIds
 
 const (
 	leaseBandwidth = uint64(10000)

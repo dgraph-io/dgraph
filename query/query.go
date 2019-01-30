@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -135,6 +136,8 @@ type params struct {
 	FacetOrder     string
 	FacetOrderDesc bool
 	ExploreDepth   uint64
+	MaxWeight      float64
+	MinWeight      float64
 	isInternal     bool   // Determines if processTask has to be called or not.
 	ignoreResult   bool   // Node results are ignored.
 	Expand         string // Value is either _all_/variable-name or empty.
@@ -210,6 +213,19 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 	if gf == nil {
 		return
 	}
+
+	// type function is just an alias for eq("type", type).
+	if gf.Name == "type" {
+		sg.Attr = "type"
+		sg.SrcFunc = &Function{
+			Name:       "eq",
+			Args:       append(gf.Args[:0:0], gf.Args...),
+			IsCount:    false,
+			IsValueVar: false,
+		}
+		return
+	}
+
 	sg.SrcFunc = &Function{
 		Name:       gf.Name,
 		Args:       append(gf.Args[:0:0], gf.Args...),
@@ -795,34 +811,60 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		args.AfterUID = uint64(after)
 	}
 
-	if v, ok := gq.Args["depth"]; ok && (args.Alias == "shortest") {
-		from, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+	if args.Alias == "shortest" {
+		if v, ok := gq.Args["depth"]; ok {
+			depth, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.ExploreDepth = depth
 		}
-		args.ExploreDepth = from
-	}
-	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
-		numPaths, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["numpaths"]; ok {
+			numPaths, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.numPaths = int(numPaths)
 		}
-		args.numPaths = int(numPaths)
-	}
-	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
-		from, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["from"]; ok {
+			from, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.From = uint64(from)
 		}
-		args.From = uint64(from)
-	}
-	if v, ok := gq.Args["to"]; ok && args.Alias == "shortest" {
-		to, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return err
+
+		if v, ok := gq.Args["to"]; ok {
+			to, err := strconv.ParseUint(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.To = uint64(to)
 		}
-		args.To = uint64(to)
+
+		if v, ok := gq.Args["maxweight"]; ok {
+			maxWeight, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return err
+			}
+			args.MaxWeight = maxWeight
+		} else if !ok {
+			args.MaxWeight = math.MaxFloat64
+		}
+
+		if v, ok := gq.Args["minweight"]; ok {
+			minWeight, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return err
+			}
+			args.MinWeight = minWeight
+		} else if !ok {
+			args.MinWeight = -math.MaxFloat64
+		}
 	}
+
 	if v, ok := gq.Args["first"]; ok {
 		first, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -920,6 +962,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}
+
 		sg.createSrcFunction(gq.Func)
 	}
 
@@ -2351,7 +2394,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
+		"minweight", "maxweight":
 		return true
 	}
 	return false
@@ -2361,7 +2405,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext",
-		"has", "uid", "uid_in", "anyof", "allof":
+		"has", "uid", "uid_in", "anyof", "allof", "type":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)

@@ -448,7 +448,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			}
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-s.shutDownCh:
+		case <-s.closer.HasBeenClosed():
 			return errServerShutDown
 		}
 	}

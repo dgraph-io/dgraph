@@ -20,6 +20,7 @@ BUILD_DATE    ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION ?= $(shell git describe --always --tags)
 BUILD_TAGS    ?=
+GOPATH        ?= $(shell go env GOPATH)
 
 # Build-time Go variables
 dgraphVersion  = github.com/dgraph-io/dgraph/x.dgraphVersion

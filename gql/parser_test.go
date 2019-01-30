@@ -1061,7 +1061,7 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 func TestParseShortestPath(t *testing.T) {
 	query := `
 	{
-		shortest(from:0x0a, to:0x0b, numpaths: 3) {
+		shortest(from:0x0a, to:0x0b, numpaths: 3, minweight: 3, maxweight: 6) {
 			friends
 			name
 		}
@@ -1074,6 +1074,8 @@ func TestParseShortestPath(t *testing.T) {
 	require.Equal(t, "0x0a", res.Query[0].Args["from"])
 	require.Equal(t, "0x0b", res.Query[0].Args["to"])
 	require.Equal(t, "3", res.Query[0].Args["numpaths"])
+	require.Equal(t, "3", res.Query[0].Args["minweight"])
+	require.Equal(t, "6", res.Query[0].Args["maxweight"])
 }
 
 func TestParseMultipleQueries(t *testing.T) {
@@ -4490,4 +4492,49 @@ func TestLineAndColumnNumberInErrorOutput(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"line 4 column 35: Unrecognized character in lexDirective: U+002C ','")
+}
+
+func TestTypeFunction(t *testing.T) {
+	q := `
+	query {
+		me(func: type(Person)) {
+			name
+		}
+	}`
+	gq, err := Parse(Request{Str: q})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "type", gq.Query[0].Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Func.Args[0].Value)
+}
+
+func TestTypeFunctionError1(t *testing.T) {
+	q := `
+	query {
+		me(func: type(Person, School)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: q})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "type function only supports one argument")
+}
+
+func TestTypeInFilter(t *testing.T) {
+	q := `
+	query {
+		me(func: uid(0x01)) @filter(type(Person)) {
+			name
+		}
+	}`
+	gq, err := Parse(Request{Str: q})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "uid", gq.Query[0].Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "name", gq.Query[0].Children[0].Attr)
+	require.Equal(t, "type", gq.Query[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Filter.Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Filter.Func.Args[0].Value)
 }
