@@ -70,6 +70,7 @@ func TestUpdateAcl(t *testing.T) {
 	require.True(t, changed, "the acl should be changed through update "+
 		"with element of negative predicate")
 	require.Equal(t, 1, len(updatedAcls5), "the acl list should have 1 element now")
-	require.Equal(t, "friend", updatedAcls5[0].Predicate, "the left acl should have the original "+
-		"first predicate")
+	require.Equal(t, "friend", updatedAcls5[0].PredFilter.Predicate,
+		"the left acl should have the original "+
+			"first predicate")
 }
