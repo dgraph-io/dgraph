@@ -310,14 +310,15 @@ func RefreshAcls(closer *y.Closer) {
 		storedEntries := 0
 		for _, group := range groups {
 			// convert the serialized acl into a map for easy lookups
-			group.MappedAcls, err = acl.UnmarshalAcl([]byte(group.Acls))
+			predPerms, predRegexPerms, err := acl.UnmarshalAcl([]byte(group.Acls))
 			if err != nil {
 				glog.Errorf("Error while unmarshalling ACLs for group %v:%v", group, err)
 				continue
 			}
 
 			storedEntries++
-			aclCache.Store(group.GroupID, &group)
+			aclCache.predPerms.Store(group.GroupID, predPerms)
+			aclCache.predRegexPerms.Store(group.GroupID, predRegexPerms)
 		}
 		glog.V(1).Infof("Updated the ACL cache with %d entries", storedEntries)
 		return nil
@@ -345,7 +346,12 @@ const queryAcls = `
 `
 
 // the acl cache mapping group names to the corresponding group acls
-var aclCache sync.Map
+type AclCache struct {
+	predPerms      sync.Map
+	predRegexPerms sync.Map
+}
+
+var aclCache AclCache
 
 // clear the aclCache and upsert the Groot account.
 func ResetAcl() {
@@ -404,7 +410,10 @@ func ResetAcl() {
 		return nil
 	}
 
-	aclCache = sync.Map{}
+	aclCache = AclCache{
+		predPerms:      sync.Map{},
+		predRegexPerms: sync.Map{},
+	}
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -587,12 +596,12 @@ func authorizePredicate(groups []string, predicate string, operation *acl.Operat
 // hasAccess checks the aclCache and returns whether the specified group is authorized to perform
 // the operation on the given predicate
 func hasAccess(groupId string, predicate string, operation *acl.Operation) error {
-	entry, found := aclCache.Load(groupId)
+	predPerms, found := aclCache.predPerms.Load(groupId)
 	if !found {
 		return fmt.Errorf("acl not found for group %v", groupId)
 	}
-	aclGroup := entry.(*acl.Group)
-	perm, found := aclGroup.MappedAcls[predicate]
+	predPermsMap := predPerms.(map[string]int32)
+	perm, found := predPermsMap[predicate]
 	allowed := found && (perm&operation.Code) != 0
 	glog.V(1).Infof("Authorizing group %v on predicate %v for %s, allowed %v", groupId,
 		predicate, operation.Name, allowed)

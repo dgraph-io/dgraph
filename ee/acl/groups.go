@@ -145,20 +145,32 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 	return group, nil
 }
 
+// an entity can be either a single predicate or a regex that can be used to
+// match multiple predicates
+type PredFilter struct {
+	IsRegex   bool
+	Predicate string
+	Regex     string
+}
+
 type Acl struct {
-	Predicate string `json:"predicate"`
-	Perm      int32  `json:"perm"`
+	PredFilter PredFilter
+	Perm       int32 `json:"perm"`
 }
 
 func chMod(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	predicate := conf.GetString("pred")
+	predRegex := conf.GetString("pred_regex")
 	perm := conf.GetInt("perm")
 	if len(groupId) == 0 {
 		return fmt.Errorf("The groupid must not be empty")
 	}
-	if len(predicate) == 0 {
-		return fmt.Errorf("The predicate must not be empty")
+	if len(predicate) > 0 && len(predRegex) > 0 {
+		return fmt.Errorf("either --pred or --pred_regex should be specified, but not both")
+	}
+	if len(predicate) == 0 && len(predRegex) == 0 {
+		return fmt.Errorf("either --pred or --pred_regex should be specified, but not both")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
@@ -192,10 +204,25 @@ func chMod(conf *viper.Viper) error {
 		}
 	}
 
-	newAcls, updated := updateAcl(currentAcls, Acl{
-		Predicate: predicate,
-		Perm:      int32(perm),
-	})
+	var newAcl Acl
+	if len(predicate) > 0 {
+		newAcl = Acl{
+			PredFilter: PredFilter{
+				IsRegex:   false,
+				Predicate: predicate,
+			},
+			Perm: int32(perm),
+		}
+	} else {
+		newAcl = Acl{
+			PredFilter: PredFilter{
+				IsRegex: true,
+				Regex:   predRegex,
+			},
+			Perm: int32(perm),
+		}
+	}
+	newAcls, updated := updateAcl(currentAcls, newAcl)
 	if !updated {
 		glog.Infof("Nothing needs to be changed for the permission of group:%v", groupId)
 		return nil
@@ -228,8 +255,12 @@ func chMod(conf *viper.Viper) error {
 // returns whether the existing acls slice is changed
 func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 	for idx, aclEntry := range acls {
-		if aclEntry.Predicate == newAcl.Predicate {
+		curFilter := aclEntry.PredFilter
+		newFilter := newAcl.PredFilter
+		if (!curFilter.IsRegex && !newFilter.IsRegex && curFilter.Predicate == newFilter.Predicate) ||
+			(curFilter.IsRegex && newFilter.IsRegex && curFilter.Regex == newFilter.Regex) {
 			if aclEntry.Perm == newAcl.Perm {
+				// new permission is the same as the current one, no update
 				return acls, false
 			}
 			if newAcl.Perm < 0 {

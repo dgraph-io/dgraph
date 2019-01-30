@@ -89,11 +89,10 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 
 // parse the response and check existing of the uid
 type Group struct {
-	Uid        string           `json:"uid"`
-	GroupID    string           `json:"dgraph.xid"`
-	Users      []User           `json:"~dgraph.user.group"`
-	Acls       string           `json:"dgraph.group.acl"`
-	MappedAcls map[string]int32 // only used in memory for acl enforcement
+	Uid     string `json:"uid"`
+	GroupID string `json:"dgraph.xid"`
+	Users   []User `json:"~dgraph.user.group"`
+	Acls    string `json:"dgraph.group.acl"`
 }
 
 // Extract the first User pointed by the userKey in the query response
@@ -116,19 +115,26 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	return &groups[0], nil
 }
 
-// convert the acl blob to a map from predicates to permissions
-func UnmarshalAcl(aclBytes []byte) (map[string]int32, error) {
+// convert the acl blob to two maps:
+// the first one being a map from the single predicates to permissions;
+// and the second one being a map from the predicate regular expressions to permissions
+func UnmarshalAcl(aclBytes []byte) (map[string]int32, map[string]int32, error) {
 	var acls []Acl
 	if len(aclBytes) != 0 {
 		if err := json.Unmarshal(aclBytes, &acls); err != nil {
-			return nil, fmt.Errorf("unable to unmarshal the aclBytes: %v", err)
+			return nil, nil, fmt.Errorf("unable to unmarshal the aclBytes: %v", err)
 		}
 	}
-	mappedAcls := make(map[string]int32)
+	predPerms := make(map[string]int32)
+	predRegexPerms := make(map[string]int32)
 	for _, acl := range acls {
-		mappedAcls[acl.Predicate] = acl.Perm
+		if acl.PredFilter.IsRegex {
+			predRegexPerms[acl.PredFilter.Regex] = acl.Perm
+		} else {
+			predPerms[acl.PredFilter.Predicate] = acl.Perm
+		}
 	}
-	return mappedAcls, nil
+	return predPerms, predRegexPerms, nil
 }
 
 // Extract a sequence of groups from the input

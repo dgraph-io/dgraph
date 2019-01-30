@@ -178,6 +178,8 @@ func initSubcommands() []*x.SubCommand {
 		"is to be changed")
 	chModFlags.StringP("pred", "p", "", "The predicates whose acls"+
 		" are to be changed")
+	chModFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
+		" whose acls are to be changed")
 	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
 		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
 
@@ -290,7 +292,8 @@ func info(conf *viper.Viper) error {
 		}
 
 		for _, acl := range acls {
-			aclStrs = append(aclStrs, fmt.Sprintf("(predicate:%v,perm:%v)", acl.Predicate, acl.Perm))
+			aclStrs = append(aclStrs, fmt.Sprintf("(predicate filter:%v,perm:%v)",
+				acl.PredFilter, acl.Perm))
 		}
 		groupSB.WriteString(fmt.Sprintf("acls:%v\n", strings.Join(aclStrs, " ")))
 
