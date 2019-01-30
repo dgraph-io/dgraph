@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/stretchr/testify/require"
 
 	"google.golang.org/grpc"
@@ -1649,6 +1651,35 @@ func TestTypeMutationAndQuery(t *testing.T) {
 	require.Equal(t, 1, len(queryResults))
 	name := queryResults[0].(map[string]interface{})["name"].(string)
 	require.Equal(t, "Alice", name)
+}
+
+func TestIPStringParsing(t *testing.T) {
+	var addrRange []worker.IPRange
+	var err error
+
+	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244")
+	require.NoError(t, err)
+	require.Equal(t, net.IPv4(144, 142, 126, 222), addrRange[0].Lower)
+	require.Equal(t, net.IPv4(144, 142, 126, 244), addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("144.142.126.254")
+	require.NoError(t, err)
+	require.Equal(t, net.IPv4(144, 142, 126, 254), addrRange[0].Lower)
+	require.Equal(t, net.IPv4(144, 142, 126, 254), addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("192.168.0.0/16")
+	require.NoError(t, err)
+	require.Equal(t, net.IPv4(192, 168, 0, 0), addrRange[0].Lower)
+	require.Equal(t, net.IPv4(192, 168, 255, 255), addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("example.org")
+	require.NoError(t, err)
+	require.NotEqual(t, net.IPv4(0, 0, 0, 0), addrRange[0].Lower)
+
+	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244,144.142.126.254" +
+		",192.168.0.0/16,example.org")
+	require.NoError(t, err)
+	require.NotEqual(t, 0, len(addrRange))
 }
 
 func TestMain(m *testing.M) {
