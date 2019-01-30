@@ -327,13 +327,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	updates, err := schema.Parse(op.Schema)
+	result, err := schema.Parse(op.Schema)
 	if err != nil {
 		return empty, err
 	}
-	glog.Infof("Got schema: %+v\n", updates)
+	glog.Infof("Got schema: %+v\n", result.Schemas)
 	// TODO: Maybe add some checks about the schema.
-	m.Schema = updates
+	m.Schema = result.Schemas
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }

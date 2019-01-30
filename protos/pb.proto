@@ -240,7 +240,7 @@ message Posting {
 		UID = 7;
 		PASSWORD = 8;
 		STRING = 9;
-
+    OBJECT = 10;
 	}
 	ValType val_type = 3;
 	enum PostingType {
@@ -340,6 +340,20 @@ message SchemaUpdate {
 	// Deleted field:
 	reserved 7;
 	reserved "explicit";
+}
+
+message TypeField {
+  string name = 1;
+	Posting.ValType value_type = 2;
+  string object_type_name = 3;
+  bool list = 4;
+  bool non_nullable = 5;
+  bool non_nullable_list = 6;
+}
+
+message TypeUpdate {
+  string name = 1;
+  repeated TypeField fields = 2;
 }
 
 // Bulk loader proto.
