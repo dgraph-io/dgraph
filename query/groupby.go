@@ -219,7 +219,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
 				// Ignore uids which are not part of srcUid.
-				if algo.IndexOf(ul, srcUid) < 0 {
+				if algo.IndexOf(ul, srcUid) == -1 {
 					continue
 				}
 				ul := child.uidMatrix[i]
@@ -231,7 +231,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 			// It's a value node.
 			for i, v := range child.valueMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
-				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
+				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) == -1 {
 					continue
 				}
 				val, err := convertTo(v.Values[0])
