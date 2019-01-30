@@ -31,11 +31,7 @@ func userPasswd(conf *viper.Viper) error {
 	}
 
 	// 1. get the dgo client with appropriete access JWT
-	var dc *dgo.Dgraph
-	var err error
-	var cancel CloseFunc
-	// get the dgo client using the groot credentials
-	dc, cancel, err = getClientWithAdminCtx(conf)
+	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
 		return fmt.Errorf("unable to get dgo client:%v", err)
 	}
