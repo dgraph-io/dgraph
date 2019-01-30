@@ -14,16 +14,7 @@ Feel free to fork our repo and start creating PR’s after assigning yourself to
 
 **2. Fork the Go-pre repo.**
 
-Sign in to your Github account or create a new account if you do not have one already. Then navigate your browser to [https://github.com/ChainSafeSystems/go-pre](https://github.com/ChainSafeSystems/go-pre). In the upper right hand corner of the page, click “fork”. This will create a copy of the Go-pre repo in your account.
-
 **3. Create a local clone of Go-pre.**
-
-```
-$ mkdir -p $GOPATH/src/github.com/ChainSafeSystems
-$ cd $GOPATH/src/github.com/ChainSafeSystems
-$ git clone git@github.com:ChainSafeSystems/go-pre.git
-$ cd $GOPATH/src/github.com/ChainSafeSystems/go-pre
-```
 
 **4. Link your local clone to the fork on your Github repo.**
 
@@ -42,13 +33,7 @@ $ git remote -v (you should see myrepo and go-pre in the list of remotes)
 
 Check out open issues at [https://github.com/ChainSafeSystems/go-pre/issues](https://github.com/ChainSafeSystems/go-pre/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave a comment to the development team to ask if they would like you to work on it.
 
-**7. Create a local branch with a name that clearly identifies what you will be working on.**
-
-```
-$ git checkout -b feature-in-progress-branch
-```
-
-**8. Make improvements to the code.**
+**7. Make improvements to the code.**
 
 Each time you work on the code be sure that you are working on the branch that you have created as opposed to your local copy of the ChainSafe Systems repo. Keeping your changes segregated in this branch will make it easier to merge your changes into the repo later.
 
@@ -56,7 +41,7 @@ Each time you work on the code be sure that you are working on the branch that y
 $ git checkout feature-in-progress-branch
 ```
 
-**9. Test your changes.**
+**8. Test your changes.**
 
 Changes that only affect a single file can be tested with
 
@@ -64,7 +49,7 @@ Changes that only affect a single file can be tested with
 $ go test <file_you_are_working_on>
 ```
 
-**10. Lint your changes.**
+**9. Lint your changes.**
 
 Before opening a pull request be sure to run the linter
 
@@ -72,25 +57,9 @@ Before opening a pull request be sure to run the linter
 $ gometallinter ./...
 ```
 
-**11. Create a pull request.**
+**10. Create a pull request.**
 
 Navigate your browser to [https://github.com/ChainSafeSystems/go-pre](https://github.com/ChainSafeSystems/go-pre) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafeSystems/go-pre/pulls](https://github.com/ChainSafeSystems/go-pre/pulls).
-
-**12. Respond to comments by Core Contributors.**
-
-Core Contributors may ask questions and request that you make edits. If you set notifications at the top of the page to “not watching,” you will still be notified by email whenever someone comments on the page of a pull request you have created. If you are asked to modify your pull request, repeat steps 8 through 15, then leave a comment to notify the Core Contributors that the pull request is ready for further review.
-
-**13. If the number of commits becomes excessive, you may be asked to squash your commits.**
-
- You can do this with an interactive rebase. 
- 
-**14. Update your pull request with the squashed commits.**
-
-```
-$ git push myrepo feature-in-progress-branch -f
-```
-
-**15.  Finally, again leave a comment to the Core Contributors on the pull request to let them know that the pull request has been updated.**
 
 ## Contributor Responsibilities
 
@@ -98,7 +67,7 @@ We consider two types of contributions to our repo and categorize them as follow
 
 ### Part-Time Contributors
 
-Anyone can become a part-time contributor and help out on implementing polkadot client. The responsibilities of a part-time contributor include:
+Anyone can become a part-time contributor and help out on implementing polkadot client. Contributions can be made in the following ways:
 
 -   Engaging in Gitter conversations, asking the questions on how to begin contributing to the project
 -   Opening up github issues to express interest in code to implement
@@ -113,9 +82,10 @@ We do not expect all part-time contributors to be experts on all the latest Polk
 
 ### Core Contributors
 
-Core contributors are remote contractors of ChainSafe Systems and are considered critical team members of our organization. Core devs have all of the responsibilities of part-time contributors plus the majority of the following:
+Core contributors are currently comprised of members of the ChainSafe Systems team. Core devs have all of the responsibilities of part-time contributors plus the majority of the following:
 
 -   Stay up to date on the latest Polkadot research and updates
+- 	Commit high quality code on core functionality
 -   Monitor github issues and PR’s to make sure owner, labels, descriptions are correct
 -   Formulate independent ideas, suggest new work to do, point out improvements to existing approaches
 -   Participate in code review, ensure code quality is excellent, and have ensure high code coverage
