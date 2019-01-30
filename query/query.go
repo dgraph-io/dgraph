@@ -1502,7 +1502,6 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path: sgPath,
 		}
 
-		glog.Infof("value %v", int64(len(sg.DestUIDs.Uids)))
 		val := types.Val{
 			Tid:   types.IntID,
 			Value: int64(len(sg.DestUIDs.Uids)),
