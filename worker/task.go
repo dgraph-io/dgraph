@@ -305,7 +305,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 		}
 		return true, nil
 	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn, MatchFn:
-		// All of these require index, hence would require fetching uid postings.
+		// All of these require an index, hence would require fetching uid postings.
 		return false, nil
 	case UidInFn, CompareScalarFn:
 		// Operate on uid postings
