@@ -575,10 +575,11 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 	result []uint64) *SubGraph {
 	shortestSg := new(SubGraph)
 	shortestSg.Params = params{
-		Alias:       "_path_",
-		shortest:    true,
-		pathSource:  true,
-		totalWeight: totalWeight,
+		Alias:    "_path_",
+		shortest: true,
+	}
+	shortestSg.pathMeta = &pathMetadata{
+		weight: totalWeight,
 	}
 	curUid := result[0]
 	shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
@@ -625,10 +626,11 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 	for _, it := range kroutes {
 		shortestSg := new(SubGraph)
 		shortestSg.Params = params{
-			Alias:       "_path_",
-			shortest:    true,
-			pathSource:  true,
-			totalWeight: it.totalWeight,
+			Alias:    "_path_",
+			shortest: true,
+		}
+		shortestSg.pathMeta = &pathMetadata{
+			weight: it.totalWeight,
 		}
 		curUid := it.route[0].uid
 		shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}

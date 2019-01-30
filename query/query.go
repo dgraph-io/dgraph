@@ -150,8 +150,10 @@ type params struct {
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll      bool     // expand all languages
 	shortest       bool
-	pathSource     bool // true if the node represents the first node in a path.
-	totalWeight    float64
+}
+
+type pathMetadata struct {
+	weight float64 // Total weight of the path.
 }
 
 // Function holds the information about gql functions.
@@ -191,6 +193,8 @@ type SubGraph struct {
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *pb.List
 	List     bool // whether predicate is of list type
+
+	pathMeta *pathMetadata
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -576,12 +580,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		dst.SetUID(uid, "uid")
 	}
 
-	if sg.Params.pathSource {
+	if sg.pathMeta != nil {
 		totalWeight := types.Val{
 			Tid:   types.FloatID,
-			Value: sg.Params.totalWeight,
+			Value: sg.pathMeta.weight,
 		}
-		dst.AddValue("_totalWeight_", totalWeight)
+		dst.AddValue("_weight_", totalWeight)
 	}
 
 	return nil
