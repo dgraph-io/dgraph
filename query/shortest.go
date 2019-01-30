@@ -36,7 +36,8 @@ type pathInfo struct {
 }
 
 type route struct {
-	route []pathInfo
+	route       []pathInfo
+	totalWeight float64
 }
 
 type Item struct {
@@ -272,7 +273,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
-		path: route{[]pathInfo{{uid: sg.Params.From}}},
+		path: route{route: []pathInfo{{uid: sg.Params.From}}},
 	}
 	heap.Push(&pq, srcNode)
 
@@ -301,7 +302,9 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			// Add path to list.
-			kroutes = append(kroutes, item.path)
+			newRoute := item.path
+			newRoute.totalWeight = item.cost
+			kroutes = append(kroutes, newRoute)
 			if len(kroutes) == numPaths {
 				// We found the required number of paths.
 				break
@@ -364,7 +367,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				uid:  toUid,
 				cost: item.cost + cost,
 				hop:  item.hop + 1,
-				path: route{curPath},
+				path: route{route: curPath},
 			}
 			heap.Push(&pq, node)
 		}
@@ -460,9 +463,11 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 
 	var stopExpansion bool
+	var totalWeight float64
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
+			totalWeight = item.cost
 			break
 		}
 		if item.hop > numHops && numHops < maxHops {
@@ -562,15 +567,18 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	sg.DestUIDs.Uids = result
 
-	shortestSg := createPathSubgraph(ctx, dist, result)
+	shortestSg := createPathSubgraph(ctx, dist, totalWeight, result)
 	return []*SubGraph{shortestSg}, nil
 }
 
-func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
+func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeight float64,
+	result []uint64) *SubGraph {
 	shortestSg := new(SubGraph)
 	shortestSg.Params = params{
-		Alias:    "_path_",
-		shortest: true,
+		Alias:       "_path_",
+		shortest:    true,
+		pathSource:  true,
+		totalWeight: totalWeight,
 	}
 	curUid := result[0]
 	shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}
@@ -617,8 +625,10 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 	for _, it := range kroutes {
 		shortestSg := new(SubGraph)
 		shortestSg.Params = params{
-			Alias:    "_path_",
-			shortest: true,
+			Alias:       "_path_",
+			shortest:    true,
+			pathSource:  true,
+			totalWeight: it.totalWeight,
 		}
 		curUid := it.route[0].uid
 		shortestSg.SrcUIDs = &pb.List{Uids: []uint64{curUid}}

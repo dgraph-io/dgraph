@@ -150,6 +150,8 @@ type params struct {
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll      bool     // expand all languages
 	shortest       bool
+	pathSource     bool // true if the node represents the first node in a path.
+	totalWeight    float64
 }
 
 // Function holds the information about gql functions.
@@ -572,6 +574,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	// nothing else at that level.
 	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
 		dst.SetUID(uid, "uid")
+	}
+
+	if sg.Params.pathSource {
+		totalWeight := types.Val{
+			Tid:   types.FloatID,
+			Value: sg.Params.totalWeight,
+		}
+		dst.AddValue("_totalWeight_", totalWeight)
 	}
 
 	return nil
