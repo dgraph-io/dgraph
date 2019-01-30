@@ -387,6 +387,27 @@ func TestParseEmptyType(t *testing.T) {
 	}, result.Types[0])
 
 }
+
+func TestParseCombinedSchemasAndTypes(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+
+		}
+        name: string .
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Schemas))
+	require.Equal(t, &pb.SchemaUpdate{
+		Predicate: "name",
+		ValueType: 9, 
+	}, result.Schemas[0])
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		Name: "Person",
+	}, result.Types[0])
+}
+
 func TestParseMultipleTypes(t *testing.T) {
 	reset()
 	result, err := Parse(`
