@@ -1674,12 +1674,22 @@ func TestIPStringParsing(t *testing.T) {
 
 	addrRange, err = getIPsFromString("example.org")
 	require.NoError(t, err)
-	require.NotEqual(t, net.IPv4(0, 0, 0, 0), addrRange[0].Lower)
+	require.NotEqual(t, net.IPv4zero, addrRange[0].Lower)
 
 	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244,144.142.126.254" +
 		",192.168.0.0/16,example.org")
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(addrRange))
+
+	addrRange, err = getIPsFromString("fd03:b188:0f3c:9ec4::babe:face")
+	require.NoError(t, err)
+	require.NotEqual(t, net.IPv6zero, addrRange[0].Lower)
+	require.Equal(t, addrRange[0].Lower, addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("fd03:b188:0f3c:9ec4::/64")
+	require.NoError(t, err)
+	require.NotEqual(t, net.IPv6zero, addrRange[0].Lower)
+	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
 }
 
 func TestMain(m *testing.M) {

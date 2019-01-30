@@ -188,10 +188,13 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 	rangeStrings := strings.Split(str, ",")
 
 	for _, s := range rangeStrings {
+		isIPv6 := strings.Index(s, "::") >= 0
 		tuple := strings.Split(s, ":")
-		if len(tuple) == 1 {
+		if isIPv6 || len(tuple) == 1 {
 			if strings.Index(s, "/") < 0 {
-				// string is IP address or hostname like 144.124.126.254 or host.docker.internal
+				// string is hostname like host.docker.internal,
+				// or IPv4 address like 144.124.126.254,
+				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
 				ipAddr := net.ParseIP(s)
 				if ipAddr != nil {
 					ipRanges = append(ipRanges, worker.IPRange{Lower: ipAddr, Upper: ipAddr})
@@ -206,7 +209,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 					}
 				}
 			} else {
-				// string is CIDR block like 192.168.0.0/16
+				// string is CIDR block like 192.168.0.0/16 or fd03:b188:0f3c:9ec4::/64
 				rangeLo, network, err := net.ParseCIDR(s)
 				if err != nil {
 					return nil, fmt.Errorf("invalid CIDR block: %s", s)
@@ -216,7 +219,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 				rangeHi := make(net.IP, len(rangeLo))
 				copy(rangeHi, rangeLo)
 				for i := 1; i <= maskLen; i++ {
-					rangeHi[addrLen - i] |= ^network.Mask[maskLen - i]
+					rangeHi[addrLen-i] |= ^network.Mask[maskLen-i]
 				}
 
 				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
