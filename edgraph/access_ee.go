@@ -597,12 +597,27 @@ func authorizePredicate(groups []string, predicate string, operation *acl.Operat
 // the operation on the given predicate
 func hasAccess(groupId string, predicate string, operation *acl.Operation) error {
 	predPerms, found := aclCache.predPerms.Load(groupId)
-	if !found {
-		return fmt.Errorf("acl not found for group %v", groupId)
+	var allowed bool
+	if found {
+		predPermsMap := predPerms.(map[string]int32)
+		perm, permFound := predPermsMap[predicate]
+		allowed = permFound && (perm&operation.Code) != 0
+	} else {
+		regexPerms, regexPermsFound := aclCache.predRegexPerms.Load(groupId)
+		if regexPermsFound {
+			// the regexPermsMap is a map from the regex pred filter to the corresponding
+			// permission, e.g.
+			// ^user(.*)name$ -> 4
+			// ^friend -> 6
+			regexPermsMap := regexPerms.(map[string]int32)
+			// iterate through all the regex predicate filters and see if any one can match the given
+			// predicate
+			for regexPred, perm := range regexPermsMap {
+
+			}
+		}
 	}
-	predPermsMap := predPerms.(map[string]int32)
-	perm, found := predPermsMap[predicate]
-	allowed := found && (perm&operation.Code) != 0
+
 	glog.V(1).Infof("Authorizing group %v on predicate %v for %s, allowed %v", groupId,
 		predicate, operation.Name, allowed)
 	if !allowed {
@@ -610,4 +625,6 @@ func hasAccess(groupId string, predicate string, operation *acl.Operation) error
 			groupId, operation.Name, predicate)
 	}
 	return nil
+
+	return fmt.Errorf("acl not found for group %v", groupId)
 }
