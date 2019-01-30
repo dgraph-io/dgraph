@@ -77,18 +77,29 @@ func (n *node) uniqueKey() string {
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) error {
-	if n.Raft() == nil {
+	switch {
+	case n.Raft() == nil:
 		return x.Errorf("Raft isn't initialized yet.")
-	}
-	if ctx.Err() != nil {
+	case ctx.Err() != nil:
 		return ctx.Err()
+	case !n.AmLeader():
+		// Do this check upfront. Don't do this inside propose for reasons explained below.
+		return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
 	}
-	span := otrace.FromContext(ctx)
 
+	// We could consider adding a wrapper around the user proposal, so we can access any key-values.
+	// Something like this:
+	// https://github.com/golang/go/commit/5d39260079b5170e6b4263adb4022cc4b54153c4
+	span := otrace.FromContext(ctx)
+	// Overwrite ctx, so we no longer enforce the timeouts or cancels from ctx.
+	ctx = otrace.NewContext(context.Background(), span)
+
+	// propose runs in a loop. So, we should not do any checks inside, including n.AmLeader. This is
+	// to avoid the scenario where the first proposal times out and the second one gets returned
+	// due to node no longer being the leader. In this scenario, the first proposal can still get
+	// accepted by Raft, causing a txn violation later for us, because we assumed that the proposal
+	// did not go through.
 	propose := func(timeout time.Duration) error {
-		if !n.AmLeader() {
-			return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
-		}
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
@@ -102,9 +113,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key)
 		proposal.Key = key
-		if span != nil {
-			span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
-		}
+		span.Annotatef(nil, "Proposing with key: %s. Timeout: %v", key, timeout)
 
 		data, err := proposal.Marshal()
 		if err != nil {
@@ -112,6 +121,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		}
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
+			span.Annotatef(nil, "Error while proposing via Raft: %v", err)
 			return x.Wrapf(err, "While proposing")
 		}
 
@@ -120,9 +130,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		case err := <-che:
 			// We arrived here by a call to n.props.Done().
 			return err
-		case <-ctx.Done():
-			return ctx.Err()
 		case <-cctx.Done():
+			span.Annotatef(nil, "Internal context timeout %s. Will retry...", timeout)
 			return errInternalRetry
 		}
 	}
