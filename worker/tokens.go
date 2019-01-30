@@ -69,8 +69,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	if lang == "." {
 		lang = "en"
 	}
-	switch funcType {
-	case FullTextSearchFn:
+	if funcType == FullTextSearchFn {
 		return tok.GetFullTextTokens(funcArgs, lang)
 	}
 	return tok.GetTermTokens(funcArgs)
