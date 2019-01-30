@@ -292,3 +292,53 @@ func TestPasswordReset(t *testing.T) {
 	err = dg.Login(ctx, userid, newPassword)
 	require.NoError(t, err, "Logging in with new password should work now")
 }
+
+func TestPredicateRegex(t *testing.T) {
+	glog.Infof("testing with port 9180")
+	dg, cancel := x.GetDgraphClientOnPort(9180)
+	defer cancel()
+	createAccountAndData(t, dg)
+	ctx := context.Background()
+	err := dg.Login(ctx, userid, userpassword)
+	require.NoError(t, err, "Logging in with the current password should have succeeded")
+
+	queryPredicateWithUserAccount(t, dg, true)
+	mutatePredicateWithUserAccount(t, dg, true)
+	alterPredicateWithUserAccount(t, dg, true)
+	// create a new group
+	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "groupadd",
+		"-d", dgraphEndpoint,
+		"-g", group, "-x", "password")
+	if err := createGroupCmd.Run(); err != nil {
+		t.Fatalf("Unable to create group:%v", err)
+	}
+
+	// add the user to the group
+	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "usermod",
+		"-d", dgraphEndpoint,
+		"-u", userid, "-g", group, "-x", "password")
+	if err := addUserToGroupCmd.Run(); err != nil {
+		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
+	}
+
+	// add READ+Write permission on the regex ^predicate_to(.*)$ pred filter to the group
+	regexPred := "^predicate_to(.*)$"
+	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", dgraphEndpoint,
+		"-g", group, "--pred_regex", regexPred, "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
+		"-x",
+		"password")
+	if err := addReadWriteToRegexPermCmd.Run(); err != nil {
+		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
+			regexPred, group, err)
+	}
+
+	queryPredicateWithUserAccount(t, dg, false)
+	mutatePredicateWithUserAccount(t, dg, false)
+	// the alter operation should still fail since the regex pred does not have the Modify
+	// permission
+	alterPredicateWithUserAccount(t, dg, true)
+}
