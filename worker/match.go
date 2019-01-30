@@ -32,7 +32,7 @@ func matchFuzzy(srcFn *functionContext, val string) bool {
 		return false
 	}
 
-	terms, err := tok.GetTermTokens([]string{val})
+	terms, err := tok.GetTokens(tok.IdentTerm, val)
 	if err != nil {
 		return false
 	}
@@ -60,7 +60,7 @@ func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
 		return pl.Uids(opts)
 	}
 
-	tokens, err := tok.GetMatchTokens(arg.srcFn.tokens)
+	tokens, err := tok.GetTokens(tok.IdentTrigram, arg.srcFn.tokens...)
 	if err != nil {
 		return nil, err
 	}
