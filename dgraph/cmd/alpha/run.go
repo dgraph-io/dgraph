@@ -178,7 +178,7 @@ func setupCustomTokenizers() {
 // Parses a comma-delimited list of IP addresses, IP ranges, CIDR blocks, or hostnames
 // and returns a slice of []IPRange.
 //
-// e.g. "144.142.126.222:144.142.126.244,144.124.126.254,192.168.0.0/16,host.docker.internal"
+// e.g. "144.142.126.222:144.142.126.244,144.142.126.254,192.168.0.0/16,host.docker.internal"
 func getIPsFromString(str string) ([]worker.IPRange, error) {
 	if str == "" {
 		return []worker.IPRange{}, nil
@@ -212,9 +212,11 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 					return nil, fmt.Errorf("invalid CIDR block: %s", s)
 				}
 
-				rangeHi := rangeLo
-				for i := 0; i < len(rangeHi); i++ {
-					rangeHi[i] |= ^network.Mask[i]
+				addrLen, maskLen := len(rangeLo), len(network.Mask)
+				rangeHi := make(net.IP, len(rangeLo))
+				copy(rangeHi, rangeLo)
+				for i := 1; i <= maskLen; i++ {
+					rangeHi[addrLen - i] |= ^network.Mask[maskLen - i]
 				}
 
 				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
