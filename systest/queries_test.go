@@ -578,12 +578,12 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		in, out, failure string
 	}{
 		{
-			in:  `{q(func:match(term, "plane")) {term}}`,
-			out: `{"q":[]}`,
-		},
-		{
 			in:  `{q(func:match(term, drive)) {term}}`,
 			out: `{"q":[{"term":"drive"}]}`,
+		},
+		{
+			in:  `{q(func:match(term, "plane")) {term}}`,
+			out: `{"q":[]}`,
 		},
 		{
 			in: `{q(func:match(term, way)) {term}}`,
