@@ -282,10 +282,10 @@ func authorizeUser(ctx context.Context, userid string, password string) (*acl.Us
 
 type PredRegexRule struct {
 	PredRegex *regexp.Regexp
-	Perm      int32
+	Perms     int32
 }
 
-// convert the acl blob to two data sets:
+// UnmarshalAcl converts the acl blob to two data sets:
 // the first one being a map from the single predicates to permissions;
 // and the second one being a slice of predicate regex rules
 func UnmarshalAcl(aclBytes []byte) (map[string]int32, []*PredRegexRule, error) {
@@ -310,7 +310,7 @@ func UnmarshalAcl(aclBytes []byte) (map[string]int32, []*PredRegexRule, error) {
 
 			predRegexPerms = append(predRegexPerms, &PredRegexRule{
 				PredRegex: predRegex,
-				Perm:      acl.Perm,
+				Perms:     acl.Perm,
 			})
 		} else {
 			predPerms[acl.PredFilter.Predicate] = acl.Perm
@@ -676,7 +676,7 @@ func authorizePredicate(userId string, groups []string, accessInfo *AccessInfo) 
 // hasAccess checks the aclCache and returns whether the specified group is authorized to perform
 // the operation on the given predicate
 func hasAccess(groupId string, predicate string, operation *acl.Operation) error {
-	// first try to evaluate the request using the predicate -> permission map
+	// First, try to evaluate the request using the predicate -> permission map.
 	predPerms, found := aclCache.predPerms.Load(groupId)
 	if found {
 		predPermsMap := predPerms.(map[string]int32)
@@ -700,14 +700,14 @@ func hasAccess(groupId string, predicate string, operation *acl.Operation) error
 		// predicate
 		for _, predRegex := range predRegexRules {
 			if predRegex.PredRegex.MatchString(predicate) &&
-				predRegex.Perm&operation.Code != 0 {
+				predRegex.Perms&operation.Code != 0 {
 				glog.V(1).Infof("matched request (group:%v,predicate:%v,operation:%v) "+
 					"with rule (group:%v,predicate regex:%v,perm:%v)",
-					groupId, predicate, operation.Name, groupId, predRegex.PredRegex, predRegex.Perm)
+					groupId, predicate, operation.Name, groupId, predRegex.PredRegex, predRegex.Perms)
 				return nil
 			}
 		}
 	}
 
-	return fmt.Errorf("unable to find a matched rule")
+	return fmt.Errorf("unable to find a matching rule")
 }

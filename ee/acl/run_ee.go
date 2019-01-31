@@ -96,9 +96,9 @@ func initSubcommands() []*x.SubCommand {
 			}
 		},
 	}
-	chPdFlags := cmdPasswd.Cmd.Flags()
-	chPdFlags.StringP("user", "u", "", "The user id to be created")
-	chPdFlags.StringP("new_password", "", "", "The new password for the user")
+	chPwdFlags := cmdPasswd.Cmd.Flags()
+	chPwdFlags.StringP("user", "u", "", "The user id to be created")
+	chPwdFlags.StringP("new_password", "", "", "The new password for the user")
 
 	// user deletion command
 	var cmdUserDel x.SubCommand
@@ -234,7 +234,7 @@ func info(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if (len(userId) == 0 && len(groupId) == 0) ||
 		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("Either the user or group should be specified, not both")
+		return fmt.Errorf("either the user or group should be specified, not both")
 	}
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	defer cancel()
@@ -287,7 +287,7 @@ func info(conf *viper.Viper) error {
 		var aclStrs []string
 		var acls []Acl
 		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v:%v",
 				groupId, err)
 		}
 

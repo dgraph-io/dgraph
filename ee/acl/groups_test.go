@@ -29,21 +29,26 @@ func TestUpdateAcl(t *testing.T) {
 
 	updatedAcls1, changed := updateAcl(currenAcls, newAcl)
 	require.True(t, changed, "the acl list should be changed")
-	require.Equal(t, 1, len(updatedAcls1), "the updated acl list should have 1 element")
+	require.Equal(t, 1, len(updatedAcls1),
+		"the updated acl list should have 1 element")
 
 	// trying to update the acl list again with the exactly same acl won't change it
 	updatedAcls2, changed := updateAcl(updatedAcls1, newAcl)
-	require.False(t, changed, "the acl list should not be changed through update with "+
-		"an existing element")
-	require.Equal(t, 1, len(updatedAcls2), "the updated acl list should still have 1 element")
-	require.Equal(t, int32(4), updatedAcls2[0].Perm, "the perm should still have the value of 4")
+	require.False(t, changed,
+		"the acl list should not be changed through update with an existing element")
+	require.Equal(t, 1, len(updatedAcls2),
+		"the updated acl list should still have 1 element")
+	require.Equal(t, int32(4), updatedAcls2[0].Perm,
+		"the perm should still have the value of 4")
 
 	newAcl.Perm = 6
 	updatedAcls3, changed := updateAcl(updatedAcls1, newAcl)
 	require.True(t, changed, "the acl list should be changed through update "+
 		"with element of new perm")
-	require.Equal(t, 1, len(updatedAcls3), "the updated acl list should still have 1 element")
-	require.Equal(t, int32(6), updatedAcls3[0].Perm, "the updated perm should be 6 now")
+	require.Equal(t, 1, len(updatedAcls3),
+		"the updated acl list should still have 1 element")
+	require.Equal(t, int32(6), updatedAcls3[0].Perm,
+		"the updated perm should be 6 now")
 
 	newAcl = Acl{
 		PredFilter: PredFilter{
@@ -56,7 +61,8 @@ func TestUpdateAcl(t *testing.T) {
 	updatedAcls4, changed := updateAcl(updatedAcls3, newAcl)
 	require.True(t, changed, "the acl should be changed through update "+
 		"with element of new predicate")
-	require.Equal(t, 2, len(updatedAcls4), "the acl list should have 2 elements now")
+	require.Equal(t, 2, len(updatedAcls4),
+		"the acl list should have 2 elements now")
 
 	newAcl = Acl{
 		PredFilter: PredFilter{
@@ -69,8 +75,8 @@ func TestUpdateAcl(t *testing.T) {
 	updatedAcls5, changed := updateAcl(updatedAcls4, newAcl)
 	require.True(t, changed, "the acl should be changed through update "+
 		"with element of negative predicate")
-	require.Equal(t, 1, len(updatedAcls5), "the acl list should have 1 element now")
+	require.Equal(t, 1, len(updatedAcls5),
+		"the acl list should have 1 element now")
 	require.Equal(t, "friend", updatedAcls5[0].PredFilter.Predicate,
-		"the left acl should have the original "+
-			"first predicate")
+		"the left acl should have the original first predicate")
 }

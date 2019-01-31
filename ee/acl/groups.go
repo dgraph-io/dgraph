@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/dgraph-io/dgo"
@@ -28,7 +29,7 @@ import (
 func groupAdd(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if len(groupId) == 0 {
-		return fmt.Errorf("The group id should not be empty")
+		return fmt.Errorf("the group id should not be empty")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
@@ -47,10 +48,10 @@ func groupAdd(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return fmt.Errorf("Error while querying group:%v", err)
+		return fmt.Errorf("error while querying group:%v", err)
 	}
 	if group != nil {
-		return fmt.Errorf("The group with id %v already exists", groupId)
+		return fmt.Errorf("the group with id %v already exists", groupId)
 	}
 
 	createGroupNQuads := []*api.NQuad{
@@ -66,7 +67,7 @@ func groupAdd(conf *viper.Viper) error {
 		Set:       createGroupNQuads,
 	}
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to create group: %v", err)
+		return fmt.Errorf("unable to create group: %v", err)
 	}
 
 	glog.Infof("Created new group with id %v", groupId)
@@ -76,7 +77,7 @@ func groupAdd(conf *viper.Viper) error {
 func groupDel(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if len(groupId) == 0 {
-		return fmt.Errorf("The group id should not be empty")
+		return fmt.Errorf("the group id should not be empty")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
@@ -95,10 +96,10 @@ func groupDel(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId)
 	if err != nil {
-		return fmt.Errorf("Error while querying group:%v", err)
+		return fmt.Errorf("error while querying group:%v", err)
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("Unable to delete group because it does not exist: %v", groupId)
+		return fmt.Errorf("unable to delete group because it does not exist: %v", groupId)
 	}
 
 	deleteGroupNQuads := []*api.NQuad{
@@ -113,7 +114,7 @@ func groupDel(conf *viper.Viper) error {
 		Del:       deleteGroupNQuads,
 	}
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to delete group: %v", err)
+		return fmt.Errorf("unable to delete group: %v", err)
 	}
 
 	glog.Infof("Deleted group with id %v", groupId)
@@ -164,13 +165,20 @@ func chMod(conf *viper.Viper) error {
 	predRegex := conf.GetString("pred_regex")
 	perm := conf.GetInt("perm")
 	if len(groupId) == 0 {
-		return fmt.Errorf("The groupid must not be empty")
+		return fmt.Errorf("the groupid must not be empty")
 	}
 	if len(predicate) > 0 && len(predRegex) > 0 {
-		return fmt.Errorf("either --pred or --pred_regex should be specified, but not both")
+		return fmt.Errorf("one of --pred or --pred_regex must be specified")
 	}
 	if len(predicate) == 0 && len(predRegex) == 0 {
-		return fmt.Errorf("either --pred or --pred_regex should be specified, but not both")
+		return fmt.Errorf("one of --pred or --pred_regex must be specified")
+	}
+	if len(predRegex) > 0 {
+		// make sure the predRegex can be compiled as a regex
+		if _, err := regexp.Compile(predRegex); err != nil {
+			return fmt.Errorf("unable to compile %v as a regular expression:%v",
+				predRegex, err)
+		}
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
@@ -189,17 +197,17 @@ func chMod(conf *viper.Viper) error {
 
 	group, err := queryGroup(ctx, txn, groupId, "dgraph.group.acl")
 	if err != nil {
-		return fmt.Errorf("Error while querying group:%v", err)
+		return fmt.Errorf("error while querying group:%v", err)
 	}
 	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("Unable to change permission for group because it does not exist: %v",
+		return fmt.Errorf("unable to change permission for group because it does not exist: %v",
 			groupId)
 	}
 
 	var currentAcls []Acl
 	if len(group.Acls) != 0 {
 		if err := json.Unmarshal([]byte(group.Acls), &currentAcls); err != nil {
-			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v:%v",
 				groupId, err)
 		}
 	}
@@ -230,7 +238,7 @@ func chMod(conf *viper.Viper) error {
 
 	newAclBytes, err := json.Marshal(newAcls)
 	if err != nil {
-		return fmt.Errorf("Unable to marshal the updated acls:%v", err)
+		return fmt.Errorf("unable to marshal the updated acls:%v", err)
 	}
 
 	chModNQuads := &api.NQuad{
@@ -244,7 +252,7 @@ func chMod(conf *viper.Viper) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to change mutations for the group %v on predicate %v: %v",
+		return fmt.Errorf("unable to change mutations for the group %v on predicate %v: %v",
 			groupId, predicate, err)
 	}
 	glog.Infof("Successfully changed permission for group %v on predicate %v to %v",
@@ -252,17 +260,15 @@ func chMod(conf *viper.Viper) error {
 	return nil
 }
 
+func isSameFilter(filter1 *PredFilter, filter2 *PredFilter) bool {
+	return (!filter1.IsRegex && !filter2.IsRegex && filter1.Predicate == filter2.Predicate) ||
+		(filter1.IsRegex && filter2.IsRegex && filter1.Regex == filter2.Regex)
+}
+
 // returns whether the existing acls slice is changed
 func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 	for idx, aclEntry := range acls {
-		curFilter := aclEntry.PredFilter
-		newFilter := newAcl.PredFilter
-		if (!curFilter.IsRegex &&
-			!newFilter.IsRegex &&
-			curFilter.Predicate == newFilter.Predicate) ||
-			(curFilter.IsRegex &&
-				newFilter.IsRegex &&
-				curFilter.Regex == newFilter.Regex) {
+		if isSameFilter(&aclEntry.PredFilter, &newAcl.PredFilter) {
 			if aclEntry.Perm == newAcl.Perm {
 				// new permission is the same as the current one, no update
 				return acls, false
