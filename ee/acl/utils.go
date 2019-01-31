@@ -139,10 +139,11 @@ func askUserPassword(userid string, times int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error while reading password:%v", err)
 	}
+	fmt.Println()
 	password := string(pd)
 
 	if times == 2 {
-		fmt.Printf("\nRetype password for %v:", userid)
+		fmt.Printf("Retype password for %v:", userid)
 		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return "", fmt.Errorf("error while reading password:%v", err)
@@ -179,7 +180,7 @@ func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) 
 	if err := dc.Login(ctx, userid, password); err != nil {
 		return dc, cleanFunc, fmt.Errorf("unable to login to the %v account:%v", userid, err)
 	}
-	glog.Infof("login successfully to the %v account", userid)
+	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
 	return dc, cleanFunc, nil
 }

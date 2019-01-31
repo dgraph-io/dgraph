@@ -45,7 +45,7 @@ func (s *Server) Login(ctx context.Context,
 	var addr string
 	if ip, ok := peer.FromContext(ctx); ok {
 		addr = ip.Addr.String()
-		glog.Infof("login request from: %s", addr)
+		glog.Infof("Login request from: %s", addr)
 		span.Annotate([]otrace.Attribute{
 			otrace.StringAttribute("client_ip", addr),
 		}, "client ip for login")
@@ -118,7 +118,7 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 				"user not found for id %v", userId)
 		}
 
-		glog.Infof("authenticated user %s through refresh token", userId)
+		glog.Infof("Authenticated user %s through refresh token", userId)
 		return user, nil
 	}
 
@@ -332,7 +332,7 @@ func RefreshAcls(closer *y.Closer) {
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
 	// aclCache
 	retrieveAcls := func() error {
-		glog.V(1).Infof("Refreshing ACLs")
+		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
 			Query: queryAcls,
 		}
@@ -370,7 +370,7 @@ func RefreshAcls(closer *y.Closer) {
 			}
 			storedEntries += len(predPerms) + len(predRegexPerms)
 		}
-		glog.V(1).Infof("Updated the ACL cache with %d entries", storedEntries)
+		glog.V(3).Infof("Updated the ACL cache with %d entries", storedEntries)
 		return nil
 	}
 

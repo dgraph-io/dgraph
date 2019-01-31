@@ -78,7 +78,7 @@ func userPasswd(conf *viper.Viper) error {
 	if _, err := txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("unable to change password for user %v: %v", userid, err)
 	}
-	glog.Infof("Successfully changed password for %v", userid)
+	fmt.Printf("Successfully changed password for %v\n", userid)
 	return nil
 }
 
@@ -140,7 +140,7 @@ func userAdd(conf *viper.Viper) error {
 		return fmt.Errorf("unable to create user: %v", err)
 	}
 
-	glog.Infof("Created new user with id %v", userid)
+	fmt.Printf("Created new user with id %v\n", userid)
 	return nil
 }
 
@@ -190,7 +190,7 @@ func userDel(conf *viper.Viper) error {
 		return fmt.Errorf("unable to delete user: %v", err)
 	}
 
-	glog.Infof("Deleted user with id %v", userid)
+	fmt.Printf("Deleted user with id %v\n", userid)
 	return nil
 }
 
@@ -238,7 +238,7 @@ func userMod(conf *viper.Viper) error {
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
-			glog.Errorf("Unable to discard transaction:%v", err)
+			fmt.Printf("Unable to discard transaction: %v\n", err)
 		}
 	}()
 
@@ -270,31 +270,31 @@ func userMod(conf *viper.Viper) error {
 	}
 
 	for _, g := range newGroups {
-		glog.Infof("Adding user %v to group %v", userId, g)
+		fmt.Printf("Adding user %v to group %v\n", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("error while getting the user mod nquad:%v", err)
+			return fmt.Errorf("error while getting the user mod nquad: %v", err)
 		}
 		mu.Set = append(mu.Set, nquad)
 	}
 
 	for _, g := range groupsToBeDeleted {
-		glog.Infof("Deleting user %v from group %v", userId, g)
+		fmt.Printf("Deleting user %v from group %v\n", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("error while getting the user mod nquad:%v", err)
+			return fmt.Errorf("error while getting the user mod nquad: %v", err)
 		}
 		mu.Del = append(mu.Del, nquad)
 	}
 	if len(mu.Del) == 0 && len(mu.Set) == 0 {
-		glog.Infof("Nothing needs to be changed for the groups of user:%v", userId)
+		fmt.Printf("Nothing needs to be changed for the groups of user: %v\n", userId)
 		return nil
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("error while mutating the group:%+v", err)
+		return fmt.Errorf("error while mutating the group: %+v", err)
 	}
-	glog.Infof("Successfully modified groups for user %v", userId)
+	fmt.Printf("Successfully modified groups for user %v\n", userId)
 	return nil
 }
 
