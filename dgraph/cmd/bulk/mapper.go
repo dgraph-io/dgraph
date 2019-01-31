@@ -117,12 +117,12 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func (m *mapper) run(inputFormat int) {
+func (m *mapper) run(inputFormat int, keyFields *[]string) {
 	chunker := loadfile.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			nqs, err := chunker.Parse(chunkBuf, nil)
+			nqs, err := chunker.Parse(chunkBuf, keyFields)
 			if err == io.EOF {
 				done = true
 			} else if err != nil {

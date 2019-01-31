@@ -91,6 +91,7 @@ func init() {
 			"more parallelism, but increases memory usage.")
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
+	flag.StringP("key", "k", "", "Comma-separated list of JSON fields to identify a uid")
 }
 
 func run() {
@@ -114,6 +115,7 @@ func run() {
 		MapShards:        Bulk.Conf.GetInt("map_shards"),
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
+		KeyFields:        Bulk.Conf.GetString("key"),
 	}
 
 	x.PrintVersion()

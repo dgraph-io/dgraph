@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,11 +59,13 @@ type options struct {
 	HttpAddr         string
 	IgnoreErrors     bool
 	CustomTokenizers string
+	KeyFields        string
 
 	MapShards    int
 	ReduceShards int
 
 	shardOutputDirs []string
+	keyFields       []string
 }
 
 type state struct {
@@ -107,6 +110,9 @@ func newLoader(opt options) *loader {
 	}
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
+	}
+	for _, f := range strings.Split(opt.KeyFields, ",") {
+		opt.keyFields = append(opt.keyFields, strings.TrimSpace(f))
 	}
 	go ld.prog.report()
 	return ld
@@ -184,7 +190,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loaderType)
+			m.run(loaderType, &ld.opt.keyFields)
 			mapperWg.Done()
 		}(m)
 	}
