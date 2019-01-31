@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -232,6 +233,21 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *RaftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return &api.Payload{Data: in.Data}, nil
+func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) error {
+	ticker := time.NewTicker(echoDuration)
+	defer ticker.Stop()
+
+	ctx := stream.Context()
+	out := &api.Payload{Data: []byte("beat")}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if err := stream.Send(out); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
