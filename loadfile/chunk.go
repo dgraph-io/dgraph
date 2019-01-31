@@ -95,19 +95,23 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 }
 
 func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ *[]string) ([]*api.NQuad, error) {
-	str, readErr := chunkBuf.ReadString('\n')
-	if readErr != nil && readErr != io.EOF {
-		x.Check(readErr)
+	nqs := make([]*api.NQuad, 0)
+	for chunkBuf.Len() > 0 {
+		str, err := chunkBuf.ReadString('\n')
+		if err != nil && err != io.EOF {
+			x.Check(err)
+		}
+
+		nq, err := rdf.Parse(strings.TrimSpace(str))
+		if err == rdf.ErrEmpty {
+			continue // blank line or comment
+		} else if err != nil {
+			return nil, errors.Wrapf(err, "while parsing line %q", str)
+		}
+		nqs = append(nqs, &nq)
 	}
 
-	nq, parseErr := rdf.Parse(strings.TrimSpace(str))
-	if parseErr == rdf.ErrEmpty {
-		return nil, readErr
-	} else if parseErr != nil {
-		return nil, errors.Wrapf(parseErr, "while parsing line %q", str)
-	}
-
-	return []*api.NQuad{&nq}, readErr
+	return nqs, nil
 }
 
 func (rdfChunker) End(r *bufio.Reader) error {
