@@ -17,28 +17,41 @@
 // This binary would retrieve a value for UID=0x01, and increment it by 1. If
 // successful, it would print out the incremented value. It assumes that it has
 // access to UID=0x01, and that `val` predicate is of type int.
-package main
+package counter
 
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
-var (
-	addr = flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
-	num  = flag.Int("num", 1, "How many times to run.")
-	ro   = flag.Bool("ro", false, "Only read the counter value, don't update it.")
-	wait = flag.String("wait", "0", "How long to wait.")
-	pred = flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
-)
+var Increment x.SubCommand
+
+func init() {
+	Increment.Cmd = &cobra.Command{
+		Use:   "increment",
+		Short: "Increment a counter transactionally",
+		Run: func(cmd *cobra.Command, args []string) {
+			run(Increment.Conf)
+		},
+	}
+
+	flag := Increment.Cmd.Flags()
+	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
+	flag.Int("num", 1, "How many times to run.")
+	flag.Bool("ro", false, "Only read the counter value, don't update it.")
+	flag.Duration("wait", 0*time.Second, "How long to wait.")
+	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
+}
 
 type Counter struct {
 	Uid string `json:"uid"`
@@ -47,12 +60,12 @@ type Counter struct {
 	startTs uint64 // Only used for internal testing.
 }
 
-func queryCounter(txn *dgo.Txn) (Counter, error) {
+func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var counter Counter
-	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", *pred, *pred)
+	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", pred, pred)
 	resp, err := txn.Query(ctx, query)
 	if err != nil {
 		return counter, fmt.Errorf("Query error: %v", err)
@@ -72,15 +85,15 @@ func queryCounter(txn *dgo.Txn) (Counter, error) {
 	return counter, nil
 }
 
-func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
+func process(dg *dgo.Dgraph, readOnly bool, pred string) (Counter, error) {
 	if readOnly {
 		txn := dg.NewReadOnlyTxn()
 		defer txn.Discard(nil)
-		return queryCounter(txn)
+		return queryCounter(txn, pred)
 	}
 
 	txn := dg.NewTxn()
-	counter, err := queryCounter(txn)
+	counter, err := queryCounter(txn, pred)
 	if err != nil {
 		return Counter{}, err
 	}
@@ -90,7 +103,7 @@ func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
 	if len(counter.Uid) == 0 {
 		counter.Uid = "_:new"
 	}
-	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, *pred, counter.Val))
+	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val))
 
 	// Don't put any timeout for mutation.
 	_, err = txn.Mutate(context.Background(), &mu)
@@ -100,23 +113,21 @@ func process(dg *dgo.Dgraph, readOnly bool) (Counter, error) {
 	return counter, txn.Commit(context.Background())
 }
 
-func main() {
-	flag.Parse()
-
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
+func run(conf *viper.Viper) {
+	addr := conf.GetString("addr")
+	waitDur := conf.GetDuration("wait")
+	num := conf.GetInt("num")
+	ro := conf.GetBool("ro")
+	pred := conf.GetString("pred")
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
 
-	waitDur, err := time.ParseDuration(*wait)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for *num > 0 {
-		cnt, err := process(dg, *ro)
+	for num > 0 {
+		cnt, err := process(dg, ro, pred)
 		now := time.Now().UTC().Format("0102 03:04:05.999")
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
@@ -124,7 +135,7 @@ func main() {
 			continue
 		}
 		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
-		*num--
+		num--
 		time.Sleep(waitDur)
 	}
 }
