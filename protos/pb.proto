@@ -397,7 +397,7 @@ message RaftBatch {
 }
 
 service Raft {
-	rpc Echo (api.Payload)        returns (api.Payload) {}
+	rpc Heartbeat (api.Payload)   returns (stream api.Payload) {}
 	rpc RaftMessage (RaftBatch)   returns (api.Payload) {}
 	rpc JoinCluster (RaftContext) returns (api.Payload) {}
 	rpc IsPeer (RaftContext)      returns (PeerResponse) {}
