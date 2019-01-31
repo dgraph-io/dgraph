@@ -95,6 +95,10 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 }
 
 func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ *[]string) ([]*api.NQuad, error) {
+	if chunkBuf.Len() == 0 {
+		return nil, io.EOF
+	}
+
 	nqs := make([]*api.NQuad, 0)
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
