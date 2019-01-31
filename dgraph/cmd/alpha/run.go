@@ -131,8 +131,9 @@ they form a Raft group and provide synchronous replication.
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 
-	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
-		" that is used for signing the JWT. Enterprise feature.")
+	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
+		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
+		"Enterprise feature.")
 	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
@@ -413,7 +414,7 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
 		if !Alpha.Conf.GetBool("enterprise_features") {
 			glog.Fatalf("You must enable Dgraph enterprise features with the " +
