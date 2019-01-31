@@ -290,17 +290,18 @@ type PredRegexRule struct {
 // and the second one being a slice of predicate regex rules
 func UnmarshalAcl(aclBytes []byte) (map[string]int32, []*PredRegexRule, error) {
 	var acls []acl.Acl
-	if len(aclBytes) != 0 {
-		if err := json.Unmarshal(aclBytes, &acls); err != nil {
-			return nil, nil, fmt.Errorf("unable to unmarshal the aclBytes: %v", err)
-		}
+	if len(aclBytes) == 0 {
+		return nil, nil, fmt.Errorf("the acl bytes are empty")
 	}
+	if err := json.Unmarshal(aclBytes, &acls); err != nil {
+		return nil, nil, fmt.Errorf("unable to unmarshal the aclBytes: %v", err)
+	}
+
 	predPerms := make(map[string]int32)
 	var predRegexPerms []*PredRegexRule
 	for _, acl := range acls {
-
 		if acl.PredFilter.IsRegex {
-			regexp, err := regexp.Compile(acl.PredFilter.Regex)
+			predRegex, err := regexp.Compile(acl.PredFilter.Regex)
 			if err != nil {
 				glog.Errorf("Unable to compile the predicate regex %v to create an ACL rule",
 					acl.PredFilter.Regex)
@@ -308,7 +309,7 @@ func UnmarshalAcl(aclBytes []byte) (map[string]int32, []*PredRegexRule, error) {
 			}
 
 			predRegexPerms = append(predRegexPerms, &PredRegexRule{
-				PredRegex: regexp,
+				PredRegex: predRegex,
 				Perm:      acl.Perm,
 			})
 		} else {
@@ -356,8 +357,17 @@ func RefreshAcls(closer *y.Closer) {
 				continue
 			}
 
-			aclCache.predPerms.Store(group.GroupID, predPerms)
-			aclCache.predRegexPerms.Store(group.GroupID, predRegexPerms)
+			if len(predPerms) > 0 {
+				aclCache.predPerms.Store(group.GroupID, predPerms)
+			} else {
+				aclCache.predPerms.Delete(group.GroupID)
+			}
+
+			if len(predRegexPerms) > 0 {
+				aclCache.predRegexPerms.Store(group.GroupID, predRegexPerms)
+			} else {
+				aclCache.predRegexPerms.Delete(group.GroupID)
+			}
 			storedEntries += len(predPerms) + len(predRegexPerms)
 		}
 		glog.V(1).Infof("Updated the ACL cache with %d entries", storedEntries)
