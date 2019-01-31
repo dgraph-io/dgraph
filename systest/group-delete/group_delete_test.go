@@ -26,7 +26,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,10 +110,6 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 }
 
-func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
-	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
-}
-
 type response struct {
 	Groups map[string]struct {
 		Members map[string]interface{} `json:"members"`
@@ -120,6 +118,26 @@ type response struct {
 			Predicate string `json:"predicate"`
 		} `json:"tablets"`
 	} `json:"groups"`
+	Removed []struct {
+		Addr    string `json:"addr"`
+		GroupID int    `json:"groupId"`
+		ID      string `json:"id"`
+	} `json:"removed"`
+}
+
+func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
+	state, err := getState()
+	require.NoError(t, err)
+
+	// NOTE: in the rare occasion that we are in fact connected to node 2, skip this.
+	for i := range state.Removed {
+		if strings.HasSuffix(state.Removed[i].Addr, "7180") {
+			t.Log("skipping cleanup, we are connected to a removed node.")
+			return
+		}
+	}
+
+	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func getState() (*response, error) {
@@ -162,7 +180,8 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=2", pred)
+		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=2",
+			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
 		require.NoError(t, getError(resp.Body))
@@ -193,7 +212,8 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
-		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=1", pred)
+		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=1",
+			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
 		require.NoError(t, getError(resp.Body))
