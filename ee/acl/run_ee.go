@@ -181,7 +181,7 @@ func initSubcommands() []*x.SubCommand {
 	chModFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
 		" whose acls are to be changed")
 	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
-		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
+		"an integer: 4 for read, 2 for write, and 1 for modify.")
 
 	var cmdInfo x.SubCommand
 	cmdInfo.Cmd = &cobra.Command{
@@ -257,11 +257,10 @@ func info(conf *viper.Viper) error {
 		}
 
 		fmt.Println()
-		fmt.Printf("User  : %5s\n", userId)
-		fmt.Printf("UID   : %5s\n", user.Uid)
-		fmt.Printf("ID    : %5s\n", user.UserID)
+		fmt.Printf("User  : %-5s\n", userId)
+		fmt.Printf("UID   : %-5s\n", user.Uid)
 		for _, group := range user.Groups {
-			fmt.Printf("Group : %5s\n", group.GroupID)
+			fmt.Printf("Group : %-5s\n", group.GroupID)
 		}
 	}
 
