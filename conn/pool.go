@@ -194,6 +194,7 @@ func (p *Pool) listenToHeartbeat() error {
 		if err != nil {
 			return err
 		}
+		// We do this periodic stream receive based approach to defend against network partitions.
 		p.Lock()
 		p.lastEcho = time.Now()
 		p.Unlock()
