@@ -323,19 +323,32 @@ func TestPredicateRegex(t *testing.T) {
 		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
 	}
 
+	addReadToNameCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", dgraphEndpoint,
+		"-g", group, "--pred", "name", "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
+		"-x",
+		"password")
+	if err := addReadToNameCmd.Run(); err != nil {
+		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
+			"name", group, err)
+	}
+
 	// add READ+Write permission on the regex ^predicate_to(.*)$ pred filter to the group
-	regexPred := "^predicate_to(.*)$"
+	predRegex := "^predicate_to(.*)$"
 	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
 		"-d", dgraphEndpoint,
-		"-g", group, "--pred_regex", regexPred, "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
+		"-g", group, "--pred_regex", predRegex, "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
 		"-x",
 		"password")
 	if err := addReadWriteToRegexPermCmd.Run(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
-			regexPred, group, err)
+		t.Fatalf("Unable to add READ+WRITE permission on %s to group %s:%v",
+			predRegex, group, err)
 	}
 
+	log.Println("Sleeping for 35 seconds for acl to catch up")
+	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	// the alter operation should still fail since the regex pred does not have the Modify

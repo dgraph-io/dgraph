@@ -115,28 +115,6 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	return &groups[0], nil
 }
 
-// convert the acl blob to two maps:
-// the first one being a map from the single predicates to permissions;
-// and the second one being a map from the predicate regular expressions to permissions
-func UnmarshalAcl(aclBytes []byte) (map[string]int32, map[string]int32, error) {
-	var acls []Acl
-	if len(aclBytes) != 0 {
-		if err := json.Unmarshal(aclBytes, &acls); err != nil {
-			return nil, nil, fmt.Errorf("unable to unmarshal the aclBytes: %v", err)
-		}
-	}
-	predPerms := make(map[string]int32)
-	predRegexPerms := make(map[string]int32)
-	for _, acl := range acls {
-		if acl.PredFilter.IsRegex {
-			predRegexPerms[acl.PredFilter.Regex] = acl.Perm
-		} else {
-			predPerms[acl.PredFilter.Predicate] = acl.Perm
-		}
-	}
-	return predPerms, predRegexPerms, nil
-}
-
 // Extract a sequence of groups from the input
 func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 	m := make(map[string][]Group)
