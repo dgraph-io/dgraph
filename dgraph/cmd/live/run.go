@@ -40,9 +40,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 
-	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/loadfile"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
@@ -84,7 +82,7 @@ func init() {
 	Live.EnvPrefix = "DGRAPH_LIVE"
 
 	flag := Live.Cmd.Flags()
-	flag.StringP("rdfs", "r", "", "Location of RDF or JSON files to load")
+	flag.StringP("rdfs", "r", "", "Location of RDF or JSON file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
@@ -198,42 +196,6 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return err
 }
 
-func parseJson(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
-	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
-	}
-
-	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes(), &keyFields)
-	if err != nil && err != io.EOF {
-		x.Check(err)
-	}
-	chunkBuf.Reset()
-
-	return nqs, err
-}
-
-func parseRdf(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
-	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
-	}
-
-	var nquads []*api.NQuad
-	var err error
-	for _, line := range strings.Split(chunkBuf.String(), "\n") {
-		nq, err := rdf.Parse(line)
-		if err == rdf.ErrEmpty {
-			// special case: comment/empty line
-			continue
-		} else if err != nil {
-			err = fmt.Errorf("Error while parsing RDF: %v, on line: %v", err, line)
-			break
-		}
-		nquads = append(nquads, &nq)
-	}
-
-	return nquads, err
-}
-
 func (l *loader) nextNquads(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
 	for _, nq := range nqs {
 		nq.Subject = l.uid(nq.Subject)
@@ -257,9 +219,8 @@ func (l *loader) finalNquads(mu *api.Mutation) {
 	}
 }
 
-func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
-	chunker := loadfile.NewChunker(loadfile.JsonInput)
-	x.CheckfNoTrace(chunker.Begin(rd))
+func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadfile.Chunker) error {
+	x.CheckfNoTrace(ck.Begin(rd))
 
 	mu := &api.Mutation{}
 	for {
@@ -270,9 +231,9 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 		}
 
 		var nqs []*api.NQuad
-		chunkBuf, err := chunker.Chunk(rd)
+		chunkBuf, err := ck.Chunk(rd)
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err = parseJson(chunkBuf)
+			nqs, err = ck.Parse(chunkBuf, &keyFields)
 			x.CheckfNoTrace(err)
 			mu = l.nextNquads(mu, nqs)
 		}
@@ -283,51 +244,19 @@ func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
 			x.Check(err)
 		}
 	}
-	x.CheckfNoTrace(chunker.End(rd))
+	x.CheckfNoTrace(ck.End(rd))
 
 	return nil
+}
+
+func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
+	chunker := loadfile.NewChunker(loadfile.JsonInput)
+	return l.processLoadFile(ctx, rd, chunker)
 }
 
 func (l *loader) processRdfFile(ctx context.Context, rd *bufio.Reader) error {
 	chunker := loadfile.NewChunker(loadfile.RdfInput)
-	x.CheckfNoTrace(chunker.Begin(rd))
-
-	mu := &api.Mutation{}
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		var nqs []*api.NQuad
-		nqArray := []*api.NQuad{nil}
-		chunkBuf, err := chunker.Chunk(rd)
-		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err = parseRdf(chunkBuf)
-			x.CheckfNoTrace(err)
-
-			// An RDF chunk could contain many more nquads than the batch size,
-			// so add them one at a time so the batch size is respected.
-			for _, nq := range nqs {
-				nqArray[0] = nq
-				mu = l.nextNquads(mu, nqArray)
-			}
-		}
-		if err == io.EOF {
-			l.finalNquads(mu)
-			break
-		} else {
-			x.Check(err)
-		}
-	}
-	x.CheckfNoTrace(chunker.End(rd))
-
-	return nil
-}
-
-func fileList(files string) []string {
-	return x.FindDataFiles(files, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	return l.processLoadFile(ctx, rd, chunker)
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
@@ -441,7 +370,7 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	filesList := fileList(opt.dataFiles)
+	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		fmt.Printf("No data files to process\n")

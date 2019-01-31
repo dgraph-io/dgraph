@@ -122,7 +122,7 @@ func (m *mapper) run(inputFormat int) {
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			nqs, err := chunker.Parse(chunkBuf)
+			nqs, err := chunker.Parse(chunkBuf, nil)
 			if err == io.EOF {
 				done = true
 			} else if err != nil {
@@ -132,7 +132,12 @@ func (m *mapper) run(inputFormat int) {
 				}
 			}
 
-			for _, nq := range nqs {
+			gqlNqs := make([]gql.NQuad, len(nqs))
+			for i, nq := range nqs {
+				gqlNqs[i] = gql.NQuad{NQuad: nq}
+			}
+
+			for _, nq := range gqlNqs {
 				if err := facets.SortAndValidate(nq.Facets); err != nil {
 					atomic.AddInt64(&m.prog.errCount, 1)
 					if !m.opt.IgnoreErrors {

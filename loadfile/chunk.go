@@ -24,19 +24,19 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	"github.com/pkg/errors"
-
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/rdf"
+
+	"github.com/pkg/errors"
 )
 
 type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer, idFields *[]string) ([]*api.NQuad, error)
 }
 
 type rdfChunker struct{}
@@ -54,7 +54,7 @@ func NewChunker(inputFormat int) Chunker {
 	case JsonInput:
 		return &jsonChunker{}
 	default:
-		panic("unknown loader type")
+		panic("unknown chunker type")
 	}
 }
 
@@ -94,11 +94,7 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func (rdfChunker) End(r *bufio.Reader) error {
-	return nil
-}
-
-func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
+func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ *[]string) ([]*api.NQuad, error) {
 	str, readErr := chunkBuf.ReadString('\n')
 	if readErr != nil && readErr != io.EOF {
 		x.Check(readErr)
@@ -111,43 +107,11 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
 		return nil, errors.Wrapf(parseErr, "while parsing line %q", str)
 	}
 
-	return []gql.NQuad{{NQuad: &nq}}, readErr
+	return []*api.NQuad{&nq}, readErr
 }
 
-func slurpSpace(r *bufio.Reader) error {
-	for {
-		ch, _, err := r.ReadRune()
-		if err != nil {
-			return err
-		}
-		if !unicode.IsSpace(ch) {
-			x.Check(r.UnreadRune())
-			return nil
-		}
-	}
-}
-
-func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
-	for {
-		ch, _, err := r.ReadRune()
-		if err != nil {
-			return err
-		}
-		x.Check2(out.WriteRune(ch))
-
-		if ch == '\\' {
-			// Pick one more rune.
-			esc, _, err := r.ReadRune()
-			if err != nil {
-				return err
-			}
-			x.Check2(out.WriteRune(esc))
-			continue
-		}
-		if ch == '"' {
-			return nil
-		}
-	}
+func (rdfChunker) End(r *bufio.Reader) error {
+	return nil
 }
 
 func (jsonChunker) Begin(r *bufio.Reader) error {
@@ -232,27 +196,59 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) End(r *bufio.Reader) error {
-	if slurpSpace(r) == io.EOF {
-		return nil
-	}
-	return errors.New("Not all of json file consumed")
-}
-
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]gql.NQuad, error) {
+func (jsonChunker) Parse(chunkBuf *bytes.Buffer, keyFields *[]string) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
 
-	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes(), nil)
+	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes(), keyFields)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}
 	chunkBuf.Reset()
 
-	gqlNq := make([]gql.NQuad, len(nqs))
-	for i, nq := range nqs {
-		gqlNq[i] = gql.NQuad{NQuad: nq}
+	return nqs, err
+}
+
+func (jsonChunker) End(r *bufio.Reader) error {
+	if slurpSpace(r) == io.EOF {
+		return nil
 	}
-	return gqlNq, err
+	return errors.New("Not all of JSON file consumed")
+}
+
+func slurpSpace(r *bufio.Reader) error {
+	for {
+		ch, _, err := r.ReadRune()
+		if err != nil {
+			return err
+		}
+		if !unicode.IsSpace(ch) {
+			x.Check(r.UnreadRune())
+			return nil
+		}
+	}
+}
+
+func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
+	for {
+		ch, _, err := r.ReadRune()
+		if err != nil {
+			return err
+		}
+		x.Check2(out.WriteRune(ch))
+
+		if ch == '\\' {
+			// Pick one more rune.
+			esc, _, err := r.ReadRune()
+			if err != nil {
+				return err
+			}
+			x.Check2(out.WriteRune(esc))
+			continue
+		}
+		if ch == '"' {
+			return nil
+		}
+	}
 }
