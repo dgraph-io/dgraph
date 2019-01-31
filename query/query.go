@@ -422,7 +422,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		if idx == -1 {
+		if idx < 0 {
 			continue
 		}
 		if pc.Params.isGroupBy {
@@ -1407,7 +1407,7 @@ func (sg *SubGraph) updateUidMatrix() {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-				return algo.IndexOf(sg.DestUIDs, uid) != -1 // Binary search.
+				return algo.IndexOf(sg.DestUIDs, uid) >= 0 // Binary search.
 			})
 		} else {
 			// If we didn't order on UIDmatrix, it'll be sorted.
