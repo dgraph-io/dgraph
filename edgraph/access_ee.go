@@ -511,10 +511,15 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return fmt.Errorf("only Groot is allowed to drop all data, current user is %s", userData[0])
 	}
 
+	userId := userData[0]
 	groupIds := userData[1:]
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
-		if err := authorizePredicate(groupIds, op.DropAttr, acl.Modify); err != nil {
+		if err := authorizePredicate(userId, groupIds,
+			&AccessInfo{
+				predicate: op.DropAttr,
+				operation: acl.Modify,
+			}); err != nil {
 			return status.Error(codes.PermissionDenied,
 				fmt.Sprintf("unauthorized to alter the predicate:%v", err))
 		}
@@ -526,7 +531,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return err
 	}
 	for _, update := range updates {
-		if err := authorizePredicate(groupIds, update.Predicate, acl.Modify); err != nil {
+		if err := authorizePredicate(userId, groupIds,
+			&AccessInfo{
+				predicate: update.Predicate,
+				operation: acl.Modify,
+			}); err != nil {
 			return status.Error(codes.PermissionDenied,
 				fmt.Sprintf("unauthorized to alter the predicate: %v", err))
 		}
@@ -563,10 +572,15 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	if err != nil {
 		return err
 	}
-
+	userId := userData[0]
 	groupIds := userData[1:]
 	for pred := range parsePredsFromMutation(gmu.Set) {
-		if err := authorizePredicate(groupIds, pred, acl.Write); err != nil {
+		if err := authorizePredicate(userId,
+			groupIds,
+			&AccessInfo{
+				predicate: pred,
+				operation: acl.Write,
+			}); err != nil {
 			return status.Error(codes.PermissionDenied,
 				fmt.Sprintf("unauthorized to mutate the predicate: %v", err))
 		}
@@ -601,6 +615,11 @@ func isGroot(userData []string) bool {
 	return userData[0] == x.GrootId
 }
 
+type AccessInfo struct {
+	predicate string
+	operation *acl.Operation
+}
+
 //authorizeQuery authorizes the query using the aclCache
 func authorizeQuery(ctx context.Context, req *api.Request) error {
 	if len(Config.HmacSecret) == 0 {
@@ -624,9 +643,14 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		return err
 	}
 
+	userId := userData[0]
 	groupIds := userData[1:]
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
-		if err := authorizePredicate(groupIds, pred, acl.Read); err != nil {
+		if err := authorizePredicate(userId, groupIds,
+			&AccessInfo{
+				predicate: pred,
+				operation: acl.Read,
+			}); err != nil {
 			return status.Error(codes.PermissionDenied,
 				fmt.Sprintf("unauthorized to query the predicate: %v", err))
 		}
@@ -634,18 +658,20 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	return nil
 }
 
-func authorizePredicate(groups []string, predicate string, operation *acl.Operation) error {
+func authorizePredicate(userId string, groups []string, accessInfo *AccessInfo) error {
 	for _, group := range groups {
-		err := hasAccess(group, predicate, operation)
-		glog.V(1).Infof("Authorizing group %v on predicate %v for %s, allowed %v",
-			group, predicate, operation.Name, err != nil)
+		err := hasAccess(group, accessInfo.predicate, accessInfo.operation)
+		glog.V(1).Infof("ACL-LOG Authorizing user %v in group %v on predicate %v "+
+			"for %s, allowed %v",
+			userId, group, accessInfo.predicate, accessInfo.operation.Name, err != nil)
 
 		if err == nil {
 			// the operation is allowed as soon as one group has the required permissions
 			return nil
 		}
 	}
-	return fmt.Errorf("unauthorized to do %s on predicate %s", operation.Name, predicate)
+	return fmt.Errorf("unauthorized to do %s on predicate %s",
+		accessInfo.operation.Name, accessInfo.predicate)
 }
 
 // hasAccess checks the aclCache and returns whether the specified group is authorized to perform
