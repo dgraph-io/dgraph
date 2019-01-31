@@ -47,7 +47,7 @@ func newTimeout(retry int) time.Duration {
 var limiter rateLimiter
 
 func init() {
-	go limiter.bleed(x.MetricsContext())
+	go limiter.bleed()
 }
 
 type rateLimiter struct {
@@ -58,9 +58,8 @@ type rateLimiter struct {
 // allows a certain number of ops per second, without taking any feedback into
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
-func (rl *rateLimiter) bleed(ctx context.Context) {
-	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "worker/rateLimiter.bleed"))
+func (rl *rateLimiter) bleed() {
+	ctx := context.Background()
 
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -76,16 +75,13 @@ func (rl *rateLimiter) bleed(ctx context.Context) {
 }
 
 func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
-	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "worker/rateLimiter.incr"))
-
 	// Let's not wait here via time.Sleep or similar. Let pendingProposals
 	// channel do its natural rate limiting.
 	weight := 1 << uint(retry) // Use an exponentially increasing weight.
 	for i := 0; i < weight; i++ {
 		select {
 		case pendingProposals <- struct{}{}:
-			ostats.Record(ctx, x.PendingProposals.M(1))
+			ostats.Record(context.Background(), x.PendingProposals.M(1))
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -95,9 +91,6 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 
 // Done would slowly bleed the retries out.
 func (rl *rateLimiter) decr(ctx context.Context, retry int) {
-	ctx, _ = tag.New(ctx,
-		tag.Upsert(x.KeyMethod, "worker/rateLimiter.decr"))
-
 	if retry == 0 {
 		<-pendingProposals
 		ostats.Record(ctx, x.PendingProposals.M(-1))
@@ -119,7 +112,7 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
 	startTime := time.Now()
-	ctx = x.MetricsMethodContext(ctx, "worker/node.proposeAndWait")
+	ctx = x.WithMethod(ctx, "worker/node.proposeAndWait")
 	defer func() {
 		v := x.TagValueStatusOK
 		if perr != nil {

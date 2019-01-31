@@ -19,11 +19,7 @@ package x
 import (
 	"context"
 	"expvar"
-	"fmt"
 	"net/http"
-	"os"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -270,58 +266,15 @@ func MetricsContext() context.Context {
 	// At the beginning add some distinguishing information
 	// to the context as tags that will be propagated when
 	// collecting metrics.
-	ctx, _ := tag.New(context.Background(),
-		tag.Upsert(KeyPid, fmt.Sprint(os.Getpid())))
-	return ctx
+	return context.Background()
 }
 
-func MetricsMethodContext(parent context.Context, method string) context.Context {
-	ctx, _ := tag.New(parent,
-		tag.Upsert(KeyPid, fmt.Sprint(os.Getpid())),
-		tag.Upsert(KeyMethod, method))
+func WithMethod(parent context.Context, method string) context.Context {
+	ctx, err := tag.New(parent, tag.Upsert(KeyMethod, method))
+	Check(err)
 	return ctx
 }
 
 func SinceInMilliseconds(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
-}
-
-// MapInt64Measure tracks a collection of Int64 measures.
-type MapInt64Measure struct {
-	sync.Mutex
-	name, desc, unit string
-	measures         map[string]*stats.Int64Measure
-}
-
-// MapInt64 used to define the collection
-func MapInt64(name, desc, unit string) *MapInt64Measure {
-	return &MapInt64Measure{
-		name:     name,
-		desc:     desc,
-		unit:     unit,
-		measures: make(map[string]*stats.Int64Measure),
-	}
-}
-
-// M creates a new Int64 measure or uses an existing one and returns it for recording.
-func (m *MapInt64Measure) M(key string, v int64) stats.Measurement {
-	m.Lock()
-	defer m.Unlock()
-	mi, ok := m.measures[key]
-	if !ok {
-		name := strings.TrimSpace(key)
-		mi = stats.Int64(
-			strings.Replace(m.name, "{key}", name, -1),
-			m.desc, m.unit)
-		CheckfNoTrace(view.Register(
-			&view.View{
-				Name:        mi.Name(),
-				Measure:     mi,
-				Description: mi.Description(),
-				Aggregation: view.Count(),
-				TagKeys:     allTagKeys,
-			}))
-		m.measures[key] = mi
-	}
-	return mi.M(v)
 }

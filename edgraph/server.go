@@ -359,10 +359,13 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 }
 
 func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	startTime := time.Now()
 
 	ctx, span := otrace.StartSpan(ctx, methodMutate)
-	ctx = x.MetricsMethodContext(ctx, methodMutate)
+	ctx = x.WithMethod(ctx, methodMutate)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
@@ -378,12 +381,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	if err := x.HealthCheck(); err != nil {
 		return resp, err
 	}
-
 	ostats.Record(ctx, x.NumMutations.M(1))
-
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
 
 	if len(mu.SetJson) > 0 {
 		span.Annotatef(nil, "Got JSON Mutation: %s", mu.SetJson)
@@ -495,15 +493,17 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
-	startTime := time.Now()
-
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
+	startTime := time.Now()
 
 	var measurements []ostats.Measurement
 	ctx, span := otrace.StartSpan(ctx, methodQuery)
-	ctx = x.MetricsMethodContext(ctx, methodQuery)
+	ctx = x.WithMethod(ctx, methodQuery)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
@@ -527,10 +527,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	defer func() {
 		measurements = append(measurements, x.PendingQueries.M(-1))
 	}()
-
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
 
 	resp = &api.Response{}
 	if len(req.Query) == 0 {
