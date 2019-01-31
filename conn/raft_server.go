@@ -249,5 +249,4 @@ func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) 
 			}
 		}
 	}
-	return nil
 }
