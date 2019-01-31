@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -162,7 +163,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=2", pred)
+		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=2", url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
 		require.NoError(t, getError(resp.Body))
@@ -193,7 +194,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
-		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=1", pred)
+		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=1", url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
 		require.NoError(t, getError(resp.Body))
