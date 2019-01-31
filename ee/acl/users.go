@@ -41,7 +41,7 @@ func userPasswd(conf *viper.Viper) error {
 	newPassword := conf.GetString("new_password")
 	if len(newPassword) == 0 {
 		var err error
-		newPassword, err = askUserPassword(userid, 2)
+		newPassword, err = askUserPassword(userid, "New", 2)
 		if err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func userAdd(conf *viper.Viper) error {
 
 	if len(password) == 0 {
 		var err error
-		password, err = askUserPassword(userid, 2)
+		password, err = askUserPassword(userid, "New", 2)
 		if err != nil {
 			return err
 		}

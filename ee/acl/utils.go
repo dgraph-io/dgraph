@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"syscall"
 	"time"
 
@@ -131,10 +132,11 @@ type JwtGroup struct {
 	Group string
 }
 
-func askUserPassword(userid string, times int) (string, error) {
+func askUserPassword(userid string, pwdType string, times int) (string, error) {
 	x.AssertTrue(times == 1 || times == 2)
+	x.AssertTrue(pwdType == "Current" || pwdType == "New")
 	// ask for the user's password
-	fmt.Printf("Password for %v:", userid)
+	fmt.Printf("%s password for %v:", pwdType, userid)
 	pd, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		return "", fmt.Errorf("error while reading password:%v", err)
@@ -143,7 +145,7 @@ func askUserPassword(userid string, times int) (string, error) {
 	password := string(pd)
 
 	if times == 2 {
-		fmt.Printf("Retype password for %v:", userid)
+		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
 		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return "", fmt.Errorf("error while reading password:%v", err)
@@ -163,7 +165,7 @@ func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) 
 	password := conf.GetString(passwordOpt)
 	if len(password) == 0 {
 		var err error
-		password, err = askUserPassword(userid, 1)
+		password, err = askUserPassword(userid, "Current", 1)
 		if err != nil {
 			return nil, nil, err
 		}
