@@ -112,7 +112,7 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	log.Println("Sleeping for 35 seconds for acl to catch up")
+	log.Println("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml in this directory)
@@ -334,7 +334,7 @@ func TestPredicateRegex(t *testing.T) {
 			"name", group, err)
 	}
 
-	// add READ+Write permission on the regex ^predicate_to(.*)$ pred filter to the group
+	// add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group
 	predRegex := "^predicate_to(.*)$"
 	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "chmod",
@@ -347,7 +347,7 @@ func TestPredicateRegex(t *testing.T) {
 			predRegex, group, err)
 	}
 
-	log.Println("Sleeping for 35 seconds for acl to catch up")
+	log.Println("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)

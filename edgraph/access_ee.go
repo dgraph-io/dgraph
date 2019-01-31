@@ -575,8 +575,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	userId := userData[0]
 	groupIds := userData[1:]
 	for pred := range parsePredsFromMutation(gmu.Set) {
-		if err := authorizePredicate(userId,
-			groupIds,
+		if err := authorizePredicate(userId, groupIds,
 			&AccessInfo{
 				predicate: pred,
 				operation: acl.Write,

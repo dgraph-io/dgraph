@@ -257,8 +257,12 @@ func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 	for idx, aclEntry := range acls {
 		curFilter := aclEntry.PredFilter
 		newFilter := newAcl.PredFilter
-		if (!curFilter.IsRegex && !newFilter.IsRegex && curFilter.Predicate == newFilter.Predicate) ||
-			(curFilter.IsRegex && newFilter.IsRegex && curFilter.Regex == newFilter.Regex) {
+		if (!curFilter.IsRegex &&
+			!newFilter.IsRegex &&
+			curFilter.Predicate == newFilter.Predicate) ||
+			(curFilter.IsRegex &&
+				newFilter.IsRegex &&
+				curFilter.Regex == newFilter.Regex) {
 			if aclEntry.Perm == newAcl.Perm {
 				// new permission is the same as the current one, no update
 				return acls, false
