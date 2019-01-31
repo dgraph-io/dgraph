@@ -1227,6 +1227,14 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph
 		if err != nil {
 			return err
 		}
+
+		// This is the result of setting the result of count(uid) to a variable.
+		// Treat this value as a constant.
+		if val, ok := newMap[math.MaxUint64]; ok && len(newMap) == 1 {
+			mt.Const = val
+			continue
+		}
+
 		mt.Val = newMap
 	}
 	return nil
@@ -1488,6 +1496,17 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			}
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
+	} else if sg.Params.uidCount {
+		doneVars[sg.Params.Var] = varValue{
+			Vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+
+		val := types.Val{
+			Tid:   types.IntID,
+			Value: int64(len(sg.DestUIDs.Uids)),
+		}
+		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
 	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
 		// Uid variable could be defined using uid or a predicate.
 		uids := sg.DestUIDs

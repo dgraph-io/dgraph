@@ -1656,6 +1656,62 @@ func TestNestedFuncRoot4(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}}`, js)
 }
 
+func TestCountUidToVar(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as count(uid)
+		}
+
+		me(func: uid(1)) {
+			score: math(f)
+		}
+	}
+    `
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
+}
+
+func TestCountUidToVarMultiple(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as count(uid)
+		}
+
+		var(func: has(follow), first: 4) {
+			g as count(uid)
+		}
+
+		me(func: uid(1)) {
+			score: math(f + g)
+		}
+	}
+    `
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 7}]}}`, js)
+}
+
+func TestCountUidToVarCombinedWithNormalVar(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as count(uid)
+		}
+
+		var(func: has(follow)) {
+			g as count(path)
+		}
+
+		me(func: uid(1)) {
+			score: math(f + g)
+		}
+	}
+    `
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 5}]}}`, js)
+}
+
 var maxPendingCh chan uint64
 
 func TestMain(m *testing.M) {

@@ -3665,17 +3665,6 @@ func TestCountAtRootErr(t *testing.T) {
 func TestCountAtRootErr2(t *testing.T) {
 	query := `{
 		me(func: uid( 1)) {
-			a as count(uid)
-		}
-	}`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Cannot assign variable to count()")
-}
-
-func TestCountAtRootErr3(t *testing.T) {
-	query := `{
-		me(func: uid( 1)) {
 			count()
 		}
 	}`

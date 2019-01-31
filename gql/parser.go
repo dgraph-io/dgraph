@@ -2641,11 +2641,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						goto Fall
 					}
 
-					if varName != "" {
-						return it.Errorf("Cannot assign variable to count()")
-					}
 					count = notSeen
 					gq.UidCount = true
+					gq.Var = varName
 					if alias != "" {
 						gq.UidCountAlias = alias
 					}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package counter
 
 import (
 	"context"
@@ -32,6 +32,7 @@ import (
 )
 
 const N = 10
+const pred = "counter"
 
 func increment(t *testing.T, dg *dgo.Dgraph) int {
 	var max int
@@ -51,7 +52,7 @@ func increment(t *testing.T, dg *dgo.Dgraph) int {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < N; i++ {
-				cnt, err := process(dg, false)
+				cnt, err := process(dg, false, pred)
 				if err != nil {
 					if strings.Index(err.Error(), "Transaction has been aborted") >= 0 {
 						// pass
@@ -69,7 +70,7 @@ func increment(t *testing.T, dg *dgo.Dgraph) int {
 }
 
 func read(t *testing.T, dg *dgo.Dgraph, expected int) {
-	cnt, err := process(dg, true)
+	cnt, err := process(dg, true, pred)
 	require.NoError(t, err)
 	ts := cnt.startTs
 	t.Logf("Readonly stage counter: %+v\n", cnt)
@@ -80,7 +81,7 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < N; i++ {
-				cnt, err := process(dg, true)
+				cnt, err := process(dg, true, pred)
 				if err != nil {
 					t.Logf("Error while reading: %v\n", err)
 				} else {
@@ -110,7 +111,7 @@ func TestIncrement(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	x.Check(dg.Alter(ctx, &op))
 
-	cnt, err := process(dg, false)
+	cnt, err := process(dg, false, pred)
 	if err != nil {
 		t.Logf("Error while reading: %v\n", err)
 	} else {
