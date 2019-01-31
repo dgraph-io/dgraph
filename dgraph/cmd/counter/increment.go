@@ -17,7 +17,7 @@
 // This binary would retrieve a value for UID=0x01, and increment it by 1. If
 // successful, it would print out the incremented value. It assumes that it has
 // access to UID=0x01, and that `val` predicate is of type int.
-package increment
+package counter
 
 import (
 	"context"
@@ -39,7 +39,7 @@ var Increment x.SubCommand
 func init() {
 	Increment.Cmd = &cobra.Command{
 		Use:   "increment",
-		Short: "increment a counter transactionally",
+		Short: "Increment a counter transactionally",
 		Run: func(cmd *cobra.Command, args []string) {
 			run(Increment.Conf)
 		},
