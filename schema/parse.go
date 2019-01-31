@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"log"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -300,13 +299,12 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	// Iterator is currently on the token corresponding to the keyword type.
 	// Call Next to land on the type name.
 	it.Next()
-	typeUpdate := &pb.TypeUpdate{Name: it.Item().Val}
-	log.Printf("Name: %v\n", it.Item().Val)
+	typeUpdate := &pb.TypeUpdate{TypeName: it.Item().Val}
 
 	// Call next again to skip the { character.
 	it.Next()
 
-	var fields []*pb.TypeField
+	var fields []*pb.SchemaUpdate
 	for {
 		item := it.Item()
 		switch item.Typ {
@@ -331,8 +329,8 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	}
 }
 
-func parseTypeField(it *lex.ItemIterator) (*pb.TypeField, error) {
-	field := &pb.TypeField{Name: it.Item().Val}
+func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
+	field := &pb.SchemaUpdate{Predicate: it.Item().Val}
 	list := false
 
 	it.Next()
@@ -420,6 +418,7 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) (SchemasAndTypes, error) {
+	var emptyResult SchemasAndTypes
 	var result SchemasAndTypes
 	var schemas []*pb.SchemaUpdate
 	var types []*pb.TypeUpdate
@@ -427,7 +426,7 @@ func Parse(s string) (SchemasAndTypes, error) {
 	l := lex.NewLexer(s)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
-		return result, err
+		return emptyResult, err
 	}
 	it := l.NewIterator()
 	for it.Next() {
@@ -435,7 +434,7 @@ func Parse(s string) (SchemasAndTypes, error) {
 		switch item.Typ {
 		case lex.ItemEOF:
 			if err := resolveTokenizers(schemas); err != nil {
-				return result, x.Wrapf(err, "failed to enrich schema")
+				return emptyResult, x.Wrapf(err, "failed to enrich schema")
 			}
 			result.Schemas = schemas
 			result.Types = types
@@ -445,7 +444,7 @@ func Parse(s string) (SchemasAndTypes, error) {
 			if isTypeDeclaration(item, it) {
 				typeUpdate, err := parseTypeDeclaration(it)
 				if err != nil {
-					return result, err
+					return emptyResult, err
 				}
 				types = append(types, typeUpdate)
 				continue
@@ -453,15 +452,15 @@ func Parse(s string) (SchemasAndTypes, error) {
 
 			schema, err := parseScalarPair(it, item.Val)
 			if err != nil {
-				return result, err
+				return emptyResult, err
 			}
 			schemas = append(schemas, schema)
 		case itemNewLine:
 			// pass empty line
 
 		default:
-			return result, x.Errorf("Unexpected token: %v while parsing schema", item)
+			return emptyResult, x.Errorf("Unexpected token: %v while parsing schema", item)
 		}
 	}
-	return result, x.Errorf("Shouldn't reach here")
+	return emptyResult, x.Errorf("Shouldn't reach here")
 }

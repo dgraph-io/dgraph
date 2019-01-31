@@ -337,23 +337,19 @@ message SchemaUpdate {
 	bool upsert = 8;
 	bool lang = 9;
 
+	// Fields required for type system.
+	bool non_nullable = 10;
+	bool non_nullable_list = 11;
+	string object_type_name = 12;
+
 	// Deleted field:
 	reserved 7;
 	reserved "explicit";
 }
 
-message TypeField {
-  string name = 1;
-	Posting.ValType value_type = 2;
-  string object_type_name = 3;
-  bool list = 4;
-  bool non_nullable = 5;
-  bool non_nullable_list = 6;
-}
-
 message TypeUpdate {
-  string name = 1;
-  repeated TypeField fields = 2;
+	string type_name = 1;
+	repeated SchemaUpdate fields = 2;
 }
 
 // Bulk loader proto.
