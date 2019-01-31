@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,10 +110,6 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 }
 
-func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
-	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
-}
-
 type response struct {
 	Groups map[string]struct {
 		Members map[string]interface{} `json:"members"`
@@ -121,6 +118,26 @@ type response struct {
 			Predicate string `json:"predicate"`
 		} `json:"tablets"`
 	} `json:"groups"`
+	Removed []struct {
+		Addr    string `json:"addr"`
+		GroupID int    `json:"groupId"`
+		ID      string `json:"id"`
+	} `json:"removed"`
+}
+
+func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
+	state, err := getState()
+	require.NoError(t, err)
+
+	// NOTE: in the rare occasion that we are in fact connected to node 2, skip this.
+	for i := range state.Removed {
+		if strings.HasSuffix(state.Removed[i].Addr, "7180") {
+			t.Log("skipping cleanup, we are connected to a removed node.")
+			return
+		}
+	}
+
+	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func getState() (*response, error) {
