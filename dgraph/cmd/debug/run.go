@@ -49,9 +49,10 @@ type flagOptions struct {
 	readOnly      bool
 	pdir          string
 	itemMeta      bool
-	jepsen        bool
+	jepsen        string
 	readTs        uint64
 	sizeHistogram bool
+	noKeys        bool
 }
 
 func init() {
@@ -66,7 +67,9 @@ func init() {
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
-	flag.BoolVar(&opt.jepsen, "jepsen", false, "Disect Jepsen output.")
+	flag.BoolVar(&opt.noKeys, "nokeys", false,
+		"Ignore key_. Only consider amount when calculating total.")
+	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
 	flag.StringVarP(&opt.predicate, "pred", "r", "", "Only output specified predicate.")
@@ -92,51 +95,7 @@ func toInt(o *pb.Posting) int {
 	return a
 }
 
-func readAmount(txn *badger.Txn, uid uint64) int {
-	iopt := badger.DefaultIteratorOptions
-	iopt.AllVersions = true
-	itr := txn.NewIterator(iopt)
-	defer itr.Close()
-
-	for itr.Rewind(); itr.Valid(); {
-		item := itr.Item()
-		pk := x.Parse(item.Key())
-		if !pk.IsData() || pk.Uid != uid || !strings.HasPrefix(pk.Attr, "amount_") {
-			itr.Next()
-			continue
-		}
-		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
-		if err != nil {
-			log.Fatalf("Unable to read posting list: %v", err)
-		}
-		var times int
-		var amount int
-		err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
-			amount = toInt(o)
-			times++
-			return nil
-		})
-		x.Check(err)
-		if times == 0 {
-			itr.Next()
-			continue
-		}
-		x.AssertTrue(times <= 1)
-		return amount
-	}
-	return 0
-}
-
-func seekTotal(db *badger.DB, readTs uint64) int {
-	txn := db.NewTransactionAt(readTs, false)
-	defer txn.Discard()
-
-	iopt := badger.DefaultIteratorOptions
-	iopt.AllVersions = true
-	iopt.PrefetchValues = false
-	itr := txn.NewIterator(iopt)
-	defer itr.Close()
-
+func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 	keys := make(map[uint64]int)
 	var lastKey []byte
 	for itr.Rewind(); itr.Valid(); {
@@ -147,7 +106,7 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 		}
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk := x.Parse(item.Key())
-		if !pk.IsData() || !strings.HasPrefix(pk.Attr, "key_") {
+		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
 			continue
 		}
 		if pk.IsSchema() {
@@ -175,15 +134,63 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 		})
 		x.Checkf(err, "during iterate")
 	}
+	return keys
+}
 
+func seekTotal(db *badger.DB, readTs uint64) int {
+	txn := db.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+
+	iopt := badger.DefaultIteratorOptions
+	iopt.AllVersions = true
+	iopt.PrefetchValues = false
+	itr := txn.NewIterator(iopt)
+	defer itr.Close()
+
+	keys := uidToVal(itr, "key_")
+	fmt.Printf("Got keys: %+v\n", keys)
+	vals := uidToVal(itr, "amount_")
 	var total int
+	for _, val := range vals {
+		total += val
+	}
+	fmt.Printf("Got vals: %+v. Total: %d\n", vals, total)
+	if opt.noKeys {
+		// Ignore the key_ predicate. Only consider the amount_ predicate. Useful when tablets are
+		// being moved around.
+		keys = vals
+	}
+
+	total = 0
 	for uid, key := range keys {
-		a := readAmount(txn, uid)
+		a := vals[uid]
 		fmt.Printf("uid: %-5d %x key: %d amount: %d\n", uid, uid, key, a)
 		total += a
 	}
 	fmt.Printf("Total @ %d = %d\n", readTs, total)
 	return total
+}
+
+func findFirstValidTxn(db *badger.DB) uint64 {
+	readTs := opt.readTs
+	var wrong uint64
+	for {
+		min, max := getMinMax(db, readTs-1)
+		if max <= min {
+			fmt.Printf("Can't find it. Max: %d\n", max)
+			return 0
+		}
+		readTs = max
+		if total := seekTotal(db, readTs); total != 100 {
+			fmt.Printf("===> VIOLATION at ts: %d\n", readTs)
+			showAllPostingsAt(db, readTs)
+			wrong = readTs
+		} else {
+			fmt.Printf("===> Found first correct version at %d\n", readTs)
+			showAllPostingsAt(db, readTs)
+			return wrong
+		}
+	}
 }
 
 func findFirstInvalidTxn(db *badger.DB, lowTs, highTs uint64) uint64 {
@@ -296,7 +303,13 @@ func jepsen(db *badger.DB) {
 	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("min=%d. max=%d\n", min, max)
 
-	ts := findFirstInvalidTxn(db, min, max)
+	var ts uint64
+	switch opt.jepsen {
+	case "binary":
+		ts = findFirstInvalidTxn(db, min, max)
+	case "linear":
+		ts = findFirstValidTxn(db)
+	}
 	fmt.Println()
 	if ts == 0 {
 		fmt.Println("Nothing found. Exiting.")
@@ -315,6 +328,8 @@ func jepsen(db *badger.DB) {
 
 func history(lookup []byte, itr *badger.Iterator) {
 	var buf bytes.Buffer
+	pk := x.Parse(lookup)
+	fmt.Fprintf(&buf, "==> key: %x. PK: %+v\n", lookup, pk)
 	for ; itr.Valid(); itr.Next() {
 		item := itr.Item()
 		if !bytes.Equal(item.Key(), lookup) {
@@ -640,11 +655,17 @@ func run() {
 	x.Check(err)
 	defer db.Close()
 
+	min, max := getMinMax(db, opt.readTs)
+	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
+
 	switch {
 	case len(opt.keyLookup) > 0:
 		lookup(db)
-	case opt.jepsen:
+	case len(opt.jepsen) > 0:
 		jepsen(db)
+	case opt.vals:
+		total := seekTotal(db, opt.readTs)
+		fmt.Printf("Total: %d\n", total)
 	case opt.sizeHistogram:
 		sizeHistogram(db)
 	default:

@@ -231,44 +231,16 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	l := new(List)
-	l.key = key
-	l.mutationMap = make(map[uint64]*pb.PostingList)
-	l.plist = new(pb.PostingList)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 
-	item, err := txn.Get(key)
-	if err == badger.ErrKeyNotFound {
-		return l, nil
-	}
-	if err != nil {
-		return l, err
-	}
-	if item.UserMeta()&BitEmptyPosting > 0 {
-		l.minTs = item.Version()
-
-	} else if item.UserMeta()&BitCompletePosting > 0 {
-		err = unmarshalOrCopy(l.plist, item)
-		l.minTs = item.Version()
-
-	} else {
-		iterOpts := badger.DefaultIteratorOptions
-		iterOpts.AllVersions = true
-		iterOpts.PrefetchValues = false
-		it := txn.NewKeyIterator(key, iterOpts)
-		defer it.Close()
-		it.Seek(key)
-		l, err = ReadPostingList(key, it)
-	}
-	if err != nil {
-		return l, err
-	}
-
-	l.Lock()
-	size := l.calculateSize()
-	l.Unlock()
-	x.BytesRead.Add(int64(size))
-	atomic.StoreInt32(&l.estimatedSize, size)
-	return l, nil
+	// When we do rollups, an older version would go to the top of the LSM tree, which can cause
+	// issues during txn.Get. Therefore, always iterate.
+	iterOpts := badger.DefaultIteratorOptions
+	iterOpts.AllVersions = true
+	iterOpts.PrefetchValues = false
+	itr := txn.NewKeyIterator(key, iterOpts)
+	defer itr.Close()
+	itr.Seek(key)
+	return ReadPostingList(key, itr)
 }
