@@ -61,16 +61,27 @@ function StartAlpha
 function BackupRequest
 {
   INFO "requesting backup"
-  curl localhost:$HTTP_PORT/admin/backup -XPOST -F"destination=$WORKDIR/dir1" &>/dev/null
+  curl -XPOST localhost:$HTTP_PORT/admin/backup -F"destination=$WORKDIR/dir1" &>/dev/null
+  sleep 10
+}
+
+function BackupRequestAt
+{
+  local dir=${1:?no dir given}
+  local readts=${2:?no ts given}
+  INFO "requesting incremental backup at $readts"
+  curl -XPOST localhost:$HTTP_PORT/admin/backup -F"destination=$WORKDIR/$dir" -F"at=$readts" &>/dev/null
   sleep 10
 }
 
 function BackupRestore
 {
+  local dir1=${1:?no dir given}
+  local dir2=${2:?no dir given}
   INFO "backup loading data"
   dgraph restore \
-    -l $WORKDIR/dir1/ \
-    -p $WORKDIR/dir2/ \
+    -l $WORKDIR/$dir1/ \
+    -p $WORKDIR/$dir2/ \
     >restore.log 2>&1 </dev/null \
     || FATAL "backup restore failed"
   sleep 1
@@ -84,7 +95,7 @@ function CheckPData
     >check.log 2>&1 </dev/null \
     || FATAL "backup failed p data check"
   sleep 1
-  echo $(cat check.log | grep -o 'Found [0-9]\+ keys')
+  echo $(tail check.log | grep -o 'Found [0-9]\+ keys')
 }
 
 function StopServers
@@ -101,29 +112,47 @@ function Cleanup
   rm -rf $WORKDIR
 }
 
-mkdir dir1
-pushd dir1 >/dev/null
-
 StartZero
 BackupLoadSampleData
 StartAlpha
+
+mkdir dir1
+pushd dir1 >/dev/null
 BackupRequest
+popd >/dev/null
+
+# checked later
+mkdir dir3
+pushd dir3 >/dev/null
+BackupRequestAt "dir3" "2"
+popd >/dev/null
+
 StopServers
 
-popd >/dev/null
 mkdir dir2
 pushd dir2 >/dev/null
-
-BackupRestore
-
+BackupRestore "dir1" "dir2"
 popd >/dev/null
 
-p0=$(CheckPData "$WORKDIR/dir1/p/")
+p0=$(CheckPData "$WORKDIR/p/")
 p1=$(CheckPData "$WORKDIR/dir2/p1/")
 
 [ "$p0" != "$p1" ] && FATAL "Restore failed. Expected '$p0' but got '$p1'"
 
 INFO "restore was successful"
+
+INFO "running incremental backup test"
+
+mkdir dir4
+pushd dir4 >/dev/null
+BackupRestore "dir3" "dir4"
+popd >/dev/null
+
+p2=$(CheckPData "$WORKDIR/dir4/p1/")
+
+[ "$p0" != "$p2" ] && FATAL "Restore from incr failed. Expected '$p0' but got '$p2'"
+
+INFO "incremental backup was successful"
 
 Cleanup
 
