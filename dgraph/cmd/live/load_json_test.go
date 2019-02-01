@@ -34,9 +34,11 @@ import (
 
 const alphaService = ":9180"
 
-var testDataDir string
-var dg *dgo.Dgraph
-var tmpDir string
+var (
+	testDataDir string
+	dg          *dgo.Dgraph
+	tmpDir      string
+)
 
 // Just check the first and last entries and assumes everything in between is okay.
 func checkLoadedData(t *testing.T) {

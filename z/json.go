@@ -73,7 +73,7 @@ func sortJSON(i interface{}) uint64 {
 }
 
 func sortJSONMap(m map[string]interface{}) uint64 {
-	h := uint64(0)
+	var h uint64
 	for _, k := range m {
 		// Because xor is commutative, it doesn't matter that map iteration
 		// is in random order.

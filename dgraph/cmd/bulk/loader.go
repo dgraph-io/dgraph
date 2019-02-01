@@ -31,13 +31,13 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/loadfile"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
+	"google.golang.org/grpc"
 )
 
 type options struct {

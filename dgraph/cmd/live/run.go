@@ -61,12 +61,12 @@ type options struct {
 	keyFields           string
 }
 
-var opt options
-var tlsConf x.TLSHelperConfig
-
-var Live x.SubCommand
-
-var keyFields []string
+var (
+	opt       options
+	tlsConf   x.TLSHelperConfig
+	Live      x.SubCommand
+	keyFields []string
+)
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -171,7 +171,7 @@ func (l *loader) uid(val string) string {
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
-// forward file to the RDF or JSON processor as appropriate
+// processFile forwards a file to the RDF or JSON processor as appropriate
 func (l *loader) processFile(ctx context.Context, file string) error {
 	fmt.Printf("Processing data file %q\n", file)
 

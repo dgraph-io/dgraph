@@ -419,14 +419,14 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 }
 
 func replaceBlankIds(nqs []*api.NQuad, keyFields *[]string) error {
-	field2idx := make(map[string]int)
+	fieldToIdx := make(map[string]int)
 	for idx, nq := range nqs {
-		field2idx[nq.Predicate] = idx
+		fieldToIdx[nq.Predicate] = idx
 	}
 
 	var str string
 	for _, f := range *keyFields {
-		idx, ok := field2idx[f]
+		idx, ok := fieldToIdx[f]
 		if !ok {
 			return fmt.Errorf("Key field %s not found: %+v\n", f, nqs)
 		}

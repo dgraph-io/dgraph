@@ -58,6 +58,7 @@ func NewChunker(inputFormat int) Chunker {
 	}
 }
 
+// RDF files don't require any special processing at the beginning of the file
 func (rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
@@ -118,6 +119,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ *[]string) ([]*api.NQuad, erro
 	return nqs, nil
 }
 
+// RDF files don't require any special processing at the end of the file
 func (rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
