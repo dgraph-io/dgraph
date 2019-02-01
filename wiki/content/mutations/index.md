@@ -263,12 +263,12 @@ The pattern `S * *` deletes all edges out of a node (the node itself may remain 
 
 ## Mutations using cURL
 
-Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl.
+Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the HTTP header `X-DgraphCommitNow: true`.
 
 To run a `set` mutation:
 
 ```sh
-curl -X POST localhost:8080/mutate -d $'
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 {
   set {
     _:alice <name> "Alice" .
@@ -279,11 +279,11 @@ curl -X POST localhost:8080/mutate -d $'
 To run a `delete` mutation:
 
 ```sh
-curl -X POST localhost:8080/mutate -d $'
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 {
   delete {
-    <0x56f33> <name> * . 
-    #The "0x56f33" would be Alice's UID
+    # Example: Alice's UID is 0x56f33
+    <0x56f33> <name> * .
   }
 }'
 ```
@@ -291,7 +291,7 @@ curl -X POST localhost:8080/mutate -d $'
 To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
 
 ```
-curl -X POST localhost:8080/mutate --data-binary @mutation.txt
+curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate --data-binary @mutation.txt
 ```
 
 ## JSON Mutation Format
