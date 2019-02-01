@@ -13,8 +13,10 @@
 package backup
 
 import (
+	"fmt"
 	"io"
 	"net/url"
+	"path"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -28,7 +30,7 @@ type handler interface {
 	// Create prepares the location for write operations.
 	Create(*url.URL, *Request) error
 	// Load will scan location URI for backup files, then load them with loadFunc.
-	Load(*url.URL, loadFn) error
+	Load(*url.URL, uint64, loadFn) error
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -43,12 +45,24 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
+// getInfo scans the file name and returns its the read timestamp and group ID.
+// If the file is not scannable, returns an error.
+// Returns read timestamp and group ID, or an error otherwise.
+func getInfo(file string) (uint64, int, error) {
+	var readTs uint64
+	var groupId int
+	_, err := fmt.Sscanf(path.Base(file), backupFmt, &readTs, &groupId)
+	return readTs, groupId, err
+}
+
 // loadFn is a function that will receive the current file being read.
-type loadFn func(reader io.Reader, object string) error
+// A reader and the backup readTs are passed as arguments.
+type loadFn func(io.Reader, int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
+// If since is non-zero, handlers might filter files based on readTs.
 // Returns nil on success, error otherwise.
-func Load(l string, fn loadFn) error {
+func Load(l string, since uint64, fn loadFn) error {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return err
@@ -59,5 +73,5 @@ func Load(l string, fn loadFn) error {
 		return x.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, fn)
+	return h.Load(uri, since, fn)
 }
