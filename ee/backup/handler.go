@@ -24,12 +24,29 @@ import (
 const backupFmt = "r%d-g%d.backup"
 
 // handler interface is implemented by URI scheme handlers.
+// When adding new scheme handles, for example 'azure://', an object will implement
+// this interface to supply Dgraph with a way to create or load backup files into DB.
 type handler interface {
-	// Handlers know how to Write and Close their location.
+	// Handlers must know how to Write and Close their URI location.
+	// These function calls are used by both Create and Load.
 	io.WriteCloser
-	// Create prepares the location for write operations.
+
+	// Create prepares the location for write operations. This function is defined for
+	// creating new backup files at a location described by the URL. The caller of this
+	// comes from an HTTP request.
+	//
+	// The URL object is parsed as described in `newHandler`.
+	// The Request object has the DB, estimated tablets size, backup parameters.
 	Create(*url.URL, *Request) error
+
 	// Load will scan location URI for backup files, then load them with loadFunc.
+	// Object implementing this function will use for retrieving (dowload) backup files
+	// and loading the data into a DB. The restore CLI command is the caller of this func.
+	//
+	// The URL object is parsed as described in `newHandler`.
+	// The uint64 represents a read timestamp that is used for partially restoring data.
+	// The loadFn receives the files as they are processed by a handler, to do the actual
+	// load to DB.
 	Load(*url.URL, uint64, loadFn) error
 }
 
