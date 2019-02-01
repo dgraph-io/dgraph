@@ -112,7 +112,7 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	alterPredicateWithUserAccount(t, dg, true)
 	createGroupAndAcls(t)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	log.Println("Sleeping for 35 seconds for acl to catch up")
+	log.Println("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml in this directory)
@@ -265,4 +265,93 @@ func createGroupAndAcls(t *testing.T) {
 	if err := addModifyPermCmd.Run(); err != nil {
 		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)
 	}
+}
+
+func TestPasswordReset(t *testing.T) {
+	glog.Infof("testing with port 9180")
+	dg, cancel := x.GetDgraphClientOnPort(9180)
+	defer cancel()
+	createAccountAndData(t, dg)
+	// test login using the current password
+	ctx := context.Background()
+	err := dg.Login(ctx, userid, userpassword)
+	require.NoError(t, err, "Logging in with the current password should have succeeded")
+
+	// reset password for the user alice
+	newPassword := userpassword + "123"
+	chPdCmd := exec.Command("dgraph", "acl", "passwd", "-d", dgraphEndpoint, "-u",
+		userid, "--new_password", newPassword, "-x", "password")
+	checkOutput(t, chPdCmd, false)
+	glog.Infof("Successfully changed password for %v", userid)
+
+	// test that logging in using the old password should now fail
+	err = dg.Login(ctx, userid, userpassword)
+	require.Error(t, err, "Logging in with old password should no longer work")
+
+	// test logging in using the new password
+	err = dg.Login(ctx, userid, newPassword)
+	require.NoError(t, err, "Logging in with new password should work now")
+}
+
+func TestPredicateRegex(t *testing.T) {
+	glog.Infof("testing with port 9180")
+	dg, cancel := x.GetDgraphClientOnPort(9180)
+	defer cancel()
+	createAccountAndData(t, dg)
+	ctx := context.Background()
+	err := dg.Login(ctx, userid, userpassword)
+	require.NoError(t, err, "Logging in with the current password should have succeeded")
+
+	queryPredicateWithUserAccount(t, dg, true)
+	mutatePredicateWithUserAccount(t, dg, true)
+	alterPredicateWithUserAccount(t, dg, true)
+	// create a new group
+	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "groupadd",
+		"-d", dgraphEndpoint,
+		"-g", group, "-x", "password")
+	if err := createGroupCmd.Run(); err != nil {
+		t.Fatalf("Unable to create group:%v", err)
+	}
+
+	// add the user to the group
+	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "usermod",
+		"-d", dgraphEndpoint,
+		"-u", userid, "-g", group, "-x", "password")
+	if err := addUserToGroupCmd.Run(); err != nil {
+		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
+	}
+
+	addReadToNameCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", dgraphEndpoint,
+		"-g", group, "--pred", "name", "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
+		"-x",
+		"password")
+	if err := addReadToNameCmd.Run(); err != nil {
+		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
+			"name", group, err)
+	}
+
+	// add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group
+	predRegex := "^predicate_to(.*)$"
+	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+		"acl", "chmod",
+		"-d", dgraphEndpoint,
+		"-g", group, "--pred_regex", predRegex, "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
+		"-x",
+		"password")
+	if err := addReadWriteToRegexPermCmd.Run(); err != nil {
+		t.Fatalf("Unable to add READ+WRITE permission on %s to group %s:%v",
+			predRegex, group, err)
+	}
+
+	log.Println("Sleeping for 35 seconds for acl caches to be refreshed")
+	time.Sleep(35 * time.Second)
+	queryPredicateWithUserAccount(t, dg, false)
+	mutatePredicateWithUserAccount(t, dg, false)
+	// the alter operation should still fail since the regex pred does not have the Modify
+	// permission
+	alterPredicateWithUserAccount(t, dg, true)
 }

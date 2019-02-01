@@ -24,21 +24,83 @@ import (
 	"github.com/spf13/viper"
 )
 
+func userPasswd(conf *viper.Viper) error {
+	userid := conf.GetString("user")
+	if len(userid) == 0 {
+		return fmt.Errorf("the user must not be empty")
+	}
+
+	// 1. get the dgo client with appropriete access JWT
+	dc, cancel, err := getClientWithAdminCtx(conf)
+	if err != nil {
+		return fmt.Errorf("unable to get dgo client:%v", err)
+	}
+	defer cancel()
+
+	// 2. get the new password
+	newPassword := conf.GetString("new_password")
+	if len(newPassword) == 0 {
+		var err error
+		newPassword, err = askUserPassword(userid, 2)
+		if err != nil {
+			return err
+		}
+	}
+
+	ctx := context.Background()
+	txn := dc.NewTxn()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			glog.Errorf("Unable to discard transaction:%v", err)
+		}
+	}()
+
+	// 3. query the user's current uid
+	user, err := queryUser(ctx, txn, userid)
+	if err != nil {
+		return fmt.Errorf("error while querying user:%v", err)
+	}
+	if user == nil {
+		return fmt.Errorf("the user does not exist: %v", userid)
+	}
+
+	// 4. mutate the user's password
+	chPdNQuads := []*api.NQuad{
+		{
+			Subject:     user.Uid,
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: newPassword}},
+		}}
+	mu := &api.Mutation{
+		CommitNow: true,
+		Set:       chPdNQuads,
+	}
+	if _, err := txn.Mutate(ctx, mu); err != nil {
+		return fmt.Errorf("unable to change password for user %v: %v", userid, err)
+	}
+	fmt.Printf("Successfully changed password for %v\n", userid)
+	return nil
+}
+
 func userAdd(conf *viper.Viper) error {
 	userid := conf.GetString("user")
 	password := conf.GetString("password")
-
 	if len(userid) == 0 {
-		return fmt.Errorf("The user must not be empty")
-	}
-	if len(password) == 0 {
-		return fmt.Errorf("The password must not be empty")
+		return fmt.Errorf("the user must not be empty")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
+	}
+	defer cancel()
+
+	if len(password) == 0 {
+		var err error
+		password, err = askUserPassword(userid, 2)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx := context.Background()
@@ -51,10 +113,10 @@ func userAdd(conf *viper.Viper) error {
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return fmt.Errorf("Error while querying user:%v", err)
+		return fmt.Errorf("error while querying user:%v", err)
 	}
 	if user != nil {
-		return fmt.Errorf("Unable to create user because of conflict: %v", userid)
+		return fmt.Errorf("unable to create user because of conflict: %v", userid)
 	}
 
 	createUserNQuads := []*api.NQuad{
@@ -75,10 +137,10 @@ func userAdd(conf *viper.Viper) error {
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to create user: %v", err)
+		return fmt.Errorf("unable to create user: %v", err)
 	}
 
-	glog.Infof("Created new user with id %v", userid)
+	fmt.Printf("Created new user with id %v\n", userid)
 	return nil
 }
 
@@ -86,14 +148,14 @@ func userDel(conf *viper.Viper) error {
 	userid := conf.GetString("user")
 	// validate the userid
 	if len(userid) == 0 {
-		return fmt.Errorf("The user id should not be empty")
+		return fmt.Errorf("the user id should not be empty")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
@@ -105,11 +167,11 @@ func userDel(conf *viper.Viper) error {
 
 	user, err := queryUser(ctx, txn, userid)
 	if err != nil {
-		return fmt.Errorf("Error while querying user:%v", err)
+		return fmt.Errorf("error while querying user:%v", err)
 	}
 
 	if user == nil || len(user.Uid) == 0 {
-		return fmt.Errorf("Unable to delete user because it does not exist: %v", userid)
+		return fmt.Errorf("unable to delete user because it does not exist: %v", userid)
 	}
 
 	deleteUserNQuads := []*api.NQuad{
@@ -125,10 +187,10 @@ func userDel(conf *viper.Viper) error {
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Unable to delete user: %v", err)
+		return fmt.Errorf("unable to delete user: %v", err)
 	}
 
-	glog.Infof("Deleted user with id %v", userid)
+	fmt.Printf("Deleted user with id %v\n", userid)
 	return nil
 }
 
@@ -150,7 +212,7 @@ func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, er
 
 	queryResp, err := txn.QueryWithVars(ctx, query, queryVars)
 	if err != nil {
-		return nil, fmt.Errorf("Error while query user with id %s: %v", userid, err)
+		return nil, fmt.Errorf("error while query user with id %s: %v", userid, err)
 	}
 	user, err = UnmarshalUser(queryResp, "user")
 	if err != nil {
@@ -163,29 +225,29 @@ func userMod(conf *viper.Viper) error {
 	userId := conf.GetString("user")
 	groups := conf.GetString("groups")
 	if len(userId) == 0 {
-		return fmt.Errorf("The user must not be empty")
+		return fmt.Errorf("the user must not be empty")
 	}
 
 	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
 	}
+	defer cancel()
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
-			glog.Errorf("Unable to discard transaction:%v", err)
+			fmt.Printf("Unable to discard transaction: %v\n", err)
 		}
 	}()
 
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
-		return fmt.Errorf("Error while querying user:%v", err)
+		return fmt.Errorf("error while querying user:%v", err)
 	}
 	if user == nil {
-		return fmt.Errorf("The user does not exist: %v", userId)
+		return fmt.Errorf("the user does not exist: %v", userId)
 	}
 
 	targetGroupsMap := make(map[string]struct{})
@@ -208,31 +270,31 @@ func userMod(conf *viper.Viper) error {
 	}
 
 	for _, g := range newGroups {
-		glog.Infof("Adding user %v to group %v", userId, g)
+		fmt.Printf("Adding user %v to group %v\n", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("Error while getting the user mod nquad:%v", err)
+			return fmt.Errorf("error while getting the user mod nquad: %v", err)
 		}
 		mu.Set = append(mu.Set, nquad)
 	}
 
 	for _, g := range groupsToBeDeleted {
-		glog.Infof("Deleting user %v from group %v", userId, g)
+		fmt.Printf("Deleting user %v from group %v\n", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("Error while getting the user mod nquad:%v", err)
+			return fmt.Errorf("error while getting the user mod nquad: %v", err)
 		}
 		mu.Del = append(mu.Del, nquad)
 	}
 	if len(mu.Del) == 0 && len(mu.Set) == 0 {
-		glog.Infof("Nothing needs to be changed for the groups of user:%v", userId)
+		fmt.Printf("Nothing needs to be changed for the groups of user: %v\n", userId)
 		return nil
 	}
 
 	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("Error while mutating the group:%+v", err)
+		return fmt.Errorf("error while mutating the group: %+v", err)
 	}
-	glog.Infof("Successfully modified groups for user %v", userId)
+	fmt.Printf("Successfully modified groups for user %v\n", userId)
 	return nil
 }
 
@@ -243,7 +305,7 @@ func getUserModNQuad(ctx context.Context, txn *dgo.Txn, userId string,
 		return nil, err
 	}
 	if group == nil {
-		return nil, fmt.Errorf("The group does not exist:%v", groupId)
+		return nil, fmt.Errorf("the group does not exist:%v", groupId)
 	}
 
 	createUserGroupNQuads := &api.NQuad{
