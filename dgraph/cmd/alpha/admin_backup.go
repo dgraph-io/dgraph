@@ -21,6 +21,7 @@ package alpha
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -31,23 +32,38 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !Alpha.Conf.GetBool("enterprise_features") {
-		err := x.Errorf("You must enable Dgraph enterprise features.")
-		x.SetStatus(w, err.Error(), "Backup failed.")
+		x.SetStatus(w,
+			"You must enable Dgraph enterprise features. Restart alpha with --enterprise_features",
+			"Backup failed.")
 		return
 	}
-	dst := r.FormValue("destination")
-	if dst == "" {
-		err := x.Errorf("You must specify a 'destination' value")
-		x.SetStatus(w, err.Error(), "Backup failed.")
+
+	destination := r.FormValue("destination")
+	if destination == "" {
+		x.SetStatus(w, "You must specify a 'destination' value", "Backup failed.")
 		return
 	}
-	if err := worker.BackupOverNetwork(context.Background(), dst); err != nil {
+
+	var (
+		err   error
+		since uint64
+	)
+	if at := r.FormValue("at"); at != "" {
+		since, err = strconv.ParseUint(at, 10, 64)
+		if err != nil {
+			x.SetStatus(w,
+				"Invalid value for 'at', it must be an integer greater than zero (0)",
+				"Backup failed.")
+			return
+		}
+	}
+
+	if err = worker.BackupOverNetwork(context.Background(), destination, since); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
-
 }
 
 func init() {
