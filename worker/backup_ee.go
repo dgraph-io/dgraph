@@ -91,8 +91,8 @@ func backupGroup(ctx context.Context, in pb.BackupRequest) error {
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, dst string) error {
-	ctx, cancel := context.WithCancel(pctx)
+func BackupOverNetwork(ctx context.Context, destination string, since uint64) error {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Check that this node can accept requests.
@@ -101,19 +101,23 @@ func BackupOverNetwork(pctx context.Context, dst string) error {
 		return err
 	}
 
-	// Get ReadTs from zero and wait for stream to catch up.
-	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
-	if err != nil {
-		glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
-		return err
+	req := pb.BackupRequest{
+		ReadTs:   since,
+		Location: destination,
+		UnixTs:   time.Now().UTC().Format("20060102.1504"),
+	}
+
+	if since == 0 {
+		// Get ReadTs from zero and wait for stream to catch up.
+		ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
+		if err != nil {
+			glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
+			return err
+		}
+		req.ReadTs = ts.ReadOnly
 	}
 
 	gids := groups().KnownGroups()
-	req := pb.BackupRequest{
-		ReadTs:   ts.ReadOnly,
-		Location: dst,
-		UnixTs:   time.Now().UTC().Format("20060102.1504"),
-	}
 	glog.Infof("Created backup request: %+v. Groups=%v\n", req, gids)
 
 	// This will dispatch the request to all groups and wait for their response.
