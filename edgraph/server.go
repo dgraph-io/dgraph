@@ -283,7 +283,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-
 	// Reserved predicates cannot be dropped.
 	if _, ok := x.InitialPreds[op.DropAttr]; len(op.DropAttr) > 0 && ok {
 		err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped", op.DropAttr)
@@ -298,7 +297,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 				err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
 					update.Predicate)
 				return nil, err
-			}		
+			}
 		}
 	}
 
