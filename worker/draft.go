@@ -450,6 +450,10 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		x.Errorf("Error while flushing to disk: %v", err)
 		return err
 	}
+
+	g := groups()
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.gid])
+
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil

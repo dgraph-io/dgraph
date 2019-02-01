@@ -50,6 +50,11 @@ type groupi struct {
 	triggerCh    chan struct{} // Used to trigger membership sync
 	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
 	closer       *y.Closer
+
+	// Group checksum is used to determine if the tablets served by the groups have changed from
+	// the membership information that the Alpha has. If so, Alpha cannot service a read.
+	deltaChecksum      uint64 // Checksum received by OracleDelta.
+	membershipChecksum uint64 // Checksum received by MembershipState.
 }
 
 var gr *groupi
@@ -136,6 +141,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
+
 	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
@@ -318,6 +324,9 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		for _, tablet := range group.Tablets {
 			g.tablets[tablet.Predicate] = tablet
 		}
+		if gid == g.gid {
+			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
+		}
 	}
 	for _, member := range g.state.Zeros {
 		if Config.MyAddr != member.Addr {
@@ -347,6 +356,24 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 	g.RLock()
 	defer g.RUnlock()
 	return g.gid == gid
+}
+
+func (g *groupi) ChecksumsMatch(ctx context.Context) error {
+	if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
+		return nil
+	}
+	t := time.NewTicker(100 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("Group checksum mismatch for id: %d", g.gid)
+		}
+	}
 }
 
 func (g *groupi) BelongsTo(key string) uint32 {
@@ -652,21 +679,6 @@ func (g *groupi) sendMembershipUpdates() {
 				break // breaks select case, not for loop.
 			}
 			tablets := g.calculateTabletSizes()
-			g.RLock()
-			for attr := range g.tablets {
-				if tablets[attr] == nil {
-					// Found an attribute, which is present in the group state by Zero, but not on
-					// disk. So, we can do some cleanup here by asking Zero to remove this predicate
-					// from the group's state.
-					tablets[attr] = &pb.Tablet{
-						GroupId:   g.gid,
-						Predicate: attr,
-						Remove:    true,
-					}
-					glog.Warningf("Removing tablet: %+v", tablets[attr])
-				}
-			}
-			g.RUnlock()
 			if err := g.doSendMembership(tablets); err != nil {
 				glog.Errorf("While sending membership update with tablet: %v", err)
 			} else {
@@ -770,6 +782,10 @@ func (g *groupi) cleanupTablets() {
 	defer func() {
 		glog.Infof("EXITING cleanupTablets.")
 	}()
+
+	// TODO: Do not clean tablets for now. This causes race conditions where we end up deleting
+	// predicate which is being streamed over by another group.
+	return
 
 	cleanup := func() {
 		g.blockDeletes.Lock()
