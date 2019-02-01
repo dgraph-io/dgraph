@@ -180,6 +180,10 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
+	for _, f := range strings.Split(opt.KeyFields, ",") {
+		opt.parsedKeyFields = append(opt.parsedKeyFields, strings.TrimSpace(f))
+	}
+
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()

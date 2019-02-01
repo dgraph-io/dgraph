@@ -26,7 +26,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -65,7 +64,7 @@ type options struct {
 	ReduceShards int
 
 	shardOutputDirs []string
-	keyFields       []string
+	parsedKeyFields []string
 }
 
 type state struct {
@@ -110,9 +109,6 @@ func newLoader(opt options) *loader {
 	}
 	for i := 0; i < opt.NumGoroutines; i++ {
 		ld.mappers[i] = newMapper(st)
-	}
-	for _, f := range strings.Split(opt.KeyFields, ",") {
-		opt.keyFields = append(opt.keyFields, strings.TrimSpace(f))
 	}
 	go ld.prog.report()
 	return ld
@@ -190,7 +186,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loaderType, &ld.opt.keyFields)
+			m.run(loaderType, &ld.opt.parsedKeyFields)
 			mapperWg.Done()
 		}(m)
 	}
