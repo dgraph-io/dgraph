@@ -107,13 +107,17 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
+	alterReservedPredicates(t, dg)
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
+
 	createGroupAndAcls(t)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
 	log.Println("Sleeping for 35 seconds for acl to catch up")
 	time.Sleep(35 * time.Second)
+
+	alterReservedPredicates(t, dg)
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml in this directory)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
@@ -131,6 +135,23 @@ var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var group = "dev"
 var rootDir = filepath.Join(os.TempDir(), "acl_test")
+
+func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
+	ctx := context.Background()
+	err := dg.Alter(ctx, &api.Operation{
+		Schema: "dgraph.xid: int .",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"predicate dgraph.xid is reserved and is not allowed to be modified")
+
+	err = dg.Alter(ctx, &api.Operation{
+		DropAttr: "dgraph.xid",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"predicate dgraph.xid is reserved and is not allowed to be dropped")
+}
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	// login with alice's account
