@@ -196,7 +196,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return err
 }
 
-func (l *loader) nextNquads(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
+func (l *loader) nextNquads(batch []*api.NQuad, nqs []*api.NQuad) []*api.NQuad {
 	for _, nq := range nqs {
 		nq.Subject = l.uid(nq.Subject)
 		if len(nq.ObjectId) > 0 {
@@ -204,25 +204,26 @@ func (l *loader) nextNquads(mu *api.Mutation, nqs []*api.NQuad) *api.Mutation {
 		}
 	}
 
-	mu.Set = append(mu.Set, nqs...)
-	if len(mu.Set) >= opt.batchSize {
-		l.reqs <- *mu
-		mu = &api.Mutation{}
+	batch = append(batch, nqs...)
+	for len(batch) >= opt.batchSize {
+		mu := api.Mutation{Set: batch[:opt.batchSize]}
+		l.reqs <- mu
+		batch = batch[opt.batchSize:]
 	}
 
-	return mu
+	return batch
 }
 
-func (l *loader) finalNquads(mu *api.Mutation) {
-	if len(mu.Set) > 0 {
-		l.reqs <- *mu
+func (l *loader) finalNquads(batch []*api.NQuad) {
+	if len(batch) > 0 {
+		l.reqs <- api.Mutation{Set: batch}
 	}
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadfile.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
-	mu := &api.Mutation{}
+	batch := make([]*api.NQuad, 0)
 	for {
 		select {
 		case <-ctx.Done():
@@ -235,10 +236,10 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadf
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
 			nqs, err = ck.Parse(chunkBuf, &keyFields)
 			x.CheckfNoTrace(err)
-			mu = l.nextNquads(mu, nqs)
+			batch = l.nextNquads(batch, nqs)
 		}
 		if err == io.EOF {
-			l.finalNquads(mu)
+			l.finalNquads(batch)
 			break
 		} else {
 			x.Check(err)
