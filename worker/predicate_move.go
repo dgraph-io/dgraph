@@ -74,15 +74,13 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				if !pk.IsSchema() {
 					return x.Errorf("Expecting first key to be schema key: %+v", kv)
 				}
-				// No need to do a clean predicate. We're writing at the timestamp of the move,
-				// which is higher than all previous commits and no txn commit can happen at a
-				// higher timestamp.
-				// p := &pb.Proposal{CleanPredicate: pk.Attr}
+				// Delete on all nodes.
+				p := &pb.Proposal{CleanPredicate: pk.Attr}
 				glog.Infof("Predicate being received: %v", pk.Attr)
-				// if err := n.proposeAndWait(ctx, p); err != nil {
-				// 	glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
-				// 	return err
-				// }
+				if err := n.proposeAndWait(ctx, p); err != nil {
+					glog.Errorf("Error while cleaning predicate %v %v\n", pk.Attr, err)
+					return err
+				}
 			}
 
 			proposal.Kv = append(proposal.Kv, kv)

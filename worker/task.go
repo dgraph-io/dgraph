@@ -701,10 +701,10 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
-		return &emptyResult, err
+		return nil, err
 	}
 	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return &emptyResult, err
+		return nil, err
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()

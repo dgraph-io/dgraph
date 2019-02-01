@@ -142,8 +142,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
 
-	// HACK HACK HACK: Do not try to cleanup tablets for now.
-	// go gr.cleanupTablets()
+	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
 	gr.proposeInitialSchema()
@@ -680,26 +679,6 @@ func (g *groupi) sendMembershipUpdates() {
 				break // breaks select case, not for loop.
 			}
 			tablets := g.calculateTabletSizes()
-			g.RLock()
-			for attr := range g.tablets {
-				if tablets[attr] == nil {
-					// Found an attribute, which is present in the group state by Zero, but not on
-					// disk. So, we can do some cleanup here by asking Zero to remove this predicate
-					// from the group's state.
-
-					// ************************
-					// HACK HACK HACK: Let's not try to clean any tablets.
-					// ************************
-					//
-					// tablets[attr] = &pb.Tablet{
-					// 	GroupId:   g.gid,
-					// 	Predicate: attr,
-					// 	Remove:    true,
-					// }
-					// glog.Warningf("Removing tablet: %+v", tablets[attr])
-				}
-			}
-			g.RUnlock()
 			if err := g.doSendMembership(tablets); err != nil {
 				glog.Errorf("While sending membership update with tablet: %v", err)
 			} else {
@@ -803,6 +782,10 @@ func (g *groupi) cleanupTablets() {
 	defer func() {
 		glog.Infof("EXITING cleanupTablets.")
 	}()
+
+	// TODO: Do not clean tablets for now. This causes race conditions where we end up deleting
+	// predicate which is being streamed over by another group.
+	return
 
 	cleanup := func() {
 		g.blockDeletes.Lock()

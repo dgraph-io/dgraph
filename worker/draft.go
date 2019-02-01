@@ -456,7 +456,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
-	// posting.Oracle().SetChecksum(delta.GroupChecksums[groups().gid])
 	return nil
 }
 

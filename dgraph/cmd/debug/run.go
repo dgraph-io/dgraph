@@ -67,7 +67,8 @@ func init() {
 	flag := Debug.Cmd.Flags()
 	flag.BoolVar(&opt.itemMeta, "item", true, "Output item meta as well. Set to false for diffs.")
 	flag.BoolVar(&opt.vals, "vals", false, "Output values along with keys.")
-	flag.BoolVar(&opt.noKeys, "nokeys", false, "Ignore key_. Only consider amount_ when calculating total.")
+	flag.BoolVar(&opt.noKeys, "nokeys", false,
+		"Ignore key_. Only consider amount when calculating total.")
 	flag.StringVar(&opt.jepsen, "jepsen", "", "Disect Jepsen output. Can be linear/binary.")
 	flag.Uint64Var(&opt.readTs, "at", math.MaxUint64, "Set read timestamp for all txns.")
 	flag.BoolVarP(&opt.readOnly, "readonly", "o", true, "Open in read only mode.")
@@ -155,6 +156,8 @@ func seekTotal(db *badger.DB, readTs uint64) int {
 	}
 	fmt.Printf("Got vals: %+v. Total: %d\n", vals, total)
 	if opt.noKeys {
+		// Ignore the key_ predicate. Only consider the amount_ predicate. Useful when tablets are
+		// being moved around.
 		keys = vals
 	}
 
@@ -174,7 +177,7 @@ func findFirstValidTxn(db *badger.DB) uint64 {
 	for {
 		min, max := getMinMax(db, readTs-1)
 		if max <= min {
-			fmt.Println("Can't find it. Max: %d\n", max)
+			fmt.Printf("Can't find it. Max: %d\n", max)
 			return 0
 		}
 		readTs = max
