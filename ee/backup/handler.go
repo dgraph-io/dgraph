@@ -21,6 +21,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// backupFmt defines the name of backups files or blobs.
+// The first parameter is the read timestamp at the time of backup. This is used for
+// incremental backups and partial restore.
+// The second parameter is the group ID when backup happened. This is used for partitioning
+// the posting directories 'p' during restore.
 const backupFmt = "r%d-g%d.backup"
 
 // handler interface is implemented by URI scheme handlers.
@@ -36,12 +41,12 @@ type handler interface {
 	// comes from an HTTP request.
 	//
 	// The URL object is parsed as described in `newHandler`.
-	// The Request object has the DB, estimated tablets size, backup parameters.
+	// The Request object has the DB, estimated tablets size, and backup parameters.
 	Create(*url.URL, *Request) error
 
-	// Load will scan location URI for backup files, then load them with loadFunc.
-	// Object implementing this function will use for retrieving (dowload) backup files
-	// and loading the data into a DB. The restore CLI command is the caller of this func.
+	// Load will scan location URI for backup files, then load them via loadFn.
+	// Objects implementing this function will use for retrieving (dowload) backup files
+	// and loading the data into a DB. The restore CLI command uses this call.
 	//
 	// The URL object is parsed as described in `newHandler`.
 	// The uint64 represents a read timestamp that is used for partially restoring data.
