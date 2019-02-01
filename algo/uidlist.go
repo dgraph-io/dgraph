@@ -17,8 +17,6 @@
 package algo
 
 import (
-	"container/heap"
-
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
@@ -262,6 +260,17 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 
 		n := len(d)
 		i, j := 0, n
+		if n > jump {
+			vv := d[jump]
+			if vv < qval {
+				i = jump
+			} else {
+				if vv == qval {
+					i = jump
+				}
+				j = jump
+			}
+		}
 		for i < j {
 			h := (i + j) >> 1
 			if d[h] < qval {
@@ -287,6 +296,17 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 				d = d[i:]
 
 				n := len(q)
+				if n > jump {
+					vv := q[jump]
+					if vv < dval {
+						i = jump
+					} else {
+						if vv == dval {
+							i = jump
+						}
+						j = jump
+					}
+				}
 				i, j := 0, n
 				for i < j {
 					h := (i + j) >> 1
@@ -406,7 +426,7 @@ func MergeSorted(lists []*pb.List) *pb.List {
 	}
 
 	h := &uint64Heap{}
-	heap.Init(h)
+	initHeap(h)
 	maxSz := 0
 
 	for i, l := range lists {
@@ -415,7 +435,7 @@ func MergeSorted(lists []*pb.List) *pb.List {
 		}
 		lenList := len(l.Uids)
 		if lenList > 0 {
-			heap.Push(h, elem{
+			pushHeap(h, elem{
 				val:     l.Uids[0],
 				listIdx: i,
 			})
@@ -438,12 +458,12 @@ func MergeSorted(lists []*pb.List) *pb.List {
 		}
 		l := lists[me.listIdx]
 		if idx[me.listIdx] >= len(l.Uids)-1 {
-			heap.Pop(h)
+			popHeap(h)
 		} else {
 			idx[me.listIdx]++
 			val := l.Uids[idx[me.listIdx]]
 			(*h)[0].val = val
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
+			fixHeap(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
 	return &pb.List{Uids: output}

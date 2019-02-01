@@ -1,0 +1,129 @@
+goos: linux
+goarch: amd64
+pkg: github.com/dgraph-io/dgraph/algo
+BenchmarkListIntersectRandom/:size=10240:overlap=0.30:-12         	   20000	     68210 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRandom/:compressed:size=10240:overlap=0.30:-12         	   10000	    135643 ns/op	    2048 B/op	       1 allocs/op
+BenchmarkListIntersectRandom/:size=1024000:overlap=0.30:-12                  	     200	   9528478 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRandom/:compressed:size=1024000:overlap=0.30:-12       	     100	  16033363 ns/op	    2048 B/op	       1 allocs/op
+BenchmarkListIntersectRandom/:size=10240:overlap=0.10:-12                    	   20000	     65329 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRandom/:compressed:size=10240:overlap=0.10:-12         	   10000	    132664 ns/op	    2048 B/op	       1 allocs/op
+BenchmarkListIntersectRandom/:size=1024000:overlap=0.10:-12                  	     200	   8726383 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRandom/:compressed:size=1024000:overlap=0.10:-12       	     100	  15455849 ns/op	    2048 B/op	       1 allocs/op
+BenchmarkListIntersectRandom/:size=10240:overlap=0.01:-12                    	   20000	     61784 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRandom/:compressed:size=10240:overlap=0.01:-12         	   10000	    175362 ns/op	    2048 B/op	       1 allocs/op
+BenchmarkListIntersectRandom/:size=1024000:overlap=0.01:-12                  	     200	   8577640 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRandom/:compressed:size=1024000:overlap=0.01:-12       	     100	  19027343 ns/op	    2048 B/op	       1 allocs/op
+len: 10, compressed: 20, bytes/int: 2.000000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=10:overlap=0.01:-12  	50000000	        25.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1:size=10:overlap=0.01:-12         	 3000000	       544 ns/op	    2048 B/op	       1 allocs/op
+
+len: 100, compressed: 106, bytes/int: 1.060000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=10:overlap=0.01:-12                  	20000000	        96.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10:size=10:overlap=0.01:-12        	 1000000	      1113 ns/op	    2048 B/op	       1 allocs/op
+
+len: 500, compressed: 516, bytes/int: 1.032000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=10:overlap=0.01:-12                  	 5000000	       351 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=50:size=10:overlap=0.01:-12        	  500000	      3853 ns/op	    2048 B/op	       1 allocs/op
+
+len: 1000, compressed: 1032, bytes/int: 1.032000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=10:overlap=0.01:-12                 	10000000	       158 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=100:size=10:overlap=0.01:-12       	  300000	      5687 ns/op	    2048 B/op	       1 allocs/op
+
+len: 5000, compressed: 5158, bytes/int: 1.031600
+BenchmarkListIntersectRatio/:IntersectWith:ratio=500:size=10:overlap=0.01:-12                 	 3000000	       490 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=500:size=10:overlap=0.01:-12       	   50000	     24210 ns/op	   22608 B/op	      16 allocs/op
+
+len: 10000, compressed: 10314, bytes/int: 1.031400
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1000:size=10:overlap=0.01:-12                	 3000000	       512 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1000:size=10:overlap=0.01:-12      	  100000	     22417 ns/op	   17408 B/op	       7 allocs/op
+
+len: 100000, compressed: 103078, bytes/int: 1.030780
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10000:size=10:overlap=0.01:-12               	 2000000	       678 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10000:size=10:overlap=0.01:-12     	  100000	     21209 ns/op	   11392 B/op	       4 allocs/op
+
+len: 1000000, compressed: 1030748, bytes/int: 1.030748
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100000:size=10:overlap=0.01:-12              	 2000000	       840 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=100000:size=10:overlap=0.01:-12    	  100000	     19086 ns/op	    2048 B/op	       1 allocs/op
+
+len: 100, compressed: 141, bytes/int: 1.410000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=100:overlap=0.01:-12                  	 5000000	       258 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1:size=100:overlap=0.01:-12        	 1000000	      1659 ns/op	    2048 B/op	       1 allocs/op
+
+len: 1000, compressed: 1034, bytes/int: 1.034000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=100:overlap=0.01:-12                 	 1000000	      1159 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10:size=100:overlap=0.01:-12       	  200000	      7785 ns/op	    2048 B/op	       1 allocs/op
+
+len: 5000, compressed: 5162, bytes/int: 1.032400
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=100:overlap=0.01:-12                 	  500000	      3776 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=50:size=100:overlap=0.01:-12       	   50000	     37506 ns/op	    2048 B/op	       1 allocs/op
+
+len: 10000, compressed: 10318, bytes/int: 1.031800
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=100:overlap=0.01:-12                	  500000	      2799 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=100:size=100:overlap=0.01:-12      	   20000	     69590 ns/op	    2048 B/op	       1 allocs/op
+
+len: 50000, compressed: 51564, bytes/int: 1.031280
+BenchmarkListIntersectRatio/:IntersectWith:ratio=500:size=100:overlap=0.01:-12                	  200000	      7084 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=500:size=100:overlap=0.01:-12      	   10000	    224520 ns/op	  209920 B/op	      76 allocs/op
+
+len: 100000, compressed: 103123, bytes/int: 1.031230
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1000:size=100:overlap=0.01:-12               	  200000	      7564 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1000:size=100:overlap=0.01:-12     	   10000	    214956 ns/op	  165664 B/op	      60 allocs/op
+
+len: 1000000, compressed: 1031204, bytes/int: 1.031204
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10000:size=100:overlap=0.01:-12              	  200000	     10388 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10000:size=100:overlap=0.01:-12    	   10000	    202612 ns/op	   77184 B/op	      22 allocs/op
+
+len: 1000, compressed: 1312, bytes/int: 1.312000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=1000:overlap=0.01:-12                 	  500000	      3225 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1:size=1000:overlap=0.01:-12       	  100000	     13971 ns/op	    2048 B/op	       1 allocs/op
+
+len: 10000, compressed: 10353, bytes/int: 1.035300
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=1000:overlap=0.01:-12                	  100000	     13725 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10:size=1000:overlap=0.01:-12      	   20000	     79718 ns/op	    2048 B/op	       1 allocs/op
+
+len: 50000, compressed: 51731, bytes/int: 1.034620
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=1000:overlap=0.01:-12                	   50000	     38440 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=50:size=1000:overlap=0.01:-12      	    5000	    351239 ns/op	    2048 B/op	       1 allocs/op
+
+len: 100000, compressed: 103455, bytes/int: 1.034550
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=1000:overlap=0.01:-12               	   50000	     33351 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=100:size=1000:overlap=0.01:-12     	    2000	    644425 ns/op	    2048 B/op	       1 allocs/op
+
+len: 500000, compressed: 517261, bytes/int: 1.034522
+BenchmarkListIntersectRatio/:IntersectWith:ratio=500:size=1000:overlap=0.01:-12               	   10000	    116690 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=500:size=1000:overlap=0.01:-12     	    1000	   2262510 ns/op	 1821648 B/op	     637 allocs/op
+
+len: 1000000, compressed: 1034516, bytes/int: 1.034516
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1000:size=1000:overlap=0.01:-12              	   10000	    131122 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1000:size=1000:overlap=0.01:-12    	    1000	   2359282 ns/op	 1804160 B/op	     635 allocs/op
+
+len: 10000, compressed: 13127, bytes/int: 1.312700
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=10000:overlap=0.01:-12                	   20000	     60251 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1:size=10000:overlap=0.01:-12      	   10000	    167046 ns/op	    2048 B/op	       1 allocs/op
+
+len: 100000, compressed: 103514, bytes/int: 1.035140
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=10000:overlap=0.01:-12               	   10000	    145302 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10:size=10000:overlap=0.01:-12     	    2000	    772366 ns/op	    2048 B/op	       1 allocs/op
+
+len: 500000, compressed: 517552, bytes/int: 1.035104
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=10000:overlap=0.01:-12               	    5000	    390959 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=50:size=10000:overlap=0.01:-12     	     500	   3613648 ns/op	    2048 B/op	       1 allocs/op
+
+len: 1000000, compressed: 1035096, bytes/int: 1.035096
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=10000:overlap=0.01:-12              	    3000	    487785 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=100:size=10000:overlap=0.01:-12    	     200	   6432449 ns/op	    2048 B/op	       1 allocs/op
+
+len: 100000, compressed: 131767, bytes/int: 1.317670
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=100000:overlap=0.01:-12               	    2000	    795523 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1:size=100000:overlap=0.01:-12     	    1000	   1850366 ns/op	    2048 B/op	       1 allocs/op
+
+len: 1000000, compressed: 1038248, bytes/int: 1.038248
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=100000:overlap=0.01:-12              	    1000	   1467801 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=10:size=100000:overlap=0.01:-12    	     200	   7712599 ns/op	    2048 B/op	       1 allocs/op
+
+len: 1000000, compressed: 1317552, bytes/int: 1.317552
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=1000000:overlap=0.01:-12              	     200	   8276767 ns/op	       0 B/op	       0 allocs/op
+BenchmarkListIntersectRatio/compressed:IntersectWith:ratio=1:size=1000000:overlap=0.01:-12    	     100	  18714370 ns/op	    2048 B/op	       1 allocs/op
+
+PASS
+ok  	github.com/dgraph-io/dgraph/algo	131.892s
