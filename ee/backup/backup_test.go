@@ -47,6 +47,7 @@ func TestBackup(t *testing.T) {
 
 	t.Run("setup", wrap(BackupSetup))
 	t.Run("test local backup", wrap(BackupLocal))
+	t.Run("incremental backup", wrap(BackupIncr))
 }
 
 // BackupSetup loads some data into the cluster so we can test backup.
@@ -98,6 +99,20 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 func BackupLocal(t *testing.T, c *dgo.Dgraph) {
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{"/tmp"},
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	if !bytes.Contains(b, []byte("Success")) {
+		t.Errorf("Backup request failed: %v", string(b))
+	}
+}
+
+func BackupIncr(t *testing.T, c *dgo.Dgraph) {
+	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
+		"destination": []string{"/tmp"},
+		"at":          []string{"1"},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
