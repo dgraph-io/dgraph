@@ -293,7 +293,7 @@ func info(conf *viper.Viper) error {
 			aclStrs = append(aclStrs, fmt.Sprintf("(predicate filter: %v, perm: %v)",
 				acl.PredFilter, acl.Perm))
 		}
-		fmt.Sprintf("ACLs : %5s\n", strings.Join(aclStrs, " "))
+		fmt.Printf("ACLs : %5s\n", strings.Join(aclStrs, " "))
 	}
 
 	return nil
