@@ -133,7 +133,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 // Load creates an AWS session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
+func (h *s3Handler) Load(uri *url.URL, since uint64, fn loadFn) error {
 	var objects []string
 
 	mc, err := h.setup(uri)
@@ -155,6 +155,20 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 	glog.V(2).Infof("Loading from S3: %v", objects)
 
 	for _, object := range objects {
+		readTs, groupId, err := getInfo(object)
+		if err != nil {
+			if glog.V(2) {
+				fmt.Printf("--- Skip: invalid backup name format: %q\n", object)
+			}
+			continue
+		}
+		// if we are doing a partial restore, check the backup readTs here.
+		if since != 0 && readTs < since {
+			if glog.V(2) {
+				fmt.Printf("--- Skip: readTs too old (%d < %d): %q\n", since, readTs, object)
+			}
+			continue
+		}
 		reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 		if err != nil {
 			return x.Errorf("Restore closing due to error: %s", err)
@@ -169,7 +183,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 			return x.Errorf("Restore remote object is empty or inaccessible: %s", object)
 		}
 		fmt.Printf("--- Downloading %q, %d bytes\n", object, st.Size)
-		if err = fn(reader, object); err != nil {
+		if err = fn(reader, groupId); err != nil {
 			reader.Close()
 			return err
 		}
