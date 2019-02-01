@@ -180,6 +180,17 @@ func (s *state) TokenizerNames(pred string) []string {
 	return names
 }
 
+// HasTokenizer is a convenience func that checks if a given tokenizer is found in pred.
+// Returns true if found, else false.
+func (s *state) HasTokenizer(id byte, pred string) bool {
+	for _, t := range s.Tokenizer(pred) {
+		if t.Identifier() == id {
+			return true
+		}
+	}
+	return false
+}
+
 // IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(pred string) bool {
 	s.RLock()

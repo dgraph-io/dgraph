@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -35,8 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/stretchr/testify/require"
 
 	"google.golang.org/grpc"
@@ -284,8 +284,8 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"age","type":"default"},`+
-		x.AclPredsJson+","+
-		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`+
+		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}`+
 		`]}}`, output)
 
 	output, err = runQuery(q1)
@@ -1361,9 +1361,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
-		`{"predicate":"occupations","type":"string"}]}}`, res)
-
+		`{"predicate":"occupations","type":"string"},`+
+		`{"predicate":"type", "type":"string", "index":true, "tokenizer": ["exact"]}]}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1506,9 +1505,8 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q3)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
-			x.AclPredsJson+
-			`]}}`, output)
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},
+			{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1607,6 +1605,91 @@ func TestGrpcCompressionSupport(t *testing.T) {
 	tx := dc.NewTxn()
 	_, err = tx.Query(context.Background(), q)
 	require.NoError(t, err)
+}
+
+func TestTypeMutationAndQuery(t *testing.T) {
+	var m = `
+	{
+		"set": [
+			{
+				"name": "Alice",
+				"type": "Employee"
+			},
+			{
+				"name": "Bob",
+				"type": "Employer"
+			}
+		]
+	}
+	`
+
+	var q = `
+	{
+		q(func: has(name)) @filter(type(Employee)){
+			uid
+			name
+		}
+	}
+	`
+
+	var s = `
+            name: string @index(exact) .
+	`
+
+	require.NoError(t, dropAll())
+	err := alterSchemaWithRetry(s)
+	require.NoError(t, err)
+
+	err = runJsonMutation(m)
+	require.NoError(t, err)
+
+	output, err := runQuery(q)
+	require.NoError(t, err)
+	result := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	queryResults := result["data"].(map[string]interface{})["q"].([]interface{})
+	require.Equal(t, 1, len(queryResults))
+	name := queryResults[0].(map[string]interface{})["name"].(string)
+	require.Equal(t, "Alice", name)
+}
+
+func TestIPStringParsing(t *testing.T) {
+	var addrRange []worker.IPRange
+	var err error
+
+	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244")
+	require.NoError(t, err)
+	require.Equal(t, net.IPv4(144, 142, 126, 222), addrRange[0].Lower)
+	require.Equal(t, net.IPv4(144, 142, 126, 244), addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("144.142.126.254")
+	require.NoError(t, err)
+	require.Equal(t, net.IPv4(144, 142, 126, 254), addrRange[0].Lower)
+	require.Equal(t, net.IPv4(144, 142, 126, 254), addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("192.168.0.0/16")
+	require.NoError(t, err)
+	require.Equal(t, net.IPv4(192, 168, 0, 0), addrRange[0].Lower)
+	require.Equal(t, net.IPv4(192, 168, 255, 255), addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("example.org")
+	require.NoError(t, err)
+	require.NotEqual(t, net.IPv4zero, addrRange[0].Lower)
+
+	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244,144.142.126.254" +
+		",192.168.0.0/16,example.org")
+	require.NoError(t, err)
+	require.NotEqual(t, 0, len(addrRange))
+
+	addrRange, err = getIPsFromString("fd03:b188:0f3c:9ec4::babe:face")
+	require.NoError(t, err)
+	require.NotEqual(t, net.IPv6zero, addrRange[0].Lower)
+	require.Equal(t, addrRange[0].Lower, addrRange[0].Upper)
+
+	addrRange, err = getIPsFromString("fd03:b188:0f3c:9ec4::/64")
+	require.NoError(t, err)
+	require.NotEqual(t, net.IPv6zero, addrRange[0].Lower)
+	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
 }
 
 func TestMain(m *testing.M) {

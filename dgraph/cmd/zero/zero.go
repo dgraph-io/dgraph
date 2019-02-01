@@ -25,6 +25,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -56,8 +57,8 @@ type Server struct {
 	// groupMap    map[uint32]*Group
 	nextGroup      uint32
 	leaderChangeCh chan struct{}
-	shutDownCh     chan struct{} // Used to tell stream to close.
-	connectLock    sync.Mutex    // Used to serialize connect requests from servers.
+	closer         *y.Closer  // Used to tell stream to close.
+	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
 	blockCommitsOn map[string]struct{}
 }
@@ -76,7 +77,7 @@ func (s *Server) Init() {
 	s.nextTxnTs = 1
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
-	s.shutDownCh = make(chan struct{}, 1)
+	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = make(map[string]struct{})
 	go s.rebalanceTablets()
 }
@@ -624,7 +625,7 @@ func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershi
 			}
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-s.shutDownCh:
+		case <-s.closer.HasBeenClosed():
 			return errServerShutDown
 		}
 	}

@@ -2738,8 +2738,6 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-
-
 Edges weights are included by using facets on the edges as follows.
 
 {{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
@@ -2815,6 +2813,18 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
+The k-shortest path algorithm (used when numPaths > 1)also accepts the arguments ```minweight``` and ```maxweight```, which take a float as their value. When they are passed, only paths within the weight range ```[minweight, maxweight]``` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
+
+```
+curl localhost:8080/query -XPOST -d $'{
+ path as shortest(from: 0x2, to: 0x5, numpaths: 2, minweight: 2, maxweight: 4) {
+  friend
+ }
+ path(func: uid(path)) {
+   name
+ }
+}' | python -m json.tool | less
+```
 
 ## Recurse Query
 
@@ -3171,7 +3181,7 @@ will tokenize the value. The resultant tokens are used as keys for posting
 lists. The edge subject is then added to the posting list for each token.
 
 When a query root search occurs, the search value is tokenized. The result of
-the search is all of the nodes in the union or intersection of the correponding
+the search is all of the nodes in the union or intersection of the corresponding
 posting lists (depending on whether `anyof` or `allof` was used).
 {{% /notice %}}
 

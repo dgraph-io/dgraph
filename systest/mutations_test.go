@@ -691,10 +691,10 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
-		`{"predicate":"name","type":"default"}]`, string(b))
+		`{"predicate":"name","type":"default"},`+
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`, string(b))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -714,9 +714,9 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
-		`{"predicate":"name","type":"default"}]`, string(b))
+		`{"predicate":"name","type":"default"},`+
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`, string(b))
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {

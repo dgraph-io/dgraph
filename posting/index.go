@@ -544,7 +544,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 			return err
 		}
 	}
-	glog.V(1).Infof("Rebuild: Iteration done. Now commiting at ts=%d\n", r.startTs)
+	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
 	// We must commit all the posting lists to memory, so they'd be picked up
 	// during posting list rollup below.
@@ -601,16 +601,16 @@ const (
 
 // Run rebuilds all indices that need it.
 func (rb *IndexRebuild) Run(ctx context.Context) error {
-	if err := RebuildListType(ctx, rb); err != nil {
+	if err := rebuildListType(ctx, rb); err != nil {
 		return err
 	}
-	if err := RebuildIndex(ctx, rb); err != nil {
+	if err := rebuildIndex(ctx, rb); err != nil {
 		return err
 	}
-	if err := RebuildCountIndex(ctx, rb); err != nil {
+	if err := rebuildCountIndex(ctx, rb); err != nil {
 		return err
 	}
-	return RebuildReverseEdges(ctx, rb)
+	return rebuildReverseEdges(ctx, rb)
 }
 
 type indexRebuildInfo struct {
@@ -687,9 +687,9 @@ func (rb *IndexRebuild) needsIndexRebuild() indexRebuildInfo {
 	}
 }
 
-// RebuildIndex rebuilds index for a given attribute.
+// rebuildIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
-func RebuildIndex(ctx context.Context, rb *IndexRebuild) error {
+func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	// Exit early if indices do not need to be rebuilt.
 	rebuildInfo := rb.needsIndexRebuild()
 
@@ -784,8 +784,8 @@ func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	return indexRebuild
 }
 
-// RebuildCountIndex rebuilds the count index for a given attribute.
-func RebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
+// rebuildCountIndex rebuilds the count index for a given attribute.
+func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 	op := rb.needsCountIndexRebuild()
 	if op == indexNoop {
 		return nil
@@ -865,8 +865,8 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 	return indexDelete
 }
 
-// RebuildReverseEdges rebuilds the reverse edges for a given attribute.
-func RebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
+// rebuildReverseEdges rebuilds the reverse edges for a given attribute.
+func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	op := rb.needsReverseEdgesRebuild()
 	if op == indexNoop {
 		return nil
@@ -928,9 +928,9 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	return false, nil
 }
 
-// RebuildListType rebuilds the index when the schema is changed from scalar to list type.
+// rebuildListType rebuilds the index when the schema is changed from scalar to list type.
 // We need to fingerprint the values to get the new ValueId.
-func RebuildListType(ctx context.Context, rb *IndexRebuild) error {
+func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	if needsRebuild, err := rb.needsListTypeRebuild(); !needsRebuild || err != nil {
 		return err
 	}

@@ -19,7 +19,6 @@ package alpha
 import (
 	"bytes"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -176,44 +175,74 @@ func setupCustomTokenizers() {
 	}
 }
 
-// Parses the comma-delimited whitelist ip-range string passed in as an argument
-// from the command line and returns slice of []IPRange
+// Parses a comma-delimited list of IP addresses, IP ranges, CIDR blocks, or hostnames
+// and returns a slice of []IPRange.
 //
-// ex. "144.142.126.222:144.124.126.400,190.59.35.57:190.59.35.99"
-func parseIPsFromString(str string) ([]worker.IPRange, error) {
+// e.g. "144.142.126.222:144.142.126.244,144.142.126.254,192.168.0.0/16,host.docker.internal"
+func getIPsFromString(str string) ([]worker.IPRange, error) {
 	if str == "" {
 		return []worker.IPRange{}, nil
 	}
 
 	var ipRanges []worker.IPRange
-	ipRangeStrings := strings.Split(str, ",")
+	rangeStrings := strings.Split(str, ",")
 
-	// Check that the each of the ranges are valid
-	for _, s := range ipRangeStrings {
-		ipsTuple := strings.Split(s, ":")
+	for _, s := range rangeStrings {
+		isIPv6 := strings.Index(s, "::") >= 0
+		tuple := strings.Split(s, ":")
+		switch {
+		case isIPv6 || len(tuple) == 1:
+			if strings.Index(s, "/") < 0 {
+				// string is hostname like host.docker.internal,
+				// or IPv4 address like 144.124.126.254,
+				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
+				ipAddr := net.ParseIP(s)
+				if ipAddr != nil {
+					ipRanges = append(ipRanges, worker.IPRange{Lower: ipAddr, Upper: ipAddr})
+				} else {
+					ipAddrs, err := net.LookupIP(s)
+					if err != nil {
+						return nil, fmt.Errorf("invalid IP address or hostname: %s", s)
+					}
 
-		// Assert that the range consists of an upper and lower bound
-		if len(ipsTuple) != 2 {
-			return nil, errors.New("IP range must have a lower and upper bound")
-		}
+					for _, addr := range ipAddrs {
+						ipRanges = append(ipRanges, worker.IPRange{Lower: addr, Upper: addr})
+					}
+				}
+			} else {
+				// string is CIDR block like 192.168.0.0/16 or fd03:b188:0f3c:9ec4::/64
+				rangeLo, network, err := net.ParseCIDR(s)
+				if err != nil {
+					return nil, fmt.Errorf("invalid CIDR block: %s", s)
+				}
 
-		lowerBoundIP := net.ParseIP(ipsTuple[0])
-		upperBoundIP := net.ParseIP(ipsTuple[1])
+				addrLen, maskLen := len(rangeLo), len(network.Mask)
+				rangeHi := make(net.IP, len(rangeLo))
+				copy(rangeHi, rangeLo)
+				for i := 1; i <= maskLen; i++ {
+					rangeHi[addrLen-i] |= ^network.Mask[maskLen-i]
+				}
 
-		if lowerBoundIP == nil || upperBoundIP == nil {
-			// Assert that both upper and lower bound are valid IPs
-			return nil, errors.New(
-				ipsTuple[0] + " or " + ipsTuple[1] + " is not a valid IP address",
-			)
-		} else if bytes.Compare(lowerBoundIP, upperBoundIP) > 0 {
-			// Assert that the lower bound is less than the upper bound
-			return nil, errors.New(
-				ipsTuple[0] + " cannot be greater than " + ipsTuple[1],
-			)
-		} else {
-			ipRanges = append(ipRanges, worker.IPRange{Lower: lowerBoundIP, Upper: upperBoundIP})
+				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+			}
+		case len(tuple) == 2:
+			// string is range like a.b.c.d:v.x.y.z
+			rangeLo := net.ParseIP(tuple[0])
+			rangeHi := net.ParseIP(tuple[1])
+			if rangeLo == nil {
+				return nil, fmt.Errorf("invalid IP address: %s", tuple[0])
+			} else if rangeHi == nil {
+				return nil, fmt.Errorf("invalid IP address: %s", tuple[1])
+			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
+				return nil, fmt.Errorf("inverted IP address range: %s", s)
+			} else {
+				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+			}
+		default:
+			return nil, fmt.Errorf("invalid IP address range: %s", s)
 		}
 	}
+
 	return ipRanges, nil
 }
 
@@ -450,7 +479,7 @@ func run() {
 
 	edgraph.SetConfiguration(opts)
 
-	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
+	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
 	worker.Config = worker.Options{
 		ExportPath:          Alpha.Conf.GetString("export"),
@@ -463,6 +492,7 @@ func run() {
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
+		AclEnabled:          secretFile != "",
 	}
 
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)

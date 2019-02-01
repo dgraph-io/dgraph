@@ -106,7 +106,7 @@ txn := client.NewTxn()
 defer txn.Discard(ctx)
 
 // Create and execute a query to looks up an email and checks if the password
-matches.
+// matches.
 q := fmt.Sprintf(`
     {
         login_attempt(func: eq(email, %q)) {
@@ -171,7 +171,7 @@ transactions. The steps are as follows:
 1. Create a new transaction.
 
 2. Query for the node. This will usually be as simple as `{ q(func: eq(email,
-   "bob@example.com") { uid }}`. If a `uid` result is returned, then that's the
+   "bob@example.com")) { uid }}`. If a `uid` result is returned, then that's the
 `uid` for the existing node. If no results are returned, then the user account
 doesn't exist.
 
