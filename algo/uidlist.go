@@ -18,7 +18,6 @@ package algo
 
 import (
 	"container/heap"
-	"sort"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -100,9 +99,17 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 		uids := dec.Uids()
 		for len(uids) > 0 {
 			for _, u := range uids {
-				qidx := sort.Search(len(q), func(idx int) bool {
-					return q[idx] >= u
-				})
+				n := len(q)
+				i, j := 0, n
+				for i < j {
+					h := (i + j) >> 1
+					if q[h] < u {
+						i = h + 1
+					} else {
+						j = h
+					}
+				}
+				qidx := i
 				if qidx >= len(q) {
 					return
 				}
@@ -207,9 +214,7 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 	return i, k
 }
 
-// IntersectWithBin is based on the paper
-// "Fast Intersection Algorithms for Sorted Sequences"
-// https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
+// IntersectWithBin is a binary search intersection algorithm
 func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	ld := len(d)
 	lq := len(q)
@@ -223,53 +228,85 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	}
 
 	val := d[0]
-	minq := sort.Search(len(q), func(i int) bool {
-		return q[i] >= val
-	})
 
-	val = d[len(d)-1]
-	maxq := sort.Search(len(q), func(i int) bool {
-		return q[i] > val
-	})
-
-	binIntersect(d, q[minq:maxq], o)
-}
-
-// binIntersect is the recursive function used.
-// NOTE: len(d) >= len(q) (Must hold)
-func binIntersect(d, q []uint64, final *[]uint64) {
-	if len(d) == 0 || len(q) == 0 {
-		return
-	}
-	midq := len(q) / 2
-	qval := q[midq]
-	midd := sort.Search(len(d), func(i int) bool {
-		return d[i] >= qval
-	})
-
-	dd := d[0:midd]
-	qq := q[0:midq]
-	if len(dd) > len(qq) { // D > Q
-		binIntersect(dd, qq, final)
-	} else {
-		binIntersect(qq, dd, final)
+	n := len(q)
+	i, j := 0, n
+	for i < j {
+		h := (i + j) >> 1
+		if q[h] < val {
+			i = h + 1
+		} else {
+			j = h
+		}
 	}
 
-	if midd >= len(d) {
-		return
-	}
-	if d[midd] == qval {
-		*final = append(*final, qval)
-	} else {
-		midd--
+	minq := i
+
+	val = d[ld-1]
+
+	i, j = 0, n
+	for i < j {
+		h := (i + j) >> 1
+		if q[h] <= val {
+			i = h + 1
+		} else {
+			j = h
+		}
 	}
 
-	dd = d[midd+1:]
-	qq = q[midq+1:]
-	if len(dd) > len(qq) { // D > Q
-		binIntersect(dd, qq, final)
-	} else {
-		binIntersect(qq, dd, final)
+	maxq := i
+	q = q[minq:maxq]
+	// d>=q
+	for len(q) > 0 && len(d) > 0 {
+		qval := q[0]
+
+		n := len(d)
+		i, j := 0, n
+		for i < j {
+			h := (i + j) >> 1
+			if d[h] < qval {
+				i = h + 1
+			} else {
+				j = h
+			}
+		}
+		if i < n {
+			dval := d[i]
+			if dval == qval {
+				*o = append(*o, qval)
+				if len(q) == 1 {
+					break
+				}
+				q = q[1:]
+				d = d[i:]
+			} else {
+				if len(q) == 1 {
+					break
+				}
+				q = q[1:]
+				d = d[i:]
+
+				n := len(q)
+				i, j := 0, n
+				for i < j {
+					h := (i + j) >> 1
+					if q[h] < dval {
+						i = h + 1
+					} else {
+						j = h
+					}
+				}
+				qval := q[i]
+				if dval == qval {
+					*o = append(*o, qval)
+					if len(d) == 1 {
+						break
+					}
+					q = q[i:]
+					d = d[1:]
+				}
+			}
+		}
 	}
 }
 
@@ -286,15 +323,31 @@ func IntersectSorted(lists []*pb.List) *pb.List {
 	}
 	ls := make([]listInfo, 0, len(lists))
 	for _, list := range lists {
+		lnval := len(list.Uids)
+
+		n := len(ls)
+		i, j := 0, n
+		for i < j {
+			h := (i + j) >> 1
+			if ls[h].length < lnval {
+				i = h + 1
+			} else {
+				j = h
+			}
+		}
 		ls = append(ls, listInfo{
 			l:      list,
-			length: len(list.Uids),
+			length: lnval,
 		})
+		if i < n {
+			copy(ls[i+1:], ls[i:])
+			ls[i] = listInfo{
+				l:      list,
+				length: lnval,
+			}
+		}
 	}
-	// Sort the lists based on length.
-	sort.Slice(ls, func(i, j int) bool {
-		return ls[i].length < ls[j].length
-	})
+
 	out := &pb.List{Uids: make([]uint64, ls[0].length)}
 	if len(ls) == 1 {
 		copy(out.Uids, ls[0].l.Uids)
@@ -399,7 +452,16 @@ func MergeSorted(lists []*pb.List) *pb.List {
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func IndexOf(u *pb.List, uid uint64) int {
-	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
+	n := len(u.Uids)
+	i, j := 0, n
+	for i < j {
+		h := (i + j) >> 1
+		if u.Uids[h] < uid {
+			i = h + 1
+		} else {
+			j = h
+		}
+	}
 	if i < len(u.Uids) && u.Uids[i] == uid {
 		return i
 	}
