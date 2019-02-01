@@ -96,7 +96,7 @@ $ dgraph restore -since 20001 -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.c
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
 	flag.Uint64Var(&opt.readTs, "since", 0,
-		"Starting version for incremental restore")
+		"Starting version for partial restore")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
