@@ -76,7 +76,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 
 // Load uses tries to load any backup files found.
 // Returns nil on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
+func (h *fileHandler) Load(uri *url.URL, since uint64, fn loadFn) error {
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
@@ -92,12 +92,26 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
 	glog.V(2).Infof("Loading backup file(s): %v", files)
 
 	for _, file := range files {
+		readTs, groupId, err := getInfo(file)
+		if err != nil {
+			if glog.V(2) {
+				fmt.Printf("--- Skip: invalid backup name format: %q\n", file)
+			}
+			continue
+		}
+		// if we are doing a partial restore, check the backup readTs here.
+		if since != 0 && readTs < since {
+			if glog.V(2) {
+				fmt.Printf("--- Skip: readTs too old (%d < %d): %q\n", since, readTs, file)
+			}
+			continue
+		}
 		fp, err := os.Open(file)
 		if err != nil {
 			return x.Errorf("Error opening %q: %s", file, err)
 		}
 		defer fp.Close()
-		if err = fn(fp, file); err != nil {
+		if err = fn(fp, groupId); err != nil {
 			return err
 		}
 	}
