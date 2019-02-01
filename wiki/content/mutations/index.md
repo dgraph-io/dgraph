@@ -282,7 +282,8 @@ To run a `delete` mutation:
 curl -X POST localhost:8080/mutate -d $'
 {
   delete {
-    _:alice <name> "Alice" .
+    <0x56f33> <name> * . 
+    #The "0x56f33" would be Alice's UID
   }
 }'
 ```
