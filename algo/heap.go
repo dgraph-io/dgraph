@@ -57,16 +57,16 @@ func popHeap(h *uint64Heap) elem {
 	return h.Pop()
 }
 
-func removeHeap(h *uint64Heap, i int) elem {
-	n := h.Len() - 1
-	if n != i {
-		h.Swap(i, n)
-		if !downHeap(h, i, n) {
-			upHeap(h, i)
-		}
-	}
-	return h.Pop()
-}
+// func removeHeap(h *uint64Heap, i int) elem {
+// 	n := h.Len() - 1
+// 	if n != i {
+// 		h.Swap(i, n)
+// 		if !downHeap(h, i, n) {
+// 			upHeap(h, i)
+// 		}
+// 	}
+// 	return h.Pop()
+// }
 
 func fixHeap(h *uint64Heap, i int) {
 	if !downHeap(h, i, h.Len()) {
