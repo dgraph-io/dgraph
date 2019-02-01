@@ -565,7 +565,7 @@ Output:
 This node joined a swarm as a worker.
 ```
 
-Similary, aws03
+Similarly, aws03
 ```sh
 eval $(docker-machine env aws03)
 docker swarm join \

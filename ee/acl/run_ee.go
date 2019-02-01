@@ -152,7 +152,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to change a group's permissions",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := chMod(cmdChMod.Conf); err != nil {
-				glog.Errorf("Unable to change permisson for group:%v", err)
+				glog.Errorf("Unable to change permission for group:%v", err)
 				os.Exit(1)
 			}
 		},
