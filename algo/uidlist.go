@@ -98,16 +98,16 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 		for len(uids) > 0 {
 			for _, u := range uids {
 				n := len(q)
-				i, j := 0, n
-				for i < j {
-					h := (i + j) >> 1
-					if q[h] < u {
-						i = h + 1
+				low, high := 0, n
+				for low < high {
+					mid := (low + high) >> 1
+					if q[mid] < u {
+						low = mid + 1
 					} else {
-						j = h
+						high = mid
 					}
 				}
-				qidx := i
+				qidx := low
 				if qidx >= len(q) {
 					return
 				}
@@ -228,104 +228,118 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	val := d[0]
 
 	n := len(q)
-	i, j := 0, n
-	for i < j {
-		h := (i + j) >> 1
-		if q[h] < val {
-			i = h + 1
+	low, high := 0, n
+	for low < high {
+		mid := (low + high) >> 1
+		if q[mid] < val {
+			low = mid + 1
 		} else {
-			j = h
+			high = mid
 		}
 	}
 
-	minq := i
+	minq := low
 
 	val = d[ld-1]
 
-	i, j = 0, n
-	for i < j {
-		h := (i + j) >> 1
-		if q[h] <= val {
-			i = h + 1
+	if (low+jump) < n && q[low+jump] > val {
+		high = low + jump
+	} else {
+		high = n
+	}
+	for low < high {
+		mid := (low + high) >> 1
+		if q[mid] <= val {
+			low = mid + 1
 		} else {
-			j = h
+			high = mid
 		}
 	}
 
-	maxq := i
+	maxq := low
 	q = q[minq:maxq]
-	// d>=q
+
 	for len(q) > 0 && len(d) > 0 {
+		if len(d) < len(q) {
+			d, q = q, d
+		}
 		qval := q[0]
 
 		n := len(d)
-		i, j := 0, n
+		low, high := 0, n
 		if n > jump {
-			vv := d[jump]
-			if vv < qval {
-				i = jump
+			dval := d[jump]
+			if dval < qval {
+				low = jump
 			} else {
-				if vv == qval {
-					i = jump
+				if dval == qval {
+					low = jump
 				}
-				j = jump
+				high = jump
 			}
 		}
-		for i < j {
-			h := (i + j) >> 1
-			if d[h] < qval {
-				i = h + 1
+		for low < high {
+			mid := (low + high) >> 1
+			if d[mid] < qval {
+				low = mid + 1
 			} else {
-				j = h
+				high = mid
 			}
 		}
-		if i < n {
-			dval := d[i]
+		if low < n {
+			dval := d[low]
 			if dval == qval {
 				*o = append(*o, qval)
 				if len(q) == 1 {
 					break
 				}
 				q = q[1:]
-				d = d[i:]
+				d = d[low:]
 			} else {
 				if len(q) == 1 {
 					break
 				}
 				q = q[1:]
-				d = d[i:]
+				d = d[low:]
 
 				n := len(q)
+				low, high := 0, n
 				if n > jump {
-					vv := q[jump]
-					if vv < dval {
-						i = jump
+					qval := q[jump]
+					if qval < dval {
+						low = jump
 					} else {
-						if vv == dval {
-							i = jump
+						if qval == dval {
+							low = jump
 						}
-						j = jump
+						high = jump
 					}
 				}
-				i, j := 0, n
-				for i < j {
-					h := (i + j) >> 1
-					if q[h] < dval {
-						i = h + 1
+				for low < high {
+					mid := (low + high) >> 1
+					if q[mid] < dval {
+						low = mid + 1
 					} else {
-						j = h
+						high = mid
 					}
 				}
-				qval := q[i]
-				if dval == qval {
-					*o = append(*o, qval)
+				if low < n {
+					qval := q[low]
+					if dval == qval {
+						*o = append(*o, qval)
+					}
 					if len(d) == 1 {
 						break
 					}
-					q = q[i:]
+					q = q[low:]
 					d = d[1:]
+
+				} else {
+					break
 				}
 			}
+		} else {
+			break
 		}
 	}
 }
@@ -346,22 +360,22 @@ func IntersectSorted(lists []*pb.List) *pb.List {
 		lnval := len(list.Uids)
 
 		n := len(ls)
-		i, j := 0, n
-		for i < j {
-			h := (i + j) >> 1
-			if ls[h].length < lnval {
-				i = h + 1
+		low, high := 0, n
+		for low < high {
+			mid := (low + high) >> 1
+			if ls[mid].length < lnval {
+				low = mid + 1
 			} else {
-				j = h
+				high = mid
 			}
 		}
 		ls = append(ls, listInfo{
 			l:      list,
 			length: lnval,
 		})
-		if i < n {
-			copy(ls[i+1:], ls[i:])
-			ls[i] = listInfo{
+		if low < n {
+			copy(ls[low+1:], ls[low:])
+			ls[low] = listInfo{
 				l:      list,
 				length: lnval,
 			}
@@ -473,17 +487,17 @@ func MergeSorted(lists []*pb.List) *pb.List {
 // which it finds the uid, else returns -1
 func IndexOf(u *pb.List, uid uint64) int {
 	n := len(u.Uids)
-	i, j := 0, n
-	for i < j {
-		h := (i + j) >> 1
-		if u.Uids[h] < uid {
-			i = h + 1
+	low, high := 0, n
+	for low < high {
+		mid := (low + high) >> 1
+		if u.Uids[mid] < uid {
+			low = mid + 1
 		} else {
-			j = h
+			high = mid
 		}
 	}
-	if i < len(u.Uids) && u.Uids[i] == uid {
-		return i
+	if low < len(u.Uids) && u.Uids[low] == uid {
+		return low
 	}
 	return -1
 }

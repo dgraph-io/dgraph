@@ -38,6 +38,7 @@ func (h *uint64Heap) Pop() elem {
 	return x
 }
 
+// the code below has been adapted from src/container/heap/heap.go
 func initHeap(h *uint64Heap) {
 	n := h.Len()
 	for i := n/2 - 1; i >= 0; i-- {
@@ -57,23 +58,13 @@ func popHeap(h *uint64Heap) elem {
 	return h.Pop()
 }
 
-// func removeHeap(h *uint64Heap, i int) elem {
-// 	n := h.Len() - 1
-// 	if n != i {
-// 		h.Swap(i, n)
-// 		if !downHeap(h, i, n) {
-// 			upHeap(h, i)
-// 		}
-// 	}
-// 	return h.Pop()
-// }
-
 func fixHeap(h *uint64Heap, i int) {
 	if !downHeap(h, i, h.Len()) {
 		upHeap(h, i)
 	}
 }
 
+// upHeap up the value in heap
 func upHeap(h *uint64Heap, j int) {
 	for {
 		i := (j - 1) / 2 // parent
@@ -85,22 +76,23 @@ func upHeap(h *uint64Heap, j int) {
 	}
 }
 
-func downHeap(h *uint64Heap, i0, n int) bool {
-	i := i0
+// downHeap down the value in heap
+func downHeap(h *uint64Heap, initialLow, n int) bool {
+	low := initialLow
 	for {
-		j1 := 2*i + 1
-		if j1 >= n || j1 < 0 { // j1 < 0 after int overflow
+		high := 2*low + 1
+		if high >= n || high < 0 { // high < 0 after int overflow
 			break
 		}
-		j := j1 // left child
-		if j2 := j1 + 1; j2 < n && h.Less(j2, j1) {
-			j = j2 // = 2*i + 2  // right child
+		j := high // left child
+		if next := high + 1; next < n && h.Less(next, high) {
+			j = next // = 2*i + 2  // right child
 		}
-		if !h.Less(j, i) {
+		if !h.Less(j, low) {
 			break
 		}
-		h.Swap(i, j)
-		i = j
+		h.Swap(low, j)
+		low = j
 	}
-	return i > i0
+	return low > initialLow
 }
