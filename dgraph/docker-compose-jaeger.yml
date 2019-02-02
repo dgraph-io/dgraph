@@ -30,5 +30,8 @@ services:
       - "16686:16686"
     environment:
       - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+    # The jaeger all-in-one container stores all traces in memory. Set
+    # --memory.max-traces to some number if you don't want to store all traces
+    # indefinitely.
     # command:
     #   - --memory.max-traces=1000

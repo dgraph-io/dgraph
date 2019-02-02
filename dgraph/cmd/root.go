@@ -100,6 +100,8 @@ func initCmds() {
 		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
 		sc.Conf.AutomaticEnv()
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+		// Options that contain a "." should use "_" in its place when provided as an
+		// environment variable.
 		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 	cobra.OnInitialize(func() {
