@@ -51,6 +51,7 @@ func TestQuery(t *testing.T) {
 	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
 	t.Run("hash index queries", wrap(QueryHashIndex))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
+	t.Run("groupby uid that works", wrap(GroupByUidWorks))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
@@ -722,4 +723,49 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
+}
+
+func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "horsejr" .
+      _:x2 <name> "srfrog" .
+      _:x3 <name> "missbug" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			in:  fmt.Sprintf(`{q(func:uid(%s)) @groupby(uid) {count(uid)}}`, assigned.Uids["x1"]),
+			out: `{}`,
+		},
+		{
+			in: fmt.Sprintf(`{q(func:uid(%s)) @groupby(name) {count(uid)}}`, assigned.Uids["x1"]),
+			out: `{"q":[{
+				"@groupby":[{
+					"count": 1,
+					"name": "horsejr"
+				}]}]}`,
+		},
+		{
+			in:  `{q(func:has(dummy)) @groupby(uid) {}}`,
+			out: `{}`,
+		},
+		{
+			in:  `{q(func:has(name)) @groupby(dummy) {}}`,
+			out: `{}`,
+		},
+	}
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
 }
