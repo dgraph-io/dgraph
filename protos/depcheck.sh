@@ -14,7 +14,7 @@ function CompareSemVer() {
 	local ver1=(${1//./ })
 	local ver2=(${2//./ })
 
-	echo "Checking for semver $1 or newer"
+	echo "Checking for semantic version $1 or newer"
 
 	# check major
 	if [ ${ver1[0]} -gt ${ver2[0]} ]; then
