@@ -401,15 +401,14 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 	}
 
 	nextItems, err := it.Peek(2)
-	if err != nil || len(nextItems) != 2 {
+	switch {
+	case err != nil || len(nextItems) != 2:
 		return false
-	}
 
-	if nextItems[0].Typ != itemText {
+	case nextItems[0].Typ != itemText:
 		return false
-	}
 
-	if nextItems[1].Typ != itemLeftCurl {
+	case nextItems[1].Typ != itemLeftCurl:
 		return false
 	}
 
@@ -417,8 +416,7 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) (SchemasAndTypes, error) {
-	var emptyResult SchemasAndTypes
+func Parse(s string) (*SchemasAndTypes, error) {
 	var result SchemasAndTypes
 	var schemas []*pb.SchemaUpdate
 	var types []*pb.TypeUpdate
@@ -426,7 +424,7 @@ func Parse(s string) (SchemasAndTypes, error) {
 	l := lex.NewLexer(s)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
-		return emptyResult, err
+		return nil, err
 	}
 	it := l.NewIterator()
 	for it.Next() {
@@ -434,17 +432,17 @@ func Parse(s string) (SchemasAndTypes, error) {
 		switch item.Typ {
 		case lex.ItemEOF:
 			if err := resolveTokenizers(schemas); err != nil {
-				return emptyResult, x.Wrapf(err, "failed to enrich schema")
+				return nil, x.Wrapf(err, "failed to enrich schema")
 			}
 			result.Schemas = schemas
 			result.Types = types
-			return result, nil
+			return &result, nil
 
 		case itemText:
 			if isTypeDeclaration(item, it) {
 				typeUpdate, err := parseTypeDeclaration(it)
 				if err != nil {
-					return emptyResult, err
+					return nil, err
 				}
 				types = append(types, typeUpdate)
 				continue
@@ -452,15 +450,15 @@ func Parse(s string) (SchemasAndTypes, error) {
 
 			schema, err := parseScalarPair(it, item.Val)
 			if err != nil {
-				return emptyResult, err
+				return nil, err
 			}
 			schemas = append(schemas, schema)
 		case itemNewLine:
 			// pass empty line
 
 		default:
-			return emptyResult, x.Errorf("Unexpected token: %v while parsing schema", item)
+			return nil, x.Errorf("Unexpected token: %v while parsing schema", item)
 		}
 	}
-	return emptyResult, x.Errorf("Shouldn't reach here")
+	return nil, x.Errorf("Shouldn't reach here")
 }

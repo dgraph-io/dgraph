@@ -226,7 +226,7 @@ func TestParse3_Error(t *testing.T) {
 	reset()
 	result, err := Parse("age:uid @index .")
 	require.Error(t, err)
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParse4_Error(t *testing.T) {
@@ -234,13 +234,13 @@ func TestParse4_Error(t *testing.T) {
 	result, err := Parse("alive:bool @index(geo) .")
 	require.Equal(t, "Tokenizer: geo isn't valid for predicate: alive of type: bool",
 		err.Error())
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParse4_NoError(t *testing.T) {
 	reset()
 	result, err := Parse("name:string @index(fulltext) .")
-	require.NotNil(t, result.Schemas)
+	require.NotNil(t, result)
 	require.Nil(t, err)
 }
 
@@ -248,28 +248,28 @@ func TestParse5_Error(t *testing.T) {
 	reset()
 	result, err := Parse("value:default @index .")
 	require.Error(t, err)
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParse6_Error(t *testing.T) {
 	reset()
 	result, err := Parse("pass:password @index .")
 	require.Error(t, err)
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParse7_Error(t *testing.T) {
 	reset()
 	result, err := Parse("name:string @index .")
 	require.Error(t, err)
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParse8_Error(t *testing.T) {
 	reset()
 	result, err := Parse("dob:dateTime @index .")
 	require.Error(t, err)
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParseScalarList(t *testing.T) {
@@ -309,7 +309,7 @@ func TestParseScalarListError1(t *testing.T) {
 	`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Unclosed [ while parsing schema for: friend")
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParseScalarListError2(t *testing.T) {
@@ -319,7 +319,7 @@ func TestParseScalarListError2(t *testing.T) {
 	`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Invalid ending")
-	require.Nil(t, result.Schemas)
+	require.Nil(t, result)
 }
 
 func TestParseScalarListError3(t *testing.T) {
