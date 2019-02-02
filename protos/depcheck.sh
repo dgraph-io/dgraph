@@ -4,7 +4,7 @@ set -e
 
 readonly PROTOCMINVER="3.6.1"
 
-which protoc || (echo "Error: protoc not found" ; exit 1)
+which protoc &>/dev/null || (echo "Error: protoc not found" ; exit 1)
 
 PROTOCVER=`protoc --version | awk '{printf $2}'`
 
