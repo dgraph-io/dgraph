@@ -8,17 +8,17 @@ which protoc &>/dev/null || (echo "Error: protoc not found" ; exit 1)
 
 PROTOCVER=`protoc --version | awk '{printf $2}'`
 
-# CompareProtocVer compares the min protoc version against the installed protoc.
+# CompareSemVer compares the minimum version ver1 against another version ver2.
 # If the version is below our min it will exit with non-zero to trigger error in make.
-function CompareProtocVer() {
+function CompareSemVer() {
 	local ver1=(${1//./ })
 	local ver2=(${2//./ })
 
-	echo "Checking for protobuf version $PROTOCMINVER or newer"
+	echo "Checking for semver $1 or newer"
 
 	# check major
 	if [ ${ver1[0]} -gt ${ver2[0]} ]; then
-		echo "Error: protoc major version is '${ver2[0]}'"
+		echo "Error: major version is '${ver2[0]}'"
 		exit 1
 	elif [ ${ver2[0]} -gt ${ver1[0]} ]; then
 		exit 0
@@ -26,7 +26,7 @@ function CompareProtocVer() {
 
 	# check minor
 	if [ ${ver1[1]} -gt ${ver2[1]} ]; then
-		echo "Error: protoc minor version is '${ver2[1]}'"
+		echo "Error: minor version is '${ver2[1]}'"
 		exit 1
 	elif [ ${ver2[1]} -gt ${ver1[1]} ]; then
 		exit 0
@@ -34,12 +34,12 @@ function CompareProtocVer() {
 
 	# check patch
 	if [ ${ver1[2]} -gt ${ver2[2]} ]; then
-		echo "Error protoc patch version is '${ver2[2]}'"
+		echo "Error patch version is '${ver2[2]}'"
 		exit 1
 	fi
 }
 
-CompareProtocVer $PROTOCMINVER $PROTOCVER
+CompareSemVer $PROTOCMINVER $PROTOCVER
 
 # TODO: check proto api versions
 
