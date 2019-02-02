@@ -20,6 +20,7 @@ import (
 	goflag "flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
@@ -99,6 +100,7 @@ func initCmds() {
 		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
 		sc.Conf.AutomaticEnv()
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 	cobra.OnInitialize(func() {
 		cfg := rootConf.GetString("config")

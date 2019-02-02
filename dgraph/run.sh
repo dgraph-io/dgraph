@@ -1,2 +1,16 @@
-md5sum ~/go/bin/dgraph; go build . && go install . && md5sum dgraph ~/go/bin/dgraph
-docker-compose down; DATA=$HOME/dg docker-compose up --force-recreate --remove-orphans
+#!/bin/bash
+for o in $@; do
+    case $o in
+        '--jaeger' )
+            EXTRA_COMPOSE=( -f docker-compose-jaeger.yml )
+            ;;
+        *)
+            echo "Unknown option $1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+make install
+docker-compose down
+DATA=$HOME/dg docker-compose -f docker-compose.yml ${EXTRA_COMPOSE[@]} up --force-recreate --remove-orphans

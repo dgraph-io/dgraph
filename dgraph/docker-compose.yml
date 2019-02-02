@@ -1,5 +1,5 @@
 # Docker compose file for testing. Use it with:
-# docker-compose up --force-recreate
+# ./run.sh
 # This would pick up dgraph binary from $GOPATH.
 
 version: "3.5"
@@ -24,6 +24,7 @@ services:
   zero2:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.2
+    working_dir: /data/dg0.2
     depends_on:
       - zero1
     ports:
@@ -42,6 +43,7 @@ services:
   zero3:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.3
+    working_dir: /data/dg0.3
     depends_on:
       - zero2
     ports:
