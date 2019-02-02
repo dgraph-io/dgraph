@@ -3,6 +3,18 @@ COMPOSE_FILES=( -f docker-compose.yml )
 SERVICES=()
 for o in $@; do
     case $o in
+        '-h'|'--help' )
+            cat <<EOF
+Runs the Dgraph test cluster.
+
+Available options:
+
+    --jaeger   Run with Jaeger tracing enabled.
+    --single   Run a single Zero and Alpha (2-node cluster).
+    --metrics  Run with metrics collection and dashboard (Prometheus/Grafana/Node Exporter).
+EOF
+            exit 0
+            ;;
         '--jaeger' )
             COMPOSE_FILES+=( -f docker-compose-jaeger.yml )
             ;;
