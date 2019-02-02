@@ -331,7 +331,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 
 func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 	field := &pb.SchemaUpdate{Predicate: it.Item().Val}
-	list := false
+	var list bool
 
 	it.Next()
 	if it.Item().Typ != itemColon {
@@ -347,9 +347,8 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 	if it.Item().Typ != itemText {
 		return nil, x.Errorf("Missing field type in type declaration. Got %v", it.Item().Val)
 	}
-	typ := getType(it.Item().Val)
-	field.ValueType = typ
-	if typ == pb.Posting_OBJECT {
+	field.ValueType = getType(it.Item().Val)
+	if field.ValueType == pb.Posting_OBJECT {
 		field.ObjectTypeName = it.Item().Val
 	}
 
@@ -418,8 +417,6 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) (*SchemasAndTypes, error) {
 	var result SchemasAndTypes
-	var schemas []*pb.SchemaUpdate
-	var types []*pb.TypeUpdate
 
 	l := lex.NewLexer(s)
 	l.Run(lexText)
@@ -431,11 +428,9 @@ func Parse(s string) (*SchemasAndTypes, error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
-			if err := resolveTokenizers(schemas); err != nil {
+			if err := resolveTokenizers(result.Schemas); err != nil {
 				return nil, x.Wrapf(err, "failed to enrich schema")
 			}
-			result.Schemas = schemas
-			result.Types = types
 			return &result, nil
 
 		case itemText:
@@ -444,7 +439,7 @@ func Parse(s string) (*SchemasAndTypes, error) {
 				if err != nil {
 					return nil, err
 				}
-				types = append(types, typeUpdate)
+				result.Types = append(result.Types, typeUpdate)
 				continue
 			}
 
@@ -452,7 +447,7 @@ func Parse(s string) (*SchemasAndTypes, error) {
 			if err != nil {
 				return nil, err
 			}
-			schemas = append(schemas, schema)
+			result.Schemas = append(result.Schemas, schema)
 		case itemNewLine:
 			// pass empty line
 
