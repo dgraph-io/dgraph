@@ -3181,7 +3181,7 @@ will tokenize the value. The resultant tokens are used as keys for posting
 lists. The edge subject is then added to the posting list for each token.
 
 When a query root search occurs, the search value is tokenized. The result of
-the search is all of the nodes in the union or intersection of the correponding
+the search is all of the nodes in the union or intersection of the corresponding
 posting lists (depending on whether `anyof` or `allof` was used).
 {{% /notice %}}
 
