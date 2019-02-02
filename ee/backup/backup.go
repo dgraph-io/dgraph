@@ -43,8 +43,7 @@ func (r *Request) Process(ctx context.Context) error {
 
 	stream := r.DB.NewStreamAt(r.Backup.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	// Take full backups for now.
-	if _, err := stream.Backup(h, 0); err != nil {
+	if _, err := stream.Backup(h, r.Backup.Since); err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}

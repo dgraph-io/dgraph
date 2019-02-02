@@ -101,20 +101,18 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 		return err
 	}
 
-	req := pb.BackupRequest{
-		ReadTs:   since,
-		Location: destination,
-		UnixTs:   time.Now().UTC().Format("20060102.1504"),
+	// Get ReadTs from zero and wait for stream to catch up.
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
+	if err != nil {
+		glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
+		return err
 	}
 
-	if since == 0 {
-		// Get ReadTs from zero and wait for stream to catch up.
-		ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
-		if err != nil {
-			glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
-			return err
-		}
-		req.ReadTs = ts.ReadOnly
+	req := pb.BackupRequest{
+		ReadTs:   ts.ReadOnly,
+		Since:    since,
+		Location: destination,
+		UnixTs:   time.Now().UTC().Format("20060102.1504"),
 	}
 
 	gids := groups().KnownGroups()
