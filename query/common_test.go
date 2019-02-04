@@ -87,9 +87,8 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	require.NoError(t, txn.CommitToDisk(writer, commit))
 	require.NoError(t, writer.Flush())
 
-	// Add a GroupChecksum to make groups().ChecksumsMatch work. Hacky as hell.
 	// TODO: Switch this package to use normal Dgraph cluster.
-	delta := &pb.OracleDelta{MaxAssigned: commit, GroupChecksums: map[uint32]uint64{1: 5715270497596731094}}
+	delta := &pb.OracleDelta{MaxAssigned: commit}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(delta)
 }
