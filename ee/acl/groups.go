@@ -69,7 +69,7 @@ func groupAdd(conf *viper.Viper) error {
 		return fmt.Errorf("unable to create group: %v", err)
 	}
 
-	fmt.Printf("Created new group with id %v", groupId)
+	fmt.Printf("Created new group with id %v\n", groupId)
 	return nil
 }
 
