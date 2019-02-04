@@ -283,24 +283,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	// Reserved predicates cannot be dropped.
-	if _, ok := x.InitialPreds[op.DropAttr]; len(op.DropAttr) > 0 && ok {
-		err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped", op.DropAttr)
-		return nil, err
-	}
-
-	// Reserved predicates cannot be altered.
-	updates, schemaErr := schema.Parse(op.Schema)
-	if schemaErr == nil {
-		for _, update := range updates {
-			if _, ok := x.InitialPreds[update.Predicate]; ok {
-				err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
-					update.Predicate)
-				return nil, err
-			}
-		}
-	}
-
 	if !isMutationAllowed(ctx) {
 		return nil, x.Errorf("No mutations allowed by server.")
 	}
@@ -313,8 +295,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
 	}
-
-	// All checks done.
 
 	defer glog.Infof("ALTER op: %+v done", op)
 
@@ -331,6 +311,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if len(op.DropAttr) > 0 {
+		// Reserved predicates cannot be dropped.
+		if _, ok := x.InitialPreds[op.DropAttr]; ok {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
+				op.DropAttr)
+			return nil, err
+		}
+
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
@@ -347,13 +334,24 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	if schemaErr != nil {
-		return empty, schemaErr
+	updates, err := schema.Parse(op.Schema)
+	if err != nil {
+		return empty, err
 	}
+
+	// Reserved predicates cannot be altered.
+	for _, update := range updates {
+		if _, ok := x.InitialPreds[update.Predicate]; ok {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
+				update.Predicate)
+			return nil, err
+		}
+	}
+
 	glog.Infof("Got schema: %+v\n", updates)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = updates
-	_, err := query.ApplyMutations(ctx, m)
+	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
 
