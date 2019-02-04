@@ -64,35 +64,35 @@ func fixHeap(h *uint64Heap, i int) {
 	}
 }
 
-// upHeap up the value in heap
-func upHeap(h *uint64Heap, j int) {
+// upHeap refines the value level, starting from the bottom level “pos” to the parent levels, in the binary tree “h”
+func upHeap(h *uint64Heap, pos int) {
 	for {
-		i := (j - 1) / 2 // parent
-		if i == j || !h.Less(j, i) {
+		parent := (pos - 1) / 2 // parent
+		if parent == pos || !h.Less(pos, parent) {
 			break
 		}
-		h.Swap(i, j)
-		j = i
+		h.Swap(parent, pos)
+		pos = parent
 	}
 }
 
-// downHeap down the value in heap
-func downHeap(h *uint64Heap, initialLow, n int) bool {
-	low := initialLow
+// downHeap refines the value level, starting from the upper level “pos” to the right levels, in the binary tree “h”
+func downHeap(h *uint64Heap, pos, n int) bool {
+	current := pos
 	for {
-		high := 2*low + 1
+		high := 2*current + 1
 		if high >= n || high < 0 { // high < 0 after int overflow
 			break
 		}
-		j := high // left child
+		node := high // left child
 		if next := high + 1; next < n && h.Less(next, high) {
-			j = next // = 2*i + 2  // right child
+			node = next // = 2*i + 2  right child
 		}
-		if !h.Less(j, low) {
+		if !h.Less(node, current) {
 			break
 		}
-		h.Swap(low, j)
-		low = j
+		h.Swap(current, node)
+		current = node
 	}
-	return low > initialLow
+	return current > pos
 }
