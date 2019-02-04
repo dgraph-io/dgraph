@@ -280,6 +280,11 @@ func authorizeUser(ctx context.Context, userid string, password string) (*acl.Us
 	return user, nil
 }
 
+type GroupRule struct {
+	group string
+	perms int32
+}
+
 type PredRegexRule struct {
 	PredRegex *regexp.Regexp
 	Perms     int32
@@ -287,8 +292,8 @@ type PredRegexRule struct {
 
 // UnmarshalAcl converts the acl blob to two data sets:
 // the first one being a map from the single predicates to permissions;
-// and the second one being a slice of predicate regex rules
-func UnmarshalAcl(aclBytes []byte) (map[string]int32, []*PredRegexRule, error) {
+// and the second one being a map from predicate regexes to permissions
+func UnmarshalAcl(aclBytes []byte) (map[string]int32, map[string]int32, error) {
 	var acls []acl.Acl
 	if len(aclBytes) == 0 {
 		return nil, nil, fmt.Errorf("the acl bytes are empty")

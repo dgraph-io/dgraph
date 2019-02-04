@@ -270,8 +270,6 @@ func info(conf *viper.Viper) error {
 		if err != nil {
 			return err
 		}
-		// build the info string for group
-
 		fmt.Printf("Group: %5s\n", groupId)
 		fmt.Printf("UID  : %5s\n", group.Uid)
 		fmt.Printf("ID   : %5s\n", group.GroupID)
@@ -282,7 +280,6 @@ func info(conf *viper.Viper) error {
 		}
 		fmt.Printf("Users: %5s\n", strings.Join(userNames, " "))
 
-		var aclStrs []string
 		var acls []Acl
 		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
 			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
@@ -290,10 +287,8 @@ func info(conf *viper.Viper) error {
 		}
 
 		for _, acl := range acls {
-			aclStrs = append(aclStrs, fmt.Sprintf("(predicate filter: %v, perm: %v)",
-				acl.PredFilter, acl.Perm))
+			fmt.Printf("ACL  : %5v\n", acl)
 		}
-		fmt.Sprintf("ACLs : %5s\n", strings.Join(aclStrs, " "))
 	}
 
 	return nil

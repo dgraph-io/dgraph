@@ -147,15 +147,10 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 
 // an entity can be either a single predicate or a regex that can be used to
 // match multiple predicates
-type PredFilter struct {
-	IsRegex   bool
+type Acl struct {
 	Predicate string
 	Regex     string
-}
-
-type Acl struct {
-	PredFilter PredFilter
-	Perm       int32 `json:"perm"`
+	Perm      int32 `json:"perm"`
 }
 
 func chMod(conf *viper.Viper) error {
@@ -214,19 +209,13 @@ func chMod(conf *viper.Viper) error {
 	var newAcl Acl
 	if len(predicate) > 0 {
 		newAcl = Acl{
-			PredFilter: PredFilter{
-				IsRegex:   false,
-				Predicate: predicate,
-			},
-			Perm: int32(perm),
+			Predicate: predicate,
+			Perm:      int32(perm),
 		}
 	} else {
 		newAcl = Acl{
-			PredFilter: PredFilter{
-				IsRegex: true,
-				Regex:   predRegex,
-			},
-			Perm: int32(perm),
+			Regex: predRegex,
+			Perm:  int32(perm),
 		}
 	}
 	newAcls, updated := updateAcl(currentAcls, newAcl)
@@ -259,15 +248,14 @@ func chMod(conf *viper.Viper) error {
 	return nil
 }
 
-func isSameFilter(filter1 *PredFilter, filter2 *PredFilter) bool {
-	return (!filter1.IsRegex && !filter2.IsRegex && filter1.Predicate == filter2.Predicate) ||
-		(filter1.IsRegex && filter2.IsRegex && filter1.Regex == filter2.Regex)
+func isSamePredicate(acl1 *Acl, acl2 *Acl) bool {
+	return (acl1.Predicate == acl2.Predicate) || (acl1.Regex == acl2.Regex)
 }
 
 // returns whether the existing acls slice is changed
 func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 	for idx, aclEntry := range acls {
-		if isSameFilter(&aclEntry.PredFilter, &newAcl.PredFilter) {
+		if isSamePredicate(&aclEntry, &newAcl) {
 			if aclEntry.Perm == newAcl.Perm {
 				// new permission is the same as the current one, no update
 				return acls, false
