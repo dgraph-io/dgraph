@@ -83,7 +83,7 @@ in the real world.
 * Link to your project or reproducible gist:
 * I intend to submit a pull request to fix this issue: [ ] 
 
-<!--- When you're finished with the above, please delete these comments to avoid
+<!--- When you're finished with the above, you may need to delete these comments to avoid
 whitespace formatting issues -->
 
 <!--- Modified from trufflesuite/ganache -->
