@@ -57,10 +57,9 @@ cluster.
 func Execute() {
 	initCmds()
 
-	// Convinces goflags that we have called Parse() to avoid noisy logs.
+	// Convinces goflags that Parse() has been called to avoid noisy logs.
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
-	// We don't need to check the error here.
-	_ = goflag.CommandLine.Parse([]string{})
+	x.Check(goflag.CommandLine.Parse([]string{}))
 
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Println(err)
