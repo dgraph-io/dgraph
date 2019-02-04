@@ -18,8 +18,6 @@ package cmd
 
 import (
 	goflag "flag"
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -56,11 +54,12 @@ cluster.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	initCmds()
-	goflag.Parse()
-	if err := RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+
+	// Convinces goflags that Parse() has been called to avoid noisy logs.
+	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
+	x.Check(goflag.CommandLine.Parse([]string{}))
+
+	x.Check(RootCmd.Execute())
 }
 
 var rootConf = viper.New()
