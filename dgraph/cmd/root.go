@@ -18,8 +18,6 @@ package cmd
 
 import (
 	goflag "flag"
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -61,10 +59,7 @@ func Execute() {
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
 	x.Check(goflag.CommandLine.Parse([]string{}))
 
-	if err := RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	x.Check(RootCmd.Execute())
 }
 
 var rootConf = viper.New()
