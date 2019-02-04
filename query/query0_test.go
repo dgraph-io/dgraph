@@ -1631,6 +1631,7 @@ var maxPendingCh chan uint64
 
 func TestMain(m *testing.M) {
 	x.Init()
+	x.SetTestRun()
 
 	odch = make(chan *pb.OracleDelta, 100)
 	maxPendingCh = make(chan uint64, 100)
