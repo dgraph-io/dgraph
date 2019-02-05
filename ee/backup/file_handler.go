@@ -82,8 +82,8 @@ func (h *fileHandler) Load(uri *url.URL, since uint64, fn loadFn) error {
 	}
 
 	// find files and sort.
-	files := x.FindFilesFunc(uri.Path, func(path string) bool {
-		return strings.HasSuffix(path, ".backup")
+	files := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	if len(files) == 0 {
 		return x.Errorf("No backup files found in %q", uri.Path)
