@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -120,6 +121,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	if err = plist.AddMutation(ctx, txn, edge); err != nil {
 		return err
 	}
+	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 }
 
@@ -186,6 +188,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 	if err != nil {
 		return err
 	}
+	ostats.Record(ctx, x.NumEdges.M(1))
 
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
@@ -264,6 +267,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	if err = plist.AddMutation(ctx, txn, t); err != nil {
 		return err
 	}
+	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 
 }
@@ -375,6 +379,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	if err != nil {
 		return err
 	}
+	ostats.Record(ctx, x.NumEdges.M(1))
 	if hasCountIndex && cp.countAfter != cp.countBefore {
 		if err := txn.updateCount(ctx, cp); err != nil {
 			return err

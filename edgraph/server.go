@@ -520,9 +520,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return nil, err
 	}
 
-	// TODO: Perhaps use a global atomic int and then at the end
-	// of this loop record this value in a background goroutine.
-	// Investigate if we can optimize this.
 	ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 	defer func() {
 		measurements = append(measurements, x.PendingQueries.M(-1))

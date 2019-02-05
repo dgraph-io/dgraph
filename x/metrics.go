@@ -32,43 +32,41 @@ import (
 var (
 	// These are cumulative
 	PostingReads = stats.Int64("dgraph/posting_reads",
-		"The number of posting reads", stats.UnitDimensionless)
+		"Total number of posting reads", stats.UnitDimensionless)
 	PostingWrites = stats.Int64("dgraph/posting_writes",
-		"The number of posting writes", stats.UnitDimensionless)
+		"Total number of posting writes", stats.UnitDimensionless)
 	BytesRead = stats.Int64("dgraph/bytes_read",
-		"The number of bytes read", stats.UnitBytes)
+		"Total number of bytes read", stats.UnitBytes)
 	BytesWrite = stats.Int64("dgraph/bytes_written",
-		"The number of bytes written", stats.UnitBytes)
+		"Total number of bytes written", stats.UnitBytes)
 	NumQueries = stats.Int64("dgraph/queries",
-		"The number of queries", stats.UnitDimensionless)
+		"Total number of queries", stats.UnitDimensionless)
 	NumMutations = stats.Int64("dgraph/mutations",
-		"The number of mutations", stats.UnitDimensionless)
+		"Total number of mutations", stats.UnitDimensionless)
+	NumEdges = stats.Int64("dgraph/num_edges",
+		"Total number of edges created", stats.UnitDimensionless)
 	LatencyMs = stats.Float64("dgraph/latency",
-		"The latency of the various methods", stats.UnitMilliseconds)
+		"Latency of the various methods", stats.UnitMilliseconds)
 
 	// value at particular point of time
 	PendingQueries = stats.Int64("dgraph/queries_pending",
-		"The number of pending queries", stats.UnitDimensionless)
+		"Number of pending queries", stats.UnitDimensionless)
 	PendingProposals = stats.Int64("dgraph/proposals_pending",
-		"The number of pending proposals", stats.UnitDimensionless)
+		"Number of pending proposals", stats.UnitDimensionless)
 	DirtyMapSize = stats.Int64("dgraph/dirtymap_size",
-		"The number of elements in the dirty map", stats.UnitDimensionless)
+		"Number of elements in the dirty map", stats.UnitDimensionless)
 	NumGoRoutines = stats.Int64("dgraph/goroutines",
-		"The number of goroutines", stats.UnitDimensionless)
+		"Number of goroutines", stats.UnitDimensionless)
 	MemoryInUse = stats.Int64("dgraph/memory_in_use",
-		"The amount of memory in use", stats.UnitBytes)
+		"Amount of memory in use", stats.UnitBytes)
 	MemoryIdle = stats.Int64("dgraph/memory_idle",
-		"The amount of memory in idle spans", stats.UnitBytes)
+		"Amount of memory in idle spans", stats.UnitBytes)
 	MemoryProc = stats.Int64("dgraph/memory_proc",
-		"The amount of memory used in processes", stats.UnitBytes)
+		"Amount of memory used in processes", stats.UnitBytes)
 	ActiveMutations = stats.Int64("dgraph/active_mutations",
-		"The number of active mutations", stats.UnitDimensionless)
+		"Number of active mutations", stats.UnitDimensionless)
 	AlphaHealth = stats.Int64("dgraph/alpha_status",
-		"The status of the alphas", stats.UnitDimensionless)
-	MaxPlSize = stats.Int64("dgraph/max_list_bytes",
-		"The maximum value of bytes of the list", stats.UnitBytes)
-	MaxPlLength = stats.Int64("dgraph/max_list_length",
-		"The maximum length of the list", stats.UnitDimensionless)
+		"Status of the alphas", stats.UnitDimensionless)
 
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
@@ -76,11 +74,9 @@ var (
 
 var (
 	// Tag keys here
-	KeyPid, _    = tag.NewKey("pid")
 	KeyStatus, _ = tag.NewKey("status")
 	KeyError, _  = tag.NewKey("error")
 	KeyMethod, _ = tag.NewKey("method")
-	KeyPeriod, _ = tag.NewKey("period")
 
 	// Tag values here
 	TagValueStatusOK    = "ok"
@@ -99,7 +95,7 @@ var (
 )
 
 var allTagKeys = []tag.Key{
-	KeyPid, KeyStatus, KeyError, KeyMethod,
+	KeyStatus, KeyError, KeyMethod,
 }
 
 var allViews = []*view.View{
@@ -142,6 +138,13 @@ var allViews = []*view.View{
 		Name:        NumQueries.Name(),
 		Measure:     NumQueries,
 		Description: NumQueries.Description(),
+		Aggregation: view.Count(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        NumEdges.Name(),
+		Measure:     NumEdges,
+		Description: NumEdges.Description(),
 		Aggregation: view.Count(),
 		TagKeys:     allTagKeys,
 	},
@@ -207,20 +210,6 @@ var allViews = []*view.View{
 		Name:        AlphaHealth.Name(),
 		Measure:     AlphaHealth,
 		Description: AlphaHealth.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MaxPlSize.Name(),
-		Measure:     MaxPlSize,
-		Description: MaxPlSize.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MaxPlLength.Name(),
-		Measure:     MaxPlLength,
-		Description: MaxPlLength.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},

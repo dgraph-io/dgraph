@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
 	bpb "github.com/dgraph-io/badger/pb"

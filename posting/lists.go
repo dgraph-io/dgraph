@@ -29,7 +29,6 @@ import (
 	"time"
 
 	ostats "go.opencensus.io/stats"
-	"go.opencensus.io/tag"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -114,15 +113,10 @@ func getMemUsage() int {
 	return rss * os.Getpagesize()
 }
 
-func updateMemoryMetrics(ctx context.Context, lc *y.Closer) {
+func updateMemoryMetrics(lc *y.Closer) {
 	defer lc.Done()
-	period := time.Minute
-	ticker := time.NewTicker(period)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-
-	ctx, _ = tag.New(ctx,
-		tag.Insert(x.KeyMethod, "updateMemoryMetrics"),
-		tag.Insert(x.KeyPeriod, period.String()))
 
 	for {
 		select {
@@ -157,14 +151,9 @@ var (
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
-	// At the beginning add some distinguishing information
-	// to the context as tags that will be propagated when
-	// collecting metrics.
-	ctx := x.MetricsContext()
-
 	pstore = ps
 	closer = y.NewCloser(1)
-	go updateMemoryMetrics(ctx, closer)
+	go updateMemoryMetrics(closer)
 }
 
 func Cleanup() {
