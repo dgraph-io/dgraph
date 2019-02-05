@@ -186,7 +186,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loaderType, &ld.opt.parsedKeyFields)
+			m.run(loaderType, ld.opt.parsedKeyFields)
 			mapperWg.Done()
 		}(m)
 	}
@@ -201,8 +201,8 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done()
 
-			r, cleanup_fn := x.FileReader(file)
-			defer cleanup_fn()
+			r, cleanup := x.FileReader(file)
+			defer cleanup()
 
 			x.Check(chunker.Begin(r))
 			for {

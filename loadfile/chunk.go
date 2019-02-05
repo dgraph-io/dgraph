@@ -36,7 +36,7 @@ type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer, idFields *[]string) ([]*api.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer, idFields []string) ([]*api.NQuad, error)
 }
 
 type rdfChunker struct{}
@@ -58,7 +58,7 @@ func NewChunker(inputFormat int) Chunker {
 	}
 }
 
-// RDF files don't require any special processing at the beginning of the file
+// RDF files don't require any special processing at the beginning of the file.
 func (rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
@@ -95,7 +95,7 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ *[]string) ([]*api.NQuad, error) {
+func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ []string) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
@@ -119,7 +119,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ *[]string) ([]*api.NQuad, erro
 	return nqs, nil
 }
 
-// RDF files don't require any special processing at the end of the file
+// RDF files don't require any special processing at the end of the file.
 func (rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
@@ -206,7 +206,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer, keyFields *[]string) ([]*api.NQuad, error) {
+func (jsonChunker) Parse(chunkBuf *bytes.Buffer, keyFields []string) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}

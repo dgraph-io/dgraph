@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ type arrayElement struct {
 }
 
 func sortJSONArray(a []interface{}) uint64 {
-	h := uint64(0)
+	var h uint64
 	elements := make([]arrayElement, len(a))
 	for i, elem := range a {
 		elements[i] = arrayElement{elem, sortJSON(elem)}

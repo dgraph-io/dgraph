@@ -418,14 +418,14 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	return mr.nquads, err
 }
 
-func replaceBlankIds(nqs []*api.NQuad, keyFields *[]string) error {
+func replaceBlankIds(nqs []*api.NQuad, keyFields []string) error {
 	fieldToIdx := make(map[string]int)
 	for idx, nq := range nqs {
 		fieldToIdx[nq.Predicate] = idx
 	}
 
 	var str string
-	for _, f := range *keyFields {
+	for _, f := range keyFields {
 		idx, ok := fieldToIdx[f]
 		if !ok {
 			return fmt.Errorf("Key field %s not found: %+v\n", f, nqs)
@@ -442,7 +442,7 @@ func replaceBlankIds(nqs []*api.NQuad, keyFields *[]string) error {
 
 // JsonToNquads converts a JSON map or array of maps to N-Quads,
 // optionally setting the uid if none was found.
-func JsonToNquads(b []byte, keyFields *[]string) ([]*api.NQuad, error) {
+func JsonToNquads(b []byte, keyFields []string) ([]*api.NQuad, error) {
 	nqs, err := nquadsFromJson(b, set)
 
 	if err == nil {

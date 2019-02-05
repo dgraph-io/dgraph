@@ -91,7 +91,7 @@ func init() {
 			"more parallelism, but increases memory usage.")
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
-	flag.StringP("key", "k", "", "Comma-separated list of JSON fields to identify a uid")
+	flag.StringP("key", "k", "", "Comma-separated list of JSON fields to identify a node uniquely")
 }
 
 func run() {

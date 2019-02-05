@@ -117,7 +117,7 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func (m *mapper) run(inputFormat int, keyFields *[]string) {
+func (m *mapper) run(inputFormat int, keyFields []string) {
 	chunker := loadfile.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
@@ -132,12 +132,7 @@ func (m *mapper) run(inputFormat int, keyFields *[]string) {
 				}
 			}
 
-			gqlNqs := make([]gql.NQuad, len(nqs))
-			for i, nq := range nqs {
-				gqlNqs[i] = gql.NQuad{NQuad: nq}
-			}
-
-			for _, nq := range gqlNqs {
+			for _, nq := range nqs {
 				if err := facets.SortAndValidate(nq.Facets); err != nil {
 					atomic.AddInt64(&m.prog.errCount, 1)
 					if !m.opt.IgnoreErrors {
@@ -145,7 +140,7 @@ func (m *mapper) run(inputFormat int, keyFields *[]string) {
 					}
 				}
 
-				m.processNQuad(nq)
+				m.processNQuad(gql.NQuad{nq})
 				atomic.AddInt64(&m.prog.nquadCount, 1)
 			}
 

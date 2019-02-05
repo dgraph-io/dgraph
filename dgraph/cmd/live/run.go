@@ -175,8 +175,8 @@ func (l *loader) uid(val string) string {
 func (l *loader) processFile(ctx context.Context, file string) error {
 	fmt.Printf("Processing data file %q\n", file)
 
-	rd, cleanup_fn := x.FileReader(file)
-	defer cleanup_fn()
+	rd, cleanup := x.FileReader(file)
+	defer cleanup()
 
 	var err error
 	var isJson bool
@@ -234,7 +234,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadf
 		var nqs []*api.NQuad
 		chunkBuf, err := ck.Chunk(rd)
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err = ck.Parse(chunkBuf, &keyFields)
+			nqs, err = ck.Parse(chunkBuf, keyFields)
 			x.CheckfNoTrace(err)
 			batch = l.nextNquads(batch, nqs)
 		}

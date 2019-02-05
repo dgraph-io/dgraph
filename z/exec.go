@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // for debugging the tests
@@ -64,7 +66,8 @@ func Pipeline(cmds [][]string) error {
 			}
 		}
 
-		cmd[i].Start()
+		err := cmd[i].Start()
+		x.Check(err)
 	}
 
 	// Make sure to properly reap all spawned processes, but only save the error from the
