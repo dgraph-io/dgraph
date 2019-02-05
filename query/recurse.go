@@ -136,8 +136,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 
 		if numEdges > x.Config.QueryEdgeLimit {
-			// If we've seen too many nodes, stop the query.
-			return ErrTooBig
+			// If we've seen too many edges, stop the query.
+			return x.Errorf("Exceeded query edge limit = %v. Found %v edges.",
+				x.Config.QueryEdgeLimit, numEdges)
 		}
 
 		if len(out) == 0 {

@@ -54,7 +54,6 @@ var pathPool = sync.Pool{
 }
 
 var ErrStop = x.Errorf("STOP")
-var ErrTooBig = x.Errorf("Query exceeded memory limit. Please modify the query")
 var ErrFacet = x.Errorf("Skip the edge")
 
 type priorityQueue []*Item
@@ -204,7 +203,8 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 
 		if numEdges > x.Config.QueryEdgeLimit {
 			// If we've seen too many nodes, stop the query.
-			rch <- ErrTooBig
+			rch <- x.Errorf("Exceeded query edge limit = %v. Found %v edges.",
+				x.Config.QueryEdgeLimit, numEdges)
 			return
 		}
 
@@ -315,9 +315,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				select {
 				case err = <-expandErr:
 					if err != nil {
-						if err == ErrTooBig {
-							return nil, err
-						} else if err == ErrStop {
+						if err == ErrStop {
 							stopExpansion = true
 						} else {
 							return nil, err
@@ -474,9 +472,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			select {
 			case err = <-expandErr:
 				if err != nil {
-					if err == ErrTooBig {
-						return nil, err
-					} else if err == ErrStop {
+					if err == ErrStop {
 						stopExpansion = true
 					} else {
 						return nil, err

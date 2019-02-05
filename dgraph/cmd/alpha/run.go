@@ -150,7 +150,7 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
-			" This is only useful for shortest path queries.")
+			" This applies to shortest path and recursive queries.")
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
