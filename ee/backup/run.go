@@ -112,16 +112,21 @@ func run() (err error) {
 		}
 	}()
 
+	return runRestore(opt.pdir, opt.location, opt.readTs)
+}
+
+// runRestore calls badger.Load and tries to load data into a new DB.
+func runRestore(pdir, location string, readTs uint64) error {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(opt.location, opt.readTs, func(r io.Reader, groupId int) error {
-		fmt.Printf("--- Restoring groupId: %d, readTs: %d\n", groupId, opt.readTs)
+	return Load(location, readTs, func(r io.Reader, groupId int) error {
+		fmt.Printf("--- Restoring groupId: %d, readTs: %d\n", groupId, readTs)
 		bo := badger.DefaultOptions
 		bo.SyncWrites = false
 		bo.TableLoadingMode = options.MemoryMap
 		bo.ValueThreshold = 1 << 10
 		bo.NumVersionsToKeep = math.MaxInt32
-		bo.Dir = filepath.Join(opt.pdir, fmt.Sprintf("p%d", groupId))
+		bo.Dir = filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 		bo.ValueDir = bo.Dir
 		db, err := badger.OpenManaged(bo)
 		if err != nil {
