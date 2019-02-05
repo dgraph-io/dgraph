@@ -226,7 +226,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
 		case len(tuple) == 2:
-			// string is range like a.b.c.d:v.x.y.z
+			// string is range like a.b.c.d:w.x.y.z
 			rangeLo := net.ParseIP(tuple[0])
 			rangeHi := net.ParseIP(tuple[1])
 			if rangeLo == nil {
