@@ -191,9 +191,9 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, checkSchema(s1))
 
 	s := `jobs: string @upsert .`
-	su, err := schema.Parse(s)
+	result, err := schema.Parse(s)
 	require.NoError(t, err)
-	err = checkSchema(su[0])
+	err = checkSchema(result.Schemas[0])
 	require.Error(t, err)
 	require.Equal(t, "Index tokenizer is mandatory for: [jobs] when specifying @upsert directive", err.Error())
 
@@ -201,10 +201,10 @@ func TestCheckSchema(t *testing.T) {
 		jobs : string @index(exact) @upsert .
 		age  : int @index(int) @upsert .
 	`
-	su, err = schema.Parse(s)
+	result, err = schema.Parse(s)
 	require.NoError(t, err)
-	err = checkSchema(su[0])
+	err = checkSchema(result.Schemas[0])
 	require.NoError(t, err)
-	err = checkSchema(su[1])
+	err = checkSchema(result.Schemas[1])
 	require.NoError(t, err)
 }

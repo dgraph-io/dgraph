@@ -34,12 +34,12 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 		reset()
 	}
 	pstate.DeleteAll()
-	updates, err := Parse(string(s))
+	result, err := Parse(string(s))
 	if err != nil {
 		return err
 	}
 
-	for _, update := range updates {
+	for _, update := range result.Schemas {
 		State().Set(update.Predicate, *update)
 	}
 	State().Set("_predicate_", pb.SchemaUpdate{
@@ -295,9 +295,140 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 	return nil
 }
 
+func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
+	// Iterator is currently on the token corresponding to the keyword type.
+	if it.Item().Typ != itemText || it.Item().Val != "type" {
+		return nil, x.Errorf("Expected type keyword. Got %v", it.Item().Val)
+	}
+
+	it.Next()
+	if it.Item().Typ != itemText {
+		return nil, x.Errorf("Expected type name. Got %v", it.Item().Val)
+	}
+	typeUpdate := &pb.TypeUpdate{TypeName: it.Item().Val}
+
+	it.Next()
+	if it.Item().Typ != itemLeftCurl {
+		return nil, x.Errorf("Expected {. Got %v", it.Item().Val)
+	}
+
+	var fields []*pb.SchemaUpdate
+	for it.Next() {
+		item := it.Item()
+
+		switch item.Typ {
+		case itemRightCurl:
+			it.Next()
+			if it.Item().Typ != itemNewLine {
+				return nil, x.Errorf("Expected new line after type declaration. Got %v",
+					it.Item().Val)
+			}
+
+			typeUpdate.Fields = fields
+			return typeUpdate, nil
+		case itemText:
+			field, err := parseTypeField(it)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, field)
+		case itemNewLine:
+			// Ignore empty lines.
+		default:
+			return nil, x.Errorf("Unexpected token. Got %v", it.Item().Val)
+		}
+	}
+	return nil, x.Errorf("Shouldn't reach here.")
+}
+
+func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
+	field := &pb.SchemaUpdate{Predicate: it.Item().Val}
+	var list bool
+
+	it.Next()
+	if it.Item().Typ != itemColon {
+		return nil, x.Errorf("Missing colon in type declaration. Got %v", it.Item().Val)
+	}
+
+	it.Next()
+	if it.Item().Typ == itemLeftSquare {
+		list = true
+		it.Next()
+	}
+
+	if it.Item().Typ != itemText {
+		return nil, x.Errorf("Missing field type in type declaration. Got %v", it.Item().Val)
+	}
+	field.ValueType = getType(it.Item().Val)
+	if field.ValueType == pb.Posting_OBJECT {
+		field.ObjectTypeName = it.Item().Val
+	}
+
+	it.Next()
+	if it.Item().Typ == itemExclamationMark {
+		field.NonNullable = true
+		it.Next()
+	}
+
+	if list {
+		if it.Item().Typ != itemRightSquare {
+			return nil, x.Errorf("Expected matching square bracket. Got %v", it.Item().Val)
+		}
+		field.List = true
+		it.Next()
+
+		if it.Item().Typ == itemExclamationMark {
+			field.NonNullableList = true
+			it.Next()
+		}
+	}
+
+	if it.Item().Typ != itemNewLine {
+		return nil, x.Errorf("Expected new line after field declaration. Got %v", it.Item().Val)
+	}
+
+	return field, nil
+}
+
+func getType(typeName string) pb.Posting_ValType {
+	typ, ok := types.TypeForName(strings.ToLower(typeName))
+	if ok {
+		return pb.Posting_ValType(typ)
+	}
+
+	return pb.Posting_OBJECT
+}
+
+// SchemasAndTypes represents the parsed schema and type updates.
+type SchemasAndTypes struct {
+	Schemas []*pb.SchemaUpdate
+	Types   []*pb.TypeUpdate
+}
+
+func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
+	if item.Val != "type" {
+		return false
+	}
+
+	nextItems, err := it.Peek(2)
+	switch {
+	case err != nil || len(nextItems) != 2:
+		return false
+
+	case nextItems[0].Typ != itemText:
+		return false
+
+	case nextItems[1].Typ != itemLeftCurl:
+		return false
+	}
+
+	return true
+}
+
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) ([]*pb.SchemaUpdate, error) {
-	var schemas []*pb.SchemaUpdate
+func Parse(s string) (*SchemasAndTypes, error) {
+	var result SchemasAndTypes
+
 	l := lex.NewLexer(s)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
@@ -308,17 +439,26 @@ func Parse(s string) ([]*pb.SchemaUpdate, error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
-			if err := resolveTokenizers(schemas); err != nil {
+			if err := resolveTokenizers(result.Schemas); err != nil {
 				return nil, x.Wrapf(err, "failed to enrich schema")
 			}
-			return schemas, nil
+			return &result, nil
 
 		case itemText:
+			if isTypeDeclaration(item, it) {
+				typeUpdate, err := parseTypeDeclaration(it)
+				if err != nil {
+					return nil, err
+				}
+				result.Types = append(result.Types, typeUpdate)
+				continue
+			}
+
 			schema, err := parseScalarPair(it, item.Val)
 			if err != nil {
 				return nil, err
 			}
-			schemas = append(schemas, schema)
+			result.Schemas = append(result.Schemas, schema)
 		case itemNewLine:
 			// pass empty line
 

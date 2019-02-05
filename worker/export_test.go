@@ -216,17 +216,18 @@ func TestExport(t *testing.T) {
 	scanner = bufio.NewScanner(r)
 	count = 0
 	for scanner.Scan() {
-		schemas, err := schema.Parse(scanner.Text())
+		result, err := schema.Parse(scanner.Text())
 		require.NoError(t, err)
-		require.Equal(t, 1, len(schemas))
+		require.Equal(t, 1, len(result.Schemas))
 		// We wrote schema for only two predicates
-		if schemas[0].Predicate == "friend" {
-			require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
+		if result.Schemas[0].Predicate == "friend" {
+			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
 		} else {
-			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range", schemas[0].Predicate)
-			require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
+			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+				result.Schemas[0].Predicate)
+			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
 		}
-		count = len(schemas)
+		count = len(result.Schemas)
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming

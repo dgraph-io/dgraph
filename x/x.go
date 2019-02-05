@@ -486,6 +486,7 @@ func SpanTimer(span *trace.Span, name string) func() {
 
 	return func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
+		// TODO: We can look into doing a latency record here.
 	}
 }
 

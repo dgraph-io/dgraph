@@ -35,6 +35,7 @@ const (
 	itemUnderscore
 	itemLeftSquare
 	itemRightSquare
+	itemExclamationMark
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -74,6 +75,8 @@ Loop:
 			l.Emit(itemLeftSquare)
 		case r == ']':
 			l.Emit(itemRightSquare)
+		case r == '!':
+			l.Emit(itemExclamationMark)
 		case r == '_':
 			// Predicates can start with _.
 			return lexWord
