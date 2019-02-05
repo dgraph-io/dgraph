@@ -388,6 +388,27 @@ func TestParseEmptyType(t *testing.T) {
 
 }
 
+func TestParseSingleType(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+			Name: string
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+		Fields: []*pb.SchemaUpdate{
+			&pb.SchemaUpdate{
+				Predicate: "Name",
+				ValueType: pb.Posting_STRING,
+			},
+		},
+	}, result.Types[0])
+
+}
+
 func TestParseCombinedSchemasAndTypes(t *testing.T) {
 	reset()
 	result, err := Parse(`

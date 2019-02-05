@@ -297,16 +297,25 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 
 func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	// Iterator is currently on the token corresponding to the keyword type.
-	// Call Next to land on the type name.
+	if it.Item().Typ != itemText || it.Item().Val != "type" {
+		return nil, x.Errorf("Expected type keyword. Got %v", it.Item().Val)
+	}
+
 	it.Next()
+	if it.Item().Typ != itemText {
+		return nil, x.Errorf("Expected type name. Got %v", it.Item().Val)
+	}
 	typeUpdate := &pb.TypeUpdate{TypeName: it.Item().Val}
 
-	// Call next again to skip the { character.
 	it.Next()
+	if it.Item().Typ != itemLeftCurl {
+		return nil, x.Errorf("Expected {. Got %v", it.Item().Val)
+	}
 
 	var fields []*pb.SchemaUpdate
-	for {
+	for it.Next() {
 		item := it.Item()
+
 		switch item.Typ {
 		case itemRightCurl:
 			it.Next()
@@ -323,10 +332,13 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 				return nil, err
 			}
 			fields = append(fields, field)
+		case itemNewLine:
+			// Ignore empty lines.
 		default:
-			it.Next()
+			return nil, x.Errorf("Unexpected token. Got %v", it.Item().Val)
 		}
 	}
+	return nil, x.Errorf("Shouldn't reach here.")
 }
 
 func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
@@ -375,7 +387,6 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 		return nil, x.Errorf("Expected new line after field declaration. Got %v", it.Item().Val)
 	}
 
-	it.Next()
 	return field, nil
 }
 

@@ -341,6 +341,9 @@ message SchemaUpdate {
 	// Fields required for type system.
 	bool non_nullable = 10;
 	bool non_nullable_list = 11;
+
+	// If value_type is OBJECT, then this represents an object type with a
+	// custom name. This field stores said name.
 	string object_type_name = 12;
 
 	// Deleted field:

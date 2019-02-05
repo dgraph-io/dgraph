@@ -2613,8 +2613,10 @@ type SchemaUpdate struct {
 	Upsert    bool                   `protobuf:"varint,8,opt,name=upsert,proto3" json:"upsert,omitempty"`
 	Lang      bool                   `protobuf:"varint,9,opt,name=lang,proto3" json:"lang,omitempty"`
 	// Fields required for type system.
-	NonNullable          bool     `protobuf:"varint,10,opt,name=non_nullable,json=nonNullable,proto3" json:"non_nullable,omitempty"`
-	NonNullableList      bool     `protobuf:"varint,11,opt,name=non_nullable_list,json=nonNullableList,proto3" json:"non_nullable_list,omitempty"`
+	NonNullable     bool `protobuf:"varint,10,opt,name=non_nullable,json=nonNullable,proto3" json:"non_nullable,omitempty"`
+	NonNullableList bool `protobuf:"varint,11,opt,name=non_nullable_list,json=nonNullableList,proto3" json:"non_nullable_list,omitempty"`
+	// If value_type is OBJECT, then this represents an object type with a
+	// custom name. This field stores said name.
 	ObjectTypeName       string   `protobuf:"bytes,12,opt,name=object_type_name,json=objectTypeName,proto3" json:"object_type_name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
