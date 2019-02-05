@@ -17,256 +17,204 @@
 package x
 
 import (
+	"context"
 	"expvar"
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/golang/glog"
+	"go.opencensus.io/exporter/prometheus"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
 )
 
 var (
 	// These are cumulative
-	PostingReads  *expvar.Int
-	PostingWrites *expvar.Int
-	BytesRead     *expvar.Int
-	BytesWrite    *expvar.Int
-	NumQueries    *expvar.Int
+	NumQueries = stats.Int64("dgraph/queries",
+		"Total number of queries", stats.UnitDimensionless)
+	NumMutations = stats.Int64("dgraph/mutations",
+		"Total number of mutations", stats.UnitDimensionless)
+	NumEdges = stats.Int64("dgraph/num_edges",
+		"Total number of edges created", stats.UnitDimensionless)
+	LatencyMs = stats.Float64("dgraph/latency",
+		"Latency of the various methods", stats.UnitMilliseconds)
 
 	// value at particular point of time
-	PendingQueries   *expvar.Int
-	PendingProposals *expvar.Int
-	DirtyMapSize     *expvar.Int
-	NumGoRoutines    *expvar.Int
-	MemoryInUse      *expvar.Int
-	MemoryIdle       *expvar.Int
-	MemoryProc       *expvar.Int
-	ActiveMutations  *expvar.Int
-	AlphaHealth      *expvar.Int
-	MaxPlSize        *expvar.Int
-	MaxPlLength      *expvar.Int
+	PendingQueries = stats.Int64("dgraph/queries_pending",
+		"Number of pending queries", stats.UnitDimensionless)
+	PendingProposals = stats.Int64("dgraph/proposals_pending",
+		"Number of pending proposals", stats.UnitDimensionless)
+	NumGoRoutines = stats.Int64("dgraph/goroutines",
+		"Number of goroutines", stats.UnitDimensionless)
+	MemoryInUse = stats.Int64("dgraph/memory_in_use",
+		"Amount of memory in use", stats.UnitBytes)
+	MemoryIdle = stats.Int64("dgraph/memory_idle",
+		"Amount of memory in idle spans", stats.UnitBytes)
+	MemoryProc = stats.Int64("dgraph/memory_proc",
+		"Amount of memory used in processes", stats.UnitBytes)
+	ActiveMutations = stats.Int64("dgraph/active_mutations",
+		"Number of active mutations", stats.UnitDimensionless)
+	AlphaHealth = stats.Int64("dgraph/alpha_status",
+		"Status of the alphas", stats.UnitDimensionless)
 
-	PredicateStats *expvar.Map
-	Conf           *expvar.Map
-
-	MaxPlSz int64
 	// TODO: Request statistics, latencies, 500, timeouts
-
+	Conf *expvar.Map
 )
 
-func init() {
-	PostingReads = expvar.NewInt("dgraph_posting_reads_total")
-	PostingWrites = expvar.NewInt("dgraph_posting_writes_total")
-	PendingProposals = expvar.NewInt("dgraph_pending_proposals_total")
-	BytesRead = expvar.NewInt("dgraph_read_bytes_total")
-	BytesWrite = expvar.NewInt("dgraph_written_bytes_total")
-	PendingQueries = expvar.NewInt("dgraph_pending_queries_total")
-	NumQueries = expvar.NewInt("dgraph_num_queries_total")
-	AlphaHealth = expvar.NewInt("dgraph_alpha_health_status")
-	DirtyMapSize = expvar.NewInt("dgraph_dirtymap_keys_total")
-	NumGoRoutines = expvar.NewInt("dgraph_goroutines_total")
-	MemoryInUse = expvar.NewInt("dgraph_memory_inuse_bytes")
-	MemoryIdle = expvar.NewInt("dgraph_memory_idle_bytes")
-	MemoryProc = expvar.NewInt("dgraph_memory_proc_bytes")
-	ActiveMutations = expvar.NewInt("dgraph_active_mutations_total")
-	PredicateStats = expvar.NewMap("dgraph_predicate_stats")
-	Conf = expvar.NewMap("dgraph_config")
-	MaxPlSize = expvar.NewInt("dgraph_max_list_bytes")
-	MaxPlLength = expvar.NewInt("dgraph_max_list_length")
+var (
+	// Tag keys here
+	KeyStatus, _ = tag.NewKey("status")
+	KeyError, _  = tag.NewKey("error")
+	KeyMethod, _ = tag.NewKey("method")
 
+	// Tag values here
+	TagValueStatusOK    = "ok"
+	TagValueStatusError = "error"
+)
+
+var defaultLatencyMsDistribution = view.Distribution(
+	0, 0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16,
+	20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500,
+	650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
+
+var allTagKeys = []tag.Key{
+	KeyStatus, KeyError, KeyMethod,
+}
+
+var allViews = []*view.View{
+	{
+		Name:        LatencyMs.Name(),
+		Measure:     LatencyMs,
+		Description: LatencyMs.Description(),
+		Aggregation: defaultLatencyMsDistribution,
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        NumQueries.Name(),
+		Measure:     NumQueries,
+		Description: NumQueries.Description(),
+		Aggregation: view.Count(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        NumEdges.Name(),
+		Measure:     NumEdges,
+		Description: NumEdges.Description(),
+		Aggregation: view.Count(),
+		TagKeys:     allTagKeys,
+	},
+
+	// Last value aggregations
+	{
+		Name:        PendingQueries.Name(),
+		Measure:     PendingQueries,
+		Description: PendingQueries.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        PendingProposals.Name(),
+		Measure:     PendingProposals,
+		Description: PendingProposals.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        NumGoRoutines.Name(),
+		Measure:     NumGoRoutines,
+		Description: NumGoRoutines.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        MemoryInUse.Name(),
+		Measure:     MemoryInUse,
+		Description: MemoryInUse.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        MemoryIdle.Name(),
+		Measure:     MemoryIdle,
+		Description: MemoryIdle.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        MemoryProc.Name(),
+		Measure:     MemoryProc,
+		Description: MemoryProc.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        ActiveMutations.Name(),
+		Measure:     ActiveMutations,
+		Description: ActiveMutations.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        AlphaHealth.Name(),
+		Measure:     AlphaHealth,
+		Description: AlphaHealth.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+}
+
+func init() {
+	Conf = expvar.NewMap("dgraph_config")
+
+	ctx := MetricsContext()
 	go func() {
+		var v string
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				if err := HealthCheck(); err == nil {
-					AlphaHealth.Set(1)
-				} else {
-					AlphaHealth.Set(0)
+				v = TagValueStatusOK
+				if err := HealthCheck(); err != nil {
+					v = TagValueStatusError
 				}
+				cctx, _ := tag.New(ctx, tag.Upsert(KeyStatus, v))
+				// TODO: Do we need to set health to zero, or would this tag be sufficient to
+				// indicate if Alpha is up but HealthCheck is failing.
+				stats.Record(cctx, AlphaHealth.M(1))
 			}
 		}
 	}()
 
-	// TODO: prometheus.NewExpvarCollector is not production worthy (see godocs). Use a better
-	// way for exporting Prometheus metrics (like an OpenCensus metrics exporter).
-	expvarCollector := prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
-		"dgraph_lru_hits_total": prometheus.NewDesc(
-			"dgraph_lru_hits_total",
-			"dgraph_lru_hits_total",
-			nil, nil,
-		),
-		"dgraph_lru_miss_total": prometheus.NewDesc(
-			"dgraph_lru_miss_total",
-			"dgraph_lru_miss_total",
-			nil, nil,
-		),
-		"dgraph_lru_race_total": prometheus.NewDesc(
-			"dgraph_lru_race_total",
-			"dgraph_lru_race_total",
-			nil, nil,
-		),
-		"dgraph_lru_evicted_total": prometheus.NewDesc(
-			"dgraph_lru_evicted_total",
-			"dgraph_lru_evicted_total",
-			nil, nil,
-		),
-		"dgraph_lru_size_bytes": prometheus.NewDesc(
-			"dgraph_lru_size_bytes",
-			"dgraph_lru_size_bytes",
-			nil, nil,
-		),
-		"dgraph_lru_keys_total": prometheus.NewDesc(
-			"dgraph_lru_keys_total",
-			"dgraph_lru_keys_total",
-			nil, nil,
-		),
-		"dgraph_lru_capacity_bytes": prometheus.NewDesc(
-			"dgraph_lru_capacity_bytes",
-			"dgraph_lru_capacity_bytes",
-			nil, nil,
-		),
-		"dgraph_posting_reads_total": prometheus.NewDesc(
-			"dgraph_posting_reads_total",
-			"dgraph_posting_reads_total",
-			nil, nil,
-		),
-		"dgraph_posting_writes_total": prometheus.NewDesc(
-			"dgraph_posting_writes_total",
-			"dgraph_posting_writes_total",
-			nil, nil,
-		),
-		"dgraph_max_list_bytes": prometheus.NewDesc(
-			"dgraph_max_list_bytes",
-			"dgraph_max_list_bytes",
-			nil, nil,
-		),
-		"dgraph_max_list_length": prometheus.NewDesc(
-			"dgraph_max_list_length",
-			"dgraph_max_list_length",
-			nil, nil,
-		),
-		"dgraph_pending_proposals_total": prometheus.NewDesc(
-			"dgraph_pending_proposals_total",
-			"dgraph_pending_proposals_total",
-			nil, nil,
-		),
-		"dgraph_read_bytes_total": prometheus.NewDesc(
-			"dgraph_read_bytes_total",
-			"dgraph_read_bytes_total",
-			nil, nil,
-		),
-		"dgraph_written_bytes_total": prometheus.NewDesc(
-			"dgraph_written_bytes_total",
-			"dgraph_written_bytes_total",
-			nil, nil,
-		),
-		"dgraph_pending_queries_total": prometheus.NewDesc(
-			"dgraph_pending_queries_total",
-			"dgraph_pending_queries_total",
-			nil, nil,
-		),
-		"dgraph_num_queries_total": prometheus.NewDesc(
-			"dgraph_num_queries_total",
-			"dgraph_num_queries_total",
-			nil, nil,
-		),
-		"dgraph_alpha_health_status": prometheus.NewDesc(
-			"dgraph_alpha_health_status",
-			"dgraph_alpha_health_status",
-			nil, nil,
-		),
-		"dgraph_dirtymap_keys_total": prometheus.NewDesc(
-			"dgraph_dirtymap_keys_total",
-			"dgraph_dirtymap_keys_total",
-			nil, nil,
-		),
-		"dgraph_goroutines_total": prometheus.NewDesc(
-			"dgraph_goroutines_total",
-			"dgraph_goroutines_total",
-			nil, nil,
-		),
-		"dgraph_memory_inuse_bytes": prometheus.NewDesc(
-			"dgraph_memory_inuse_bytes",
-			"dgraph_memory_inuse_bytes",
-			nil, nil,
-		),
-		"dgraph_memory_idle_bytes": prometheus.NewDesc(
-			"dgraph_memory_idle_bytes",
-			"dgraph_memory_idle_bytes",
-			nil, nil,
-		),
-		"dgraph_memory_proc_bytes": prometheus.NewDesc(
-			"dgraph_memory_proc_bytes",
-			"dgraph_memory_proc_bytes",
-			nil, nil,
-		),
-		"dgraph_active_mutations_total": prometheus.NewDesc(
-			"dgraph_active_mutations_total",
-			"dgraph_active_mutations_total",
-			nil, nil,
-		),
-		"dgraph_predicate_stats": prometheus.NewDesc(
-			"dgraph_predicate_stats",
-			"dgraph_predicate_stats",
-			[]string{"name"}, nil,
-		),
-		"badger_disk_reads_total": prometheus.NewDesc(
-			"badger_disk_reads_total",
-			"badger_disk_reads_total",
-			nil, nil,
-		),
-		"badger_disk_writes_total": prometheus.NewDesc(
-			"badger_disk_writes_total",
-			"badger_disk_writes_total",
-			nil, nil,
-		),
-		"badger_read_bytes": prometheus.NewDesc(
-			"badger_read_bytes",
-			"badger_read_bytes",
-			nil, nil,
-		),
-		"badger_written_bytes": prometheus.NewDesc(
-			"badger_written_bytes",
-			"badger_written_bytes",
-			nil, nil,
-		),
-		"badger_lsm_level_gets_total": prometheus.NewDesc(
-			"badger_lsm_level_gets_total",
-			"badger_lsm_level_gets_total",
-			[]string{"level"}, nil,
-		),
-		"badger_lsm_bloom_hits_total": prometheus.NewDesc(
-			"badger_lsm_bloom_hits_total",
-			"badger_lsm_bloom_hits_total",
-			[]string{"level"}, nil,
-		),
-		"badger_gets_total": prometheus.NewDesc(
-			"badger_gets_total",
-			"badger_gets_total",
-			nil, nil,
-		),
-		"badger_puts_total": prometheus.NewDesc(
-			"badger_puts_total",
-			"badger_puts_total",
-			nil, nil,
-		),
-		"badger_memtable_gets_total": prometheus.NewDesc(
-			"badger_memtable_gets_total",
-			"badger_memtable_gets_total",
-			nil, nil,
-		),
-		"badger_lsm_size": prometheus.NewDesc(
-			"badger_lsm_size",
-			"badger_lsm_size",
-			[]string{"dir"}, nil,
-		),
-		"badger_vlog_size": prometheus.NewDesc(
-			"badger_vlog_size",
-			"badger_vlog_size",
-			[]string{"dir"}, nil,
-		),
+	CheckfNoTrace(view.Register(allViews...))
+
+	pe, err := prometheus.NewExporter(prometheus.Options{
+		Namespace: "dgraph",
+		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
-	prometheus.MustRegister(expvarCollector)
-	http.Handle("/debug/prometheus_metrics", prometheus.Handler())
+	Checkf(err, "Failed to create OpenCensus Prometheus exporter: %v", err)
+	view.RegisterExporter(pe)
+
+	http.Handle("/debug/prometheus_metrics", pe)
+}
+
+// MetricsContext returns a context with tags that are useful for
+// distinguishing the state of the running system.
+// This context will be used to derive other contexts.
+func MetricsContext() context.Context {
+	// At the beginning add some distinguishing information
+	// to the context as tags that will be propagated when
+	// collecting metrics.
+	return context.Background()
+}
+
+func WithMethod(parent context.Context, method string) context.Context {
+	ctx, err := tag.New(parent, tag.Upsert(KeyMethod, method))
+	Check(err)
+	return ctx
+}
+
+func SinceInMilliseconds(startTime time.Time) float64 {
+	return float64(time.Since(startTime)) / 1e6
 }
