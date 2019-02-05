@@ -36,7 +36,7 @@ type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer, idFields []string) ([]*api.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
 }
 
 type rdfChunker struct{}
@@ -95,7 +95,7 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func (rdfChunker) Parse(chunkBuf *bytes.Buffer, _ []string) ([]*api.NQuad, error) {
+func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
@@ -206,12 +206,12 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer, keyFields []string) ([]*api.NQuad, error) {
+func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
 
-	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes(), keyFields)
+	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes())
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}

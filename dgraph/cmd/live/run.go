@@ -58,14 +58,12 @@ type options struct {
 	ignoreIndexConflict bool
 	authToken           string
 	useCompression      bool
-	keyFields           string
 }
 
 var (
-	opt       options
-	tlsConf   x.TLSHelperConfig
-	Live      x.SubCommand
-	keyFields []string
+	opt     options
+	tlsConf x.TLSHelperConfig
+	Live    x.SubCommand
 )
 
 func init() {
@@ -97,7 +95,6 @@ func init() {
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
-	flag.StringP("key", "k", "", "Comma-separated list of JSON fields to identify a uid")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -234,7 +231,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadf
 		var nqs []*api.NQuad
 		chunkBuf, err := ck.Chunk(rd)
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err = ck.Parse(chunkBuf, keyFields)
+			nqs, err = ck.Parse(chunkBuf)
 			x.CheckfNoTrace(err)
 			batch = l.nextNquads(batch, nqs)
 		}
@@ -316,14 +313,9 @@ func run() error {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
-		keyFields:           Live.Conf.GetString("key"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
-
-	for _, f := range strings.Split(opt.keyFields, ",") {
-		keyFields = append(keyFields, strings.TrimSpace(f))
-	}
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()

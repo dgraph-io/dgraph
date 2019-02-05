@@ -136,49 +136,6 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 
 	checkLoadedData(t)
 }
-
-func TestLiveLoadJSONAutoUID(t *testing.T) {
-	z.DropAll(t, dg)
-
-	// Remove UID from test data to verify that live loading it fails.
-	pipeline := [][]string{
-		{"grep", "-v", "uid", testDataDir + "/family.json"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", "/dev/stdin",
-			"--dgraph", alphaService},
-	}
-	err := z.Pipeline(pipeline)
-	require.Error(t, err, "live loading JSON file without uid failed")
-	require.Equal(t, 0, z.DbNodeCount(t, dg), "no data was loaded")
-
-	// Remove UID and use "role" as the key to create UIDs from. Only 4 of the 6 family members
-	// should be in the final database, one for each of "father", "mother", "son", and "daughter".
-	pipeline = [][]string{
-		{"grep", "-v", "uid", testDataDir + "/family.json"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", "/dev/stdin",
-			"--dgraph", alphaService, "--key", "role"},
-	}
-	err = z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file with auto-uid ran successfully")
-	require.Equal(t, 4, z.DbNodeCount(t, dg), "not all data was loaded")
-
-	z.DropAll(t, dg)
-
-	// Remove UID and use "role" and "age" as the key to create UIDs from. That should be enough
-	// to make all members unique, so all should be in final database.
-	pipeline = [][]string{
-		{"grep", "-v", "uid", testDataDir + "/family.json"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", "/dev/stdin",
-			"--dgraph", alphaService, "--key", "role,age"},
-	}
-	err = z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file with auto-uid ran successfully")
-	require.Equal(t, 6, z.DbNodeCount(t, dg), "all data was loaded")
-	checkLoadedData(t)
-}
-
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile) + "/test_data"

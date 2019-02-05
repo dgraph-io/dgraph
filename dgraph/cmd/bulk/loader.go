@@ -58,13 +58,11 @@ type options struct {
 	HttpAddr         string
 	IgnoreErrors     bool
 	CustomTokenizers string
-	KeyFields        string
 
 	MapShards    int
 	ReduceShards int
 
 	shardOutputDirs []string
-	parsedKeyFields []string
 }
 
 type state struct {
@@ -186,7 +184,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loaderType, ld.opt.parsedKeyFields)
+			m.run(loaderType)
 			mapperWg.Done()
 		}(m)
 	}
