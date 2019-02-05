@@ -60,7 +60,7 @@ type Server struct {
 	closer         *y.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
-	blockCommitsOn map[string]struct{}
+	blockCommitsOn *sync.Map
 }
 
 func (s *Server) Init() {
@@ -78,7 +78,7 @@ func (s *Server) Init() {
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = y.NewCloser(2) // grpc and http
-	s.blockCommitsOn = make(map[string]struct{})
+	s.blockCommitsOn = new(sync.Map)
 	go s.rebalanceTablets()
 }
 
@@ -285,20 +285,14 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 }
 
 func (s *Server) blockTablet(pred string) func() {
-	s.Lock()
-	s.blockCommitsOn[pred] = struct{}{}
-	s.Unlock()
+	s.blockCommitsOn.Store(pred, struct{}{})
 	return func() {
-		s.Lock()
-		delete(s.blockCommitsOn, pred)
-		s.Unlock()
+		s.blockCommitsOn.Delete(pred)
 	}
 }
 
 func (s *Server) isBlocked(pred string) bool {
-	s.RLock()
-	defer s.RUnlock()
-	_, blocked := s.blockCommitsOn[pred]
+	_, blocked := s.blockCommitsOn.Load(pred)
 	return blocked
 }
 
