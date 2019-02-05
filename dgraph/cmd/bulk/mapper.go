@@ -140,7 +140,7 @@ func (m *mapper) run(inputFormat int, keyFields []string) {
 					}
 				}
 
-				m.processNQuad(gql.NQuad{nq})
+				m.processNQuad(gql.NQuad{NQuad: nq})
 				atomic.AddInt64(&m.prog.nquadCount, 1)
 			}
 
