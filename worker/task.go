@@ -1158,6 +1158,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
 	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
+	matchQuery := strings.Join(arg.srcFn.tokens, "")
 	filtered := &pb.List{}
 	for _, uid := range uids.Uids {
 		select {
@@ -1191,7 +1192,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		for _, val := range vals {
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchFuzzy(arg.srcFn, strVal.Value.(string)) {
+			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string)) {
 				filtered.Uids = append(filtered.Uids, uid)
 				// NOTE: We only add the uid once.
 				break
@@ -1495,8 +1496,12 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
-		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
-			return nil, err
+		if fnType == MatchFn {
+			fc.tokens = q.SrcFunc.Args
+		} else {
+			if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
+				return nil, err
+			}
 		}
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
