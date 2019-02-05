@@ -135,7 +135,6 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 			return err
 		}
 	}
-	req.GroupId = 0
 	glog.Infof("Backup completed OK.")
 	return nil
 }
