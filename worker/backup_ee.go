@@ -122,10 +122,10 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 	// If we receive any failures, we cancel the process.
 	errCh := make(chan error, 1)
 	for _, gid := range gids {
-		req.GroupId = gid
-		go func() {
+		go func(gid uint32) {
+			req.GroupId = gid
 			errCh <- backupGroup(ctx, req)
-		}()
+		}(gid)
 	}
 
 	for i := 0; i < len(gids); i++ {
