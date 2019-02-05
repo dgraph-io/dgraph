@@ -27,6 +27,8 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+
+	ostats "go.opencensus.io/stats"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -157,7 +159,7 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error {
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropAll {
@@ -216,8 +218,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 	}
 
 	total := len(proposal.Mutations.Edges)
-	x.ActiveMutations.Add(int64(total))
-	defer x.ActiveMutations.Add(-int64(total))
+
+	// TODO: Active mutations values can go up or down but with
+	// OpenCensus stats bucket boundaries start from 0, hence
+	// recording negative and positive values skews up values.
+	ostats.Record(ctx, x.ActiveMutations.M(int64(total)))
+	defer func() {
+		ostats.Record(ctx, x.ActiveMutations.M(int64(-total)))
+	}()
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
