@@ -139,9 +139,9 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 	buf, err := ioutil.ReadAll(r)
 	x.Check(err)
 
-	initialSchema, err := schema.Parse(string(buf))
+	result, err := schema.Parse(string(buf))
 	x.Check(err)
-	return initialSchema
+	return result.Schemas
 }
 
 func findDataFiles(dir string, ext string) []string {

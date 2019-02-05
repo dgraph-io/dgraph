@@ -462,11 +462,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return nil
 	}
 
-	updates, err := schema.Parse(op.Schema)
+	result, err := schema.Parse(op.Schema)
 	if err != nil {
 		return err
 	}
-	for _, update := range updates {
+	for _, update := range result.Schemas {
 		if err := authorizePredicate(groupIds, update.Predicate, acl.Modify); err != nil {
 			return status.Error(codes.PermissionDenied,
 				fmt.Sprintf("unauthorized to alter the predicate: %v", err))
