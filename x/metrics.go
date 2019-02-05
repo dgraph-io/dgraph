@@ -31,14 +31,6 @@ import (
 
 var (
 	// These are cumulative
-	PostingReads = stats.Int64("dgraph/posting_reads",
-		"Total number of posting reads", stats.UnitDimensionless)
-	PostingWrites = stats.Int64("dgraph/posting_writes",
-		"Total number of posting writes", stats.UnitDimensionless)
-	BytesRead = stats.Int64("dgraph/bytes_read",
-		"Total number of bytes read", stats.UnitBytes)
-	BytesWrite = stats.Int64("dgraph/bytes_written",
-		"Total number of bytes written", stats.UnitBytes)
 	NumQueries = stats.Int64("dgraph/queries",
 		"Total number of queries", stats.UnitDimensionless)
 	NumMutations = stats.Int64("dgraph/mutations",
@@ -53,8 +45,6 @@ var (
 		"Number of pending queries", stats.UnitDimensionless)
 	PendingProposals = stats.Int64("dgraph/proposals_pending",
 		"Number of pending proposals", stats.UnitDimensionless)
-	DirtyMapSize = stats.Int64("dgraph/dirtymap_size",
-		"Number of elements in the dirty map", stats.UnitDimensionless)
 	NumGoRoutines = stats.Int64("dgraph/goroutines",
 		"Number of goroutines", stats.UnitDimensionless)
 	MemoryInUse = stats.Int64("dgraph/memory_in_use",
@@ -107,34 +97,6 @@ var allViews = []*view.View{
 		TagKeys:     allTagKeys,
 	},
 	{
-		Name:        PostingReads.Name(),
-		Measure:     PostingReads,
-		Description: PostingReads.Description(),
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        PostingWrites.Name(),
-		Measure:     PostingWrites,
-		Description: PostingWrites.Description(),
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        BytesRead.Name(),
-		Measure:     BytesRead,
-		Description: BytesRead.Description(),
-		Aggregation: defaultBytesDistribution,
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        BytesWrite.Name(),
-		Measure:     BytesWrite,
-		Description: BytesWrite.Description(),
-		Aggregation: defaultBytesDistribution,
-		TagKeys:     allTagKeys,
-	},
-	{
 		Name:        NumQueries.Name(),
 		Measure:     NumQueries,
 		Description: NumQueries.Description(),
@@ -161,13 +123,6 @@ var allViews = []*view.View{
 		Name:        PendingProposals.Name(),
 		Measure:     PendingProposals,
 		Description: PendingProposals.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        DirtyMapSize.Name(),
-		Measure:     DirtyMapSize,
-		Description: DirtyMapSize.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
@@ -231,6 +186,8 @@ func init() {
 					v = TagValueStatusError
 				}
 				cctx, _ := tag.New(ctx, tag.Upsert(KeyStatus, v))
+				// TODO: Do we need to set health to zero, or would this tag be sufficient to
+				// indicate if Alpha is up but HealthCheck is failing.
 				stats.Record(cctx, AlphaHealth.M(1))
 			}
 		}

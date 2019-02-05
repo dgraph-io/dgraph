@@ -90,10 +90,10 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 }
 
 // Done would slowly bleed the retries out.
-func (rl *rateLimiter) decr(ctx context.Context, retry int) {
+func (rl *rateLimiter) decr(retry int) {
 	if retry == 0 {
 		<-pendingProposals
-		ostats.Record(ctx, x.PendingProposals.M(-1))
+		ostats.Record(context.Background(), x.PendingProposals.M(-1))
 		return
 	}
 	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
@@ -112,7 +112,7 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
 	startTime := time.Now()
-	ctx = x.WithMethod(ctx, "worker/node.proposeAndWait")
+	ctx = x.WithMethod(ctx, "n.proposeAndWait")
 	defer func() {
 		v := x.TagValueStatusOK
 		if perr != nil {
@@ -240,7 +240,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		if err := limiter.incr(ctx, i); err != nil {
 			return err
 		}
-		defer limiter.decr(ctx, i)
+		defer limiter.decr(i)
 
 		if err := propose(newTimeout(i)); err != errInternalRetry {
 			return err

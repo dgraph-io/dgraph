@@ -25,8 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.opencensus.io/stats"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -110,7 +108,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	// Also, if the snapshot read ts is above the commit ts, then we just delete the postings from
 	// memory, instead of writing them back again.
 
-	var size, writes int64
 	for _, key := range keys {
 		plist, err := txn.Get([]byte(key))
 		if err != nil {
@@ -123,13 +120,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		if err := writer.SetAt([]byte(key), data, BitDeltaPosting, commitTs); err != nil {
 			return err
 		}
-		size += int64(len(data))
-		writes++
 	}
-
-	stats.Record(x.MetricsContext(),
-		x.PostingWrites.M(writes), x.BytesWrite.M(size))
-
 	return nil
 }
 
@@ -205,7 +196,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			l.estimatedSize = int32(item.EstimatedSize())
 			// No need to do Next here. The outer loop can take care of skipping more versions of
 			// the same key.
 			return l, nil
