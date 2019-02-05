@@ -87,7 +87,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	require.NoError(t, txn.CommitToDisk(writer, commit))
 	require.NoError(t, writer.Flush())
 
-	// require.NoError(t, txn.CommitToMemory(commit))
+	// TODO: Switch this package to use normal Dgraph cluster.
 	delta := &pb.OracleDelta{MaxAssigned: commit}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commit})
 	posting.Oracle().ProcessDelta(delta)

@@ -41,7 +41,7 @@ func increment(atLeast int) error {
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 	for _, addr := range addrs {
 		go func(addr string) {
-			errCh <- run(ctx, fmt.Sprintf("increment --addr=%s", addr))
+			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s", addr))
 		}(addr)
 	}
 	start := time.Now()
