@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	otrace "go.opencensus.io/trace"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
@@ -109,15 +111,26 @@ func verifyUid(ctx context.Context, uid uint64) error {
 	if uid <= worker.MaxLeaseId() {
 		return nil
 	}
-	// Even though the uid is above the max lease id, it might just be because
-	// the membership state has fallen behind. Update the state and try again.
-	if err := worker.UpdateMembershipState(ctx); err != nil {
-		return x.Wrapf(err, "updating error state")
+	deadline := time.Now().Add(3 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			lease := worker.MaxLeaseId()
+			if uid <= lease {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				err := x.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+				glog.V(2).Infof("verifyUid returned error: %v", err)
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	if lease := worker.MaxLeaseId(); uid > lease {
-		return x.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
-	}
-	return nil
 }
 
 // AssignUids tries to assign unique ids to each identity in the subjects and objects in the

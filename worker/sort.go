@@ -373,9 +373,15 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 // iterating over the index.
 func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error) {
 	span := otrace.FromContext(ctx)
-	span.Annotatef(nil, "processSort: Waiting for readTs: %d", ts.ReadTs)
+	stop := x.SpanTimer(span, "processSort")
+	defer stop()
+
+	span.Annotatef(nil, "Waiting for startTs: %d", ts.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
-		return &emptySortResult, err
+		return nil, err
+	}
+	if err := groups().ChecksumsMatch(ctx); err != nil {
+		return nil, err
 	}
 	span.Annotate(nil, "Done waiting")
 

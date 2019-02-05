@@ -101,25 +101,28 @@ func (p *Pools) RemoveInvalid(state *pb.MembershipState) {
 
 func (p *Pools) remove(addr string) {
 	p.Lock()
+	defer p.Unlock()
 	pool, ok := p.all[addr]
 	if !ok {
-		p.Unlock()
 		return
 	}
 	glog.Warningf("DISCONNECTING from %s\n", addr)
 	delete(p.all, addr)
-	p.Unlock()
 	pool.shutdown()
 }
 
-func (p *Pools) Connect(addr string) *Pool {
+func (p *Pools) getPool(addr string) (*Pool, bool) {
 	p.RLock()
+	defer p.RUnlock()
 	existingPool, has := p.all[addr]
+	return existingPool, has
+}
+
+func (p *Pools) Connect(addr string) *Pool {
+	existingPool, has := p.getPool(addr)
 	if has {
-		p.RUnlock()
 		return existingPool
 	}
-	p.RUnlock()
 
 	pool, err := NewPool(addr)
 	if err != nil {
@@ -128,14 +131,13 @@ func (p *Pools) Connect(addr string) *Pool {
 	}
 
 	p.Lock()
+	defer p.Unlock()
 	existingPool, has = p.all[addr]
 	if has {
-		p.Unlock()
 		return existingPool
 	}
 	glog.Infof("CONNECTED to %v\n", addr)
 	p.all[addr] = pool
-	p.Unlock()
 	return pool
 }
 
@@ -173,8 +175,8 @@ func (p *Pool) shutdown() {
 
 func (p *Pool) SetUnhealthy() {
 	p.Lock()
+	defer p.Unlock()
 	p.lastEcho = time.Time{}
-	p.Unlock()
 }
 
 func (p *Pool) listenToHeartbeat() error {

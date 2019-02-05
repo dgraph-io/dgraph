@@ -174,6 +174,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	proposal.Key = key
 	span := otrace.FromContext(ctx)
 
+	stop := x.SpanTimer(span, "n.proposeAndWait")
+	defer stop()
+
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()

@@ -289,11 +289,6 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	// violations in Jepsen, because we'll send out a MaxAssigned higher than a commit, which would
 	// cause newer txns to see older data.
 
-	// We could consider adding a wrapper around the user proposal, so we can access any key-values.
-	// Something like this:
-	// https://github.com/golang/go/commit/5d39260079b5170e6b4263adb4022cc4b54153c4
-	ctx = context.Background() // Use a new context with no timeout.
-
 	// If this node stops being the leader, we want this proposal to not be forwarded to the leader,
 	// and get aborted.
 	if err := s.Node.proposeAndWait(ctx, &zp); err != nil {
@@ -443,6 +438,9 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			if !open {
 				return errClosed
 			}
+			// Pass in the latest group checksum as well, so the Alpha can use that to determine
+			// when not to service a read.
+			delta.GroupChecksums = s.groupChecksums()
 			if err := server.Send(delta); err != nil {
 				return err
 			}

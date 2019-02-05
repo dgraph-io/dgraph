@@ -232,6 +232,16 @@ func (s *Server) membershipState() *pb.MembershipState {
 	return proto.Clone(s.state).(*pb.MembershipState)
 }
 
+func (s *Server) groupChecksums() map[uint32]uint64 {
+	s.RLock()
+	defer s.RUnlock()
+	m := make(map[uint32]uint64)
+	for gid, g := range s.state.GetGroups() {
+		m[gid] = g.Checksum
+	}
+	return m
+}
+
 func (s *Server) storeZero(m *pb.Member) {
 	s.Lock()
 	defer s.Unlock()

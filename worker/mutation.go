@@ -499,7 +499,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
 	span.Annotate(attributes, "")
 
-	if tctx.Aborted {
+	if tctx.Aborted || tctx.CommitTs == 0 {
 		return 0, y.ErrAborted
 	}
 	return tctx.CommitTs, nil
