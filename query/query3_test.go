@@ -25,11 +25,11 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRecurseError(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(loop: true) {
@@ -43,6 +43,25 @@ func TestRecurseError(t *testing.T) {
 	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query.")
+}
+
+func TestRecurseEdgeLimitError(t *testing.T) {
+	// HACK: Set this flag in the external test cluster when query tests are migrated to
+	// use it.
+	defer func(prev uint64) { x.Config.QueryEdgeLimit = prev }(x.Config.QueryEdgeLimit)
+	x.Config.QueryEdgeLimit = 5
+	query := `
+		{
+			me(func: uid(0x01)) @recurse(loop: true, depth: 2) {
+				friend
+				name
+			}
+		}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Exceeded query edge limit")
 }
 
 func TestRecurseQuery(t *testing.T) {
@@ -257,6 +276,24 @@ func TestShortestPath_ExpandError(t *testing.T) {
 
 	_, err := processToFastJson(t, query)
 	require.Error(t, err)
+}
+
+func TestShortestPath_EdgeLimitError(t *testing.T) {
+	// HACK: Set this flag in the external test cluster when query tests are migrated to
+	// use it.
+	defer func(prev uint64) { x.Config.QueryEdgeLimit = prev }(x.Config.QueryEdgeLimit)
+	x.Config.QueryEdgeLimit = 5
+	query := `
+		{
+			shortest(from:0x01, to:101) {
+              friend
+			}
+		}`
+
+	ctx := defaultContext()
+	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Exceeded query edge limit")
 }
 
 func TestShortestPath_NoPath(t *testing.T) {
