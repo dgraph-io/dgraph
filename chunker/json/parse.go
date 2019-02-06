@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package edgraph
+package json
 
 import (
 	"bytes"
@@ -132,7 +132,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.Predicate, nq.Lang = x.PredicateLang(k)
 
 		// Default value is considered as S P * deletion.
-		if v == "" && op == delete {
+		if v == "" && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
@@ -143,14 +143,14 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_StrVal{StrVal: v}}
 
 	case float64:
-		if v == 0 && op == delete {
+		if v == 0 && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
 		nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: v}}
 
 	case bool:
-		if v == false && op == delete {
+		if v == false && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
@@ -165,7 +165,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
-	if op == delete && len(mr.uid) > 0 && len(m) == 1 {
+	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
 		mr.nquads = append(mr.nquads, &api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
@@ -240,7 +240,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	}
 
 	if len(mr.uid) == 0 {
-		if op == delete {
+		if op == DeleteNquads {
 			// Delete operations with a non-nil value must have a uid specified.
 			return mr, x.Errorf("UID must be present and non-zero while deleting edges.")
 		}
@@ -258,7 +258,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			continue
 		}
 
-		if op == delete {
+		if op == DeleteNquads {
 			// This corresponds to edge deletion.
 			if v == nil {
 				mr.nquads = append(mr.nquads, &api.NQuad{
@@ -285,7 +285,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		}
 
 		if v == nil {
-			if op == delete {
+			if op == DeleteNquads {
 				nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 				mr.nquads = append(mr.nquads, &nq)
 			}
@@ -372,11 +372,11 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 }
 
 const (
-	set = iota
-	delete
+	SetNquads = iota
+	DeleteNquads
 )
 
-func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
+func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()
@@ -416,8 +416,4 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	mr, err := mapToNquads(ms, &idx, op, "")
 	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
-}
-
-func NquadsFromJson(b []byte) ([]*api.NQuad, error) {
-	return nquadsFromJson(b, set)
 }

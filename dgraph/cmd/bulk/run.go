@@ -48,10 +48,10 @@ func init() {
 
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("rdfs", "r", "",
-		"Directory containing *.rdf or *.rdf.gz files to load.")
+		"Location of RDF data to load.")
 	// would be nice to use -j to match -r, but already used by --num_go_routines
 	flag.String("jsons", "",
-		"Directory containing *.json or *.json.gz files to load.")
+		"Location of JSON data to load.")
 	flag.StringP("schema_file", "s", "",
 		"Location of schema file to load.")
 	flag.String("out", "out",
@@ -121,7 +121,7 @@ func run() {
 		os.Exit(0)
 	}
 	if opt.SchemaFile == "" {
-		fmt.Fprint(os.Stderr, "schema file must be specified.\n")
+		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
 	}
 	if opt.RDFDir == "" && opt.JSONDir == "" {

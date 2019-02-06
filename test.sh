@@ -58,6 +58,7 @@ function FindDefaultClusterTests {
 
 function Run {
     set -o pipefail
+    echo -en "...\r"
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \

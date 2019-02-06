@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package bulk
+
+package chunker
 
 import (
 	"bufio"
@@ -45,8 +46,8 @@ func TestJSONLoadStart(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		chunker := newChunker(jsonInput)
-		require.Error(t, chunker.begin(bufioReader(test.json)), test.desc)
+		chunker := NewChunker(JsonInput)
+		require.Error(t, chunker.Begin(bufioReader(test.json)), test.desc)
 	}
 }
 
@@ -63,11 +64,11 @@ func TestJSONLoadReadNext(t *testing.T) {
 		{"[{}", "malformed array"},
 	}
 	for _, test := range tests {
-		chunker := newChunker(jsonInput)
+		chunker := NewChunker(JsonInput)
 		reader := bufioReader(test.json)
-		require.NoError(t, chunker.begin(reader), test.desc)
+		require.NoError(t, chunker.Begin(reader), test.desc)
 
-		json, err := chunker.chunk(reader)
+		json, err := chunker.Chunk(reader)
 		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		require.Nil(t, json, test.desc)
 		require.Error(t, err, test.desc)
@@ -112,11 +113,11 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		chunker := newChunker(jsonInput)
+		chunker := NewChunker(JsonInput)
 		reader := bufioReader(test.json)
-		require.NoError(t, chunker.begin(reader), test.desc)
+		require.NoError(t, chunker.Begin(reader), test.desc)
 
-		json, err := chunker.chunk(reader)
+		json, err := chunker.Chunk(reader)
 		if err == io.EOF {
 			// pass
 		} else {
@@ -175,23 +176,23 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	}`,
 	}
 
-	chunker := newChunker(jsonInput)
+	chunker := NewChunker(JsonInput)
 	reader := bufioReader(testDoc)
 
 	var json *bytes.Buffer
 	var idx int
 
-	err := chunker.begin(reader)
+	err := chunker.Begin(reader)
 	require.NoError(t, err, "begin reading JSON document")
 	for idx = 0; err == nil; idx++ {
 		desc := fmt.Sprintf("reading chunk #%d", idx+1)
-		json, err = chunker.chunk(reader)
+		json, err = chunker.Chunk(reader)
 		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
 		if err != io.EOF {
 			require.NoError(t, err, desc)
 			require.Equal(t, testChunks[idx], json.String(), desc)
 		}
 	}
-	err = chunker.end(reader)
+	err = chunker.End(reader)
 	require.NoError(t, err, "end reading JSON document")
 }

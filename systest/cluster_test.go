@@ -174,7 +174,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata_first_200k.rdf.gz")
 
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--rdfs", data,
+		"--files", data,
 		"--schema", schema,
 		"--dgraph", ":"+cluster.dgraphPort,
 		"--zero", ":"+cluster.zeroPort,
