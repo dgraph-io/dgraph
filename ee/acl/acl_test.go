@@ -86,6 +86,27 @@ func resetUser(t *testing.T) {
 	glog.Infof("created user")
 }
 
+func TestReservedPredicates(t *testing.T) {
+	// This test uses the groot account to ensure that reserved predicates
+	// cannot be altered even if the permissions allow it.
+	ctx := context.Background()
+
+	dg1, cancel1 := x.GetDgraphClientOnPort(9180)
+	defer cancel1()
+	if err := dg1.Login(ctx, x.GrootId, "password"); err != nil {
+		t.Fatalf("unable to login using the groot account:%v", err)
+	}
+	defer cancel1()
+	alterReservedPredicates(t, dg1)
+
+	dg2, cancel2 := x.GetDgraphClientOnPort(9180)
+	defer cancel2()
+	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
+		t.Fatalf("unable to login using the groot account:%v", err)
+	}
+	alterReservedPredicates(t, dg2)
+}
+
 func TestAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
 	dg1, cancel := x.GetDgraphClientOnPort(9180)
@@ -107,7 +128,6 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 		t.Fatalf("unable to login using the account %v", userid)
 	}
 
-	alterReservedPredicates(t, dg)
 	queryPredicateWithUserAccount(t, dg, true)
 	mutatePredicateWithUserAccount(t, dg, true)
 	alterPredicateWithUserAccount(t, dg, true)
@@ -117,7 +137,6 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	log.Println("Sleeping for 35 seconds for acl to catch up")
 	time.Sleep(35 * time.Second)
 
-	alterReservedPredicates(t, dg)
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml in this directory)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
@@ -234,7 +253,7 @@ func createGroupAndAcls(t *testing.T) {
 		"-d", dgraphEndpoint,
 		"-g", group, "-x", "password")
 	if err := createGroupCmd.Run(); err != nil {
-		t.Fatalf("Unable to create group:%v", err)
+		t.Fatalf("Unable to create group: %v", err)
 	}
 
 	// add the user to the group
@@ -243,7 +262,7 @@ func createGroupAndAcls(t *testing.T) {
 		"-d", dgraphEndpoint,
 		"-u", userid, "-g", group, "-x", "password")
 	if err := addUserToGroupCmd.Run(); err != nil {
-		t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
+		t.Fatalf("Unable to add user %s to group %s: %v", userid, group, err)
 	}
 
 	// add READ permission on the predicateToRead to the group
@@ -253,7 +272,7 @@ func createGroupAndAcls(t *testing.T) {
 		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read.Code)), "-x",
 		"password")
 	if err := addReadPermCmd1.Run(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
+		t.Fatalf("Unable to add READ permission on %s to group %s: %v",
 			predicateToRead, group, err)
 	}
 
@@ -264,7 +283,7 @@ func createGroupAndAcls(t *testing.T) {
 		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read.Code)), "-x",
 		"password")
 	if err := addReadPermCmd2.Run(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s:%v", queryAttr, group, err)
+		t.Fatalf("Unable to add READ permission on %s to group %s: %v", queryAttr, group, err)
 	}
 
 	// add WRITE permission on the predicateToWrite
@@ -274,7 +293,7 @@ func createGroupAndAcls(t *testing.T) {
 		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write.Code)), "-x",
 		"password")
 	if err := addWritePermCmd.Run(); err != nil {
-		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToWrite, group, err)
+		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToWrite, group, err)
 	}
 
 	// add MODIFY permission on the predicateToAlter
@@ -284,6 +303,6 @@ func createGroupAndAcls(t *testing.T) {
 		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify.Code)), "-x",
 		"password")
 	if err := addModifyPermCmd.Run(); err != nil {
-		t.Fatalf("Unable to add permission on %s to group %s:%v", predicateToAlter, group, err)
+		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToAlter, group, err)
 	}
 }
