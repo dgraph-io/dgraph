@@ -1715,6 +1715,8 @@ func TestCountUidToVarCombinedWithNormalVar(t *testing.T) {
 var maxPendingCh chan uint64
 
 func TestMain(m *testing.M) {
+	// TODO: Most of this code should be removed once all tests are using a cluster instead
+	// of the current setup.
 	x.Init()
 	x.SetTestRun()
 
