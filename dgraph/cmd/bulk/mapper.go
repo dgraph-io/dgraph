@@ -118,7 +118,7 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 }
 
 func (m *mapper) run(inputFormat int) {
-	chunker := loadfile.NewChunker(inputFormat)
+	chunker := chunker.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {

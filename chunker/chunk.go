@@ -26,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 
 	"github.com/pkg/errors"
@@ -210,7 +211,7 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		return nil, io.EOF
 	}
 
-	nqs, err := NquadsFromJson(chunkBuf.Bytes(), set)
+	nqs, err := json.Parse(chunkBuf.Bytes(), json.SetNquads)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}
