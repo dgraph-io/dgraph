@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package loadfile
+package chunker
 
 import (
 	"bufio"
@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
-	"github.com/dgraph-io/dgraph/edgraph"
 
 	"github.com/pkg/errors"
 )
@@ -211,7 +210,7 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		return nil, io.EOF
 	}
 
-	nqs, err := edgraph.JsonToNquads(chunkBuf.Bytes())
+	nqs, err := NquadsFromJson(chunkBuf.Bytes(), set)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}

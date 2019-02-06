@@ -178,12 +178,12 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	var err error
 	var isJson bool
 	if strings.HasSuffix(file, ".rdf") || strings.HasSuffix(file, ".rdf.gz") {
-		err = l.processLoadFile(ctx, rd, loadfile.NewChunker(loadfile.RdfInput))
+		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.RdfInput))
 	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
-		err = l.processLoadFile(ctx, rd, loadfile.NewChunker(loadfile.JsonInput))
+		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
 	} else if isJson, err = x.IsJSONData(rd); err == nil {
 		if isJson {
-			err = l.processLoadFile(ctx, rd, loadfile.NewChunker(loadfile.JsonInput))
+			err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
 		} else {
 			err = fmt.Errorf("Unable to determine file content format: %s", file)
 		}
@@ -192,7 +192,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return err
 }
 
-func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadfile.Chunker) error {
+func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
 	batch := make([]*api.NQuad, 0)

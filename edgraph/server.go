@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
@@ -645,14 +646,14 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
-		nqs, err := nquadsFromJson(mu.SetJson, set)
+		nqs, err := chunker.NquadsFromJson(mu.SetJson, set)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := nquadsFromJson(mu.DeleteJson, delete)
+		nqs, err := chunker.NquadsFromJson(mu.DeleteJson, delete)
 		if err != nil {
 			return nil, err
 		}

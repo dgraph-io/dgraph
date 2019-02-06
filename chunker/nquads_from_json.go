@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package edgraph
+package chunker
 
 import (
 	"bytes"
@@ -376,7 +376,7 @@ const (
 	delete
 )
 
-func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
+func NquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()
@@ -416,10 +416,4 @@ func nquadsFromJson(b []byte, op int) ([]*api.NQuad, error) {
 	mr, err := mapToNquads(ms, &idx, op, "")
 	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
-}
-
-// JsonToNquads converts a JSON map or array of maps to N-Quads,
-// optionally setting the uid if none was found.
-func JsonToNquads(b []byte) ([]*api.NQuad, error) {
-	return nquadsFromJson(b, set)
 }

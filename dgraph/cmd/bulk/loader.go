@@ -165,11 +165,11 @@ func (ld *loader) mapStage() {
 	var dir, ext string
 	var loaderType int
 	if ld.opt.RDFDir != "" {
-		loaderType = loadfile.RdfInput
+		loaderType = chunker.RdfInput
 		dir = ld.opt.RDFDir
 		ext = ".rdf"
 	} else {
-		loaderType = loadfile.JsonInput
+		loaderType = chunker.JsonInput
 		dir = ld.opt.JSONDir
 		ext = ".json"
 
@@ -194,7 +194,7 @@ func (ld *loader) mapStage() {
 	for i, file := range files {
 		thr.Start()
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
-		chunker := loadfile.NewChunker(loaderType)
+		chunker := chunker.NewChunker(loaderType)
 
 		go func(file string) {
 			defer thr.Done()

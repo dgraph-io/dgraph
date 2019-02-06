@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package loadfile
+package chunker
 
 import (
 	"bufio"
