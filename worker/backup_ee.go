@@ -112,7 +112,7 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 		ReadTs:   ts.ReadOnly,
 		Since:    since,
 		Location: destination,
-		UnixTs:   time.Now().UTC().Format("20060102.1504"),
+		UnixTs:   time.Now().UTC().Format("20060102.150405"),
 	}
 
 	gids := groups().KnownGroups()
