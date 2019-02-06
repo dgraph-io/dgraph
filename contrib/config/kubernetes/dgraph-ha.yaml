@@ -77,7 +77,7 @@ spec:
   selector:
     app: dgraph-ratel
 ---
-# This is a headless service which is neccessary for discovery for a dgraph-zero StatefulSet.
+# This is a headless service which is necessary for discovery for a dgraph-zero StatefulSet.
 # https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service
@@ -94,7 +94,7 @@ spec:
   selector:
     app: dgraph-zero
 ---
-# This is a headless service which is neccessary for discovery for a dgraph-alpha StatefulSet.
+# This is a headless service which is necessary for discovery for a dgraph-alpha StatefulSet.
 # https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#creating-a-statefulset
 apiVersion: v1
 kind: Service

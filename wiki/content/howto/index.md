@@ -171,7 +171,7 @@ transactions. The steps are as follows:
 1. Create a new transaction.
 
 2. Query for the node. This will usually be as simple as `{ q(func: eq(email,
-   "bob@example.com") { uid }}`. If a `uid` result is returned, then that's the
+   "bob@example.com")) { uid }}`. If a `uid` result is returned, then that's the
 `uid` for the existing node. If no results are returned, then the user account
 doesn't exist.
 

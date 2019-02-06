@@ -544,7 +544,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 			return err
 		}
 	}
-	glog.V(1).Infof("Rebuild: Iteration done. Now commiting at ts=%d\n", r.startTs)
+	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
 	// We must commit all the posting lists to memory, so they'd be picked up
 	// during posting list rollup below.

@@ -17,9 +17,7 @@
 package conn
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
 	"fmt"
 	"sync"
 	"time"
@@ -36,7 +34,7 @@ import (
 var (
 	ErrNoConnection        = fmt.Errorf("No connection exists")
 	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
-	echoDuration           = time.Second
+	echoDuration           = 500 * time.Millisecond
 )
 
 // "Pool" is used to manage the grpc client connection(s) for communicating with other
@@ -103,25 +101,28 @@ func (p *Pools) RemoveInvalid(state *pb.MembershipState) {
 
 func (p *Pools) remove(addr string) {
 	p.Lock()
+	defer p.Unlock()
 	pool, ok := p.all[addr]
 	if !ok {
-		p.Unlock()
 		return
 	}
 	glog.Warningf("DISCONNECTING from %s\n", addr)
 	delete(p.all, addr)
-	p.Unlock()
 	pool.shutdown()
 }
 
-func (p *Pools) Connect(addr string) *Pool {
+func (p *Pools) getPool(addr string) (*Pool, bool) {
 	p.RLock()
+	defer p.RUnlock()
 	existingPool, has := p.all[addr]
+	return existingPool, has
+}
+
+func (p *Pools) Connect(addr string) *Pool {
+	existingPool, has := p.getPool(addr)
 	if has {
-		p.RUnlock()
 		return existingPool
 	}
-	p.RUnlock()
 
 	pool, err := NewPool(addr)
 	if err != nil {
@@ -130,14 +131,13 @@ func (p *Pools) Connect(addr string) *Pool {
 	}
 
 	p.Lock()
+	defer p.Unlock()
 	existingPool, has = p.all[addr]
 	if has {
-		p.Unlock()
 		return existingPool
 	}
 	glog.Infof("CONNECTED to %v\n", addr)
 	p.all[addr] = pool
-	p.Unlock()
 	return pool
 }
 
@@ -154,7 +154,6 @@ func NewPool(addr string) (*Pool, error) {
 		return nil, err
 	}
 	pl := &Pool{conn: conn, Addr: addr, lastEcho: time.Now()}
-	pl.UpdateHealthStatus(true)
 
 	// Initialize ticker before running monitor health.
 	pl.ticker = time.NewTicker(echoDuration)
@@ -176,45 +175,47 @@ func (p *Pool) shutdown() {
 
 func (p *Pool) SetUnhealthy() {
 	p.Lock()
+	defer p.Unlock()
 	p.lastEcho = time.Time{}
-	p.Unlock()
 }
 
-func (p *Pool) UpdateHealthStatus(printError bool) error {
+func (p *Pool) listenToHeartbeat() error {
 	conn := p.Get()
-
-	query := new(api.Payload)
-	query.Data = make([]byte, 10)
-	x.Check2(rand.Read(query.Data))
-
 	c := pb.NewRaftClient(conn)
-	// Ensure that we have a timeout here, otherwise a network partition could
-	// end up causing this RPC to get stuck forever.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	resp, err := c.Echo(ctx, query)
-	if err == nil {
-		x.AssertTruef(bytes.Equal(resp.Data, query.Data),
-			"non-matching Echo response value from %v", p.Addr)
+	stream, err := c.Heartbeat(ctx, &api.Payload{})
+	if err != nil {
+		return err
+	}
+
+	for {
+		_, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		// We do this periodic stream receive based approach to defend against network partitions.
 		p.Lock()
 		p.lastEcho = time.Now()
 		p.Unlock()
-	} else if printError {
-		glog.Errorf("Echo error from %v. Err: %v\n", p.Addr, err)
 	}
-	return err
 }
 
 // MonitorHealth monitors the health of the connection via Echo. This function blocks forever.
 func (p *Pool) MonitorHealth() {
 	var lastErr error
 	for range p.ticker.C {
-		err := p.UpdateHealthStatus(lastErr == nil)
+		err := p.listenToHeartbeat()
 		if lastErr != nil && err == nil {
 			glog.Infof("Connection established with %v\n", p.Addr)
+		} else if err != nil && lastErr == nil {
+			glog.Warningf("Connection lost with %v. Error: %v\n", p.Addr, err)
 		}
 		lastErr = err
+		// Sleep for a bit before retrying.
+		time.Sleep(echoDuration)
 	}
 }
 
@@ -224,5 +225,5 @@ func (p *Pool) IsHealthy() bool {
 	}
 	p.RLock()
 	defer p.RUnlock()
-	return time.Since(p.lastEcho) < 2*echoDuration
+	return time.Since(p.lastEcho) < 4*echoDuration
 }
