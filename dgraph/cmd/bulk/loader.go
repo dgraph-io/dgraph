@@ -31,7 +31,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/dgraph/loadfile"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
