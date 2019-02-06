@@ -192,30 +192,6 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	return err
 }
 
-func (l *loader) nextNquads(batch []*api.NQuad, nqs []*api.NQuad) []*api.NQuad {
-	for _, nq := range nqs {
-		nq.Subject = l.uid(nq.Subject)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = l.uid(nq.ObjectId)
-		}
-	}
-
-	batch = append(batch, nqs...)
-	for len(batch) >= opt.batchSize {
-		mu := api.Mutation{Set: batch[:opt.batchSize]}
-		l.reqs <- mu
-		batch = batch[opt.batchSize:]
-	}
-
-	return batch
-}
-
-func (l *loader) finalNquads(batch []*api.NQuad) {
-	if len(batch) > 0 {
-		l.reqs <- api.Mutation{Set: batch}
-	}
-}
-
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadfile.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
@@ -232,10 +208,25 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadf
 		if chunkBuf != nil && chunkBuf.Len() > 0 {
 			nqs, err = ck.Parse(chunkBuf)
 			x.CheckfNoTrace(err)
-			batch = l.nextNquads(batch, nqs)
+
+			for _, nq := range nqs {
+				nq.Subject = l.uid(nq.Subject)
+				if len(nq.ObjectId) > 0 {
+					nq.ObjectId = l.uid(nq.ObjectId)
+				}
+			}
+
+			batch = append(batch, nqs...)
+			for len(batch) >= opt.batchSize {
+				mu := api.Mutation{Set: batch[:opt.batchSize]}
+				batch = batch[opt.batchSize:]
+				l.reqs <- mu
+			}
 		}
 		if err == io.EOF {
-			l.finalNquads(batch)
+			if len(batch) > 0 {
+				l.reqs <- api.Mutation{Set: batch}
+			}
 			break
 		} else {
 			x.Check(err)
