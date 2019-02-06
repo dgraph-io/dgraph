@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sort"
 	"testing"
@@ -29,6 +31,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -38,7 +41,59 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc"
 )
+
+var (
+	client = getNewClient()
+)
+
+func assignUids(t *testing.T, num uint64) {
+	_, err := http.Get(fmt.Sprintf("http://localhost:6080/assign?what=uids&num=%d", num))
+	require.NoError(t, err)
+}
+
+func getNewClient() *dgo.Dgraph {
+	conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+	x.Check(err)
+	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
+}
+
+func setSchema(t *testing.T, schema string) {
+	require.NoError(t, client.Alter(context.Background(), &api.Operation{
+		Schema: schema,
+	}))
+}
+
+func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
+	txn := client.NewTxn()
+	res, err := txn.Query(ctx, query)
+	if err != nil {
+		return "", err
+	}
+
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
+func processQueryNoErr(t *testing.T, query string) string {
+	res, err := processQuery(t, context.Background(), query)
+	require.NoError(t, err)
+	return res
+}
+
+func addTriples(t *testing.T, triples string) {
+	txn := client.NewTxn()
+	_, err := txn.Mutate(context.Background(), &api.Mutation{
+		SetNquads: []byte(triples),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+}
 
 func childAttrs(sg *SubGraph) []string {
 	var out []string
@@ -300,10 +355,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
-func populateGraph(t *testing.T) {
-	x.AssertTrue(ps != nil)
-
-	const schemaStr = `
+const testSchema = `
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
@@ -335,7 +387,126 @@ best_friend                    : uid .
 type                           : string @index(exact) .
 `
 
-	err := schema.ParseBytes([]byte(schemaStr), 1)
+func populateCluster(t *testing.T) {
+	require.NoError(t, client.Alter(context.Background(), &api.Operation{DropAll: true}))
+	setSchema(t, testSchema)
+	assignUids(t, 15000)
+
+	addTriples(t, `
+		<1> <name> "Michonne" .
+		<23> <name> "Rick Grimes" .
+		<24> <name> "Glenn Rhee" .
+		<25> <name> "Daryl Dixon" .
+		<31> <name> "Andrea" .
+		<240> <name> "Andrea With no friends" .
+		<1000> <name> "Alice" .
+		<1001> <name> "Bob" .
+		<1002> <name> "Matt" .
+		<1003> <name> "John" .
+		<3500> <name> "" .
+		<3500> <name@ko> "상현" .
+		<3502> <name> "" .
+		<3502> <name@en> "Amit" .
+		<3502> <name@hi> "अमित" .
+		<3503> <name@en> "Andrew" .
+		<3503> <name@hi> "" .
+		<5000> <name> "School A" .
+		<5001> <name> "School B" .
+		<10000> <name> "Alice" .
+		<10001> <name> "Elizabeth" .
+		<10002> <name> "Alice" .
+		<10003> <name> "Bob" .
+		<10004> <name> "Alice" .
+		<10005> <name> "Bob" .
+		<10006> <name> "Colin" .
+		<10007> <name> "Elizabeth" .
+
+		<1> <friend> <23> .
+		<1> <friend> <24> .
+		<1> <friend> <25> .
+		<1> <friend> <31> .
+		<1> <friend> <101> .
+		<31> <friend> <24> .
+		<23> <friend> <1> .
+
+		<2> <best_friend> <64> .
+
+		<1> <age> "38" .
+		<23> <age> "15" .
+		<24> <age> "15" .
+		<25> <age> "17" .
+		<31> <age> "19" .
+		<10000> <age> "25" .
+		<10001> <age> "75" .
+		<10002> <age> "75" .
+		<10003> <age> "75" .
+		<10004> <age> "75" .
+		<10005> <age> "25" .
+		<10006> <age> "25" .
+		<10007> <age> "25" .
+
+		<1> <alive> "true" .
+
+		<1> <gender> "female" .
+
+		<4001> <office> "office 1" .
+		<4002> <room> "room 1" .
+		<4003> <room> "room 2" .
+		<4004> <room> "" .
+		<4001> <office.room> <4002> .
+		<4001> <office.room> <4003> .
+		<4001> <office.room> <4004> .
+
+		<3001> <symbol> "AAPL" .
+		<3002> <symbol> "AMZN" .
+		<3003> <symbol> "AMD" .
+		<3004> <symbol> "FB" .
+		<3005> <symbol> "GOOG" .
+		<3006> <symbol> "MSFT" .
+
+		<1> <dob> "1910-01-01" .
+		<23> <dob> "1910-01-02" .
+		<24> <dob> "1909-05-05" .
+		<25> <dob> "1909-01-10" .
+		<31> <dob> "1901-01-15" .
+
+		<1> <path> <31> (weight = 0.1, weight1 = 0.2) .
+		<1> <path> <24> (weight = 0.2) .
+		<31> <path> <1000> (weight = 0.1) .
+		<1000> <path> <1001> (weight = 0.1) .
+		<1000> <path> <1002> (weight = 0.7) .
+		<1001> <path> <1002> (weight = 0.1) .
+		<1002> <path> <1003> (weight = 0.6) .
+		<1001> <path> <1003> (weight = 1.5) .
+		<1003> <path> <1001> .
+
+		<1> <follow> <31> .
+		<1> <follow> <24> .
+		<31> <follow> <1001> .
+		<1001> <follow> <1000> .
+		<1002> <follow> <1000> .
+		<1001> <follow> <1003> .
+		<1003> <follow> <1002> .
+
+		<1> <survival_rate> "98.99" .
+		<23> <survival_rate> "1.6" .
+		<24> <survival_rate> "1.6" .
+		<25> <survival_rate> "1.6" .
+		<31> <survival_rate> "1.6" .
+
+		<1> <school> <5000> .
+		<23> <school> <5001> .
+		<24> <school> <5000> .
+		<25> <school> <5000> .
+		<31> <school> <5001> .
+		<101> <school> <5001> .
+	`)
+}
+
+func populateGraph(t *testing.T) {
+	x.AssertTrue(ps != nil)
+
+	err := schema.ParseBytes([]byte(testSchema), 1)
 	x.Check(err)
 	addPassword(t, 1, "password", "123456")
 	addPassword(t, 23, "pass", "654321")
