@@ -92,7 +92,7 @@ func TestLiveLoadJSONFile(t *testing.T) {
 
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", testDataDir + "/family.json",
+			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
@@ -107,7 +107,7 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 	pipeline := [][]string{
 		{"gzip", "-c", testDataDir + "/family.json"},
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", "/dev/stdin",
+			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
@@ -128,7 +128,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--rdfs", fileList,
+			"--schema", testDataDir + "/family.schema", "--files", fileList,
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
