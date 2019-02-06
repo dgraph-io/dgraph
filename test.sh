@@ -117,8 +117,9 @@ if [[ $# -eq 0 ]]; then
         Info "Running only code tests"
     fi
 elif [[ $# -eq 1 ]]; then
-    go list ./... | grep $1 > $MATCHING_TESTS
-    Info "Running only tests matching '$1'"
+    REGEX=${1%/}
+    go list ./... | grep $REGEX > $MATCHING_TESTS
+    Info "Running only tests matching '$REGEX'"
     RUN_ALL=
 else
     echo >&2 "usage: $ME [pkg_regex]"

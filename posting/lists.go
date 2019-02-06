@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,6 +27,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
@@ -114,6 +117,7 @@ func updateMemoryMetrics(lc *y.Closer) {
 	defer lc.Done()
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-lc.HasBeenClosed():
@@ -132,9 +136,10 @@ func updateMemoryMetrics(lc *y.Closer) {
 			// transient spike in live heap size.
 			idle := ms.HeapIdle - ms.HeapReleased
 
-			x.MemoryInUse.Set(int64(inUse))
-			x.MemoryIdle.Set(int64(idle))
-			x.MemoryProc.Set(int64(getMemUsage()))
+			ostats.Record(context.Background(),
+				x.MemoryInUse.M(int64(inUse)),
+				x.MemoryIdle.M(int64(idle)),
+				x.MemoryProc.M(int64(getMemUsage())))
 		}
 	}
 }

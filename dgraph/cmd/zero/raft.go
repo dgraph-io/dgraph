@@ -94,6 +94,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 	// Overwrite ctx, so we no longer enforce the timeouts or cancels from ctx.
 	ctx = otrace.NewContext(context.Background(), span)
 
+	stop := x.SpanTimer(span, "n.proposeAndWait")
+	defer stop()
+
 	// propose runs in a loop. So, we should not do any checks inside, including n.AmLeader. This is
 	// to avoid the scenario where the first proposal times out and the second one gets returned
 	// due to node no longer being the leader. In this scenario, the first proposal can still get
