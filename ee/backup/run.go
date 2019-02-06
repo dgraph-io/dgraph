@@ -62,7 +62,7 @@ The --posting flag sets the posting list parent dir to store the loaded backup f
 
 The --since flag will try to restore from a specific read timestamp. Each backup file has
 the read timestamp in their name. If this flag is not used, the restore starts from the
-earliest version.
+latest version.
 
 Dgraph backup creates a unique backup object for each node group, and restore will create
 a posting directory 'p' matching the backup group ID. Such that a backup file
