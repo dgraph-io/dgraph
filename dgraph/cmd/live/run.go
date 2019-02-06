@@ -172,7 +172,7 @@ func (l *loader) uid(val string) string {
 func (l *loader) processFile(ctx context.Context, file string) error {
 	fmt.Printf("Processing data file %q\n", file)
 
-	rd, cleanup := x.FileReader(file)
+	rd, cleanup := chunker.FileReader(file)
 	defer cleanup()
 
 	var err error
@@ -181,7 +181,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.RdfInput))
 	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
 		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
-	} else if isJson, err = x.IsJSONData(rd); err == nil {
+	} else if isJson, err = chunker.IsJSONData(rd); err == nil {
 		if isJson {
 			err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
 		} else {

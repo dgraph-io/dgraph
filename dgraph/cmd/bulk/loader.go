@@ -194,14 +194,14 @@ func (ld *loader) mapStage() {
 	for i, file := range files {
 		thr.Start()
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
-		chunker := chunker.NewChunker(loaderType)
 
 		go func(file string) {
 			defer thr.Done()
 
-			r, cleanup := x.FileReader(file)
+			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
+			chunker := chunker.NewChunker(loaderType)
 			x.Check(chunker.Begin(r))
 			for {
 				chunkBuf, err := chunker.Chunk(r)
