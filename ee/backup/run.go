@@ -31,7 +31,7 @@ var Restore x.SubCommand
 var opt struct {
 	location string
 	pdir     string
-	readTs   uint64
+	since    uint64
 }
 
 func init() {
@@ -95,7 +95,7 @@ $ dgraph restore -since 20001 -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.c
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
-	flag.Uint64Var(&opt.readTs, "since", 0,
+	flag.Uint64Var(&opt.since, "since", 0,
 		"Starting version for partial restore")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
@@ -112,17 +112,17 @@ func run() (err error) {
 		}
 	}()
 
-	return runRestore(opt.pdir, opt.location, opt.readTs)
+	return runRestore(opt.pdir, opt.location, opt.since)
 }
 
 // runRestore calls badger.Load and tries to load data into a new DB.
-func runRestore(pdir, location string, readTs uint64) error {
+func runRestore(pdir, location string, since uint64) error {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(location, readTs, func(r io.Reader, groupId int) error {
-		fmt.Printf("--- Restoring groupId: %d, readTs: %d\n", groupId, readTs)
+	return Load(location, since, func(r io.Reader, groupId int) error {
+		fmt.Printf("--- Restoring groupId: %d, since: %d\n", groupId, since)
 		bo := badger.DefaultOptions
-		bo.SyncWrites = false
+		bo.SyncWrites = true
 		bo.TableLoadingMode = options.MemoryMap
 		bo.ValueThreshold = 1 << 10
 		bo.NumVersionsToKeep = math.MaxInt32
