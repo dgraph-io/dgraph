@@ -14,7 +14,6 @@ package backup
 
 import (
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -28,23 +27,7 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp      *os.File
-	readers multiReader
-}
-
-type multiReader []io.Reader
-
-func (mr multiReader) Close() error {
-	var err error
-	for i := range mr {
-		if mr[i] == nil {
-			continue
-		}
-		if fp, ok := mr[i].(*os.File); ok {
-			err = fp.Close()
-		}
-	}
-	return err
+	fp *os.File
 }
 
 // Create prepares the a path to save backup files.
@@ -119,7 +102,6 @@ func (h *fileHandler) Load(uri *url.URL, since uint64, fn loadFn) error {
 }
 
 func (h *fileHandler) Close() error {
-	h.readers.Close()
 	if h.fp == nil {
 		return nil
 	}
