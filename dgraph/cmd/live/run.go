@@ -195,7 +195,7 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
-	batch := make([]*api.NQuad, 0)
+	batch := make([]*api.NQuad, 0, 2*opt.batchSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -219,8 +219,11 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			batch = append(batch, nqs...)
 			for len(batch) >= opt.batchSize {
 				mu := api.Mutation{Set: batch[:opt.batchSize]}
-				batch = batch[opt.batchSize:]
 				l.reqs <- mu
+				// The following would create a new batch slice. We should not use batch =
+				// batch[opt.batchSize:], because it would end up modifying the batch array passed
+				// to l.reqs above.
+				batch = append([]*api.NQuad{}, batch[opt.batchSize:]...)
 			}
 		}
 		if err == io.EOF {
