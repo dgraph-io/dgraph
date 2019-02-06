@@ -150,7 +150,6 @@ if [[ $RUN_ALL ]]; then
     ./contrib/scripts/load-test.sh
 
     Info "Running custom test scripts"
-    ./contrib/scripts/test-backup-restore.sh
     ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
 fi
 
