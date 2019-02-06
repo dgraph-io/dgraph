@@ -249,7 +249,9 @@ func chMod(conf *viper.Viper) error {
 }
 
 func isSamePredicate(acl1 *Acl, acl2 *Acl) bool {
-	return (acl1.Predicate == acl2.Predicate) || (acl1.Regex == acl2.Regex)
+	return (len(acl1.Predicate) > 0 && len(acl2.Predicate) > 0 &&
+		acl1.Predicate == acl2.Predicate) ||
+		(len(acl1.Regex) > 0 && len(acl2.Regex) > 0 && acl1.Regex == acl2.Regex)
 }
 
 // returns whether the existing acls slice is changed

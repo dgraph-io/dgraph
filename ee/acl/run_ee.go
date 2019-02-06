@@ -270,6 +270,10 @@ func info(conf *viper.Viper) error {
 		if err != nil {
 			return err
 		}
+		if group == nil {
+			fmt.Printf("The group %s does not exist.", groupId)
+			return nil
+		}
 		fmt.Printf("Group: %5s\n", groupId)
 		fmt.Printf("UID  : %5s\n", group.Uid)
 		fmt.Printf("ID   : %5s\n", group.GroupID)

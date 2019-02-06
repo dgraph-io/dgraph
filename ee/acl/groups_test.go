@@ -20,11 +20,8 @@ import (
 func TestUpdateAcl(t *testing.T) {
 	var currenAcls []Acl
 	newAcl := Acl{
-		PredFilter: PredFilter{
-			IsRegex:   false,
-			Predicate: "friend",
-		},
-		Perm: 4,
+		Predicate: "friend",
+		Perm:      4,
 	}
 
 	updatedAcls1, changed := updateAcl(currenAcls, newAcl)
@@ -51,11 +48,8 @@ func TestUpdateAcl(t *testing.T) {
 		"the updated perm should be 6 now")
 
 	newAcl = Acl{
-		PredFilter: PredFilter{
-			IsRegex:   false,
-			Predicate: "buddy",
-		},
-		Perm: 6,
+		Predicate: "buddy",
+		Perm:      6,
 	}
 
 	updatedAcls4, changed := updateAcl(updatedAcls3, newAcl)
@@ -65,11 +59,8 @@ func TestUpdateAcl(t *testing.T) {
 		"the acl list should have 2 elements now")
 
 	newAcl = Acl{
-		PredFilter: PredFilter{
-			IsRegex:   false,
-			Predicate: "buddy",
-		},
-		Perm: -3,
+		Predicate: "buddy",
+		Perm:      -3,
 	}
 
 	updatedAcls5, changed := updateAcl(updatedAcls4, newAcl)
@@ -77,6 +68,6 @@ func TestUpdateAcl(t *testing.T) {
 		"with element of negative predicate")
 	require.Equal(t, 1, len(updatedAcls5),
 		"the acl list should have 1 element now")
-	require.Equal(t, "friend", updatedAcls5[0].PredFilter.Predicate,
+	require.Equal(t, "friend", updatedAcls5[0].Predicate,
 		"the left acl should have the original first predicate")
 }
