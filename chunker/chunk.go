@@ -26,8 +26,8 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
+	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/rdf"
 
 	"github.com/pkg/errors"
 )
