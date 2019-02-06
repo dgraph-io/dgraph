@@ -178,14 +178,13 @@ func (l *loader) processFile(ctx context.Context, file string) error {
 	var err error
 	var isJson bool
 	if strings.HasSuffix(file, ".rdf") || strings.HasSuffix(file, ".rdf.gz") {
-		err = l.processRdfFile(ctx, rd)
+		err = l.processLoadFile(ctx, rd, loadfile.NewChunker(loadfile.RdfInput))
 	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
-		err = l.processJsonFile(ctx, rd)
-	} else {
-		isJson, err = x.IsJSONData(rd)
+		err = l.processLoadFile(ctx, rd, loadfile.NewChunker(loadfile.JsonInput))
+	} else if isJson, err = x.IsJSONData(rd); err == nil {
 		if isJson {
-			err = l.processJsonFile(ctx, rd)
-		} else if err == nil {
+			err = l.processLoadFile(ctx, rd, loadfile.NewChunker(loadfile.JsonInput))
+		} else {
 			err = fmt.Errorf("Unable to determine file content format: %s", file)
 		}
 	}
@@ -245,16 +244,6 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck loadf
 	x.CheckfNoTrace(ck.End(rd))
 
 	return nil
-}
-
-func (l *loader) processJsonFile(ctx context.Context, rd *bufio.Reader) error {
-	chunker := loadfile.NewChunker(loadfile.JsonInput)
-	return l.processLoadFile(ctx, rd, chunker)
-}
-
-func (l *loader) processRdfFile(ctx context.Context, rd *bufio.Reader) error {
-	chunker := loadfile.NewChunker(loadfile.RdfInput)
-	return l.processLoadFile(ctx, rd, chunker)
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
