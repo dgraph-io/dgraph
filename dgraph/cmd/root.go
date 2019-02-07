@@ -59,6 +59,9 @@ func Execute() {
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
 	x.Check(goflag.CommandLine.Parse([]string{}))
 
+	// Dumping the usage in case of an error makes the error messages harder to see.
+	RootCmd.SilenceUsage = true
+
 	x.CheckfNoLog(RootCmd.Execute())
 }
 
