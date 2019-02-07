@@ -275,8 +275,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 	numGo, width := x.DivideAndRule(len(m.Edges))
-	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d",
-		len(m.Edges), numGo, width)
+	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
 	if numGo == 1 {
 		return process(m.Edges)
