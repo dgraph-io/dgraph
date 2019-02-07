@@ -11,8 +11,6 @@ services:
     ports:
       - 5080:5080
       - 6080:6080
-    tmpfs:
-      - /tmp
     labels:
       cluster: test
       service: zero
@@ -21,10 +19,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $DATA
-        target: /data
-    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --enterprise_features --bindall --expose_trace --profile_mode block --block_rate 10 -w /tmp/zw1
+    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --enterprise_features --bindall --expose_trace --profile_mode block --block_rate 10
 
   zero2:
     image: dgraph/dgraph:latest
@@ -35,8 +30,6 @@ services:
     ports:
       - 5082:5082
       - 6082:6082
-    tmpfs:
-      - /tmp
     labels:
       cluster: test
       service: zero
@@ -45,10 +38,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $DATA
-        target: /data
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --idx 2 --logtostderr -v=2 --enterprise_features --peer=zero1:5080 -w /tmp/zw2
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --idx 2 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
 
   zero3:
     image: dgraph/dgraph:latest
@@ -59,8 +49,6 @@ services:
     ports:
       - 5083:5083
       - 6083:6083
-    tmpfs:
-      - /tmp
     labels:
       cluster: test
       service: zero
@@ -69,11 +57,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $DATA
-        target: /data
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --idx 3 --logtostderr -v=2 --enterprise_features --peer=zero1:5080 -w /tmp/zw3
-
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --idx 3 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
 
   dg1:
     image: dgraph/dgraph:latest
@@ -84,18 +68,13 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $DATA
-        target: /data
-    tmpfs:
-      - /tmp
     ports:
       - 8180:8180
       - 9180:9180
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 0.1 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255 -w /tmp/w1
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
 
   dg2:
     image: dgraph/dgraph:latest
@@ -108,19 +87,13 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $DATA
-        target: /data
-    tmpfs:
-      - /tmp
     ports:
       - 8182:8182
       - 9182:9182
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 0.1 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255 -w /tmp/w2
-
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
 
   dg3:
     image: dgraph/dgraph:latest
@@ -133,16 +106,10 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $DATA
-        target: /data
-    tmpfs:
-      - /tmp
     ports:
       - 8183:8183
       - 9183:9183
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 0.1 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255 -w /tmp/w3
-
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255

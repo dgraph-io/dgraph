@@ -40,6 +40,5 @@ done
 
 make install
 docker-compose ${COMPOSE_FILES[@]} down
-export DATA=/mnt/nvme/dgraph
-docker-compose ${COMPOSE_FILES[@]} up --force-recreate --remove-orphans ${SERVICES[@]}
+DATA=$HOME/dg docker-compose ${COMPOSE_FILES[@]} up --force-recreate --remove-orphans ${SERVICES[@]}
 
