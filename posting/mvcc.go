@@ -121,7 +121,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				if data == nil {
 					continue
 				}
-				if plist.MaxVersion() > commitTs {
+				if plist.MaxVersion() >= commitTs {
 					pk := x.Parse([]byte(key))
 					glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
 						plist.MaxVersion(), commitTs, pk)
