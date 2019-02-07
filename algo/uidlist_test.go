@@ -346,6 +346,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			sz1 := sz
 			sz2 := sz * r
 			if sz2 > 1000000 {
+				fmt.Printf("SKIPPING ratio=%d;size=%d\n", r, sz)
 				break
 			}
 

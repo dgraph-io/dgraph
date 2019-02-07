@@ -18,7 +18,9 @@ package algo
 
 import (
 	"container/heap"
+	"fmt"
 	"sort"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -210,6 +212,7 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
+var filenum int64
 func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	ld := len(d)
 	lq := len(q)
@@ -221,18 +224,22 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	if ld == 0 || lq == 0 || d[ld-1] < q[0] || q[lq-1] < d[0] {
 		return
 	}
-
+	counter1 := new(int64)
+	counter2 := new(int64)
 	val := d[0]
 	minq := sort.Search(len(q), func(i int) bool {
+		atomic.AddInt64(counter1, 1)
 		return q[i] >= val
 	})
 
 	val = d[len(d)-1]
 	maxq := sort.Search(len(q), func(i int) bool {
+		atomic.AddInt64(counter2, 1)
 		return q[i] > val
 	})
 
 	binIntersect(d, q[minq:maxq], o)
+	fmt.Printf("LD=%d LQ=%d COUNTER1=%d COUNTER2=%d\n", ld, lq, *counter1, *counter2)
 }
 
 // binIntersect is the recursive function used.
