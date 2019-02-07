@@ -385,3 +385,17 @@ func TestPredicateRegex(t *testing.T) {
 	// permission
 	alterPredicateWithUserAccount(t, dg, true)
 }
+
+func TestAccessWithoutLoggingIn(t *testing.T) {
+	//ctx := context.Background()
+	dg, cancel := x.GetDgraphClientOnPort(9180)
+	defer cancel()
+
+	createAccountAndData(t, dg)
+	// without logging in,
+	// the anonymous user should be evaluated as if the user does not belong to any group,
+	// and access should be granted if there is no ACL rule defined for a predicate (fail open)
+	queryPredicateWithUserAccount(t, dg, false)
+	mutatePredicateWithUserAccount(t, dg, false)
+	alterPredicateWithUserAccount(t, dg, false)
+}

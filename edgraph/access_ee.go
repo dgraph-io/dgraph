@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -496,6 +498,8 @@ func ResetAcl() {
 	}
 }
 
+var errNoJwt = errors.New("no accessJwt available")
+
 // extract the userId, groupIds from the accessJwt in the context
 func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
@@ -505,7 +509,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
-		return nil, fmt.Errorf("no accessJwt available")
+		return nil, errNoJwt
 	}
 
 	return validateToken(accessJwt[0])
@@ -519,11 +523,20 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	if err != nil {
+	var userId string
+	var groupIds []string
+	if err == nil {
+		if isGroot(userData) {
+			return nil
+		}
+		userId = userData[0]
+		groupIds = userData[1:]
+	} else if err == errNoJwt {
+		// treat the user as anonymous who has not joined any group yet
+		// such a user can still get access to predicates if there is no rule defined on the
+		// predicate (the fail open approach)
+	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	if isGroot(userData) {
-		return nil
 	}
 
 	// if we get here, we know the user is not Groot.
@@ -531,8 +544,6 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return fmt.Errorf("only Groot is allowed to drop all data, current user is %s", userData[0])
 	}
 
-	userId := userData[0]
-	groupIds := userData[1:]
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
 		err := authorizePredicate(groupIds, op.DropAttr, acl.Modify)
@@ -589,20 +600,26 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	if err != nil {
+	var userId string
+	var groupIds []string
+	if err == nil {
+		if isGroot(userData) {
+			return nil
+		}
+		userId = userData[0]
+		groupIds = userData[1:]
+	} else if err == errNoJwt {
+		// treat the user as anonymous who has not joined any group yet
+		// such a user can still get access to predicates if there is no rule defined on the
+		// predicate (the fail open approach)
+	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	if isGroot(userData) {
-		// Groot has access to everything.
-		return nil
 	}
 
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return err
 	}
-	userId := userData[0]
-	groupIds := userData[1:]
 	for pred := range parsePredsFromMutation(gmu.Set) {
 		err := authorizePredicate(groupIds, pred, acl.Write)
 		logACLAccess(&ACLAccessLog{
@@ -669,11 +686,20 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	}
 
 	userData, err := extractUserAndGroups(ctx)
-	if err != nil {
+	var userId string
+	var groupIds []string
+	if err == nil {
+		if isGroot(userData) {
+			return nil
+		}
+		userId = userData[0]
+		groupIds = userData[1:]
+	} else if err == errNoJwt {
+		// treat the user as anonymous who has not joined any group yet
+		// such a user can still get access to predicates if there is no rule defined on the
+		// predicate (the fail open approach)
+	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	if isGroot(userData) {
-		return nil
 	}
 
 	parsedReq, err := gql.Parse(gql.Request{
@@ -684,8 +710,6 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		return err
 	}
 
-	userId := userData[0]
-	groupIds := userData[1:]
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
 		err := authorizePredicate(groupIds, pred, acl.Read)
 		logACLAccess(&ACLAccessLog{
