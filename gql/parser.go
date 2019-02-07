@@ -1342,6 +1342,10 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	return nil
 }
 
+// parseIneqArgs will try to parse the arguments inside an array ([]). If the values
+// are prefixed with $ they are treated as Gql variables, otherwise used as scalar values.
+// Returns nil on success while appending arguments to the function Args slice. Otherwise
+// returns an error, which can be a parsing or value error.
 func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 	var expectArg, isDollar bool
 
@@ -1350,12 +1354,10 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 		item := it.Item()
 		switch item.Typ {
 		case itemRightSquare:
-			glog.Info("itemRightSquare")
 			return nil
 		case itemDollar:
-			glog.Infof("itemDollar: %v", item)
 			if !expectArg {
-				return item.Errorf("Missing comma in arg list declaration")
+				return item.Errorf("Missing comma in argument list declaration")
 			}
 			if item, ok := it.PeekOne(); !ok || item.Typ != itemName {
 				return item.Errorf("Expecting a variable name. Got: %v", item)
@@ -1363,7 +1365,6 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 			isDollar = true
 			continue
 		case itemName:
-			glog.Infof("itemName: %v", item)
 			if !isDollar {
 				val, err := getValueArg(item.Val)
 				if err != nil {
@@ -1375,9 +1376,8 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 			val := "$" + item.Val
 			g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
 		case itemComma:
-			glog.Info("itemComma")
 			if expectArg {
-				return item.Errorf("Invalid comma in arg list")
+				return item.Errorf("Invalid comma in argument list")
 			}
 			expectArg = true
 			continue
@@ -1390,6 +1390,8 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 	return it.Errorf("Expecting ] to end list but none was found")
 }
 
+// getValueArg returns a space-trimmed and unquoted version of val.
+// Returns the cleaned string, otherwise empty string and an error.
 func getValueArg(val string) (string, error) {
 	return unquoteIfQuoted(strings.TrimSpace(val))
 }
