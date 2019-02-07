@@ -79,7 +79,7 @@ type List struct {
 
 func (l *List) MaxVersion() uint64 {
 	l.RLock()
-	defer l.RLock()
+	defer l.RUnlock()
 	return l.maxTs
 }
 
