@@ -56,7 +56,7 @@ func (s *Server) Login(ctx context.Context,
 
 	user, err := s.authenticateLogin(ctx, request)
 	if err != nil {
-		errMsg := fmt.Sprintf("authentication from address %s failed: %v", addr, err)
+		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
 		glog.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
