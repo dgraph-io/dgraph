@@ -72,10 +72,17 @@ type List struct {
 	plist         *pb.PostingList
 	mutationMap   map[uint64]*pb.PostingList
 	minTs         uint64 // commit timestamp of immutable layer, reject reads before this ts.
+	maxTs         uint64 // max commit timestamp seen for this list.
 	estimatedSize int32
 
 	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
+}
+
+func (l *List) MaxVersion() uint64 {
+	l.RLock()
+	defer l.RLock()
+	return l.maxTs
 }
 
 // calculateSize would give you the size estimate. This is expensive, so run it carefully.

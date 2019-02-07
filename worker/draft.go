@@ -827,7 +827,6 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
-	writer.BlindWrite = true // Do overwrite keys.
 
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Rolling up"

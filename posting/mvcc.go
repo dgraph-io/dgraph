@@ -108,16 +108,32 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	// Also, if the snapshot read ts is above the commit ts, then we just delete the postings from
 	// memory, instead of writing them back again.
 
-	for _, key := range keys {
-		plist, err := txn.Get([]byte(key))
+	var idx int
+	for idx < len(keys) {
+		err := writer.Update(commitTs, func(btxn *badger.Txn) error {
+			for ; idx < len(keys); idx++ {
+				key := keys[idx]
+				plist, err := txn.Get([]byte(key))
+				if err != nil {
+					return err
+				}
+				data := plist.GetMutation(txn.StartTs)
+				if data == nil {
+					continue
+				}
+				if plist.MaxVersion() > commitTs {
+					pk := x.Parse([]byte(key))
+					glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
+						plist.MaxVersion(), commitTs, pk)
+					continue
+				}
+				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 		if err != nil {
-			return err
-		}
-		data := plist.GetMutation(txn.StartTs)
-		if data == nil {
-			continue
-		}
-		if err := writer.SetAt([]byte(key), data, BitDeltaPosting, commitTs); err != nil {
 			return err
 		}
 	}
@@ -179,11 +195,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
 		item := it.Item()
-		if item.IsDeletedOrExpired() {
-			// Don't consider any more versions.
+		if !bytes.Equal(item.Key(), l.key) {
 			break
 		}
-		if !bytes.Equal(item.Key(), l.key) {
+		l.maxTs = x.Max(l.maxTs, item.Version())
+		if item.IsDeletedOrExpired() {
+			// Don't consider any more versions.
 			break
 		}
 

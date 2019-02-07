@@ -26,7 +26,6 @@ services:
         target: /data
     command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --enterprise_features --bindall --expose_trace --profile_mode block --block_rate 10 -w /tmp/zw1
 
-
   zero2:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.2
