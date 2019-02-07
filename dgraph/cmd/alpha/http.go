@@ -156,6 +156,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), query.DebugKey, d)
+	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
+		md := metadata.New(nil)
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
 
 	// If ro is set, run this as a readonly query.
 	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {
@@ -252,6 +257,12 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		mu.CommitNow = c
 	}
+	ctx := context.Background()
+	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
+		md := metadata.New(nil)
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
 
 	ts, err := extractStartTs(r.URL.Path)
 	if err != nil {
@@ -260,7 +271,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.StartTs = ts
 
-	resp, err := (&edgraph.Server{}).Mutate(context.Background(), mu)
+	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -426,6 +437,10 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	md := metadata.New(nil)
 	// Pass in an auth token, if present.
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
+	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
+		md.Append("accessJwt", accessJwt)
+	}
+
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	if _, err = (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
