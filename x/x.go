@@ -91,6 +91,12 @@ var (
 		"dgraph.group.acl":  {},
 		"type":              {},
 	}
+	AclPreds = map[string]struct{}{
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+	}
 	Nilbyte []byte
 )
 

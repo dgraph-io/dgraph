@@ -505,7 +505,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	// extract the jwt and unmarshal the jwt to get the list of groups
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, fmt.Errorf("no metadata available")
+		return nil, errNoJwt
 	}
 	accessJwt := md.Get("accessJwt")
 	if len(accessJwt) == 0 {
@@ -541,7 +541,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 	// if we get here, we know the user is not Groot.
 	if op.DropAll {
-		return fmt.Errorf("only Groot is allowed to drop all data, current user is %s", userData[0])
+		return fmt.Errorf("only Groot is allowed to drop all data")
 	}
 
 	if len(op.DropAttr) > 0 {
@@ -562,11 +562,11 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return nil
 	}
 
-	result, err := schema.Parse(op.Schema)
+	update, err := schema.Parse(op.Schema)
 	if err != nil {
 		return err
 	}
-	for _, update := range updates {
+	for _, update := range update.Schemas {
 		err := authorizePredicate(groupIds, update.Predicate, acl.Modify)
 		logACLAccess(&ACLAccessLog{
 			userId:    userId,
