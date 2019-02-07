@@ -77,13 +77,10 @@ func min(a, b, c int) int {
 
 // matchFuzzy takes in a value (from posting) and compares it to our list of ngram tokens.
 // Returns true if value matches fuzzy tokens, false otherwise.
-func matchFuzzy(query, val string) bool {
+func matchFuzzy(query, val string, max int) bool {
 	if val == "" {
 		return false
 	}
-
-	// TODO: Fill in the max edit distance based parsing by match.
-	max := 8
 	return levenshteinDistance(val, query, max) <= max
 }
 

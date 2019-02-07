@@ -1192,7 +1192,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		for _, val := range vals {
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string)) {
+			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), int(arg.srcFn.threshold)) {
 				filtered.Uids = append(filtered.Uids, uid)
 				// NOTE: We only add the uid once.
 				break
