@@ -1486,7 +1486,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
-	case StandardFn, FullTextSearchFn, MatchFn:
+	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
@@ -1496,14 +1496,36 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
-		if fnType == MatchFn {
-			fc.tokens = q.SrcFunc.Args
-		} else {
-			if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
-				return nil, err
-			}
+		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
+			return nil, err
 		}
 		fc.intersectDest = needsIntersect(f)
+		fc.n = len(fc.tokens)
+	case MatchFn:
+		l := len(q.SrcFunc.Args)
+		if l == 0 || l > 2 {
+			return nil, x.Errorf("Function '%s' requires at most 2 arguments, but got %d (%v)",
+				f, l, q.SrcFunc.Args)
+		}
+		required, found := verifyStringIndex(attr, fnType)
+		if !found {
+			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
+		}
+		fc.intersectDest = needsIntersect(f)
+		// Max Levenshtein distance
+		fc.threshold = 8
+		if l == 2 {
+			var s string
+			s, q.SrcFunc.Args = q.SrcFunc.Args[1], q.SrcFunc.Args[:1]
+			max, err := strconv.ParseInt(s, 10, 32)
+			if err != nil {
+				return nil, x.Errorf("Levenshtein distance value must be an int, got %v", s)
+			}
+			if max > 0 && max < 8 {
+				fc.threshold = int64(max)
+			}
+		}
+		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case CustomIndexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
