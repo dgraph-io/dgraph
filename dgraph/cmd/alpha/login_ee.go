@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +58,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	var out bytes.Buffer
 	out.WriteString(fmt.Sprintf("ACCESS JWT:\n%s\n", jwt.AccessJwt))
 	out.WriteString(fmt.Sprintf("REFRESH JWT:\n%s\n", jwt.RefreshJwt))
-	writeResponse(w, r, out.Bytes())
+	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+		glog.Errorf("Error while writing response: %v", err)
+	}
 }
 
 func init() {
