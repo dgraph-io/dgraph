@@ -31,6 +31,7 @@ package x
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/pkg/errors"
 )
@@ -49,9 +50,17 @@ func Checkf(err error, format string, args ...interface{}) {
 	}
 }
 
+// CheckfNoTrace is Checkf without a stack trace.
 func CheckfNoTrace(err error) {
 	if err != nil {
 		log.Fatalf(err.Error())
+	}
+}
+
+// CheckfNoLog exits on error without any message (to avoid duplicate error messages).
+func CheckfNoLog(err error) {
+	if err != nil {
+		os.Exit(1)
 	}
 }
 

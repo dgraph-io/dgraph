@@ -59,7 +59,7 @@ func Execute() {
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
 	x.Check(goflag.CommandLine.Parse([]string{}))
 
-	x.Check(RootCmd.Execute())
+	x.CheckfNoLog(RootCmd.Execute())
 }
 
 var rootConf = viper.New()
