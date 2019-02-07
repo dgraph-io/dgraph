@@ -17,40 +17,15 @@
 package query
 
 import (
-	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"sync/atomic"
 	"testing"
 
 	context "golang.org/x/net/context"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
-
-	"github.com/dgraph-io/dgraph/x"
 )
-
-var passwordCache = make(map[string]string, 2)
-
-var ts uint64
-var odch chan *pb.OracleDelta
-
-func timestamp() uint64 {
-	return atomic.AddUint64(&ts, 1)
-}
-
-var ps *badger.DB
 
 func TestGetUID(t *testing.T) {
 	query := `
@@ -297,7 +272,7 @@ func TestGetUIDInDebugMode(t *testing.T) {
 		}
 	`
 
-	ctx := defaultContext()
+	ctx := context.Background()
 	ctx = context.WithValue(ctx, DebugKey, "true")
 	js, err := processQuery(t, ctx, query)
 	require.NoError(t, err)
@@ -1712,88 +1687,7 @@ func TestCountUidToVarCombinedWithNormalVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 5}]}}`, js)
 }
 
-var maxPendingCh chan uint64
-
 func TestMain(m *testing.M) {
-	// TODO: Most of this code should be removed once all tests are using a cluster instead
-	// of the current setup.
-	x.Init()
-	x.SetTestRun()
-
-	odch = make(chan *pb.OracleDelta, 100)
-	maxPendingCh = make(chan uint64, 100)
-
-	cmd := exec.Command("go", "install", "github.com/dgraph-io/dgraph/dgraph")
-	cmd.Env = os.Environ()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not run %q: %s", cmd.Args, string(out))
-	}
-	zw, err := ioutil.TempDir("", "wal_")
-	x.Check(err)
-
-	var exists bool
-	var goPath string
-
-	if goPath, exists = os.LookupEnv("GOPATH"); !exists {
-		goPath = os.ExpandEnv("$HOME/go")
-	}
-
-	zero := exec.Command(filepath.Join(goPath, "/bin/dgraph"),
-		"zero",
-		"--wal", zw,
-		"-o", "10",
-	)
-	zero.Stdout = os.Stdout
-	zero.Stderr = os.Stdout
-	if err := zero.Start(); err != nil {
-		log.Fatalf("While starting Zero: %v", err)
-	}
-
-	dir, err := ioutil.TempDir("", "storetest_")
-	x.Check(err)
-
-	opt := badger.LSMOnlyOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-	opt.SyncWrites = false
-	ps, err = badger.OpenManaged(opt)
-	defer ps.Close()
-	x.Check(err)
-
-	worker.Config.RaftId = 1
-	posting.Config.AllottedMemory = 1024.0
-	posting.Config.CommitFraction = 0.10
-	worker.Config.ZeroAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+10)
-	worker.Config.RaftId = 1
-	worker.Config.MyAddr = "localhost:12345"
-	worker.Config.ExpandEdge = true
-	worker.Config.NumPendingProposals = 100 // So that mutations can run.
-	schema.Init(ps)
-	posting.Init(ps)
-	worker.Init(ps)
-
-	dir2, err := ioutil.TempDir("", "wal_")
-	x.Check(err)
-
-	kvOpt := badger.DefaultOptions
-	kvOpt.SyncWrites = true
-	kvOpt.Dir = dir2
-	kvOpt.ValueDir = dir2
-	kvOpt.TableLoadingMode = options.LoadToRAM
-	walStore, err := badger.Open(kvOpt)
-	x.Check(err)
-
-	worker.StartRaftNodes(walStore, false)
-	// Load schema after nodes have started
-
 	populateCluster(&testing.T{})
-	populateGraph(&testing.T{})
-	go updateMaxPending()
-	r := m.Run()
-
-	os.RemoveAll(dir)
-	os.RemoveAll(dir2)
-	x.Check(zero.Process.Kill())
-	os.RemoveAll(zw)
-	os.Exit(r)
+	os.Exit(m.Run())
 }

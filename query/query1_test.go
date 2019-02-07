@@ -24,9 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
@@ -81,32 +78,6 @@ func TestSchemaBlock5(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"schema":[{"predicate":"name","type":"string","index":true,"tokenizer":["term","exact","trigram"],"count":true,"lang":true}]}}`, js)
-}
-
-// Duplicate implemention as in cmd/dgraph/main_test.go
-// TODO: Change the implementation in cmd/dgraph to test for network failure
-type raftServer struct {
-}
-
-func (c *raftServer) Echo(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return in, nil
-}
-
-func (c *raftServer) RaftMessage(ctx context.Context, in *api.Payload) (*api.Payload, error) {
-	return &api.Payload{}, nil
-}
-
-func (c *raftServer) JoinCluster(ctx context.Context, in *pb.RaftContext) (*api.Payload, error) {
-	return &api.Payload{}, nil
-}
-
-func updateMaxPending() {
-	for mp := range maxPendingCh {
-		posting.Oracle().ProcessDelta(&pb.OracleDelta{
-			MaxAssigned: mp,
-		})
-	}
-
 }
 
 func TestFilterNonIndexedPredicateFail(t *testing.T) {
