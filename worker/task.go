@@ -339,7 +339,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	// This function has small boiletplate as handleUidPostings, around how the code gets
 	// concurrently executed. I didn't see much value in trying to separate it out, because the core
 	// logic constitutes most of the code volume here.
-	numGo, width := x.DivideAndRule(srcFn.n)
+	numGo, width := x.DivideAndRule(srcFn.n, 256)
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
@@ -530,7 +530,7 @@ func (qs *queryState) handleUidPostings(
 	}
 
 	// Divide the task into many goroutines.
-	numGo, width := x.DivideAndRule(srcFn.n)
+	numGo, width := x.DivideAndRule(srcFn.n, 256)
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 

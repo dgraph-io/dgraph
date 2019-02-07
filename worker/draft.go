@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 
 	ostats "go.opencensus.io/stats"
+	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -244,22 +246,56 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return dy.ErrConflict
 	}
 
-	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
-	var retries int
-	for _, edge := range m.Edges {
-		for {
-			err := runMutation(ctx, edge, txn)
-			if err == nil {
-				break
-			}
-			if err != posting.ErrRetry {
-				return err
-			}
-			retries++
+	sort.Slice(m.Edges, func(i, j int) bool {
+		ei := m.Edges[i]
+		ej := m.Edges[j]
+		if ei.GetAttr() != ej.GetAttr() {
+			return ei.GetAttr() < ej.GetAttr()
 		}
+		return ei.GetEntity() < ej.GetEntity()
+	})
+
+	process := func(edges []*pb.DirectedEdge) error {
+		var retries int
+		for _, edge := range edges {
+			for {
+				err := runMutation(ctx, edge, txn)
+				if err == nil {
+					break
+				}
+				if err != posting.ErrRetry {
+					return err
+				}
+				retries++
+			}
+		}
+		if retries > 0 {
+			span.Annotatef(nil, "retries=true num=%d", retries)
+		}
+		return nil
 	}
-	if retries > 0 {
-		span.Annotatef(nil, "retries=true num=%d", retries)
+	numGo, width := x.DivideAndRule(len(m.Edges), 256)
+	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d",
+		len(m.Edges), numGo, width)
+
+	if numGo == 1 {
+		return process(m.Edges)
+	}
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(m.Edges) {
+			end = len(m.Edges)
+		}
+		go func(start, end int) {
+			errCh <- process(m.Edges[start:end])
+		}(start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -387,6 +423,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
+				start := time.Now()
 				perr = n.applyCommitted(proposal)
 				if len(proposal.Key) > 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
@@ -397,6 +434,17 @@ func (n *node) processApplyCh() {
 				}
 				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 					proposal.Key, proposal.Index, perr)
+
+				var tags []tag.Mutator
+				switch {
+				case proposal.Mutations != nil:
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+				case proposal.Delta != nil:
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+				}
+				// tags = append(tags, tag.Upsert(x.KeyError, perr.Error()))
+				ms := x.SinceInMilliseconds(start)
+				ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(proposal.Key, perr)
