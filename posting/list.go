@@ -25,7 +25,6 @@ import (
 	"math"
 	"sort"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -68,25 +67,13 @@ const (
 
 type List struct {
 	x.SafeMutex
-	key           []byte
-	plist         *pb.PostingList
-	mutationMap   map[uint64]*pb.PostingList
-	minTs         uint64 // commit timestamp of immutable layer, reject reads before this ts.
-	estimatedSize int32
+	key         []byte
+	plist       *pb.PostingList
+	mutationMap map[uint64]*pb.PostingList
+	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 
 	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
-}
-
-// calculateSize would give you the size estimate. This is expensive, so run it carefully.
-func (l *List) calculateSize() int32 {
-	sz := int(unsafe.Sizeof(l))
-	sz += l.plist.Size()
-	sz += cap(l.key)
-	for _, pl := range l.mutationMap {
-		sz += 8 + pl.Size()
-	}
-	return int32(sz)
 }
 
 type PIterator struct {
@@ -182,14 +169,6 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		Op:          op,
 		Facets:      t.Facets,
 	}
-}
-
-func (l *List) EstimatedSize() int32 {
-	size := atomic.LoadInt32(&l.estimatedSize)
-	if size < 0 {
-		return 0
-	}
-	return size
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -328,7 +307,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	}
 
 	l.updateMutationLayer(mpost)
-	atomic.AddInt32(&l.estimatedSize, int32(mpost.Size()+16 /* various overhead */))
 	atomic.AddInt32(&l.pendingTxns, 1)
 	txn.AddKeys(string(l.key), conflictKey)
 	return nil
@@ -375,7 +353,6 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	}
 	if commitTs == 0 {
 		// Abort mutation.
-		atomic.AddInt32(&l.estimatedSize, -1*int32(plist.Size()))
 		delete(l.mutationMap, startTs)
 		return nil
 	}
@@ -688,7 +665,6 @@ func (l *List) rollup(readTs uint64) error {
 
 	l.minTs = maxCommitTs
 	l.plist = final
-	atomic.StoreInt32(&l.estimatedSize, l.calculateSize())
 	return nil
 }
 
