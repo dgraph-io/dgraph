@@ -88,7 +88,7 @@ func downHeap(h *uint64Heap, pos, n int) bool {
 		}
 		node := high // left child
 		if next := high + 1; next < n && h.Less(next, high) {
-			node = next // = 2*i + 2  right child
+			node = next // = 2*current + 2  right child
 		}
 		if !h.Less(node, current) {
 			break
