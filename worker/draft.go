@@ -442,7 +442,6 @@ func (n *node) processApplyCh() {
 				case proposal.Delta != nil:
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 				}
-				// tags = append(tags, tag.Upsert(x.KeyError, perr.Error()))
 				ms := x.SinceInMilliseconds(start)
 				ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
