@@ -126,7 +126,7 @@ func waitForHealthy() error {
 		}
 	}
 	for _, alpha := range []string{"localhost:9180", "localhost:9182", "localhost:9183"} {
-		if err := run(ctxb, "increment --addr="+alpha); err != nil {
+		if err := run(ctxb, "dgraph increment --addr="+alpha); err != nil {
 			return err
 		}
 	}
