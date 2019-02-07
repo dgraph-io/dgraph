@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -304,9 +305,15 @@ const (
 	messageBatchSoftLimit = 10000000
 )
 
+type Stream struct {
+	msgCh chan []byte
+	alive int32
+}
+
 func (n *Node) BatchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
-	failedConn := make(map[uint64]bool)
+	streams := make(map[uint64]*Stream)
+
 	for {
 		totalSize := 0
 		sm := <-n.messages
@@ -342,59 +349,91 @@ func (n *Node) BatchAndSendMessages() {
 			if buf.Len() == 0 {
 				continue
 			}
-
-			addr, has := n.Peer(to)
-			pool, err := Get().Get(addr)
-			if !has || err != nil {
-				if exists := failedConn[to]; !exists {
-					// So that we print error only the first time we are not able to connect.
-					// Otherwise, the log is polluted with multiple errors.
-					glog.Warningf("No healthy connection to node Id: %#x addr: [%s], err: %v\n",
-						to, addr, err)
-					failedConn[to] = true
+			stream, ok := streams[to]
+			if !ok || atomic.LoadInt32(&stream.alive) <= 0 {
+				stream = &Stream{
+					msgCh: make(chan []byte, 100),
+					alive: 1,
 				}
-				continue
+				go n.streamMessages(to, stream)
+				streams[to] = stream
 			}
-
-			failedConn[to] = false
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
-			go n.doSendMessage(to, pool, data)
 			buf.Reset()
+
+			select {
+			case stream.msgCh <- data:
+			default:
+			}
 		}
 	}
 }
 
-func (n *Node) doSendMessage(to uint64, pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func (n *Node) streamMessages(to uint64, stream *Stream) {
+	defer atomic.StoreInt32(&stream.alive, 0)
 
-	client := pool.Get()
-
-	c := pb.NewRaftClient(client)
-	p := &api.Payload{Data: data}
-	batch := &pb.RaftBatch{
-		Context: n.RaftContext,
-		Payload: p,
-	}
-
-	// We don't need to run this in a goroutine, because doSendMessage is
-	// already being run in one.
-	_, err := c.RaftMessage(ctx, batch)
-	if err != nil {
-		switch {
-		case strings.Contains(err.Error(), "TransientFailure"):
-			glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
-			n.Raft().ReportUnreachable(to)
-			pool.SetUnhealthy()
-		default:
-			glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
-				pool.Addr, err)
+	deadline := time.Now().Add(time.Minute)
+	var lastLog time.Time
+	// Exit after a thousand tries and let BatchAndSendMessages create another goroutine, if
+	// needed.
+	for i := 0; ; i++ {
+		if err := n.doSendMessage(to, stream.msgCh); err != nil {
+			if time.Since(lastLog) > time.Minute {
+				glog.Warningf("Unable to send message to peer: %#x. Error: %v", to, err)
+			}
+			// So that we print error only a few times if we are not able to connect.
+			// Otherwise, the log is polluted with multiple errors.
+			lastLog = time.Now()
+		}
+		if i >= 1e6 {
+			if time.Now().After(deadline) {
+				return
+			}
+			i = 0
 		}
 	}
-	// We don't need to do anything if we receive any error while sending message.
-	// RAFT would automatically retry.
-	return
+}
+
+func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
+	addr, has := n.Peer(to)
+	if !has {
+		return x.Errorf("Do not have address of peer %#x", to)
+	}
+	pool, err := Get().Get(addr)
+	if err != nil {
+		return err
+	}
+	c := pb.NewRaftClient(pool.Get())
+	mc, err := c.RaftMessage(context.Background())
+	if err != nil {
+		return err
+	}
+
+	ctx := mc.Context()
+	for {
+		select {
+		case data := <-msgCh:
+			batch := &pb.RaftBatch{
+				Context: n.RaftContext,
+				Payload: &api.Payload{Data: data},
+			}
+			if err := mc.Send(batch); err != nil {
+				switch {
+				case strings.Contains(err.Error(), "TransientFailure"):
+					glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
+					n.Raft().ReportUnreachable(to)
+					pool.SetUnhealthy()
+				default:
+				}
+				// We don't need to do anything if we receive any error while sending message.
+				// RAFT would automatically retry.
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // Connects the node and makes its peerPool refer to the constructed pool and address
