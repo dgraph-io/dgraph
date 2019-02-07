@@ -58,10 +58,10 @@ func init() {
 		CmdAcl.Cmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
 		if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
-			glog.Fatalf("Unable to bind flags for command %v:%v", sc, err)
+			glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
 		}
 		if err := sc.Conf.BindPFlags(CmdAcl.Cmd.PersistentFlags()); err != nil {
-			glog.Fatalf("Unable to bind persistent flags from acl for command %v:%v", sc, err)
+			glog.Fatalf("Unable to bind persistent flags from acl for command %v: %v", sc, err)
 		}
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 	}
@@ -75,7 +75,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to add a user",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := userAdd(cmdUserAdd.Conf); err != nil {
-				glog.Errorf("Unable to add user:%v", err)
+				fmt.Printf("Unable to add user: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -84,6 +84,22 @@ func initSubcommands() []*x.SubCommand {
 	userAddFlags.StringP("user", "u", "", "The user id to be created")
 	userAddFlags.StringP("password", "p", "", "The password for the user")
 
+	// user change password command
+	var cmdPasswd x.SubCommand
+	cmdPasswd.Cmd = &cobra.Command{
+		Use:   "passwd",
+		Short: "Run Dgraph acl tool to change a user's password",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := userPasswd(cmdPasswd.Conf); err != nil {
+				fmt.Printf("Unable to change password for user: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+	chPwdFlags := cmdPasswd.Cmd.Flags()
+	chPwdFlags.StringP("user", "u", "", "The user id to be created")
+	chPwdFlags.StringP("new_password", "", "", "The new password for the user")
+
 	// user deletion command
 	var cmdUserDel x.SubCommand
 	cmdUserDel.Cmd = &cobra.Command{
@@ -91,7 +107,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to delete a user",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := userDel(cmdUserDel.Conf); err != nil {
-				glog.Errorf("Unable to delete the user:%v", err)
+				fmt.Printf("Unable to delete the user: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -106,7 +122,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to add a group",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := groupAdd(cmdGroupAdd.Conf); err != nil {
-				glog.Errorf("Unable to add group:%v", err)
+				fmt.Printf("Unable to add group: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -121,7 +137,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to delete a group",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := groupDel(cmdGroupDel.Conf); err != nil {
-				glog.Errorf("Unable to delete group:%v", err)
+				fmt.Printf("Unable to delete group: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -136,7 +152,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to change a user's groups",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := userMod(cmdUserMod.Conf); err != nil {
-				glog.Errorf("Unable to modify user:%v", err)
+				fmt.Printf("Unable to modify user: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -152,7 +168,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to change a group's permissions",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := chMod(cmdChMod.Conf); err != nil {
-				glog.Errorf("Unable to change permission for group:%v", err)
+				fmt.Printf("Unable to change permisson for group: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -162,8 +178,10 @@ func initSubcommands() []*x.SubCommand {
 		"is to be changed")
 	chModFlags.StringP("pred", "p", "", "The predicates whose acls"+
 		" are to be changed")
+	chModFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
+		" whose acls are to be changed")
 	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
-		"an integer, 4 for read-only, 2 for write-only, and 1 for modify-only")
+		"an integer: 4 for read, 2 for write, and 1 for modify.")
 
 	var cmdInfo x.SubCommand
 	cmdInfo.Cmd = &cobra.Command{
@@ -171,7 +189,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Show info about a user or group",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := info(cmdInfo.Conf); err != nil {
-				glog.Errorf("Unable to show info:%v", err)
+				fmt.Printf("Unable to show info: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -180,7 +198,7 @@ func initSubcommands() []*x.SubCommand {
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{
-		&cmdUserAdd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
+		&cmdUserAdd, &cmdPasswd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
 		&cmdChMod, &cmdInfo,
 	}
 }
@@ -191,7 +209,7 @@ func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 	opt = options{
 		dgraph: conf.GetString("dgraph"),
 	}
-	glog.Infof("Running transaction with dgraph endpoint: %v", opt.dgraph)
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.dgraph)
 
 	if len(opt.dgraph) == 0 {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
@@ -206,7 +224,7 @@ func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 	dc := api.NewDgraphClient(conn)
 	return dgo.NewDgraphClient(dc), func() {
 		if err := conn.Close(); err != nil {
-			glog.Errorf("Error while closing connection:%v", err)
+			fmt.Printf("Error while closing connection: %v\n", err)
 		}
 	}
 }
@@ -216,19 +234,19 @@ func info(conf *viper.Viper) error {
 	groupId := conf.GetString("group")
 	if (len(userId) == 0 && len(groupId) == 0) ||
 		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("Either the user or group should be specified, not both")
+		return fmt.Errorf("either the user or group should be specified, not both")
 	}
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	defer cancel()
 	if err != nil {
-		return fmt.Errorf("unable to get admin context:%v", err)
+		return fmt.Errorf("unable to get admin context: %v\n", err)
 	}
 
 	ctx := context.Background()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
-			glog.Errorf("Unable to discard transaction:%v", err)
+			fmt.Printf("Unable to discard transaction: %v\n", err)
 		}
 	}()
 
@@ -238,15 +256,12 @@ func info(conf *viper.Viper) error {
 			return err
 		}
 
-		var userBuf strings.Builder
-		userBuf.WriteString(fmt.Sprintf("user %v:\n", userId))
-		userBuf.WriteString(fmt.Sprintf("uid:%v\nid:%v\n", user.Uid, user.UserID))
-		var groupNames []string
+		fmt.Println()
+		fmt.Printf("User  : %-5s\n", userId)
+		fmt.Printf("UID   : %-5s\n", user.Uid)
 		for _, group := range user.Groups {
-			groupNames = append(groupNames, group.GroupID)
+			fmt.Printf("Group : %-5s\n", group.GroupID)
 		}
-		userBuf.WriteString(fmt.Sprintf("groups:%v\n", strings.Join(groupNames, " ")))
-		glog.Infof(userBuf.String())
 	}
 
 	if len(groupId) != 0 {
@@ -255,30 +270,29 @@ func info(conf *viper.Viper) error {
 		if err != nil {
 			return err
 		}
-		// build the info string for group
-		var groupSB strings.Builder
-		groupSB.WriteString(fmt.Sprintf("group %v:\n", groupId))
-		groupSB.WriteString(fmt.Sprintf("uid:%v\nid:%v\n", group.Uid, group.GroupID))
+		if group == nil {
+			fmt.Printf("The group %s does not exist.\n", groupId)
+			return nil
+		}
+		fmt.Printf("Group: %5s\n", groupId)
+		fmt.Printf("UID  : %5s\n", group.Uid)
+		fmt.Printf("ID   : %5s\n", group.GroupID)
 
 		var userNames []string
 		for _, user := range group.Users {
 			userNames = append(userNames, user.UserID)
 		}
-		groupSB.WriteString(fmt.Sprintf("users:%v\n", strings.Join(userNames, " ")))
+		fmt.Printf("Users: %5s\n", strings.Join(userNames, " "))
 
-		var aclStrs []string
 		var acls []Acl
 		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return fmt.Errorf("Unable to unmarshal the acls associated with the group %v:%v",
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
 				groupId, err)
 		}
 
 		for _, acl := range acls {
-			aclStrs = append(aclStrs, fmt.Sprintf("(predicate:%v,perm:%v)", acl.Predicate, acl.Perm))
+			fmt.Printf("ACL  : %5v\n", acl)
 		}
-		groupSB.WriteString(fmt.Sprintf("acls:%v\n", strings.Join(aclStrs, " ")))
-
-		glog.Infof(groupSB.String())
 	}
 
 	return nil
