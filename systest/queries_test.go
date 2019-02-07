@@ -582,8 +582,16 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			out: `{"q":[{"term":"drive"}]}`,
 		},
 		{
-			in:  `{q(func:match(term, "plane")) {term}}`,
+			in:  `{q(func:match(term, "plano", 1)) {term}}`,
 			out: `{"q":[]}`,
+		},
+		{
+			in:  `{q(func:match(term, "plano", 2)) {term}}`,
+			out: `{"q":[{"term":"lane"}]}`,
+		},
+		{
+			in:  `{q(func:match(term, "plano")) {term}}`,
+			out: `{"q":[{"term":"lane"}]}`,
 		},
 		{
 			in: `{q(func:match(term, way)) {term}}`,
@@ -591,15 +599,16 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
         {"term": "highway"},
         {"term": "pathway"},
         {"term": "parkway"},
-        {"term": "dual carriageway"},
         {"term": "motorway"}
       ]}`,
 		},
 		{
 			in: `{q(func:match(term, pway)) {term}}`,
 			out: `{"q":[
+        {"term": "highway"},
         {"term": "pathway"},
-        {"term": "parkway"}
+        {"term": "parkway"},
+        {"term": "motorway"}
       ]}`,
 		},
 		{
@@ -617,13 +626,37 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
       ]}`,
 		},
 		{
+			in: `{q(func:match(term, strip)) {term}}`,
+			out: `{"q":[
+        {"term": "street"},
+        {"term": "side street"}
+      ]}`,
+		},
+		{
+			in:  `{q(func:match(term, strip, 3)) {term}}`,
+			out: `{"q":[{"term": "street"}]}`,
+		},
+		{
 			in: `{q(func:match(term, "carigeway")) {term}}`,
 			out: `{"q":[
         {"term": "dual carriageway"}
       ]}`,
 		},
 		{
-			in:  `{q(func:match(term, "dualway")) {term}}`,
+			in:  `{q(func:match(term, "carigeway", 4)) {term}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in: `{q(func:match(term, "dualway")) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "pathway"},
+        {"term": "parkway"},
+        {"term": "motorway"}
+      ]}`,
+		},
+		{
+			in:  `{q(func:match(term, "dualway", 2)) {term}}`,
 			out: `{"q":[]}`,
 		},
 		{
