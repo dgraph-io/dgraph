@@ -232,8 +232,8 @@ func TestParse3_Error(t *testing.T) {
 func TestParse4_Error(t *testing.T) {
 	reset()
 	result, err := Parse("alive:bool @index(geo) .")
-	require.Equal(t, "Tokenizer: geo isn't valid for predicate: alive of type: bool",
-		err.Error())
+	require.Contains(t, err.Error(),
+		"Tokenizer: geo isn't valid for predicate: alive of type: bool")
 	require.Nil(t, result)
 }
 
