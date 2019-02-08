@@ -354,7 +354,7 @@ func Marshal(from Val, to *Val) error {
 		}
 	case StringID, DefaultID:
 		// This is a default value from sg.fillVars, don't convert it's empty.
-		// Fixes issue #2295.
+		// Fixes issue #2980.
 		if fromID == DefaultID && val == nil {
 			*res = ""
 			break
