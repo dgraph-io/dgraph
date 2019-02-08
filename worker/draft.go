@@ -30,7 +30,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 
 	ostats "go.opencensus.io/stats"
-	tag "go.opencensus.io/tag"
+	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"

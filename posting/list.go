@@ -77,7 +77,7 @@ type List struct {
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 }
 
-func (l *List) MaxVersion() uint64 {
+func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
 	return l.maxTs
