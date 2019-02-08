@@ -297,8 +297,8 @@ func Parse(key []byte) *ParsedKey {
 	return p
 }
 
-// IsPredicateReserved returns true if 'pred' is in the reserved predicate list.
-func IsPredicateReserved(pred string) bool {
+// IsReservedPredicate returns true if 'pred' is in the reserved predicate list.
+func IsReservedPredicate(pred string) bool {
 	var m = map[string]struct{}{
 		PredicateListAttr:   {},
 		"dgraph.xid":        {},
