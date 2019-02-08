@@ -213,6 +213,8 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
 var filenum int64
+var counter3, counter4 int64
+
 func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	ld := len(d)
 	lq := len(q)
@@ -226,6 +228,8 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	}
 	counter1 := new(int64)
 	counter2 := new(int64)
+	counter3 = 0
+	counter4 = 0
 	val := d[0]
 	minq := sort.Search(len(q), func(i int) bool {
 		atomic.AddInt64(counter1, 1)
@@ -239,18 +243,22 @@ func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	})
 
 	binIntersect(d, q[minq:maxq], o)
-	fmt.Printf("LD=%d LQ=%d COUNTER1=%d COUNTER2=%d\n", ld, lq, *counter1, *counter2)
+	fmt.Printf("LD=%d LQ=%d COUNTER1=%d COUNTER2=%d COUNTER3=%d COUNTER4=%d TOTAL=%d\n",
+		ld, lq, *counter1, *counter2, counter3, counter4,
+		*counter1+*counter2+counter3+counter4)
 }
 
 // binIntersect is the recursive function used.
 // NOTE: len(d) >= len(q) (Must hold)
 func binIntersect(d, q []uint64, final *[]uint64) {
+	atomic.AddInt64(&counter3, 1)
 	if len(d) == 0 || len(q) == 0 {
 		return
 	}
 	midq := len(q) / 2
 	qval := q[midq]
 	midd := sort.Search(len(d), func(i int) bool {
+		atomic.AddInt64(&counter4, 1)
 		return d[i] >= qval
 	})
 
