@@ -348,13 +348,13 @@ func run() error {
 	}
 
 	if opt.dataFiles == "" {
-		return errors.New("RDF or JSON file(s) location must be specified\n")
+		return errors.New("RDF or JSON file(s) location must be specified")
 	}
 
 	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		return fmt.Errorf("No data files found in %s\n", opt.dataFiles)
+		return fmt.Errorf("No data files found in %s", opt.dataFiles)
 	} else {
 		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
