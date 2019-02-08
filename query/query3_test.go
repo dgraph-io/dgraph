@@ -1081,13 +1081,13 @@ func TestMinSchema(t *testing.T) {
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
 		js)
 
-	setSchema(t, `survival_rate: int .`)
+	setSchema(`survival_rate: int .`)
 
 	js = processQueryNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"min(val(x))":1}]}}`,
 		js)
-	setSchema(t, `survival_rate: float .`)
+	setSchema(`survival_rate: float .`)
 }
 
 func TestAvg(t *testing.T) {

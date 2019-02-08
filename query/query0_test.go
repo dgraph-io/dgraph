@@ -903,6 +903,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 		}
 	`
 	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
