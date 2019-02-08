@@ -296,3 +296,17 @@ func Parse(key []byte) *ParsedKey {
 	}
 	return p
 }
+
+// IsPredicateReserved returns true if 'pred' is in the reserved predicate list.
+func IsPredicateReserved(pred string) bool {
+	var m = map[string]struct{}{
+		PredicateListAttr:   {},
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+		"type":              {},
+	}
+	_, ok := m[pred]
+	return ok
+}
