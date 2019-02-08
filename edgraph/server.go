@@ -374,7 +374,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceInMilliseconds(startTime)
+		timeSpentMs := x.SinceMs(startTime)
 		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
 	}()
 
@@ -512,7 +512,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceInMilliseconds(startTime)
+		timeSpentMs := x.SinceMs(startTime)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
 	}()
