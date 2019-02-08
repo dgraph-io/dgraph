@@ -42,15 +42,19 @@ endif
 all: $(BIN)
 
 $(BIN): clean
-	@go build $(BUILD_FLAGS) -o $(BIN)
+	@GO111MODULE=on go build $(BUILD_FLAGS) -o $(BIN)
 
+.PHONY: clean
 clean:
 	@rm -f $(BIN)
 
+.PHONY: uninstall
 uninstall:
 	@go clean -i -x
 
+.PHONY: install
 install:
 	@echo "Old MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
 	@go install $(BUILD_FLAGS)
 	@echo "New MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+
