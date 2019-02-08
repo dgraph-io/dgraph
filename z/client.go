@@ -37,7 +37,7 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	for {
-		// keep retrying until we receive a non-retriable error
+		// keep retrying until we succeed or receive a non-retriable error
 		err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 		if err == nil || !strings.Contains(err.Error(), "Please retry") {
 			break

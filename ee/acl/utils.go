@@ -88,7 +88,7 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 	return &users[0], nil
 }
 
-// an Acl can be either a single predicate or a regex that can be used to
+// an Acl can have either a single predicate or a regex that can be used to
 // match multiple predicates
 type Acl struct {
 	Predicate string `json:"predicate"`

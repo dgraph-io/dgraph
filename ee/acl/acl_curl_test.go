@@ -15,19 +15,17 @@ package acl
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCurlAuthorization(t *testing.T) {
-	glog.Infof("testing with port 9180")
+	t.Logf("testing with port 9180")
 	dg, cancel := x.GetDgraphClientOnPort(9180)
 	defer cancel()
 	createAccountAndData(t, dg)
@@ -65,9 +63,10 @@ func TestCurlAuthorization(t *testing.T) {
 		shouldFail: false,
 	})
 
-	// sleep long enough (10s per the docker-compose.yml in this directory)
-	// for the accessJwt to expire in order to test auto login through refresh jwt
-	log.Println("Sleeping for 12 seconds for accessJwt to expire")
+	// sleep long enough (longer than 10s, the access JWT TTL defined in the docker-compose.yml
+	// in this directory) for the accessJwt to expire, in order to test auto login through refresh
+	// JWT
+	t.Logf("Sleeping for 12 seconds for accessJwt to expire")
 	time.Sleep(12 * time.Second)
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
@@ -90,7 +89,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	createGroupAndAcls(t, unusedGroup, false)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	log.Println("Sleeping for 35 seconds for acl caches to be refreshed")
+	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
@@ -98,6 +97,8 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 	// refresh the jwts again
 	accessJwt, refreshJwt = curlLogin(t, refreshJwt)
+	// verify that with an ACL rule defined, all the operations should be denied when the acsess JWT
+	// does not have the required permissions
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
 		failMsg:    "PermissionDenied",
@@ -112,12 +113,11 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	createGroupAndAcls(t, devGroup, true)
-	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	log.Println("Sleeping for 35 seconds for acl caches to be refreshed")
+	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	// refresh the jwts again
 	accessJwt, refreshJwt = curlLogin(t, refreshJwt)
-	// through the dev group, the operations should be allowed again
+	// verify that the operations should be allowed again through the dev group
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: false,
 	})
@@ -135,7 +135,7 @@ var curlMutateEndpoint = "localhost:8180/mutate"
 var curlAlterEndpoint = "localhost:8180/alter"
 
 // curlLogin sends a curl request to the curlLoginEndpoint
-// and returns the access jwt and refresh jwt extracted from
+// and returns the access JWT and refresh JWT extracted from
 // the curl command output
 func curlLogin(t *testing.T, refreshJwt string) (string, string) {
 	// login with alice's account using curl
@@ -152,10 +152,10 @@ func curlLogin(t *testing.T, refreshJwt string) (string, string) {
 	}
 
 	userLoginCmd := exec.Command("curl", args...)
-	//t.Logf("curl %s\n", strings.Join(args, " "))
 	out, err := userLoginCmd.Output()
 	require.NoError(t, err, "the login should have succeeded")
 
+	// search for access JWT and refresh JWT in the curl output
 	outputLines := strings.Split(string(out), "\n")
 	var newAccessJwt string
 	var newRefreshJwt string

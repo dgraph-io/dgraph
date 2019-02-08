@@ -315,20 +315,24 @@ func RefreshAcls(closer *y.Closer) {
 		// In dgraph, acl rules are divided by groups, e.g.
 		// the dev group has the following blob representing its ACL rules
 		// [friend, 4], [name, 7], [^user.*name$, 4]
-		// whereas friend and name are predicates,
+		// where friend and name are predicates,
 		// and the last one is a regex that can match multiple predicates.
-		// In the aclCache in memory, we need to change the structure so that ACL rules are divided
-		// by predicates, e.g.
+		// However in the aclCache in memory, we need to change the structure so that ACL rules are
+		// divided by predicates, e.g.
 		// friend ->
 		//     dev -> 4
 		//     sre -> 6
 		// name ->
 		//     dev -> 7
 		// the reason is that we want to efficiently determine if any ACL rule has been defined
-		// for a given predicate, and allow the operation if none is defined
-		// (the fail open approach).
+		// for a given predicate, and allow the operation if none is defined, per the fail open
+		// approach
 
+		// predPerms is the map descriebed above that maps a single
+		// predicate to a submap, and the submap maps a group to a permission
 		predPerms := make(map[string]map[string]int32)
+		// predRegexPerms is a map from a regex string to a PredRegexRule, and a PredRegexRule
+		// contains a map from a group to a permission
 		predRegexPerms := make(map[string]*PredRegexRule)
 		for _, group := range groups {
 			aclBytes := []byte(group.Acls)
@@ -340,8 +344,6 @@ func RefreshAcls(closer *y.Closer) {
 
 			for _, acl := range acls {
 				if len(acl.Predicate) > 0 {
-					//var groupPermsMap map[string]int32
-					//var found bool
 					if groupPerms, found := predPerms[acl.Predicate]; found {
 						groupPerms[group.GroupID] = acl.Perm
 					} else {
@@ -349,19 +351,17 @@ func RefreshAcls(closer *y.Closer) {
 						groupPerms[group.GroupID] = acl.Perm
 						predPerms[acl.Predicate] = groupPerms
 					}
-
 				} else if len(acl.Regex) > 0 {
-					// try to compile the regex
-					predRegex, err := regexp.Compile(acl.Regex)
-					if err != nil {
-						glog.Errorf("Unable to compile the predicate regex %v "+
-							"to create an ACL rule", acl.Regex)
-						continue
-					}
-
 					if predRegexRule, found := predRegexPerms[acl.Regex]; found {
 						predRegexRule.groupPerms[group.GroupID] = acl.Perm
 					} else {
+						predRegex, err := regexp.Compile(acl.Regex)
+						if err != nil {
+							glog.Errorf("Unable to compile the predicate regex %v "+
+								"to create an ACL rule", acl.Regex)
+							continue
+						}
+
 						groupPermsMap := make(map[string]int32)
 						groupPermsMap[group.GroupID] = acl.Perm
 						predRegexPerms[acl.Regex] = &PredRegexRule{
@@ -374,12 +374,9 @@ func RefreshAcls(closer *y.Closer) {
 		}
 
 		// convert the predRegexPerms into a slice
-		var predRegexRules []PredRegexRule
-		for _, groupPerms := range predRegexPerms {
-			predRegexRules = append(predRegexRules, PredRegexRule{
-				predRegex:  groupPerms.predRegex,
-				groupPerms: groupPerms.groupPerms,
-			})
+		var predRegexRules []*PredRegexRule
+		for _, predRegexRule := range predRegexPerms {
+			predRegexRules = append(predRegexRules, predRegexRule)
 		}
 
 		aclCache.Lock()
@@ -420,7 +417,7 @@ type PredRegexRule struct {
 type AclCache struct {
 	sync.RWMutex
 	predPerms      map[string]map[string]int32
-	predRegexRules []PredRegexRule
+	predRegexRules []*PredRegexRule
 }
 
 var aclCache AclCache
@@ -484,7 +481,7 @@ func ResetAcl() {
 
 	aclCache = AclCache{
 		predPerms:      make(map[string]map[string]int32),
-		predRegexRules: make([]PredRegexRule, 0),
+		predRegexRules: make([]*PredRegexRule, 0),
 	}
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -532,9 +529,9 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		userId = userData[0]
 		groupIds = userData[1:]
 	} else if err == errNoJwt {
-		// treat the user as anonymous who has not joined any group yet
-		// such a user can still get access to predicates if there is no rule defined on the
-		// predicate (the fail open approach)
+		// treat the user as an anonymous guest who has not joined any group yet
+		// such a user can still get access to predicates that have no ACL rule defined, per the
+		// fail open approach
 	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -609,9 +606,8 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		userId = userData[0]
 		groupIds = userData[1:]
 	} else if err == errNoJwt {
-		// treat the user as anonymous who has not joined any group yet
-		// such a user can still get access to predicates if there is no rule defined on the
-		// predicate (the fail open approach)
+		// treat the user as an anonymous guest who has not joined any group yet
+		// such a user can still get access to predicates that have no ACL rule defined
 	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -695,9 +691,8 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		userId = userData[0]
 		groupIds = userData[1:]
 	} else if err == errNoJwt {
-		// treat the user as anonymous who has not joined any group yet
-		// such a user can still get access to predicates if there is no rule defined on the
-		// predicate (the fail open approach)
+		// treat the user as an anonymous guest who has not joined any group yet
+		// such a user can still get access to predicates that have no ACL rule defined
 	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -741,11 +736,8 @@ func hasRequiredAccess(groupPerms map[string]int32, groups []string,
 }
 
 func authorizePredicate(groups []string, predicate string, operation *acl.Operation) error {
-	var predPerms map[string]map[string]int32
-	var predRegexRules []PredRegexRule
 	aclCache.RLock()
-	predPerms = aclCache.predPerms
-	predRegexRules = aclCache.predRegexRules
+	predPerms, predRegexRules := aclCache.predPerms, aclCache.predRegexRules
 	aclCache.RUnlock()
 
 	var singlePredMatch bool
@@ -774,6 +766,6 @@ func authorizePredicate(groups []string, predicate string, operation *acl.Operat
 	}
 
 	// no rule has been defined that can match the predicate
-	// by default we allow the operation following the fail open approach
+	// by default we follow the fail open approach and allow the operation
 	return nil
 }
