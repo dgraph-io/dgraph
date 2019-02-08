@@ -14,3 +14,9 @@
 .idea/
 ### Go Patch ###
 /vendor/
+
+# IdeaIDE
+.idea
+
+# VS Code
+.vscode
