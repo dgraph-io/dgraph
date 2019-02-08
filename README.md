@@ -27,7 +27,7 @@
 ## Contributing
 
 
-Our contribution guidelines are as follows: [CONTRIBUTING.md!](https://github.com/ChainSafeSystems/go-pre/blob/master/CONTRIBUTING.md) Check it out to get started.
+Our contribution guidelines are as follows: [CONTRIBUTING.md!](CONTRIBUTING.md) Check it out to get started.
 
 ## License
 
