@@ -276,6 +276,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
+	return nil
 
 	if numGo == 1 {
 		return process(m.Edges)
@@ -333,7 +334,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
-		return n.commitOrAbort(proposal.Key, proposal.Delta)
+		return n.commitOrAbort(ctx, proposal.Delta)
 
 	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
@@ -474,10 +475,12 @@ func (n *node) processApplyCh() {
 	}
 }
 
-func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
-	// First let's commit all mutations to disk.
+func (n *node) commitOrAbort(ctx context.Context, delta *pb.OracleDelta) error {
+	span := otrace.FromContext(ctx)
+
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
+		return
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil {
 			return
@@ -492,6 +495,8 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		}
 	}
 
+	numGo, width := x.DivideAndRule(len(delta.Txns))
+	span.Annotatef(nil, "numGo: %d. Width: %d. Txns: %d", numGo, width, len(delta.Txns))
 	for _, status := range delta.Txns {
 		if status.CommitTs > 0 && status.CommitTs < n.lastCommitTs {
 			glog.Errorf("Lastcommit %d > current %d. This would cause some commits to be lost.",
@@ -633,6 +638,12 @@ func (n *node) Run() {
 		close(done)
 	}()
 
+	// dirName, err := ioutil.TempDir("/data", "alpha")
+	// x.Check(err)
+	// walf, err := y.OpenSyncedFile(path.Join(dirName, "raft.wal"), true)
+	// x.Check(err)
+	// var buf bytes.Buffer
+
 	traceOpt := otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 	var snapshotLoops uint64
 	for {
@@ -693,7 +704,8 @@ func (n *node) Run() {
 				}
 			}
 			if span != nil {
-				span.Annotate(nil, "Handled ReadStates and SoftState.")
+				span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("leader", leader)},
+					"Handled SoftState. Num messages: %d", len(rd.Messages))
 			}
 
 			// We move the retrieval of snapshot before we store the rd.Snapshot, so that in case
@@ -743,7 +755,25 @@ func (n *node) Run() {
 			}
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(span, rd.HardState, rd.Entries, rd.Snapshot)
+			// buf.Reset()
+			// for _, entry := range rd.Entries {
+			// 	data, err := entry.Marshal()
+			// 	x.Check(err)
+			// 	buf.Write(data)
+			// }
+			// if !raft.IsEmptyHardState(rd.HardState) {
+			// 	data, err := rd.HardState.Marshal()
+			// 	x.Check(err)
+			// 	buf.Write(data)
+			// }
+			// if !raft.IsEmptySnap(rd.Snapshot) {
+			// 	data, err := rd.Snapshot.Marshal()
+			// 	x.Check(err)
+			// 	buf.Write(data)
+			// }
+			// x.Check2(walf.Write(buf.Bytes()))
+
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),

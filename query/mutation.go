@@ -34,20 +34,20 @@ import (
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	if worker.Config.ExpandEdge {
-		edges, err := expandEdges(ctx, m)
-		if err != nil {
-			return nil, x.Wrapf(err, "While adding pb.edges")
-		}
-		m.Edges = edges
-	} else {
-		for _, mu := range m.Edges {
-			if mu.Attr == x.Star && !worker.Config.ExpandEdge {
-				return nil, x.Errorf("Expand edge (--expand_edge) is set to false." +
-					" Cannot perform S * * deletion.")
-			}
-		}
-	}
+	// if worker.Config.ExpandEdge {
+	// 	edges, err := expandEdges(ctx, m)
+	// 	if err != nil {
+	// 		return nil, x.Wrapf(err, "While adding pb.edges")
+	// 	}
+	// 	m.Edges = edges
+	// } else {
+	// 	for _, mu := range m.Edges {
+	// 		if mu.Attr == x.Star && !worker.Config.ExpandEdge {
+	// 			return nil, x.Errorf("Expand edge (--expand_edge) is set to false." +
+	// 				" Cannot perform S * * deletion.")
+	// 		}
+	// 	}
+	// }
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {

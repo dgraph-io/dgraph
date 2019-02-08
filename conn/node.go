@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
@@ -250,9 +251,9 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 	return n.Store.Snapshot()
 }
 
-func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
+func (n *Node) SaveToStorage(span *otrace.Span, h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
 	for {
-		if err := n.Store.Save(h, es, s); err != nil {
+		if err := n.Store.Save(span, h, es, s); err != nil {
 			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
 		} else {
 			return

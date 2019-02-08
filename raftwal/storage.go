@@ -22,11 +22,13 @@ import (
 	"errors"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/coreos/etcd/raft"
 	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
 	"github.com/golang/glog"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -35,19 +37,8 @@ import (
 type localCache struct {
 	sync.RWMutex
 	firstIndex uint64
+	lastIndex  uint64
 	snap       pb.Snapshot
-}
-
-func (c *localCache) setFirst(first uint64) {
-	c.Lock()
-	defer c.Unlock()
-	c.firstIndex = first
-}
-
-func (c *localCache) first() uint64 {
-	c.RLock()
-	defer c.RUnlock()
-	return c.firstIndex
 }
 
 func (c *localCache) setSnapshot(s pb.Snapshot) {
@@ -220,13 +211,13 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 	if !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
 	}
-	if first := w.cache.first(); first > 0 {
+	if first := atomic.LoadUint64(&w.cache.firstIndex); first > 0 {
 		return first, nil
 	}
 	index, err := w.seekEntry(nil, 0, false)
 	if err == nil {
 		glog.V(2).Infof("Setting first index: %d", index+1)
-		w.cache.setFirst(index + 1)
+		atomic.StoreUint64(&w.cache.firstIndex, index+1)
 	} else if glog.V(2) {
 		glog.Errorf("While seekEntry. Error: %v", err)
 	}
@@ -235,7 +226,14 @@ func (w *DiskStorage) FirstIndex() (uint64, error) {
 
 // LastIndex returns the index of the last entry in the log.
 func (w *DiskStorage) LastIndex() (uint64, error) {
-	return w.seekEntry(nil, math.MaxUint64, true)
+	if last := atomic.LoadUint64(&w.cache.lastIndex); last > 0 {
+		return last, nil
+	}
+	index, err := w.seekEntry(nil, math.MaxUint64, true)
+	if err == nil {
+		atomic.StoreUint64(&w.cache.lastIndex, index)
+	}
+	return index, err
 }
 
 // Delete all entries from [0, until), i.e. excluding until.
@@ -571,20 +569,28 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte) er
 // first, then HardState and Snapshot if they are not empty. If persistent storage supports atomic
 // writes then all of them can be written together. Note that when writing an Entry with Index i,
 // any previously-persisted entries with Index >= i must be discarded.
-func (w *DiskStorage) Save(h pb.HardState, es []pb.Entry, snap pb.Snapshot) error {
+func (w *DiskStorage) Save(span *otrace.Span, h pb.HardState, es []pb.Entry, snap pb.Snapshot) error {
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
+	span.Annotate(nil, "DiskStorage.Save")
 
 	if err := w.addEntries(batch, es); err != nil {
 		return err
 	}
+	span.Annotate(nil, "Added entries")
+
 	if err := w.setHardState(batch, h); err != nil {
 		return err
 	}
+	span.Annotate(nil, "Set hard state")
+
 	if err := w.setSnapshot(batch, snap); err != nil {
 		return err
 	}
-	return batch.Flush()
+	span.Annotate(nil, "Set snapshot")
+	err := batch.Flush()
+	span.Annotate(nil, "flushed to disk")
+	return err
 }
 
 // Append the new entries to storage.
@@ -627,5 +633,6 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 	if laste < last {
 		return w.deleteFrom(batch, laste+1)
 	}
+	atomic.StoreUint64(&w.cache.lastIndex, laste)
 	return nil
 }

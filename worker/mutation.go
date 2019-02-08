@@ -444,8 +444,9 @@ type res struct {
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
-	defer span.End()
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "worker.MutateOverNetwork")
+	defer stop()
 
 	tctx := &api.TxnContext{StartTs: m.StartTs}
 	mutationMap := populateMutationMap(m)

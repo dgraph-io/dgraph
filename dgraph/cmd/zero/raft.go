@@ -612,7 +612,7 @@ func (n *node) Run() {
 				readStateCh <- rs
 			}
 
-			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			n.SaveToStorage(nil, rd.HardState, rd.Entries, rd.Snapshot)
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))

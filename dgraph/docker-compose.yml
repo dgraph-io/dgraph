@@ -74,7 +74,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 0.05 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
 
   dg2:
     image: dgraph/dgraph:latest
@@ -93,7 +93,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 0.05 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
 
   dg3:
     image: dgraph/dgraph:latest
@@ -112,4 +112,4 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 0.05 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0:10.255.255.255,172.16.0.0:172.31.255.255,192.168.0.0:192.168.255.255
