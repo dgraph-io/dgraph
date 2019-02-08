@@ -190,14 +190,18 @@ Posting Lists get stored in Badger, in a key-value format, like so:
 ```
 
 ### Group
-A set of Posting Lists sharing the same `Predicate` constitute a group. Each server can serve
-multiple distinct [groups](/deploy#data-sharding).
 
-A group config file is used to determine which server would serve what groups. In the future
-versions, live Dgraph alpha would be able to move tablets around depending upon heuristics.
+Every Alpha server belongs to a particular group, and each group is responsible for serving a
+particular set of predicates. Multiple servers in a single group replicate the same data to achieve
+high availability and redundancy of data.
 
-If a groups gets too big, it could be split further. In this case, a single `Predicate` essentially
-gets divided across two groups.
+Predicates are automatically assigned to each group based on which group first receives the
+predicate. By default periodically predicates can be moved around to different groups upon
+heuristics to evenly distribute the data across the cluster. Predicates can also be moved manually
+if desired.
+
+In a future version, if a group gets too big, it could be split further. In this case, a single
+`Predicate` essentially gets divided across two groups.
 
 ```
   Original Group:
