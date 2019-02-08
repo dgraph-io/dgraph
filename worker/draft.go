@@ -441,7 +441,7 @@ func (n *node) processApplyCh() {
 				case proposal.Delta != nil:
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 				}
-				ms := x.SinceInMilliseconds(start)
+				ms := x.SinceMs(start)
 				ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
@@ -633,6 +633,7 @@ func (n *node) Run() {
 		close(done)
 	}()
 
+	traceOpt := otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 	var snapshotLoops uint64
 	for {
 		select {
@@ -672,10 +673,12 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			var start time.Time
 			var span *otrace.Span
 			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
 				// Optionally, trace this run.
-				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop")
+				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop", traceOpt)
+				start = time.Now()
 			}
 
 			if rd.SoftState != nil {
@@ -812,6 +815,11 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
+			}
+			if !start.IsZero() {
+				ostats.RecordWithTags(context.Background(),
+					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
+					x.LatencyMs.M(x.SinceMs(start)))
 			}
 		}
 	}
