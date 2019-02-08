@@ -170,6 +170,14 @@ func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"predicate dgraph.xid is reserved and is not allowed to be dropped")
+
+	// Test that reserved predicates act as case-insensitive.
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: "dgraph.XID: int .",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"predicate dgraph.XID is reserved and is not allowed to be modified")
 }
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
