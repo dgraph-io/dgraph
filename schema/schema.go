@@ -59,8 +59,7 @@ func (s *state) DeleteAll() {
 
 	for pred := range s.predicate {
 		// We set schema for _predicate_, hence it shouldn't be deleted.
-		_, isInitialPred := x.InitialPreds[pred]
-		if !isInitialPred {
+		if !x.IsPredicateReserved(pred) {
 			delete(s.predicate, pred)
 		}
 	}
