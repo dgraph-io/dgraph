@@ -58,7 +58,8 @@ func (s *state) DeleteAll() {
 	defer s.Unlock()
 
 	for pred := range s.predicate {
-		// We set schema for _predicate_, hence it shouldn't be deleted.
+		// Predicates in x.InitialPreds represent internal predicates which
+		// shouldn't be dropped.
 		_, isInitialPred := x.InitialPreds[pred]
 		if !isInitialPred {
 			delete(s.predicate, pred)
