@@ -34,4 +34,4 @@ services:
     # --memory.max-traces to some number if you don't want to store all traces
     # indefinitely.
     command:
-      - --memory.max-traces=1000
+      - --memory.max-traces=1000000
