@@ -23,12 +23,15 @@ PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/badger/pb
 help:
 	@echo Use \"make regenerate\" to proceed.
 
+.PHONY: clean
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
+.PHONY: check
 check:
 	@./depcheck.sh
 
+.PHONY: regenerate
 regenerate: check clean
 	@protoc \
 		--proto_path=${PROTO_PATH} \
