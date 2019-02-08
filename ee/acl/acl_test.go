@@ -168,6 +168,12 @@ var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
 var unusedGroup = "unusedGroup"
 var rootDir = filepath.Join(os.TempDir(), "acl_test")
+var query = fmt.Sprintf(`
+	{
+		q(func: eq(%s, "SF")) {
+			%s
+		}
+	}`, predicateToRead, queryAttr)
 
 func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
@@ -190,12 +196,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 	// login with alice's account
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	query := fmt.Sprintf(`
-	{
-		q(func: eq(%s, "SF")) {
-			%s
-		}
-	}`, predicateToRead, queryAttr)
 	txn = dg.NewTxn()
 	_, err := txn.Query(ctx, query)
 
