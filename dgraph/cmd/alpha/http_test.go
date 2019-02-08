@@ -241,7 +241,6 @@ func TestTransactionBasic(t *testing.T) {
 	m1 := `
     {
 	  set {
-		_:alice <name> "Alice" .
 		_:alice <name> "Bob" .
 		_:alice <balance> "110" .
 		_:bob <balance> "60" .

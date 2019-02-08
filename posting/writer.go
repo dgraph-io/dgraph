@@ -29,9 +29,6 @@ type TxnWriter struct {
 	db  *badger.DB
 	wg  sync.WaitGroup
 	che chan error
-
-	// This can be set to allow overwrites during Set.
-	BlindWrite bool
 }
 
 func NewTxnWriter(db *badger.DB) *TxnWriter {
@@ -67,52 +64,43 @@ func (w *TxnWriter) Send(kvs *pb.KVS) error {
 	return nil
 }
 
-func (w *TxnWriter) Delete(key []byte, ts uint64) error {
-	if ts == 0 {
+func (w *TxnWriter) Update(commitTs uint64, f func(txn *badger.Txn) error) error {
+	if commitTs == 0 {
 		return nil
 	}
 	txn := w.db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
-	if err := txn.Delete(key); err != nil {
+
+	err := f(txn)
+	if err == badger.ErrTxnTooBig {
+		// continue to commit.
+	} else if err != nil {
 		return err
 	}
 	w.wg.Add(1)
-	return txn.CommitAt(ts, w.cb)
+	return txn.CommitAt(commitTs, w.cb)
+}
+
+func (w *TxnWriter) Delete(key []byte, ts uint64) error {
+	return w.Update(ts, func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	})
 }
 
 func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
-	if ts == 0 {
+	return w.Update(ts, func(txn *badger.Txn) error {
+		switch meta {
+		case BitCompletePosting, BitEmptyPosting:
+			if err := txn.SetWithDiscard(key, val, meta); err != nil {
+				return err
+			}
+		default:
+			if err := txn.SetWithMeta(key, val, meta); err != nil {
+				return err
+			}
+		}
 		return nil
-	}
-
-	txn := w.db.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	if !w.BlindWrite {
-		// We do a Get to ensure that we don't end up overwriting an already
-		// existing delta or state at the ts.
-		if item, err := txn.Get(key); err == badger.ErrKeyNotFound {
-			// pass
-		} else if err != nil {
-			return err
-
-		} else if item.Version() >= ts {
-			// Found an existing commit at an equal or higher timestamp. So, skip writing.
-			return nil
-		}
-	}
-	switch meta {
-	case BitCompletePosting, BitEmptyPosting:
-		if err := txn.SetWithDiscard(key, val, meta); err != nil {
-			return err
-		}
-	default:
-		if err := txn.SetWithMeta(key, val, meta); err != nil {
-			return err
-		}
-	}
-	w.wg.Add(1)
-	return txn.CommitAt(ts, w.cb)
+	})
 }
 
 func (w *TxnWriter) Flush() error {

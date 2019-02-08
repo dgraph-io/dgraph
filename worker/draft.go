@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -241,22 +242,55 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 		return dy.ErrConflict
 	}
 
-	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
-	var retries int
-	for _, edge := range m.Edges {
-		for {
-			err := runMutation(ctx, edge, txn)
-			if err == nil {
-				break
-			}
-			if err != posting.ErrRetry {
-				return err
-			}
-			retries++
+	sort.Slice(m.Edges, func(i, j int) bool {
+		ei := m.Edges[i]
+		ej := m.Edges[j]
+		if ei.GetAttr() != ej.GetAttr() {
+			return ei.GetAttr() < ej.GetAttr()
 		}
+		return ei.GetEntity() < ej.GetEntity()
+	})
+
+	process := func(edges []*pb.DirectedEdge) error {
+		var retries int
+		for _, edge := range edges {
+			for {
+				err := runMutation(ctx, edge, txn)
+				if err == nil {
+					break
+				}
+				if err != posting.ErrRetry {
+					return err
+				}
+				retries++
+			}
+		}
+		if retries > 0 {
+			span.Annotatef(nil, "retries=true num=%d", retries)
+		}
+		return nil
 	}
-	if retries > 0 {
-		span.Annotatef(nil, "retries=true num=%d", retries)
+	numGo, width := x.DivideAndRule(len(m.Edges))
+	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
+
+	if numGo == 1 {
+		return process(m.Edges)
+	}
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(m.Edges) {
+			end = len(m.Edges)
+		}
+		go func(start, end int) {
+			errCh <- process(m.Edges[start:end])
+		}(start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -818,7 +852,6 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
-	writer.BlindWrite = true // Do overwrite keys.
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	amLeader := n.AmLeader()
