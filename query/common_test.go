@@ -202,7 +202,6 @@ symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : [uid] .
 best_friend                    : uid .
-type                           : string @index(exact) .
 `
 
 func populateCluster(t *testing.T) {

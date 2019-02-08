@@ -305,9 +305,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return nil, err
 	}
 
-	// All checks done.
-
 	defer glog.Infof("ALTER op: %+v done", op)
+
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
@@ -319,7 +318,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		ResetAcl()
 		return empty, err
 	}
+
 	if len(op.DropAttr) > 0 {
+		// Reserved predicates cannot be dropped.
+		if x.IsReservedPredicate(op.DropAttr) {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
+				op.DropAttr)
+			return nil, err
+		}
+
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
@@ -340,6 +347,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err != nil {
 		return empty, err
 	}
+
+	// Reserved predicates cannot be altered.
+	for _, update := range result.Schemas {
+		if x.IsReservedPredicate(update.Predicate) {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
+				update.Predicate)
+			return nil, err
+		}
+	}
+
 	glog.Infof("Got schema: %+v\n", result.Schemas)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Schemas

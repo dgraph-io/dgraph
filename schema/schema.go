@@ -60,8 +60,7 @@ func (s *state) DeleteAll() {
 	for pred := range s.predicate {
 		// Predicates in x.InitialPreds represent internal predicates which
 		// shouldn't be dropped.
-		_, isInitialPred := x.InitialPreds[pred]
-		if !isInitialPred {
+		if !x.IsReservedPredicate(pred) {
 			delete(s.predicate, pred)
 		}
 	}
