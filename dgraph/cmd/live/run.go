@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -49,6 +50,7 @@ import (
 
 type options struct {
 	dataFiles           string
+	dataFormat          string
 	schemaFile          string
 	dgraph              string
 	zero                string
@@ -82,6 +84,7 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
+	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
@@ -169,27 +172,24 @@ func (l *loader) uid(val string) string {
 }
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
-func (l *loader) processFile(ctx context.Context, file string) error {
-	fmt.Printf("Processing data file %q\n", file)
+func (l *loader) processFile(ctx context.Context, filename string) error {
+	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(file)
+	rd, cleanup := chunker.FileReader(filename)
 	defer cleanup()
 
-	var err error
-	var isJson bool
-	if strings.HasSuffix(file, ".rdf") || strings.HasSuffix(file, ".rdf.gz") {
-		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.RdfInput))
-	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
-		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
-	} else if isJson, err = chunker.IsJSONData(rd); err == nil {
-		if isJson {
-			err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
-		} else {
-			err = fmt.Errorf("Unable to determine file content format: %s", file)
+	loadType := chunker.DataFormat(filename, opt.dataFormat)
+	if loadType == chunker.UnknownFormat {
+		if isJson, err := chunker.IsJSONData(rd); err == nil {
+			if isJson {
+				loadType = chunker.JsonFormat
+			} else {
+				return fmt.Errorf("Need --format=rdf or --format=json to load %s", filename)
+			}
 		}
 	}
 
-	return err
+	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
@@ -287,6 +287,7 @@ func run() error {
 	x.PrintVersion()
 	opt = options{
 		dataFiles:           Live.Conf.GetString("files"),
+		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
 		dgraph:              Live.Conf.GetString("dgraph"),
 		zero:                Live.Conf.GetString("zero"),
@@ -346,11 +347,14 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
+	if opt.dataFiles == "" {
+		return errors.New("RDF or JSON file(s) location must be specified\n")
+	}
+
 	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		fmt.Printf("No data files to process\n")
-		return nil
+		return fmt.Errorf("No data files found in %s\n", opt.dataFiles)
 	} else {
 		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}

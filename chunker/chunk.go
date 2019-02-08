@@ -48,18 +48,19 @@ type rdfChunker struct{}
 type jsonChunker struct{}
 
 const (
-	RdfInput int = iota
-	JsonInput
+	UnknownFormat int = iota
+	RdfFormat
+	JsonFormat
 )
 
 func NewChunker(inputFormat int) Chunker {
 	switch inputFormat {
-	case RdfInput:
+	case RdfFormat:
 		return &rdfChunker{}
-	case JsonInput:
+	case JsonFormat:
 		return &jsonChunker{}
 	default:
-		panic("unknown chunker type")
+		panic("unknown input format")
 	}
 }
 
@@ -310,4 +311,19 @@ func IsJSONData(r *bufio.Reader) (bool, error) {
 	_, err = de.Token()
 
 	return err == nil, nil
+}
+
+// DataFormat returns a file's data format (RDF, JSON, or unknown) based on the filename
+// or the user-provided format option. The file extension has precedence.
+func DataFormat(filename string, format string) int {
+	format = strings.ToLower(format)
+	filename = strings.TrimSuffix(strings.ToLower(filename), ".gz")
+	switch {
+	case strings.HasSuffix(filename, ".rdf") || format == "rdf":
+		return RdfFormat
+	case strings.HasSuffix(filename, ".json") || format == "json":
+		return JsonFormat
+	default:
+		return UnknownFormat
+	}
 }
