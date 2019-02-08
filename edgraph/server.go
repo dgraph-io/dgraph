@@ -355,7 +355,8 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	if err := authorizeMutation(ctx, mu); err != nil {
 		return nil, err
 	}
-	return &api.Assigned{}, nil
+	// // HACK HACK HACK
+	// return &api.Assigned{}, nil
 
 	return s.doMutate(ctx, mu)
 }

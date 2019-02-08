@@ -158,13 +158,19 @@ func (l *loader) uid(val string) string {
 	// to be an existing node in the graph. There is limited protection against
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
-	if strings.HasPrefix(val, "0x") {
-		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val
-		}
+	uid, err := strconv.ParseUint(val, 0, 64)
+	if err == nil {
+		return fmt.Sprintf("%#x", uid)
 	}
+	// if strings.HasPrefix(val, "0x") {
+	// 	if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
+	// 		return val
+	// 	}
+	// }
+	// TODO: Depending upon a flag setting, we should either try to pick up the UID, or allocate a
+	// new one.
 
-	uid, _ := l.alloc.AssignUid(val)
+	uid, _ = l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
