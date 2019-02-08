@@ -37,7 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 
-	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )

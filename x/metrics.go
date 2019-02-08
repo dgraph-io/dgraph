@@ -215,6 +215,6 @@ func WithMethod(parent context.Context, method string) context.Context {
 	return ctx
 }
 
-func SinceInMilliseconds(startTime time.Time) float64 {
+func SinceMs(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
 }

@@ -17,7 +17,6 @@
 package bulk
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -27,16 +26,17 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
 	"google.golang.org/grpc"
 )
 
@@ -144,25 +144,6 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 	return result.Schemas
 }
 
-func findDataFiles(dir string, ext string) []string {
-	var files []string
-	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasSuffix(path, ext) || strings.HasSuffix(path, ext+".gz") {
-			files = append(files, path)
-		}
-		return nil
-	}))
-	return files
-}
-
-type uidRangeResponse struct {
-	uids *pb.AssignedIds
-	err  error
-}
-
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
@@ -181,21 +162,21 @@ func (ld *loader) mapStage() {
 		LRUSize:   1 << 19,
 	})
 
-	var files []string
-	var ext string
+	var dir, ext string
 	var loaderType int
 	if ld.opt.RDFDir != "" {
-		loaderType = rdfInput
+		loaderType = chunker.RdfInput
+		dir = ld.opt.RDFDir
 		ext = ".rdf"
-		files = findDataFiles(ld.opt.RDFDir, ext)
 	} else {
-		loaderType = jsonInput
+		loaderType = chunker.JsonInput
+		dir = ld.opt.JSONDir
 		ext = ".json"
-		files = findDataFiles(ld.opt.JSONDir, ext)
-	}
 
+	}
+	files := x.FindDataFiles(dir, []string{ext, ext + ".gz"})
 	if len(files) == 0 {
-		fmt.Printf("No *%s files found.\n", ext)
+		fmt.Printf("No *%s files found under %s.\n", ext, dir)
 		os.Exit(1)
 	}
 
@@ -213,25 +194,17 @@ func (ld *loader) mapStage() {
 	for i, file := range files {
 		thr.Start()
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
-		chunker := newChunker(loaderType)
+
 		go func(file string) {
 			defer thr.Done()
 
-			f, err := os.Open(file)
-			x.Check(err)
-			defer f.Close()
+			r, cleanup := chunker.FileReader(file)
+			defer cleanup()
 
-			var r *bufio.Reader
-			if !strings.HasSuffix(file, ".gz") {
-				r = bufio.NewReaderSize(f, 1<<20)
-			} else {
-				gzr, err := gzip.NewReader(f)
-				x.Checkf(err, "Could not create gzip reader for file %q.", file)
-				r = bufio.NewReaderSize(gzr, 1<<20)
-			}
-			x.Check(chunker.begin(r))
+			chunker := chunker.NewChunker(loaderType)
+			x.Check(chunker.Begin(r))
 			for {
-				chunkBuf, err := chunker.chunk(r)
+				chunkBuf, err := chunker.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
 					ld.readerChunkCh <- chunkBuf
 				}
@@ -241,7 +214,7 @@ func (ld *loader) mapStage() {
 					x.Check(err)
 				}
 			}
-			x.Check(chunker.end(r))
+			x.Check(chunker.End(r))
 		}(file)
 	}
 	thr.Wait()

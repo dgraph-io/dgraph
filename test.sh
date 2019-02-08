@@ -58,6 +58,7 @@ function FindDefaultClusterTests {
 
 function Run {
     set -o pipefail
+    echo -en "...\r"
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
@@ -117,8 +118,9 @@ if [[ $# -eq 0 ]]; then
         Info "Running only code tests"
     fi
 elif [[ $# -eq 1 ]]; then
-    go list ./... | grep $1 > $MATCHING_TESTS
-    Info "Running only tests matching '$1'"
+    REGEX=${1%/}
+    go list ./... | grep $REGEX > $MATCHING_TESTS
+    Info "Running only tests matching '$REGEX'"
     RUN_ALL=
 else
     echo >&2 "usage: $ME [pkg_regex]"
