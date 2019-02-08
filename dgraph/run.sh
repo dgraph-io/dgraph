@@ -15,6 +15,12 @@ Available options:
     --metrics      Run with metrics collection and dashboard (Prometheus/Grafana/Node Exporter).
     --data <path>  Run with Dgraph data directories mounted to <path>.
     --tmpfs        Run with WAL directories (w/zw) in-memory with tmpfs.
+
+Metrics are stored in separate Docker volumes for persistence across runs.
+To reset metrics collection, remove any existing volumes by running:
+
+    docker volume rm dgraph_prometheus-volume
+    docker volume rm dgraph_grafana-volume
 EOF
             exit 0
             ;;
@@ -26,12 +32,6 @@ EOF
             ;;
         '--single' )
             SERVICES+=( zero1 dg1 )
-            if [[ " ${COMPOSE_FILES[@]} " =~ "docker-compose-jaeger.yml" ]]; then
-                SERVICES+=( jaeger )
-            fi
-            if [[ " ${COMPOSE_FILES[@]} " =~ "docker-compose-metrics.yml" ]]; then
-                SERVICES+=( node-exporter prometheus grafana )
-            fi
             ;;
         '--data' )
             DATA="$2"
@@ -56,6 +56,17 @@ EOF
     esac
     shift
 done
+
+# If the --single flag was set, then make sure that services from other flags
+# are started too.
+if [ "${#SERVICES[@]}" -gt 0 ]; then
+    if [[ " ${COMPOSE_FILES[@]} " =~ "docker-compose-jaeger.yml" ]]; then
+        SERVICES+=( jaeger )
+    fi
+    if [[ " ${COMPOSE_FILES[@]} " =~ "docker-compose-metrics.yml" ]]; then
+        SERVICES+=( node-exporter prometheus grafana )
+    fi
+fi
 
 make install
 docker-compose ${COMPOSE_FILES[@]} down
