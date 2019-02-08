@@ -1,7 +1,7 @@
 PKGS := $(shell go list ./... | grep -v /vendor)
 
 .PHONY: test
-test: lint
+test:
 	go test $(PKGS)
 
 BIN_DIR := $(GOPATH)/bin
