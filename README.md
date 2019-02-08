@@ -27,7 +27,7 @@
 ## Contributing
 
 
-Our contribution guidelines are as follows: [CONTRIBUTING.md!](CONTRIBUTING.md) Check it out to get started.
+Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
