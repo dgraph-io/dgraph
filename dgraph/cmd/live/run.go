@@ -158,13 +158,11 @@ func (l *loader) uid(val string) string {
 	// to be an existing node in the graph. There is limited protection against
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
-	if strings.HasPrefix(val, "0x") {
-		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val
-		}
+	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+		return fmt.Sprintf("%#x", uid)
 	}
 
-	uid, _ := l.alloc.AssignUid(val)
+	uid := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
@@ -258,10 +256,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	alloc := xidmap.New(
 		kv,
 		connzero,
-		xidmap.Options{
-			NumShards: 100,
-			LRUSize:   1e5,
-		},
 	)
 
 	l := &loader{
@@ -332,7 +326,6 @@ func run() error {
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
 	defer l.kv.Close()
-	defer l.alloc.EvictAll()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {

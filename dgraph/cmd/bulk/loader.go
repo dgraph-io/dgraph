@@ -157,10 +157,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
-		NumShards: 1 << 10,
-		LRUSize:   1 << 19,
-	})
+	ld.xids = xidmap.New(ld.xidDB, ld.zero)
 
 	var dir, ext string
 	var loaderType int
@@ -226,7 +223,7 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	ld.xids.EvictAll()
+	// ld.xids.EvictAll()
 	x.Check(ld.xidDB.Close())
 	ld.xids = nil
 	runtime.GC()
