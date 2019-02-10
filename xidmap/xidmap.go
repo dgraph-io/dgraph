@@ -19,6 +19,8 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
+	"math/rand"
+	"runtime"
 	"sync"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -34,13 +37,18 @@ import (
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	sync.RWMutex // protects uidMap and block.
-	newRanges    chan *pb.AssignedIds
-	uidMap       map[string]uint64
-	block        *block
+	shards    []*shard
+	newRanges chan *pb.AssignedIds
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
+}
+
+type shard struct {
+	sync.RWMutex
+	block
+
+	uidMap map[string]uint64
 }
 
 type block struct {
@@ -65,8 +73,12 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, 10),
-		block:     new(block),
-		uidMap:    make(map[string]uint64),
+		shards:    make([]*shard, runtime.GOMAXPROCS(0)),
+	}
+	for i := range xm.shards {
+		xm.shards[i] = &shard{
+			uidMap: make(map[string]uint64),
+		}
 	}
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
@@ -81,9 +93,11 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			for itr.Rewind(); itr.Valid(); itr.Next() {
 				item := itr.Item()
 				key := string(item.Key())
+				sh := xm.shardFor(key)
 				err := item.Value(func(val []byte) error {
 					uid := binary.BigEndian.Uint64(val)
-					xm.uidMap[key] = uid
+					// No need to acquire a lock. This is all serial access.
+					sh.uidMap[key] = uid
 					return nil
 				})
 				if err != nil {
@@ -123,25 +137,32 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	return xm
 }
 
+func (m *XidMap) shardFor(xid string) *shard {
+	fp := farm.Fingerprint32([]byte(xid))
+	idx := fp % uint32(len(m.shards))
+	return m.shards[idx]
+}
+
 // AssignUid creates new or looks up existing XID to UID mappings.
 func (m *XidMap) AssignUid(xid string) uint64 {
-	m.RLock()
-	uid := m.uidMap[xid]
-	m.RUnlock()
+	sh := m.shardFor(xid)
+	sh.RLock()
+	uid := sh.uidMap[xid]
+	sh.RUnlock()
 	if uid > 0 {
 		return uid
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	sh.Lock()
+	defer sh.Unlock()
 
-	uid = m.uidMap[xid]
+	uid = sh.uidMap[xid]
 	if uid > 0 {
 		return uid
 	}
 
-	newUid := m.block.assign(m.newRanges)
-	m.uidMap[xid] = newUid
+	newUid := sh.assign(m.newRanges)
+	sh.uidMap[xid] = newUid
 
 	if m.writer != nil {
 		var uidBuf [8]byte
@@ -153,41 +174,34 @@ func (m *XidMap) AssignUid(xid string) uint64 {
 	return newUid
 }
 
-// BumpTo can be used to make Zero allocate UIDs up to this given number.
+func (sh *shard) End() uint64 {
+	sh.RLock()
+	defer sh.RUnlock()
+	return sh.end
+}
+
+// BumpTo can be used to make Zero allocate UIDs up to this given number. No guarantees are made
+// about the next UID allocated by XidMap. It can be lower or higher than the uid given here.
 func (m *XidMap) BumpTo(uid uint64) {
-	m.RLock()
-	end := m.block.end
-	m.RUnlock()
-	if uid <= end {
-		return
+	for _, sh := range m.shards {
+		if uid <= sh.End() {
+			return
+		}
 	}
-
-	m.Lock()
-	defer m.Unlock()
-
-	b := m.block
 	for {
-		if uid < b.start {
+		r := <-m.newRanges
+		if uid <= r.EndId {
 			return
 		}
-		if uid == b.start {
-			b.start++
-			return
-		}
-		if uid < b.end {
-			b.start = uid + 1
-			return
-		}
-		newRange := <-m.newRanges
-		b.start, b.end = newRange.StartId, newRange.EndId
 	}
 }
 
 // AllocateUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) AllocateUid() uint64 {
-	m.Lock()
-	defer m.Unlock()
-	return m.block.assign(m.newRanges)
+	sh := m.shards[rand.Intn(len(m.shards))]
+	sh.Lock()
+	defer sh.Unlock()
+	return sh.assign(m.newRanges)
 }
 
 // Flush must be called if DB is provided to XidMap.
