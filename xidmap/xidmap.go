@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -36,9 +37,10 @@ import (
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	shards    []*shard
-	newRanges chan *pb.AssignedIds
-	zc        pb.ZeroClient
+	shards     []*shard
+	newRanges  chan *pb.AssignedIds
+	zc         pb.ZeroClient
+	maxUidSeen uint64
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
@@ -123,6 +125,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
+				xm.updateMaxSeen(assigned.EndId)
 				backoff = initBackoff
 				xm.newRanges <- assigned
 				continue
@@ -181,41 +184,33 @@ func (sh *shard) Current() uint64 {
 	return sh.start
 }
 
+func (m *XidMap) updateMaxSeen(max uint64) {
+	for {
+		prev := atomic.LoadUint64(&m.maxUidSeen)
+		if prev >= max {
+			return
+		}
+		atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max)
+	}
+}
+
 // BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
 // ensure all future allocations of UIDs be higher than this one, but result is not guaranteed.
 func (m *XidMap) BumpTo(uid uint64) {
-	for _, sh := range m.shards {
-		if uid <= sh.Current() {
-			return
-		}
+	curMax := atomic.LoadUint64(&m.maxUidSeen)
+	if uid <= curMax {
+		return
 	}
-	defer func() {
-		// Reset all the shards.
-		for _, sh := range m.shards {
-			sh.Lock()
-			sh.end = 0
-			sh.assign(m.newRanges)
-			sh.Unlock()
-		}
-	}()
 
 	for {
 		glog.V(1).Infof("Bumping up to %v", uid)
-		r := <-m.newRanges
-		if uid <= r.EndId {
-			return
-		}
-		num := uid - r.EndId
+		num := x.Max(uid-curMax, 1e4)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		assigned, err := m.zc.AssignUids(ctx, &pb.Num{Val: num})
 		cancel()
 		if err == nil {
 			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
-			if assigned.EndId-uid >= 1e4 {
-				assigned.StartId = uid + 1
-				go func() { m.newRanges <- assigned }()
-				glog.V(1).Infof("Reusing assigned as: %v", assigned)
-			}
+			m.updateMaxSeen(assigned.EndId)
 			return
 		} else {
 			glog.Errorf("While requesting AssignUids(%d): %v", num, err)
