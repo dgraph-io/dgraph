@@ -153,8 +153,8 @@ func (m *XidMap) AssignUid(xid string) uint64 {
 	return newUid
 }
 
-// BumpUp can be used to make Zero allocate UIDs up to this given number.
-func (m *XidMap) BumpUp(uid uint64) {
+// BumpTo can be used to make Zero allocate UIDs up to this given number.
+func (m *XidMap) BumpTo(uid uint64) {
 	m.RLock()
 	end := m.block.end
 	m.RUnlock()
@@ -192,5 +192,8 @@ func (m *XidMap) AllocateUid() uint64 {
 
 // Flush must be called if DB is provided to XidMap.
 func (m *XidMap) Flush() error {
+	if m.writer == nil {
+		return nil
+	}
 	return m.writer.Flush()
 }

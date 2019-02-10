@@ -159,6 +159,7 @@ func (l *loader) uid(val string) string {
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
 	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+		l.alloc.BumpTo(uid)
 		return fmt.Sprintf("%#x", uid)
 	}
 
@@ -239,32 +240,32 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
-	x.Check(os.MkdirAll(opt.clientDir, 0700))
-	o := badger.DefaultOptions
-	o.SyncWrites = true // So that checkpoints are persisted immediately.
-	o.TableLoadingMode = bopt.MemoryMap
-	o.Dir = opt.clientDir
-	o.ValueDir = opt.clientDir
+	var db *badger.DB
+	if len(opt.clientDir) > 0 {
+		x.Check(os.MkdirAll(opt.clientDir, 0700))
+		o := badger.DefaultOptions
+		o.SyncWrites = true // So that checkpoints are persisted immediately.
+		o.TableLoadingMode = bopt.MemoryMap
+		o.Dir = opt.clientDir
+		o.ValueDir = opt.clientDir
 
-	kv, err := badger.Open(o)
-	x.Checkf(err, "Error while creating badger KV posting store")
+		var err error
+		db, err = badger.Open(o)
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
 
 	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(
-		kv,
-		connzero,
-	)
-
+	alloc := xidmap.New(connzero, db)
 	l := &loader{
 		opts:     opts,
 		dc:       dc,
 		start:    time.Now(),
 		reqs:     make(chan api.Mutation, opts.Pending*2),
 		alloc:    alloc,
-		kv:       kv,
+		db:       db,
 		zeroconn: connzero,
 	}
 
@@ -316,16 +317,9 @@ func run() error {
 	}
 	dgraphClient := dgo.NewDgraphClient(clients...)
 
-	if len(opt.clientDir) == 0 {
-		var err error
-		opt.clientDir, err = ioutil.TempDir("", "x")
-		x.Checkf(err, "Error while trying to create temporary client directory.")
-		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
-		defer os.RemoveAll(opt.clientDir)
-	}
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
-	defer l.kv.Close()
+	defer l.db.Close()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
@@ -390,5 +384,9 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if l.db != nil {
+		l.alloc.Flush()
+		l.db.Close()
+	}
 	return nil
 }

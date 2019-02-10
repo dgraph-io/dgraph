@@ -63,7 +63,7 @@ type loader struct {
 	dc         *dgo.Dgraph
 	alloc      *xidmap.XidMap
 	ticker     *time.Ticker
-	kv         *badger.DB
+	db         *badger.DB
 	requestsWg sync.WaitGroup
 	// If we retry a request, we add one to retryRequestsWg.
 	retryRequestsWg sync.WaitGroup
