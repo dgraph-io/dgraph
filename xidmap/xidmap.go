@@ -34,25 +34,21 @@ import (
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	sync.Mutex
-	kv *badger.DB
-	// opt       Options
-	newRanges chan *pb.AssignedIds
-	uidMap    sync.Map
-	writer    *badger.WriteBatch
+	sync.RWMutex // protects uidMap and block.
+	newRanges    chan *pb.AssignedIds
+	uidMap       map[string]uint64
+	block        *block
 
-	block *block
+	// Optionally, these can be set to persist the mappings.
+	writer *badger.WriteBatch
 }
 
 type block struct {
-	sync.Mutex
 	start, end uint64
 }
 
+// This must already have a write lock.
 func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
-	b.Lock()
-	defer b.Unlock()
-
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
 		b.start, b.end = newRange.StartId, newRange.EndId
@@ -63,16 +59,44 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	return uid
 }
 
-// New creates an XidMap with given badger and uid provider.
-func New(kv *badger.DB, zero *grpc.ClientConn) *XidMap {
-	// x.AssertTrue(opt.LRUSize != 0)
-	// x.AssertTrue(opt.NumShards != 0)
+// New creates an XidMap. zero conn must be valid for UID allocations to happen. Optionally, a
+// badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
+// assignment operations.
+func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 	xm := &XidMap{
-		kv:        kv,
 		newRanges: make(chan *pb.AssignedIds, 10),
-		writer:    kv.NewWriteBatch(),
 		block:     new(block),
+		uidMap:    make(map[string]uint64),
 	}
+	if db != nil {
+		// If DB is provided, let's load up all the xid -> uid mappings in memory.
+		xm.writer = db.NewWriteBatch()
+
+		err := db.View(func(txn *badger.Txn) error {
+			var count int
+			opt := badger.DefaultIteratorOptions
+			opt.PrefetchValues = false
+			itr := txn.NewIterator(opt)
+			defer itr.Close()
+			for itr.Rewind(); itr.Valid(); itr.Next() {
+				item := itr.Item()
+				key := string(item.Key())
+				err := item.Value(func(val []byte) error {
+					uid := binary.BigEndian.Uint64(val)
+					xm.uidMap[key] = uid
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+				count++
+			}
+			glog.Infof("Loaded up %d xid to uid mappings", count)
+			return nil
+		})
+		x.Check(err)
+	}
+
 	go func() {
 		zc := pb.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
@@ -95,67 +119,78 @@ func New(kv *badger.DB, zero *grpc.ClientConn) *XidMap {
 			}
 			time.Sleep(backoff)
 		}
-
 	}()
 	return xm
 }
 
 // AssignUid creates new or looks up existing XID to UID mappings.
-func (m *XidMap) AssignUid(xid string) (uid uint64) {
-	val, ok := m.uidMap.Load(xid)
-	if ok {
-		return val.(uint64)
+func (m *XidMap) AssignUid(xid string) uint64 {
+	m.RLock()
+	uid := m.uidMap[xid]
+	m.RUnlock()
+	if uid > 0 {
+		return uid
 	}
-	// TODO: Load up the xid->uid map upfront.
 
-	// fp := farm.Fingerprint64([]byte(xid))
-	// idx := fp % uint64(m.opt.NumShards)
-	// sh := &m.shards[idx]
+	m.Lock()
+	defer m.Unlock()
 
-	// sh.Lock()
-	// defer sh.Unlock()
+	uid = m.uidMap[xid]
+	if uid > 0 {
+		return uid
+	}
 
-	// var ok bool
-	// uid, ok = sh.lookup(xid)
-	// if ok {
-	// 	return uid, false
-	// }
+	newUid := m.block.assign(m.newRanges)
+	m.uidMap[xid] = newUid
 
-	// x.Check(m.kv.View(func(txn *badger.Txn) error {
-	// 	item, err := txn.Get([]byte(xid))
-	// 	if err == badger.ErrKeyNotFound {
-	// 		return nil
-	// 	}
-	// 	x.Check(err)
-	// 	return item.Value(func(uidBuf []byte) error {
-	// 		x.AssertTrue(len(uidBuf) > 0)
-	// 		var n int
-	// 		uid, n = binary.Uvarint(uidBuf)
-	// 		x.AssertTrue(n == len(uidBuf))
-	// 		ok = true
-	// 		return nil
-	// 	})
-	// }))
-	// if ok {
-	// 	sh.add(xid, uid, true)
-	// 	return uid, false
-	// }
-
-	uid = m.block.assign(m.newRanges)
-	val, loaded := m.uidMap.LoadOrStore(xid, uid)
-	uid = val.(uint64)
-	if !loaded {
-		// This uid was stored.
-		var uidBuf [binary.MaxVarintLen64]byte
-		n := binary.PutUvarint(uidBuf[:], uid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:n], 0); err != nil {
+	if m.writer != nil {
+		var uidBuf [8]byte
+		binary.BigEndian.PutUint64(uidBuf[:], newUid)
+		if err := m.writer.Set([]byte(xid), uidBuf[:], 0); err != nil {
 			panic(err)
 		}
 	}
-	return uid
+	return newUid
+}
+
+// BumpUp can be used to make Zero allocate UIDs up to this given number.
+func (m *XidMap) BumpUp(uid uint64) {
+	m.RLock()
+	end := m.block.end
+	m.RUnlock()
+	if uid <= end {
+		return
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	b := m.block
+	for {
+		if uid < b.start {
+			return
+		}
+		if uid == b.start {
+			b.start++
+			return
+		}
+		if uid < b.end {
+			b.start = uid + 1
+			return
+		}
+		newRange := <-m.newRanges
+		b.start, b.end = newRange.StartId, newRange.EndId
+	}
 }
 
 // AllocateUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) AllocateUid() uint64 {
+	m.Lock()
+	defer m.Unlock()
 	return m.block.assign(m.newRanges)
+}
+
+// Flush must be called if DB is provided to XidMap.
+func (m *XidMap) Flush() error {
+	return m.writer.Flush()
 }
