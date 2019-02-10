@@ -39,6 +39,7 @@ import (
 type XidMap struct {
 	shards    []*shard
 	newRanges chan *pb.AssignedIds
+	zc        pb.ZeroClient
 
 	// Optionally, these can be set to persist the mappings.
 	writer *badger.WriteBatch
@@ -110,15 +111,15 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		})
 		x.Check(err)
 	}
+	xm.zc = pb.NewZeroClient(zero)
 
 	go func() {
-		zc := pb.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 1e5})
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e5})
 			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
@@ -174,24 +175,42 @@ func (m *XidMap) AssignUid(xid string) uint64 {
 	return newUid
 }
 
-func (sh *shard) End() uint64 {
+func (sh *shard) Current() uint64 {
 	sh.RLock()
 	defer sh.RUnlock()
-	return sh.end
+	return sh.start
 }
 
-// BumpTo can be used to make Zero allocate UIDs up to this given number. No guarantees are made
-// about the next UID allocated by XidMap. It can be lower or higher than the uid given here.
+// BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
+// ensure all future allocations of UIDs be higher than this one, but result is not guaranteed.
 func (m *XidMap) BumpTo(uid uint64) {
 	for _, sh := range m.shards {
-		if uid <= sh.End() {
+		if uid <= sh.Current() {
 			return
 		}
 	}
+	defer func() {
+		for _, sh := range m.shards {
+			sh.Lock()
+			sh.end = 0
+			sh.Unlock()
+		}
+	}()
+
 	for {
 		r := <-m.newRanges
 		if uid <= r.EndId {
 			return
+		}
+		num := uid - r.EndId
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		assigned, err := m.zc.AssignUids(ctx, &pb.Num{Val: num})
+		cancel()
+		if err == nil {
+			glog.V(1).Infof("Requested bump: %d. Discarding assigned: %v", uid, assigned)
+			return
+		} else {
+			glog.Errorf("While requesting AssignUids(%d): %v", num, err)
 		}
 	}
 }

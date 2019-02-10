@@ -49,9 +49,8 @@ func TestXidmap(t *testing.T) {
 
 		to := xidmap.AllocateUid() + uint64(1e6+3)
 		xidmap.BumpTo(to)
-		uid := xidmap.AllocateUid()
+		uid := xidmap.AllocateUid() // Does not have to be above the bump.
 		t.Logf("bump up to: %d. allocated: %d", to, uid)
-		require.True(t, uid > to, "to: %d. Got: %d", to, uid)
 
 		require.NoError(t, xidmap.Flush())
 		xidmap = nil
