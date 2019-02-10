@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math/rand"
-	"runtime"
 	"sync"
 	"time"
 
@@ -72,9 +71,10 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations.
 func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
+	numShards := 32
 	xm := &XidMap{
-		newRanges: make(chan *pb.AssignedIds, 10),
-		shards:    make([]*shard, runtime.GOMAXPROCS(0)),
+		newRanges: make(chan *pb.AssignedIds, numShards),
+		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
 		xm.shards[i] = &shard{
@@ -119,7 +119,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e5})
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e4})
 			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
@@ -190,14 +190,17 @@ func (m *XidMap) BumpTo(uid uint64) {
 		}
 	}
 	defer func() {
+		// Reset all the shards.
 		for _, sh := range m.shards {
 			sh.Lock()
 			sh.end = 0
+			sh.assign(m.newRanges)
 			sh.Unlock()
 		}
 	}()
 
 	for {
+		glog.V(1).Infof("Bumping up to %v", uid)
 		r := <-m.newRanges
 		if uid <= r.EndId {
 			return
@@ -207,7 +210,12 @@ func (m *XidMap) BumpTo(uid uint64) {
 		assigned, err := m.zc.AssignUids(ctx, &pb.Num{Val: num})
 		cancel()
 		if err == nil {
-			glog.V(1).Infof("Requested bump: %d. Discarding assigned: %v", uid, assigned)
+			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
+			if assigned.EndId-uid >= 1e4 {
+				assigned.StartId = uid + 1
+				go func() { m.newRanges <- assigned }()
+				glog.V(1).Infof("Reusing assigned as: %v", assigned)
+			}
 			return
 		} else {
 			glog.Errorf("While requesting AssignUids(%d): %v", num, err)

@@ -188,15 +188,18 @@ func (l *loader) makeRequests() {
 }
 
 func (l *loader) printCounters() {
-	l.ticker = time.NewTicker(2 * time.Second)
+	period := 5 * time.Second
+	l.ticker = time.NewTicker(period)
 	start := time.Now()
 
+	var last Counter
 	for range l.ticker.C {
 		counter := l.Counter()
-		rate := float64(counter.Nquads) / counter.Elapsed.Seconds()
+		rate := float64(counter.Nquads-last.Nquads) / period.Seconds()
 		elapsed := time.Since(start).Round(time.Second)
-		fmt.Printf("[%6s] Txns: %d N-Quads: %d N-Quads/sec: %5.0f Aborts: %d\n",
+		fmt.Printf("[%6s] Txns: %d N-Quads: %d N-Quads/s [last 5s]: %5.0f Aborts: %d\n",
 			elapsed, counter.TxnsDone, counter.Nquads, rate, counter.Aborts)
+		last = counter
 	}
 }
 
