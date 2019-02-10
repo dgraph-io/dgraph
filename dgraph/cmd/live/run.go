@@ -244,10 +244,10 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
 		o := badger.DefaultOptions
-		o.SyncWrites = true // So that checkpoints are persisted immediately.
-		o.TableLoadingMode = bopt.MemoryMap
 		o.Dir = opt.clientDir
 		o.ValueDir = opt.clientDir
+		o.TableLoadingMode = bopt.MemoryMap
+		o.SyncWrites = false
 
 		var err error
 		db, err = badger.Open(o)
@@ -319,7 +319,6 @@ func run() error {
 
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
-	defer l.db.Close()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
