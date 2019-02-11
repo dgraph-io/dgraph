@@ -184,7 +184,7 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 			if isJson {
 				loadType = chunker.JsonFormat
 			} else {
-				return fmt.Errorf("Need --format=rdf or --format=json to load %s", filename)
+				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
 			}
 		}
 	}
