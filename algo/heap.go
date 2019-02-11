@@ -65,7 +65,8 @@ func fixHeap(h *uint64Heap, i int) {
 }
 
 // upHeap refines the value level
-// starting from the bottom level “pos” to the parent levels, in the binary tree “h”
+// starting from the bottom level “pos” to the parent levels,
+// in the binary tree “h”
 func upHeap(h *uint64Heap, pos int) {
 	for {
 		parent := (pos - 1) / 2 // parent
@@ -78,7 +79,8 @@ func upHeap(h *uint64Heap, pos int) {
 }
 
 // downHeap refines the value level
-// starting from the upper level “pos” to the right levels, in the binary tree “h”
+// starting from the upper level “pos” to the right levels, 
+// in the binary tree “h”
 func downHeap(h *uint64Heap, pos, n int) bool {
 	current := pos
 	for {
