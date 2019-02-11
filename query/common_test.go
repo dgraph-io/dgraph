@@ -202,6 +202,7 @@ symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : [uid] .
 best_friend                    : uid .
+pet                            : [uid] .
 `
 
 func populateCluster(t *testing.T) {
@@ -211,6 +212,12 @@ func populateCluster(t *testing.T) {
 
 	addTriplesToCluster(t, `
 		<1> <name> "Michonne" .
+		<2> <name> "King Lear" .
+		<3> <name> "Margaret" .
+		<4> <name> "Leonard" .
+		<5> <name> "Garfield" .
+		<6> <name> "Bear" .
+		<7> <name> "Nemo" .
 		<23> <name> "Rick Grimes" .
 		<24> <name> "Glenn Rhee" .
 		<25> <name> "Daryl Dixon" .
@@ -425,6 +432,15 @@ func populateCluster(t *testing.T) {
 		<2> <type> "Person" .
 		<3> <type> "Person" .
 		<4> <type> "Person" .
+		<5> <type> "Animal" .
+		<6> <type> "Animal" .
+
+		<2> <pet> <5> .
+		<3> <pet> <6> .
+		<4> <pet> <7> .
+
+		<2> <enemy> <3> .
+		<2> <enemy> <4> .
 	`)
 
 	addGeoPointToCluster(t, 1, "loc", []float64{1.1, 2.0})
