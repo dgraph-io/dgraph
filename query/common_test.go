@@ -35,9 +35,11 @@ var (
 	client = getNewClient()
 )
 
-func assignUids(t *testing.T, num uint64) {
+func assignUids(num uint64) {
 	_, err := http.Get(fmt.Sprintf("http://localhost:6080/assign?what=uids&num=%d", num))
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
+	}
 }
 
 func getNewClient() *dgo.Dgraph {
@@ -47,9 +49,12 @@ func getNewClient() *dgo.Dgraph {
 }
 
 func setSchema(schema string) {
-	client.Alter(context.Background(), &api.Operation{
+	err := client.Alter(context.Background(), &api.Operation{
 		Schema: schema,
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+	}
 }
 
 func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
@@ -98,10 +103,14 @@ func addTriplesToCluster(triples string) {
 	ctx := context.Background()
 	defer txn.Discard(ctx)
 
-	txn.Mutate(ctx, &api.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(triples),
 		CommitNow: true,
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not add triples. Got error %v", err.Error()))
+	}
+
 }
 
 func deleteTriplesInCluster(triples string) {
@@ -109,10 +118,13 @@ func deleteTriplesInCluster(triples string) {
 	ctx := context.Background()
 	defer txn.Discard(ctx)
 
-	txn.Mutate(ctx, &api.Mutation{
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(triples),
 		CommitNow: true,
 	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
+	}
 }
 
 func addGeoPointToCluster(uid uint64, pred string, point []float64) {
@@ -212,10 +224,14 @@ office.room                    : [uid] .
 best_friend                    : uid .
 `
 
-func populateCluster(t *testing.T) {
-	require.NoError(t, client.Alter(context.Background(), &api.Operation{DropAll: true}))
+func populateCluster() {
+	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
+	if err != nil {
+		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
+	}
+
 	setSchema(testSchema)
-	assignUids(t, 100000)
+	assignUids(100000)
 
 	addTriplesToCluster(`
 		<1> <name> "Michonne" .

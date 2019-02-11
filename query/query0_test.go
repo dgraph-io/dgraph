@@ -1689,6 +1689,6 @@ func TestCountUidToVarCombinedWithNormalVar(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	populateCluster(&testing.T{})
+	populateCluster()
 	os.Exit(m.Run())
 }
