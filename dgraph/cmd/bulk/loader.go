@@ -147,6 +147,7 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
+	// TODO: Consider if we need to always store the XIDs in Badger. Things slow down if we do.
 	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
 	x.Check(os.Mkdir(xidDir, 0755))
 	opt := badger.DefaultOptions
@@ -157,10 +158,7 @@ func (ld *loader) mapStage() {
 	var err error
 	ld.xidDB, err = badger.Open(opt)
 	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
-		NumShards: 1 << 10,
-		LRUSize:   1 << 19,
-	})
+	ld.xids = xidmap.New(ld.zero, ld.xidDB)
 
 	var dir, ext string
 	var loaderType int
@@ -226,7 +224,7 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	ld.xids.EvictAll()
+	x.Check(ld.xids.Flush())
 	x.Check(ld.xidDB.Close())
 	ld.xids = nil
 	runtime.GC()

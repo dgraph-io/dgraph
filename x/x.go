@@ -433,7 +433,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 
-	if tlsConf.CertRequired {
+	if tlsConf != nil && tlsConf.CertRequired {
 		tlsConf.ConfigType = TLSClientConfig
 		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
 		if err != nil {

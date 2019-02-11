@@ -217,8 +217,8 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew := m.xids.AssignUid(xid)
-	if !isNew || !m.opt.StoreXids {
+	uid := m.xids.AssignUid(xid)
+	if !m.opt.StoreXids {
 		return uid
 	}
 	if strings.HasPrefix(xid, "_:") {
