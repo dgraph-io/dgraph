@@ -75,7 +75,7 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) 
 	err := pl.Iterate(readTs, 0, func(p *pb.Posting) error {
 		buf.WriteString(prefix)
 		if p.PostingType == pb.Posting_REF {
-			buf.WriteString(fmt.Sprintf("<_:uid%x>", p.Uid))
+			buf.WriteString(fmt.Sprintf("<0x%04x>", p.Uid))
 
 		} else {
 			// Value posting
@@ -313,7 +313,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return toSchema(pk.Attr, update)
 
 		case pk.IsData():
-			prefix := fmt.Sprintf("<_:uid%x> <%s> ", pk.Uid, pk.Attr)
+			prefix := fmt.Sprintf("<0x%04x> <%s> ", pk.Uid, pk.Attr)
 			pl, err := posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
