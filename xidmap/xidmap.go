@@ -57,7 +57,7 @@ type block struct {
 	start, end uint64
 }
 
-// This must already have a write lock.
+// assign assumes the write lock is already acquired.
 func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
@@ -195,7 +195,7 @@ func (m *XidMap) updateMaxSeen(max uint64) {
 }
 
 // BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
-// ensure all future allocations of UIDs be higher than this one, but result is not guaranteed.
+// ensure all future allocations of UIDs be higher than this one, but results are not guaranteed.
 func (m *XidMap) BumpTo(uid uint64) {
 	curMax := atomic.LoadUint64(&m.maxUidSeen)
 	if uid <= curMax {
