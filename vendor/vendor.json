@@ -651,12 +651,6 @@
 			"revisionTime": "2017-10-17T18:19:29Z"
 		},
 		{
-			"checksumSHA1": "9fTIdD63nJT3Y4QvHtw9dCBhzzE=",
-			"path": "github.com/lithammer/fuzzysearch/fuzzy",
-			"revision": "9704abcb5729ef17e4316e31439d7fcece8dac5f",
-			"revisionTime": "2019-01-06T22:13:24Z"
-		},
-		{
 			"checksumSHA1": "8ae1DyNE/yY9NvY3PmvtQdLBJnc=",
 			"path": "github.com/magiconair/properties",
 			"revision": "49d762b9817ba1c2e9d0c69183c2b4a8b8f1d934",
