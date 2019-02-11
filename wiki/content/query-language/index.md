@@ -353,6 +353,40 @@ Keep the following in mind when designing regular expression queries.
 - If the partial result (for subset of trigrams) exceeds 1000000 uids during index scan, the query is stopped to prohibit expensive queries.
 
 
+### Fuzzy matching
+
+
+Syntax Examples: `match(predicate, string)` or `regexp(predicate, string, distance)`
+
+Schema Types: `string`
+
+Index Required: `trigram`
+
+Matches strings by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) predicate value to the string.
+By default the distance is set to eight (8) but a lesser distance can be set when using the second form. The distance will never exceed the default.
+Using greater distance value could yield more but less accurate results.
+
+Query Example: At root, fuzzy match nodes similar to `Stephen`, with a default distance value of 8.
+
+{{< runnable >}}
+{
+  directors(func: match(name@en, Stephen)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+Same query with a Levenshtein distance of 3.
+
+{{< runnable >}}
+{
+  directors(func: match(name@en, Stephen, 3)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+
 ### Full Text Search
 
 Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
