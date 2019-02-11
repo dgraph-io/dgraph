@@ -2145,7 +2145,10 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
 		case "type":
-			parseType(it, curp)
+			err := parseType(it, curp)
+			if err != nil {
+				return err
+			} 
 		default:
 			return item.Errorf("Unknown directive [%s]", item.Val)
 		}
