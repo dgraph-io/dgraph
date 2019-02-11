@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strings"
 )
 
 const (
@@ -307,6 +308,6 @@ func IsReservedPredicate(pred string) bool {
 		"dgraph.group.acl":  {},
 		"type":              {},
 	}
-	_, ok := m[pred]
+	_, ok := m[strings.ToLower(pred)]
 	return ok
 }
