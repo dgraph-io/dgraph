@@ -1189,10 +1189,11 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 			return err
 		}
 
+		max := int(arg.srcFn.threshold)
 		for _, val := range vals {
 			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), int(arg.srcFn.threshold)) {
+			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
 				filtered.Uids = append(filtered.Uids, uid)
 				// NOTE: We only add the uid once.
 				break
@@ -1502,10 +1503,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case MatchFn:
-		l := len(q.SrcFunc.Args)
-		if l == 0 || l > 2 {
-			return nil, x.Errorf("Function '%s' requires at most 2 arguments, but got %d (%v)",
-				f, l, q.SrcFunc.Args)
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
@@ -1513,18 +1512,16 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		fc.intersectDest = needsIntersect(f)
 		// Max Levenshtein distance
-		fc.threshold = 8
-		if l == 2 {
-			var s string
-			s, q.SrcFunc.Args = q.SrcFunc.Args[1], q.SrcFunc.Args[:1]
-			max, err := strconv.ParseInt(s, 10, 32)
-			if err != nil {
-				return nil, x.Errorf("Levenshtein distance value must be an int, got %v", s)
-			}
-			if max > 0 && max < 8 {
-				fc.threshold = int64(max)
-			}
+		var s string
+		s, q.SrcFunc.Args = q.SrcFunc.Args[1], q.SrcFunc.Args[:1]
+		max, err := strconv.ParseInt(s, 10, 32)
+		if err != nil {
+			return nil, x.Errorf("Levenshtein distance value must be an int, got %v", s)
 		}
+		if max < 0 {
+			return nil, x.Errorf("Levenshtein distance value must be greater than 0, got %v", s)
+		}
+		fc.threshold = int64(max)
 		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case CustomIndexFn:
