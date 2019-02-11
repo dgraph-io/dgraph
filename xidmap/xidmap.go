@@ -125,8 +125,8 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
-				xm.updateMaxSeen(assigned.EndId)
 				backoff = initBackoff
+				xm.updateMaxSeen(assigned.EndId)
 				xm.newRanges <- assigned
 				continue
 			}
