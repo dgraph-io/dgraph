@@ -23,10 +23,18 @@ PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/badger/pb
 help:
 	@echo Use \"make regenerate\" to proceed.
 
+.PHONY: clean
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
 
-regenerate: clean
+.PHONY: check
+check:
+	@./depcheck.sh || \
+		(echo "Upgrading protoc before regenerating." ; \
+		go get -u github.com/golang/protobuf/protoc-gen-go)
+
+.PHONY: regenerate
+regenerate: check clean
 	@protoc \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/protos/api:pb \
