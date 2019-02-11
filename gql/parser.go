@@ -1343,7 +1343,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 }
 
 // parseIneqArgs will try to parse the arguments inside an array ([]). If the values
-// are prefixed with $ they are treated as Gql variables, otherwise used as scalar values.
+// are prefixed with $ they are treated as Gql variables, otherwise they are used as scalar values.
 // Returns nil on success while appending arguments to the function Args slice. Otherwise
 // returns an error, which can be a parsing or value error.
 func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
@@ -1365,6 +1365,7 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 			isDollar = true
 			continue
 		case itemName:
+			// This is not a $variable, just add the value.
 			if !isDollar {
 				val, err := getValueArg(item.Val)
 				if err != nil {
@@ -1373,6 +1374,7 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 				g.Args = append(g.Args, Arg{Value: val})
 				break
 			}
+			// This is a $variable that must be expanded later.
 			val := "$" + item.Val
 			g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
 		case itemComma:
@@ -1387,7 +1389,7 @@ func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
 		expectArg = false
 		isDollar = false
 	}
-	return it.Errorf("Expecting ] to end list but none was found")
+	return it.Errorf("Expecting ] to end list but got %v instead", it.Item().Val)
 }
 
 // getValueArg returns a space-trimmed and unquoted version of val.
