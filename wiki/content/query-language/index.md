@@ -356,21 +356,20 @@ Keep the following in mind when designing regular expression queries.
 ### Fuzzy matching
 
 
-Syntax Examples: `match(predicate, string)` or `regexp(predicate, string, distance)`
+Syntax: ``match(predicate, string, distance)`
 
 Schema Types: `string`
 
 Index Required: `trigram`
 
-Matches strings by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) predicate value to the string.
-By default the distance is set to eight (8) but a lesser distance can be set when using the second form. The distance will never exceed the default.
-Using greater distance value could yield more but less accurate results.
+Matches strings by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) predicate value to the string,
+also known as "fuzzy matching". The distance parameter must be greater than zero (0). Using a greater distance value could yield more but less accurate results.
 
 Query Example: At root, fuzzy match nodes similar to `Stephen`, with a default distance value of 8.
 
 {{< runnable >}}
 {
-  directors(func: match(name@en, Stephen)) {
+  directors(func: match(name@en, Stephen, 8)) {
     name@en
   }
 }
