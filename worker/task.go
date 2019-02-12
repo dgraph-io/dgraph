@@ -220,6 +220,7 @@ const (
 	HasFn
 	UidInFn
 	CustomIndexFn
+	MatchFn
 	StandardFn = 100
 )
 
@@ -260,6 +261,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return UidInFn, f
 	case "anyof", "allof":
 		return CustomIndexFn, f
+	case "match":
+		return MatchFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -270,11 +273,18 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 
 func needsIndex(fnType FuncType) bool {
 	switch fnType {
-	case CompareAttrFn, GeoFn, FullTextSearchFn, StandardFn:
+	case CompareAttrFn, GeoFn, FullTextSearchFn, StandardFn, MatchFn:
 		return true
-	default:
-		return false
 	}
+	return false
+}
+
+// needsIntersect checks if the function type needs algo.IntersectSorted() after the results
+// are collected. This is needed for functions that require all values to  match, like
+// "allofterms", "alloftext", and custom functions with "allof".
+// Returns true if function results need intersect, false otherwise.
+func needsIntersect(fnName string) bool {
+	return strings.HasPrefix(fnName, "allof") || strings.HasSuffix(fnName, "allof")
 }
 
 type funcArgs struct {
@@ -294,8 +304,8 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 			return false, nil
 		}
 		return true, nil
-	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn:
-		// All of these require index, hence would require fetching uid postings.
+	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn, MatchFn:
+		// All of these require an index, hence would require fetching uid postings.
 		return false, nil
 	case UidInFn, CompareScalarFn:
 		// Operate on uid postings
@@ -558,7 +568,7 @@ func (qs *queryState) handleUidPostings(
 				} else {
 					key = x.DataKey(q.Attr, q.UidList.Uids[i])
 				}
-			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn:
+			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			case CompareAttrFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
@@ -815,6 +825,13 @@ func (qs *queryState) helpProcessTask(
 		// the regex matcher.
 		span.Annotate(nil, "handleRegexFunction")
 		if err := qs.handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
+			return nil, err
+		}
+	}
+
+	if srcFn.fnType == MatchFn {
+		span.Annotate(nil, "handleMatchFunction")
+		if err := qs.handleMatchFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -1100,6 +1117,97 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 			}
 		}
 	}
+	return nil
+}
+
+func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "handleMatchFunction")
+	defer stop()
+	if span != nil {
+		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
+	}
+
+	attr := arg.q.Attr
+	typ := arg.srcFn.atype
+	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
+	uids := &pb.List{}
+	switch {
+	case !typ.IsScalar():
+		return x.Errorf("Attribute not scalar: %s %v", attr, typ)
+
+	case typ != types.StringID:
+		return x.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
+
+	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+		uids = arg.q.UidList
+
+	case schema.State().HasTokenizer(tok.IdentTrigram, attr):
+		var err error
+		uids, err = uidsForMatch(attr, arg)
+		if err != nil {
+			return err
+		}
+
+	default:
+		return x.Errorf(
+			"Attribute %v does not have trigram index for fuzzy matching. "+
+				"Please add a trigram index or use has/uid function with match() as filter.",
+			attr)
+	}
+
+	isList := schema.State().IsList(attr)
+	lang := langForFunc(arg.q.Langs)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
+	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+
+	matchQuery := strings.Join(arg.srcFn.tokens, "")
+	filtered := &pb.List{}
+	for _, uid := range uids.Uids {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		pl, err := qs.cache.Get(x.DataKey(attr, uid))
+		if err != nil {
+			return err
+		}
+
+		vals := make([]types.Val, 1)
+		switch {
+		case lang != "":
+			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+		case isList:
+			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+		default:
+			vals[0], err = pl.Value(arg.q.ReadTs)
+		}
+		if err != nil {
+			if err == posting.ErrNoValue {
+				continue
+			}
+			return err
+		}
+
+		max := int(arg.srcFn.threshold)
+		for _, val := range vals {
+			// convert data from binary to appropriate format
+			strVal, err := types.Convert(val, types.StringID)
+			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
+				filtered.Uids = append(filtered.Uids, uid)
+				// NOTE: We only add the uid once.
+				break
+			}
+		}
+	}
+
+	for i := 0; i < len(arg.out.UidMatrix); i++ {
+		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	}
+
 	return nil
 }
 
@@ -1395,8 +1503,29 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
 		}
-		fnName := strings.ToLower(q.SrcFunc.Name)
-		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
+		fc.intersectDest = needsIntersect(f)
+		fc.n = len(fc.tokens)
+	case MatchFn:
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+			return nil, err
+		}
+		required, found := verifyStringIndex(attr, fnType)
+		if !found {
+			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
+		}
+		fc.intersectDest = needsIntersect(f)
+		// Max Levenshtein distance
+		var s string
+		s, q.SrcFunc.Args = q.SrcFunc.Args[1], q.SrcFunc.Args[:1]
+		max, err := strconv.ParseInt(s, 10, 32)
+		if err != nil {
+			return nil, x.Errorf("Levenshtein distance value must be an int, got %v", s)
+		}
+		if max < 0 {
+			return nil, x.Errorf("Levenshtein distance value must be greater than 0, got %v", s)
+		}
+		fc.threshold = int64(max)
+		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case CustomIndexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
@@ -1417,9 +1546,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		fc.tokens, _ = tok.BuildTokens(valToTok.Value,
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
-		fnName := strings.ToLower(q.SrcFunc.Name)
-		x.AssertTrue(fnName == "allof" || fnName == "anyof")
-		fc.intersectDest = strings.HasSuffix(fnName, "allof")
+		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case RegexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
