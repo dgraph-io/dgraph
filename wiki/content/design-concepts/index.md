@@ -256,39 +256,36 @@ the posting list, the first time it's brought back into memory.
 Let's understand how query execution works, by looking at an example.
 
 ```
-{
-    me(func: uid(0x1)) {
-      pred_A
-      pred_B {
-        pred_B1
-        pred_B2
-      }
-      pred_C {
-        pred_C1
-        pred_C2 {
-          pred_C21
-      }
-      }
+me(id: m.abcde) {
+  pred_A
+  pred_B {
+    pred_B1
+    pred_B2
+  }
+  pred_C {
+    pred_C1
+    pred_C2 {
+      pred_C21
+   }
   }
 }
-
 ```
 
-Let's assume we have 3 Alpha instances, and instance id=2 receives this query. These are the steps:
+Let's assume we have 3 server instances, and instance id = 2 receives this query. These are the steps:
 
-* Dgraph seeks for the node of provided UID.
-* Send queries to look up keys = `pred_A, 0x1`, `pred_B, 0x1`, and `pred_C, 0x1`. These predicates could
+* Determine the UID of provided XID, in this case `m.abcde` using fingerprinting. Say the UID = u.
+* Send queries to look up keys = `pred_A, u`, `pred_B, u`, and `pred_C, u`. These predicates could
 belong to 3 different groups, served by potentially different servers. So, this would typically
 incur at max 3 network calls (equal to number of predicates at this step).
-* The above queries would return back 3 list of UIDs or value. The result of `pred_B` and `pred_C`
+* The above queries would return back 3 list of ids or value. The result of `pred_B` and `pred_C`
 would be converted into queries for `pred_Bi` and `pred_Ci`.
 * `pred_Bi` and `pred_Ci` would then cause at max 4 network calls, depending upon where these
 predicates are located. The keys for `pred_Bi` for e.g. would be `pred_Bi, res_pred_Bk`, where
-res_pred_Bk = list of resulting UIDs from `pred_B, u`.
+res_pred_Bk = list of resulting ids from `pred_B, u`.
 * Looking at `res_pred_C2`, you'll notice that this would be a list of lists aka list matrix. We
 merge these list of lists into a sorted list with distinct elements to form the query for `pred_C21`.
 * Another network call depending upon where `pred_C21` lies, and this would again give us a list of
-list UIDs / value.
+list ids / value.
 
 If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for
 replying back to the client. If the query was run via [gRPC](https://www.grpc.io/) interface using
