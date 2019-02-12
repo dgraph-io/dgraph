@@ -426,6 +426,38 @@ func TestMultipleMinMax(t *testing.T) {
 		js)
 }
 
+func TestBinaryMultipleValues(t *testing.T) {
+	query := `
+	{
+		var(func:uid(0x1)) {
+			x as math(max(1,2,3,1,2,3,4,1,1,1,11,2,2,1,10))
+			y as math(min(1,2,3,4,0,5,6,7,1))
+			z as math(pow(2,2,2,2))
+			w as math(logbase(256,16,2))
+		}
+		q(func:uid(0x1)) {
+			val(x)
+			val(y)
+			val(z)
+			val(w)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"val(x)": 11.000000,
+					"val(y)": 0.000000,
+					"val(z)": 256.000000,
+					"val(w)": 1.000000
+				}
+			]
+		}
+	}`, js)
+}
+
 func TestDuplicateAlias(t *testing.T) {
 
 	query := `
