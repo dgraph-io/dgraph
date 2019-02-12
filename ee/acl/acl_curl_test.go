@@ -21,11 +21,12 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCurlAuthorization(t *testing.T) {
-	t.Logf("testing with port 9180")
+	glog.Infof("testing with port 9180")
 	dg, cancel := x.GetDgraphClientOnPort(9180)
 	defer cancel()
 	createAccountAndData(t, dg)
@@ -66,7 +67,7 @@ func TestCurlAuthorization(t *testing.T) {
 	// sleep long enough (longer than 10s, the access JWT TTL defined in the docker-compose.yml
 	// in this directory) for the accessJwt to expire, in order to test auto login through refresh
 	// JWT
-	t.Logf("Sleeping for 12 seconds for accessJwt to expire")
+	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
 	time.Sleep(12 * time.Second)
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
@@ -89,7 +90,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	createGroupAndAcls(t, unusedGroup, false)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
+	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
@@ -113,7 +114,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	createGroupAndAcls(t, devGroup, true)
-	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
+	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	// refresh the jwts again
 	accessJwt, refreshJwt = curlLogin(t, refreshJwt)
@@ -155,26 +156,25 @@ func curlLogin(t *testing.T, refreshJwt string) (string, string) {
 	out, err := userLoginCmd.Output()
 	require.NoError(t, err, "the login should have succeeded")
 
-	// search for access JWT and refresh JWT in the curl output
-	outputLines := strings.Split(string(out), "\n")
-	var newAccessJwt string
-	var newRefreshJwt string
-	for idx := 0; idx < len(outputLines); idx++ {
-		line := outputLines[idx]
-		if line == "ACCESS JWT:" {
-			idx++
-			require.True(t, idx < len(outputLines),
-				"no line found after ACCESS JWT")
-			newAccessJwt = outputLines[idx]
-		} else if line == "REFRESH JWT:" {
-			idx++
-			require.True(t, idx < len(outputLines),
-				"no line found after REFRESH JWT")
-			newRefreshJwt = outputLines[idx]
-		}
+	var outputJson map[string]map[string]string
+	if err := json.Unmarshal(out, &outputJson); err != nil {
+		t.Fatal("unable to unmarshal the output to get JWTs")
 	}
-	require.True(t, len(newAccessJwt) > 0, "no access jwt received")
-	require.True(t, len(newRefreshJwt) > 0, "no refresh jwt received")
+	glog.Infof("got output: %v", outputJson)
+
+	data, found := outputJson["data"]
+	if !found {
+		t.Fatal("no data entry found in the output")
+	}
+
+	newAccessJwt, found := data["accessJWT"]
+	if !found {
+		t.Fatal("no access JWT found in the output")
+	}
+	newRefreshJwt, found := data["refreshJWT"]
+	if !found {
+		t.Fatal("no refresh JWT found in the output")
+	}
 
 	return newAccessJwt, newRefreshJwt
 }
@@ -215,7 +215,6 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *FailureConfig) {
 
 func verifyCurlCmd(t *testing.T, args []string,
 	failureConfig *FailureConfig) {
-	//t.Logf("curl %s\n", strings.Join(args, " "))
 	queryCmd := exec.Command("curl", args...)
 
 	output, err := queryCmd.Output()

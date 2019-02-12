@@ -83,13 +83,7 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	AclPreds       = map[string]struct{}{
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-	}
-	Nilbyte []byte
+	Nilbyte        []byte
 )
 
 func ShouldCrash(err error) bool {

@@ -134,7 +134,7 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	alterPredicateWithUserAccount(t, dg, false)
 	createGroupAndAcls(t, unusedGroup, false)
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
+	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 
 	// now all these operations should fail since there are rules defined on the unusedGroup
@@ -145,17 +145,17 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	createGroupAndAcls(t, devGroup, true)
 
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
+	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 
 	// now the operations should succeed again through the devGroup
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml in this directory)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
-	t.Logf("Sleeping for 12 seconds for accessJwt to expire")
+	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
 	time.Sleep(12 * time.Second)
 	mutatePredicateWithUserAccount(t, dg, false)
-	t.Logf("Sleeping for 12 seconds for accessJwt to expire")
+	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
 	time.Sleep(12 * time.Second)
 	alterPredicateWithUserAccount(t, dg, false)
 }
@@ -364,7 +364,7 @@ func TestPredicateRegex(t *testing.T) {
 	createGroupAndAcls(t, unusedGroup, false)
 
 	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
+	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	// the operations should all fail when there is a rule defined, but the current user is not
 	// allowed
@@ -413,7 +413,7 @@ func TestPredicateRegex(t *testing.T) {
 			predRegex, devGroup, err)
 	}
 
-	t.Logf("Sleeping for 35 seconds for acl caches to be refreshed")
+	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)

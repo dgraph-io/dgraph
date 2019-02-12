@@ -89,9 +89,8 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
-	flag.Bool("enterprise_features", false,
-		"Enable Dgraph enterprise features. "+
-			"If you set this to true, you agree to the Dgraph Community License.")
+	flag.Bool("enterprise_features", false, "Enable Dgraph enterprise features. "+
+		"If you set this to true, you agree to the Dgraph Community License.")
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.

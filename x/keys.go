@@ -310,3 +310,14 @@ func IsReservedPredicate(pred string) bool {
 	_, ok := m[pred]
 	return ok
 }
+
+func IsAclPredicate(pred string) bool {
+	var m = map[string]struct{}{
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+	}
+	_, ok := m[pred]
+	return ok
+}

@@ -19,15 +19,13 @@
 package alpha
 
 import (
-	"bytes"
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -55,12 +53,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 	}
 
-	var out bytes.Buffer
-	out.WriteString(fmt.Sprintf("ACCESS JWT:\n%s\n", jwt.AccessJwt))
-	out.WriteString(fmt.Sprintf("REFRESH JWT:\n%s\n", jwt.RefreshJwt))
-	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
-		glog.Errorf("Error while writing response: %v", err)
+	response := map[string]interface{}{}
+	mp := map[string]interface{}{}
+	mp["accessJWT"] = jwt.AccessJwt
+	mp["refreshJWT"] = jwt.RefreshJwt
+	response["data"] = mp
+
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
 	}
+
+	writeResponse(w, r, js)
 }
 
 func init() {

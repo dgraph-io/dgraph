@@ -14,11 +14,8 @@ package edgraph
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -312,77 +309,7 @@ func RefreshAcls(closer *y.Closer) {
 			return err
 		}
 
-		// In dgraph, acl rules are divided by groups, e.g.
-		// the dev group has the following blob representing its ACL rules
-		// [friend, 4], [name, 7], [^user.*name$, 4]
-		// where friend and name are predicates,
-		// and the last one is a regex that can match multiple predicates.
-		// However in the aclCache in memory, we need to change the structure so that ACL rules are
-		// divided by predicates, e.g.
-		// friend ->
-		//     dev -> 4
-		//     sre -> 6
-		// name ->
-		//     dev -> 7
-		// the reason is that we want to efficiently determine if any ACL rule has been defined
-		// for a given predicate, and allow the operation if none is defined, per the fail open
-		// approach
-
-		// predPerms is the map descriebed above that maps a single
-		// predicate to a submap, and the submap maps a group to a permission
-		predPerms := make(map[string]map[string]int32)
-		// predRegexPerms is a map from a regex string to a PredRegexRule, and a PredRegexRule
-		// contains a map from a group to a permission
-		predRegexPerms := make(map[string]*PredRegexRule)
-		for _, group := range groups {
-			aclBytes := []byte(group.Acls)
-			var acls []acl.Acl
-			if err := json.Unmarshal(aclBytes, &acls); err != nil {
-				glog.Errorf("Unable to unmarshal the aclBytes: %v", err)
-				continue
-			}
-
-			for _, acl := range acls {
-				if len(acl.Predicate) > 0 {
-					if groupPerms, found := predPerms[acl.Predicate]; found {
-						groupPerms[group.GroupID] = acl.Perm
-					} else {
-						groupPerms := make(map[string]int32)
-						groupPerms[group.GroupID] = acl.Perm
-						predPerms[acl.Predicate] = groupPerms
-					}
-				} else if len(acl.Regex) > 0 {
-					if predRegexRule, found := predRegexPerms[acl.Regex]; found {
-						predRegexRule.groupPerms[group.GroupID] = acl.Perm
-					} else {
-						predRegex, err := regexp.Compile(acl.Regex)
-						if err != nil {
-							glog.Errorf("Unable to compile the predicate regex %v "+
-								"to create an ACL rule", acl.Regex)
-							continue
-						}
-
-						groupPermsMap := make(map[string]int32)
-						groupPermsMap[group.GroupID] = acl.Perm
-						predRegexPerms[acl.Regex] = &PredRegexRule{
-							predRegex:  predRegex,
-							groupPerms: groupPermsMap,
-						}
-					}
-				}
-			}
-		}
-
-		// convert the predRegexPerms into a slice
-		var predRegexRules []*PredRegexRule
-		for _, predRegexRule := range predRegexPerms {
-			predRegexRules = append(predRegexRules, predRegexRule)
-		}
-
-		aclCache.Lock()
-		aclCache.predPerms = predPerms
-		aclCache.predRegexRules = predRegexRules
-		aclCache.Unlock()
+		aclCache.update(groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
@@ -407,20 +334,6 @@ const queryAcls = `
   }
 }
 `
-
-type PredRegexRule struct {
-	predRegex  *regexp.Regexp
-	groupPerms map[string]int32
-}
-
-// the acl cache mapping group names to the corresponding group acls
-type AclCache struct {
-	sync.RWMutex
-	predPerms      map[string]map[string]int32
-	predRegexRules []*PredRegexRule
-}
-
-var aclCache AclCache
 
 // clear the aclCache and upsert the Groot account.
 func ResetAcl() {
@@ -479,7 +392,7 @@ func ResetAcl() {
 		return nil
 	}
 
-	aclCache = AclCache{
+	aclCache = &AclCache{
 		predPerms:      make(map[string]map[string]int32),
 		predRegexRules: make([]*PredRegexRule, 0),
 	}
@@ -532,18 +445,20 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		// treat the user as an anonymous guest who has not joined any group yet
 		// such a user can still get access to predicates that have no ACL rule defined, per the
 		// fail open approach
+		userId = "anonymous"
 	} else {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	// if we get here, we know the user is not Groot.
 	if op.DropAll {
-		return fmt.Errorf("only Groot is allowed to drop all data")
+		return fmt.Errorf("only Groot is allowed to drop all data, but the current user is %s",
+			userId)
 	}
 
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
-		err := authorizePredicate(groupIds, op.DropAttr, acl.Modify)
+		err := aclCache.authorizePredicate(groupIds, op.DropAttr, acl.Modify)
 		logACLAccess(&ACLAccessLog{
 			userId:    userId,
 			groups:    groupIds,
@@ -564,7 +479,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		return err
 	}
 	for _, update := range update.Schemas {
-		err := authorizePredicate(groupIds, update.Predicate, acl.Modify)
+		err := aclCache.authorizePredicate(groupIds, update.Predicate, acl.Modify)
 		logACLAccess(&ACLAccessLog{
 			userId:    userId,
 			groups:    groupIds,
@@ -617,7 +532,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		return err
 	}
 	for pred := range parsePredsFromMutation(gmu.Set) {
-		err := authorizePredicate(groupIds, pred, acl.Write)
+		err := aclCache.authorizePredicate(groupIds, pred, acl.Write)
 		logACLAccess(&ACLAccessLog{
 			userId:    userId,
 			groups:    groupIds,
@@ -706,7 +621,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	}
 
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
-		err := authorizePredicate(groupIds, pred, acl.Read)
+		err := aclCache.authorizePredicate(groupIds, pred, acl.Read)
 		logACLAccess(&ACLAccessLog{
 			userId:    userId,
 			groups:    groupIds,
@@ -719,53 +634,5 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 				fmt.Sprintf("unauthorized to query the predicate: %v", err))
 		}
 	}
-	return nil
-}
-
-// hasRequiredAccess checks if any group in the passed in groups is allowed to perform the operation
-// according to the acl rules stored in groupPerms
-func hasRequiredAccess(groupPerms map[string]int32, groups []string,
-	operation *acl.Operation) bool {
-	for _, group := range groups {
-		groupPerm, found := groupPerms[group]
-		if found && (groupPerm&operation.Code != 0) {
-			return true
-		}
-	}
-	return false
-}
-
-func authorizePredicate(groups []string, predicate string, operation *acl.Operation) error {
-	aclCache.RLock()
-	predPerms, predRegexRules := aclCache.predPerms, aclCache.predRegexRules
-	aclCache.RUnlock()
-
-	var singlePredMatch bool
-	if groupPerms, found := predPerms[predicate]; found {
-		singlePredMatch = true
-		if hasRequiredAccess(groupPerms, groups, operation) {
-			return nil
-		}
-	}
-
-	var predRegexMatch bool
-	for _, predRegexRule := range predRegexRules {
-		if predRegexRule.predRegex.MatchString(predicate) {
-			predRegexMatch = true
-			if hasRequiredAccess(predRegexRule.groupPerms, groups, operation) {
-				return nil
-			}
-		}
-	}
-
-	if singlePredMatch || predRegexMatch {
-		// there is an ACL rule defined that can match the predicate
-		// and the operation has not been allowed
-		return fmt.Errorf("unauthorized to do %s on predicate %s",
-			operation.Name, predicate)
-	}
-
-	// no rule has been defined that can match the predicate
-	// by default we follow the fail open approach and allow the operation
 	return nil
 }
