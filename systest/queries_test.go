@@ -578,7 +578,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		in, out, failure string
 	}{
 		{
-			in:  `{q(func:match(term, drive)) {term}}`,
+			in:  `{q(func:match(term, drive, 8)) {term}}`,
 			out: `{"q":[{"term":"drive"}]}`,
 		},
 		{
@@ -590,11 +590,11 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			out: `{"q":[{"term":"lane"}]}`,
 		},
 		{
-			in:  `{q(func:match(term, "plano")) {term}}`,
+			in:  `{q(func:match(term, "plano", 8)) {term}}`,
 			out: `{"q":[{"term":"lane"}]}`,
 		},
 		{
-			in: `{q(func:match(term, way)) {term}}`,
+			in: `{q(func:match(term, way, 8)) {term}}`,
 			out: `{"q":[
         {"term": "highway"},
         {"term": "pathway"},
@@ -603,7 +603,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
       ]}`,
 		},
 		{
-			in: `{q(func:match(term, pway)) {term}}`,
+			in: `{q(func:match(term, pway, 8)) {term}}`,
 			out: `{"q":[
         {"term": "highway"},
         {"term": "pathway"},
@@ -612,21 +612,21 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
       ]}`,
 		},
 		{
-			in: `{q(func:match(term, high)) {term}}`,
+			in: `{q(func:match(term, high, 8)) {term}}`,
 			out: `{"q":[
         {"term": "highway"},
         {"term": "high road"}
       ]}`,
 		},
 		{
-			in: `{q(func:match(term, str)) {term}}`,
+			in: `{q(func:match(term, str, 8)) {term}}`,
 			out: `{"q":[
         {"term": "street"},
         {"term": "side street"}
       ]}`,
 		},
 		{
-			in: `{q(func:match(term, strip)) {term}}`,
+			in: `{q(func:match(term, strip, 8)) {term}}`,
 			out: `{"q":[
         {"term": "street"},
         {"term": "side street"}
@@ -637,7 +637,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			out: `{"q":[{"term": "street"}]}`,
 		},
 		{
-			in: `{q(func:match(term, "carigeway")) {term}}`,
+			in: `{q(func:match(term, "carigeway", 8)) {term}}`,
 			out: `{"q":[
         {"term": "dual carriageway"}
       ]}`,
@@ -647,7 +647,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			out: `{"q":[]}`,
 		},
 		{
-			in: `{q(func:match(term, "dualway")) {term}}`,
+			in: `{q(func:match(term, "dualway", 8)) {term}}`,
 			out: `{"q":[
         {"term": "highway"},
         {"term": "pathway"},
@@ -660,11 +660,11 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			out: `{"q":[]}`,
 		},
 		{
-			in:      `{q(func:match(term, "")) {term}}`,
+			in:      `{q(func:match(term, "", 8)) {term}}`,
 			failure: `Empty argument received`,
 		},
 		{
-			in:      `{q(func:match(name, "someone")) {name}}`,
+			in:      `{q(func:match(name, "someone", 8)) {name}}`,
 			failure: `Attribute name is not indexed with type trigram`,
 		},
 	}
