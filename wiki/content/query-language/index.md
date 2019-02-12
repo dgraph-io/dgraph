@@ -23,6 +23,30 @@ A GraphQL+- query finds nodes based on search criteria, matches patterns in a gr
 
 A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
 
+The syntax structure basically consists of:
+
+```
+{
+  me(func: #Apply functions here) # <- Query Root {
+    pred_A@en
+
+    pred_B @filter(#Apply any filtering parameter here) { #block one
+      pred_B1
+      pred_B2
+    } #End of block one
+
+    pred_C { #block two
+      pred_C1
+
+      pred_C2 { #block C2
+        pred_C21
+    } #End block C2
+
+    } #End of block two
+
+  } #End of Query Root
+}
+```
 
 ### Returning Values
 
