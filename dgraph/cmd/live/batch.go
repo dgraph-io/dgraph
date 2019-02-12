@@ -137,7 +137,7 @@ func handleError(err error) {
 		fmt.Printf("Server is overloaded. Will retry after %s.", dur.Round(time.Minute))
 		time.Sleep(dur)
 	case err != y.ErrAborted && err != y.ErrConflict:
-		fmt.Printf("Error while mutating %v\n", s.Message())
+		fmt.Printf("Error while mutating: %v\n", s.Message())
 	}
 }
 
