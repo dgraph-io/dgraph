@@ -407,7 +407,7 @@ for each transaction.
 2. The set of keys modified by the transaction (`keys`). This aids in
    transaction conflict detection.
 
-     Every mutation would send back a neeuatw set of keys. The client must merge them
+     Every mutation would send back a new set of keys. The client must merge them
      with the existing set. Optionally, a client can de-dup these keys while
      merging.
 
