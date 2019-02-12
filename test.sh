@@ -148,11 +148,11 @@ fi
 
 if [[ $RUN_ALL ]]; then
     Info "Running load-test.sh"
-    ./contrib/scripts/load-test.sh
+    ./contrib/scripts/load-test.sh || TEST_FAILED=1
 
     Info "Running custom test scripts"
-    ./contrib/scripts/test-backup-restore.sh
-    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+    ./contrib/scripts/test-backup-restore.sh || TEST_FAILED=1
+    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
 fi
 
 Info "Stopping cluster"
