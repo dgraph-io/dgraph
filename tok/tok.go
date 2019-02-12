@@ -130,6 +130,17 @@ func LoadCustomTokenizer(soFile string) {
 	registerTokenizer(CustomTokenizer{PluginTokenizer: tokenizer})
 }
 
+// GetTokenizerByID tries to find a tokenizer by id in the registered list.
+// Returns the tokenizer and true if found, otherwise nil and false.
+func GetTokenizerByID(id byte) (Tokenizer, bool) {
+	for _, t := range tokenizers {
+		if id == t.Identifier() {
+			return t, true
+		}
+	}
+	return nil, false
+}
+
 // GetTokenizer returns tokenizer given unique name.
 func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
@@ -329,6 +340,12 @@ func EncodeGeoTokens(tokens []string) {
 func EncodeRegexTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
 		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
+	}
+}
+
+func EncodeTokens(id byte, tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], id)
 	}
 }
 
