@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	bo "github.com/dgraph-io/badger/options"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -81,7 +80,6 @@ type state struct {
 type loader struct {
 	*state
 	mappers []*mapper
-	xidDB   *badger.DB
 	zero    *grpc.ClientConn
 }
 
@@ -147,19 +145,7 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
-
-	// TODO: Consider if we need to always store the XIDs in Badger. Things slow down if we do.
-	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
-	x.Check(os.Mkdir(xidDir, 0755))
-	opt := badger.DefaultOptions
-	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.MemoryMap
-	opt.Dir = xidDir
-	opt.ValueDir = xidDir
-	var err error
-	ld.xidDB, err = badger.Open(opt)
-	x.Check(err)
-	ld.xids = xidmap.New(ld.zero, ld.xidDB)
+	ld.xids = xidmap.New(ld.zero, nil)
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
@@ -224,7 +210,6 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	x.Check(ld.xids.Flush())
-	x.Check(ld.xidDB.Close())
 	ld.xids = nil
 	runtime.GC()
 }
