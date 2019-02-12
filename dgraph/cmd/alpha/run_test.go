@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"google.golang.org/grpc"
@@ -1414,6 +1415,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
+
 func TestDeleteScalarValue(t *testing.T) {
 	var s = `name: string .`
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
@@ -1429,6 +1431,24 @@ func TestDeleteScalarValue(t *testing.T) {
 	err := runMutation(m)
 	require.NoError(t, err)
 
+	// This test has been flaky at the step that verifies whether the triple exists
+	// after the first deletion. To try to combat that, verify the triple can be
+	// queried before performing the deletion.
+	q := `
+	{
+	  me(func: uid(0x12345)) {
+		name
+	  }
+	}`
+	for i := 0; i < 5; i++ {
+		output, err := runQuery(q)
+		if err != nil || !assert.JSONEq(t, output, `{"data": {"me":[{"name":"xxx"}]}}`) {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
 	var d1 = `
     {
       delete {
@@ -1441,13 +1461,6 @@ func TestDeleteScalarValue(t *testing.T) {
 
 	// Verify triple was not deleted because the value in the request did
 	// not match the existing value.
-	q := fmt.Sprintf(`
-	{
-	  me(func: uid(%s)) {
-		name
-	  }
-	}`, "0x12345")
-
 	output, err := runQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
