@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
+
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -41,8 +42,8 @@ import (
 )
 
 type options struct {
-	RDFDir           string
-	JSONDir          string
+	DataFiles        string
+	DataFormat       string
 	SchemaFile       string
 	DgraphsDir       string
 	TmpDir           string
@@ -160,21 +161,19 @@ func (ld *loader) mapStage() {
 	x.Check(err)
 	ld.xids = xidmap.New(ld.zero, ld.xidDB)
 
-	var dir, ext string
-	var loaderType int
-	if ld.opt.RDFDir != "" {
-		loaderType = chunker.RdfInput
-		dir = ld.opt.RDFDir
-		ext = ".rdf"
-	} else {
-		loaderType = chunker.JsonInput
-		dir = ld.opt.JSONDir
-		ext = ".json"
-
-	}
-	files := x.FindDataFiles(dir, []string{ext, ext + ".gz"})
+	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
-		fmt.Printf("No *%s files found under %s.\n", ext, dir)
+		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
+		os.Exit(1)
+	}
+
+	// Because mappers must handle chunks that may be from different input files, they must all
+	// assume the same data format, either RDF or JSON. Use the one specified by the user or by
+	// the first load file.
+	loadType := chunker.DataFormat(files[0], ld.opt.DataFormat)
+	if loadType == chunker.UnknownFormat {
+		// Dont't try to detect JSON input in bulk loader.
+		fmt.Printf("Need --format=rdf or --format=json to load %s", files[0])
 		os.Exit(1)
 	}
 
@@ -182,7 +181,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loaderType)
+			m.run(loadType)
 			mapperWg.Done()
 		}(m)
 	}
@@ -199,7 +198,7 @@ func (ld *loader) mapStage() {
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loaderType)
+			chunker := chunker.NewChunker(loadType)
 			x.Check(chunker.Begin(r))
 			for {
 				chunkBuf, err := chunker.Chunk(r)
