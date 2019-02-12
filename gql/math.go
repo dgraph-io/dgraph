@@ -108,7 +108,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		if err != nil {
 			return x.Errorf("Invalid math statement. Expected 1 operand")
 		}
-		if !opStack.empty() {
+		if opStack.size() > 1 {
 			peekOp := opStack.peek()
 			if (peekOp.Fn == "/" || peekOp.Fn == "%") && isZero(topOp.Fn, topVal.Const) {
 				return x.Errorf("Division by zero")
