@@ -70,6 +70,10 @@ func isBinaryMath(f string) bool {
 	return f == "*" || f == "+" || f == "-" || f == "/" || f == "%"
 }
 
+func isBinary(f string) bool {
+	return f == "max" || f == "min" || f == "logbase" || f == "pow"
+}
+
 func isTernary(f string) bool {
 	return f == "cond"
 }
@@ -102,11 +106,11 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
-			return x.Errorf("Invalid math statement. Expected 1 operands")
+			return x.Errorf("Invalid math statement. Expected 1 operand")
 		}
-		if opStack.size() > 1 {
-			peek := opStack.peek().Fn
-			if (peek == "/" || peek == "%") && isZero(topOp.Fn, topVal.Const) {
+		if !opStack.empty() {
+			peekOp := opStack.peek()
+			if (peekOp.Fn == "/" || peekOp.Fn == "%") && isZero(topOp.Fn, topVal.Const) {
 				return x.Errorf("Division by zero")
 			}
 		}
@@ -201,6 +205,14 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 					child, again, err = parseMathFunc(it, again)
 					if err != nil {
 						return nil, false, err
+					}
+					// evaluate binary operator if we already have two values in stack.
+					if valueStack.size() > 1 && isBinary(op) {
+						err := evalMathStack(opStack, valueStack)
+						if err != nil {
+							return nil, false, err
+						}
+						opStack.push(&MathTree{Fn: op})
 					}
 					valueStack.push(child)
 					if !again {
