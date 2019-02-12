@@ -344,7 +344,7 @@ func Marshal(from Val, to *Val) error {
 	// This is a default value from sg.fillVars, don't convert it's empty.
 	// Fixes issue #2980.
 	if val == nil {
-		*res = ValueForType(toID).Value
+		*to = ValueForType(toID)
 		return nil
 	}
 
