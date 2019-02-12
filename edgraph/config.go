@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -112,8 +114,10 @@ func (o *Options) validate() {
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-	x.AssertTruefNoTrace(o.AllottedMemory != -1,
-		"LRU memory (--lru_mb) must be specified. (At least 1024 MB)")
+	if o.AllottedMemory < 0 {
+		glog.Warningf("LRU memory (--lru_mb) defaulting to the minimum 1024 MB")
+		o.AllottedMemory = MinAllottedMemory
+	}
 	x.AssertTruefNoTrace(o.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f",
 		MinAllottedMemory, o.AllottedMemory)
