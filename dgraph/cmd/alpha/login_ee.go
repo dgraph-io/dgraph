@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +66,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, r, js)
+	if _, err := writeResponse(w, r, js); err != nil {
+		glog.Errorf("Error while writing response: %v", err)
+	}
 }
 
 func init() {
