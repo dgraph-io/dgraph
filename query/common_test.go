@@ -358,9 +358,6 @@ func populateCluster(t *testing.T) {
 		<31> <survival_rate> "1.6" .
 
 		<1> <school> <5000> .
-		<2> <school> <5000> .
-		<3> <school> <5000> .
-		<4> <school> <5001> .
 		<23> <school> <5001> .
 		<24> <school> <5000> .
 		<25> <school> <5000> .

@@ -229,7 +229,7 @@ func TestNonListUidPredicateReverse2(t *testing.T) {
 			me(func: uid(0x40)) {
 				uid
 				~best_friend {
-					school {
+					pet {
 						name
 					}
 					uid
@@ -240,9 +240,9 @@ func TestNonListUidPredicateReverse2(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x40", "~best_friend": [
-			{"uid":"0x2","school":[{"name":"School A"}]},
-			{"uid":"0x3","school":[{"name":"School A"}]},
-			{"uid":"0x4","school":[{"name":"School B"}]}]}]}}`,
+			{"uid":"0x2","pet":[{"name":"Garfield"}]},
+			{"uid":"0x3","pet":[{"name":"Bear"}]},
+			{"uid":"0x4","pet":[{"name":"Nemo"}]}]}]}}`,
 		js)
 }
 
