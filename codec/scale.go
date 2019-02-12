@@ -3,20 +3,26 @@ package codec
 import (
     "encoding/binary"
 	"errors"
-	"fmt"
 )
 
 func Encode(b interface{}) ([]byte, error) {
 	switch v := b.(type) {
 		case []byte:
-			fmt.Printf("%x", v)
+			return encodeByteArray(v)
 		case int64:
-			fmt.Printf("%d", v)
 			return encodeInteger(v)
 		default:
-			return []byte{}, errors.New("unsupported type!!")
+			return []byte{}, errors.New("Unsupported type!!")
 	}
 	return []byte{}, nil
+}
+
+func encodeByteArray(b []byte) ([]byte, error) {
+	encodedLen, err := encodeInteger(int64(len(b)))
+	if err != nil {
+		return []byte{}, err
+	}
+	return append(encodedLen, b...), nil
 }
 
 // encodeInteger performs the following on integer i:
@@ -39,6 +45,14 @@ func encodeInteger(n int64) ([]byte, error) {
 		o := make([]byte, 4)
 		binary.LittleEndian.PutUint16(o, uint16(n<<2)+2)
 		return o, nil
+	} else {
+		return []byte{}, nil
+	}
+}
+
+func encodeLargeInteger(n int) ([]byte, error) {
+	if n < 1 << 30 {
+		return encodeInteger(int64(n))
 	} else {
 		return []byte{}, nil
 	}
