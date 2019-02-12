@@ -341,6 +341,13 @@ func Marshal(from Val, to *Val) error {
 	val := from.Value
 	res := &to.Value
 
+	// This is a default value from sg.fillVars, don't convert it's empty.
+	// Fixes issue #2980.
+	if val == nil {
+		*res = ValueForType(toID).Value
+		return nil
+	}
+
 	switch fromID {
 	case BinaryID:
 		vc := val.([]byte)
@@ -353,12 +360,6 @@ func Marshal(from Val, to *Val) error {
 			return cantConvert(fromID, toID)
 		}
 	case StringID, DefaultID:
-		// This is a default value from sg.fillVars, don't convert it's empty.
-		// Fixes issue #2980.
-		if fromID == DefaultID && val == nil {
-			*res = ""
-			break
-		}
 		vc := val.(string)
 		switch toID {
 		case StringID, DefaultID:
