@@ -1880,6 +1880,40 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	return nil
 }
 
+func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
+	it.Next()
+	if it.Item().Typ != itemLeftRound {
+		return it.Item().Errorf("Expected a left round after type")
+	}
+
+	it.Next()
+	if it.Item().Typ != itemName {
+		return it.Item().Errorf("Expected a type name inside type directive")
+	}
+	typeName := it.Item().Val
+
+	it.Next()
+	if it.Item().Typ != itemRightRound {
+		return it.Item().Errorf("Expected ) after the type name in type directive")
+	}
+
+	// For now @type(TypeName) is equivalent of filtering using the type function.
+	// Later the type declarations will be used to ensure that the fields inside
+	// each block correspond to the specified type.
+	gq.Filter = &FilterTree{
+		Func: &Function{
+			Name: "type",
+			Args: []Arg{
+				Arg{
+					Value: typeName,
+				},
+			},
+		},
+	}
+
+	return nil
+}
+
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
 func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	it.Next()
@@ -2110,6 +2144,11 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
+		case "type":
+			err := parseType(it, curp)
+			if err != nil {
+				return err
+			}
 		default:
 			return item.Errorf("Unknown directive [%s]", item.Val)
 		}
