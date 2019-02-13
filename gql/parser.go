@@ -2549,7 +2549,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if varName == "" && alias == "" {
 					return it.Errorf("Function math should be used with a variable or have an alias")
 				}
-				mathTree, again, err := parseMathFunc(it, false)
+				mathTree, again, err := parseMathFunc(it, false, "")
 				if err != nil {
 					return err
 				}
