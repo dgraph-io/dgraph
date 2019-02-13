@@ -53,6 +53,15 @@ func (s *mathTreeStack) peek() *MathTree {
 	return s.a[len(s.a)-1]
 }
 
+func (s *mathTreeStack) reverse() *mathTreeStack {
+	l := len(s.a)
+	for i := l/2 - 1; i >= 0; i-- {
+		opp := l - 1 - i
+		s.a[i], s.a[opp] = s.a[opp], s.a[i]
+	}
+	return s
+}
+
 type MathTree struct {
 	Fn    string
 	Var   string
@@ -97,12 +106,18 @@ func isZero(f string, rval types.Val) bool {
 	return false
 }
 
-func evalMathStack(opStack, valueStack *mathTreeStack) error {
+// evalMathStack will evaluate the math operation in opStack by using the values stored in
+// valueStack. The values in valueStack must satisfy the type of operation, otherwise an
+// error is returned. If flip is true, the order of operands is flipped. The result of eval
+// is pushed to the top of valueStack.
+// Returns nil if the operation was added to the valueStack, otherwise an error.
+func evalMathStack(opStack, valueStack *mathTreeStack, flip bool) error {
 	topOp, err := opStack.pop()
-	if err != nil {
+	switch {
+	case err != nil:
 		return x.Errorf("Invalid Math expression")
-	}
-	if isUnary(topOp.Fn) {
+
+	case isUnary(topOp.Fn):
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
@@ -116,7 +131,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		}
 		topOp.Child = []*MathTree{topVal}
 
-	} else if isTernary(topOp.Fn) {
+	case isTernary(topOp.Fn):
 		if valueStack.size() < 3 {
 			return x.Errorf("Invalid Math expression. Expected 3 operands")
 		}
@@ -125,7 +140,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal3 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal3, topVal2, topVal1}
 
-	} else {
+	default:
 		if valueStack.size() < 2 {
 			return x.Errorf("Invalid Math expression. Expected 2 operands")
 		}
@@ -135,11 +150,34 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal2, topVal1}
-
+	}
+	// Flip values to fit reverse eval.
+	if flip {
+		i := len(topOp.Child) - 1
+		topOp.Child[0], topOp.Child[i] = topOp.Child[i], topOp.Child[0]
 	}
 	// Push the new value (tree) into the valueStack.
 	valueStack.push(topOp)
 	return nil
+}
+
+// evalMVBStack determines if op is a multi-value binary (MVB) operation.
+// If the operation is MVB, it will reverse value stack and flip order of operands to
+// do a commutative eval of the values in valueStack. If the operation is not MVB, it will
+// pass the eval to evalMathStack for normal eval.
+// Returns nil if the operation was added to the valueStack, otherwise an error.
+func evalMVBStack(opStack, valueStack *mathTreeStack, op string) error {
+	flip := isBinary(op) && valueStack.size() > 2
+	if flip {
+		for valueStack.reverse(); valueStack.size() > 2; {
+			opStack.push(&MathTree{Fn: op})
+			err := evalMathStack(opStack, valueStack, true)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return evalMathStack(opStack, valueStack, flip)
 }
 
 func isMathFunc(f string) bool {
@@ -189,7 +227,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool, oper string) (*MathTree, bo
 				if mathOpPrecedence[topOp.Fn] < opPred {
 					break
 				}
-				err := evalMathStack(opStack, valueStack)
+				err := evalMathStack(opStack, valueStack, false)
 				if err != nil {
 					return nil, false, err
 				}
@@ -257,16 +295,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool, oper string) (*MathTree, bo
 				if topOp.Fn == "(" {
 					break
 				}
-				if isBinary(oper) {
-					for valueStack.size() > 2 {
-						opStack.push(&MathTree{Fn: oper})
-						err := evalMathStack(opStack, valueStack)
-						if err != nil {
-							return nil, false, err
-						}
-					}
-				}
-				err := evalMathStack(opStack, valueStack)
+				err := evalMVBStack(opStack, valueStack, oper)
 				if err != nil {
 					return nil, false, err
 				}
@@ -293,16 +322,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool, oper string) (*MathTree, bo
 				if topOp.Fn == "(" {
 					break
 				}
-				if isBinary(oper) {
-					for valueStack.size() > 2 {
-						opStack.push(&MathTree{Fn: oper})
-						err := evalMathStack(opStack, valueStack)
-						if err != nil {
-							return nil, false, err
-						}
-					}
-				}
-				err := evalMathStack(opStack, valueStack)
+				err := evalMVBStack(opStack, valueStack, oper)
 				if err != nil {
 					return nil, false, err
 				}
