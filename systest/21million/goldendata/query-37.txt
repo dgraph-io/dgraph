@@ -1,0 +1,6 @@
+{
+  directors(func: gt(count(director.film), 5)) {
+    totalDirectors : count()
+  }
+}
+null

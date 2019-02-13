@@ -1,0 +1,15 @@
+{
+  brCharacters(func: eq(name@en, "Blade Runner")) {
+    name@en
+    initial_release_date
+    starring {
+      performance.actor {
+        name@en  # actor name
+      }
+      performance.character {
+        name@en  # character name
+      }
+    }
+  }
+}
+null

@@ -1,0 +1,25 @@
+{
+ var(func:allofterms(name@en, "angelina jolie")) {
+   actor.film {
+    A AS performance.film {  # All films acted in by Angelina Jolie
+     B As genre  # Genres of all the films acted in by Angelina Jolie
+    }
+   }
+  }
+
+ var(func:allofterms(name@en, "brad pitt")) {
+   actor.film {
+    C AS performance.film {  # All films acted in by Brad Pitt
+     D as genre  # Genres of all the films acted in by Brad Pitt
+    }
+   }
+  }
+
+ films(func: uid(D)) @filter(uid(B)) {   # Genres from both Angelina and Brad
+  name@en
+   ~genre @filter(uid(A, C)) {  # Movies in either A or C.
+     name@en
+   }
+ }
+}
+null

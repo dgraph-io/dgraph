@@ -1,0 +1,8 @@
+{
+ "query": "query test($a: int = 2, $b: int!){  me(func: uid(1)) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
+ "variables" : {
+   "$a": "5",
+   "$b": "10"
+ }
+}
+null

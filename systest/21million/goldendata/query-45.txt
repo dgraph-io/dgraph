@@ -1,0 +1,14 @@
+{
+  var(func:allofterms(name@en, "The Princess Bride")) {
+    starring {
+      pbActors as performance.actor {
+        roles as count(actor.film)
+      }
+    }
+  }
+  totalRoles(func: uid(pbActors), orderasc: val(roles)) {
+    name@en
+    numRoles : val(roles)
+  }
+}
+null

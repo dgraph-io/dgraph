@@ -1,0 +1,16 @@
+{
+  stevens as var(func: allofterms(name@en, "steven")) {
+    director.film {
+      ird as initial_release_date
+      # ird is a value variable mapping a film UID to its release date
+    }
+    minIRD as min(val(ird))
+    # minIRD is a value variable mapping a director UID to their first release date
+  }
+
+  byIRD(func: uid(stevens), orderasc: val(minIRD)) {
+    name@en
+    firstRelease: val(minIRD)
+  }
+}
+null
