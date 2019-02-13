@@ -27,6 +27,9 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: volume
+        source: data
+        target: /data/dg1
     ports:
       - 8180:8180
       - 9180:9180
@@ -36,6 +39,5 @@ services:
       /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5080 -o 100 --logtostderr
                           --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
-networks:
-  default:
-    name: dgraph_default
+volumes:
+  data:
