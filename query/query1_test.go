@@ -532,6 +532,38 @@ func TestBinaryMultipleValues3(t *testing.T) {
 	}`, js)
 }
 
+func TestBinaryMultipleValues4(t *testing.T) {
+	query := `
+	{
+		var(func:uid(0x1)) {
+			x0 as math(pow(pow(pow(2,2),3),4))
+			x1 as math(pow(2,2,3,4))
+  		y0 as math(logbase(logbase(16,2),2))
+			y1 as math(logbase(16,2,2))
+		}
+		q(func:uid(0x1)) {
+			val(x0)
+			val(x1)
+			val(y0)
+			val(y1)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"val(x0)": 16777216.000000,
+					"val(x1)": 16777216.000000,
+					"val(y0)": 2.000000,
+					"val(y1)": 2.000000
+				}
+			]
+		}
+	}`, js)
+}
+
 func TestDuplicateAlias(t *testing.T) {
 
 	query := `
