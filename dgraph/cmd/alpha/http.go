@@ -156,12 +156,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), query.DebugKey, d)
-	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
-		md := metadata.New(nil)
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
-
+	ctx = attachAccessJwt(ctx, r)
 	// If ro is set, run this as a readonly query.
 	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {
 		if ro == "true" || ro == "1" {
@@ -257,12 +252,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		mu.CommitNow = c
 	}
-	ctx := context.Background()
-	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
-		md := metadata.New(nil)
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
+	ctx := attachAccessJwt(context.Background(), r)
 
 	ts, err := extractStartTs(r.URL.Path)
 	if err != nil {
@@ -411,6 +401,19 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, r, js)
 }
 
+func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
+}
+
 func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if commonHandler(w, r) {
 		return
@@ -437,11 +440,8 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	md := metadata.New(nil)
 	// Pass in an auth token, if present.
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
-	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
-		md.Append("accessJwt", accessJwt)
-	}
-
 	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx = attachAccessJwt(ctx, r)
 	if _, err = (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return

@@ -459,7 +459,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
 		err := aclCache.authorizePredicate(groupIds, op.DropAttr, acl.Modify)
-		logACLAccess(&ACLAccessLog{
+		logACLAccess(&AclAccessLog{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: op.DropAttr,
@@ -469,7 +469,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 		if err != nil {
 			return status.Error(codes.PermissionDenied,
-				fmt.Sprintf("unauthorized to alter the predicate:%v", err))
+				fmt.Sprintf("unauthorized to alter the predicate: %v", err))
 		}
 		return nil
 	}
@@ -480,7 +480,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 	for _, update := range update.Schemas {
 		err := aclCache.authorizePredicate(groupIds, update.Predicate, acl.Modify)
-		logACLAccess(&ACLAccessLog{
+		logACLAccess(&AclAccessLog{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: update.Predicate,
@@ -533,7 +533,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 	for pred := range parsePredsFromMutation(gmu.Set) {
 		err := aclCache.authorizePredicate(groupIds, pred, acl.Write)
-		logACLAccess(&ACLAccessLog{
+		logACLAccess(&AclAccessLog{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: pred,
@@ -575,7 +575,7 @@ func isGroot(userData []string) bool {
 	return userData[0] == x.GrootId
 }
 
-type ACLAccessLog struct {
+type AclAccessLog struct {
 	userId    string
 	groups    []string
 	predicate string
@@ -583,7 +583,7 @@ type ACLAccessLog struct {
 	allowed   bool
 }
 
-func logACLAccess(log *ACLAccessLog) {
+func logACLAccess(log *AclAccessLog) {
 	glog.V(1).Infof("ACL-LOG Authorizing user %s with groups %s on predicate %s "+
 		"for %s, allowed %v", log.userId, strings.Join(log.groups, ","),
 		log.predicate, log.operation.Name, log.allowed)
@@ -622,7 +622,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
 		err := aclCache.authorizePredicate(groupIds, pred, acl.Read)
-		logACLAccess(&ACLAccessLog{
+		logACLAccess(&AclAccessLog{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: pred,

@@ -154,10 +154,10 @@ func chMod(conf *viper.Viper) error {
 		return fmt.Errorf("the groupid must not be empty")
 	}
 	if len(predicate) > 0 && len(predRegex) > 0 {
-		return fmt.Errorf("one of --pred or --pred_regex must be specified")
+		return fmt.Errorf("only one of --pred or --pred_regex must be specified")
 	}
 	if len(predicate) == 0 && len(predRegex) == 0 {
-		return fmt.Errorf("one of --pred or --pred_regex must be specified")
+		return fmt.Errorf("only one of --pred or --pred_regex must be specified")
 	}
 	if len(predRegex) > 0 {
 		// make sure the predRegex can be compiled as a regex
