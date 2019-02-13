@@ -206,6 +206,46 @@ func TestGetNonListUidPredicate(t *testing.T) {
 		js)
 }
 
+func TestNonListUidPredicateReverse1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x40)) {
+				uid
+				~best_friend {
+					uid
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x40", "~best_friend": [{"uid":"0x2"},{"uid":"0x3"},{"uid":"0x4"}]}]}}`,
+		js)
+}
+
+func TestNonListUidPredicateReverse2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x40)) {
+				uid
+				~best_friend {
+					pet {
+						name
+					}
+					uid
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x40", "~best_friend": [
+			{"uid":"0x2","pet":[{"name":"Garfield"}]},
+			{"uid":"0x3","pet":[{"name":"Bear"}]},
+			{"uid":"0x4","pet":[{"name":"Nemo"}]}]}]}}`,
+		js)
+}
+
 func TestGeAge(t *testing.T) {
 	query := `{
 		  senior_citizens(func: ge(age, 75)) {

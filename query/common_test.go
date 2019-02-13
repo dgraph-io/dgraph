@@ -221,7 +221,7 @@ pass                           : password .
 symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : [uid] .
-best_friend                    : uid .
+best_friend                    : uid @reverse .
 pet                            : [uid] .
 `
 
@@ -311,6 +311,8 @@ func populateCluster() {
 		<23> <friend> <1> .
 
 		<2> <best_friend> <64> .
+		<3> <best_friend> <64> .
+		<4> <best_friend> <64> .
 
 		<1> <age> "38" .
 		<23> <age> "15" .
