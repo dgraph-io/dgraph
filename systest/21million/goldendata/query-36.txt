@@ -1,0 +1,7 @@
+{
+  me(func: allofterms(name@en, "Orlando")) @filter(has(actor.film)) {
+    name@en
+    count(actor.film)
+  }
+}
+null

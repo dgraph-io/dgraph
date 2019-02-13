@@ -1,0 +1,16 @@
+{
+  var(func: eq(name@en, "Lost in Translation")) {
+    pred as _predicate_
+    # expand(_all_) { expand(_all_)}
+  }
+
+  director(func: eq(name@en, "Lost in Translation")) {
+    name@.
+    expand(val(pred)) {
+      expand(_all_) {
+        name@.
+      }
+    }
+  }
+}
+null

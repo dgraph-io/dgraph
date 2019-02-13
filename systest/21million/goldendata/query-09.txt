@@ -1,0 +1,9 @@
+{
+  me(func: allofterms(name@en, "jones indiana")) {
+    name@en
+    genre {
+      name@en
+    }
+  }
+}
+null
