@@ -55,7 +55,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{}
-	mp := map[string]interface{}{}
+	mp := make(map[string]string)
 	mp["accessJWT"] = jwt.AccessJwt
 	mp["refreshJWT"] = jwt.RefreshJwt
 	response["data"] = mp

@@ -459,7 +459,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(op.DropAttr) > 0 {
 		// check that we have the modify permission on the predicate
 		err := aclCache.authorizePredicate(groupIds, op.DropAttr, acl.Modify)
-		logACLAccess(&AclAccessLog{
+		logAccess(&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: op.DropAttr,
@@ -480,7 +480,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 	for _, update := range update.Schemas {
 		err := aclCache.authorizePredicate(groupIds, update.Predicate, acl.Modify)
-		logACLAccess(&AclAccessLog{
+		logAccess(&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: update.Predicate,
@@ -533,7 +533,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 	for pred := range parsePredsFromMutation(gmu.Set) {
 		err := aclCache.authorizePredicate(groupIds, pred, acl.Write)
-		logACLAccess(&AclAccessLog{
+		logAccess(&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: pred,
@@ -575,7 +575,7 @@ func isGroot(userData []string) bool {
 	return userData[0] == x.GrootId
 }
 
-type AclAccessLog struct {
+type AccessEntry struct {
 	userId    string
 	groups    []string
 	predicate string
@@ -583,7 +583,7 @@ type AclAccessLog struct {
 	allowed   bool
 }
 
-func logACLAccess(log *AclAccessLog) {
+func logAccess(log *AccessEntry) {
 	glog.V(1).Infof("ACL-LOG Authorizing user %s with groups %s on predicate %s "+
 		"for %s, allowed %v", log.userId, strings.Join(log.groups, ","),
 		log.predicate, log.operation.Name, log.allowed)
@@ -622,7 +622,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 
 	for pred := range parsePredsFromQuery(parsedReq.Query) {
 		err := aclCache.authorizePredicate(groupIds, pred, acl.Read)
-		logACLAccess(&AclAccessLog{
+		logAccess(&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			predicate: pred,
