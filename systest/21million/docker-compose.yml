@@ -27,9 +27,6 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      - type: bind
-        source: $ALPHA_DATA_DIR
-        target: /data/dg1
     ports:
       - 8180:8180
       - 9180:9180
