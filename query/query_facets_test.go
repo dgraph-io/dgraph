@@ -24,7 +24,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func populateClusterWithFacets(t *testing.T) {
+var (
+	facetSetupDone = false
+)
+
+func populateClusterWithFacets() {
+	// Return immediately if the setup has been performed already.
+	if facetSetupDone {
+		return
+	}
+
 	triples := `
 		<25> <name> "Daryl Dixon" .
 		<31> <name> "Andrea" .
@@ -60,30 +69,14 @@ func populateClusterWithFacets(t *testing.T) {
 	triples += fmt.Sprintf("<23> <name> \"Rick Grimes\" %s .\n", nameFacets)
 	triples += fmt.Sprintf("<24> <name> \"Glenn Rhee\" %s .\n", nameFacets)
 
-	addTriplesToCluster(t, triples)
-}
+	addTriplesToCluster(triples)
 
-func teardownFacetsFromCluster(t *testing.T) {
-	deleteTriplesInCluster(t, `
-		<1> <friend> <23> .	
-		<1> <friend> <24> .	
-		<1> <friend> <25> .	
-		<1> <friend> <31> .	
-		<1> <friend> <101> .	
-		<23> <friend> <1> .	
-		<31> <friend> <1> .	
-		<31> <friend> <24> .	
-		<31> <friend> <25> .	
-
-		<33> <schools> <2433> .
-
-		<320> <name@en> "Test facet" .
-	`)
+	// Mark the setup as done so that the next tests do not have to perform it.
+	facetSetupDone = true
 }
 
 func TestRetrieveFacetsSimple(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(0x1)) {
@@ -100,8 +93,7 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 }
 
 func TestOrderFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
@@ -120,8 +112,7 @@ func TestOrderFacets(t *testing.T) {
 }
 
 func TestOrderdescFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
@@ -140,8 +131,7 @@ func TestOrderdescFacets(t *testing.T) {
 }
 
 func TestOrderdescFacetsWithFilters(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 
@@ -164,8 +154,7 @@ func TestOrderdescFacetsWithFilters(t *testing.T) {
 }
 
 func TestRetrieveFacetsAsVars(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
@@ -187,8 +176,7 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 }
 
 func TestRetrieveFacetsUidValues(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
@@ -207,8 +195,7 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 }
 
 func TestRetrieveFacetsAll(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(0x1)) {
@@ -229,8 +216,7 @@ func TestRetrieveFacetsAll(t *testing.T) {
 }
 
 func TestFacetsNotInQuery(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(0x1)) {
@@ -251,8 +237,7 @@ func TestFacetsNotInQuery(t *testing.T) {
 }
 
 func TestSubjectWithNoFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// id 33 does not have any facets associated with name and school
 	query := `
 		{
@@ -271,8 +256,7 @@ func TestSubjectWithNoFacets(t *testing.T) {
 }
 
 func TestFetchingFewFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// only 1 friend of 1 has facet : "close" and she/he has no name
 	query := `
 		{
@@ -292,8 +276,7 @@ func TestFetchingFewFacets(t *testing.T) {
 }
 
 func TestFetchingNoFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// TestFetchingFewFacets but without the facet.  Returns no facets.
 	query := `
 		{
@@ -313,8 +296,7 @@ func TestFetchingNoFacets(t *testing.T) {
 }
 
 func TestFacetsSortOrder(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// order of facets in gql query should not matter.
 	query := `
 		{
@@ -334,8 +316,7 @@ func TestFacetsSortOrder(t *testing.T) {
 }
 
 func TestUnknownFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// uknown facets should be ignored.
 	query := `
 		{
@@ -355,14 +336,16 @@ func TestUnknownFacets(t *testing.T) {
 }
 
 func TestFacetsMutation(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 
 	// Delete friendship between Michonne and Glenn
-	deleteTriplesInCluster(t, "<1> <friend> <24> .")
+	deleteTriplesInCluster("<1> <friend> <24> .")
 	friendFacets := "(since = 2001-11-10T00:00:00Z, close = false, family = false)"
 	// 101 is not close friend now.
-	addTriplesToCluster(t, fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets))
+	addTriplesToCluster(fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets))
+	// This test messes with the test setup, so set facetSetupDone to false so
+	// the next test redoes the setup.
+	facetSetupDone = false
 
 	query := `
 		{
@@ -382,8 +365,7 @@ func TestFacetsMutation(t *testing.T) {
 }
 
 func TestFacetsFilterSimple(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find close friends of 1
 	query := `
 		{
@@ -405,8 +387,7 @@ func TestFacetsFilterSimple(t *testing.T) {
 }
 
 func TestFacetsFilterSimple2(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find close friends of 1
 	query := `
 		{
@@ -427,8 +408,7 @@ func TestFacetsFilterSimple2(t *testing.T) {
 }
 
 func TestFacetsFilterSimple3(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find close friends of 1
 	query := `
 		{
@@ -449,8 +429,7 @@ func TestFacetsFilterSimple3(t *testing.T) {
 }
 
 func TestFacetsFilterOr(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find close or family friends of 1
 	query := `
 		{
@@ -472,8 +451,7 @@ func TestFacetsFilterOr(t *testing.T) {
 }
 
 func TestFacetsFilterAnd(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// unknown filters do not have any effect on results.
 	query := `
 		{
@@ -494,8 +472,7 @@ func TestFacetsFilterAnd(t *testing.T) {
 }
 
 func TestFacetsFilterle(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find friends of 1 below 36 years of age.
 	query := `
 		{
@@ -516,8 +493,7 @@ func TestFacetsFilterle(t *testing.T) {
 }
 
 func TestFacetsFilterge(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find friends of 1 above 32 years of age.
 	query := `
 		{
@@ -538,8 +514,7 @@ func TestFacetsFilterge(t *testing.T) {
 }
 
 func TestFacetsFilterAndOrle(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find close or family friends of 1 before 2007-01-10
 	query := `
 		{
@@ -561,8 +536,7 @@ func TestFacetsFilterAndOrle(t *testing.T) {
 }
 
 func TestFacetsFilterAndOrge2(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find close or family friends of 1 after 2007-01-10
 	query := `
 		{
@@ -583,8 +557,7 @@ func TestFacetsFilterAndOrge2(t *testing.T) {
 }
 
 func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// find Not (close or family friends of 1 after 2007-01-10)
 	// Mutually exclusive of above result : TestFacetsFilterNotAndOrge
 	query := `
@@ -606,8 +579,7 @@ func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
 }
 
 func TestFacetsFilterUnknownFacets(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// unknown facets should filter out edges.
 	query := `
 		{
@@ -628,8 +600,7 @@ func TestFacetsFilterUnknownFacets(t *testing.T) {
 }
 
 func TestFacetsFilterUnknownOrKnown(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// unknown filters with OR do not have any effect on results
 	query := `
 		{
@@ -650,8 +621,7 @@ func TestFacetsFilterUnknownOrKnown(t *testing.T) {
 }
 
 func TestFacetsFilterallofterms(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(31)) {
@@ -671,8 +641,7 @@ func TestFacetsFilterallofterms(t *testing.T) {
 }
 
 func TestFacetsFilterAllofMultiple(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(31)) {
@@ -692,8 +661,7 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 }
 
 func TestFacetsFilterAllofNone(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// nothing matches in allofterms
 	query := `
 		{
@@ -714,8 +682,7 @@ func TestFacetsFilterAllofNone(t *testing.T) {
 }
 
 func TestFacetsFilteranyofterms(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(31)) {
@@ -735,8 +702,7 @@ func TestFacetsFilteranyofterms(t *testing.T) {
 }
 
 func TestFacetsFilterAnyofNone(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(31)) {
@@ -756,8 +722,7 @@ func TestFacetsFilterAnyofNone(t *testing.T) {
 }
 
 func TestFacetsFilterAllofanyofterms(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(31)) {
@@ -777,8 +742,7 @@ func TestFacetsFilterAllofanyofterms(t *testing.T) {
 }
 
 func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(31)) {
@@ -798,8 +762,7 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 }
 
 func TestFacetsFilterAtValueFail(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// facet filtering is not supported at value level.
 	query := `
 	{
@@ -816,8 +779,7 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 }
 
 func TestFacetsFilterAndRetrieval(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	// Close should not be retrieved.. only used for filtering.
 	query := `
 		{
@@ -838,8 +800,7 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 }
 
 func TestFacetWithLang(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(320)) {
@@ -853,8 +814,7 @@ func TestFacetWithLang(t *testing.T) {
 }
 
 func TestFilterUidFacetMismatch(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 	{
 		me(func: uid(0x1)) {
@@ -869,8 +829,7 @@ func TestFilterUidFacetMismatch(t *testing.T) {
 }
 
 func TestRecurseFacetOrder(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
     {
 		me(func: uid(1)) @recurse(depth: 2) {
@@ -897,8 +856,7 @@ func TestRecurseFacetOrder(t *testing.T) {
 }
 
 func TestFacetsAlias(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me(func: uid(0x1)) {
@@ -915,8 +873,7 @@ func TestFacetsAlias(t *testing.T) {
 }
 
 func TestFacetsAlias2(t *testing.T) {
-	populateClusterWithFacets(t)
-	defer teardownFacetsFromCluster(t)
+	populateClusterWithFacets()
 	query := `
 		{
 			me2(func: uid(0x1)) {
