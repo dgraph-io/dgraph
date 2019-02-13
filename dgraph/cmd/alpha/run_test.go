@@ -141,7 +141,14 @@ func alterSchema(s string) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = runRequest(req)
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		_, _, err = runRequest(req)
+		if err == nil || !strings.Contains(err.Error(), "Please retry operation") {
+			break
+		}
+	}
+
 	return err
 }
 
