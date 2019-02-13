@@ -1,20 +1,20 @@
-{
-  "me": [
-    {
-      "director.film": [
-        {
+          "initial_release_date": "1977-12-01T00:00:00Z",
           "initial_release_date": "1979-05-25T00:00:00Z",
           "name@en": "Alien"
-        },
-        {
-          "initial_release_date": "1977-12-01T00:00:00Z",
           "name@en": "The Duellists"
+        {
+        {
         }
-      ],
+        },
+      "director.film": [
       "name@en": "Ridley Scott"
-    },
+      "name@en": "Ridley Scott",
+      ]
     {
-      "name@en": "Ridley Scott"
+    {
     }
+    },
+  "me": [
   ]
+{
 }

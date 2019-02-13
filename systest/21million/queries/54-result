@@ -1,176 +1,176 @@
-{
-  "director": [
-    {
-      "director.film": [
-        {
-          "name@en": "Twilight Zone: The Movie",
-          "numGenres": 3
-        },
-        {
-          "name@en": "Lincoln",
-          "numGenres": 5
-        },
-        {
-          "name@en": "Minority Report",
-          "numGenres": 12
-        },
-        {
-          "name@en": "Indiana Jones and the Temple of Doom",
-          "numGenres": 4
-        },
-        {
-          "name@en": "Schindler's List",
-          "numGenres": 5
-        },
-        {
-          "name@en": "Amistad",
-          "numGenres": 3
-        },
-        {
           "name@en": "1941",
-          "numGenres": 5
-        },
-        {
-          "name@en": "Indiana Jones and the Last Crusade",
-          "numGenres": 4
-        },
-        {
-          "name@en": "Jaws",
-          "numGenres": 8
-        },
-        {
-          "name@en": "Saving Private Ryan",
-          "numGenres": 3
-        },
-        {
-          "name@en": "War Horse",
-          "numGenres": 2
-        },
-        {
-          "name@en": "Close Encounters of the Third Kind",
-          "numGenres": 3
-        },
-        {
-          "name@en": "Empire of the Sun",
-          "numGenres": 7
-        },
-        {
-          "name@en": "The Adventures of Tintin: The Secret of the Unicorn",
-          "numGenres": 6
-        },
-        {
-          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull",
-          "numGenres": 7
-        },
-        {
-          "name@en": "Jurassic Park",
-          "numGenres": 3
-        },
-        {
-          "name@en": "The Lost World: Jurassic Park",
-          "numGenres": 5
-        },
-        {
-          "name@en": "Hook",
-          "numGenres": 8
-        },
-        {
-          "name@en": "Munich",
-          "numGenres": 5
-        },
-        {
-          "name@en": "Indiana Jones and the Raiders of the Lost Ark",
-          "numGenres": 2
-        },
-        {
-          "name@en": "Duel",
-          "numGenres": 4
-        },
-        {
-          "name@en": "Slipstream",
-          "numGenres": 1
-        },
-        {
-          "name@en": "Catch Me If You Can",
-          "numGenres": 4
-        },
-        {
-          "name@en": "The Terminal",
-          "numGenres": 5
-        },
-        {
-          "name@en": "The Sugarland Express",
-          "numGenres": 3
-        },
-        {
           "name@en": "A.I. Artificial Intelligence",
-          "numGenres": 4
-        },
-        {
-          "name@en": "The Color Purple",
-          "numGenres": 1
-        },
-        {
-          "name@en": "War of the Worlds",
-          "numGenres": 9
-        },
-        {
-          "name@en": "Bridge of Spies",
-          "numGenres": 1
-        },
-        {
-          "name@en": "E.T. the Extra-Terrestrial",
-          "numGenres": 5
-        },
-        {
-          "name@en": "Something Evil",
-          "numGenres": 3
-        },
-        {
-          "name@en": "The BFG",
-          "numGenres": 0
-        },
-        {
-          "name@en": "Amblin",
-          "numGenres": 1
-        },
-        {
-          "name@en": "Robopocalypse",
-          "numGenres": 3
-        },
-        {
-          "name@en": "Savage",
-          "numGenres": 2
-        },
-        {
           "name@en": "Always",
-          "numGenres": 4
-        },
-        {
-          "name@en": "The Attack of the Mummies",
-          "numGenres": 0
-        },
-        {
-          "name@en": "Firelight",
-          "numGenres": 2
-        },
-        {
           "name@en": "Amazing Stories: Book One",
+          "name@en": "Amblin",
+          "name@en": "Amistad",
+          "name@en": "Bridge of Spies",
+          "name@en": "Catch Me If You Can",
+          "name@en": "Close Encounters of the Third Kind",
+          "name@en": "Duel",
+          "name@en": "E.T. the Extra-Terrestrial",
+          "name@en": "Empire of the Sun",
+          "name@en": "Firelight",
+          "name@en": "Hook",
+          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull",
+          "name@en": "Indiana Jones and the Last Crusade",
+          "name@en": "Indiana Jones and the Raiders of the Lost Ark",
+          "name@en": "Indiana Jones and the Temple of Doom",
+          "name@en": "Jaws",
+          "name@en": "Jurassic Park",
+          "name@en": "Lincoln",
+          "name@en": "Minority Report",
+          "name@en": "Munich",
+          "name@en": "Robopocalypse",
+          "name@en": "Savage",
+          "name@en": "Saving Private Ryan",
+          "name@en": "Schindler's List",
+          "name@en": "Slipstream",
+          "name@en": "Something Evil",
+          "name@en": "The Adventures of Tintin: The Secret of the Unicorn",
+          "name@en": "The Attack of the Mummies",
+          "name@en": "The BFG",
+          "name@en": "The Color Purple",
+          "name@en": "The Lost World: Jurassic Park",
+          "name@en": "The Sugarland Express",
+          "name@en": "The Terminal",
+          "name@en": "Twilight Zone: The Movie",
+          "name@en": "War Horse",
+          "name@en": "War of the Worlds",
+          "numGenres": 0
+          "numGenres": 0
+          "numGenres": 1
+          "numGenres": 1
+          "numGenres": 1
+          "numGenres": 1
+          "numGenres": 12
           "numGenres": 2
+          "numGenres": 2
+          "numGenres": 2
+          "numGenres": 2
+          "numGenres": 2
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 3
+          "numGenres": 4
+          "numGenres": 4
+          "numGenres": 4
+          "numGenres": 4
+          "numGenres": 4
+          "numGenres": 4
+          "numGenres": 5
+          "numGenres": 5
+          "numGenres": 5
+          "numGenres": 5
+          "numGenres": 5
+          "numGenres": 5
+          "numGenres": 5
+          "numGenres": 6
+          "numGenres": 7
+          "numGenres": 7
+          "numGenres": 8
+          "numGenres": 8
+          "numGenres": 9
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
+        {
         }
-      ],
-      "genresPerMovie": 3.948718,
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+        },
+      "director.film": [
+      "genresPerMovie": 3.948718
+      "name@en": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
       "name@en": "Steven Spielberg",
-      "totalGenres": 154
-    },
+      "totalGenres": 154,
+      ],
     {
-      "name@en": "Steven Spielberg"
-    },
     {
-      "name@en": "Steven Spielberg"
-    },
     {
-      "name@en": "Steven Spielberg"
+    {
     }
+    },
+    },
+    },
+  "director": [
   ]
+{
 }
