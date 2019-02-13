@@ -8,28 +8,34 @@ source $DGRAPH_ROOT/contrib/scripts/functions.sh
 COMPOSE_FILE=$(dirname $0)/docker-compose.yml
 SCHEMA_URL='https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true'
 DATA_URL='https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true'
-WGET_CMD="wget -q -O-"
-SRCDIR=$(dirname $0)
 
 function Info {
     echo -e "INFO: $*"
 }
 
+function DockerCompose {
+    docker-compose -p dgraph -f $COMPOSE_FILE "$@"
+}
 
-Info "entering directory $SRCDIR/"
-cd $SRCDIR
+# TODO check for >24GB of RAM
 
-Info "bringing up a zero container"
-docker-compose up -d --force-recreate zero1
+Info "removing old data (if any)"
+DockerCompose down -v
 
-Info "creating alpha container"
-docker-compose up -d --force-recreate dg1
+Info "bringing up zero container"
+DockerCompose up -d zero1
+
+Info "waiting for it to become leader"
+DockerCompose logs -f | grep -q -m1 'became leader'
 
 Info "bulk loading 21million data set"
-docker exec -it bank-dg1 \
-    dgraph bulk --schema=<($WGET_CMD $SCHEMA_URL) --files=<($WGET_CMD $DATA_URL) \
-                --format=rdf --out=/data/dg1/                                    \
-    \&\& mv /data/dg1/bulk/0/p /data/dg1
+DockerCompose run dg1 \
+    bash -s <<EOF
+        /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
+                       --format=rdf --zero=zero1:5080 --out=/data/dg1/bulk
+        mv /data/dg1/bulk/0/p /data/dg1
+EOF
 
-Info "starting alpha service"
-docker-compose start -d dg1
+Info "bringing up alpha container"
+DockerCompose up -d dg1
+
