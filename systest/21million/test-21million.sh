@@ -28,8 +28,8 @@ DockerCompose down -v
 Info "bringing up zero container"
 DockerCompose up -d zero1
 
-Info "waiting for it to become leader"
-DockerCompose logs -f | grep -q -m1 'became leader'
+Info "waiting for zero to become leader"
+DockerCompose logs -f | grep -q -m1 "I've become the leader"
 
 Info "bulk loading 21million data set"
 DockerCompose run --rm dg1 \
