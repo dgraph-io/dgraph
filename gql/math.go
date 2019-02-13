@@ -153,7 +153,7 @@ func isMathFunc(f string) bool {
 		f == "since"
 }
 
-func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
+func parseMathFunc(it *lex.ItemIterator, again bool, oper string) (*MathTree, bool, error) {
 	if !again {
 		it.Next()
 		item := it.Item()
@@ -163,10 +163,10 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	}
 
 	// opStack is used to collect the operators in right order.
-	opStack := new(mathTreeStack)
+	opStack := &mathTreeStack{}
 	opStack.push(&MathTree{Fn: "("}) // Push ( onto operator stack.
 	// valueStack is used to collect the values.
-	valueStack := new(mathTreeStack)
+	valueStack := &mathTreeStack{}
 
 	for it.Next() {
 		item := it.Item()
@@ -180,6 +180,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				(lastItem.Val == "(" || lastItem.Val == "," || isBinaryMath(lastItem.Val)) {
 				op = "u-" // This is a unary -
 			}
+			oper = op
 			opPred := mathOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0 for %v: %d", op, opPred)
 			// Evaluate the stack until we see an operator with strictly lower pred.
@@ -199,20 +200,12 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				return nil, false, err
 			}
 			if peekIt[0].Typ == itemLeftRound {
-				again := false
+				var again bool
 				var child *MathTree
 				for {
-					child, again, err = parseMathFunc(it, again)
+					child, again, err = parseMathFunc(it, again, op)
 					if err != nil {
 						return nil, false, err
-					}
-					// evaluate binary operator if we already have two values in stack.
-					if valueStack.size() > 1 && isBinary(op) {
-						err := evalMathStack(opStack, valueStack)
-						if err != nil {
-							return nil, false, err
-						}
-						opStack.push(&MathTree{Fn: op})
 					}
 					valueStack.push(child)
 					if !again {
@@ -226,13 +219,13 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				return nil, false, err
 			}
 			if peekIt[0].Typ == itemLeftRound {
-				again := false
 				if !isMathFunc(item.Val) {
 					return nil, false, x.Errorf("Unknown math function: %v", item.Val)
 				}
+				var again bool
 				var child *MathTree
 				for {
-					child, again, err = parseMathFunc(it, again)
+					child, again, err = parseMathFunc(it, again, oper)
 					if err != nil {
 						return nil, false, err
 					}
@@ -264,6 +257,15 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				if topOp.Fn == "(" {
 					break
 				}
+				if isBinary(oper) {
+					for valueStack.size() > 2 {
+						opStack.push(&MathTree{Fn: oper})
+						err := evalMathStack(opStack, valueStack)
+						if err != nil {
+							return nil, false, err
+						}
+					}
+				}
 				err := evalMathStack(opStack, valueStack)
 				if err != nil {
 					return nil, false, err
@@ -290,6 +292,15 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				topOp := opStack.peek()
 				if topOp.Fn == "(" {
 					break
+				}
+				if isBinary(oper) {
+					for valueStack.size() > 2 {
+						opStack.push(&MathTree{Fn: oper})
+						err := evalMathStack(opStack, valueStack)
+						if err != nil {
+							return nil, false, err
+						}
+					}
 				}
 				err := evalMathStack(opStack, valueStack)
 				if err != nil {
