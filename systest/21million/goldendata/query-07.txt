@@ -1,8 +1,0 @@
-{
-  bladerunner(func: anyofterms(name@en, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
-    name@en
-    initial_release_date
-    netflix_id
-  }
-}
-null

@@ -1,0 +1,10 @@
+{
+  var(func: anyofterms(name@en, "Steven Tom")) {
+    a as count(director.film)
+  }
+
+  me() {
+    avg(val(a))
+    sum(val(a))
+  }
+}

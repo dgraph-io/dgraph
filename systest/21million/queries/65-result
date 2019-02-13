@@ -1,0 +1,930 @@
+{
+  "director": [
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Twilight Zone: The Movie",
+      "performance.actor": {
+        "actor": "Albert Brooks"
+      },
+      "performance.character": {
+        "character": "Car Driver"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Twilight Zone: The Movie",
+      "performance.actor": {
+        "actor": "Dan Aykroyd"
+      },
+      "performance.character": {
+        "character": "Ambulance Driver"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Lincoln",
+      "performance.actor": {
+        "actor": "Shawn Everett Jones"
+      },
+      "performance.character": {
+        "character": "Clerk #1"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Lincoln",
+      "performance.actor": {
+        "actor": "Brian Elder"
+      },
+      "performance.character": {
+        "character": "Confederate Soldier #2"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Minority Report",
+      "performance.actor": {
+        "actor": "Matthew Dickman"
+      },
+      "performance.character": {
+        "character": "Dashiell"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Minority Report",
+      "performance.actor": {
+        "actor": "Jessica Capshaw"
+      },
+      "performance.character": {
+        "character": "Evanna"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Temple of Doom",
+      "performance.actor": {
+        "actor": "Jenny Turnock"
+      },
+      "performance.character": {
+        "character": "Dancer #30"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Temple of Doom",
+      "performance.actor": {
+        "actor": "Andrea Chance"
+      },
+      "performance.character": {
+        "character": "Dancer #9"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Schindler's List",
+      "performance.actor": {
+        "actor": "Sebastian Konrad"
+      },
+      "performance.character": {
+        "character": "Engineer Man"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Schindler's List",
+      "performance.actor": {
+        "actor": "Agnieszka Korzeniowska"
+      },
+      "performance.character": {
+        "character": "Ghetto Girl #1"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Amistad",
+      "performance.actor": {
+        "actor": "Nigel Hawthorne"
+      },
+      "performance.character": {
+        "character": "Martin Van Buren"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Amistad",
+      "performance.actor": {
+        "actor": "Anthony Hopkins"
+      },
+      "performance.character": {
+        "character": "John Quincy Adams"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "1941",
+      "performance.actor": {
+        "actor": "Murray Hamilton"
+      },
+      "performance.character": {
+        "character": "Claude Crumn"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "1941",
+      "performance.actor": {
+        "actor": "Paul Cloud"
+      },
+      "performance.character": {
+        "character": "Stilwell Aide #2"
+      }
+    },
+    {
+      "country": "United Kingdom",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Last Crusade",
+      "performance.actor": {
+        "actor": "River Phoenix"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Last Crusade",
+      "performance.actor": {
+        "actor": "River Phoenix"
+      }
+    },
+    {
+      "country": "United Kingdom",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Last Crusade",
+      "performance.actor": {
+        "actor": "Paul Maxwell"
+      },
+      "performance.character": {
+        "character": "Panama Hat"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Last Crusade",
+      "performance.actor": {
+        "actor": "Paul Maxwell"
+      },
+      "performance.character": {
+        "character": "Panama Hat"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Jaws",
+      "performance.actor": {
+        "actor": "Ayn Ruymen"
+      },
+      "performance.character": {
+        "character": "Nurse #1"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Jaws",
+      "performance.actor": {
+        "actor": "Denise Cheshire"
+      },
+      "performance.character": {
+        "character": "Christine 'Chrissie' Watkins"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Saving Private Ryan",
+      "performance.actor": {
+        "actor": "Martin Beaton"
+      },
+      "performance.character": {
+        "character": "Jean's Son"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Saving Private Ryan",
+      "performance.actor": {
+        "actor": "Barry Pepper"
+      },
+      "performance.character": {
+        "character": "Private Jackson"
+      }
+    },
+    {
+      "country": "United Kingdom",
+      "director": "Steven Spielberg",
+      "film": "War Horse",
+      "performance.actor": {
+        "actor": "Eddie Marsan"
+      },
+      "performance.character": {
+        "character": "Sgt. Fry"
+      }
+    },
+    {
+      "country": "India",
+      "director": "Steven Spielberg",
+      "film": "War Horse",
+      "performance.actor": {
+        "actor": "Eddie Marsan"
+      },
+      "performance.character": {
+        "character": "Sgt. Fry"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "War Horse",
+      "performance.actor": {
+        "actor": "Eddie Marsan"
+      },
+      "performance.character": {
+        "character": "Sgt. Fry"
+      }
+    },
+    {
+      "country": "United Kingdom",
+      "director": "Steven Spielberg",
+      "film": "War Horse",
+      "performance.actor": {
+        "actor": "Maximilian Brückner"
+      },
+      "performance.character": {
+        "character": "German Artillery Officer"
+      }
+    },
+    {
+      "country": "India",
+      "director": "Steven Spielberg",
+      "film": "War Horse",
+      "performance.actor": {
+        "actor": "Maximilian Brückner"
+      },
+      "performance.character": {
+        "character": "German Artillery Officer"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "War Horse",
+      "performance.actor": {
+        "actor": "Maximilian Brückner"
+      },
+      "performance.character": {
+        "character": "German Artillery Officer"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Close Encounters of the Third Kind",
+      "performance.actor": {
+        "actor": "Teri Garr"
+      },
+      "performance.character": {
+        "character": "Ronnie Neary"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Close Encounters of the Third Kind",
+      "performance.actor": {
+        "actor": "Richard L. Hawkins"
+      },
+      "performance.character": {
+        "character": "Air Traffic Controller #2"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Empire of the Sun",
+      "performance.actor": {
+        "actor": "Masatō Ibu"
+      },
+      "performance.character": {
+        "character": "Sgt. Nagata"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Empire of the Sun",
+      "performance.actor": {
+        "actor": "Joe Pantoliano"
+      },
+      "performance.character": {
+        "character": "Frank Demarest"
+      }
+    },
+    {
+      "country": "New Zealand",
+      "director": "Steven Spielberg",
+      "film": "The Adventures of Tintin: The Secret of the Unicorn",
+      "performance.actor": {
+        "actor": "Daniel Craig"
+      },
+      "performance.character": {
+        "character": "Sakharine"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Adventures of Tintin: The Secret of the Unicorn",
+      "performance.actor": {
+        "actor": "Daniel Craig"
+      },
+      "performance.character": {
+        "character": "Sakharine"
+      }
+    },
+    {
+      "country": "New Zealand",
+      "director": "Steven Spielberg",
+      "film": "The Adventures of Tintin: The Secret of the Unicorn",
+      "performance.actor": {
+        "actor": "Enn Reitel"
+      },
+      "performance.character": {
+        "character": "Nestor"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Adventures of Tintin: The Secret of the Unicorn",
+      "performance.actor": {
+        "actor": "Enn Reitel"
+      },
+      "performance.character": {
+        "character": "Nestor"
+      }
+    },
+    {
+      "country": "Brazil",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Kingdom of the Crystal Skull",
+      "performance.actor": {
+        "actor": "David LaVera"
+      },
+      "performance.character": {
+        "character": "Toba"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Kingdom of the Crystal Skull",
+      "performance.actor": {
+        "actor": "David LaVera"
+      },
+      "performance.character": {
+        "character": "Toba"
+      }
+    },
+    {
+      "country": "Brazil",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Kingdom of the Crystal Skull",
+      "performance.actor": {
+        "actor": "Andrew Divoff"
+      },
+      "performance.character": {
+        "character": "Russian Soldier #4"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Kingdom of the Crystal Skull",
+      "performance.actor": {
+        "actor": "Andrew Divoff"
+      },
+      "performance.character": {
+        "character": "Russian Soldier #4"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Jurassic Park",
+      "performance.actor": {
+        "actor": "Christopher John Fields"
+      },
+      "performance.character": {
+        "character": "Volunteer #1"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Jurassic Park",
+      "performance.actor": {
+        "actor": "Richard Attenborough"
+      },
+      "performance.character": {
+        "character": "John Hammond"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Lost World: Jurassic Park",
+      "performance.actor": {
+        "actor": "J. Scott Shonka"
+      },
+      "performance.character": {
+        "character": "InGen Worker #3"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Lost World: Jurassic Park",
+      "performance.actor": {
+        "actor": "J. Patrick McCormack"
+      },
+      "performance.character": {
+        "character": "Board Member"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Hook",
+      "performance.actor": {
+        "actor": "Rebecca Hoffman"
+      },
+      "performance.character": {
+        "character": "Jane in Play"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Hook",
+      "performance.actor": {
+        "actor": "Jeff Bornstein"
+      },
+      "performance.character": {
+        "character": "Pirate #2"
+      }
+    },
+    {
+      "country": "France",
+      "director": "Steven Spielberg",
+      "film": "Munich",
+      "performance.actor": {
+        "actor": "Richard Brake"
+      },
+      "performance.character": {
+        "character": "Belligerent American"
+      }
+    },
+    {
+      "country": "Canada",
+      "director": "Steven Spielberg",
+      "film": "Munich",
+      "performance.actor": {
+        "actor": "Richard Brake"
+      },
+      "performance.character": {
+        "character": "Belligerent American"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Munich",
+      "performance.actor": {
+        "actor": "Richard Brake"
+      },
+      "performance.character": {
+        "character": "Belligerent American"
+      }
+    },
+    {
+      "country": "France",
+      "director": "Steven Spielberg",
+      "film": "Munich",
+      "performance.actor": {
+        "actor": "Lynn Cohen"
+      },
+      "performance.character": {
+        "character": "Golda Meir"
+      }
+    },
+    {
+      "country": "Canada",
+      "director": "Steven Spielberg",
+      "film": "Munich",
+      "performance.actor": {
+        "actor": "Lynn Cohen"
+      },
+      "performance.character": {
+        "character": "Golda Meir"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Munich",
+      "performance.actor": {
+        "actor": "Lynn Cohen"
+      },
+      "performance.character": {
+        "character": "Golda Meir"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Raiders of the Lost Ark",
+      "performance.actor": {
+        "actor": "Pat Roach"
+      },
+      "performance.character": {
+        "character": "1st Mechanic"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Indiana Jones and the Raiders of the Lost Ark",
+      "performance.actor": {
+        "actor": "Nick Gillard"
+      },
+      "performance.character": {
+        "character": "German Soldier #3"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Duel",
+      "performance.actor": {
+        "actor": "Jacqueline Scott"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Duel",
+      "performance.actor": {
+        "actor": "Eddie Firestone"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Slipstream",
+      "performance.actor": {
+        "actor": "Jim Baxes"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Slipstream",
+      "performance.actor": {
+        "actor": "Tony Bill"
+      }
+    },
+    {
+      "country": "Canada",
+      "director": "Steven Spielberg",
+      "film": "Catch Me If You Can",
+      "performance.actor": {
+        "actor": "Frank John Hughes"
+      },
+      "performance.character": {
+        "character": "Tom Fox"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Catch Me If You Can",
+      "performance.actor": {
+        "actor": "Frank John Hughes"
+      },
+      "performance.character": {
+        "character": "Tom Fox"
+      }
+    },
+    {
+      "country": "Canada",
+      "director": "Steven Spielberg",
+      "film": "Catch Me If You Can",
+      "performance.actor": {
+        "actor": "Tom Hanks"
+      },
+      "performance.character": {
+        "character": "Carl Hanratty"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Catch Me If You Can",
+      "performance.actor": {
+        "actor": "Tom Hanks"
+      },
+      "performance.character": {
+        "character": "Carl Hanratty"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Terminal",
+      "performance.actor": {
+        "actor": "Kingslee Purcell"
+      },
+      "performance.character": {
+        "character": "Nathan's Hot Dog Manager"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Terminal",
+      "performance.actor": {
+        "actor": "Justin Rodgers Hall"
+      },
+      "performance.character": {
+        "character": "Haitian Passenger"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Sugarland Express",
+      "performance.actor": {
+        "actor": "Gregory Walcott"
+      },
+      "performance.character": {
+        "character": "Mashburn"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Sugarland Express",
+      "performance.actor": {
+        "actor": "William Atherton"
+      },
+      "performance.character": {
+        "character": "Clovis"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "A.I. Artificial Intelligence",
+      "performance.actor": {
+        "actor": "Linda Asuma"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "A.I. Artificial Intelligence",
+      "performance.actor": {
+        "actor": "Hallie Bird"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Color Purple",
+      "performance.actor": {
+        "actor": "Carl Anderson"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The Color Purple",
+      "performance.actor": {
+        "actor": "Oprah Winfrey"
+      },
+      "performance.character": {
+        "character": "Sofia"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "War of the Worlds",
+      "performance.actor": {
+        "actor": "Lenny Venito"
+      },
+      "performance.character": {
+        "character": "Manny"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "War of the Worlds",
+      "performance.actor": {
+        "actor": "Amy Ryan"
+      },
+      "performance.character": {
+        "character": "Neighbor with Toddler"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Bridge of Spies",
+      "performance.actor": {
+        "actor": "Mark Rylance"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Bridge of Spies",
+      "performance.actor": {
+        "actor": "Alan Alda"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "E.T. the Extra-Terrestrial",
+      "performance.actor": {
+        "actor": "Debra Winger"
+      },
+      "performance.character": {
+        "character": "Nurse Zombie Carrying Poodle"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "E.T. the Extra-Terrestrial",
+      "performance.actor": {
+        "actor": "Ted Grossman"
+      },
+      "performance.character": {
+        "character": "Government Agent"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Something Evil",
+      "performance.actor": {
+        "actor": "Sandy Dennis"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Something Evil",
+      "performance.actor": {
+        "actor": "Darren McGavin"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The BFG",
+      "performance.actor": {
+        "actor": "Bill Hader"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "The BFG",
+      "performance.actor": {
+        "actor": "Mark Rylance"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Amblin",
+      "performance.actor": {
+        "actor": "Richard Levin"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Amblin",
+      "performance.actor": {
+        "actor": "Pamela McMyler"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Robopocalypse"
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Savage",
+      "performance.actor": {
+        "actor": "Martin Landau"
+      },
+      "performance.character": {
+        "character": "Paul Savage"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Savage",
+      "performance.actor": {
+        "actor": "Martin Landau"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Always",
+      "performance.actor": {
+        "actor": "Roberts Blossom"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Always",
+      "performance.actor": {
+        "actor": "Brian Haley"
+      }
+    },
+    {
+      "director": "Steven Spielberg",
+      "film": "The Attack of the Mummies"
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Firelight",
+      "performance.actor": {
+        "actor": "Nancy Spielberg"
+      }
+    },
+    {
+      "country": "United States of America",
+      "director": "Steven Spielberg",
+      "film": "Amazing Stories: Book One"
+    },
+    {
+      "director": "Steven Spielberg And The Return To Film School"
+    },
+    {
+      "director": "Directors: Steven Spielberg"
+    },
+    {
+      "director": "Steven Spielberg"
+    },
+    {
+      "director": "Young Steven Spielberg"
+    },
+    {
+      "director": "Steven Spielberg"
+    },
+    {
+      "director": "Steven Spielberg"
+    }
+  ]
+}

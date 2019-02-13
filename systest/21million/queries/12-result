@@ -1,0 +1,18 @@
+{
+  "me": [
+    {
+      "director.film": [
+        {
+          "name@en": "War Horse"
+        },
+        {
+          "name@en": "War of the Worlds"
+        },
+        {
+          "name@en": "Bridge of Spies"
+        }
+      ],
+      "name@en": "Steven Spielberg"
+    }
+  ]
+}

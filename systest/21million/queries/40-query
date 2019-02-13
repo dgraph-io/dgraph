@@ -1,0 +1,15 @@
+{
+  genres as var(func: has(~genre)) {
+    ~genre {
+      numGenres as count(genre)
+    }
+  }
+
+  genres(func: uid(genres), orderasc: name@en) {
+    name@en
+    ~genre (orderdesc: val(numGenres), first: 5) {
+      name@en
+    	genres : val(numGenres)
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "genre": [
+    {
+      "name@en": "Documentary film",
+      "~genre": [
+        {
+          "name@en": "Thaumazein"
+        }
+      ]
+    },
+    {
+      "name@en": "Drama",
+      "~genre": [
+        {
+          "name@en": "L'ennemi naturel"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy",
+      "~genre": [
+        {
+          "name@en": "La Bouillabaisse"
+        }
+      ]
+    },
+    {
+      "name@en": "Short Film",
+      "~genre": [
+        {
+          "name@en": "Checkmate, Keep Your Enemies Closer"
+        }
+      ]
+    }
+  ]
+}

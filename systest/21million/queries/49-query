@@ -1,0 +1,8 @@
+{
+  var(func: allofterms(name@en, "Harry Potter")) {
+    d as initial_release_date
+  }
+  me() {
+    min(val(d))
+  }
+}

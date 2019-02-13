@@ -1,0 +1,19 @@
+{
+  "TopMovies": [
+    {
+      "name@en": "Lincoln",
+      "val(date)": "2012-10-08T00:00:00Z",
+      "val(score)": 8.3039
+    },
+    {
+      "name@en": "The Adventures of Tintin: The Secret of the Unicorn",
+      "val(date)": "2011-10-23T00:00:00Z",
+      "val(score)": 6.717769
+    },
+    {
+      "name@en": "War Horse",
+      "val(date)": "2011-12-04T00:00:00Z",
+      "val(score)": 4.215223
+    }
+  ]
+}
