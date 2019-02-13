@@ -426,7 +426,7 @@ func TestMultipleMinMax(t *testing.T) {
 		js)
 }
 
-func TestBinaryMultipleValues(t *testing.T) {
+func TestBinaryMultipleValues1(t *testing.T) {
 	query := `
 	{
 		var(func:uid(0x1)) {
@@ -452,6 +452,80 @@ func TestBinaryMultipleValues(t *testing.T) {
 					"val(y)": 0.000000,
 					"val(z)": 256.000000,
 					"val(w)": 1.000000
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestBinaryMultipleValues2(t *testing.T) {
+	query := `
+	{
+		var(func:uid(0x1)) {
+			x as math(max(max(max(3,5),20),1))
+			y as math(max(1,max(20,max(3,5))))
+			z as math(max(1,20,3,5))
+		}
+		q(func:uid(0x1)) {
+			val(x)
+			val(y)
+			val(z)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"val(x)": 20.000000,
+					"val(y)": 20.000000,
+					"val(z)": 20.000000
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestBinaryMultipleValues3(t *testing.T) {
+	query := `
+	{
+		var(func:uid(0x1)) {
+			x as math(
+				logbase(
+					pow(
+						max(1,2,3),
+						min(3,4,5)
+					),
+					max(1,2,3)
+				)
+			)
+			y as math(
+				min(
+					max(
+						min(1,2,3),
+						max(4,5,6)
+					),
+					min(
+						max(4,5,6),
+						min(7,8,9)
+					)
+				)
+			)
+		}
+		q(func:uid(0x1)) {
+			val(x)
+			val(y)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"val(x)": 3.000000,
+					"val(y)": 6.000000
 				}
 			]
 		}
