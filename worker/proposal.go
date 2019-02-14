@@ -26,7 +26,11 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+
+	ostats "go.opencensus.io/stats"
+	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+
 	"golang.org/x/net/context"
 )
 
@@ -55,13 +59,15 @@ type rateLimiter struct {
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
 func (rl *rateLimiter) bleed() {
+	ctx := context.Background()
+
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 
 	for range tick.C {
 		if atomic.AddInt32(&rl.iou, -1) >= 0 {
 			<-pendingProposals
-			x.PendingProposals.Add(-1)
+			ostats.Record(ctx, x.PendingProposals.M(-1))
 		} else {
 			atomic.AddInt32(&rl.iou, 1)
 		}
@@ -75,7 +81,7 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 	for i := 0; i < weight; i++ {
 		select {
 		case pendingProposals <- struct{}{}:
-			x.PendingProposals.Add(1)
+			ostats.Record(context.Background(), x.PendingProposals.M(1))
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -87,7 +93,7 @@ func (rl *rateLimiter) incr(ctx context.Context, retry int) error {
 func (rl *rateLimiter) decr(retry int) {
 	if retry == 0 {
 		<-pendingProposals
-		x.PendingProposals.Add(-1)
+		ostats.Record(context.Background(), x.PendingProposals.M(-1))
 		return
 	}
 	weight := 1 << uint(retry) // Ensure that the weight calculation is a copy of incr.
@@ -104,7 +110,19 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
-func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
+	startTime := time.Now()
+	ctx = x.WithMethod(ctx, "n.proposeAndWait")
+	defer func() {
+		v := x.TagValueStatusOK
+		if perr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
+		timeMs := x.SinceMs(startTime)
+		ostats.Record(ctx, x.LatencyMs.M(timeMs))
+	}()
+
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet")
 	}
@@ -155,6 +173,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) error 
 	key := uniqueKey()
 	proposal.Key = key
 	span := otrace.FromContext(ctx)
+
+	stop := x.SpanTimer(span, "n.proposeAndWait")
+	defer stop()
 
 	propose := func(timeout time.Duration) error {
 		cctx, cancel := context.WithCancel(ctx)

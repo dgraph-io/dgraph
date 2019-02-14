@@ -56,7 +56,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
 	writer := posting.NewTxnWriter(pstore)
-	writer.BlindWrite = true // Do overwrite keys.
 	for {
 		kvs, err := stream.Recv()
 		if err != nil {

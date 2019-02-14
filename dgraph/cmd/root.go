@@ -18,8 +18,7 @@ package cmd
 
 import (
 	goflag "flag"
-	"fmt"
-	"os"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
@@ -55,11 +54,15 @@ cluster.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	initCmds()
-	goflag.Parse()
-	if err := RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+
+	// Convinces goflags that Parse() has been called to avoid noisy logs.
+	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
+	x.Check(goflag.CommandLine.Parse([]string{}))
+
+	// Dumping the usage in case of an error makes the error messages harder to see.
+	RootCmd.SilenceUsage = true
+
+	x.CheckfNoLog(RootCmd.Execute())
 }
 
 var rootConf = viper.New()
@@ -82,8 +85,6 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	RootCmd.PersistentFlags().Bool("enterprise_features", false,
-		"Enable Dgraph enterprise features. If you set this to true, you agree to the Dgraph Community License.")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
@@ -99,6 +100,9 @@ func initCmds() {
 		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
 		sc.Conf.AutomaticEnv()
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+		// Options that contain a "." should use "_" in its place when provided as an
+		// environment variable.
+		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 	cobra.OnInitialize(func() {
 		cfg := rootConf.GetString("config")

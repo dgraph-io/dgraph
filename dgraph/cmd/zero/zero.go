@@ -60,7 +60,7 @@ type Server struct {
 	closer         *y.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
-	blockCommitsOn map[string]struct{}
+	blockCommitsOn *sync.Map
 }
 
 func (s *Server) Init() {
@@ -78,7 +78,7 @@ func (s *Server) Init() {
 	s.nextGroup = 1
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = y.NewCloser(2) // grpc and http
-	s.blockCommitsOn = make(map[string]struct{})
+	s.blockCommitsOn = new(sync.Map)
 	go s.rebalanceTablets()
 }
 
@@ -232,6 +232,16 @@ func (s *Server) membershipState() *pb.MembershipState {
 	return proto.Clone(s.state).(*pb.MembershipState)
 }
 
+func (s *Server) groupChecksums() map[uint32]uint64 {
+	s.RLock()
+	defer s.RUnlock()
+	m := make(map[uint32]uint64)
+	for gid, g := range s.state.GetGroups() {
+		m[gid] = g.Checksum
+	}
+	return m
+}
+
 func (s *Server) storeZero(m *pb.Member) {
 	s.Lock()
 	defer s.Unlock()
@@ -275,20 +285,14 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 }
 
 func (s *Server) blockTablet(pred string) func() {
-	s.Lock()
-	s.blockCommitsOn[pred] = struct{}{}
-	s.Unlock()
+	s.blockCommitsOn.Store(pred, struct{}{})
 	return func() {
-		s.Lock()
-		delete(s.blockCommitsOn, pred)
-		s.Unlock()
+		s.blockCommitsOn.Delete(pred)
 	}
 }
 
 func (s *Server) isBlocked(pred string) bool {
-	s.RLock()
-	defer s.RUnlock()
-	_, blocked := s.blockCommitsOn[pred]
+	_, blocked := s.blockCommitsOn.Load(pred)
 	return blocked
 }
 
@@ -547,6 +551,12 @@ func (s *Server) ShouldServe(
 	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
+	if x.IsAclPredicate(tablet.Predicate) {
+		// force all the acl predicates to be allocated to group 1
+		// this is to make it eaiser to stream ACL updates to all alpha servers
+		// since they only need to open one pipeline to receive updates for all ACL predicates
+		tablet.GroupId = 1
+	}
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		span.Annotatef(nil, "While proposing tablet: %v", err)

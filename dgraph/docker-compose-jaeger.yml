@@ -1,0 +1,37 @@
+# Docker compose file for testing that includes Jaeger tracing. Use it with:
+# ./run.sh --jaeger
+# This would pick up dgraph binary from $GOPATH.
+
+version: "3.5"
+services:
+  zero1:
+    environment:
+      - DGRAPH_ZERO_JAEGER_COLLECTOR=http://jaeger:14268
+  zero2:
+    environment:
+      - DGRAPH_ZERO_JAEGER_COLLECTOR=http://jaeger:14268
+  zero3:
+    environment:
+      - DGRAPH_ZERO_JAEGER_COLLECTOR=http://jaeger:14268
+  dg1:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg2:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg3:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    hostname: jaeger
+    ports:
+      - "16686:16686"
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+    # The jaeger all-in-one container stores all traces in memory. Set
+    # --memory.max-traces to some number if you don't want to store all traces
+    # indefinitely.
+    command:
+      - --memory.max-traces=1000000

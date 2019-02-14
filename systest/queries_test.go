@@ -50,7 +50,9 @@ func TestQuery(t *testing.T) {
 	t.Run("multiple block eval", wrap(MultipleBlockEval))
 	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
 	t.Run("hash index queries", wrap(QueryHashIndex))
+	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
+	t.Run("groupby uid that works", wrap(GroupByUidWorks))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
@@ -538,6 +540,147 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	CompareJSON(t, js, string(m["data"]))
 }
 
+func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      term: string @index(trigram) .
+      name: string .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:t0 <term> "" .
+      _:t1 <term> "road" .
+      _:t2 <term> "avenue" .
+      _:t3 <term> "street" .
+      _:t4 <term> "boulevard" .
+      _:t5 <term> "drive" .
+      _:t6 <term> "route" .
+      _:t7 <term> "pass" .
+      _:t8 <term> "pathway" .
+      _:t9 <term> "lane" .
+      _:ta <term> "highway" .
+      _:tb <term> "parkway" .
+      _:tc <term> "motorway" .
+      _:td <term> "high road" .
+      _:te <term> "side street" .
+      _:tf <term> "dual carriageway" .
+      _:n0 <name> "srfrog" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out, failure string
+	}{
+		{
+			in:  `{q(func:match(term, drive, 8)) {term}}`,
+			out: `{"q":[{"term":"drive"}]}`,
+		},
+		{
+			in:  `{q(func:match(term, "plano", 1)) {term}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in:  `{q(func:match(term, "plano", 2)) {term}}`,
+			out: `{"q":[{"term":"lane"}]}`,
+		},
+		{
+			in:  `{q(func:match(term, "plano", 8)) {term}}`,
+			out: `{"q":[{"term":"lane"}]}`,
+		},
+		{
+			in: `{q(func:match(term, way, 8)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "pathway"},
+        {"term": "parkway"},
+        {"term": "motorway"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, pway, 8)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "pathway"},
+        {"term": "parkway"},
+        {"term": "motorway"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, high, 8)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "high road"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, str, 8)) {term}}`,
+			out: `{"q":[
+        {"term": "street"},
+        {"term": "side street"}
+      ]}`,
+		},
+		{
+			in: `{q(func:match(term, strip, 8)) {term}}`,
+			out: `{"q":[
+        {"term": "street"},
+        {"term": "side street"}
+      ]}`,
+		},
+		{
+			in:  `{q(func:match(term, strip, 3)) {term}}`,
+			out: `{"q":[{"term": "street"}]}`,
+		},
+		{
+			in: `{q(func:match(term, "carigeway", 8)) {term}}`,
+			out: `{"q":[
+        {"term": "dual carriageway"}
+      ]}`,
+		},
+		{
+			in:  `{q(func:match(term, "carigeway", 4)) {term}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in: `{q(func:match(term, "dualway", 8)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "pathway"},
+        {"term": "parkway"},
+        {"term": "motorway"}
+      ]}`,
+		},
+		{
+			in:  `{q(func:match(term, "dualway", 2)) {term}}`,
+			out: `{"q":[]}`,
+		},
+		{
+			in:      `{q(func:match(term, "", 8)) {term}}`,
+			failure: `Empty argument received`,
+		},
+		{
+			in:      `{q(func:match(name, "someone", 8)) {name}}`,
+			failure: `Attribute name is not indexed with type trigram`,
+		},
+	}
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.failure)
+			continue
+		}
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
+}
+
 func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
@@ -722,4 +865,49 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	_, err = c.NewTxn().Query(ctx, `{q(func:regexp(name, /art/)) {name}}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute name does not have trigram index for regex matching.")
+}
+
+func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "horsejr" .
+      _:x2 <name> "srfrog" .
+      _:x3 <name> "missbug" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			in:  fmt.Sprintf(`{q(func:uid(%s)) @groupby(uid) {count(uid)}}`, assigned.Uids["x1"]),
+			out: `{}`,
+		},
+		{
+			in: fmt.Sprintf(`{q(func:uid(%s)) @groupby(name) {count(uid)}}`, assigned.Uids["x1"]),
+			out: `{"q":[{
+				"@groupby":[{
+					"count": 1,
+					"name": "horsejr"
+				}]}]}`,
+		},
+		{
+			in:  `{q(func:has(dummy)) @groupby(uid) {}}`,
+			out: `{}`,
+		},
+		{
+			in:  `{q(func:has(name)) @groupby(dummy) {}}`,
+			out: `{}`,
+		},
+	}
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
 }

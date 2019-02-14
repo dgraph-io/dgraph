@@ -32,22 +32,31 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
+	nqjson "github.com/dgraph-io/dgraph/chunker/json"
+	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
+)
+
+const (
+	methodMutate = "Server.Mutate"
+	methodQuery  = "Server.Query"
 )
 
 type ServerState struct {
@@ -296,9 +305,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return nil, err
 	}
 
-	// All checks done.
-
 	defer glog.Infof("ALTER op: %+v done", op)
+
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
@@ -310,7 +318,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		ResetAcl()
 		return empty, err
 	}
+
 	if len(op.DropAttr) > 0 {
+		// Reserved predicates cannot be dropped.
+		if x.IsReservedPredicate(op.DropAttr) {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
+				op.DropAttr)
+			return nil, err
+		}
+
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
@@ -327,13 +343,23 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	updates, err := schema.Parse(op.Schema)
+	result, err := schema.Parse(op.Schema)
 	if err != nil {
 		return empty, err
 	}
-	glog.Infof("Got schema: %+v\n", updates)
+
+	// Reserved predicates cannot be altered.
+	for _, update := range result.Schemas {
+		if x.IsReservedPredicate(update.Predicate) {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
+				update.Predicate)
+			return nil, err
+		}
+	}
+
+	glog.Infof("Got schema: %+v\n", result.Schemas)
 	// TODO: Maybe add some checks about the schema.
-	m.Schema = updates
+	m.Schema = result.Schemas
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
@@ -350,14 +376,30 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return s.doMutate(ctx, mu)
 }
 
-func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	ctx, span := otrace.StartSpan(ctx, "Server.Mutate")
-	defer span.End()
+func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	startTime := time.Now()
+
+	ctx, span := otrace.StartSpan(ctx, methodMutate)
+	ctx = x.WithMethod(ctx, methodMutate)
+	defer func() {
+		span.End()
+		v := x.TagValueStatusOK
+		if rerr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
+		timeSpentMs := x.SinceMs(startTime)
+		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
+	}()
 
 	resp = &api.Assigned{}
 	if err := x.HealthCheck(); err != nil {
 		return resp, err
 	}
+	ostats.Record(ctx, x.NumMutations.M(1))
 
 	if len(mu.SetJson) > 0 {
 		span.Annotatef(nil, "Got JSON Mutation: %s", mu.SetJson)
@@ -377,6 +419,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 			len(mu.Set) == 0 && len(mu.Del) == 0 &&
 			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
 	if emptyMutation {
+		span.Annotate(nil, "Empty mutation")
 		return resp, fmt.Errorf("Empty mutation")
 	}
 
@@ -467,25 +510,40 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if glog.V(3) {
 		glog.Infof("Got a query: %+v", req)
 	}
-	ctx, span := otrace.StartSpan(ctx, "Server.Query")
-	defer span.End()
+	startTime := time.Now()
+
+	var measurements []ostats.Measurement
+	ctx, span := otrace.StartSpan(ctx, methodQuery)
+	ctx = x.WithMethod(ctx, methodQuery)
+	defer func() {
+		span.End()
+		v := x.TagValueStatusOK
+		if rerr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
+		timeSpentMs := x.SinceMs(startTime)
+		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
+		ostats.Record(ctx, measurements...)
+	}()
 
 	if err := x.HealthCheck(); err != nil {
 		return nil, err
 	}
 
-	x.PendingQueries.Add(1)
-	x.NumQueries.Add(1)
-	defer x.PendingQueries.Add(-1)
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
+	ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
+	defer func() {
+		measurements = append(measurements, x.PendingQueries.M(-1))
+	}()
 
-	resp := new(api.Response)
+	resp = &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")
@@ -645,14 +703,14 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
-		nqs, err := nquadsFromJson(mu.SetJson, set)
+		nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := nquadsFromJson(mu.DeleteJson, delete)
+		nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}

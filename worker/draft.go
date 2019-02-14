@@ -22,11 +22,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -157,7 +161,7 @@ func detectPendingTxns(attr string) error {
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error {
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropAll {
@@ -216,8 +220,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 	}
 
 	total := len(proposal.Mutations.Edges)
-	x.ActiveMutations.Add(int64(total))
-	defer x.ActiveMutations.Add(-int64(total))
+
+	// TODO: Active mutations values can go up or down but with
+	// OpenCensus stats bucket boundaries start from 0, hence
+	// recording negative and positive values skews up values.
+	ostats.Record(ctx, x.ActiveMutations.M(int64(total)))
+	defer func() {
+		ostats.Record(ctx, x.ActiveMutations.M(int64(-total)))
+	}()
 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
@@ -236,22 +246,55 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) error 
 		return dy.ErrConflict
 	}
 
-	span.Annotatef(nil, "To apply: %d edges", len(m.Edges))
-	var retries int
-	for _, edge := range m.Edges {
-		for {
-			err := runMutation(ctx, edge, txn)
-			if err == nil {
-				break
-			}
-			if err != posting.ErrRetry {
-				return err
-			}
-			retries++
+	sort.Slice(m.Edges, func(i, j int) bool {
+		ei := m.Edges[i]
+		ej := m.Edges[j]
+		if ei.GetAttr() != ej.GetAttr() {
+			return ei.GetAttr() < ej.GetAttr()
 		}
+		return ei.GetEntity() < ej.GetEntity()
+	})
+
+	process := func(edges []*pb.DirectedEdge) error {
+		var retries int
+		for _, edge := range edges {
+			for {
+				err := runMutation(ctx, edge, txn)
+				if err == nil {
+					break
+				}
+				if err != posting.ErrRetry {
+					return err
+				}
+				retries++
+			}
+		}
+		if retries > 0 {
+			span.Annotatef(nil, "retries=true num=%d", retries)
+		}
+		return nil
 	}
-	if retries > 0 {
-		span.Annotatef(nil, "retries=true num=%d", retries)
+	numGo, width := x.DivideAndRule(len(m.Edges))
+	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
+
+	if numGo == 1 {
+		return process(m.Edges)
+	}
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(m.Edges) {
+			end = len(m.Edges)
+		}
+		go func(start, end int) {
+			errCh <- process(m.Edges[start:end])
+		}(start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -379,6 +422,7 @@ func (n *node) processApplyCh() {
 				// Don't break here. We still need to call the Done below.
 
 			} else {
+				start := time.Now()
 				perr = n.applyCommitted(proposal)
 				if len(proposal.Key) > 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
@@ -389,6 +433,16 @@ func (n *node) processApplyCh() {
 				}
 				n.elog.Printf("Applied proposal with key: %s, index: %d. Err: %v",
 					proposal.Key, proposal.Index, perr)
+
+				var tags []tag.Mutator
+				switch {
+				case proposal.Mutations != nil:
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+				case proposal.Delta != nil:
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+				}
+				ms := x.SinceMs(start)
+				ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(proposal.Key, perr)
@@ -450,6 +504,10 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		x.Errorf("Error while flushing to disk: %v", err)
 		return err
 	}
+
+	g := groups()
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.gid])
+
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
@@ -575,6 +633,7 @@ func (n *node) Run() {
 		close(done)
 	}()
 
+	traceOpt := otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 	var snapshotLoops uint64
 	for {
 		select {
@@ -614,10 +673,12 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			var start time.Time
 			var span *otrace.Span
 			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
 				// Optionally, trace this run.
-				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop")
+				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop", traceOpt)
+				start = time.Now()
 			}
 
 			if rd.SoftState != nil {
@@ -755,6 +816,11 @@ func (n *node) Run() {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
 			}
+			if !start.IsZero() {
+				ostats.RecordWithTags(context.Background(),
+					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
+					x.LatencyMs.M(x.SinceMs(start)))
+			}
 		}
 	}
 }
@@ -767,7 +833,6 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
-	writer.BlindWrite = true // Do overwrite keys.
 
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Rolling up"

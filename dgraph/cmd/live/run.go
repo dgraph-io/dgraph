@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,7 +30,6 @@ import (
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -40,29 +40,33 @@ import (
 	bopt "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/rdf"
+
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
 	"github.com/spf13/cobra"
 )
 
 type options struct {
-	files               string
+	dataFiles           string
+	dataFormat          string
 	schemaFile          string
 	dgraph              string
 	zero                string
 	concurrent          int
-	numRdf              int
+	batchSize           int
 	clientDir           string
 	ignoreIndexConflict bool
 	authToken           string
 	useCompression      bool
 }
 
-var opt options
-var tlsConf x.TLSHelperConfig
-
-var Live x.SubCommand
+var (
+	opt     options
+	tlsConf x.TLSHelperConfig
+	Live    x.SubCommand
+)
 
 func init() {
 	Live.Cmd = &cobra.Command{
@@ -78,14 +82,15 @@ func init() {
 	Live.EnvPrefix = "DGRAPH_LIVE"
 
 	flag := Live.Cmd.Flags()
-	flag.StringP("rdfs", "r", "", "Location of rdf files to load")
+	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
+	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
 	flag.IntP("batch", "b", 1000,
-		"Number of RDF N-Quads to send as part of a mutation.")
+		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
@@ -121,7 +126,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 
 // processSchemaFile process schema for a given gz file.
 func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
-	fmt.Printf("\nProcessing %s\n", file)
+	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
 		md.Append("auth-token", opt.authToken)
@@ -156,123 +161,111 @@ func (l *loader) uid(val string) string {
 	// to be an existing node in the graph. There is limited protection against
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
-	if strings.HasPrefix(val, "0x") {
-		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val
-		}
+	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+		l.alloc.BumpTo(uid)
+		return fmt.Sprintf("%#x", uid)
 	}
 
-	uid, _ := l.alloc.AssignUid(val)
+	uid := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
-func fileReader(file string) (io.Reader, *os.File) {
-	f, err := os.Open(file)
-	x.Check(err)
+// processFile forwards a file to the RDF or JSON processor as appropriate
+func (l *loader) processFile(ctx context.Context, filename string) error {
+	fmt.Printf("Processing data file %q\n", filename)
 
-	var r io.Reader
-	if filepath.Ext(file) == ".gz" {
-		r, err = gzip.NewReader(f)
-		x.Check(err)
-	} else {
-		r = bufio.NewReader(f)
+	rd, cleanup := chunker.FileReader(filename)
+	defer cleanup()
+
+	loadType := chunker.DataFormat(filename, opt.dataFormat)
+	if loadType == chunker.UnknownFormat {
+		if isJson, err := chunker.IsJSONData(rd); err == nil {
+			if isJson {
+				loadType = chunker.JsonFormat
+			} else {
+				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
+			}
+		}
 	}
-	return r, f
+
+	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
 }
 
-// processFile sends mutations for a given gz file.
-func (l *loader) processFile(ctx context.Context, file string) error {
-	fmt.Printf("\nProcessing %s\n", file)
-	gr, f := fileReader(file)
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
-	defer f.Close()
+func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
+	x.CheckfNoTrace(ck.Begin(rd))
 
-	var line uint64
-	mu := api.Mutation{}
-	var batchSize int
+	batch := make([]*api.NQuad, 0, 2*opt.batchSize)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		err := readLine(bufReader, &buf)
-		if err != nil {
-			if err != io.EOF {
-				return err
+
+		var nqs []*api.NQuad
+		chunkBuf, err := ck.Chunk(rd)
+		if chunkBuf != nil && chunkBuf.Len() > 0 {
+			nqs, err = ck.Parse(chunkBuf)
+			x.CheckfNoTrace(err)
+
+			for _, nq := range nqs {
+				nq.Subject = l.uid(nq.Subject)
+				if len(nq.ObjectId) > 0 {
+					nq.ObjectId = l.uid(nq.ObjectId)
+				}
+			}
+
+			batch = append(batch, nqs...)
+			for len(batch) >= opt.batchSize {
+				mu := api.Mutation{Set: batch[:opt.batchSize]}
+				l.reqs <- mu
+				// The following would create a new batch slice. We should not use batch =
+				// batch[opt.batchSize:], because it would end up modifying the batch array passed
+				// to l.reqs above.
+				batch = append([]*api.NQuad{}, batch[opt.batchSize:]...)
+			}
+		}
+		if err == io.EOF {
+			if len(batch) > 0 {
+				l.reqs <- api.Mutation{Set: batch}
 			}
 			break
-		}
-		line++
-
-		nq, err := rdf.Parse(buf.String())
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			buf.Reset()
-			continue
-		} else if err != nil {
-			return fmt.Errorf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
-		}
-		batchSize++
-		buf.Reset()
-
-		nq.Subject = l.uid(nq.Subject)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = l.uid(nq.ObjectId)
-		}
-		mu.Set = append(mu.Set, &nq)
-
-		if batchSize >= opt.numRdf {
-			l.reqs <- mu
-			batchSize = 0
-			mu = api.Mutation{}
+		} else {
+			x.Check(err)
 		}
 	}
-	if batchSize > 0 {
-		l.reqs <- mu
-		mu = api.Mutation{}
-	}
+	x.CheckfNoTrace(ck.End(rd))
+
 	return nil
 }
 
-func fileList(files string) []string {
-	if len(files) == 0 {
-		return []string{}
-	}
-	return strings.Split(files, ",")
-}
-
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
-	x.Check(os.MkdirAll(opt.clientDir, 0700))
-	o := badger.DefaultOptions
-	o.SyncWrites = true // So that checkpoints are persisted immediately.
-	o.TableLoadingMode = bopt.MemoryMap
-	o.Dir = opt.clientDir
-	o.ValueDir = opt.clientDir
+	var db *badger.DB
+	if len(opt.clientDir) > 0 {
+		x.Check(os.MkdirAll(opt.clientDir, 0700))
+		o := badger.DefaultOptions
+		o.Dir = opt.clientDir
+		o.ValueDir = opt.clientDir
+		o.TableLoadingMode = bopt.MemoryMap
+		o.SyncWrites = false
 
-	kv, err := badger.Open(o)
-	x.Checkf(err, "Error while creating badger KV posting store")
+		var err error
+		db, err = badger.Open(o)
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
 
 	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(
-		kv,
-		connzero,
-		xidmap.Options{
-			NumShards: 100,
-			LRUSize:   1e5,
-		},
-	)
-
+	alloc := xidmap.New(connzero, db)
 	l := &loader{
 		opts:     opts,
 		dc:       dc,
 		start:    time.Now(),
 		reqs:     make(chan api.Mutation, opts.Pending*2),
 		alloc:    alloc,
-		kv:       kv,
+		db:       db,
 		zeroconn: connzero,
 	}
 
@@ -288,12 +281,13 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 func run() error {
 	x.PrintVersion()
 	opt = options{
-		files:               Live.Conf.GetString("rdfs"),
+		dataFiles:           Live.Conf.GetString("files"),
+		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
 		dgraph:              Live.Conf.GetString("dgraph"),
 		zero:                Live.Conf.GetString("zero"),
 		concurrent:          Live.Conf.GetInt("conc"),
-		numRdf:              Live.Conf.GetInt("batch"),
+		batchSize:           Live.Conf.GetInt("batch"),
 		clientDir:           Live.Conf.GetString("xidmap"),
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
@@ -305,7 +299,7 @@ func run() error {
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
-		Size:          opt.numRdf,
+		Size:          opt.batchSize,
 		Pending:       opt.concurrent,
 		PrintCounters: true,
 		Ctx:           ctx,
@@ -324,17 +318,8 @@ func run() error {
 	}
 	dgraphClient := dgo.NewDgraphClient(clients...)
 
-	if len(opt.clientDir) == 0 {
-		var err error
-		opt.clientDir, err = ioutil.TempDir("", "x")
-		x.Checkf(err, "Error while trying to create temporary client directory.")
-		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
-		defer os.RemoveAll(opt.clientDir)
-	}
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
-	defer l.kv.Close()
-	defer l.alloc.EvictAll()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
@@ -345,13 +330,19 @@ func run() error {
 			fmt.Printf("Error while processing schema file %q: %s\n", opt.schemaFile, err)
 			return err
 		}
-		fmt.Printf("Processed schema file %q\n", opt.schemaFile)
+		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
-	filesList := fileList(opt.files)
+	if opt.dataFiles == "" {
+		return errors.New("RDF or JSON file(s) location must be specified")
+	}
+
+	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		return nil
+		return fmt.Errorf("No data files found in %s", opt.dataFiles)
+	} else {
+		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
@@ -370,7 +361,7 @@ func run() error {
 
 	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
-			fmt.Printf("Error while processing file %q: %s\n", filesList[i], err)
+			fmt.Printf("Error while processing data file %q: %s\n", filesList[i], err)
 			return err
 		}
 	}
@@ -384,17 +375,21 @@ func run() error {
 	c := l.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
-		rate = c.Rdfs
+		rate = c.Nquads
 	} else {
-		rate = c.Rdfs / uint64(c.Elapsed.Seconds())
+		rate = c.Nquads / uint64(c.Elapsed.Seconds())
 	}
 	// Lets print an empty line, otherwise Interrupted or Number of Mutations overwrites the
 	// previous printed line.
 	fmt.Printf("%100s\r", "")
-	fmt.Printf("Number of TXs run         : %d\n", c.TxnsDone)
-	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
-	fmt.Printf("Time spent                : %v\n", c.Elapsed)
-	fmt.Printf("RDFs processed per second : %d\n", rate)
+	fmt.Printf("Number of TXs run            : %d\n", c.TxnsDone)
+	fmt.Printf("Number of N-Quads processed  : %d\n", c.Nquads)
+	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
+	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if l.db != nil {
+		l.alloc.Flush()
+		l.db.Close()
+	}
 	return nil
 }

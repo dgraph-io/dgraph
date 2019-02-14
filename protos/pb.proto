@@ -133,6 +133,7 @@ message Group {
 	map<uint64, Member> members = 1; // Raft ID is the key.
 	map<string, Tablet> tablets = 2; // Predicate + others are key.
 	uint64 snapshot_ts          = 3; // Stores Snapshot transaction ts.
+	uint64 checksum             = 4; // Stores a checksum.
 }
 
 message ZeroProposal {
@@ -240,7 +241,7 @@ message Posting {
 		UID = 7;
 		PASSWORD = 8;
 		STRING = 9;
-
+    OBJECT = 10;
 	}
 	ValType val_type = 3;
 	enum PostingType {
@@ -337,9 +338,22 @@ message SchemaUpdate {
 	bool upsert = 8;
 	bool lang = 9;
 
+	// Fields required for type system.
+	bool non_nullable = 10;
+	bool non_nullable_list = 11;
+
+	// If value_type is OBJECT, then this represents an object type with a
+	// custom name. This field stores said name.
+	string object_type_name = 12;
+
 	// Deleted field:
 	reserved 7;
 	reserved "explicit";
+}
+
+message TypeUpdate {
+	string type_name = 1;
+	repeated SchemaUpdate fields = 2;
 }
 
 // Bulk loader proto.
@@ -364,8 +378,9 @@ message TxnStatus {
 }
 
 message OracleDelta {
-	repeated TxnStatus txns = 1;
-	uint64 max_assigned = 2;
+	repeated TxnStatus txns             = 1;
+	uint64 max_assigned                 = 2;
+	map<uint32, uint64> group_checksums = 3;
 	// implement tmax.
 }
 

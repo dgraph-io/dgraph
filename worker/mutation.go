@@ -290,7 +290,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
+		return x.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -499,7 +499,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	attributes = append(attributes, otrace.BoolAttribute("committed", tctx.CommitTs > 0))
 	span.Annotate(attributes, "")
 
-	if tctx.Aborted {
+	if tctx.Aborted || tctx.CommitTs == 0 {
 		return 0, y.ErrAborted
 	}
 	return tctx.CommitTs, nil

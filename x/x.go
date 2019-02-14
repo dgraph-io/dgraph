@@ -83,15 +83,7 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	InitialPreds   = map[string]struct{}{
-		PredicateListAttr:   {},
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-		"type":              {},
-	}
-	Nilbyte []byte
+	Nilbyte        []byte
 )
 
 func ShouldCrash(err error) bool {
@@ -441,7 +433,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 
-	if tlsConf.CertRequired {
+	if tlsConf != nil && tlsConf.CertRequired {
 		tlsConf.ConfigType = TLSClientConfig
 		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
 		if err != nil {
@@ -486,6 +478,7 @@ func SpanTimer(span *trace.Span, name string) func() {
 
 	return func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
+		// TODO: We can look into doing a latency record here.
 	}
 }
 

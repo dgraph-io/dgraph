@@ -1,0 +1,24 @@
+# Docker compose file for testing WAL directories mounted in tmpfs. Use it with:
+# ./run.sh --tmpfs
+# This would pick up dgraph binary from $GOPATH.
+
+version: "3.5"
+services:
+  zero1:
+    tmpfs:
+      - /data/dg0.1/zw
+  zero2:
+    tmpfs:
+      - /data/dg0.2/zw
+  zero3:
+    tmpfs:
+      - /data/dg0.3/zw
+  dg1:
+    tmpfs:
+      - /data/dg1/w
+  dg2:
+    tmpfs:
+      - /data/dg2/w
+  dg3:
+    tmpfs:
+      - /data/dg3/w
