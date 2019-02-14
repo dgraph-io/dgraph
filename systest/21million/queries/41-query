@@ -1,0 +1,20 @@
+{
+ AngelinaInfo(func:allofterms(name@en, "angelina jolie")) {
+  name@en
+   actor.film {
+    performance.film {
+      genre {
+        name@en
+      }
+    }
+   }
+  }
+
+ DirectorInfo(func: eq(name@en, "Peter Jackson")) {
+    name@en
+    director.film @filter(ge(initial_release_date, "2008"))  {
+        Release_date: initial_release_date
+        Name: name@en
+    }
+  }
+}
