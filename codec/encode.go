@@ -83,37 +83,3 @@ func encodeBool(l bool) ([]byte, error) {
 		return []byte{0x00}, nil
 	}
 }
-
-func Decode(b []byte, t string) (interface{}, error) {
-	switch(t) {
-		case "int", "int64":
-			return decodeInteger(b)
-	}
-	return []byte{}, nil
-}
-
-func decodeInteger(b []byte) (int64, error) { 
-	if len(b) == 1 {
-		return int64(b[0]>>2), nil
-	} else if len(b) == 2 {
-		o := binary.LittleEndian.Uint16(b)>>2
-		return int64(o), nil
-	} else if len(b) == 4 {
-		o := binary.LittleEndian.Uint32(b)>>2
-		return int64(o), nil
-	} else {
-		topSixBits := (binary.LittleEndian.Uint16(b)&0xff)>>2
-		byteLen := topSixBits + 4
-
-		if byteLen == 4 {
-			return int64(binary.LittleEndian.Uint32(b[1:byteLen+1])), nil
-		} else if byteLen > 4 && byteLen < 8 {
-			upperBytes := make([]byte, 8-byteLen)
-			upperBytes = append(b[5:byteLen+1], upperBytes...)
-			upper := int64(binary.LittleEndian.Uint32(upperBytes))<<32
-			lower := int64(binary.LittleEndian.Uint32(b[1:5]))
-			return int64(upper + lower), nil
-		}
-		return int64(0), nil
-	}
-}
