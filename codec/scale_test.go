@@ -33,7 +33,11 @@ var encodeTests = []encodeTest{
 	{val: []byte{0x01}, 		output: []byte{0x04, 0x01}},
 	{val: []byte{0xff}, 		output: []byte{0x04, 0xff}},	
 	{val: []byte{0x01, 0x01}, 	output: []byte{0x08, 0x01, 0x01}},	
-	{val: []byte{0x01, 0x01}, 	output: []byte{0x08, 0x01, 0x01}},	
+	{val: []byte{0x01, 0x01}, 	output: []byte{0x08, 0x01, 0x01}},
+
+	// booleans
+	{val: true, 				output: []byte{0x01}},
+	{val: false,				output: []byte{0x00}},
 }
 
 var decodeIntTests = []decodeIntTest {
