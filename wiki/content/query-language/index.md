@@ -465,6 +465,7 @@ Syntax Examples:
 * `eq(predicate, val(varName))`
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
+* `eq(predicate, [var1, var2, ..., varN])`
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
