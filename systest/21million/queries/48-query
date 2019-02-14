@@ -1,0 +1,17 @@
+{
+	movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
+
+    paths as math(1)
+    total_films : num_films as count(director.film)
+    director : name@en
+
+    director.film {
+      starring {
+        performance.actor {
+          fraction : math(paths / (num_films/paths))
+          actor : name@en
+        }
+      }
+    }
+  }
+}

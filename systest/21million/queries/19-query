@@ -1,0 +1,8 @@
+{
+  genre(func: gt(count(~genre), 30000)){
+    name@en
+    ~genre (first:1) {
+      name@en
+    }
+  }
+}

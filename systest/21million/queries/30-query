@@ -1,0 +1,20 @@
+{
+  ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
+    director.film {
+      num_actors as count(starring)
+    }
+    average as avg(val(num_actors))
+  }
+
+  films(func: uid(ID)) {
+    english_name : name@en
+    average_actors : val(average)
+    num_films : count(director.film)
+
+    films : director.film {
+      name : name@en
+      english_name : name@en
+      french_name : name@fr
+    }
+  }
+}
