@@ -336,6 +336,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 }
 
 func Marshal(from Val, to *Val) error {
+	if to == nil {
+		return x.Errorf("Invalid conversion %s to nil", from.Tid.Name())
+	}
+
 	fromID := from.Tid
 	toID := to.Tid
 	val := from.Value
