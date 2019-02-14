@@ -42,12 +42,15 @@ var encodeTests = []encodeTest{
 
 var decodeIntTests = []decodeIntTest {
 	// compact integers
-	{val: []byte{0x00}, 						output: 0},
-	{val: []byte{0x04}, 						output: 1},
-	{val: []byte{0xa8}, 						output: 42},
-	{val: []byte{0x15, 0x01},					output: 69},
-	{val: []byte{0xfe, 0xff, 0xff, 0xff}, 		output: int64(1073741823)},
-	{val: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, output: int64(1073741824)},
+	{val: []byte{0x00}, 									output: int64(0)},
+	{val: []byte{0x04}, 									output: int64(1)},
+	{val: []byte{0xa8}, 									output: int64(42)},
+	{val: []byte{0x15, 0x01},								output: int64(69)},
+	{val: []byte{0xfd, 0xff},								output: int64(16383)},
+	{val: []byte{0xfe, 0xff, 0xff, 0xff}, 					output: int64(1073741823)},
+	{val: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, 			output: int64(1073741824)},
+	{val: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, 			output: int64(1<<32-1)},
+	{val: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01},		output: int64(1<<32)},
 }
 
 func TestEncode(t *testing.T) {
