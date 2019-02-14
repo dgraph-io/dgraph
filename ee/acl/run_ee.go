@@ -98,7 +98,7 @@ func initSubcommands() []*x.SubCommand {
 	}
 	chPwdFlags := cmdPasswd.Cmd.Flags()
 	chPwdFlags.StringP("user", "u", "", "The user id to be created")
-	chPwdFlags.StringP("new_password", "", "", "The new password for the user")
+	chPwdFlags.StringP("new", "", "", "The new password for the user")
 
 	// user deletion command
 	var cmdUserDel x.SubCommand
@@ -255,6 +255,10 @@ func info(conf *viper.Viper) error {
 		if err != nil {
 			return err
 		}
+		if user == nil {
+			fmt.Printf("The user %q does not exist.\n", userId)
+			return nil
+		}
 
 		fmt.Println()
 		fmt.Printf("User  : %-5s\n", userId)
@@ -271,7 +275,7 @@ func info(conf *viper.Viper) error {
 			return err
 		}
 		if group == nil {
-			fmt.Printf("The group %s does not exist.\n", groupId)
+			fmt.Printf("The group %q does not exist.\n", groupId)
 			return nil
 		}
 		fmt.Printf("Group: %5s\n", groupId)

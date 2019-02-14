@@ -584,8 +584,8 @@ type AccessEntry struct {
 }
 
 func logAccess(log *AccessEntry) {
-	glog.V(1).Infof("ACL-LOG Authorizing user %s with groups %s on predicate %s "+
-		"for %s, allowed %v", log.userId, strings.Join(log.groups, ","),
+	glog.V(1).Infof("ACL-LOG Authorizing user %q with groups %q on predicate %q "+
+		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
 		log.predicate, log.operation.Name, log.allowed)
 }
 
