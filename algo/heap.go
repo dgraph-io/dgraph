@@ -79,7 +79,7 @@ func upHeap(h *uint64Heap, pos int) {
 }
 
 // downHeap refines the value level
-// starting from the upper level “pos” to the right levels, 
+// starting from the upper level “pos” to the right levels,
 // in the binary tree “h”
 func downHeap(h *uint64Heap, pos, n int) bool {
 	current := pos
