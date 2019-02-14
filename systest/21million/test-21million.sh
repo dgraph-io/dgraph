@@ -5,7 +5,7 @@ readonly ME=${0##*/}
 COMPOSE_FILE=$(dirname $0)/docker-compose.yml
 QUERY_DIR=$(dirname $0)/queries
 BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
-SCHEMA_URL="$BENCHMARKS_REPO/blob/javier/update_21million/data/21million.schema?raw=true"
+SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
 DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
 
 # these may be changed for testing the test
