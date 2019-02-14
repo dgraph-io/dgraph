@@ -1,9 +1,6 @@
 #!/bin/bash -e
 
 readonly ME=${0##*/}
-readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
-
-source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 COMPOSE_FILE=$(dirname $0)/docker-compose.yml
 QUERY_DIR=$(dirname $0)/queries
@@ -80,7 +77,7 @@ for IN_FILE in $QUERY_DIR/*-query; do
     REF_FILE=${IN_FILE/query/result}
     OUT_FILE=$TEMP_DIR/$(basename $REF_FILE)
 
-    # sorting the results destroys the JSON structure but allows diff'ing them
+    # sorting the JSON destroys its structure but allows it to be diff'd
     curl -Ss http://localhost:8180/query -d@$IN_FILE | jq .data | sort >> $OUT_FILE
     if ! diff -q $REF_FILE $OUT_FILE &>/dev/null; then
         echo -e "\n$IN_FILE results differ"
