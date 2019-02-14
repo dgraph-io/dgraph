@@ -1944,3 +1944,26 @@ func TestMultipleTypeDirectivesInPredicate(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"enemy":[{"name":"Margaret", "pet":[{"name":"Bear"}]}, {"name":"Leonard"}]}]}}`, js)
 }
+
+func TestQueryUnknownType(t *testing.T) {
+	query := `types(UnknownType)`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestQuerySingleType(t *testing.T) {
+	query := `types(Person)`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"types":[{"typeName":"Person",
+		"fields":[{"fieldName":"name", "type":"string"}, {"fieldName":"pet", "type":"Animal"}]}]}}`,
+		js)
+}
+
+func TestQueryMultipleTypes(t *testing.T) {
+	query := `types(Person, Animal)`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"types":[{"typeName":"Animal",
+		"fields":[{"fieldName":"name", "type":"string"}]},
+	{"typeName":"Person", "fields":[{"fieldName":"name", "type": "string"},
+		{"fieldName":"pet", "type":"Animal"}]}]}}`, js)
+}

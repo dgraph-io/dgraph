@@ -199,6 +199,7 @@ message Mutations {
 	repeated SchemaUpdate schema = 4;
 	bool drop_all                = 5;
 	bool ignore_index_conflict   = 6;
+	repeated TypeUpdate types    = 7;
 }
 
 message Snapshot {
@@ -355,6 +356,11 @@ message TypeUpdate {
 	string type_name = 1;
 	repeated SchemaUpdate fields = 2;
 }
+
+message TypeRequest {
+	repeated string type_names = 1;
+}
+
 
 // Bulk loader proto.
 message MapEntry {

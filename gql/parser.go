@@ -455,6 +455,7 @@ type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
 	Schema    *pb.SchemaRequest
+	Types     *pb.TypeRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -487,6 +488,16 @@ func Parse(r Request) (res Result, rerr error) {
 					return res, item.Errorf("Schema block is not allowed with query block")
 				}
 				if res.Schema, rerr = getSchema(it); rerr != nil {
+					return res, rerr
+				}
+			} else if item.Val == "types" {
+				if res.Types != nil {
+					return res, item.Errorf("Only one type block allowed ")
+				}
+				if res.Query != nil {
+					return res, item.Errorf("Type block is not allowed with query block")
+				}
+				if res.Types, rerr = getTypes(it); rerr != nil {
 					return res, rerr
 				}
 			} else if item.Val == "fragment" {
@@ -960,6 +971,54 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 		}
 	}
 	return nil, it.Errorf("Invalid schema block.")
+}
+
+// parseTypeNames parses till rightround is found
+func parseTypeNames(it *lex.ItemIterator, req *pb.TypeRequest) error {
+	seenType := false
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightRound:
+			return nil
+		case itemComma:
+			if !seenType {
+				return item.Errorf("Invalid comma")
+			}
+			seenType = false
+		case itemName:
+			if seenType {
+				return item.Errorf("A comma is required between types")
+			}
+			req.TypeNames = append(req.TypeNames, item.Val)
+			seenType = true
+		default:
+			return item.Errorf("Invalid type block")
+		}
+	}
+	return it.Item().Errorf("Invalid type block")
+}
+
+func getTypes(it *lex.ItemIterator) (*pb.TypeRequest, error) {
+	var req pb.TypeRequest
+	leftRoundSeen := false
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemLeftRound:
+			if leftRoundSeen {
+				return nil, item.Errorf("Too many left rounds in type block")
+			}
+			leftRoundSeen = true
+			if err := parseTypeNames(it, &req); err != nil {
+				return nil, err
+			}
+			return &req, nil
+		default:
+			return nil, item.Errorf("Invalid type block")
+		}
+	}
+	return nil, it.Errorf("Invalid type block")
 }
 
 // parseGqlVariables parses the the graphQL variable declaration.

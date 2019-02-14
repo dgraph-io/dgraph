@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -360,6 +361,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Got schema: %+v\n", result.Schemas)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Schemas
+	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
@@ -575,18 +577,28 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	}
 
 	// Core processing happens here.
-	var er query.ExecuteResult
+	var er query.ExecutionResult
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, x.Wrap(err)
 	}
-	resp.Schema = er.SchemaNode
 
 	var js []byte
-	if len(resp.Schema) > 0 {
-		sort.Slice(resp.Schema, func(i, j int) bool {
-			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		sort.Slice(er.SchemaNode, func(i, j int) bool {
+			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
-		js, err = json.Marshal(map[string]interface{}{"schema": resp.Schema})
+		sort.Slice(er.Types, func(i, j int) bool {
+			return er.Types[i].TypeName < er.Types[j].TypeName
+		})
+
+		respMap := make(map[string]interface{})
+		if len(er.SchemaNode) > 0 {
+			respMap["schema"] = er.SchemaNode
+		}
+		if len(er.Types) > 0 {
+			respMap["types"] = formatTypes(er.Types)
+		}
+		js, err = json.Marshal(respMap)
 	} else {
 		js, err = query.ToJson(&l, er.Subgraphs)
 	}
@@ -820,4 +832,54 @@ func validateKeys(nq *api.NQuad) error {
 		}
 	}
 	return nil
+}
+
+// formatField takes a SchemaUpdate representing a field in a type and converts
+// it into a map containing keys for the type name and the type.
+func formatField(field *pb.SchemaUpdate) map[string]string {
+	fieldMap := make(map[string]string)
+	fieldMap["fieldName"] = field.Predicate
+	typ := ""
+	if field.List {
+		typ += "["
+	}
+
+	if field.ValueType == pb.Posting_OBJECT {
+		typ += field.ObjectTypeName
+	} else {
+		typeId := types.TypeID(field.ValueType)
+		typ += typeId.Name()
+	}
+
+	if field.NonNullable {
+		typ += "!"
+	}
+	if field.List {
+		typ += "]"
+	}
+	if field.NonNullableList {
+		typ += "!"
+	}
+	fieldMap["type"] = typ
+
+	return fieldMap
+}
+
+// formatTypes takes a list of TypeUpdates and converts them in to a list of
+// maps in a format that is human-readable to be marshaled into JSON.
+func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
+	var res []map[string]interface{}
+	for _, typ := range types {
+		typeMap := make(map[string]interface{})
+		typeMap["typeName"] = typ.TypeName
+		typeMap["fields"] = make([]map[string]string, 0)
+
+		for _, field := range typ.Fields {
+			fieldMap := formatField(field)
+			typeMap["fields"] = append(typeMap["fields"].([]map[string]string), fieldMap)
+		}
+
+		res = append(res, typeMap)
+	}
+	return res
 }

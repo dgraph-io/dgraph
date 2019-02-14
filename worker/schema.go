@@ -214,3 +214,25 @@ func (w *grpcWorker) Schema(ctx context.Context, s *pb.SchemaRequest) (*pb.Schem
 	}
 	return getSchema(ctx, s)
 }
+
+// GetTypes processes the type requests and retrieves the desired types.
+func GetTypes(ctx context.Context, req *pb.TypeRequest) ([]*pb.TypeUpdate, error) {
+	var typeNames []string
+	var out []*pb.TypeUpdate
+
+	if len(req.TypeNames) == 0 {
+		typeNames = schema.State().Types()
+	} else {
+		typeNames = req.TypeNames
+	}
+
+	for _, name := range typeNames {
+		typeUpdate, found := schema.State().GetType(name)
+		if !found {
+			continue
+		}
+		out = append(out, &typeUpdate)
+	}
+
+	return out, nil
+}

@@ -830,6 +830,10 @@ func (g *groupi) cleanupTablets() {
 				itr.Seek(pk.SkipSchema())
 				continue
 			}
+			if pk.IsType() {
+				itr.Seek(pk.SkipType())
+				continue
+			}
 			itr.Seek(pk.SkipPredicate())
 		}
 	}

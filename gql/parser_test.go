@@ -4681,3 +4681,54 @@ func TestMultipleTypeDirectives(t *testing.T) {
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
 	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
 }
+
+func TestParseEmptyTypeQuery(t *testing.T) {
+	query := `
+		types()
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Types)
+	require.Equal(t, 0, len(res.Types.TypeNames))
+}
+
+func TestParseTypeQuery(t *testing.T) {
+	query := `
+		types(Person)
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Types)
+	require.Equal(t, 1, len(res.Types.TypeNames))
+	require.Equal(t, "Person", res.Types.TypeNames[0])
+}
+
+func TestParseTypeQueryMultiple(t *testing.T) {
+	query := `
+		types(Person, Animal)
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Types)
+	require.Equal(t, 2, len(res.Types.TypeNames))
+	require.Equal(t, "Person", res.Types.TypeNames[0])
+	require.Equal(t, "Animal", res.Types.TypeNames[1])
+}
+
+func TestParseInvalidTypeQuery1(t *testing.T) {
+	query := `
+		types(
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unclosed type action")
+}
+
+func TestParseInvalidTypeQuery2(t *testing.T) {
+	query := `
+		types(Person Animal)
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "A comma is required between types")
+}
