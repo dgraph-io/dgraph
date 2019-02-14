@@ -1,0 +1,15 @@
+{
+	var(func:allofterms(name@en, "steven spielberg")) {
+		films as director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as math(p + q + r)
+		}
+	}
+
+	TopMovies(func: uid(films), orderdesc: val(score), first: 5){
+		name@en
+		val(score)
+	}
+}

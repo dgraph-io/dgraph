@@ -1,0 +1,13 @@
+{
+  ID as var(func: allofterms(name@en, "Steven")) {
+    director.film {
+      num_actors as count(starring)
+    }
+    total as sum(val(num_actors))
+  }
+
+  dirs(func: uid(ID)) @filter(gt(val(total), 100)) {
+    name@en
+    total_actors : val(total)
+  }
+}

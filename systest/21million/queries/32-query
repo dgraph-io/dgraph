@@ -1,0 +1,17 @@
+{
+  ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
+    director.film {
+      stars as count(starring)
+    }
+    totalActors as sum(val(stars))
+  }
+
+  mostStars(func: uid(ID), orderdesc: val(totalActors), first: 3) {
+    name@en
+    stars : val(totalActors)
+
+    director.film {
+      name@en
+    }
+  }
+}

@@ -136,6 +136,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 
 	checkLoadedData(t)
 }
+
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile) + "/test_data"
