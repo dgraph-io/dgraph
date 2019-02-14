@@ -9,12 +9,12 @@ COMPOSE_FILE=$(dirname $0)/docker-compose.yml
 QUERY_DIR=$(dirname $0)/queries
 BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
 SCHEMA_URL="$BENCHMARKS_REPO/blob/javier/update_21million/data/21million.schema?raw=true"
-SCHEMA_FILE=$QUERY_DIR/schema.txt
 DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
 
 # these may be changed for testing the test
 DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
 DGRAPH_RELOAD=${DGRAPH_RELOAD:=yes}
+DGRAPH_LOAD_ONLY=${DGRAPH_LOAD_ONLY:=}
 
 function Info {
     echo -e "INFO: $*"
@@ -68,32 +68,34 @@ if [[ $DGRAPH_RELOAD && $DGRAPH_LOADER == live ]]; then
                 --format=rdf --zero=:5080 --dgraph=:9180 --logtostderr
 fi
 
+# if env var is set, exit after loading data
+[[ $DGRAPH_LOAD_ONLY ]] && exit 0
+
 Info "running benchmarks/regression queries"
 TEMP_DIR=$(mktemp -d --tmpdir $ME.tmp-XXXXXX)
 FOUND_DIFFS=0
-trap "rm -rf $TEMPDIR" EXIT
-for FILE in $QUERY_DIR/query-*.txt; do
-#    echo >&2 -n "."
-#    OUT_FILE=$TEMP_DIR/query-$IDX.txt
-#    GOLDEN_FILE=$QUERY_DIR/query-$IDX.txt
-#    curl -LSs "$QUERIES_BASE_URL/query-$IDX.txt?raw=true"         > $OUT_FILE
-#    curl -Ss http://localhost:8180/query -d@$OUT_FILE | jq .data >> $OUT_FILE
-#    if ! diff -q $GOLDEN_FILE $OUT_FILE; then
-#        FOUND_DIFFS=1
-#        diff $GOLDEN_FILE $OUT_FILE
-#    fi
-    echo $FILE
-    curl -Ss http://localhost:8180/query -d@$FILE | jq -S .data >> $FILE
+trap "rm -rf $TEMP_DIR" EXIT
+for IN_FILE in $QUERY_DIR/*-query; do
+    echo >&2 -n "."
+    REF_FILE=${IN_FILE/query/result}
+    OUT_FILE=$TEMP_DIR/$(basename $REF_FILE)
+
+    # sorting the results destroys the JSON structure but allows diff'ing them
+    curl -Ss http://localhost:8180/query -d@$IN_FILE | jq .data | sort >> $OUT_FILE
+    if ! diff -q $REF_FILE $OUT_FILE &>/dev/null; then
+        echo -e "\n$IN_FILE results differ"
+        FOUND_DIFFS=1
+    fi
 done
 echo
 
-#Info "bringing down zero and alpha containers"
-#DockerCompose down
-#
-#if [[ $FOUND_DIFFS -eq 0 ]]; then
-#    Info "no diffs found in query results"
-#else
-#    Info "found some diffs in query results"
-#fi
+Info "bringing down zero and alpha containers"
+DockerCompose down -v
+
+if [[ $FOUND_DIFFS -eq 0 ]]; then
+    Info "no diffs found in query results"
+else
+    Info "found some diffs in query results"
+fi
 
 exit $FOUND_DIFFS
