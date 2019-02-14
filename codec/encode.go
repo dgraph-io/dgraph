@@ -5,10 +5,16 @@ import (
 	"errors"
 )
 
+// Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64,
+// or bool
 func Encode(b interface{}) ([]byte, error) {
 	switch v := b.(type) {
 		case []byte:
 			return encodeByteArray(v)
+		case int16:
+			return encodeInteger(int64(v))
+		case int32:
+			return encodeInteger(int64(v))
 		case int64:
 			return encodeInteger(v)
 		case bool:
@@ -19,6 +25,9 @@ func Encode(b interface{}) ([]byte, error) {
 	return []byte{}, nil
 }
 
+// encodeByteArray performs the following:
+// b -> [encodeInteger(len(b)) b]
+// it returns a byte array where the first byte is the length of b encoded with SCALE, followed by the byte array b itself
 func encodeByteArray(b []byte) ([]byte, error) {
 	encodedLen, err := encodeInteger(int64(len(b)))
 	if err != nil {
@@ -28,13 +37,13 @@ func encodeByteArray(b []byte) ([]byte, error) {
 }
 
 // encodeInteger performs the following on integer i:
-// i -> base2(i) -> i^n...i^0 where n is the length in bits of i
-// note that the bit representation of i is in little endian; ie i^n is the least significant bit of i,
-// and i^0 is the most significant bit
-// if n < 2^6 return i^n...i^2 00 [ 8 bits = 1 byte output ]
-// if 2^6 <= n < 2^14 return i^n...i^2 01 [ 16 bits = 2 byte output ]
-// if 2^14 <= n < 2^30 return i^n...i^2 10 [ 32 bits = 4 byte output ]
-// if n >= 2^30 return [top 6 bits of first byte = # of bytes following less 4] [bottom 2 bits of first byte = 11]
+// i  -> i^0...i^n where n is the length in bits of i
+// note that the bit representation of i is in little endian; ie i^0 is the least significant bit of i,
+// and i^n is the most significant bit
+// if n < 2^6 return [00 i^2...i^8 ] [ 8 bits = 1 byte output ]
+// if 2^6 <= n < 2^14 return [01 i^2...i^16] [ 16 bits = 2 byte output ]
+// if 2^14 <= n < 2^30 return [10 i^2...i^32] [ 32 bits = 4 byte output ]
+// if n >= 2^30 return [lower 2 bits of first byte = 11] [upper 6 bits of first byte = # of bytes following less 4] 
 // [append i as a byte array to the first byte]
 func encodeInteger(i int64) ([]byte, error) {
 	if i < 1 << 6 { 
@@ -76,6 +85,9 @@ func encodeInteger(i int64) ([]byte, error) {
 	}
 }
 
+// encodeBool performs the following:
+// l = true -> return [1]
+// l = false -> return [0]
 func encodeBool(l bool) ([]byte, error) {
 	if l {
 		return []byte{0x01}, nil
