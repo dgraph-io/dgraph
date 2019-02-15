@@ -34,7 +34,6 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	x.Check(err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	x.Check(err)
 
 	return dg

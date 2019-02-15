@@ -1,3 +1,5 @@
+// +build standalone
+
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
@@ -18,17 +20,19 @@ package main
 
 import (
 	"context"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"io/ioutil"
 	"path"
 	"runtime"
 	"strings"
+	"testing"
+
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
-func main() {
+func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := path.Dir(thisFile) + "/query"
+	queryDir := path.Dir(thisFile) + "/queries"
 
 	dg := z.DgraphClient(":9180")
 
@@ -38,21 +42,11 @@ func main() {
 	for _, file := range files {
 		contents, err := ioutil.ReadFile(queryDir + "/" + file.Name())
 		x.CheckfNoTrace(err)
+
 		content := strings.SplitN(string(contents), "\n---\n", 2)
-
 		resp, err := dg.NewTxn().Query(context.Background(), content[0])
-		x.Checkf(err, "on file %s with query %s:", file, content[0])
 
-		z.CompareJSON(nil, `
-		{
-		    "q": [
-					{
-					"name": "Homer",
-					"age": 38,
-					"role": "father"
-			    }
-			]
-		}
-	`, string(resp.GetJson()))
+		t.Logf("running %s", file.Name())
+		z.CompareJSON(t, content[1], string(resp.GetJson()))
 	}
 }

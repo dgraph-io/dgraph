@@ -8,7 +8,8 @@ BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
 SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
 DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
 
-# these may be changed for testing the test
+# these may be used for testing the test
+DATA_URL="$BENCHMARKS_REPO/blob/master/data/goldendata.rdf.gz?raw=true"
 DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
 DGRAPH_RELOAD=${DGRAPH_RELOAD:=yes}
 DGRAPH_LOAD_ONLY=${DGRAPH_LOAD_ONLY:=}
@@ -71,7 +72,7 @@ fi
 Info "running benchmarks/regression queries"
 TEMP_DIR=$(mktemp -d --tmpdir $ME.tmp-XXXXXX)
 FOUND_DIFFS=0
-trap "rm -rf $TEMP_DIR" EXIT
+//trap "rm -rf $TEMP_DIR" EXIT
 for IN_FILE in $QUERY_DIR/*-query; do
     echo >&2 -n "."
     REF_FILE=${IN_FILE/query/result}
