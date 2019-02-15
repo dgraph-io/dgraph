@@ -47,6 +47,10 @@ func TestQueries(t *testing.T) {
 		resp, err := dg.NewTxn().Query(context.Background(), content[0])
 
 		t.Logf("running %s", file.Name())
-		z.CompareJSON(t, content[1], string(resp.GetJson()))
+		if len(resp.GetJson()) > 0 {
+			z.CompareJSON(t, content[1], string(resp.GetJson()))
+		} else {
+			t.Error("  got empty response")
+		}
 	}
 }

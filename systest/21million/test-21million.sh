@@ -1,15 +1,16 @@
 #!/bin/bash -e
 
 readonly ME=${0##*/}
+readonly SRCDIR=$(dirname $0)
 
-COMPOSE_FILE=$(dirname $0)/docker-compose.yml
-QUERY_DIR=$(dirname $0)/queries
+COMPOSE_FILE=$SRCDIR/docker-compose.yml
+QUERY_DIR=$SRCDIR/queries
 BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
 SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
 DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
 
 # these may be used for testing the test
-DATA_URL="$BENCHMARKS_REPO/blob/master/data/goldendata.rdf.gz?raw=true"
+#DATA_URL="$BENCHMARKS_REPO/blob/master/data/goldendata.rdf.gz?raw=true"
 DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
 DGRAPH_RELOAD=${DGRAPH_RELOAD:=yes}
 DGRAPH_LOAD_ONLY=${DGRAPH_LOAD_ONLY:=}
@@ -30,6 +31,9 @@ fi
 if [[ ${DGRAPH_RELOAD,,} != yes ]]; then
     unset DGRAPH_RELOAD
 fi
+
+Info "entering directory $SRCDIR"
+cd $SRCDIR
 
 if [[ $DGRAPH_RELOAD ]]; then
     Info "removing old data (if any)"
@@ -70,25 +74,14 @@ fi
 [[ $DGRAPH_LOAD_ONLY ]] && exit 0
 
 Info "running benchmarks/regression queries"
-TEMP_DIR=$(mktemp -d --tmpdir $ME.tmp-XXXXXX)
-FOUND_DIFFS=0
-//trap "rm -rf $TEMP_DIR" EXIT
-for IN_FILE in $QUERY_DIR/*-query; do
-    echo >&2 -n "."
-    REF_FILE=${IN_FILE/query/result}
-    OUT_FILE=$TEMP_DIR/$(basename $REF_FILE)
-
-    # sorting the JSON destroys its structure but allows it to be diff'd
-    curl -Ss http://localhost:8180/query -d@$IN_FILE | jq .data | sort >> $OUT_FILE
-    if ! diff -q $REF_FILE $OUT_FILE &>/dev/null; then
-        echo -e "\n$IN_FILE results differ"
-        FOUND_DIFFS=1
-    fi
-done
-echo
+go test -v -tags standalone
 
 Info "bringing down zero and alpha containers"
-DockerCompose down -v
+if [[ $DEGRAPH_RELOAD ]]; then
+    DockerCompose down -v
+else
+    DockerCompose down
+fi
 
 if [[ $FOUND_DIFFS -eq 0 ]]; then
     Info "no diffs found in query results"
