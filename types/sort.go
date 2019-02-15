@@ -123,6 +123,12 @@ func less(a, b Val) bool {
 	if a.Tid != b.Tid {
 		return mismatchedLess(a, b)
 	}
+	if a.Value == nil {
+		a = ValueForType(a.Tid)
+	}
+	if b.Value == nil {
+		b = ValueForType(b.Tid)
+	}
 	switch a.Tid {
 	case DateTimeID:
 		return a.Value.(time.Time).Before(b.Value.(time.Time))
@@ -174,6 +180,12 @@ func Equal(a, b Val) (bool, error) {
 func equal(a, b Val) bool {
 	if a.Tid != b.Tid {
 		return false
+	}
+	if a.Value == nil {
+		a = ValueForType(a.Tid)
+	}
+	if b.Value == nil {
+		b = ValueForType(b.Tid)
 	}
 	switch a.Tid {
 	case DateTimeID:
