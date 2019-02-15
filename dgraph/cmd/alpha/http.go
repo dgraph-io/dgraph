@@ -326,15 +326,24 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var reqList []string
+	useList := false
+	if err := json.Unmarshal(reqText, &reqList); err == nil {
+		useList = true
+	}
+
 	var reqMap map[string][]string
-	if err := json.Unmarshal(reqText, &reqMap); err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while unmarshalling keys header into array")
+	if err := json.Unmarshal(reqText, &reqMap); err != nil && !useList {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Error while unmarshalling request body")
 		return
 	}
 
-	tc.Keys = reqMap["keys"]
-	tc.Preds = reqMap["preds"]
+	if useList {
+		tc.Keys = reqList
+	} else {
+		tc.Keys = reqMap["keys"]
+		tc.Preds = reqMap["preds"]
+	}
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
