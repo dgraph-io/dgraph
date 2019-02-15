@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Tests in this file require a cluster running with --query_edge_limit=5.
+
 func TestRecurseEdgeLimitError(t *testing.T) {
 	q := `
 		{
