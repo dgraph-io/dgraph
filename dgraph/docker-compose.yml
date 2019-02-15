@@ -113,3 +113,57 @@ services:
       cluster: test
       service: alpha
     command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  dg4:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg4
+    working_dir: /data/dg4
+    depends_on:
+      - dg3
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8184:8184
+      - 9184:9184
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  dg5:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg5
+    working_dir: /data/dg5
+    depends_on:
+      - dg4
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8185:8185
+      - 9185:9185
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+  dg6:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg6
+    working_dir: /data/dg6
+    depends_on:
+      - dg5
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8186:8186
+      - 9186:9186
+    labels:
+      cluster: test
+      service: alpha
+    command: /gobin/dgraph alpha --my=dg6:7186 --lru_mb=1024 --zero=zero1:5080 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
