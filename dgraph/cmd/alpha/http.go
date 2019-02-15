@@ -273,6 +273,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		Txn:     resp.Context,
 		Latency: resp.Latency,
 	}
+	sort.Strings(e.Txn.Keys)
+	sort.Strings(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
 	if mu.CommitNow {
@@ -333,8 +335,6 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	tc.Keys = reqMap["keys"]
 	tc.Preds = reqMap["preds"]
-	sort.Strings(tc.Keys)
-	sort.Strings(tc.Preds)
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
