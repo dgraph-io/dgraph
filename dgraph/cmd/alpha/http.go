@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -332,6 +333,8 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	tc.Keys = reqMap["keys"]
 	tc.Preds = reqMap["preds"]
+	sort.Strings(tc.Keys)
+	sort.Strings(tc.Preds)
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
