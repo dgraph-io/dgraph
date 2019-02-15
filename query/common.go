@@ -57,7 +57,7 @@ func setSchema(schema string) {
 	}
 }
 
-func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
+func ProcessQuery(t *testing.T, ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -75,7 +75,7 @@ func processQuery(t *testing.T, ctx context.Context, query string) (string, erro
 }
 
 func processQueryNoErr(t *testing.T, query string) string {
-	res, err := processQuery(t, context.Background(), query)
+	res, err := ProcessQuery(t, context.Background(), query)
 	require.NoError(t, err)
 	return res
 }
@@ -225,7 +225,7 @@ best_friend                    : uid @reverse .
 pet                            : [uid] .
 `
 
-func populateCluster() {
+func PopulateCluster() {
 	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
 	if err != nil {
 		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))

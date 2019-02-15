@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
@@ -36,28 +35,9 @@ func TestRecurseError(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query.")
-}
-
-func TestRecurseEdgeLimitError(t *testing.T) {
-	// HACK: Set this flag in the external test cluster when query tests are migrated to
-	// use it.
-	defer func(prev uint64) { x.Config.QueryEdgeLimit = prev }(x.Config.QueryEdgeLimit)
-	x.Config.QueryEdgeLimit = 5
-	query := `
-		{
-			me(func: uid(0x01)) @recurse(loop: true, depth: 2) {
-				friend
-				name
-			}
-		}`
-
-	ctx := defaultContext()
-	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Exceeded query edge limit")
 }
 
 func TestRecurseQuery(t *testing.T) {
@@ -97,7 +77,7 @@ func TestRecurseExpandRepeatedPredError(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Repeated subgraph: [name] while using expand()")
 }
@@ -269,26 +249,8 @@ func TestShortestPath_ExpandError(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
-}
-
-func TestShortestPath_EdgeLimitError(t *testing.T) {
-	// HACK: Set this flag in the external test cluster when query tests are migrated to
-	// use it.
-	defer func(prev uint64) { x.Config.QueryEdgeLimit = prev }(x.Config.QueryEdgeLimit)
-	x.Config.QueryEdgeLimit = 5
-	query := `
-		{
-			shortest(from:0x01, to:101) {
-              friend
-			}
-		}`
-
-	ctx := defaultContext()
-	_, err := processToFastJsonCtxVars(t, query, ctx, nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Exceeded query edge limit")
 }
 
 func TestShortestPath_NoPath(t *testing.T) {
@@ -563,7 +525,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -784,7 +746,7 @@ func TestDebug1(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, _ := processQuery(t, ctx, query)
+	buf, _ := ProcessQuery(t, ctx, query)
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -831,7 +793,7 @@ func TestDebug3(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, err := processQuery(t, ctx, query)
+	buf, err := ProcessQuery(t, ctx, query)
 	require.NoError(t, err)
 
 	var mp map[string]interface{}
@@ -897,7 +859,7 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -917,7 +879,7 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -933,7 +895,7 @@ func TestCountError3(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1020,7 +982,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 		}
 	}
 `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1220,7 +1182,7 @@ func TestPasswordExpandError(t *testing.T) {
     }
 	`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Contains(t, err.Error(), "Repeated subgraph: [password]")
 }
 
@@ -1260,7 +1222,7 @@ func TestCheckPasswordParseError(t *testing.T) {
                         }
                 }
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1377,7 +1339,7 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: invalidfn1 is not valid.")
 }
@@ -1393,7 +1355,7 @@ func TestToSubgraphInvalidFnName2(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1409,7 +1371,7 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1426,7 +1388,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: invalidfn4 is not valid.")
 }
@@ -1443,7 +1405,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got invalid keyword: disorderasc")
 }
@@ -1460,7 +1422,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got invalid keyword: invalidorderasc")
 }
@@ -1542,7 +1504,7 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1580,7 +1542,7 @@ func TestInvalidStringIndex(t *testing.T) {
 		}
 	`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1617,7 +1579,7 @@ func TestFilterRegexError(t *testing.T) {
     }
 `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1863,7 +1825,7 @@ func TestFilterRegex14(t *testing.T) {
     }
 `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := ProcessQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
