@@ -2535,7 +2535,8 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
-			return x.Errorf("Invalid query, query pb.id is zero and generator is nil")
+			return x.Errorf("Invalid query. No function used at root and no aggregation" +
+				" or math variables found in the body.")
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
