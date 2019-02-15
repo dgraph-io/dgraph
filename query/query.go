@@ -1678,9 +1678,16 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			default:
 				// This var does not match any uids or vals but we are still trying to access it.
 				if v.Typ == gql.ValueVar {
+					// * * * * * * * * * * * * * * * * * * *
+					// Default value vars
+					// * * * * * * * * * * * * * * * * * * *
+					//
 					// Provide a default value for valueVarAggregation() to eval val().
 					// This is a noop for aggregation funcs that would fail.
 					// The zero aggs won't show because there are no uids matched.
+					//
+					// NOTE: If you need to make type assertions that might involve
+					// default value vars, use `Safe()` func and not val.Value directly.
 					mp[v.Name].Vals[0] = types.Val{}
 					sg.Params.uidToVal = mp[v.Name].Vals
 				}
