@@ -1,7 +1,7 @@
 package codec
 
 import (
-    "encoding/binary"
+	"encoding/binary"
 	"errors"
 )
 
@@ -9,18 +9,18 @@ import (
 // or bool
 func Encode(b interface{}) ([]byte, error) {
 	switch v := b.(type) {
-		case []byte:
-			return encodeByteArray(v)
-		case int16:
-			return encodeInteger(int64(v))
-		case int32:
-			return encodeInteger(int64(v))
-		case int64:
-			return encodeInteger(v)
-		case bool:
-			return encodeBool(v)
-		default:
-			return []byte{}, errors.New("Unsupported type!")
+	case []byte:
+		return encodeByteArray(v)
+	case int16:
+		return encodeInteger(int64(v))
+	case int32:
+		return encodeInteger(int64(v))
+	case int64:
+		return encodeInteger(v)
+	case bool:
+		return encodeBool(v)
+	default:
+		return []byte{}, errors.New("Unsupported type!")
 	}
 	return []byte{}, nil
 }
@@ -43,17 +43,17 @@ func encodeByteArray(b []byte) ([]byte, error) {
 // if n < 2^6 return [00 i^2...i^8 ] [ 8 bits = 1 byte output ]
 // if 2^6 <= n < 2^14 return [01 i^2...i^16] [ 16 bits = 2 byte output ]
 // if 2^14 <= n < 2^30 return [10 i^2...i^32] [ 32 bits = 4 byte output ]
-// if n >= 2^30 return [lower 2 bits of first byte = 11] [upper 6 bits of first byte = # of bytes following less 4] 
+// if n >= 2^30 return [lower 2 bits of first byte = 11] [upper 6 bits of first byte = # of bytes following less 4]
 // [append i as a byte array to the first byte]
 func encodeInteger(i int64) ([]byte, error) {
-	if i < 1 << 6 { 
+	if i < 1<<6 {
 		o := byte(i) << 2
 		return []byte{o}, nil
-	} else if i < 1 << 14 {
+	} else if i < 1<<14 {
 		o := make([]byte, 2)
 		binary.LittleEndian.PutUint16(o, uint16(i<<2)+1)
 		return o, nil
-	} else if i < 1 << 30 {
+	} else if i < 1<<30 {
 		o := make([]byte, 4)
 		binary.LittleEndian.PutUint32(o, uint32(i<<2)+2)
 		return o, nil
