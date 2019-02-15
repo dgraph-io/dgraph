@@ -26,7 +26,6 @@ import (
 )
 
 func TestRecurseError(t *testing.T) {
-
 	query := `
 		{
 			me(func: uid(0x01)) @recurse(loop: true) {
