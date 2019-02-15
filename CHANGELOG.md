@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## [1.0.12] - [unreleased]
+## 1.0.12 - [Unreleased]
+[Unreleased]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...release/v1.0
 
 ### Added
 
@@ -36,6 +37,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix a race condition when processing concurrent queries. Fixes #2849.
 
 ## [1.0.11] - 2018-12-17
+[1.0.11]: https://github.com/dgraph-io/dgraph/compare/v1.0.10...v1.0.11
 
 ### Added
 
@@ -93,6 +95,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   parsing was handled differently depending on the input format. (#2797)
 
 ## [1.0.10] - 2018-11-05
+[1.0.10]: https://github.com/dgraph-io/dgraph/compare/v1.0.9...v1.0.10
 
 **Note: This release requires you to export and re-import data. We have changed the underlying storage format.**
 
@@ -126,6 +129,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix out-of-range values in query parser. (#2690)
 
 ## [1.0.9] - 2018-10-02
+[1.0.9]: https://github.com/dgraph-io/dgraph/compare/v1.0.8...v1.0.9
 
 ### Added
 
@@ -161,6 +165,7 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 - Add language aliases for broader support for full text indices. (#2602)
 
 ## [1.0.8] - 2018-08-29
+[1.0.8]: https://github.com/dgraph-io/dgraph/compare/v1.0.7...v1.0.8
 
 ### Added
 
@@ -180,6 +185,7 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 - Do not print error while sending Raft message by default. No action needs to be taken by the user, so it is set to V(3) level.
 
 ## [1.0.7] - 2018-08-10
+[1.0.7]: https://github.com/dgraph-io/dgraph/compare/v1.0.6...v1.0.7
 
 ### Changed
 
@@ -199,6 +205,7 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 - Fix context deadline issues with proposals. #2501.
 
 ## [1.0.6] - 2018-06-20
+[1.0.6]: https://github.com/dgraph-io/dgraph/compare/v1.0.5...v1.0.6
 
 ### Added
 
@@ -232,6 +239,7 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 are now exposed via flags named with `--badger.` prefix.
 
 ## [1.0.5] - 2018-04-20
+[1.0.5]: https://github.com/dgraph-io/dgraph/compare/v1.0.4...v1.0.5
 
 ### Added
 
@@ -267,6 +275,7 @@ are now exposed via flags named with `--badger.` prefix.
   one-third of the total RAM available on the server.
 
 ## [1.0.4] - 2018-03-09
+[1.0.4]: https://github.com/dgraph-io/dgraph/compare/v1.0.3...v1.0.4
 
 ### Added
 
@@ -305,6 +314,7 @@ are now exposed via flags named with `--badger.` prefix.
 
 
 ## [1.0.3] - 2018-02-08
+[1.0.3]: https://github.com/dgraph-io/dgraph/compare/v1.0.2...v1.0.3
 
 ### Added
 
@@ -332,6 +342,7 @@ are now exposed via flags named with `--badger.` prefix.
 * Print predicate name as part of the warning about long term for exact index.
 
 ## [1.0.2] - 2018-01-17
+[1.0.2]: https://github.com/dgraph-io/dgraph/compare/v1.0.1...v1.0.2
 
 ### Fixed
 
@@ -358,6 +369,7 @@ instead use the address given by user.
 * Only send keys corresponding to data that was mutated.
 
 ## [1.0.1] - 2017-12-20
+[1.0.1]: https://github.com/dgraph-io/dgraph/compare/v1.0.0...v1.0.1
 
 ### Fixed
 
@@ -371,6 +383,7 @@ instead use the address given by user.
 * Make sure at least one field is set while doing Alter.
 
 ## [1.0.0] - 2017-12-18
+[1.0.0]: https://github.com/dgraph-io/dgraph/compare/v0.9.3...v1.0.0
 
 ### Added
 
@@ -406,6 +419,7 @@ instead use the address given by user.
 *  Check if GraphQL Variable is defined before using.
 
 ## [0.9.3] - 2017-12-01
+[0.9.3]: https://github.com/dgraph-io/dgraph/compare/v0.9.2...v0.9.3
 
 ### Added
 
@@ -436,6 +450,7 @@ instead use the address given by user.
 * Proto definitions are split into intern and api.
 
 ## [0.9.2] - 2017-11-20
+[0.9.2]: https://github.com/dgraph-io/dgraph/compare/v0.9.1...v0.9.2
 
 ### Added
 
@@ -454,6 +469,7 @@ instead use the address given by user.
 * Fix (--ui) flag not being parsed properly.
 
 ## [0.9.1] - 2017-11-15
+[0.9.1]: https://github.com/dgraph-io/dgraph/compare/v0.9.0...v0.9.1
 
 ### Changed
 
@@ -461,6 +477,7 @@ instead use the address given by user.
 For `/commit` API, keys are passed in the body.
 
 ## [0.9.0] - 2017-11-14
+[0.9.0]: https://github.com/dgraph-io/dgraph/compare/v0.8.3...v0.9.0
 
 **The latest release has a lot of breaking changes but also brings powerful features like Transactions, support for CJK and custom tokenization.**
 

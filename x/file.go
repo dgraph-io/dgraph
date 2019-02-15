@@ -19,7 +19,9 @@ package x
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/dgraph-io/dgo/x"
 	"github.com/golang/glog"
 )
 
@@ -56,4 +58,37 @@ func FindFilesFunc(dir string, f func(string) bool) []string {
 		glog.Errorf("Error while scanning %q: %s", dir, err)
 	}
 	return files
+}
+
+// FindDataFiles returns a list of data files as a string array. If str is a comma-separated list
+// of paths, it returns that list. If str is a single path that is not a directory, it returns that
+// path. If str is a directory, it returns the files in it that have one of the extensions in ext.
+func FindDataFiles(str string, ext []string) []string {
+	if len(str) == 0 {
+		return []string{}
+	}
+
+	list := strings.Split(str, ",")
+	if len(list) == 1 {
+		fi, err := os.Stat(str)
+		if os.IsNotExist(err) {
+			glog.Errorf("File or directory does not exist: %s", str)
+			return []string{}
+		}
+		x.Check(err)
+
+		if fi.IsDir() {
+			match_fn := func(f string) bool {
+				for _, e := range ext {
+					if strings.HasSuffix(f, e) {
+						return true
+					}
+				}
+				return false
+			}
+			list = FindFilesFunc(str, match_fn)
+		}
+	}
+
+	return list
 }

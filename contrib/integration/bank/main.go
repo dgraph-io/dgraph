@@ -48,10 +48,10 @@ var (
 var startBal = 10
 
 type Account struct {
-	Uid  string `json:"uid"`
-	Key  int    `json:"key,omitempty"`
-	Bal  int    `json:"bal,omitempty"`
-	Type string `json:"type"`
+	Uid string `json:"uid"`
+	Key int    `json:"key,omitempty"`
+	Bal int    `json:"bal,omitempty"`
+	Typ string `json:"typ"`
 }
 
 type State struct {
@@ -67,16 +67,16 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	op.Schema = `
 	key: int @index(int) @upsert .
 	bal: int .
-	type: string @index(exact) @upsert .
+	typ: string @index(exact) @upsert .
 	`
 	x.Check(dg.Alter(context.Background(), &op))
 
 	var all []Account
 	for i := 1; i <= *users; i++ {
 		a := Account{
-			Key:  i,
-			Bal:  startBal,
-			Type: "ba",
+			Key: i,
+			Bal: startBal,
+			Typ: "ba",
 		}
 		all = append(all, a)
 	}
@@ -98,7 +98,7 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 func (s *State) runTotal(dg *dgo.Dgraph) error {
 	query := `
 		{
-			q(func: eq(type, "ba")) {
+			q(func: eq(typ, "ba")) {
 				uid
 				key
 				bal
@@ -137,8 +137,8 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 }
 
 func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
-	// query := fmt.Sprintf(`{ q(func: eq(key, %d)) @filter(eq(type, "ba")) { key, uid, bal, type }}`, key)
-	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, type }}`, key)
+	// query := fmt.Sprintf(`{ q(func: eq(key, %d)) @filter(eq(typ, "ba")) { key, uid, bal, typ }}`, key)
+	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, typ }}`, key)
 	// log.Printf("findACcount: %s\n", query)
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
@@ -157,7 +157,7 @@ func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
 		if *verbose {
 			log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
 		}
-		return Account{Key: key, Type: "ba"}, nil
+		return Account{Key: key, Typ: "ba"}, nil
 	}
 	return accounts[0], nil
 }

@@ -17,7 +17,6 @@
 package bulk
 
 import (
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -27,22 +26,23 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
-	bo "github.com/dgraph-io/badger/options"
+
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
+
 	"google.golang.org/grpc"
 )
 
 type options struct {
-	RDFDir           string
-	JSONDir          string
+	DataFiles        string
+	DataFormat       string
 	SchemaFile       string
 	DgraphsDir       string
 	TmpDir           string
@@ -80,7 +80,6 @@ type state struct {
 type loader struct {
 	*state
 	mappers []*mapper
-	xidDB   *badger.DB
 	zero    *grpc.ClientConn
 }
 
@@ -144,58 +143,23 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 	return result.Schemas
 }
 
-func findDataFiles(dir string, ext string) []string {
-	var files []string
-	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if strings.HasSuffix(path, ext) || strings.HasSuffix(path, ext+".gz") {
-			files = append(files, path)
-		}
-		return nil
-	}))
-	return files
-}
-
-type uidRangeResponse struct {
-	uids *pb.AssignedIds
-	err  error
-}
-
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
+	ld.xids = xidmap.New(ld.zero, nil)
 
-	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
-	x.Check(os.Mkdir(xidDir, 0755))
-	opt := badger.DefaultOptions
-	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.MemoryMap
-	opt.Dir = xidDir
-	opt.ValueDir = xidDir
-	var err error
-	ld.xidDB, err = badger.Open(opt)
-	x.Check(err)
-	ld.xids = xidmap.New(ld.xidDB, ld.zero, xidmap.Options{
-		NumShards: 1 << 10,
-		LRUSize:   1 << 19,
-	})
-
-	var files []string
-	var ext string
-	var loaderType int
-	if ld.opt.RDFDir != "" {
-		loaderType = rdfInput
-		ext = ".rdf"
-		files = findDataFiles(ld.opt.RDFDir, ext)
-	} else {
-		loaderType = jsonInput
-		ext = ".json"
-		files = findDataFiles(ld.opt.JSONDir, ext)
+	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	if len(files) == 0 {
+		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
+		os.Exit(1)
 	}
 
-	if len(files) == 0 {
-		fmt.Printf("No *%s files found.\n", ext)
+	// Because mappers must handle chunks that may be from different input files, they must all
+	// assume the same data format, either RDF or JSON. Use the one specified by the user or by
+	// the first load file.
+	loadType := chunker.DataFormat(files[0], ld.opt.DataFormat)
+	if loadType == chunker.UnknownFormat {
+		// Dont't try to detect JSON input in bulk loader.
+		fmt.Printf("Need --format=rdf or --format=json to load %s", files[0])
 		os.Exit(1)
 	}
 
@@ -203,7 +167,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loaderType)
+			m.run(loadType)
 			mapperWg.Done()
 		}(m)
 	}
@@ -213,25 +177,17 @@ func (ld *loader) mapStage() {
 	for i, file := range files {
 		thr.Start()
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
-		chunker := newChunker(loaderType)
+
 		go func(file string) {
 			defer thr.Done()
 
-			f, err := os.Open(file)
-			x.Check(err)
-			defer f.Close()
+			r, cleanup := chunker.FileReader(file)
+			defer cleanup()
 
-			var r *bufio.Reader
-			if !strings.HasSuffix(file, ".gz") {
-				r = bufio.NewReaderSize(f, 1<<20)
-			} else {
-				gzr, err := gzip.NewReader(f)
-				x.Checkf(err, "Could not create gzip reader for file %q.", file)
-				r = bufio.NewReaderSize(gzr, 1<<20)
-			}
-			x.Check(chunker.begin(r))
+			chunker := chunker.NewChunker(loadType)
+			x.Check(chunker.Begin(r))
 			for {
-				chunkBuf, err := chunker.chunk(r)
+				chunkBuf, err := chunker.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
 					ld.readerChunkCh <- chunkBuf
 				}
@@ -241,7 +197,7 @@ func (ld *loader) mapStage() {
 					x.Check(err)
 				}
 			}
-			x.Check(chunker.end(r))
+			x.Check(chunker.End(r))
 		}(file)
 	}
 	thr.Wait()
@@ -253,8 +209,7 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	ld.xids.EvictAll()
-	x.Check(ld.xidDB.Close())
+	x.Check(ld.xids.Flush())
 	ld.xids = nil
 	runtime.GC()
 }

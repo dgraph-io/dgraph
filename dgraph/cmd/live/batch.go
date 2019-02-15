@@ -63,19 +63,19 @@ type loader struct {
 	dc         *dgo.Dgraph
 	alloc      *xidmap.XidMap
 	ticker     *time.Ticker
-	kv         *badger.DB
+	db         *badger.DB
 	requestsWg sync.WaitGroup
 	// If we retry a request, we add one to retryRequestsWg.
 	retryRequestsWg sync.WaitGroup
 
 	// Miscellaneous information to print counters.
-	// Num of RDF's sent
-	rdfs uint64
+	// Num of N-Quads sent
+	nquads uint64
 	// Num of txns sent
 	txns uint64
 	// Num of aborts
 	aborts uint64
-	// To get time elapsel.
+	// To get time elapsed
 	start time.Time
 
 	reqs     chan api.Mutation
@@ -109,8 +109,8 @@ func (p *uidProvider) ReserveUidRange() (uint64, uint64, error) {
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
 // if BatchMutationOptions PrintCounters is set to true.
 type Counter struct {
-	// Number of RDF's processed by server.
-	Rdfs uint64
+	// Number of N-Quads processed by server.
+	Nquads uint64
 	// Number of mutations processed by the server.
 	TxnsDone uint64
 	// Number of Aborts
@@ -137,7 +137,7 @@ func handleError(err error) {
 		fmt.Printf("Server is overloaded. Will retry after %s.", dur.Round(time.Minute))
 		time.Sleep(dur)
 	case err != y.ErrAborted && err != y.ErrConflict:
-		fmt.Printf("Error while mutating %v\n", s.Message())
+		fmt.Printf("Error while mutating: %v\n", s.Message())
 	}
 }
 
@@ -148,7 +148,7 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
-			atomic.AddUint64(&l.rdfs, uint64(len(req.Set)))
+			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
@@ -167,7 +167,7 @@ func (l *loader) request(req api.Mutation) {
 	_, err := txn.Mutate(l.opts.Ctx, &req)
 
 	if err == nil {
-		atomic.AddUint64(&l.rdfs, uint64(len(req.Set)))
+		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
 		return
 	}
@@ -188,22 +188,25 @@ func (l *loader) makeRequests() {
 }
 
 func (l *loader) printCounters() {
-	l.ticker = time.NewTicker(2 * time.Second)
+	period := 5 * time.Second
+	l.ticker = time.NewTicker(period)
 	start := time.Now()
 
+	var last Counter
 	for range l.ticker.C {
 		counter := l.Counter()
-		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
+		rate := float64(counter.Nquads-last.Nquads) / period.Seconds()
 		elapsed := time.Since(start).Round(time.Second)
-		fmt.Printf("[%6s] Txns: %d RDFs: %d RDFs/sec: %5.0f Aborts: %d\n",
-			elapsed, counter.TxnsDone, counter.Rdfs, rate, counter.Aborts)
+		fmt.Printf("[%6s] Txns: %d N-Quads: %d N-Quads/s [last 5s]: %5.0f Aborts: %d\n",
+			elapsed, counter.TxnsDone, counter.Nquads, rate, counter.Aborts)
+		last = counter
 	}
 }
 
 // Counter returns the current state of the BatchMutation.
 func (l *loader) Counter() Counter {
 	return Counter{
-		Rdfs:     atomic.LoadUint64(&l.rdfs),
+		Nquads:   atomic.LoadUint64(&l.nquads),
 		TxnsDone: atomic.LoadUint64(&l.txns),
 		Elapsed:  time.Since(l.start),
 		Aborts:   atomic.LoadUint64(&l.aborts),

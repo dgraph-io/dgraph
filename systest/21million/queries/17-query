@@ -1,0 +1,9 @@
+{
+  me(func: eq(name@en, "Ridley Scott")) {
+    name@en
+    director.film @filter(lt(initial_release_date, "1980-01-01"))  {
+      initial_release_date
+      name@en
+    }
+  }
+}

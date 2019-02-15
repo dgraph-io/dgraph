@@ -58,6 +58,7 @@ function FindDefaultClusterTests {
 
 function Run {
     set -o pipefail
+    echo -en "...\r"
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
@@ -117,8 +118,9 @@ if [[ $# -eq 0 ]]; then
         Info "Running only code tests"
     fi
 elif [[ $# -eq 1 ]]; then
-    go list ./... | grep $1 > $MATCHING_TESTS
-    Info "Running only tests matching '$1'"
+    REGEX=${1%/}
+    go list ./... | grep $REGEX > $MATCHING_TESTS
+    Info "Running only tests matching '$REGEX'"
     RUN_ALL=
 else
     echo >&2 "usage: $ME [pkg_regex]"
@@ -145,12 +147,14 @@ else
 fi
 
 if [[ $RUN_ALL ]]; then
-    Info "Running load-test.sh"
-    ./contrib/scripts/load-test.sh
+    Info "Running small load test"
+    ./contrib/scripts/load-test.sh || TEST_FAILED=1
 
     Info "Running custom test scripts"
-    ./contrib/scripts/test-backup-restore.sh
-    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
+
+    Info "Running large load test"
+    ./systest/21million/test-21million.sh || TEST_FAILED=1
 fi
 
 Info "Stopping cluster"

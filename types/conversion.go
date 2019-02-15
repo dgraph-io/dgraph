@@ -336,10 +336,21 @@ func Convert(from Val, toID TypeID) (Val, error) {
 }
 
 func Marshal(from Val, to *Val) error {
+	if to == nil {
+		return x.Errorf("Invalid conversion %s to nil", from.Tid.Name())
+	}
+
 	fromID := from.Tid
 	toID := to.Tid
 	val := from.Value
 	res := &to.Value
+
+	// This is a default value from sg.fillVars, don't convert it's empty.
+	// Fixes issue #2980.
+	if val == nil {
+		*to = ValueForType(toID)
+		return nil
+	}
 
 	switch fromID {
 	case BinaryID:

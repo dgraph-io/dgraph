@@ -53,12 +53,12 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 	it.Next()
 	next := it.Item()
 	if next.Typ != itemText {
-		return x.Errorf("Missing directive name")
+		return next.Errorf("Missing directive name")
 	}
 	switch next.Val {
 	case "reverse":
 		if t != types.UidID {
-			return x.Errorf("Cannot reverse for non-UID type")
+			return next.Errorf("Cannot reverse for non-UID type")
 		}
 		schema.Directive = pb.SchemaUpdate_REVERSE
 	case "index":
@@ -74,12 +74,12 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		schema.Upsert = true
 	case "lang":
 		if t != types.StringID || schema.List {
-			return x.Errorf("@lang directive can only be specified for string type."+
+			return next.Errorf("@lang directive can only be specified for string type."+
 				" Got: [%v] for attr: [%v]", t.Name(), schema.Predicate)
 		}
 		schema.Lang = true
 	default:
-		return x.Errorf("Invalid index specification")
+		return next.Errorf("Invalid index specification")
 	}
 	it.Next()
 
@@ -99,11 +99,11 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 	// '@' in predicate names, so both forms are disallowed. Handling them here avoids
 	// messing with the lexer and IRI values.
 	case next.Typ == itemAt || strings.Contains(predicate, "@"):
-		return nil, x.Errorf("Invalid '@' in name")
+		return nil, next.Errorf("Invalid '@' in name")
 	case next.Typ != itemColon:
-		return nil, x.Errorf("Missing colon")
+		return nil, next.Errorf("Missing colon")
 	case !it.Next():
-		return nil, x.Errorf("Invalid ending while trying to parse schema.")
+		return nil, next.Errorf("Invalid ending while trying to parse schema.")
 	}
 	next = it.Item()
 	schema := &pb.SchemaUpdate{Predicate: predicate}
@@ -111,23 +111,23 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 	if next.Typ == itemLeftSquare {
 		schema.List = true
 		if !it.Next() {
-			return nil, x.Errorf("Invalid ending while trying to parse schema.")
+			return nil, next.Errorf("Invalid ending while trying to parse schema.")
 		}
 		next = it.Item()
 	}
 
 	if next.Typ != itemText {
-		return nil, x.Errorf("Missing Type")
+		return nil, next.Errorf("Missing Type")
 	}
 	typ := strings.ToLower(next.Val)
 	// We ignore the case for types.
 	t, ok := types.TypeForName(typ)
 	if !ok {
-		return nil, x.Errorf("Undefined Type")
+		return nil, next.Errorf("Undefined Type")
 	}
 	if schema.List {
 		if uint32(t) == uint32(types.PasswordID) || uint32(t) == uint32(types.BoolID) {
-			return nil, x.Errorf("Unsupported type for list: [%s].", types.TypeID(t).Name())
+			return nil, next.Errorf("Unsupported type for list: [%s].", types.TypeID(t).Name())
 		}
 	}
 	schema.ValueType = t.Enum()
@@ -137,10 +137,10 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 	next = it.Item()
 	if schema.List {
 		if next.Typ != itemRightSquare {
-			return nil, x.Errorf("Unclosed [ while parsing schema for: %s", predicate)
+			return nil, next.Errorf("Unclosed [ while parsing schema for: %s", predicate)
 		}
 		if !it.Next() {
-			return nil, x.Errorf("Invalid ending")
+			return nil, next.Errorf("Invalid ending")
 		}
 		next = it.Item()
 	}
@@ -156,7 +156,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 	}
 
 	if next.Typ != itemDot {
-		return nil, x.Errorf("Invalid ending")
+		return nil, next.Errorf("Invalid ending")
 	}
 	it.Next()
 	next = it.Item()
@@ -165,7 +165,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*pb.SchemaUpdate, 
 		return schema, nil
 	}
 	if next.Typ != itemNewLine {
-		return nil, x.Errorf("Invalid ending")
+		return nil, next.Errorf("Invalid ending")
 	}
 	return schema, nil
 }
@@ -178,17 +178,17 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	var seenSortableTok bool
 
 	if typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID {
-		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type %s",
+		return tokenizers, it.Item().Errorf("Indexing not allowed on predicate %s of type %s",
 			predicate, typ.Name())
 	}
 	if !it.Next() {
 		// Nothing to read.
-		return []string{}, x.Errorf("Invalid ending.")
+		return []string{}, it.Item().Errorf("Invalid ending.")
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		return []string{}, x.Errorf("Require type of tokenizer for pred: %s for indexing.",
+		return []string{}, it.Item().Errorf("Require type of tokenizer for pred: %s for indexing.",
 			predicate)
 	}
 
@@ -202,36 +202,36 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		}
 		if next.Typ == itemComma {
 			if expectArg {
-				return nil, x.Errorf("Expected a tokenizer but got comma")
+				return nil, next.Errorf("Expected a tokenizer but got comma")
 			}
 			expectArg = true
 			continue
 		}
 		if next.Typ != itemText {
-			return tokenizers, x.Errorf("Expected directive arg but got: %v", next.Val)
+			return tokenizers, next.Errorf("Expected directive arg but got: %v", next.Val)
 		}
 		if !expectArg {
-			return tokenizers, x.Errorf("Expected a comma but got: %v", next)
+			return tokenizers, next.Errorf("Expected a comma but got: %v", next)
 		}
 		// Look for custom tokenizer.
 		tokenizer, has := tok.GetTokenizer(strings.ToLower(next.Val))
 		if !has {
-			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
+			return tokenizers, next.Errorf("Invalid tokenizer %s", next.Val)
 		}
 		tokenizerType, ok := types.TypeForName(tokenizer.Type())
 		x.AssertTrue(ok) // Type is validated during tokenizer loading.
 		if tokenizerType != typ {
 			return tokenizers,
-				x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+				next.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
 					tokenizer.Name(), predicate, typ.Name())
 		}
 		if _, found := seen[tokenizer.Name()]; found {
-			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v",
+			return tokenizers, next.Errorf("Duplicate tokenizers defined for pred %v",
 				predicate)
 		}
 		if tokenizer.IsSortable() {
 			if seenSortableTok {
-				return nil, x.Errorf("More than one sortable index encountered for: %v",
+				return nil, next.Errorf("More than one sortable index encountered for: %v",
 					predicate)
 			}
 			seenSortableTok = true
@@ -298,18 +298,18 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 	// Iterator is currently on the token corresponding to the keyword type.
 	if it.Item().Typ != itemText || it.Item().Val != "type" {
-		return nil, x.Errorf("Expected type keyword. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Expected type keyword. Got %v", it.Item().Val)
 	}
 
 	it.Next()
 	if it.Item().Typ != itemText {
-		return nil, x.Errorf("Expected type name. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Expected type name. Got %v", it.Item().Val)
 	}
 	typeUpdate := &pb.TypeUpdate{TypeName: it.Item().Val}
 
 	it.Next()
 	if it.Item().Typ != itemLeftCurl {
-		return nil, x.Errorf("Expected {. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Expected {. Got %v", it.Item().Val)
 	}
 
 	var fields []*pb.SchemaUpdate
@@ -320,7 +320,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 		case itemRightCurl:
 			it.Next()
 			if it.Item().Typ != itemNewLine {
-				return nil, x.Errorf("Expected new line after type declaration. Got %v",
+				return nil, it.Item().Errorf("Expected new line after type declaration. Got %v",
 					it.Item().Val)
 			}
 
@@ -335,7 +335,7 @@ func parseTypeDeclaration(it *lex.ItemIterator) (*pb.TypeUpdate, error) {
 		case itemNewLine:
 			// Ignore empty lines.
 		default:
-			return nil, x.Errorf("Unexpected token. Got %v", it.Item().Val)
+			return nil, it.Item().Errorf("Unexpected token. Got %v", it.Item().Val)
 		}
 	}
 	return nil, x.Errorf("Shouldn't reach here.")
@@ -347,7 +347,7 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 
 	it.Next()
 	if it.Item().Typ != itemColon {
-		return nil, x.Errorf("Missing colon in type declaration. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Missing colon in type declaration. Got %v", it.Item().Val)
 	}
 
 	it.Next()
@@ -357,7 +357,8 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 	}
 
 	if it.Item().Typ != itemText {
-		return nil, x.Errorf("Missing field type in type declaration. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Missing field type in type declaration. Got %v",
+			it.Item().Val)
 	}
 	field.ValueType = getType(it.Item().Val)
 	if field.ValueType == pb.Posting_OBJECT {
@@ -372,7 +373,7 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 
 	if list {
 		if it.Item().Typ != itemRightSquare {
-			return nil, x.Errorf("Expected matching square bracket. Got %v", it.Item().Val)
+			return nil, it.Item().Errorf("Expected matching square bracket. Got %v", it.Item().Val)
 		}
 		field.List = true
 		it.Next()
@@ -384,7 +385,7 @@ func parseTypeField(it *lex.ItemIterator) (*pb.SchemaUpdate, error) {
 	}
 
 	if it.Item().Typ != itemNewLine {
-		return nil, x.Errorf("Expected new line after field declaration. Got %v", it.Item().Val)
+		return nil, it.Item().Errorf("Expected new line after field declaration. Got %v", it.Item().Val)
 	}
 
 	return field, nil
@@ -463,7 +464,7 @@ func Parse(s string) (*SchemasAndTypes, error) {
 			// pass empty line
 
 		default:
-			return nil, x.Errorf("Unexpected token: %v while parsing schema", item)
+			return nil, it.Item().Errorf("Unexpected token: %v while parsing schema", item)
 		}
 	}
 	return nil, x.Errorf("Shouldn't reach here")

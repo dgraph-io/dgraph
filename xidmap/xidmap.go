@@ -17,10 +17,11 @@
 package xidmap
 
 import (
-	"container/list"
 	"context"
 	"encoding/binary"
+	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -32,51 +33,31 @@ import (
 	"github.com/golang/glog"
 )
 
-// Options controls the performance characteristics of the XidMap.
-type Options struct {
-	// NumShards controls the number of shards the XidMap is broken into. More
-	// shards reduces lock contention.
-	NumShards int
-	// LRUSize controls the total size of the LRU cache. The LRU is split
-	// between all shards, so with 4 shards and an LRUSize of 100, each shard
-	// receives 25 LRU slots.
-	LRUSize int
-}
-
 // XidMap allocates and tracks mappings between Xids and Uids in a threadsafe
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	shards    []shard
-	kv        *badger.DB
-	opt       Options
-	newRanges chan *pb.AssignedIds
+	shards     []*shard
+	newRanges  chan *pb.AssignedIds
+	zc         pb.ZeroClient
+	maxUidSeen uint64
 
-	noMapMu sync.Mutex
-	noMap   block // block for allocating uids without an xid to uid mapping
+	// Optionally, these can be set to persist the mappings.
+	writer *badger.WriteBatch
 }
 
 type shard struct {
-	sync.Mutex
+	sync.RWMutex
 	block
 
-	elems        map[string]*list.Element
-	queue        *list.List
-	beingEvicted map[string]uint64
-
-	xm *XidMap
-}
-
-type mapping struct {
-	xid       string
-	uid       uint64
-	persisted bool
+	uidMap map[string]uint64
 }
 
 type block struct {
 	start, end uint64
 }
 
+// assign assumes the write lock is already acquired.
 func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	if b.end == 0 || b.start > b.end {
 		newRange := <-ch
@@ -88,32 +69,64 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 	return uid
 }
 
-// New creates an XidMap with given badger and uid provider.
-func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
-	x.AssertTrue(opt.LRUSize != 0)
-	x.AssertTrue(opt.NumShards != 0)
+// New creates an XidMap. zero conn must be valid for UID allocations to happen. Optionally, a
+// badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
+// assignment operations.
+func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
+	numShards := 32
 	xm := &XidMap{
-		shards:    make([]shard, opt.NumShards),
-		kv:        kv,
-		opt:       opt,
-		newRanges: make(chan *pb.AssignedIds),
+		newRanges: make(chan *pb.AssignedIds, numShards),
+		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
-		xm.shards[i].elems = make(map[string]*list.Element)
-		xm.shards[i].queue = list.New()
-		xm.shards[i].xm = xm
+		xm.shards[i] = &shard{
+			uidMap: make(map[string]uint64),
+		}
 	}
+	if db != nil {
+		// If DB is provided, let's load up all the xid -> uid mappings in memory.
+		xm.writer = db.NewWriteBatch()
+
+		err := db.View(func(txn *badger.Txn) error {
+			var count int
+			opt := badger.DefaultIteratorOptions
+			opt.PrefetchValues = false
+			itr := txn.NewIterator(opt)
+			defer itr.Close()
+			for itr.Rewind(); itr.Valid(); itr.Next() {
+				item := itr.Item()
+				key := string(item.Key())
+				sh := xm.shardFor(key)
+				err := item.Value(func(val []byte) error {
+					uid := binary.BigEndian.Uint64(val)
+					// No need to acquire a lock. This is all serial access.
+					sh.uidMap[key] = uid
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+				count++
+			}
+			glog.Infof("Loaded up %d xid to uid mappings", count)
+			return nil
+		})
+		x.Check(err)
+	}
+	xm.zc = pb.NewZeroClient(zero)
+
 	go func() {
-		zc := pb.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 10000})
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 1e4})
+			glog.V(1).Infof("Assigned Uids: %+v. Err: %v", assigned, err)
 			cancel()
 			if err == nil {
 				backoff = initBackoff
+				xm.updateMaxSeen(assigned.EndId)
 				xm.newRanges <- assigned
 				continue
 			}
@@ -124,110 +137,99 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 			}
 			time.Sleep(backoff)
 		}
-
 	}()
 	return xm
 }
 
+func (m *XidMap) shardFor(xid string) *shard {
+	fp := farm.Fingerprint32([]byte(xid))
+	idx := fp % uint32(len(m.shards))
+	return m.shards[idx]
+}
+
 // AssignUid creates new or looks up existing XID to UID mappings.
-func (m *XidMap) AssignUid(xid string) (uid uint64, isNew bool) {
-	fp := farm.Fingerprint64([]byte(xid))
-	idx := fp % uint64(m.opt.NumShards)
-	sh := &m.shards[idx]
+func (m *XidMap) AssignUid(xid string) uint64 {
+	sh := m.shardFor(xid)
+	sh.RLock()
+	uid := sh.uidMap[xid]
+	sh.RUnlock()
+	if uid > 0 {
+		return uid
+	}
 
 	sh.Lock()
 	defer sh.Unlock()
 
-	var ok bool
-	uid, ok = sh.lookup(xid)
-	if ok {
-		return uid, false
+	uid = sh.uidMap[xid]
+	if uid > 0 {
+		return uid
 	}
 
-	x.Check(m.kv.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte(xid))
-		if err == badger.ErrKeyNotFound {
-			return nil
+	newUid := sh.assign(m.newRanges)
+	sh.uidMap[xid] = newUid
+
+	if m.writer != nil {
+		var uidBuf [8]byte
+		binary.BigEndian.PutUint64(uidBuf[:], newUid)
+		if err := m.writer.Set([]byte(xid), uidBuf[:], 0); err != nil {
+			panic(err)
 		}
-		x.Check(err)
-		return item.Value(func(uidBuf []byte) error {
-			x.AssertTrue(len(uidBuf) > 0)
-			var n int
-			uid, n = binary.Uvarint(uidBuf)
-			x.AssertTrue(n == len(uidBuf))
-			ok = true
-			return nil
-		})
-	}))
-	if ok {
-		sh.add(xid, uid, true)
-		return uid, false
+	}
+	return newUid
+}
+
+func (sh *shard) Current() uint64 {
+	sh.RLock()
+	defer sh.RUnlock()
+	return sh.start
+}
+
+func (m *XidMap) updateMaxSeen(max uint64) {
+	for {
+		prev := atomic.LoadUint64(&m.maxUidSeen)
+		if prev >= max {
+			return
+		}
+		atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max)
+	}
+}
+
+// BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
+// ensure all future allocations of UIDs be higher than this one, but results are not guaranteed.
+func (m *XidMap) BumpTo(uid uint64) {
+	curMax := atomic.LoadUint64(&m.maxUidSeen)
+	if uid <= curMax {
+		return
 	}
 
-	uid = sh.assign(m.newRanges)
-	sh.add(xid, uid, false)
-	return uid, true
+	for {
+		glog.V(1).Infof("Bumping up to %v", uid)
+		num := x.Max(uid-curMax, 1e4)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		assigned, err := m.zc.AssignUids(ctx, &pb.Num{Val: num})
+		cancel()
+		if err == nil {
+			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
+			m.updateMaxSeen(assigned.EndId)
+			return
+		} else {
+			glog.Errorf("While requesting AssignUids(%d): %v", num, err)
+		}
+	}
 }
 
 // AllocateUid gives a single uid without creating an xid to uid mapping.
 func (m *XidMap) AllocateUid() uint64 {
-	m.noMapMu.Lock()
-	defer m.noMapMu.Unlock()
-	return m.noMap.assign(m.newRanges)
+	sh := m.shards[rand.Intn(len(m.shards))]
+	sh.Lock()
+	defer sh.Unlock()
+	return sh.assign(m.newRanges)
 }
 
-func (s *shard) lookup(xid string) (uint64, bool) {
-	elem, ok := s.elems[xid]
-	if ok {
-		s.queue.MoveToBack(elem)
-		return elem.Value.(*mapping).uid, true
+// Flush must be called if DB is provided to XidMap.
+func (m *XidMap) Flush() error {
+	if m.writer == nil {
+		return nil
 	}
-	if uid, ok := s.beingEvicted[xid]; ok {
-		s.add(xid, uid, true)
-		return uid, true
-	}
-	return 0, false
-}
-
-func (s *shard) add(xid string, uid uint64, persisted bool) {
-	lruSizePerShard := s.xm.opt.LRUSize / s.xm.opt.NumShards
-	if s.queue.Len() >= lruSizePerShard && len(s.beingEvicted) == 0 {
-		s.evict(0.5)
-	}
-
-	m := &mapping{
-		xid:       xid,
-		uid:       uid,
-		persisted: persisted,
-	}
-	elem := s.queue.PushBack(m)
-	s.elems[xid] = elem
-}
-
-func (m *XidMap) EvictAll() {
-	for i := range make([]struct{}, len(m.shards)) {
-		m.shards[i].Lock()
-		m.shards[i].evict(1.0)
-		m.shards[i].Unlock()
-	}
-}
-
-func (s *shard) evict(ratio float64) {
-	evict := int(float64(s.queue.Len()) * ratio)
-	s.beingEvicted = make(map[string]uint64)
-	txn := s.xm.kv.NewTransaction(true)
-	defer txn.Discard()
-	for i := 0; i < evict; i++ {
-		m := s.queue.Remove(s.queue.Front()).(*mapping)
-		delete(s.elems, m.xid)
-		s.beingEvicted[m.xid] = m.uid
-		if !m.persisted {
-			var uidBuf [binary.MaxVarintLen64]byte
-			n := binary.PutUvarint(uidBuf[:], m.uid)
-			txn.Set([]byte(m.xid), uidBuf[:n])
-		}
-
-	}
-	x.Check(txn.Commit())
-	s.beingEvicted = nil
+	return m.writer.Flush()
 }

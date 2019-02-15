@@ -359,11 +359,6 @@ func (g *groupi) ServesGroup(gid uint32) bool {
 }
 
 func (g *groupi) ChecksumsMatch(ctx context.Context) error {
-	// HACK
-	// Add a GroupChecksum to make groups().ChecksumsMatch work. Hacky as hell.
-	if x.IsTestRun() {
-		return nil
-	}
 	if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
 		return nil
 	}

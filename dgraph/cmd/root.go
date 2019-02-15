@@ -59,7 +59,10 @@ func Execute() {
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
 	x.Check(goflag.CommandLine.Parse([]string{}))
 
-	x.Check(RootCmd.Execute())
+	// Dumping the usage in case of an error makes the error messages harder to see.
+	RootCmd.SilenceUsage = true
+
+	x.CheckfNoLog(RootCmd.Execute())
 }
 
 var rootConf = viper.New()
@@ -82,8 +85,6 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	RootCmd.PersistentFlags().Bool("enterprise_features", false,
-		"Enable Dgraph enterprise features. If you set this to true, you agree to the Dgraph Community License.")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
