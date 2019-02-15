@@ -6,3 +6,28 @@
     }
   }
 }
+---
+{
+  "me": [
+    {
+      "name@en": "Baz Luhrmann",
+      "director.film": [
+        {
+          "name@en": "Romeo + Juliet"
+        },
+        {
+          "name@en": "Australia"
+        },
+        {
+          "name@en": "Moulin Rouge!"
+        },
+        {
+          "name@en": "The Great Gatsby"
+        },
+        {
+          "name@en": "Strictly Ballroom"
+        }
+      ]
+    }
+  ]
+}

@@ -9,3 +9,35 @@
     }
   }
 }
+---
+{
+  "me": [
+    {
+      "director.film": [
+        {
+          "name@en": "Firelight",
+          "initial_release_date": "1964-03-24T00:00:00Z",
+          "genre": [
+            {
+              "name@en": "Science Fiction"
+            },
+            {
+              "name@en": "Thriller"
+            }
+          ]
+        },
+        {
+          "name@en": "Amazing Stories: Book One",
+          "genre": [
+            {
+              "name@en": "Comedy"
+            },
+            {
+              "name@en": "Drama"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

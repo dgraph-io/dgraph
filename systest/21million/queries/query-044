@@ -1,10 +1,25 @@
 {
-  var(func: anyofterms(name@en, "Steven Tom")) {
-    a as count(director.film)
-  }
-
-  me() {
-    avg(val(a))
-    sum(val(a))
-  }
+	recurse(func: gt(count(~genre), 30000), depth: 2){
+		name@en
+		~genre (first:2) @filter(gt(count(starring), 2))
+		starring (first: 2)
+		performance.actor
+	}
+}
+---
+{
+  "recurse": [
+    {
+      "name@en": "Documentary film"
+    },
+    {
+      "name@en": "Drama"
+    },
+    {
+      "name@en": "Comedy"
+    },
+    {
+      "name@en": "Short Film"
+    }
+  ]
 }

@@ -5,3 +5,13 @@
     netflix_id
   }
 }
+---
+{
+  "bladerunner": [
+    {
+      "name@en": "Blade Runner",
+      "initial_release_date": "1982-06-25T00:00:00Z",
+      "netflix_id": "70083726"
+    }
+  ]
+}
