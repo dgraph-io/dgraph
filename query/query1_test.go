@@ -94,7 +94,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -112,7 +112,7 @@ func TestMultipleSamePredicateInBlockFail(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -130,7 +130,7 @@ func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -150,7 +150,7 @@ func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -263,7 +263,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 			}
 		}`
 
-	_, err := ProcessQuery(t, context.Background(), q)
+	_, err := processQuery(t, context.Background(), q)
 	require.Error(t, err)
 }
 
@@ -298,7 +298,7 @@ func TestBoolSort(t *testing.T) {
 		}
 	`
 
-	_, err := ProcessQuery(t, context.Background(), q)
+	_, err := processQuery(t, context.Background(), q)
 	require.Error(t, err)
 }
 
@@ -383,7 +383,7 @@ func TestHashTokGeqErr(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -401,7 +401,7 @@ func TestNameNotIndexed(t *testing.T) {
 		}
 	`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -439,7 +439,7 @@ func TestDuplicateAlias(t *testing.T) {
 			}
 		}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -476,7 +476,7 @@ func TestDebugUid(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, err := ProcessQuery(t, ctx, query)
+	buf, err := processQuery(t, ctx, query)
 	require.NoError(t, err)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -696,7 +696,7 @@ func TestMathVarCrash(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -846,7 +846,7 @@ func TestMultipleGtError(t *testing.T) {
 	}
 
   `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -994,7 +994,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 		}
 	}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1101,7 +1101,7 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 	}
 }`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
 
@@ -1233,7 +1233,7 @@ func TestAggregateRootError(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
 }
@@ -1308,7 +1308,7 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 			count(uid)
 		}
 	}`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `Argument cannot be "uid"`)
 }
@@ -1394,7 +1394,7 @@ func TestMultipleValueSortError(t *testing.T) {
 		}
 	}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Sorting not supported on attr: graduation of type: [scalar]")
 }
@@ -1411,7 +1411,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 		}
 	}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
 }
@@ -1625,7 +1625,7 @@ func TestMultipleValueVarError(t *testing.T) {
 		}
 	}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Value variables not supported for predicate with list type.")
 }
@@ -1686,7 +1686,7 @@ func TestPasswordError(t *testing.T) {
 		}
 	}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t,
 		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")

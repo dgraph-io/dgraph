@@ -57,9 +57,7 @@ func setSchema(schema string) {
 	}
 }
 
-// ProcessQuery  is a test-only function used to send queries to the test cluster.
-// Do not use except during testing.
-func ProcessQuery(t *testing.T, ctx context.Context, query string) (string, error) {
+func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -77,7 +75,7 @@ func ProcessQuery(t *testing.T, ctx context.Context, query string) (string, erro
 }
 
 func processQueryNoErr(t *testing.T, query string) string {
-	res, err := ProcessQuery(t, context.Background(), query)
+	res, err := processQuery(t, context.Background(), query)
 	require.NoError(t, err)
 	return res
 }
@@ -227,9 +225,7 @@ best_friend                    : uid @reverse .
 pet                            : [uid] .
 `
 
-// PopulateCluster is a test-only function used to set-up the test cluster.
-// Do not use except during testing.
-func PopulateCluster() {
+func populateCluster() {
 	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
 	if err != nil {
 		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))

@@ -35,7 +35,7 @@ func TestRecurseError(t *testing.T) {
 			}
 		}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query.")
 }
@@ -77,7 +77,7 @@ func TestRecurseExpandRepeatedPredError(t *testing.T) {
 			}
 		}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Repeated subgraph: [name] while using expand()")
 }
@@ -249,7 +249,7 @@ func TestShortestPath_ExpandError(t *testing.T) {
 			}
 		}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -525,7 +525,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 			}
 		}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -746,7 +746,7 @@ func TestDebug1(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, _ := ProcessQuery(t, ctx, query)
+	buf, _ := processQuery(t, ctx, query)
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -793,7 +793,7 @@ func TestDebug3(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, err := ProcessQuery(t, ctx, query)
+	buf, err := processQuery(t, ctx, query)
 	require.NoError(t, err)
 
 	var mp map[string]interface{}
@@ -859,7 +859,7 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -879,7 +879,7 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -895,7 +895,7 @@ func TestCountError3(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -982,7 +982,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 		}
 	}
 `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1182,7 +1182,7 @@ func TestPasswordExpandError(t *testing.T) {
     }
 	`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Contains(t, err.Error(), "Repeated subgraph: [password]")
 }
 
@@ -1222,7 +1222,7 @@ func TestCheckPasswordParseError(t *testing.T) {
                         }
                 }
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1339,7 +1339,7 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
                         }
                 }
         `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: invalidfn1 is not valid.")
 }
@@ -1355,7 +1355,7 @@ func TestToSubgraphInvalidFnName2(t *testing.T) {
                         }
                 }
         `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1371,7 +1371,7 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
                         }
                 }
         `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1388,7 +1388,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                         }
                 }
         `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: invalidfn4 is not valid.")
 }
@@ -1405,7 +1405,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         }
                 }
         `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got invalid keyword: disorderasc")
 }
@@ -1422,7 +1422,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         }
                 }
         `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got invalid keyword: invalidorderasc")
 }
@@ -1504,7 +1504,7 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1542,7 +1542,7 @@ func TestInvalidStringIndex(t *testing.T) {
 		}
 	`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1579,7 +1579,7 @@ func TestFilterRegexError(t *testing.T) {
     }
 `
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1825,7 +1825,7 @@ func TestFilterRegex14(t *testing.T) {
     }
 `
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 

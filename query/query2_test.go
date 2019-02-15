@@ -411,7 +411,7 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1015,7 +1015,7 @@ func TestMultiQueryError1(t *testing.T) {
       }
     }
   `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1034,7 +1034,7 @@ func TestMultiQueryError2(t *testing.T) {
       }
     }
   `
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1361,7 +1361,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
                 }
         `
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.NotNil(t, err)
 }
 
@@ -1376,7 +1376,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
                 }
         `
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.NotNil(t, err)
 }
 
@@ -1391,7 +1391,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
                 }
         `
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1431,7 +1431,7 @@ func TestNearGeneratorError(t *testing.T) {
 		}
 	}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1444,7 +1444,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 		}
 	}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1457,7 +1457,7 @@ func TestWithinGeneratorError(t *testing.T) {
 		}
 	}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -1505,7 +1505,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 		}
 	}`
 
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
@@ -2021,7 +2021,7 @@ func TestLangLossyIndex4(t *testing.T) {
 			}
 		}
 	`
-	_, err := ProcessQuery(t, context.Background(), query)
+	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 }
 
