@@ -10,5 +10,13 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+# Goland
+.idea/
 ### Go Patch ###
 /vendor/
+
+# IdeaIDE
+.idea
+
+# VS Code
+.vscode

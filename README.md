@@ -7,6 +7,29 @@
 [![Maintainability](https://api.codeclimate.com/v1/badges/ca3f8ff03a0a9e1cac20/maintainability)](https://codeclimate.com/github/ChainSafeSystems/go-pre/maintainability)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/ca3f8ff03a0a9e1cac20/test_coverage)](https://codeclimate.com/github/ChainSafeSystems/go-pre/test_coverage)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 [![](https://img.shields.io/twitter/follow/espadrine.svg?label=Follow&style=social)](https://twitter.com/chainsafeth)
+
+# Go-PRE
+
+
+
+## Install
+
+```
+```
+
+## Usage
+
+```
+```
+
+## Contributing
+
+
+Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## License
+
 
 
