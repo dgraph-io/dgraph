@@ -57,6 +57,8 @@ func setSchema(schema string) {
 	}
 }
 
+// ProcessQuery  is a test-only function used to send queries to the test cluster.
+// Do not use except during testing.
 func ProcessQuery(t *testing.T, ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)
@@ -225,6 +227,8 @@ best_friend                    : uid @reverse .
 pet                            : [uid] .
 `
 
+// PopulateCluster is a test-only function used to set-up the test cluster.
+// Do not use except during testing.
 func PopulateCluster() {
 	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
 	if err != nil {
