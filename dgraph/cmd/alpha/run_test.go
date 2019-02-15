@@ -128,12 +128,12 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, err := mutationWithTs(m, false, true, false, 0)
+	_, _, _, err := mutationWithTs(m, false, true, false, 0)
 	return err
 }
 
 func runJsonMutation(m string) error {
-	_, _, err := mutationWithTs(m, true, true, false, 0)
+	_, _, _, err := mutationWithTs(m, true, true, false, 0)
 	return err
 }
 

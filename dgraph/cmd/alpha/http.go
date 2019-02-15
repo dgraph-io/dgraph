@@ -318,19 +318,20 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc.StartTs = ts
 
 	// Keys are sent as an array in the body.
-	keys := readRequest(w, r)
-	if keys == nil {
+	reqText := readRequest(w, r)
+	if reqText == nil {
 		return
 	}
 
-	var encodedKeys []string
-	if err := json.Unmarshal([]byte(keys), &encodedKeys); err != nil {
+	var reqMap map[string][]string
+	if err := json.Unmarshal(reqText, &reqMap); err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest,
 			"Error while unmarshalling keys header into array")
 		return
 	}
 
-	tc.Keys = encodedKeys
+	tc.Keys = reqMap["keys"]
+	tc.Preds = reqMap["preds"]
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {

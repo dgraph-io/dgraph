@@ -136,15 +136,16 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 }
 
 func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
-	ts uint64) ([]string, uint64, error) {
+	ts uint64) ([]string, []string, uint64, error) {
 	url := addr + "/mutate"
 	if ts != 0 {
 		url += "/" + strconv.FormatUint(ts, 10)
 	}
 	var keys []string
+	var preds []string
 	req, err := http.NewRequest("POST", url, bytes.NewBufferString(m))
 	if err != nil {
-		return keys, 0, err
+		return keys, preds, 0, err
 	}
 
 	if isJson {
@@ -155,14 +156,14 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	}
 	_, body, err := runRequest(req)
 	if err != nil {
-		return keys, 0, err
+		return keys, preds, 0, err
 	}
 
 	var r res
 	x.Check(json.Unmarshal(body, &r))
 	startTs := r.Extensions.Txn.StartTs
 
-	return r.Extensions.Txn.Keys, startTs, nil
+	return r.Extensions.Txn.Keys, r.Extensions.Txn.Preds, startTs, nil
 }
 
 func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
@@ -189,13 +190,16 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	return qr, body, nil
 }
 
-func commitWithTs(keys []string, ts uint64) error {
+func commitWithTs(keys, preds []string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "/" + strconv.FormatUint(ts, 10)
 	}
 
-	b, err := json.Marshal(keys)
+	m := make(map[string]interface{})
+	m["keys"] = keys
+	m["preds"] = preds
+	b, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
@@ -232,10 +236,11 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, mts, err := mutationWithTs(m1, false, false, true, ts)
+	keys, preds, mts, err := mutationWithTs(m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
+	require.Equal(t, 3, len(preds))
 
 	data, _, err := queryWithTs(q1, 0)
 	require.NoError(t, err)
@@ -247,7 +252,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(keys, ts))
+	require.NoError(t, commitWithTs(keys, preds, ts))
 	data, _, err = queryWithTs(q1, 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
