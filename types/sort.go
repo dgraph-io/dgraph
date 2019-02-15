@@ -123,12 +123,6 @@ func less(a, b Val) bool {
 	if a.Tid != b.Tid {
 		return mismatchedLess(a, b)
 	}
-	if a.Value == nil {
-		a = ValueForType(a.Tid)
-	}
-	if b.Value == nil {
-		b = ValueForType(b.Tid)
-	}
 	switch a.Tid {
 	case DateTimeID:
 		return a.Value.(time.Time).Before(b.Value.(time.Time))
@@ -139,7 +133,7 @@ func less(a, b Val) bool {
 	case UidID:
 		return (a.Value.(uint64) < b.Value.(uint64))
 	case StringID, DefaultID:
-		return (a.Value.(string)) < (b.Value.(string))
+		return (a.Safe().(string)) < (b.Safe().(string))
 	}
 	return false
 }
@@ -181,12 +175,6 @@ func equal(a, b Val) bool {
 	if a.Tid != b.Tid {
 		return false
 	}
-	if a.Value == nil {
-		a = ValueForType(a.Tid)
-	}
-	if b.Value == nil {
-		b = ValueForType(b.Tid)
-	}
 	switch a.Tid {
 	case DateTimeID:
 		aVal, aOk := a.Value.(time.Time)
@@ -201,8 +189,8 @@ func equal(a, b Val) bool {
 		bVal, bOk := b.Value.(float64)
 		return aOk && bOk && aVal == bVal
 	case StringID, DefaultID:
-		aVal, aOk := a.Value.(string)
-		bVal, bOk := b.Value.(string)
+		aVal, aOk := a.Safe().(string)
+		bVal, bOk := b.Safe().(string)
 		return aOk && bOk && aVal == bVal
 	case BoolID:
 		aVal, aOk := a.Value.(bool)
