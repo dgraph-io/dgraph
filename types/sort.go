@@ -189,8 +189,8 @@ func equal(a, b Val) bool {
 		bVal, bOk := b.Value.(float64)
 		return aOk && bOk && aVal == bVal
 	case StringID, DefaultID:
-		aVal, aOk := a.Safe().(string)
-		bVal, bOk := b.Safe().(string)
+		aVal, aOk := a.Value.(string)
+		bVal, bOk := b.Value.(string)
 		return aOk && bOk && aVal == bVal
 	case BoolID:
 		aVal, aOk := a.Value.(bool)
