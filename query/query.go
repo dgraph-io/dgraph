@@ -152,6 +152,10 @@ type params struct {
 	shortest       bool
 }
 
+type pathMetadata struct {
+	weight float64 // Total weight of the path.
+}
+
 // Function holds the information about gql functions.
 type Function struct {
 	Name       string    // Specifies the name of the function.
@@ -189,6 +193,8 @@ type SubGraph struct {
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *pb.List
 	List     bool // whether predicate is of list type
+
+	pathMeta *pathMetadata
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -572,6 +578,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	// nothing else at that level.
 	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
 		dst.SetUID(uid, "uid")
+	}
+
+	if sg.pathMeta != nil {
+		totalWeight := types.Val{
+			Tid:   types.FloatID,
+			Value: sg.pathMeta.weight,
+		}
+		dst.AddValue("_weight_", totalWeight)
 	}
 
 	return nil
