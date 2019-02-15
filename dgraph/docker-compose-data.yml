@@ -34,3 +34,18 @@ services:
       - type: bind
         source: "${DATA}"
         target: /data
+  dg4:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg5:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg6:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data

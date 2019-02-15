@@ -12,6 +12,7 @@ Available options:
 
     --jaeger       Run with Jaeger tracing enabled.
     --single       Run a single Zero and Alpha (2-node cluster).
+    --six
     --metrics      Run with metrics collection and dashboard (Prometheus/Grafana/Node Exporter).
     --data <path>  Run with Dgraph data directories mounted to <path>.
     --tmpfs        Run with WAL directories (w/zw) in-memory with tmpfs.
