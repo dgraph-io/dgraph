@@ -41,15 +41,7 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
 		return err
 	}
-	// create backup request and process it.
-	br := &backup.Request{DB: pstore, Backup: req}
-	// calculate estimated upload size
-	for _, t := range groups().tablets {
-		if t.GroupId == req.GroupId {
-			br.Sizex += uint64(float64(t.Space) * 1.2)
-		}
-	}
-	return br.Process(ctx)
+	return backup.Process(ctx, pstore, req)
 }
 
 // Backup handles a request coming from another node.
@@ -64,11 +56,11 @@ func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Sta
 	return &resp, nil
 }
 
-func backupGroup(ctx context.Context, in pb.BackupRequest) error {
+func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 	glog.V(2).Infof("Sending backup request: %+v\n", in)
 	// this node is part of the group, process backup.
 	if groups().groupId() == in.GroupId {
-		return backupProcess(ctx, &in)
+		return backupProcess(ctx, in)
 	}
 
 	// send request to any node in the group.
@@ -76,7 +68,7 @@ func backupGroup(ctx context.Context, in pb.BackupRequest) error {
 	if pl == nil {
 		return x.Errorf("Couldn't find a server in group %d", in.GroupId)
 	}
-	status, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, &in)
+	status, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {
 		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
 		return err
@@ -108,32 +100,42 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 		return err
 	}
 
-	req := pb.BackupRequest{
+	var m backup.Manifest
+	m.Groups = groups().KnownGroups()
+	m.Request = pb.BackupRequest{
 		ReadTs:   ts.ReadOnly,
 		Since:    since,
 		Location: destination,
 		UnixTs:   time.Now().UTC().Format("20060102.150405"),
 	}
 
-	gids := groups().KnownGroups()
-	glog.Infof("Created backup request: %+v. Groups=%v\n", req, gids)
+	glog.Infof("Created backup request: %+v. Groups=%v\n", m.Request, m.Groups)
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
 	errCh := make(chan error, 1)
-	for _, gid := range gids {
-		go func(gid uint32) {
-			req.GroupId = gid
+	for _, gid := range m.Groups {
+		req := m.Request
+		req.GroupId = gid
+		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
-		}(gid)
+			// This is the since (max version) result from Backup().
+			if req.Since != 0 {
+				m.Since = req.Since
+			}
+		}(&req)
 	}
 
-	for i := 0; i < len(gids); i++ {
+	for i := 0; i < len(m.Groups); i++ {
 		err := <-errCh
 		if err != nil {
 			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
+	}
+
+	if err = m.Complete(ctx); err != nil {
+		return err
 	}
 	glog.Infof("Backup completed OK.")
 	return nil
