@@ -21,18 +21,22 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// backupFmt defines the name of backups files or blobs.
+// backupPathFmt defines the path to store or index backup objects.
+// The expected parameter is a date in string format.
+const backupPathFmt = `dgraph.%s`
+
+// backupNameFmt defines the name of backups files or objects (remote).
 // The first parameter is the read timestamp at the time of backup. This is used for
 // incremental backups and partial restore.
 // The second parameter is the group ID when backup happened. This is used for partitioning
 // the posting directories 'p' during restore.
-const backupFmt = "r%d-g%d.backup"
+const backupNameFmt = `r%d-g%d.backup`
 
 // handler interface is implemented by URI scheme handlers.
 // When adding new scheme handles, for example 'azure://', an object will implement
 // this interface to supply Dgraph with a way to create or load backup files into DB.
 type handler interface {
-	// Handlers must know how to Write and Close their URI location.
+	// Handlers must know how to Write to their URI location.
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
@@ -42,17 +46,24 @@ type handler interface {
 	//
 	// The URL object is parsed as described in `newHandler`.
 	// The Request object has the DB, estimated tablets size, and backup parameters.
-	Create(*url.URL, *Request) error
+	Create(*url.URL, *object) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// Objects implementing this function will use for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
 	//
 	// The URL object is parsed as described in `newHandler`.
-	// The uint64 represents a read timestamp that is used for partially restoring data.
 	// The loadFn receives the files as they are processed by a handler, to do the actual
 	// load to DB.
-	Load(*url.URL, uint64, loadFn) error
+	Load(*url.URL, loadFn) error
+}
+
+// object describes a file object, not necessarilly a backup file.
+// uri is the local or remote destination.
+// path is an optional path to create at destination.
+// name is the name of the file or object at uri under path.
+type object struct {
+	uri, path, name string
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -67,13 +78,54 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
+// create parses the requested target URI, finds a handler and then tries to create a session.
+// Target URI formats:
+//   [scheme]://[host]/[path]?[args]
+//   [scheme]:///[path]?[args]
+//   /[path]?[args] (only for local or NFS)
+//
+// Target URI parts:
+//   scheme - service handler, one of: "file", "s3", "minio"
+//     host - remote address. ex: "dgraph.s3.amazonaws.com"
+//     path - directory, bucket or container at target. ex: "/dgraph/backups/"
+//     args - specific arguments that are ok to appear in logs.
+//
+// Global args (if supported by the handler):
+//     secure - true|false turn on/off TLS.
+//      trace - true|false turn on/off HTTP tracing.
+//   compress - true|false turn on/off data compression.
+//    encrypt - true|false turn on/off data encryption.
+//
+// Examples:
+//   s3://dgraph.s3.amazonaws.com/dgraph/backups?secure=true
+//   minio://localhost:9000/dgraph?secure=true
+//   file:///tmp/dgraph/backups
+//   /tmp/dgraph/backups?compress=gzip
+func create(o object) (handler, error) {
+	uri, err := url.Parse(o.uri)
+	if err != nil {
+		return nil, err
+	}
+
+	// find handler for this URI scheme
+	h := getHandler(uri.Scheme)
+	if h == nil {
+		return nil, x.Errorf("Unable to handle url: %v", uri)
+	}
+
+	if err := h.Create(uri, &o); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
 // getInfo scans the file name and returns its the read timestamp and group ID.
 // If the file is not scannable, returns an error.
 // Returns read timestamp and group ID, or an error otherwise.
 func getInfo(file string) (uint64, int, error) {
 	var readTs uint64
 	var groupId int
-	_, err := fmt.Sscanf(path.Base(file), backupFmt, &readTs, &groupId)
+	_, err := fmt.Sscanf(path.Base(file), backupNameFmt, &readTs, &groupId)
 	return readTs, groupId, err
 }
 
@@ -82,9 +134,8 @@ func getInfo(file string) (uint64, int, error) {
 type loadFn func(io.Reader, int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
-// If since is non-zero, handlers might filter files based on readTs.
 // Returns nil on success, error otherwise.
-func Load(l string, since uint64, fn loadFn) error {
+func Load(l string, fn loadFn) error {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return err
@@ -95,5 +146,5 @@ func Load(l string, since uint64, fn loadFn) error {
 		return x.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, since, fn)
+	return h.Load(uri, fn)
 }
