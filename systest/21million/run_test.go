@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
 )
@@ -40,15 +41,21 @@ func TestQueries(t *testing.T) {
 	x.CheckfNoTrace(err)
 
 	for _, file := range files {
-		contents, err := ioutil.ReadFile(queryDir + "/" + file.Name())
-		x.CheckfNoTrace(err)
+		filename := queryDir + "/" + file.Name()
 
-		content := strings.SplitN(string(contents), "\n---\n", 2)
-		resp, err := dg.NewTxn().Query(context.Background(), content[0])
+		reader, cleanup := chunker.FileReader(filename)
+		bytes, err := ioutil.ReadAll(reader)
+		x.CheckfNoTrace(err)
+		contents := string(bytes[:])
+		cleanup()
+
+		// the test query and expected result are separated by a delimiter
+		bodies := strings.SplitN(contents, "\n---\n", 2)
+		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
 
 		t.Logf("running %s", file.Name())
 		if len(resp.GetJson()) > 0 {
-			z.CompareJSON(t, content[1], string(resp.GetJson()))
+			z.CompareJSON(t, bodies[1], string(resp.GetJson()))
 		} else {
 			t.Error("  got empty response")
 		}
