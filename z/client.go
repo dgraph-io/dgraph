@@ -19,7 +19,9 @@ package z
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -30,6 +32,24 @@ import (
 )
 
 func DgraphClient(serviceAddr string) *dgo.Dgraph {
+	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
+	x.Check(err)
+
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	x.Check(err)
+
+	return dg
+}
+
+func DgraphClientNoDropAll(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
 	x.Check(err)
 
