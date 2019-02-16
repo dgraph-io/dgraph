@@ -1342,6 +1342,62 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	return nil
 }
 
+// parseIneqArgs will try to parse the arguments inside an array ([]). If the values
+// are prefixed with $ they are treated as Gql variables, otherwise they are used as scalar values.
+// Returns nil on success while appending arguments to the function Args slice. Otherwise
+// returns an error, which can be a parsing or value error.
+func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
+	var expectArg, isDollar bool
+
+	expectArg = true
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightSquare:
+			return nil
+		case itemDollar:
+			if !expectArg {
+				return item.Errorf("Missing comma in argument list declaration")
+			}
+			if item, ok := it.PeekOne(); !ok || item.Typ != itemName {
+				return item.Errorf("Expecting a variable name. Got: %v", item)
+			}
+			isDollar = true
+			continue
+		case itemName:
+			// This is not a $variable, just add the value.
+			if !isDollar {
+				val, err := getValueArg(item.Val)
+				if err != nil {
+					return err
+				}
+				g.Args = append(g.Args, Arg{Value: val})
+				break
+			}
+			// This is a $variable that must be expanded later.
+			val := "$" + item.Val
+			g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
+		case itemComma:
+			if expectArg {
+				return item.Errorf("Invalid comma in argument list")
+			}
+			expectArg = true
+			continue
+		default:
+			return item.Errorf("Invalid arg list")
+		}
+		expectArg = false
+		isDollar = false
+	}
+	return it.Errorf("Expecting ] to end list but got %v instead", it.Item().Val)
+}
+
+// getValueArg returns a space-trimmed and unquoted version of val.
+// Returns the cleaned string, otherwise empty string and an error.
+func getValueArg(val string) (string, error) {
+	return unquoteIfQuoted(strings.TrimSpace(val))
+}
+
 func validFuncName(name string) bool {
 	if isGeoFunc(name) || isInequalityFn(name) {
 		return true
@@ -1375,7 +1431,7 @@ func parseRegexArgs(val string) (regexArgs, error) {
 }
 
 func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
-	var function *Function
+	function := &Function{}
 	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
@@ -1386,9 +1442,7 @@ L:
 		}
 
 		name := collectName(it, item.Val)
-		function = &Function{
-			Name: strings.ToLower(name),
-		}
+		function.Name = strings.ToLower(name)
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
@@ -1476,24 +1530,22 @@ L:
 				continue
 				// Lets reassemble the geo tokens.
 			} else if itemInFunc.Typ == itemLeftSquare {
-				isGeo := isGeoFunc(function.Name)
-				if !isGeo && !isInequalityFn(function.Name) {
-					return nil, itemInFunc.Errorf("Unexpected character [ while parsing request.")
-				}
+				var err error
+				switch {
+				case isGeoFunc(function.Name):
+					err = parseGeoArgs(it, function)
 
-				if isGeo {
-					if err := parseGeoArgs(it, function); err != nil {
-						return nil, err
-					}
-					expectArg = false
-					continue
-				}
+				case isInequalityFn(function.Name):
+					err = parseIneqArgs(it, function)
 
-				if valid := it.Next(); !valid {
-					return nil,
-						itemInFunc.Errorf("Unexpected EOF while parsing args")
+				default:
+					err = itemInFunc.Errorf("Unexpected character [ while parsing request.")
 				}
-				itemInFunc = it.Item()
+				if err != nil {
+					return nil, err
+				}
+				expectArg = false
+				continue
 			} else if itemInFunc.Typ == itemRightSquare {
 				if _, err := it.Peek(1); err != nil {
 					return nil,

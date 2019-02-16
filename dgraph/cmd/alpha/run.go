@@ -89,6 +89,8 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
+	flag.Bool("enterprise_features", false, "Enable Dgraph enterprise features. "+
+		"If you set this to true, you agree to the Dgraph Community License.")
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
@@ -128,8 +130,9 @@ they form a Raft group and provide synchronous replication.
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 
-	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
-		" that is used for signing the JWT. Enterprise feature.")
+	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
+		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
+		"Enterprise feature.")
 	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
@@ -440,12 +443,11 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
 		if !Alpha.Conf.GetBool("enterprise_features") {
-			glog.Errorf("You must enable Dgraph enterprise features with the " +
+			glog.Fatalf("You must enable Dgraph enterprise features with the " +
 				"--enterprise_features option in order to use ACL.")
-			os.Exit(1)
 		}
 
 		hmacSecret, err := ioutil.ReadFile(secretFile)
@@ -453,8 +455,7 @@ func run() {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
 		if len(hmacSecret) < 32 {
-			glog.Errorf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
-			os.Exit(1)
+			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
 		}
 
 		opts.HmacSecret = hmacSecret

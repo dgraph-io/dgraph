@@ -85,8 +85,6 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	RootCmd.PersistentFlags().Bool("enterprise_features", false,
-		"Enable Dgraph enterprise features. If you set this to true, you agree to the Dgraph Community License.")
 	rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)

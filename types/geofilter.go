@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/golang/geo/s2"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
