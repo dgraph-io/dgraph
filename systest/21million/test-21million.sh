@@ -3,7 +3,6 @@
 readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
-COMPOSE_FILE=$SRCDIR/docker-compose.yml
 QUERY_DIR=$SRCDIR/queries
 BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
 SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
@@ -20,7 +19,7 @@ function Info {
 }
 
 function DockerCompose {
-    docker-compose -p dgraph -f $COMPOSE_FILE "$@"
+    docker-compose -p dgraph "$@"
 }
 
 if [[ $DGRAPH_LOADER != bulk && $DGRAPH_LOADER != live ]]; then
