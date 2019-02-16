@@ -78,6 +78,11 @@ func (s *Server) rebalanceTablets() {
 // for the entire duration of predicate move. If this Zero stops being the leader, the final
 // proposal of reassigning the tablet to the destination would fail automatically.
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+	s.moveOngoing <- struct{}{}
+	defer func() {
+		<-s.moveOngoing
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
 	defer cancel()
 
@@ -146,6 +151,14 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		predicate, srcGroup, dstGroup)
 	glog.Info(msg)
 	span.Annotate(nil, msg)
+
+	in.DestGid = 0 // Indicates deletion for the predicate.
+	if _, err := wc.MovePredicate(ctx, in); err != nil {
+		msg = fmt.Sprintf("While deleting predicate [%v] in group %d. Error: %v",
+			in.Predicate, in.SourceGid, err)
+		span.Annotate(nil, msg)
+		glog.Warningf(msg)
+	}
 	return nil
 }
 

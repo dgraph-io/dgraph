@@ -199,6 +199,12 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
 	span := otrace.FromContext(ctx)
 
+	if in.DestGid == 0 {
+		// This means we need to issue a delete predicate proposal.
+		p := &pb.Proposal{CleanPredicate: in.Predicate}
+		return groups().Node.proposeAndWait(ctx, p)
+	}
+
 	pl := groups().Leader(in.DestGid)
 	if pl == nil {
 		return x.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
