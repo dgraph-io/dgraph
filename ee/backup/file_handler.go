@@ -32,21 +32,29 @@ type fileHandler struct {
 
 // Create prepares the a path to save backup files.
 // Returns error on failure, nil on success.
-func (h *fileHandler) Create(uri *url.URL, req *Request) error {
+func (h *fileHandler) Create(uri *url.URL, file *object) error {
+	var dir, path string
+
 	// check that the path exists and we can access it.
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
+	if file.name == "" {
+		return x.Errorf("Need to specify a file name")
+	}
+	dir = uri.Path
 
-	dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
-	if err := os.Mkdir(dir, 0700); err != nil {
-		if !os.IsExist(err) {
-			return err
+	// Create new dir at destination
+	if file.path != "" {
+		dir = filepath.Join(uri.Path, file.path)
+		if err := os.Mkdir(dir, 0700); err != nil {
+			if !os.IsExist(err) {
+				return err
+			}
 		}
 	}
+	path = filepath.Join(dir, file.name)
 
-	path := filepath.Join(dir,
-		fmt.Sprintf(backupFmt, req.Backup.ReadTs, req.Backup.GroupId))
 	fp, err := os.Create(path)
 	if err != nil {
 		return err
@@ -59,7 +67,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 
 // Load uses tries to load any backup files found.
 // Returns nil on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, since uint64, fn loadFn) error {
+func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
@@ -75,17 +83,10 @@ func (h *fileHandler) Load(uri *url.URL, since uint64, fn loadFn) error {
 	glog.V(2).Infof("Loading backup file(s): %v", files)
 
 	for _, file := range files {
-		readTs, groupId, err := getInfo(file)
+		_, groupId, err := getInfo(file)
 		if err != nil {
 			if glog.V(2) {
 				fmt.Printf("--- Skip: invalid backup name format: %q\n", file)
-			}
-			continue
-		}
-		// if we are doing a partial restore, check the backup readTs here.
-		if since != 0 && readTs < since {
-			if glog.V(2) {
-				fmt.Printf("--- Skip: readTs too old (%d < %d): %q\n", since, readTs, file)
 			}
 			continue
 		}
