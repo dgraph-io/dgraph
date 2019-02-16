@@ -35,7 +35,7 @@ func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Dir(thisFile) + "/queries"
 
-	// for this tests we DON'T want to start with an empty database
+	// For this tests we DON'T want to start with an empty database.
 	dg := z.DgraphClientNoDropAll(":9180")
 
 	files, err := ioutil.ReadDir(queryDir)
@@ -50,7 +50,7 @@ func TestQueries(t *testing.T) {
 		contents := string(bytes[:])
 		cleanup()
 
-		// the test query and expected result are separated by a delimiter
+		// The test query and expected result are separated by a delimiter.
 		bodies := strings.SplitN(contents, "\n---\n", 2)
 		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
 
