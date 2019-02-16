@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -272,6 +273,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		Txn:     resp.Context,
 		Latency: resp.Latency,
 	}
+	sort.Strings(e.Txn.Keys)
+	sort.Strings(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
 	if mu.CommitNow {
@@ -318,19 +321,29 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc.StartTs = ts
 
 	// Keys are sent as an array in the body.
-	keys := readRequest(w, r)
-	if keys == nil {
+	reqText := readRequest(w, r)
+	if reqText == nil {
 		return
 	}
 
-	var encodedKeys []string
-	if err := json.Unmarshal([]byte(keys), &encodedKeys); err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while unmarshalling keys header into array")
+	var reqList []string
+	useList := false
+	if err := json.Unmarshal(reqText, &reqList); err == nil {
+		useList = true
+	}
+
+	var reqMap map[string][]string
+	if err := json.Unmarshal(reqText, &reqMap); err != nil && !useList {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Error while unmarshalling request body")
 		return
 	}
 
-	tc.Keys = encodedKeys
+	if useList {
+		tc.Keys = reqList
+	} else {
+		tc.Keys = reqMap["keys"]
+		tc.Preds = reqMap["preds"]
+	}
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {

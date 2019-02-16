@@ -136,15 +136,16 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 }
 
 func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
-	ts uint64) ([]string, uint64, error) {
+	ts uint64) ([]string, []string, uint64, error) {
 	url := addr + "/mutate"
 	if ts != 0 {
 		url += "/" + strconv.FormatUint(ts, 10)
 	}
 	var keys []string
+	var preds []string
 	req, err := http.NewRequest("POST", url, bytes.NewBufferString(m))
 	if err != nil {
-		return keys, 0, err
+		return keys, preds, 0, err
 	}
 
 	if isJson {
@@ -155,14 +156,14 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	}
 	_, body, err := runRequest(req)
 	if err != nil {
-		return keys, 0, err
+		return keys, preds, 0, err
 	}
 
 	var r res
 	x.Check(json.Unmarshal(body, &r))
 	startTs := r.Extensions.Txn.StartTs
 
-	return r.Extensions.Txn.Keys, startTs, nil
+	return r.Extensions.Txn.Keys, r.Extensions.Txn.Preds, startTs, nil
 }
 
 func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
@@ -189,7 +190,28 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	return qr, body, nil
 }
 
-func commitWithTs(keys []string, ts uint64) error {
+func commitWithTs(keys, preds []string, ts uint64) error {
+	url := addr + "/commit"
+	if ts != 0 {
+		url += "/" + strconv.FormatUint(ts, 10)
+	}
+
+	m := make(map[string]interface{})
+	m["keys"] = keys
+	m["preds"] = preds
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	_, _, err = runRequest(req)
+	return err
+}
+
+func commitWithTsKeysOnly(keys []string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "/" + strconv.FormatUint(ts, 10)
@@ -232,7 +254,57 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, mts, err := mutationWithTs(m1, false, false, true, ts)
+	keys, preds, mts, err := mutationWithTs(m1, false, false, true, ts)
+	require.NoError(t, err)
+	require.Equal(t, mts, ts)
+	require.Equal(t, 3, len(keys))
+	require.Equal(t, 3, len(preds))
+	require.Equal(t, "1-_predicate_", preds[0])
+	require.Equal(t, "1-balance", preds[1])
+	require.Equal(t, "1-name", preds[2])
+
+	data, _, err := queryWithTs(q1, 0)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[]}}`, data)
+
+	// Query with same timestamp.
+	data, _, err = queryWithTs(q1, ts)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+
+	// Commit and query.
+	require.NoError(t, commitWithTs(keys, preds, ts))
+	data, _, err = queryWithTs(q1, 0)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+}
+
+func TestTransactionBasicNoPreds(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}
+	`
+	_, ts, err := queryWithTs(q1, 0)
+	require.NoError(t, err)
+
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+		_:alice <balance> "110" .
+		_:bob <balance> "60" .
+	  }
+	}
+	`
+
+	keys, _, mts, err := mutationWithTs(m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
@@ -247,7 +319,53 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(keys, ts))
+	require.NoError(t, commitWithTs(keys, nil, ts))
+	data, _, err = queryWithTs(q1, 0)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+}
+
+func TestTransactionBasicOldCommitFormat(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}
+	`
+	_, ts, err := queryWithTs(q1, 0)
+	require.NoError(t, err)
+
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+		_:alice <balance> "110" .
+		_:bob <balance> "60" .
+	  }
+	}
+	`
+
+	keys, _, mts, err := mutationWithTs(m1, false, false, true, ts)
+	require.NoError(t, err)
+	require.Equal(t, mts, ts)
+	require.Equal(t, 3, len(keys))
+
+	data, _, err := queryWithTs(q1, 0)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[]}}`, data)
+
+	// Query with same timestamp.
+	data, _, err = queryWithTs(q1, ts)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+
+	// Commit (using a list of keys instead of a map) and query.
+	require.NoError(t, commitWithTsKeysOnly(keys, ts))
 	data, _, err = queryWithTs(q1, 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
