@@ -465,7 +465,7 @@ Syntax Examples:
 * `eq(predicate, val(varName))`
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
-* `eq(predicate, [var1, var2, ..., varN])`
+* `eq(predicate, [$var1, "value", ..., $varN])`
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
@@ -2932,6 +2932,20 @@ query test($a: int, $b: int, $name: string) {
 {{< runnable vars="{\"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
 query test($a: int = 2, $b: int!, $name: string) {
   me(func: allofterms(name@en, $name)) {
+    director.film (first: $a, offset: $b) {
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+You can also use array with GraphQL Variables.
+
+{{< runnable vars="{\"$b\": \"10\", \"$aName\": \"Steven Spielberg\", \"$bName\": \"Quentin Tarantino\"}" >}}
+query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
+  me(func: eq(name@en, [$aName, $bName])) {
     director.film (first: $a, offset: $b) {
       genre(first: $a) {
         name@en
