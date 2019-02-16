@@ -20,7 +20,7 @@ func Encode(b interface{}) ([]byte, error) {
 	case bool:
 		return encodeBool(v)
 	default:
-		return []byte{}, errors.New("Unsupported type!")
+		return nil, errors.New("Unsupported type!")
 	}
 	return []byte{}, nil
 }
@@ -31,7 +31,7 @@ func Encode(b interface{}) ([]byte, error) {
 func encodeByteArray(b []byte) ([]byte, error) {
 	encodedLen, err := encodeInteger(int64(len(b)))
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 	return append(encodedLen, b...), nil
 }
@@ -76,12 +76,12 @@ func encodeInteger(i int64) ([]byte, error) {
 		topSixBits := uint8(numBytes - 4)
 		lengthByte := topSixBits<<2 + 3
 
-		l := make([]byte, 2)
+		bl := make([]byte, 2)
 
-		binary.LittleEndian.PutUint16(l, uint16(lengthByte))
+		binary.LittleEndian.PutUint16(bl, uint16(lengthByte))
 		binary.LittleEndian.PutUint64(o, uint64(i))
 
-		return append([]byte{l[0]}, o[0:numBytes]...), nil
+		return append([]byte{bl[0]}, o[0:numBytes]...), nil
 	}
 }
 
