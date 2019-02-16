@@ -24,8 +24,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 
-	humanize "github.com/dustin/go-humanize"
-
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go"
 )
@@ -107,7 +105,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 // URI formats:
 //   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
 //   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
-func (h *s3Handler) Create(uri *url.URL, req *Request) error {
+func (h *s3Handler) Create(uri *url.URL, file *object) error {
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
 	mc, err := h.setup(uri)
@@ -115,10 +113,8 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 		return err
 	}
 
-	// The object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-	object := filepath.Join(h.objectPrefix,
-		fmt.Sprintf("dgraph.%s", req.Backup.UnixTs),
-		fmt.Sprintf(backupFmt, req.Backup.ReadTs, req.Backup.GroupId))
+	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
+	object := filepath.Join(h.objectPrefix, file.path, file.name)
 	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
 
 	h.cerr = make(chan error, 1)
@@ -126,14 +122,13 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 		h.cerr <- h.upload(mc, object)
 	}()
 
-	glog.Infof("Uploading data, estimated size %s", humanize.Bytes(req.Sizex))
 	return nil
 }
 
 // Load creates an AWS session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, since uint64, fn loadFn) error {
+func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 	var objects []string
 
 	mc, err := h.setup(uri)
@@ -155,17 +150,10 @@ func (h *s3Handler) Load(uri *url.URL, since uint64, fn loadFn) error {
 	glog.V(2).Infof("Loading from S3: %v", objects)
 
 	for _, object := range objects {
-		readTs, groupId, err := getInfo(object)
+		_, groupId, err := getInfo(object)
 		if err != nil {
 			if glog.V(2) {
 				fmt.Printf("--- Skip: invalid backup name format: %q\n", object)
-			}
-			continue
-		}
-		// if we are doing a partial restore, check the backup readTs here.
-		if since != 0 && readTs < since {
-			if glog.V(2) {
-				fmt.Printf("--- Skip: readTs too old (%d < %d): %q\n", since, readTs, object)
 			}
 			continue
 		}
