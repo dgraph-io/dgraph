@@ -29,9 +29,7 @@ import (
 var Restore x.SubCommand
 
 var opt struct {
-	location string
-	pdir     string
-	since    uint64
+	location, pdir string
 }
 
 func init() {
@@ -59,10 +57,6 @@ Source URI parts:
     args - specific arguments that are ok to appear in logs.
 
 The --posting flag sets the posting list parent dir to store the loaded backup files.
-
-The --since flag will try to restore from a specific read timestamp. Each backup file has
-the read timestamp in their name. If this flag is not used, the restore starts from the
-latest version.
 
 Dgraph backup creates a unique backup object for each node group, and restore will create
 a posting directory 'p' matching the backup group ID. Such that a backup file
@@ -95,8 +89,6 @@ $ dgraph restore -since 20001 -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.c
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
-	flag.Uint64Var(&opt.since, "since", 0,
-		"Starting version for partial restore")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -112,15 +104,15 @@ func run() (err error) {
 		}
 	}()
 
-	return runRestore(opt.pdir, opt.location, opt.since)
+	return runRestore(opt.pdir, opt.location)
 }
 
 // runRestore calls badger.Load and tries to load data into a new DB.
-func runRestore(pdir, location string, since uint64) error {
+func runRestore(pdir, location string) error {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(location, since, func(r io.Reader, groupId int) error {
-		fmt.Printf("--- Restoring groupId: %d, since: %d\n", groupId, since)
+	return Load(location, func(r io.Reader, groupId int) error {
+		fmt.Printf("--- Restoring groupId: %d\n", groupId)
 		bo := badger.DefaultOptions
 		bo.SyncWrites = true
 		bo.TableLoadingMode = options.MemoryMap
