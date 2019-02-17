@@ -1507,6 +1507,8 @@ $ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_
 	"MapShards": 4,
 	"ReduceShards": 2
 }
+```
+```
 The bulk loader needs to open many files at once. This number depends on the size of the data set loaded, the map file output size, and the level of indexing. 100,000 is adequate for most data set sizes. See `man ulimit` for details of how to change the limit.
 Current max open files limit: 1024
 MAP 01s rdf_count:176.0 rdf_speed:174.4/sec edge_count:564.0 edge_speed:558.8/sec
@@ -1540,6 +1542,8 @@ load output from the example above:
 
 ```sh
 $ tree ./out
+```
+```
 ./out
 ├── 0
 │   └── p
