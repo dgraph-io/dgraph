@@ -155,10 +155,11 @@ func run() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
 
-	// Delete and recreate the output dirs to ensure they are empty.
-	x.Check(os.RemoveAll(opt.DgraphsDir))
+	// Delete and recreate the shard output dirs to ensure they are empty without destroying
+	// existing non-shard data, if any.
 	for i := 0; i < opt.ReduceShards; i++ {
 		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i), "p")
+		x.Check(os.RemoveAll(dir))
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 	}
