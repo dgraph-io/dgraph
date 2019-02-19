@@ -609,7 +609,7 @@ curl -X POST localhost:8080/commit/4 -d $'
 	"preds": [
 		"1-predicate",
 		"1-name"
-   ]
+	]
 }' | jq
 ```
 
