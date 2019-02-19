@@ -1488,7 +1488,9 @@ will run 6 Alphas with 3 replicas per group, then there are 2 groups and
 predicates between the reduce shards.
 
 ```sh
-$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:5080
+$ dgraph bulk -f goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:5080
+```
+```
 {
 	"RDFDir": "goldendata.rdf.gz",
 	"SchemaFile": "goldendata.schema",
@@ -1540,6 +1542,8 @@ load output from the example above:
 
 ```sh
 $ tree ./out
+```
+```
 ./out
 ├── 0
 │   └── p
