@@ -35,7 +35,7 @@ const (
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
-	byteType      = byte(0x11)
+	byteType      = byte(0x02)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -136,20 +136,20 @@ type ParsedKey struct {
 }
 
 func (p ParsedKey) IsData() bool {
-	return p.byteType == ByteData
+	return p.bytePrefix == defaultPrefix && p.byteType == ByteData
 }
 
 func (p ParsedKey) IsReverse() bool {
-	return p.byteType == ByteReverse
+	return p.bytePrefix == defaultPrefix && p.byteType == ByteReverse
 }
 
 func (p ParsedKey) IsCount() bool {
-	return p.byteType == ByteCount ||
-		p.byteType == ByteCountRev
+	return p.bytePrefix == defaultPrefix && (p.byteType == ByteCount ||
+		p.byteType == ByteCountRev)
 }
 
 func (p ParsedKey) IsIndex() bool {
-	return p.byteType == ByteIndex
+	return p.bytePrefix == defaultPrefix && p.byteType == ByteIndex
 }
 
 func (p ParsedKey) IsSchema() bool {
