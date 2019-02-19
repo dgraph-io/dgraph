@@ -56,31 +56,31 @@ func encodeInteger(i int) ([]byte, error) {
 		o := make([]byte, 4)
 		binary.LittleEndian.PutUint32(o, uint32(i<<2)+2)
 		return o, nil
-	} else {
-		// TODO: this case only works for integers between 2**30 and 2**64 due to the fact that Go's integers only hold up
-		// to 2 ** 64. need to implement this case for integers > 2**64 using the big.Int library
-		o := make([]byte, 8)
-		m := i
-		var numBytes uint
+	} 
 
-		// calculate the number of bytes needed to store i
-		// the most significant byte cannot be zero
-		// each iteration, shift by 1 byte until the number is zero
-		// then break and save the numBytes needed
-		for numBytes = 0; numBytes < 256 && m != 0; numBytes++ {
-			m = m >> 8
-		}
+	// TODO: this case only works for integers between 2**30 and 2**64 due to the fact that Go's integers only hold up
+	// to 2 ** 64. need to implement this case for integers > 2**64 using the big.Int library
+	o := make([]byte, 8)
+	m := i
+	var numBytes uint
 
-		topSixBits := uint8(numBytes - 4)
-		lengthByte := topSixBits<<2 + 3
-
-		bl := make([]byte, 2)
-
-		binary.LittleEndian.PutUint16(bl, uint16(lengthByte))
-		binary.LittleEndian.PutUint64(o, uint64(i))
-
-		return append([]byte{bl[0]}, o[0:numBytes]...), nil
+	// calculate the number of bytes needed to store i
+	// the most significant byte cannot be zero
+	// each iteration, shift by 1 byte until the number is zero
+	// then break and save the numBytes needed
+	for numBytes = 0; numBytes < 256 && m != 0; numBytes++ {
+		m = m >> 8
 	}
+
+	topSixBits := uint8(numBytes - 4)
+	lengthByte := topSixBits<<2 + 3
+
+	bl := make([]byte, 2)
+
+	binary.LittleEndian.PutUint16(bl, uint16(lengthByte))
+	binary.LittleEndian.PutUint64(o, uint64(i))
+
+	return append([]byte{bl[0]}, o[0:numBytes]...), nil
 }
 
 // encodeBool performs the following:
