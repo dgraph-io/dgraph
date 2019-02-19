@@ -1,0 +1,1553 @@
+{
+ var(func:allofterms(name@en, "angelina jolie")) {
+   actor.film {
+    A AS performance.film {  # All films acted in by Angelina Jolie
+     B As genre  # Genres of all the films acted in by Angelina Jolie
+    }
+   }
+  }
+
+ var(func:allofterms(name@en, "brad pitt")) {
+   actor.film {
+    C AS performance.film {  # All films acted in by Brad Pitt
+     D as genre  # Genres of all the films acted in by Brad Pitt
+    }
+   }
+  }
+
+ films(func: uid(D)) @filter(uid(B)) {   # Genres from both Angelina and Brad
+  name@en
+   ~genre @filter(uid(A, C)) {  # Movies in either A or C.
+     name@en
+   }
+ }
+}
+---
+{
+  "films": [
+    {
+      "name@en": "Film adaptation",
+      "~genre": [
+        {
+          "name@en": "The Fever"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Legends of the Fall"
+        },
+        {
+          "name@en": "A River Runs Through It"
+        },
+        {
+          "name@en": "Fight Club"
+        }
+      ]
+    },
+    {
+      "name@en": "Action/Adventure",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Cool World"
+        },
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Ultimate Fights"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        }
+      ]
+    },
+    {
+      "name@en": "Crime Fiction",
+      "~genre": [
+        {
+          "name@en": "The Assassination of Jesse James by the Coward Robert Ford"
+        },
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Confessions of a Dangerous Mind"
+        },
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "The Counselor"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Foxfire"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "Less Than Zero"
+        },
+        {
+          "name@en": "Snatch"
+        },
+        {
+          "name@en": "Seven"
+        },
+        {
+          "name@en": "Sleepers"
+        },
+        {
+          "name@en": "Spy Game"
+        },
+        {
+          "name@en": "Thelma \u0026 Louise"
+        },
+        {
+          "name@en": "Ultimate Fights"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Kalifornia"
+        },
+        {
+          "name@en": "Ocean's Thirteen"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "Killing Them Softly"
+        },
+        {
+          "name@en": "Burn After Reading"
+        },
+        {
+          "name@en": "Hell's Kitchen"
+        },
+        {
+          "name@en": "The Mexican"
+        },
+        {
+          "name@en": "Too Young to Die?"
+        },
+        {
+          "name@en": "True Romance"
+        },
+        {
+          "name@en": "The Devil's Own"
+        },
+        {
+          "name@en": "No Man's Land"
+        },
+        {
+          "name@en": "Playing God"
+        },
+        {
+          "name@en": "Taking Lives"
+        }
+      ]
+    },
+    {
+      "name@en": "Thriller",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Confessions of a Dangerous Mind"
+        },
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "The Tiger"
+        },
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "The Counselor"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "Snatch"
+        },
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "Seven"
+        },
+        {
+          "name@en": "Sleepers"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Spy Game"
+        },
+        {
+          "name@en": "Thelma \u0026 Louise"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "12 Monkeys"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "World War Z"
+        },
+        {
+          "name@en": "Ultimate Fights"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Kalifornia"
+        },
+        {
+          "name@en": "Ocean's Thirteen"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "Killing Them Softly"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "No Way Out"
+        },
+        {
+          "name@en": "True Romance"
+        },
+        {
+          "name@en": "Two-Fisted Tales"
+        },
+        {
+          "name@en": "The Devil's Own"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        },
+        {
+          "name@en": "Playing God"
+        },
+        {
+          "name@en": "Cutting Class"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Original Sin"
+        }
+      ]
+    },
+    {
+      "name@en": "Romance Film",
+      "~genre": [
+        {
+          "name@en": "Pushing Tin"
+        },
+        {
+          "name@en": "Happy Together"
+        },
+        {
+          "name@en": "Troy"
+        },
+        {
+          "name@en": "The Favor"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Meet Joe Black"
+        },
+        {
+          "name@en": "Less Than Zero"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "Hunk"
+        },
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Interview with the Vampire"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        },
+        {
+          "name@en": "Legends of the Fall"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "The Curious Case of Benjamin Button"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "The Mexican"
+        },
+        {
+          "name@en": "Full Frontal"
+        },
+        {
+          "name@en": "True Romance"
+        },
+        {
+          "name@en": "Johnny Suede"
+        },
+        {
+          "name@en": "The Dark Side of the Sun"
+        },
+        {
+          "name@en": "Original Sin"
+        }
+      ]
+    },
+    {
+      "name@en": "Animation",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda: Secrets of the Masters"
+        },
+        {
+          "name@en": "Cool World"
+        },
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "MegaMind"
+        },
+        {
+          "name@en": "Happy Feet Two"
+        },
+        {
+          "name@en": "Sinbad: Legend of the Seven Seas"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Kung Fu Panda 3"
+        }
+      ]
+    },
+    {
+      "name@en": "Television film",
+      "~genre": [
+        {
+          "name@en": "The Fever"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "The Image"
+        },
+        {
+          "name@en": "Too Young to Die?"
+        }
+      ]
+    },
+    {
+      "name@en": "Action Film",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Cool World"
+        },
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Fury"
+        },
+        {
+          "name@en": "Troy"
+        },
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Cyborg 2"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Spy Game"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "World War Z"
+        },
+        {
+          "name@en": "Inglourious Basterds"
+        },
+        {
+          "name@en": "Ultimate Fights"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "True Romance"
+        },
+        {
+          "name@en": "The Devil's Own"
+        },
+        {
+          "name@en": "No Man's Land"
+        }
+      ]
+    },
+    {
+      "name@en": "Martial Arts Film",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Ultimate Fights"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        }
+      ]
+    },
+    {
+      "name@en": "History",
+      "~genre": [
+        {
+          "name@en": "The Assassination of Jesse James by the Coward Robert Ford"
+        },
+        {
+          "name@en": "Troy"
+        },
+        {
+          "name@en": "Changeling"
+        }
+      ]
+    },
+    {
+      "name@en": "Short Film",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda: Secrets of the Masters"
+        },
+        {
+          "name@en": "Contact"
+        },
+        {
+          "name@en": "Beyond All Boundaries"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Alice \u0026 Viril"
+        },
+        {
+          "name@en": "Angela \u0026 Viril"
+        }
+      ]
+    },
+    {
+      "name@en": "Family",
+      "~genre": [
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "MegaMind"
+        },
+        {
+          "name@en": "Happy Feet Two"
+        },
+        {
+          "name@en": "Sinbad: Legend of the Seven Seas"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "A River Runs Through It"
+        }
+      ]
+    },
+    {
+      "name@en": "Slasher",
+      "~genre": [
+        {
+          "name@en": "Cutting Class"
+        },
+        {
+          "name@en": "Taking Lives"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy-drama",
+      "~genre": [
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Full Frontal"
+        }
+      ]
+    },
+    {
+      "name@en": "Political drama",
+      "~genre": [
+        {
+          "name@en": "Babel"
+        },
+        {
+          "name@en": "George Wallace"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        }
+      ]
+    },
+    {
+      "name@en": "Heist film",
+      "~genre": [
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        }
+      ]
+    },
+    {
+      "name@en": "Musical comedy",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Johnny Suede"
+        }
+      ]
+    },
+    {
+      "name@en": "Mystery",
+      "~genre": [
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "Meet Joe Black"
+        },
+        {
+          "name@en": "Seven"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "12 Monkeys"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "No Way Out"
+        },
+        {
+          "name@en": "Cutting Class"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Original Sin"
+        }
+      ]
+    },
+    {
+      "name@en": "Crime Thriller",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Kalifornia"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "No Way Out"
+        },
+        {
+          "name@en": "No Man's Land"
+        },
+        {
+          "name@en": "Cutting Class"
+        }
+      ]
+    },
+    {
+      "name@en": "Cult film",
+      "~genre": [
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Fight Club"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Cool World"
+        },
+        {
+          "name@en": "Confessions of a Dangerous Mind"
+        },
+        {
+          "name@en": "Pushing Tin"
+        },
+        {
+          "name@en": "Happy Together"
+        },
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "The Favor"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Snatch"
+        },
+        {
+          "name@en": "Hunk"
+        },
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Thelma \u0026 Louise"
+        },
+        {
+          "name@en": "Being John Malkovich"
+        },
+        {
+          "name@en": "Happy Feet Two"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Lookin' to Get Out"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Ocean's Thirteen"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Burn After Reading"
+        },
+        {
+          "name@en": "The Mexican"
+        },
+        {
+          "name@en": "Full Frontal"
+        },
+        {
+          "name@en": "Johnny Suede"
+        },
+        {
+          "name@en": "Cutting Class"
+        }
+      ]
+    },
+    {
+      "name@en": "Ensemble Film",
+      "~genre": [
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Ocean's Thirteen"
+        },
+        {
+          "name@en": "Full Frontal"
+        }
+      ]
+    },
+    {
+      "name@en": "Teen film",
+      "~genre": [
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Foxfire"
+        },
+        {
+          "name@en": "Less Than Zero"
+        },
+        {
+          "name@en": "Cutting Class"
+        }
+      ]
+    },
+    {
+      "name@en": "Indie film",
+      "~genre": [
+        {
+          "name@en": "Happy Together"
+        },
+        {
+          "name@en": "The Favor"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Foxfire"
+        },
+        {
+          "name@en": "Hunk"
+        },
+        {
+          "name@en": "Seven"
+        },
+        {
+          "name@en": "Babel"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        },
+        {
+          "name@en": "The Tree of Life"
+        },
+        {
+          "name@en": "A River Runs Through It"
+        },
+        {
+          "name@en": "Across the Tracks"
+        },
+        {
+          "name@en": "Full Frontal"
+        },
+        {
+          "name@en": "True Romance"
+        },
+        {
+          "name@en": "Johnny Suede"
+        }
+      ]
+    },
+    {
+      "name@en": "Spy film",
+      "~genre": [
+        {
+          "name@en": "Spy Game"
+        },
+        {
+          "name@en": "Burn After Reading"
+        },
+        {
+          "name@en": "No Way Out"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        }
+      ]
+    },
+    {
+      "name@en": "Historical fiction",
+      "~genre": [
+        {
+          "name@en": "Troy"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Cleopatra"
+        }
+      ]
+    },
+    {
+      "name@en": "Backstage Musical",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Johnny Suede"
+        }
+      ]
+    },
+    {
+      "name@en": "Children's/Family",
+      "~genre": [
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Sinbad: Legend of the Seven Seas"
+        }
+      ]
+    },
+    {
+      "name@en": "Trial drama",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Sleepers"
+        },
+        {
+          "name@en": "Too Young to Die?"
+        }
+      ]
+    },
+    {
+      "name@en": "Suspense",
+      "~genre": [
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "No Way Out"
+        }
+      ]
+    },
+    {
+      "name@en": "Romantic comedy",
+      "~genre": [
+        {
+          "name@en": "Happy Together"
+        },
+        {
+          "name@en": "The Favor"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Hunk"
+        },
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        },
+        {
+          "name@en": "Full Frontal"
+        },
+        {
+          "name@en": "Johnny Suede"
+        }
+      ]
+    },
+    {
+      "name@en": "Historical period drama",
+      "~genre": [
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "Sleepers"
+        },
+        {
+          "name@en": "Legends of the Fall"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "A River Runs Through It"
+        },
+        {
+          "name@en": "George Wallace"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        }
+      ]
+    },
+    {
+      "name@en": "Black comedy",
+      "~genre": [
+        {
+          "name@en": "Mr. \u0026 Mrs. Smith"
+        },
+        {
+          "name@en": "Being John Malkovich"
+        },
+        {
+          "name@en": "Inglourious Basterds"
+        },
+        {
+          "name@en": "Burn After Reading"
+        }
+      ]
+    },
+    {
+      "name@en": "Science Fiction",
+      "~genre": [
+        {
+          "name@en": "Cyborg 2"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "MegaMind"
+        },
+        {
+          "name@en": "12 Monkeys"
+        },
+        {
+          "name@en": "World War Z"
+        }
+      ]
+    },
+    {
+      "name@en": "Western",
+      "~genre": [
+        {
+          "name@en": "The Assassination of Jesse James by the Coward Robert Ford"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Legends of the Fall"
+        },
+        {
+          "name@en": "Two-Fisted Tales"
+        }
+      ]
+    },
+    {
+      "name@en": "Psychological thriller",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Seven"
+        },
+        {
+          "name@en": "12 Monkeys"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "No Way Out"
+        },
+        {
+          "name@en": "Taking Lives"
+        }
+      ]
+    },
+    {
+      "name@en": "Biographical film",
+      "~genre": [
+        {
+          "name@en": "The Assassination of Jesse James by the Coward Robert Ford"
+        },
+        {
+          "name@en": "Confessions of a Dangerous Mind"
+        },
+        {
+          "name@en": "Girl, Interrupted"
+        },
+        {
+          "name@en": "Moneyball"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "12 Years a Slave"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Seven Years in Tibet"
+        },
+        {
+          "name@en": "Cleopatra"
+        },
+        {
+          "name@en": "A River Runs Through It"
+        },
+        {
+          "name@en": "George Wallace"
+        }
+      ]
+    },
+    {
+      "name@en": "Docudrama",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Too Young to Die?"
+        }
+      ]
+    },
+    {
+      "name@en": "Adventure Film",
+      "~genre": [
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Troy"
+        },
+        {
+          "name@en": "The Tiger"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Thelma \u0026 Louise"
+        },
+        {
+          "name@en": "Sinbad: Legend of the Seven Seas"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "Seven Years in Tibet"
+        },
+        {
+          "name@en": "World War Z"
+        },
+        {
+          "name@en": "Inglourious Basterds"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "The Curious Case of Benjamin Button"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "The Mexican"
+        },
+        {
+          "name@en": "True Romance"
+        }
+      ]
+    },
+    {
+      "name@en": "War film",
+      "~genre": [
+        {
+          "name@en": "Fury"
+        },
+        {
+          "name@en": "Troy"
+        },
+        {
+          "name@en": "Beyond All Boundaries"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Seven Years in Tibet"
+        },
+        {
+          "name@en": "Legends of the Fall"
+        },
+        {
+          "name@en": "Inglourious Basterds"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "Two-Fisted Tales"
+        }
+      ]
+    },
+    {
+      "name@en": "Drama",
+      "~genre": [
+        {
+          "name@en": "The Assassination of Jesse James by the Coward Robert Ford"
+        },
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Confessions of a Dangerous Mind"
+        },
+        {
+          "name@en": "Pushing Tin"
+        },
+        {
+          "name@en": "Fury"
+        },
+        {
+          "name@en": "The Fever"
+        },
+        {
+          "name@en": "The Tiger"
+        },
+        {
+          "name@en": "The Favor"
+        },
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "The Counselor"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Meet Joe Black"
+        },
+        {
+          "name@en": "Moneyball"
+        },
+        {
+          "name@en": "Foxfire"
+        },
+        {
+          "name@en": "Less Than Zero"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "The Image"
+        },
+        {
+          "name@en": "Babel"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Sleepers"
+        },
+        {
+          "name@en": "12 Years a Slave"
+        },
+        {
+          "name@en": "Thelma \u0026 Louise"
+        },
+        {
+          "name@en": "Being John Malkovich"
+        },
+        {
+          "name@en": "Interview with the Vampire"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "12 Monkeys"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Seven Years in Tibet"
+        },
+        {
+          "name@en": "World War Z"
+        },
+        {
+          "name@en": "Legends of the Fall"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Inglourious Basterds"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "The Tree of Life"
+        },
+        {
+          "name@en": "The Curious Case of Benjamin Button"
+        },
+        {
+          "name@en": "Killing Them Softly"
+        },
+        {
+          "name@en": "Burn After Reading"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "A River Runs Through It"
+        },
+        {
+          "name@en": "Hell's Kitchen"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "Across the Tracks"
+        },
+        {
+          "name@en": "Fight Club"
+        },
+        {
+          "name@en": "Too Young to Die?"
+        },
+        {
+          "name@en": "Full Frontal"
+        },
+        {
+          "name@en": "True Romance"
+        },
+        {
+          "name@en": "Voyage of Time"
+        },
+        {
+          "name@en": "George Wallace"
+        },
+        {
+          "name@en": "Two-Fisted Tales"
+        },
+        {
+          "name@en": "The Dark Side of the Sun"
+        },
+        {
+          "name@en": "The Devil's Own"
+        },
+        {
+          "name@en": "No Man's Land"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        },
+        {
+          "name@en": "Playing God"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Original Sin"
+        }
+      ]
+    },
+    {
+      "name@en": "Fantasy",
+      "~genre": [
+        {
+          "name@en": "Cool World"
+        },
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Meet Joe Black"
+        },
+        {
+          "name@en": "Hunk"
+        },
+        {
+          "name@en": "Being John Malkovich"
+        },
+        {
+          "name@en": "Sinbad: Legend of the Seven Seas"
+        },
+        {
+          "name@en": "Interview with the Vampire"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "The Tree of Life"
+        },
+        {
+          "name@en": "Maleficent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4366 @@
+{
+  ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
+    director.film {
+      num_actors as count(starring)
+    }
+    average as avg(val(num_actors))
+  }
+
+  films(func: uid(ID)) {
+    english_name : name@en
+    average_actors : val(average)
+    num_films : count(director.film)
+
+    films : director.film {
+      name : name@en
+      english_name : name@en
+      french_name : name@fr
+    }
+  }
+}
+---
+{
+  "films": [
+    {
+      "english_name": "Steven Deneault",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Binner",
+          "english_name": "Binner"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hahn",
+      "average_actors": 13,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Starchaser: The Legend of Orin",
+          "english_name": "Starchaser: The Legend of Orin"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Berkoff",
+      "average_actors": 1.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Decadence",
+          "english_name": "Decadence"
+        },
+        {
+          "name": "Salome",
+          "english_name": "Salome"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Clarke",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Elizabeth",
+          "english_name": "Elizabeth"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Woloshen",
+      "average_actors": 0.5,
+      "num_films": 4,
+      "films": [
+        {
+          "name": "Playtime",
+          "english_name": "Playtime",
+          "french_name": "Playtime"
+        },
+        {
+          "name": "1000 Plateaus (2004-2014)",
+          "english_name": "1000 Plateaus (2004-2014)"
+        },
+        {
+          "name": "Crossing Victoria",
+          "english_name": "Crossing Victoria"
+        },
+        {
+          "name": "Fiesta Brava",
+          "english_name": "Fiesta Brava",
+          "french_name": "Fiesta Brava"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Oritt",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "A Year and a Night with G. Love & Special Sauce",
+          "english_name": "A Year and a Night with G. Love & Special Sauce"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven St. Croix",
+      "average_actors": 0.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Young Felecia",
+          "english_name": "Young Felecia"
+        },
+        {
+          "name": "Mindset",
+          "english_name": "Mindset"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kiefer",
+      "average_actors": 14,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Prey 4 Me",
+          "english_name": "Prey 4 Me"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Paul",
+      "average_actors": 15.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Eternity",
+          "english_name": "Eternity"
+        },
+        {
+          "name": "Falling in Love Again",
+          "english_name": "Falling in Love Again",
+          "french_name": "Falling in Love Again"
+        },
+        {
+          "name": "Slapstick of Another Kind",
+          "english_name": "Slapstick of Another Kind"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hilliard Stern",
+      "average_actors": 8.628571,
+      "num_films": 35,
+      "films": [
+        {
+          "name": "Forbidden Love",
+          "english_name": "Forbidden Love"
+        },
+        {
+          "name": "Black Fox",
+          "english_name": "Black Fox"
+        },
+        {
+          "name": "The Devil and Max Devlin",
+          "english_name": "The Devil and Max Devlin"
+        },
+        {
+          "name": "Harrad Summer",
+          "english_name": "Harrad Summer"
+        },
+        {
+          "name": "The Ghost of Flight 401",
+          "english_name": "The Ghost of Flight 401",
+          "french_name": "Le Fantôme du vol 401"
+        },
+        {
+          "name": "Miracle on Ice",
+          "english_name": "Miracle on Ice"
+        },
+        {
+          "name": "Breaking the Surface: The Greg Louganis Story",
+          "english_name": "Breaking the Surface: The Greg Louganis Story"
+        },
+        {
+          "name": "Mazes and Monsters",
+          "english_name": "Mazes and Monsters"
+        },
+        {
+          "name": "Anatomy of a Seduction",
+          "english_name": "Anatomy of a Seduction"
+        },
+        {
+          "name": "To Save the Children",
+          "english_name": "To Save the Children"
+        },
+        {
+          "name": "B.S. I Love You",
+          "english_name": "B.S. I Love You"
+        },
+        {
+          "name": "Money",
+          "english_name": "Money",
+          "french_name": "Money"
+        },
+        {
+          "name": "Morning Glory",
+          "english_name": "Morning Glory"
+        },
+        {
+          "name": "Murder in Space",
+          "english_name": "Murder in Space"
+        },
+        {
+          "name": "Man Against the Mob",
+          "english_name": "Man Against the Mob"
+        },
+        {
+          "name": "Running",
+          "english_name": "Running",
+          "french_name": "Le Vainqueur"
+        },
+        {
+          "name": "Not Quite Human",
+          "english_name": "Not Quite Human"
+        },
+        {
+          "name": "The Park Is Mine",
+          "english_name": "The Park Is Mine"
+        },
+        {
+          "name": "The Harrad Experiment",
+          "english_name": "The Harrad Experiment",
+          "french_name": "The Harrad Experiment"
+        },
+        {
+          "name": "Draw!",
+          "english_name": "Draw!"
+        },
+        {
+          "name": "Black Fox III: Good Men and Bad",
+          "english_name": "Black Fox III: Good Men and Bad"
+        },
+        {
+          "name": "Weekend War",
+          "english_name": "Weekend War"
+        },
+        {
+          "name": "Black Fox II: Price of Peace",
+          "english_name": "Black Fox II: Price of Peace"
+        },
+        {
+          "name": "Neither by Day Nor by Night",
+          "english_name": "Neither by Day Nor by Night"
+        },
+        {
+          "name": "Still the Beaver",
+          "english_name": "Still the Beaver"
+        },
+        {
+          "name": "I Wonder Who's Killing Her Now?",
+          "english_name": "I Wonder Who's Killing Her Now?"
+        },
+        {
+          "name": "Doctors' Private Lives",
+          "english_name": "Doctors' Private Lives"
+        },
+        {
+          "name": "Getting Married",
+          "english_name": "Getting Married"
+        },
+        {
+          "name": "Baby Sister",
+          "english_name": "Baby Sister"
+        },
+        {
+          "name": "Ambush Murders",
+          "english_name": "Ambush Murders"
+        },
+        {
+          "name": "A Small Killing",
+          "english_name": "A Small Killing"
+        },
+        {
+          "name": "Portrait of a Showgirl",
+          "english_name": "Portrait of a Showgirl"
+        },
+        {
+          "name": "Fast Friends",
+          "english_name": "Fast Friends"
+        },
+        {
+          "name": "When It Was a Game 2",
+          "english_name": "When It Was a Game 2"
+        },
+        {
+          "name": "City Dump: The Story of the 1951 CCNY Basketball Scandal",
+          "english_name": "City Dump: The Story of the 1951 CCNY Basketball Scandal"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dworman",
+      "average_actors": 15,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Divorce: The Musical",
+          "english_name": "Divorce: The Musical"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Saussey",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Whisker",
+          "english_name": "Whisker"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Miosku",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Gears",
+          "english_name": "Gears"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ray Morris",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Premiere",
+          "english_name": "The Premiere"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Knight",
+      "average_actors": 51,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Redemption",
+          "english_name": "Redemption",
+          "french_name": "Crazy Joe"
+        },
+        {
+          "name": "Locke",
+          "english_name": "Locke",
+          "french_name": "Locke"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bernstein",
+      "average_actors": 9,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "No Head for Heights",
+          "english_name": "No Head for Heights"
+        },
+        {
+          "name": "Decoding Annie Parker",
+          "english_name": "Decoding Annie Parker"
+        },
+        {
+          "name": "Dominion",
+          "english_name": "Dominion"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Nielson",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Cat in the Hat Knows a Lot About Christmas",
+          "english_name": "The Cat in the Hat Knows a Lot About Christmas"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Wilsey",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "At Night I Was Beautiful",
+          "english_name": "At Night I Was Beautiful"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Subotnick",
+      "average_actors": 0.285714,
+      "num_films": 7,
+      "films": [
+        {
+          "name": "Fight",
+          "english_name": "Fight"
+        },
+        {
+          "name": "Two",
+          "english_name": "Two",
+          "french_name": "Two"
+        },
+        {
+          "name": "Lake",
+          "english_name": "Lake"
+        },
+        {
+          "name": "3 Nocturnes",
+          "english_name": "3 Nocturnes",
+          "french_name": "3 Nocturnes"
+        },
+        {
+          "name": "The Dancing Bulrushes",
+          "english_name": "The Dancing Bulrushes",
+          "french_name": "The Dancing Bulrushes"
+        },
+        {
+          "name": "Baby",
+          "english_name": "Baby"
+        },
+        {
+          "name": "Boy",
+          "english_name": "Boy",
+          "french_name": "Boy"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Spencer",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Best",
+          "english_name": "Best"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Boe",
+      "average_actors": 4,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Mythic Journeys",
+          "english_name": "Mythic Journeys"
+        },
+        {
+          "name": "Nudity Required",
+          "english_name": "Nudity Required"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Fischler",
+      "average_actors": 1,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Oliver Stone: Inside Out",
+          "english_name": "Oliver Stone: Inside Out"
+        },
+        {
+          "name": "Dressing America",
+          "english_name": "Dressing America"
+        },
+        {
+          "name": "Beyond Wiseguys: Italian Americans & the Movies",
+          "english_name": "Beyond Wiseguys: Italian Americans & the Movies"
+        },
+        {
+          "name": "The Free Voice of Labor",
+          "english_name": "The Free Voice of Labor"
+        },
+        {
+          "name": "Anarchism in America",
+          "english_name": "Anarchism in America"
+        }
+      ]
+    },
+    {
+      "english_name": "Mark Steven Grove",
+      "average_actors": 14.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Shadow Walkers",
+          "english_name": "Shadow Walkers"
+        },
+        {
+          "name": "Gathering of Heroes: Legend of the Seven Swords",
+          "english_name": "Gathering of Heroes: Legend of the Seven Swords"
+        },
+        {
+          "name": "Mind's Eye",
+          "english_name": "Mind's Eye"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ramirez",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Legend of Johnny Lingo",
+          "english_name": "The Legend of Johnny Lingo"
+        }
+      ]
+    },
+    {
+      "english_name": "Mark Steven Johnson",
+      "average_actors": 43.8,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Daredevil",
+          "english_name": "Daredevil",
+          "french_name": "Daredevil"
+        },
+        {
+          "name": "When in Rome",
+          "english_name": "When in Rome",
+          "french_name": "C'était à Rome"
+        },
+        {
+          "name": "Ghost Rider",
+          "english_name": "Ghost Rider",
+          "french_name": "Ghost Rider"
+        },
+        {
+          "name": "Simon Birch",
+          "english_name": "Simon Birch",
+          "french_name": "Simon Birch"
+        },
+        {
+          "name": "Killing Season",
+          "english_name": "Killing Season",
+          "french_name": "Face à face"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Spielberg",
+      "average_actors": 42.692308,
+      "num_films": 39,
+      "films": [
+        {
+          "name": "Twilight Zone: The Movie",
+          "english_name": "Twilight Zone: The Movie",
+          "french_name": "La Quatrième Dimension"
+        },
+        {
+          "name": "Duel",
+          "english_name": "Duel",
+          "french_name": "Duel"
+        },
+        {
+          "name": "Lincoln",
+          "english_name": "Lincoln",
+          "french_name": "Lincoln"
+        },
+        {
+          "name": "Minority Report",
+          "english_name": "Minority Report",
+          "french_name": "Minority Report"
+        },
+        {
+          "name": "Indiana Jones and the Temple of Doom",
+          "english_name": "Indiana Jones and the Temple of Doom",
+          "french_name": "Indiana Jones et le Temple maudit"
+        },
+        {
+          "name": "Schindler's List",
+          "english_name": "Schindler's List",
+          "french_name": "La Liste de Schindler"
+        },
+        {
+          "name": "Amistad",
+          "english_name": "Amistad",
+          "french_name": "Amistad"
+        },
+        {
+          "name": "1941",
+          "english_name": "1941",
+          "french_name": "1941"
+        },
+        {
+          "name": "Jaws",
+          "english_name": "Jaws",
+          "french_name": "Les Dents de la mer"
+        },
+        {
+          "name": "Indiana Jones and the Last Crusade",
+          "english_name": "Indiana Jones and the Last Crusade",
+          "french_name": "Indiana Jones et la Dernière Croisade"
+        },
+        {
+          "name": "Saving Private Ryan",
+          "english_name": "Saving Private Ryan",
+          "french_name": "Il faut sauver le soldat Ryan"
+        },
+        {
+          "name": "War Horse",
+          "english_name": "War Horse",
+          "french_name": "Cheval de guerre"
+        },
+        {
+          "name": "Close Encounters of the Third Kind",
+          "english_name": "Close Encounters of the Third Kind",
+          "french_name": "Rencontres du troisième type"
+        },
+        {
+          "name": "Empire of the Sun",
+          "english_name": "Empire of the Sun",
+          "french_name": "Empire du soleil"
+        },
+        {
+          "name": "The Adventures of Tintin: The Secret of the Unicorn",
+          "english_name": "The Adventures of Tintin: The Secret of the Unicorn",
+          "french_name": "Les Aventures de Tintin : Le Secret de La Licorne"
+        },
+        {
+          "name": "Indiana Jones and the Kingdom of the Crystal Skull",
+          "english_name": "Indiana Jones and the Kingdom of the Crystal Skull",
+          "french_name": "Indiana Jones et le Royaume du crâne de cristal"
+        },
+        {
+          "name": "Jurassic Park",
+          "english_name": "Jurassic Park",
+          "french_name": "Jurassic Park"
+        },
+        {
+          "name": "The Lost World: Jurassic Park",
+          "english_name": "The Lost World: Jurassic Park",
+          "french_name": "Le Monde perdu : Jurassic Park"
+        },
+        {
+          "name": "Hook",
+          "english_name": "Hook",
+          "french_name": "Hook ou la Revanche du capitaine Crochet"
+        },
+        {
+          "name": "The Color Purple",
+          "english_name": "The Color Purple",
+          "french_name": "La Couleur pourpre"
+        },
+        {
+          "name": "Slipstream",
+          "english_name": "Slipstream"
+        },
+        {
+          "name": "Indiana Jones and the Raiders of the Lost Ark",
+          "english_name": "Indiana Jones and the Raiders of the Lost Ark",
+          "french_name": "Les Aventuriers de l'arche perdue"
+        },
+        {
+          "name": "Munich",
+          "english_name": "Munich",
+          "french_name": "Munich"
+        },
+        {
+          "name": "The Terminal",
+          "english_name": "The Terminal",
+          "french_name": "Le Terminal"
+        },
+        {
+          "name": "Catch Me If You Can",
+          "english_name": "Catch Me If You Can",
+          "french_name": "Arrête-moi si tu peux"
+        },
+        {
+          "name": "War of the Worlds",
+          "english_name": "War of the Worlds",
+          "french_name": "La Guerre des mondes"
+        },
+        {
+          "name": "A.I. Artificial Intelligence",
+          "english_name": "A.I. Artificial Intelligence",
+          "french_name": "A.I. Intelligence artificielle"
+        },
+        {
+          "name": "Bridge of Spies",
+          "english_name": "Bridge of Spies",
+          "french_name": "Le Pont des espions"
+        },
+        {
+          "name": "The Sugarland Express",
+          "english_name": "The Sugarland Express",
+          "french_name": "Sugarland Express"
+        },
+        {
+          "name": "E.T. the Extra-Terrestrial",
+          "english_name": "E.T. the Extra-Terrestrial",
+          "french_name": "E.T. l'extra-terrestre"
+        },
+        {
+          "name": "The BFG",
+          "english_name": "The BFG"
+        },
+        {
+          "name": "Amblin",
+          "english_name": "Amblin",
+          "french_name": "Amblin'"
+        },
+        {
+          "name": "Something Evil",
+          "english_name": "Something Evil",
+          "french_name": "La Chose"
+        },
+        {
+          "name": "Savage",
+          "english_name": "Savage"
+        },
+        {
+          "name": "Always",
+          "english_name": "Always",
+          "french_name": "Always"
+        },
+        {
+          "name": "Robopocalypse",
+          "english_name": "Robopocalypse"
+        },
+        {
+          "name": "The Attack of the Mummies",
+          "english_name": "The Attack of the Mummies"
+        },
+        {
+          "name": "Firelight",
+          "english_name": "Firelight",
+          "french_name": "Firelight"
+        },
+        {
+          "name": "Amazing Stories: Book One",
+          "english_name": "Amazing Stories: Book One"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Shea",
+      "average_actors": 14,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Hoodoo for Voodoo",
+          "english_name": "Hoodoo for Voodoo"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kessler",
+      "average_actors": 28,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "5up 2down",
+          "english_name": "5up 2down"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Conrad",
+      "average_actors": 122,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Promotion",
+          "english_name": "The Promotion",
+          "french_name": "Top Job!"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Zaillian",
+      "average_actors": 41,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "A Civil Action",
+          "english_name": "A Civil Action",
+          "french_name": "Préjudice"
+        },
+        {
+          "name": "Searching for Bobby Fischer",
+          "english_name": "Searching for Bobby Fischer",
+          "french_name": "À la recherche de Bobby Fischer"
+        },
+        {
+          "name": "All the King's Men",
+          "english_name": "All the King's Men",
+          "french_name": "Les Fous du roi"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Seagal",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "On Deadly Ground",
+          "english_name": "On Deadly Ground",
+          "french_name": "Terrain miné"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bram",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Kabbalah Me",
+          "english_name": "Kabbalah Me"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Pravong",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Un jour sang",
+          "english_name": "Un jour sang"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Paul Contreras",
+      "average_actors": 15,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Beasties",
+          "english_name": "Beasties"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Siegel",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Dream City",
+          "english_name": "Dream City"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Williams",
+      "average_actors": 58,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Wild",
+          "english_name": "The Wild",
+          "french_name": "The Wild"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Greenstreet",
+      "average_actors": 1,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "8: The Mormon Proposition",
+          "english_name": "8: The Mormon Proposition"
+        },
+        {
+          "name": "Killer At Large",
+          "english_name": "Killer At Large",
+          "french_name": "Killer at Large"
+        },
+        {
+          "name": "This Divided State",
+          "english_name": "This Divided State"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kampmann",
+      "average_actors": 26,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Stealing Home",
+          "english_name": "Stealing Home",
+          "french_name": "Le Retour de Billy Wyatt"
+        },
+        {
+          "name": "BuzzKill",
+          "english_name": "BuzzKill"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven-Charles Jaffe",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Gahan Wilson: Born Dead, Still Weird",
+          "english_name": "Gahan Wilson: Born Dead, Still Weird"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Silver",
+      "average_actors": 11.5,
+      "num_films": 4,
+      "films": [
+        {
+          "name": "The Bang Bang Club",
+          "english_name": "The Bang Bang Club",
+          "french_name": "The Bang Bang Club"
+        },
+        {
+          "name": "The Last Just Man",
+          "english_name": "The Last Just Man"
+        },
+        {
+          "name": "Stories from the War Zone",
+          "english_name": "Stories from the War Zone"
+        },
+        {
+          "name": "Diameter of the Bomb",
+          "english_name": "Diameter of the Bomb"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Goldmann",
+      "average_actors": 10.25,
+      "num_films": 4,
+      "films": [
+        {
+          "name": "The Videos 1989–2004",
+          "english_name": "The Videos 1989–2004",
+          "french_name": "The Videos 1989-2004"
+        },
+        {
+          "name": "Trailer Park of Terror",
+          "english_name": "Trailer Park of Terror"
+        },
+        {
+          "name": "Country Music: The Spirit of America",
+          "english_name": "Country Music: The Spirit of America"
+        },
+        {
+          "name": "Broken Bridges",
+          "english_name": "Broken Bridges"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bratter",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "First Strike",
+          "english_name": "First Strike"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Charles Castle",
+      "average_actors": 14,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Blood Descendants",
+          "english_name": "Blood Descendants"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Jacobs",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "La Spagnola",
+          "english_name": "La Spagnola"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Danz",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Tenderloin: Forgotten History",
+          "english_name": "Tenderloin: Forgotten History"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Brill",
+      "average_actors": 41.7,
+      "num_films": 10,
+      "films": [
+        {
+          "name": "Without a Paddle",
+          "english_name": "Without a Paddle",
+          "french_name": "Jusqu'au cou"
+        },
+        {
+          "name": "Drillbit Taylor",
+          "english_name": "Drillbit Taylor",
+          "french_name": "Drillbit Taylor, garde du corps"
+        },
+        {
+          "name": "Heavy Weights",
+          "english_name": "Heavy Weights",
+          "french_name": "La Colo des gourmands"
+        },
+        {
+          "name": "Movie 43",
+          "english_name": "Movie 43",
+          "french_name": "Movie 43"
+        },
+        {
+          "name": "Little Nicky",
+          "english_name": "Little Nicky",
+          "french_name": "Little Nicky"
+        },
+        {
+          "name": "The Weekend",
+          "english_name": "The Weekend"
+        },
+        {
+          "name": "Mr Deeds",
+          "english_name": "Mr Deeds",
+          "french_name": "Les Aventures de Mister Deeds"
+        },
+        {
+          "name": "Walk of Shame",
+          "english_name": "Walk of Shame",
+          "french_name": "Blackout total"
+        },
+        {
+          "name": "Late Last Night",
+          "english_name": "Late Last Night"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Soderbergh",
+      "average_actors": 29.228571,
+      "num_films": 35,
+      "films": [
+        {
+          "name": "The Girlfriend Experience",
+          "english_name": "The Girlfriend Experience",
+          "french_name": "Girlfriend Experience"
+        },
+        {
+          "name": "Traffic",
+          "english_name": "Traffic",
+          "french_name": "Traffic"
+        },
+        {
+          "name": "Behind the Candelabra",
+          "english_name": "Behind the Candelabra",
+          "french_name": "Ma vie avec Liberace"
+        },
+        {
+          "name": "9012Live",
+          "english_name": "9012Live",
+          "french_name": "Yes : 9012 Live"
+        },
+        {
+          "name": "Erin Brockovich",
+          "english_name": "Erin Brockovich",
+          "french_name": "Erin Brockovich, seule contre tous"
+        },
+        {
+          "name": "Eros",
+          "english_name": "Eros",
+          "french_name": "Eros"
+        },
+        {
+          "name": "Solaris",
+          "english_name": "Solaris",
+          "french_name": "Solaris"
+        },
+        {
+          "name": "Ocean's Twelve",
+          "english_name": "Ocean's Twelve",
+          "french_name": "Ocean's Twelve"
+        },
+        {
+          "name": "Ocean's Thirteen",
+          "english_name": "Ocean's Thirteen",
+          "french_name": "Ocean's Thirteen"
+        },
+        {
+          "name": "Sex, Lies, and Videotape",
+          "english_name": "Sex, Lies, and Videotape",
+          "french_name": "Sexe, Mensonges et Vidéo"
+        },
+        {
+          "name": "Magic Mike",
+          "english_name": "Magic Mike",
+          "french_name": "Magic Mike"
+        },
+        {
+          "name": "The Informant!",
+          "english_name": "The Informant!",
+          "french_name": "The Informant!"
+        },
+        {
+          "name": "The Last Time I Saw Michael Gregg",
+          "english_name": "The Last Time I Saw Michael Gregg",
+          "french_name": "The Last Time I Saw Michael Gregg"
+        },
+        {
+          "name": "Haywire",
+          "english_name": "Haywire",
+          "french_name": "Piégée"
+        },
+        {
+          "name": "The Limey",
+          "english_name": "The Limey",
+          "french_name": "L'Anglais"
+        },
+        {
+          "name": "Side Effects",
+          "english_name": "Side Effects",
+          "french_name": "Effets secondaires"
+        },
+        {
+          "name": "Che: Part One",
+          "english_name": "Che: Part One",
+          "french_name": "Che - 1ère partie : L'Argentin"
+        },
+        {
+          "name": "Ocean's Eleven",
+          "english_name": "Ocean's Eleven",
+          "french_name": "Ocean's Eleven"
+        },
+        {
+          "name": "Che: Part Two",
+          "english_name": "Che: Part Two",
+          "french_name": "Che, 2e partie : Guerilla"
+        },
+        {
+          "name": "Out of Sight",
+          "english_name": "Out of Sight",
+          "french_name": "Hors d'atteinte"
+        },
+        {
+          "name": "Contagion",
+          "english_name": "Contagion",
+          "french_name": "Contagion"
+        },
+        {
+          "name": "Bubble",
+          "english_name": "Bubble",
+          "french_name": "Bubble"
+        },
+        {
+          "name": "Arthur & Lancelot",
+          "english_name": "Arthur & Lancelot",
+          "french_name": "Arthur & Lancelot"
+        },
+        {
+          "name": "Kafka",
+          "english_name": "Kafka",
+          "french_name": "Kafka"
+        },
+        {
+          "name": "The Good German",
+          "english_name": "The Good German",
+          "french_name": "The Good German"
+        },
+        {
+          "name": "Cleo",
+          "english_name": "Cleo",
+          "french_name": "Cleo"
+        },
+        {
+          "name": "Full Frontal",
+          "english_name": "Full Frontal",
+          "french_name": "Full Frontal"
+        },
+        {
+          "name": "Schizopolis",
+          "english_name": "Schizopolis",
+          "french_name": "Schizopolis"
+        },
+        {
+          "name": "Gray's Anatomy",
+          "english_name": "Gray's Anatomy",
+          "french_name": "Gray's Anatomy"
+        },
+        {
+          "name": "The Underneath",
+          "english_name": "The Underneath",
+          "french_name": "À fleur de peau"
+        },
+        {
+          "name": "And Everything Is Going Fine",
+          "english_name": "And Everything Is Going Fine",
+          "french_name": "And Everything Is Going Fine"
+        },
+        {
+          "name": "King of the Hill",
+          "english_name": "King of the Hill",
+          "french_name": "King of the Hill"
+        },
+        {
+          "name": "The Great Antonio",
+          "english_name": "The Great Antonio",
+          "french_name": "The Great Antonio"
+        },
+        {
+          "name": "Wholphin: Issue 2",
+          "english_name": "Wholphin: Issue 2",
+          "french_name": "Wholphin: Issue 2"
+        },
+        {
+          "name": "Life Interrupted",
+          "english_name": "Life Interrupted",
+          "french_name": "Life Interrupted"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven J. Niles",
+      "average_actors": 41,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Lifeblood",
+          "english_name": "Lifeblood"
+        }
+      ]
+    },
+    {
+      "english_name": "James Steven Sadwith",
+      "average_actors": 6.166667,
+      "num_films": 6,
+      "films": [
+        {
+          "name": "Deadly Intentions... Again?",
+          "english_name": "Deadly Intentions... Again?",
+          "french_name": "Jusqu'à ce que le crime nous sépare"
+        },
+        {
+          "name": "A Smile as Big as the Moon",
+          "english_name": "A Smile as Big as the Moon",
+          "french_name": "Pour le sourire d'un enfant"
+        },
+        {
+          "name": "Bluffing It",
+          "english_name": "Bluffing It"
+        },
+        {
+          "name": "Elvis",
+          "english_name": "Elvis",
+          "french_name": "Elvis : Une étoile est née"
+        },
+        {
+          "name": "In Broad Daylight",
+          "english_name": "In Broad Daylight"
+        },
+        {
+          "name": "Sinatra",
+          "english_name": "Sinatra"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Peros",
+      "average_actors": 13,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Footprints",
+          "english_name": "Footprints"
+        },
+        {
+          "name": "The Undying",
+          "english_name": "The Undying"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven J. Kung",
+      "average_actors": 15,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "A Leading Man",
+          "english_name": "A Leading Man"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Vasquez",
+      "average_actors": 4.666667,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "A Siren in the Dark",
+          "english_name": "A Siren in the Dark"
+        },
+        {
+          "name": "Be Mine",
+          "english_name": "Be Mine"
+        },
+        {
+          "name": "Eroddity(s)",
+          "english_name": "Eroddity(s)"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Stern",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "When it Was a Game",
+          "english_name": "When it Was a Game"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven M. Martin",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Theremin: An Electronic Odyssey",
+          "english_name": "Theremin: An Electronic Odyssey"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kovacs",
+      "average_actors": 11,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "My Neighbor's Daughter",
+          "english_name": "My Neighbor's Daughter"
+        },
+        {
+          "name": "'68",
+          "english_name": "'68",
+          "french_name": "68"
+        },
+        {
+          "name": "Arthur and Lillie",
+          "english_name": "Arthur and Lillie"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kent Austin",
+      "average_actors": 11,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Route 66",
+          "english_name": "Route 66"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Feinberg",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Pell Grants: A Passion For Education",
+          "english_name": "Pell Grants: A Passion For Education"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Baigelman",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Feeling Minnesota",
+          "english_name": "Feeling Minnesota",
+          "french_name": "Feeling Minnesota"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kostanski",
+      "average_actors": 3,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Manborg",
+          "english_name": "Manborg"
+        },
+        {
+          "name": "Father's Day",
+          "english_name": "Father's Day"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Gorelick",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Economics of Happiness",
+          "english_name": "The Economics of Happiness"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bryant",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Grounded",
+          "english_name": "Grounded"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Austin",
+      "average_actors": 12.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Expert Weapon",
+          "english_name": "Expert Weapon"
+        },
+        {
+          "name": "American Streetfighter",
+          "english_name": "American Streetfighter"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven De Castro",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "FRED HO'S LAST YEAR",
+          "english_name": "FRED HO'S LAST YEAR"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Scarborough",
+      "average_actors": 10.165217,
+      "num_films": 115,
+      "films": [
+        {
+          "name": "Head Hunters, Inc.",
+          "english_name": "Head Hunters, Inc."
+        },
+        {
+          "name": "Falcon Four Hours - Muscle Madness",
+          "english_name": "Falcon Four Hours - Muscle Madness"
+        },
+        {
+          "name": "Trunks",
+          "english_name": "Trunks"
+        },
+        {
+          "name": "The Road Home",
+          "english_name": "The Road Home"
+        },
+        {
+          "name": "Communion",
+          "english_name": "Communion"
+        },
+        {
+          "name": "Stark Naked",
+          "english_name": "Stark Naked"
+        },
+        {
+          "name": "Sure Thing",
+          "english_name": "Sure Thing"
+        },
+        {
+          "name": "Trunks 4: White Heat",
+          "english_name": "Trunks 4: White Heat"
+        },
+        {
+          "name": "Perfect Fit",
+          "english_name": "Perfect Fit"
+        },
+        {
+          "name": "Manhunt 2.0",
+          "english_name": "Manhunt 2.0"
+        },
+        {
+          "name": "Spokes II: The Graduation",
+          "english_name": "Spokes II: The Graduation"
+        },
+        {
+          "name": "Overload",
+          "english_name": "Overload"
+        },
+        {
+          "name": "Resurrection",
+          "english_name": "Resurrection"
+        },
+        {
+          "name": "The Hard Way",
+          "english_name": "The Hard Way"
+        },
+        {
+          "name": "Trunks 3",
+          "english_name": "Trunks 3"
+        },
+        {
+          "name": "Best of the 2000s Vol. 1",
+          "english_name": "Best of the 2000s Vol. 1"
+        },
+        {
+          "name": "Conflict: Abduction, Part II",
+          "english_name": "Conflict: Abduction, Part II"
+        },
+        {
+          "name": "The Abduction",
+          "english_name": "The Abduction"
+        },
+        {
+          "name": "Guys Like Us",
+          "english_name": "Guys Like Us"
+        },
+        {
+          "name": "The Road To Temptation",
+          "english_name": "The Road To Temptation"
+        },
+        {
+          "name": "Skuff 3: Downright Wrong",
+          "english_name": "Skuff 3: Downright Wrong"
+        },
+        {
+          "name": "Man Hunt 2",
+          "english_name": "Man Hunt 2"
+        },
+        {
+          "name": "Bootstrap",
+          "english_name": "Bootstrap"
+        },
+        {
+          "name": "Best Of The 1980's, Volume 1",
+          "english_name": "Best Of The 1980's, Volume 1"
+        },
+        {
+          "name": "Best Of The 2000s 2",
+          "english_name": "Best Of The 2000s 2"
+        },
+        {
+          "name": "On The Mark",
+          "english_name": "On The Mark"
+        },
+        {
+          "name": "The Missing",
+          "english_name": "The Missing"
+        },
+        {
+          "name": "Kris Lord vs. Ken Ryker",
+          "english_name": "Kris Lord vs. Ken Ryker"
+        },
+        {
+          "name": "Falcon Studios 35th Anniversary Limited Edition",
+          "english_name": "Falcon Studios 35th Anniversary Limited Edition"
+        },
+        {
+          "name": "Acres of Ass",
+          "english_name": "Acres of Ass"
+        },
+        {
+          "name": "Best of Dean Monroe",
+          "english_name": "Best of Dean Monroe"
+        },
+        {
+          "name": "Plunge",
+          "english_name": "Plunge"
+        },
+        {
+          "name": "Redemption: Abduction, Part III",
+          "english_name": "Redemption: Abduction, Part III"
+        },
+        {
+          "name": "Screw 2: Cut to the Chase",
+          "english_name": "Screw 2: Cut to the Chase"
+        },
+        {
+          "name": "Backstage Pass",
+          "english_name": "Backstage Pass"
+        },
+        {
+          "name": "Masterpiece",
+          "english_name": "Masterpiece"
+        },
+        {
+          "name": "Movers N Shakers",
+          "english_name": "Movers N Shakers"
+        },
+        {
+          "name": "Skuff 4: Downright Fierce",
+          "english_name": "Skuff 4: Downright Fierce"
+        },
+        {
+          "name": "Deep in Hot Water",
+          "english_name": "Deep in Hot Water"
+        },
+        {
+          "name": "Hold Me Again",
+          "english_name": "Hold Me Again"
+        },
+        {
+          "name": "The Pledgemasters",
+          "english_name": "The Pledgemasters"
+        },
+        {
+          "name": "Blue",
+          "english_name": "Blue"
+        },
+        {
+          "name": "Perfect Summer",
+          "english_name": "Perfect Summer"
+        },
+        {
+          "name": "Best of Matthew Rush 2",
+          "english_name": "Best of Matthew Rush 2"
+        },
+        {
+          "name": "Manrammer",
+          "english_name": "Manrammer"
+        },
+        {
+          "name": "Special Handling",
+          "english_name": "Special Handling"
+        },
+        {
+          "name": "Cruisin'",
+          "english_name": "Cruisin'"
+        },
+        {
+          "name": "Best Of Jeff Hammond",
+          "english_name": "Best Of Jeff Hammond"
+        },
+        {
+          "name": "Justice",
+          "english_name": "Justice"
+        },
+        {
+          "name": "Dickin' Around",
+          "english_name": "Dickin' Around"
+        },
+        {
+          "name": "Trunks 5",
+          "english_name": "Trunks 5"
+        },
+        {
+          "name": "Best Of Chip Daniels",
+          "english_name": "Best Of Chip Daniels"
+        },
+        {
+          "name": "Beefcake",
+          "english_name": "Beefcake"
+        },
+        {
+          "name": "Made For You",
+          "english_name": "Made For You"
+        },
+        {
+          "name": "Big Bang",
+          "english_name": "Big Bang"
+        },
+        {
+          "name": "Cruisin' 2",
+          "english_name": "Cruisin' 2"
+        },
+        {
+          "name": "Down Home",
+          "english_name": "Down Home"
+        },
+        {
+          "name": "VERBOTEN 1-2",
+          "english_name": "VERBOTEN 1-2"
+        },
+        {
+          "name": "Basic Plumbing",
+          "english_name": "Basic Plumbing"
+        },
+        {
+          "name": "Best Of Chet Roberts",
+          "english_name": "Best Of Chet Roberts"
+        },
+        {
+          "name": "Private Workout",
+          "english_name": "Private Workout"
+        },
+        {
+          "name": "True Stories: Letters from the Hot House Files",
+          "english_name": "True Stories: Letters from the Hot House Files"
+        },
+        {
+          "name": "Another Man's Pleasure",
+          "english_name": "Another Man's Pleasure"
+        },
+        {
+          "name": "The Big Ones",
+          "english_name": "The Big Ones"
+        },
+        {
+          "name": "Full Length",
+          "english_name": "Full Length"
+        },
+        {
+          "name": "Jumpin' Jacks",
+          "english_name": "Jumpin' Jacks"
+        },
+        {
+          "name": "Pushing It",
+          "english_name": "Pushing It"
+        },
+        {
+          "name": "Jockstrap",
+          "english_name": "Jockstrap"
+        },
+        {
+          "name": "Buttbusters",
+          "english_name": "Buttbusters"
+        },
+        {
+          "name": "Mischief",
+          "english_name": "Mischief"
+        },
+        {
+          "name": "Shadows In The Night",
+          "english_name": "Shadows In The Night"
+        },
+        {
+          "name": "Layin' Pipe",
+          "english_name": "Layin' Pipe"
+        },
+        {
+          "name": "Best Of Derrick Vinyard",
+          "english_name": "Best Of Derrick Vinyard"
+        },
+        {
+          "name": "Descent",
+          "english_name": "Descent"
+        },
+        {
+          "name": "The Road To Hopeful",
+          "english_name": "The Road To Hopeful"
+        },
+        {
+          "name": "Directors Picks Steven Scarborough",
+          "english_name": "Directors Picks Steven Scarborough"
+        },
+        {
+          "name": "At Your Service",
+          "english_name": "At Your Service"
+        },
+        {
+          "name": "Compulsion",
+          "english_name": "Compulsion"
+        },
+        {
+          "name": "Wild Country",
+          "english_name": "Wild Country"
+        },
+        {
+          "name": "Raw Material",
+          "english_name": "Raw Material"
+        },
+        {
+          "name": "Black -N- Blue",
+          "english_name": "Black -N- Blue"
+        },
+        {
+          "name": "Dr.'s Orders 1: Manipulation",
+          "english_name": "Dr.'s Orders 1: Manipulation"
+        },
+        {
+          "name": "Mandriven",
+          "english_name": "Mandriven"
+        },
+        {
+          "name": "Command Performance",
+          "english_name": "Command Performance"
+        },
+        {
+          "name": "Nothin' Nice",
+          "english_name": "Nothin' Nice"
+        },
+        {
+          "name": "To the Max",
+          "english_name": "To the Max"
+        },
+        {
+          "name": "Bareback Classics",
+          "english_name": "Bareback Classics"
+        },
+        {
+          "name": "Head Hunters Two",
+          "english_name": "Head Hunters Two"
+        },
+        {
+          "name": "Ram Tough",
+          "english_name": "Ram Tough"
+        },
+        {
+          "name": "Skuff II",
+          "english_name": "Skuff II"
+        },
+        {
+          "name": "Grand Prize",
+          "english_name": "Grand Prize"
+        },
+        {
+          "name": "Hot Pursuit",
+          "english_name": "Hot Pursuit"
+        },
+        {
+          "name": "Behind Closed Doors",
+          "english_name": "Behind Closed Doors"
+        },
+        {
+          "name": "Summer Buddies",
+          "english_name": "Summer Buddies"
+        },
+        {
+          "name": "Trunks 2",
+          "english_name": "Trunks 2"
+        },
+        {
+          "name": "Paging Dr. Finger",
+          "english_name": "Paging Dr. Finger"
+        },
+        {
+          "name": "Reckless",
+          "english_name": "Reckless"
+        },
+        {
+          "name": "Skuff: Downright Dirty",
+          "english_name": "Skuff: Downright Dirty"
+        },
+        {
+          "name": "Mo' Betta' Butt",
+          "english_name": "Mo' Betta' Butt"
+        },
+        {
+          "name": "Acres of Ass 2",
+          "english_name": "Acres of Ass 2"
+        },
+        {
+          "name": "One Man's Poison",
+          "english_name": "One Man's Poison"
+        },
+        {
+          "name": "Best Of Rex Chandler Vs Steve Hammond",
+          "english_name": "Best Of Rex Chandler Vs Steve Hammond"
+        },
+        {
+          "name": "Loading Zone",
+          "english_name": "Loading Zone"
+        },
+        {
+          "name": "Fucking The Boss",
+          "english_name": "Fucking The Boss"
+        },
+        {
+          "name": "Mission Accomplished",
+          "english_name": "Mission Accomplished"
+        },
+        {
+          "name": "Billy's Tale",
+          "english_name": "Billy's Tale"
+        },
+        {
+          "name": "Touch Me",
+          "english_name": "Touch Me"
+        },
+        {
+          "name": "Dr. Good Glove",
+          "english_name": "Dr. Good Glove"
+        },
+        {
+          "name": "Black",
+          "english_name": "Black"
+        },
+        {
+          "name": "Rear-Ended",
+          "english_name": "Rear-Ended"
+        },
+        {
+          "name": "Friction",
+          "english_name": "Friction"
+        },
+        {
+          "name": "Reckless 2",
+          "english_name": "Reckless 2"
+        },
+        {
+          "name": "Bottoms Up",
+          "english_name": "Bottoms Up"
+        },
+        {
+          "name": "Dr.'s Orders 2: Dilation",
+          "english_name": "Dr.'s Orders 2: Dilation"
+        },
+        {
+          "name": "Screw: Right to the Point",
+          "english_name": "Screw: Right to the Point"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Rodrigues",
+      "average_actors": 7,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Joe's Roadtrip",
+          "english_name": "Joe's Roadtrip"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Patterson",
+      "average_actors": 15,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Drawing Down the Moon",
+          "english_name": "Drawing Down the Moon"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Eastwood",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Buried Land",
+          "english_name": "Buried Land"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven James Creazzo",
+      "average_actors": 3.6,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Night at the Carriage House",
+          "english_name": "Night at the Carriage House"
+        },
+        {
+          "name": "Letting Life In",
+          "english_name": "Letting Life In"
+        },
+        {
+          "name": "No Place Like Home",
+          "english_name": "No Place Like Home"
+        },
+        {
+          "name": "Climbing Life",
+          "english_name": "Climbing Life"
+        },
+        {
+          "name": "Lucas Booth: Journey to the Unknown",
+          "english_name": "Lucas Booth: Journey to the Unknown"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Judd",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Search for the World's Best Indian Taco",
+          "english_name": "Search for the World's Best Indian Taco"
+        }
+      ]
+    },
+    {
+      "english_name": "Ryan Steven Green",
+      "average_actors": 6.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Circle the Wagen",
+          "english_name": "Circle the Wagen"
+        },
+        {
+          "name": "Hollywood & Hammer",
+          "english_name": "Hollywood & Hammer"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Wright",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "One Soldier",
+          "english_name": "One Soldier"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Okazaki",
+      "average_actors": 2,
+      "num_films": 11,
+      "films": [
+        {
+          "name": "Troubled Paradise",
+          "english_name": "Troubled Paradise"
+        },
+        {
+          "name": "The Lisa Theory",
+          "english_name": "The Lisa Theory"
+        },
+        {
+          "name": "Days of Waiting: The Life & Art of Estelle Ishigo",
+          "english_name": "Days of Waiting: The Life & Art of Estelle Ishigo",
+          "french_name": "Days of Waiting"
+        },
+        {
+          "name": "Approximately Nels Cline",
+          "english_name": "Approximately Nels Cline"
+        },
+        {
+          "name": "Living on Tokyo Time",
+          "english_name": "Living on Tokyo Time"
+        },
+        {
+          "name": "Unfinished Business",
+          "english_name": "Unfinished Business"
+        },
+        {
+          "name": "The Conscience of Nhem En",
+          "english_name": "The Conscience of Nhem En"
+        },
+        {
+          "name": "White Light/Black Rain: The Destruction of Hiroshima and Nagasaki",
+          "english_name": "White Light/Black Rain: The Destruction of Hiroshima and Nagasaki"
+        },
+        {
+          "name": "The Mushroom Club",
+          "english_name": "The Mushroom Club"
+        },
+        {
+          "name": "Hunting Tigers",
+          "english_name": "Hunting Tigers"
+        },
+        {
+          "name": "Black Tar Heroin",
+          "english_name": "Black Tar Heroin"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Latham",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Future We Will Create: Inside the World of TED",
+          "english_name": "The Future We Will Create: Inside the World of TED"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven C. Miller",
+      "average_actors": 15.833333,
+      "num_films": 6,
+      "films": [
+        {
+          "name": "Automaton Transfusion",
+          "english_name": "Automaton Transfusion"
+        },
+        {
+          "name": "The Aggression Scale",
+          "english_name": "The Aggression Scale"
+        },
+        {
+          "name": "Silent Night",
+          "english_name": "Silent Night"
+        },
+        {
+          "name": "Under the Bed",
+          "english_name": "Under the Bed",
+          "french_name": "Scary"
+        },
+        {
+          "name": "Scream of the Banshee",
+          "english_name": "Scream of the Banshee",
+          "french_name": "The Banshee"
+        },
+        {
+          "name": "Extraction",
+          "english_name": "Extraction"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven E. de Souza",
+      "average_actors": 19,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Street Fighter",
+          "english_name": "Street Fighter",
+          "french_name": "Street Fighter - L'ultime combat"
+        },
+        {
+          "name": "Possessed",
+          "english_name": "Possessed",
+          "french_name": "Possessed"
+        },
+        {
+          "name": "Arnold's Wrecking Co.",
+          "english_name": "Arnold's Wrecking Co."
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Maler",
+      "average_actors": 9,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Autumn Heart",
+          "english_name": "The Autumn Heart"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Sheil",
+      "average_actors": 12,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Mum & Dad",
+          "english_name": "Mum & Dad",
+          "french_name": "Mum & Dad"
+        },
+        {
+          "name": "Dead Mine",
+          "english_name": "Dead Mine"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ascher",
+      "average_actors": 0.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "So Much So Fast",
+          "english_name": "So Much So Fast",
+          "french_name": "Vivre, vite"
+        },
+        {
+          "name": "Troublesome Creek: A Midwestern",
+          "english_name": "Troublesome Creek: A Midwestern"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Guevara",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Sí Se Puede",
+          "english_name": "Sí Se Puede"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Nevius",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Rowdy Girls",
+          "english_name": "Rowdy Girls"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Cheslik-DeMeyer",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Life in a Box",
+          "english_name": "Life in a Box"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Lesser",
+      "average_actors": 13,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Safe",
+          "english_name": "Safe"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dupler",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Rave On",
+          "english_name": "Rave On"
+        }
+      ]
+    },
+    {
+      "english_name": "Jon Steven Ward",
+      "average_actors": 11,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Lovers Lane",
+          "english_name": "Lovers Lane"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dunning",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Now Chinatown",
+          "english_name": "Now Chinatown"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dovas",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Comic Strip",
+          "english_name": "Comic Strip"
+        }
+      ]
+    },
+    {
+      "english_name": "Eric Steven Stahl",
+      "average_actors": 20.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "I-See-You.Com",
+          "english_name": "I-See-You.Com",
+          "french_name": "Voyeurs.com"
+        },
+        {
+          "name": "Final Approach",
+          "english_name": "Final Approach"
+        },
+        {
+          "name": "Safe House",
+          "english_name": "Safe House"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Fierberg",
+      "average_actors": 4,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Voodoo Dawn",
+          "english_name": "Voodoo Dawn"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven E. Gordon",
+      "average_actors": 13.2,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Ultimate Avengers 2",
+          "english_name": "Ultimate Avengers 2",
+          "french_name": "Ultimate Avengers 2"
+        },
+        {
+          "name": "Happily N'Ever After 2: Snow White Another Bite @ the Apple",
+          "english_name": "Happily N'Ever After 2: Snow White Another Bite @ the Apple"
+        },
+        {
+          "name": "Ultimate Avengers",
+          "english_name": "Ultimate Avengers",
+          "french_name": "Ultimate Avengers"
+        },
+        {
+          "name": "The Condor",
+          "english_name": "The Condor"
+        },
+        {
+          "name": "That Night",
+          "english_name": "That Night"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Arnold",
+      "average_actors": 2.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Messages Messages",
+          "english_name": "Messages Messages"
+        },
+        {
+          "name": "Luminous Procuress",
+          "english_name": "Luminous Procuress"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Cerritos",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Mr. Spontaneous",
+          "english_name": "Mr. Spontaneous"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hanulik",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Skeleton Girl",
+          "english_name": "Skeleton Girl"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Sebring",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Patti Smith: Dream of Life",
+          "english_name": "Patti Smith: Dream of Life"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Schardt",
+      "average_actors": 7.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Cavalier",
+          "english_name": "Cavalier"
+        },
+        {
+          "name": "Treatment",
+          "english_name": "Treatment"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Walker",
+      "average_actors": 2.066667,
+      "num_films": 30,
+      "films": [
+        {
+          "name": "Plugged",
+          "english_name": "Plugged"
+        },
+        {
+          "name": "Ass Cracks",
+          "english_name": "Ass Cracks"
+        },
+        {
+          "name": "Butt Bruisers",
+          "english_name": "Butt Bruisers"
+        },
+        {
+          "name": "Beyond Punishment",
+          "english_name": "Beyond Punishment"
+        },
+        {
+          "name": "Hard Punishment",
+          "english_name": "Hard Punishment"
+        },
+        {
+          "name": "Spank Me Man",
+          "english_name": "Spank Me Man"
+        },
+        {
+          "name": "South Beach Buns",
+          "english_name": "South Beach Buns"
+        },
+        {
+          "name": "Surf, Sand and Sex",
+          "english_name": "Surf, Sand and Sex"
+        },
+        {
+          "name": "Dildo Sex Slaves",
+          "english_name": "Dildo Sex Slaves"
+        },
+        {
+          "name": "Tormentor's Conquest",
+          "english_name": "Tormentor's Conquest"
+        },
+        {
+          "name": "Morning, Noon & Night",
+          "english_name": "Morning, Noon & Night"
+        },
+        {
+          "name": "Bound to Fool Around",
+          "english_name": "Bound to Fool Around"
+        },
+        {
+          "name": "Forced Pleasures",
+          "english_name": "Forced Pleasures"
+        },
+        {
+          "name": "Slap Happy",
+          "english_name": "Slap Happy"
+        },
+        {
+          "name": "South Beach Buns",
+          "english_name": "South Beach Buns"
+        },
+        {
+          "name": "Worked Over",
+          "english_name": "Worked Over"
+        },
+        {
+          "name": "Pleasing the Master",
+          "english_name": "Pleasing the Master"
+        },
+        {
+          "name": "Hard Use",
+          "english_name": "Hard Use"
+        },
+        {
+          "name": "Smacked Red",
+          "english_name": "Smacked Red"
+        },
+        {
+          "name": "Raw Discipline",
+          "english_name": "Raw Discipline"
+        },
+        {
+          "name": "Aching For Punishment",
+          "english_name": "Aching For Punishment"
+        },
+        {
+          "name": "Sex Hostage",
+          "english_name": "Sex Hostage"
+        },
+        {
+          "name": "Target for Torment",
+          "english_name": "Target for Torment"
+        },
+        {
+          "name": "Slave Toy",
+          "english_name": "Slave Toy"
+        },
+        {
+          "name": "Breaking Point",
+          "english_name": "Breaking Point"
+        },
+        {
+          "name": "Butt Spankers!!",
+          "english_name": "Butt Spankers!!"
+        },
+        {
+          "name": "Masters of Discipline",
+          "english_name": "Masters of Discipline"
+        },
+        {
+          "name": "Dreams of Discipline",
+          "english_name": "Dreams of Discipline"
+        },
+        {
+          "name": "Down in the Dungeon",
+          "english_name": "Down in the Dungeon"
+        },
+        {
+          "name": "Cock Lock",
+          "english_name": "Cock Lock"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Lisberger",
+      "average_actors": 15.6,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Cosmic Cartoon",
+          "english_name": "Cosmic Cartoon"
+        },
+        {
+          "name": "Tron",
+          "english_name": "Tron",
+          "french_name": "Tron"
+        },
+        {
+          "name": "Animalympics",
+          "english_name": "Animalympics",
+          "french_name": "Animalympics"
+        },
+        {
+          "name": "Hot Pursuit",
+          "english_name": "Hot Pursuit"
+        },
+        {
+          "name": "Slipstream",
+          "english_name": "Slipstream"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Taylor",
+      "average_actors": 12,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Detour",
+          "english_name": "Detour"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dieveney",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Adrenaline Cowboys: Eight Seconds to Glory",
+          "english_name": "Adrenaline Cowboys: Eight Seconds to Glory"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dungan",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Backpack",
+          "english_name": "The Backpack"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bognar",
+      "average_actors": 0,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Gravel",
+          "english_name": "Gravel"
+        },
+        {
+          "name": "A Lion in the House",
+          "english_name": "A Lion in the House"
+        },
+        {
+          "name": "Sparkle",
+          "english_name": "Sparkle"
+        },
+        {
+          "name": "The Last Truck: Closing of a GM Plant",
+          "english_name": "The Last Truck: Closing of a GM Plant"
+        },
+        {
+          "name": "Personal Belongings",
+          "english_name": "Personal Belongings"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ford",
+      "average_actors": 14,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Dungeonmaster",
+          "english_name": "The Dungeonmaster"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven McIntyre",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The House That Eye Live In",
+          "english_name": "The House That Eye Live In"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven R. Hurlburt",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Dreadheads: Portrait of a Subculture",
+          "english_name": "Dreadheads: Portrait of a Subculture"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Briand",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Proteigon",
+          "english_name": "Proteigon"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Adams",
+      "average_actors": 12,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Twisted Souls",
+          "english_name": "Twisted Souls"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Espinosa",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Black Dahlia Ballet",
+          "english_name": "The Black Dahlia Ballet"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Cantor",
+      "average_actors": 2.166667,
+      "num_films": 6,
+      "films": [
+        {
+          "name": "What Remains: The Life and Work of Sally Mann",
+          "english_name": "What Remains: The Life and Work of Sally Mann"
+        },
+        {
+          "name": "LoudQUIETloud: A Film About the Pixies",
+          "english_name": "LoudQUIETloud: A Film About the Pixies"
+        },
+        {
+          "name": "James Blunt: Return to Kosovo",
+          "english_name": "James Blunt: Return to Kosovo"
+        },
+        {
+          "name": "Bounce: Behind the Velvet Rope",
+          "english_name": "Bounce: Behind the Velvet Rope"
+        },
+        {
+          "name": "Blood Ties: The Life and Work of Sally Mann",
+          "english_name": "Blood Ties: The Life and Work of Sally Mann"
+        },
+        {
+          "name": "No One Dies in Lily Dale",
+          "english_name": "No One Dies in Lily Dale"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Huffaker",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Xr91 Biorebellion 2.0",
+          "english_name": "Xr91 Biorebellion 2.0"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven de Jong",
+      "average_actors": 6,
+      "num_films": 6,
+      "films": [
+        {
+          "name": "De Schippers van de Kameleon",
+          "english_name": "De Schippers van de Kameleon"
+        },
+        {
+          "name": "De Scheepsjongens van Bontekoe",
+          "english_name": "De Scheepsjongens van Bontekoe",
+          "french_name": "Les Aventuriers du grand large"
+        },
+        {
+          "name": "Penny's Shadow",
+          "english_name": "Penny's Shadow"
+        },
+        {
+          "name": "Kameleon 2",
+          "english_name": "Kameleon 2"
+        },
+        {
+          "name": "The Hell of '63",
+          "english_name": "The Hell of '63"
+        },
+        {
+          "name": "De Fûke",
+          "english_name": "De Fûke"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Corfe",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Little BFFs",
+          "english_name": "Little BFFs"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Decraene",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Yell for Cadel",
+          "english_name": "Yell for Cadel"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hensley",
+      "average_actors": 4,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "No Second Thoughts",
+          "english_name": "No Second Thoughts"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Rosenbaum",
+      "average_actors": 1.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "7 Days in September",
+          "english_name": "7 Days in September"
+        },
+        {
+          "name": "Journalists Killed in the Line of Duty",
+          "english_name": "Journalists Killed in the Line of Duty"
+        },
+        {
+          "name": "Inside the Bubble",
+          "english_name": "Inside the Bubble"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Pearl",
+      "average_actors": 7,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "The Substitute 2: School's Out",
+          "english_name": "The Substitute 2: School's Out"
+        },
+        {
+          "name": "At First Site",
+          "english_name": "At First Site"
+        },
+        {
+          "name": "The Dog Ate It",
+          "english_name": "The Dog Ate It"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Shainberg",
+      "average_actors": 7.333333,
+      "num_films": 6,
+      "films": [
+        {
+          "name": "Alice & Viril",
+          "english_name": "Alice & Viril",
+          "french_name": "Alice & Viril"
+        },
+        {
+          "name": "Fur",
+          "english_name": "Fur",
+          "french_name": "Fur - Un portrait imaginaire de Diane Arbus"
+        },
+        {
+          "name": "Secretary",
+          "english_name": "Secretary",
+          "french_name": "La Secrétaire"
+        },
+        {
+          "name": "Hit Me",
+          "english_name": "Hit Me",
+          "french_name": "Hit Me"
+        },
+        {
+          "name": "Angela & Viril",
+          "english_name": "Angela & Viril"
+        },
+        {
+          "name": "The Big Shoe",
+          "english_name": "The Big Shoe"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Michaels",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Charismatic",
+          "english_name": "Charismatic"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Turley",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "If You're Gonna Build a House: Community by Architecture",
+          "english_name": "If You're Gonna Build a House: Community by Architecture"
+        }
+      ]
+    },
+    {
+      "english_name": "J. Steven Edwards",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Second Mate",
+          "english_name": "The Second Mate"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven E. Mallorca",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Slow Jam King",
+          "english_name": "Slow Jam King"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Vidler",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Blackrock",
+          "english_name": "Blackrock",
+          "french_name": "Blackrock"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Calcote",
+      "average_actors": 11,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Van Von Hunter",
+          "english_name": "Van Von Hunter"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hai",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Painter",
+          "english_name": "The Painter"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven McGregor",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Big Name No Blanket",
+          "english_name": "Big Name No Blanket"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Sander",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Tim Cahill: The Unseen Journey",
+          "english_name": "Tim Cahill: The Unseen Journey"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Chow",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Memory Booth",
+          "english_name": "The Memory Booth"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dean Moore",
+      "average_actors": 10.666667,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Fractured Fairy Tales: The Phox, the Box and the Lox",
+          "english_name": "Fractured Fairy Tales: The Phox, the Box and the Lox"
+        },
+        {
+          "name": "Olive, the Other Reindeer",
+          "english_name": "Olive, the Other Reindeer"
+        },
+        {
+          "name": "Redux Riding Hood",
+          "english_name": "Redux Riding Hood",
+          "french_name": "Redux Riding Hood"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Goldfried",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Mindless Behavior: All Around the World",
+          "english_name": "Mindless Behavior: All Around the World",
+          "french_name": "All Around The World"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Levitan",
+      "average_actors": 6,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "With You in Spirit",
+          "english_name": "With You in Spirit"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Sawalich",
+      "average_actors": 58,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Music Within",
+          "english_name": "Music Within"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Christopher Young",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Over the Wall",
+          "english_name": "Over the Wall"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Minor",
+      "average_actors": 4,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Hit Me",
+          "english_name": "Hit Me"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven M. Bumgardner",
+      "average_actors": 0,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "One Day In Yosemite",
+          "english_name": "One Day In Yosemite"
+        },
+        {
+          "name": "Yosemite Nature Notes – Sky Islands",
+          "english_name": "Yosemite Nature Notes – Sky Islands"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Meyer",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Buried Prayers",
+          "english_name": "Buried Prayers"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Matheson",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Apple Grown in Wind Tunnel",
+          "english_name": "Apple Grown in Wind Tunnel"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Drayton",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Married Men and Single Women",
+          "english_name": "Married Men and Single Women"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven John Ross",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "At the River I Stand",
+          "english_name": "At the River I Stand"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven George Hentges",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Jacklight",
+          "english_name": "Jacklight"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Burch",
+      "average_actors": 7,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Action Man: Robot Atak",
+          "english_name": "Action Man: Robot Atak",
+          "french_name": "Action Man Robot Atak"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ilous",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Polis",
+          "english_name": "Polis"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Elkins",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Medusa Challenger",
+          "english_name": "Medusa Challenger"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Williford",
+      "average_actors": 125,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Green",
+          "english_name": "The Green"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kastrissios",
+      "average_actors": 19,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Horseman",
+          "english_name": "The Horseman",
+          "french_name": "The Horseman"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hoggard",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Inside the Green Berets",
+          "english_name": "Inside the Green Berets"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Jacobson",
+      "average_actors": 8.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Naked Evil",
+          "english_name": "Naked Evil"
+        },
+        {
+          "name": "Team Mates",
+          "english_name": "Team Mates"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kiefer",
+      "average_actors": 4,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "4 Weeks of Sunshine",
+          "english_name": "4 Weeks of Sunshine"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Chivers",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Catherine De Medicis Part 2",
+          "english_name": "Catherine De Medicis Part 2"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven De Beul",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Dimitri \"La Collection de cacahuètes",
+          "english_name": "Dimitri \"La Collection de cacahuètes"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven M. Smith",
+      "average_actors": 6,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Tales of the Supernatural",
+          "english_name": "Tales of the Supernatural"
+        },
+        {
+          "name": "Haunted",
+          "english_name": "Haunted"
+        },
+        {
+          "name": "Time of Her Life",
+          "english_name": "Time of Her Life"
+        }
+      ]
+    },
+    {
+      "english_name": "Jonathan Steven Green",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Imagine",
+          "english_name": "Imagine"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven J. Santos",
+      "average_actors": 0.8,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Louis C.K.: Shameless",
+          "english_name": "Louis C.K.: Shameless"
+        },
+        {
+          "name": "George Carlin: Carlin on Campus",
+          "english_name": "George Carlin: Carlin on Campus"
+        },
+        {
+          "name": "Robert Klein: The Amorous Busboy of Decatur Avenue",
+          "english_name": "Robert Klein: The Amorous Busboy of Decatur Avenue"
+        },
+        {
+          "name": "George Carlin: Carlin at Carnegie",
+          "english_name": "George Carlin: Carlin at Carnegie"
+        },
+        {
+          "name": "Richard Jeni: A Big Steaming Pile of Me",
+          "english_name": "Richard Jeni: A Big Steaming Pile of Me"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ho",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Soundman",
+          "english_name": "Soundman"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Wasserman",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Interception",
+          "english_name": "Interception"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Richter",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Center Of Gravity",
+          "english_name": "Center Of Gravity"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hope",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Rock Pockets",
+          "english_name": "Rock Pockets"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Tylor O'Connor",
+      "average_actors": 12,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Welcome to New York",
+          "english_name": "Welcome to New York"
+        }
+      ]
+    },
+    {
+      "english_name": "Ssemuju Steven Kintu",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Namu ne Nankya",
+          "english_name": "Namu ne Nankya"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hahn",
+      "average_actors": 5.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Pretty to Think So",
+          "english_name": "Pretty to Think So"
+        },
+        {
+          "name": "Party",
+          "english_name": "Party"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Wilson",
+      "average_actors": 7,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Brainiac",
+          "english_name": "Brainiac"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Lovy",
+      "average_actors": 18,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Circuitry Man",
+          "english_name": "Circuitry Man"
+        },
+        {
+          "name": "Mix",
+          "english_name": "Mix"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Schuldt",
+      "average_actors": 12,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Busgirl",
+          "english_name": "Busgirl"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Kochones",
+      "average_actors": 0,
+      "num_films": 4,
+      "films": [
+        {
+          "name": "Who Shot Rock & Roll: The Film",
+          "english_name": "Who Shot Rock & Roll: The Film"
+        },
+        {
+          "name": "The War Photographers",
+          "english_name": "The War Photographers"
+        },
+        {
+          "name": "Digital Darkroom: The Art Of 3d",
+          "english_name": "Digital Darkroom: The Art Of 3d"
+        },
+        {
+          "name": "No Strangers",
+          "english_name": "No Strangers"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Ayromlooi",
+      "average_actors": 20.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "My Girlfriend's Back",
+          "english_name": "My Girlfriend's Back"
+        },
+        {
+          "name": "Leprechaun: Back 2 tha Hood",
+          "english_name": "Leprechaun: Back 2 tha Hood",
+          "french_name": "Leprechaun 6 : Le Retour"
+        },
+        {
+          "name": "Love and Other Four Letter Words",
+          "english_name": "Love and Other Four Letter Words"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Schachter",
+      "average_actors": 9.277778,
+      "num_films": 18,
+      "films": [
+        {
+          "name": "Unanswered Prayers",
+          "english_name": "Unanswered Prayers",
+          "french_name": "La Femme de trop"
+        },
+        {
+          "name": "Above Suspicion",
+          "english_name": "Above Suspicion"
+        },
+        {
+          "name": "Door to Door",
+          "english_name": "Door to Door",
+          "french_name": "Une question de courage"
+        },
+        {
+          "name": "Just a Walk in the Park",
+          "english_name": "Just a Walk in the Park"
+        },
+        {
+          "name": "The Water Engine",
+          "english_name": "The Water Engine"
+        },
+        {
+          "name": "The Engagement Ring",
+          "english_name": "The Engagement Ring"
+        },
+        {
+          "name": "Family Man",
+          "english_name": "Family Man"
+        },
+        {
+          "name": "The Deal",
+          "english_name": "The Deal",
+          "french_name": "Le Deal"
+        },
+        {
+          "name": "For All Time",
+          "english_name": "For All Time"
+        },
+        {
+          "name": "A Slight Case of Murder",
+          "english_name": "A Slight Case of Murder"
+        },
+        {
+          "name": "The Wool Cap",
+          "english_name": "The Wool Cap",
+          "french_name": "Le Bonnet de laine"
+        },
+        {
+          "name": "The Con",
+          "english_name": "The Con"
+        },
+        {
+          "name": "Legacy of Sin: The William Coit Story",
+          "english_name": "Legacy of Sin: The William Coit Story"
+        },
+        {
+          "name": "Lady Killer",
+          "english_name": "Lady Killer"
+        },
+        {
+          "name": "The Mermaid Chair",
+          "english_name": "The Mermaid Chair"
+        },
+        {
+          "name": "To Face Her Past",
+          "english_name": "To Face Her Past"
+        },
+        {
+          "name": "Every Woman's Dream",
+          "english_name": "Every Woman's Dream"
+        },
+        {
+          "name": "Getting Up and Going Home",
+          "english_name": "Getting Up and Going Home"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven C. Barber",
+      "average_actors": 0,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Return to Tarawa: The Leon Cooper Story",
+          "english_name": "Return to Tarawa: The Leon Cooper Story"
+        },
+        {
+          "name": "Unbeaten",
+          "english_name": "Unbeaten"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Pressman",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "50 Children: The Rescue Mission of Mr. and Mrs. Kraus",
+          "english_name": "50 Children: The Rescue Mission of Mr. and Mrs. Kraus"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Byrne",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Making Magic Happen",
+          "english_name": "Making Magic Happen"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven F. Hayward",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "An Inconvenient Truth...Or Convenient Fiction?",
+          "english_name": "An Inconvenient Truth...Or Convenient Fiction?"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Swirko",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Michael S., Versammelt",
+          "english_name": "Michael S., Versammelt"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Shankar",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Hrudaya Kaleyam",
+          "english_name": "Hrudaya Kaleyam"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Rumbelow",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Autumn",
+          "english_name": "Autumn",
+          "french_name": "Autumn"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Vander Meer",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Salmon Deadly Sins",
+          "english_name": "Salmon Deadly Sins"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bereznai",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Let's Get Soaking Wet",
+          "english_name": "Let's Get Soaking Wet"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hatton",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Into the Wind",
+          "english_name": "Into the Wind"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Holloway",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Rings We Bear",
+          "english_name": "The Rings We Bear"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Esteb",
+      "average_actors": 8.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Favorite Son",
+          "english_name": "Favorite Son"
+        },
+        {
+          "name": "Dirty Politics",
+          "english_name": "Dirty Politics"
+        },
+        {
+          "name": "Baller Blockin'",
+          "english_name": "Baller Blockin'",
+          "french_name": "Baller Blockin'"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Quale",
+      "average_actors": 7.2,
+      "num_films": 5,
+      "films": [
+        {
+          "name": "Aliens of the Deep",
+          "english_name": "Aliens of the Deep",
+          "french_name": "Aliens of the Deep"
+        },
+        {
+          "name": "The Lake",
+          "english_name": "The Lake"
+        },
+        {
+          "name": "Into the Storm",
+          "english_name": "Into the Storm",
+          "french_name": "Black Storm"
+        },
+        {
+          "name": "Final Destination 5",
+          "english_name": "Final Destination 5",
+          "french_name": "Destination finale 5"
+        },
+        {
+          "name": "SuperFire",
+          "english_name": "SuperFire",
+          "french_name": "Superfire: l'enfer des flammes"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Klein",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "secretprojectrevolution",
+          "english_name": "secretprojectrevolution"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Feder",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "It Had to Be You",
+          "english_name": "It Had to Be You"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven La Butch",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "House of Leather",
+          "english_name": "House of Leather"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Javitz",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Crossing South",
+          "english_name": "Crossing South"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Brandt",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Between Us",
+          "english_name": "Between Us"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Stockage",
+      "average_actors": 9,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "13th Child",
+          "english_name": "13th Child"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Grandison",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Bush Family Fortunes: The Best Democracy Money Can Buy",
+          "english_name": "Bush Family Fortunes: The Best Democracy Money Can Buy"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Smith",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Geekdown",
+          "english_name": "Geekdown"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Morrison",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Last Captive",
+          "english_name": "The Last Captive"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Bartlo",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "50 Years! Of Love?",
+          "english_name": "50 Years! Of Love?",
+          "french_name": "50 Years! Of Love?"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Lippman",
+      "average_actors": 0,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Life On A String",
+          "english_name": "Life On A String"
+        },
+        {
+          "name": "Reality",
+          "english_name": "Reality"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Clark",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Looking for Leonard",
+          "english_name": "Looking for Leonard"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Daly",
+      "average_actors": 3,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Unfold",
+          "english_name": "Unfold"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Smith",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Passion, Prejudice and South Pacific: Creating an American Masterpiece",
+          "english_name": "Passion, Prejudice and South Pacific: Creating an American Masterpiece"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven R. Monroe",
+      "average_actors": 7.315789,
+      "num_films": 19,
+      "films": [
+        {
+          "name": "House of 9",
+          "english_name": "House of 9",
+          "french_name": "Le Piège"
+        },
+        {
+          "name": "Wyvern",
+          "english_name": "Wyvern"
+        },
+        {
+          "name": "I Spit on Your Grave",
+          "english_name": "I Spit on Your Grave",
+          "french_name": "I Spit on Your Grave"
+        },
+        {
+          "name": "The Contract",
+          "english_name": "The Contract"
+        },
+        {
+          "name": "Dual",
+          "english_name": "Dual"
+        },
+        {
+          "name": "Complacent",
+          "english_name": "Complacent"
+        },
+        {
+          "name": "12 Disasters of Christmas",
+          "english_name": "12 Disasters of Christmas"
+        },
+        {
+          "name": "Curse of the Dragon",
+          "english_name": "Curse of the Dragon"
+        },
+        {
+          "name": "I Spit on Your Grave 2",
+          "english_name": "I Spit on Your Grave 2",
+          "french_name": "I Spit on Your Grave 2"
+        },
+        {
+          "name": "MoniKa",
+          "english_name": "MoniKa"
+        },
+        {
+          "name": "Sasquatch Mountain",
+          "english_name": "Sasquatch Mountain"
+        },
+        {
+          "name": "Ice Twisters",
+          "english_name": "Ice Twisters",
+          "french_name": "Tornades de glace"
+        },
+        {
+          "name": "Left in Darkness",
+          "english_name": "Left in Darkness"
+        },
+        {
+          "name": "Mongolian Death Worm",
+          "english_name": "Mongolian Death Worm"
+        },
+        {
+          "name": "It Waits",
+          "english_name": "It Waits"
+        },
+        {
+          "name": "Ogre",
+          "english_name": "Ogre"
+        },
+        {
+          "name": "Grave Halloween",
+          "english_name": "Grave Halloween"
+        },
+        {
+          "name": "Storm Cell",
+          "english_name": "Storm Cell",
+          "french_name": "Au cœur de la tempête"
+        },
+        {
+          "name": "Beach Boys: Nashville Sounds",
+          "english_name": "Beach Boys: Nashville Sounds"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Woodcock",
+      "average_actors": 10.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Between Two Women",
+          "english_name": "Between Two Women"
+        },
+        {
+          "name": "The Jealous God",
+          "english_name": "The Jealous God"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Loring",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Age Of Love",
+          "english_name": "The Age Of Love"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Keller",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Invisible Young",
+          "english_name": "Invisible Young"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Gomez",
+      "average_actors": 1,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Kill Command",
+          "english_name": "Kill Command"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Manuel",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Robert F. Kennedy: A Memoir",
+          "english_name": "Robert F. Kennedy: A Memoir"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Johnson",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "How Obama Won the West",
+          "english_name": "How Obama Won the West"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Jurich",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "All That Remains",
+          "english_name": "All That Remains"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Fischer",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Old School New School",
+          "english_name": "Old School New School"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Cohen",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Broken Records",
+          "english_name": "Broken Records"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Wouterlood",
+      "average_actors": 11,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Anything Goes",
+          "english_name": "Anything Goes"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Tanenbaum",
+      "average_actors": 12,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Last Call",
+          "english_name": "Last Call"
+        },
+        {
+          "name": "Busted Walk",
+          "english_name": "Busted Walk"
+        },
+        {
+          "name": "Pre",
+          "english_name": "Pre"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven McMillan",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Downtime",
+          "english_name": "The Downtime"
+        }
+      ]
+    },
+    {
+      "english_name": "Mark Steven Bosko",
+      "average_actors": 1.333333,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Pig",
+          "english_name": "Pig"
+        },
+        {
+          "name": "Beach Babe Experiment",
+          "english_name": "Beach Babe Experiment"
+        },
+        {
+          "name": "Killer Nerd",
+          "english_name": "Killer Nerd"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven D. White",
+      "average_actors": 5,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Immortal",
+          "english_name": "Immortal"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Nagano",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "6 WEDDINGS AND A DRESS",
+          "english_name": "6 WEDDINGS AND A DRESS"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Thomas Davies",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Discovery Island",
+          "english_name": "Discovery Island"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Lawson",
+      "average_actors": 58,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Dead Cert",
+          "english_name": "Dead Cert"
+        },
+        {
+          "name": "Just for the Record",
+          "english_name": "Just for the Record"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Greenberg",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Funkytown",
+          "english_name": "Funkytown"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven F. Zambo",
+      "average_actors": 11,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Movie Critters' Big Picture",
+          "english_name": "Movie Critters' Big Picture"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Diller",
+      "average_actors": 7,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Peoria Babylon",
+          "english_name": "Peoria Babylon"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Sobel",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Resin",
+          "english_name": "Resin"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Rush",
+      "average_actors": 4.5,
+      "num_films": 2,
+      "films": [
+        {
+          "name": "Running from the Shadows",
+          "english_name": "Running from the Shadows"
+        },
+        {
+          "name": "Extreme Honor",
+          "english_name": "Extreme Honor",
+          "french_name": "Extreme Honor"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Dhoedt",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "State of Play",
+          "english_name": "State of Play"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven A. Love",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Ricco's Erotic World",
+          "english_name": "Ricco's Erotic World"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Gillilan",
+      "average_actors": 8,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "The Fall Before Paradise",
+          "english_name": "The Fall Before Paradise"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Tsuchida",
+      "average_actors": 2,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "A Ninja Pays Half My Rent",
+          "english_name": "A Ninja Pays Half My Rent"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Hendrix",
+      "average_actors": 15,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Sleepless Cities",
+          "english_name": "Sleepless Cities"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Feldman",
+      "average_actors": 0.666667,
+      "num_films": 3,
+      "films": [
+        {
+          "name": "Barney: Can You Sing That Song?",
+          "english_name": "Barney: Can You Sing That Song?"
+        },
+        {
+          "name": "Barney: I Can Do It",
+          "english_name": "Barney: I Can Do It"
+        },
+        {
+          "name": "Bob the Builder - Bob's White Christmas",
+          "english_name": "Bob the Builder - Bob's White Christmas"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Caple Jr.",
+      "average_actors": 10,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "A Different Tree",
+          "english_name": "A Different Tree"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven O’Riordan",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "No Limbs No Limits",
+          "english_name": "No Limbs No Limits"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Wayne",
+      "average_actors": 0,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "In an Instant",
+          "english_name": "In an Instant"
+        }
+      ]
+    },
+    {
+      "english_name": "Steven Lewis Simpson",
+      "average_actors": 9,
+      "num_films": 1,
+      "films": [
+        {
+          "name": "Rez Bomb",
+          "english_name": "Rez Bomb"
+        }
+      ]
+    }
+  ]
+}
