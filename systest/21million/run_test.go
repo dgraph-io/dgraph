@@ -35,7 +35,7 @@ func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Dir(thisFile) + "/queries"
 
-	// For this tests we DON'T want to start with an empty database.
+	// For this test we DON'T want to start with an empty database.
 	dg := z.DgraphClientNoDropAll(":9180")
 
 	files, err := ioutil.ReadDir(queryDir)
