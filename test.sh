@@ -151,7 +151,6 @@ if [[ $RUN_ALL ]]; then
     ./contrib/scripts/load-test.sh || TEST_FAILED=1
 
     Info "Running custom test scripts"
-    ./contrib/scripts/test-backup-restore.sh || TEST_FAILED=1
     ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
 
     Info "Running large load test"

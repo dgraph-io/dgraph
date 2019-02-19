@@ -564,7 +564,7 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case StringID, DefaultID:
-		return json.Marshal(v.Value.(string))
+		return json.Marshal(v.Safe().(string))
 	case PasswordID:
 		return json.Marshal(v.Value.(string))
 	}

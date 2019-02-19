@@ -152,6 +152,10 @@ type params struct {
 	shortest       bool
 }
 
+type pathMetadata struct {
+	weight float64 // Total weight of the path.
+}
+
 // Function holds the information about gql functions.
 type Function struct {
 	Name       string    // Specifies the name of the function.
@@ -189,6 +193,8 @@ type SubGraph struct {
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *pb.List
 	List     bool // whether predicate is of list type
+
+	pathMeta *pathMetadata
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -572,6 +578,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	// nothing else at that level.
 	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
 		dst.SetUID(uid, "uid")
+	}
+
+	if sg.pathMeta != nil {
+		totalWeight := types.Val{
+			Tid:   types.FloatID,
+			Value: sg.pathMeta.weight,
+		}
+		dst.AddValue("_weight_", totalWeight)
 	}
 
 	return nil
@@ -1481,6 +1495,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		doneVars[sg.Params.Var] = varValue{
 			strList: sg.valueMatrix,
 			path:    sgPath,
+			Vals:    make(map[uint64]types.Val),
 		}
 	} else if len(sg.counts) > 0 {
 		// This implies it is a value variable.
@@ -1518,6 +1533,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			doneVars[sg.Params.Var] = varValue{
 				Uids: uids,
 				path: sgPath,
+				Vals: make(map[uint64]types.Val),
 			}
 			return nil
 		}
@@ -1678,9 +1694,16 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			default:
 				// This var does not match any uids or vals but we are still trying to access it.
 				if v.Typ == gql.ValueVar {
+					// * * * * * * * * * * * * * * * * * * *
+					// Default value vars
+					// * * * * * * * * * * * * * * * * * * *
+					//
 					// Provide a default value for valueVarAggregation() to eval val().
 					// This is a noop for aggregation funcs that would fail.
 					// The zero aggs won't show because there are no uids matched.
+					//
+					// NOTE: If you need to make type assertions that might involve
+					// default value vars, use `Safe()` func and not val.Value directly.
 					mp[v.Name].Vals[0] = types.Val{}
 					sg.Params.uidToVal = mp[v.Name].Vals
 				}
@@ -2535,7 +2558,8 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
-			return x.Errorf("Invalid query, query pb.id is zero and generator is nil")
+			return x.Errorf("Invalid query. No function used at root and no aggregation" +
+				" or math variables found in the body.")
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
