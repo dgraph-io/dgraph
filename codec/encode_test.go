@@ -29,8 +29,8 @@ var encodeTests = []encodeTest{
 	{val: []byte{0xff}, output: []byte{0x04, 0xff}},
 	{val: []byte{0x01, 0x01}, output: []byte{0x08, 0x01, 0x01}},
 	{val: []byte{0x01, 0x01}, output: []byte{0x08, 0x01, 0x01}},
-	{val: byteArrayLen64(), output: append([]byte{0x01, 0x01}, byteArrayLen64()...)},
-	{val: byteArrayLen16384(), output: append([]byte{0x02, 0x00, 0x01, 0x00}, byteArrayLen16384()...)},
+	{val: byteArray(64), output: append([]byte{0x01, 0x01}, byteArray(64)...)},
+	{val: byteArray(16384), output: append([]byte{0x02, 0x00, 0x01, 0x00}, byteArray(16384)...)},
 
 	// booleans
 	{val: true, output: []byte{0x01}},
