@@ -1,6 +1,6 @@
 package codec
 
-// make byte array with length 1 << 6; used to test 2-byte length encoding
+// make byte array with length specified; used to test byte array encoding
 func byteArray(length int) ([]byte) {
 	b := make([]byte, length)
 	for i := 0; i < length; i++ {
