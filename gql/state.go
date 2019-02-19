@@ -135,31 +135,6 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 	}
 }
 
-func lexTypeQuery(l *lex.Lexer) lex.StateFn {
-	l.Mode = lexTypeQuery
-	for {
-		switch r := l.Next(); {
-		case r == rightRound:
-			l.Emit(itemRightRound)
-			return lexTopLevel
-		case r == leftRound:
-			l.Emit(itemLeftRound)
-		case isSpace(r) || lex.IsEndOfLine(r):
-			l.Ignore()
-		case isNameBegin(r):
-			return lexArgName
-		case r == '#':
-			return lexComment
-		case r == comma:
-			l.Emit(itemComma)
-		case r == lex.EOF:
-			return l.Errorf("Unclosed type action")
-		default:
-			return l.Errorf("Unrecognized character inside type block: %#U", r)
-		}
-	}
-}
-
 func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexFuncOrArg
 	var empty bool
@@ -497,9 +472,6 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		} else if word == "schema" {
 			l.Emit(itemOpType)
 			return lexInsideSchema
-		} else if word == "types" {
-			l.Emit(itemOpType)
-			return lexTypeQuery
 		} else {
 			l.Errorf("Invalid operation type: %s", word)
 		}

@@ -317,6 +317,8 @@ message SchemaRequest {
 	repeated string predicates = 2;
 	// fields can be on of type, index, reverse or tokenizer
 	repeated string fields = 3;
+
+  repeated string types = 4;
 }
 
 message SchemaResult {
@@ -356,11 +358,6 @@ message TypeUpdate {
 	string type_name = 1;
 	repeated SchemaUpdate fields = 2;
 }
-
-message TypeRequest {
-	repeated string type_names = 1;
-}
-
 
 // Bulk loader proto.
 message MapEntry {

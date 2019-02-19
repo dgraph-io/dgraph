@@ -1572,6 +1572,33 @@ func TestParseSchemaAndQuery(t *testing.T) {
 	require.Contains(t, err.Error(), "Schema block is not allowed with query block")
 }
 
+func TestParseSchemaType(t *testing.T) {
+	query := `
+		schema (type: Person) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 1)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaTypeMulti(t *testing.T) {
+	query := `
+		schema (type: [Person, Animal]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 2)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, res.Schema.Types[1], "Animal")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
 func TestParseSchemaError(t *testing.T) {
 	query := `
 		schema () {
@@ -4680,55 +4707,4 @@ func TestMultipleTypeDirectives(t *testing.T) {
 	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
 	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
-}
-
-func TestParseEmptyTypeQuery(t *testing.T) {
-	query := `
-		types()
-	`
-	res, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-	require.NotNil(t, res.Types)
-	require.Equal(t, 0, len(res.Types.TypeNames))
-}
-
-func TestParseTypeQuery(t *testing.T) {
-	query := `
-		types(Person)
-	`
-	res, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-	require.NotNil(t, res.Types)
-	require.Equal(t, 1, len(res.Types.TypeNames))
-	require.Equal(t, "Person", res.Types.TypeNames[0])
-}
-
-func TestParseTypeQueryMultiple(t *testing.T) {
-	query := `
-		types(Person, Animal)
-	`
-	res, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-	require.NotNil(t, res.Types)
-	require.Equal(t, 2, len(res.Types.TypeNames))
-	require.Equal(t, "Person", res.Types.TypeNames[0])
-	require.Equal(t, "Animal", res.Types.TypeNames[1])
-}
-
-func TestParseInvalidTypeQuery1(t *testing.T) {
-	query := `
-		types(
-	`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unclosed type action")
-}
-
-func TestParseInvalidTypeQuery2(t *testing.T) {
-	query := `
-		types(Person Animal)
-	`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "A comma is required between types")
 }

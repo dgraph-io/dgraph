@@ -455,7 +455,6 @@ type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
 	Schema    *pb.SchemaRequest
-	Types     *pb.TypeRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -488,16 +487,6 @@ func Parse(r Request) (res Result, rerr error) {
 					return res, item.Errorf("Schema block is not allowed with query block")
 				}
 				if res.Schema, rerr = getSchema(it); rerr != nil {
-					return res, rerr
-				}
-			} else if item.Val == "types" {
-				if res.Types != nil {
-					return res, item.Errorf("Only one type block allowed ")
-				}
-				if res.Query != nil {
-					return res, item.Errorf("Type block is not allowed with query block")
-				}
-				if res.Types, rerr = getTypes(it); rerr != nil {
 					return res, rerr
 				}
 			} else if item.Val == "fragment" {
@@ -895,14 +884,19 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 	return items, it.Errorf("Expecting ] to end list but none was found")
 }
 
-// parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
-	// pred should be followed by colon
+// parseSchemaPredsOrTypes parses till rightround is found
+func parseSchemaPredsOrTypes(it *lex.ItemIterator, s *pb.SchemaRequest) error {
+	// pred (or type) should be followed by colon
 	it.Next()
 	item := it.Item()
-	if item.Typ != itemName && item.Val != "pred" {
+	if item.Typ != itemName && !(item.Val == "pred" || item.Val == "type") {
 		return item.Errorf("Invalid schema block")
 	}
+	parseTypes := false
+	if item.Val == "type" {
+		parseTypes = true
+	}
+
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemColon {
@@ -913,11 +907,21 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	it.Next()
 	item = it.Item()
 	if item.Typ == itemName {
-		s.Predicates = append(s.Predicates, item.Val)
+		if parseTypes {
+			s.Types = append(s.Types, item.Val)
+		} else {
+			s.Predicates = append(s.Predicates, item.Val)
+		}
 	} else if item.Typ == itemLeftSquare {
-		var err error
-		if s.Predicates, err = parseListItemNames(it); err != nil {
+		names, err := parseListItemNames(it)
+		if err != nil {
 			return err
+		}
+
+		if parseTypes {
+			s.Types = names
+		} else {
+			s.Predicates = names
 		}
 	} else {
 		return item.Errorf("Invalid schema block")
@@ -963,7 +967,7 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 				return nil, item.Errorf("Too many left rounds in schema block")
 			}
 			leftRoundSeen = true
-			if err := parseSchemaPredicates(it, &s); err != nil {
+			if err := parseSchemaPredsOrTypes(it, &s); err != nil {
 				return nil, err
 			}
 		default:
@@ -971,54 +975,6 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 		}
 	}
 	return nil, it.Errorf("Invalid schema block.")
-}
-
-// parseTypeNames parses till rightround is found
-func parseTypeNames(it *lex.ItemIterator, req *pb.TypeRequest) error {
-	seenType := false
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case itemRightRound:
-			return nil
-		case itemComma:
-			if !seenType {
-				return item.Errorf("Invalid comma")
-			}
-			seenType = false
-		case itemName:
-			if seenType {
-				return item.Errorf("A comma is required between types")
-			}
-			req.TypeNames = append(req.TypeNames, item.Val)
-			seenType = true
-		default:
-			return item.Errorf("Invalid type block")
-		}
-	}
-	return it.Item().Errorf("Invalid type block")
-}
-
-func getTypes(it *lex.ItemIterator) (*pb.TypeRequest, error) {
-	var req pb.TypeRequest
-	leftRoundSeen := false
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case itemLeftRound:
-			if leftRoundSeen {
-				return nil, item.Errorf("Too many left rounds in type block")
-			}
-			leftRoundSeen = true
-			if err := parseTypeNames(it, &req); err != nil {
-				return nil, err
-			}
-			return &req, nil
-		default:
-			return nil, item.Errorf("Invalid type block")
-		}
-	}
-	return nil, it.Errorf("Invalid type block")
 }
 
 // parseGqlVariables parses the the graphQL variable declaration.
