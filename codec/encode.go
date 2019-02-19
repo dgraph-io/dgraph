@@ -12,11 +12,11 @@ func Encode(b interface{}) ([]byte, error) {
 	case []byte:
 		return encodeByteArray(v)
 	case int16:
-		return encodeInteger(int64(v))
+		return encodeInteger(int(v))
 	case int32:
-		return encodeInteger(int64(v))
+		return encodeInteger(int(v))
 	case int64:
-		return encodeInteger(v)
+		return encodeInteger(int(v))
 	case bool:
 		return encodeBool(v)
 	default:
@@ -29,7 +29,7 @@ func Encode(b interface{}) ([]byte, error) {
 // b -> [encodeInteger(len(b)) b]
 // it returns a byte array where the first byte is the length of b encoded with SCALE, followed by the byte array b itself
 func encodeByteArray(b []byte) ([]byte, error) {
-	encodedLen, err := encodeInteger(int64(len(b)))
+	encodedLen, err := encodeInteger(len(b))
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func encodeByteArray(b []byte) ([]byte, error) {
 // if 2^14 <= n < 2^30 return [10 i^2...i^32] [ 32 bits = 4 byte output ]
 // if n >= 2^30 return [lower 2 bits of first byte = 11] [upper 6 bits of first byte = # of bytes following less 4]
 // [append i as a byte array to the first byte]
-func encodeInteger(i int64) ([]byte, error) {
+func encodeInteger(i int) ([]byte, error) {
 	if i < 1<<6 {
 		o := byte(i) << 2
 		return []byte{o}, nil
@@ -66,11 +66,8 @@ func encodeInteger(i int64) ([]byte, error) {
 		// the most significant byte cannot be zero
 		// each iteration, shift by 1 byte until the number is zero
 		// then break and save the numBytes needed
-		for numBytes = 1; numBytes < 256; numBytes++ {
+		for numBytes = 0; numBytes < 256 && m != 0; numBytes++ {
 			m = m >> 8
-			if m == 0 {
-				break
-			}
 		}
 
 		topSixBits := uint8(numBytes - 4)
