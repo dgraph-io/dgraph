@@ -20,9 +20,8 @@ func Encode(b interface{}) ([]byte, error) {
 	case bool:
 		return encodeBool(v)
 	default:
-		return nil, errors.New("Unsupported type!")
+		return nil, errors.New("unsupported type")
 	}
-	return []byte{}, nil
 }
 
 // encodeByteArray performs the following:
