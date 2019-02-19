@@ -167,7 +167,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack, flip bool) error {
 // pass the eval to evalMathStack for normal eval.
 // Returns nil if the operation was added to the valueStack, otherwise an error.
 func evalMVBStack(opStack, valueStack *mathTreeStack, op string) error {
-	flip := isBinary(op) && valueStack.size() > 2
+	flip := (op == "min" || op == "max") && valueStack.size() > 2
 	if flip {
 		for valueStack.reverse(); valueStack.size() > 2; {
 			opStack.push(&MathTree{Fn: op})
