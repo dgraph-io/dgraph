@@ -89,7 +89,6 @@ func encodeInteger(i int) ([]byte, error) {
 func encodeBool(l bool) ([]byte, error) {
 	if l {
 		return []byte{0x01}, nil
-	} else {
-		return []byte{0x00}, nil
-	}
+	} 
+	return []byte{0x00}, nil
 }

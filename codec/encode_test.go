@@ -8,7 +8,6 @@ import (
 type encodeTest struct {
 	val    interface{}
 	output []byte
-	error  string
 }
 
 var encodeTests = []encodeTest{
