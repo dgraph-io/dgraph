@@ -619,7 +619,13 @@ func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Pa
 }
 
 func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
-	gid := group.Members[0].GroupId
+	var gid uint32
+	for _, member := range group.Members {
+		gid = member.GroupId
+	}
+	if gid == 0 {
+		return x.Errorf("Unable to find group")
+	}
 	state, err := s.latestMembershipState(ctx)
 	if err != nil {
 		return err

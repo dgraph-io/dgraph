@@ -166,6 +166,10 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	ctx, span := otrace.StartSpan(ctx, "worker.MovePredicate")
 	defer span.End()
 
+	n := groups().Node
+	if !n.AmLeader() {
+		return &emptyPayload, errNotLeader
+	}
 	if groups().gid != in.SourceGid {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
@@ -174,15 +178,16 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate
 	}
-	if !groups().ServesTablet(in.Predicate) {
-		return &emptyPayload, errUnservedTablet
-	}
-	n := groups().Node
-	if !n.AmLeader() {
-		return &emptyPayload, errNotLeader
+	if in.DestGid == 0 {
+		glog.Infof("Got instructed to delete tablet: %v", in.Predicate)
+		p := &pb.Proposal{CleanPredicate: in.Predicate}
+		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
 		return &emptyPayload, x.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
+	}
+	if !groups().ServesTablet(in.Predicate) {
+		return &emptyPayload, errUnservedTablet
 	}
 
 	msg := fmt.Sprintf("Move predicate request: %+v", in)
@@ -198,12 +203,6 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 
 func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error {
 	span := otrace.FromContext(ctx)
-
-	if in.DestGid == 0 {
-		// This means we need to issue a delete predicate proposal.
-		p := &pb.Proposal{CleanPredicate: in.Predicate}
-		return groups().Node.proposeAndWait(ctx, p)
-	}
 
 	pl := groups().Leader(in.DestGid)
 	if pl == nil {
@@ -260,7 +259,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		}
 		kv, err := l.MarshalToKv()
 		if kv != nil {
-			// HACK: Let's set all of them at this timestamp, to see what happens.
+			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs
 		}
 		return listWrap(kv), err

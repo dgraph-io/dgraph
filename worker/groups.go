@@ -252,14 +252,8 @@ func (g *groupi) calculateTabletSizes() map[string]*pb.Tablet {
 		// removed from the membership state.
 		tablet, has := tablets[pk.Attr]
 		if !has {
-			if !g.ServesTablet(pk.Attr) {
-				if pk.IsSchema() {
-					itr.Next()
-				} else {
-					// data key for predicate we don't serve, skip it.
-					itr.Seek(pk.SkipPredicate())
-				}
-				continue
+			if pk.IsSchema() {
+				itr.Next()
 			}
 			tablet = &pb.Tablet{GroupId: gid, Predicate: pk.Attr}
 			tablets[pk.Attr] = tablet
