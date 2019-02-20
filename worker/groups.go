@@ -138,11 +138,9 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
 
-	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
+	gr.closer = y.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
-
-	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
 	gr.proposeInitialSchema()
@@ -769,75 +767,6 @@ OUTER:
 	}
 	cancel()
 	goto START
-}
-
-func (g *groupi) cleanupTablets() {
-	defer g.closer.Done() // CLOSER:1
-	defer func() {
-		glog.Infof("EXITING cleanupTablets.")
-	}()
-
-	// TODO: Do not clean tablets for now. This causes race conditions where we end up deleting
-	// predicate which is being streamed over by another group.
-	return
-
-	cleanup := func() {
-		g.blockDeletes.Lock()
-		defer g.blockDeletes.Unlock()
-		if !g.Node.AmLeader() {
-			return
-		}
-		glog.Infof("Running cleaning at Node: %#x Group: %d", g.Node.Id, g.groupId())
-		defer glog.Info("Cleanup Done")
-
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		txn := pstore.NewTransactionAt(math.MaxUint64, false)
-		defer txn.Discard()
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		for itr.Rewind(); itr.Valid(); {
-			item := itr.Item()
-			pk := x.Parse(item.Key())
-			if pk == nil {
-				itr.Next()
-				continue
-			}
-
-			// Delete at most one predicate at a time.
-			// Tablet is not being served by me and is not read only.
-			// Don't use servesTablet function because it can return false even if
-			// request made to group zero fails. We might end up deleting a predicate
-			// on failure of network request even though no one else is serving this
-			// tablet.
-			if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
-				glog.Warningf("Node: %d Group: %d. Proposing predicate delete: %v. Tablet: %+v",
-					g.Node.Id, g.groupId(), pk.Attr, tablet)
-				// Predicate moves are disabled during deletion, deletePredicate purges everything.
-				p := &pb.Proposal{CleanPredicate: pk.Attr}
-				err := groups().Node.proposeAndWait(context.Background(), p)
-				glog.Errorf("Cleaning up predicate: %+v. Error: %v", p, err)
-				return
-			}
-			if pk.IsSchema() {
-				itr.Seek(pk.SkipSchema())
-				continue
-			}
-			itr.Seek(pk.SkipPredicate())
-		}
-	}
-
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-g.closer.HasBeenClosed():
-			return
-		case <-ticker.C:
-			cleanup()
-		}
-	}
 }
 
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
