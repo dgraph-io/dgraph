@@ -277,12 +277,12 @@ Let's understand how query execution works, by looking at an example.
 Let's assume we have 3 Alpha instances, and instance id=2 receives this query. These are the steps:
 
 * Send queries to look up keys = `pred_A, 0x1`, `pred_B, 0x1`, and `pred_C, 0x1`. These predicates could
-belong to 3 different groups, served by potentially different servers. So, this would typically
+belong to 3 different groups, served by potentially different Alpha servers. So, this would typically
 incur at max 3 network calls (equal to number of predicates at this step).
-* The above queries would return back 3 list of UIDs or value. The result of `pred_B` and `pred_C`
+* The above queries would return back 3 lists of UIDs or values. The result of `pred_B` and `pred_C`
 would be converted into queries for `pred_Bi` and `pred_Ci`.
 * `pred_Bi` and `pred_Ci` would then cause at max 4 network calls, depending upon where these
-predicates are located. The keys for `pred_Bi` for e.g. would be `pred_Bi, res_pred_Bk`, where
+predicates are located. The keys for `pred_Bi`, for example, would be `pred_Bi, res_pred_Bk`, where
 res_pred_Bk = list of resulting UIDs from `pred_B, u`.
 * Looking at `res_pred_C2`, you'll notice that this would be a list of lists aka list matrix. We
 merge these list of lists into a sorted list with distinct elements to form the query for `pred_C21`.
@@ -292,7 +292,7 @@ list UIDs / value.
 If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for
 replying back to the client. If the query was run via [gRPC](https://www.grpc.io/) interface using
 the language [clients]({{< relref "clients/index.md" >}}), the subgraph gets converted to
-[protocol buffer](https://developers.google.com/protocol-buffers/) format, and returned to client.
+[protocol buffer](https://developers.google.com/protocol-buffers/) format and then returned to client.
 
 ### Network Calls
 Compared to RAM or SSD access, network calls are slow.
