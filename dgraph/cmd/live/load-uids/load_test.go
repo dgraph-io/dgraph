@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package live
+package main
 
 import (
 	"context"
@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo"
@@ -40,11 +39,21 @@ var (
 	tmpDir      string
 )
 
-// Just check the first and last entries and assumes everything in between is okay.
-func checkLoadedData(t *testing.T) {
+func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
+	require.NotEqual(t, gotMap["q"].([]interface{})[0].(map[string]interface{})["uid"],
+		wantMap["q"].([]interface{})[0].(map[string]interface{})["uid"],
+		"new uid was assigned")
+
+	gotMap["q"].([]interface{})[0].(map[string]interface{})["uid"] = -1
+	wantMap["q"].([]interface{})[0].(map[string]interface{})["uid"] = -1
+	z.CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func checkLoadedData(t *testing.T, newUids bool) {
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Homer")) {
+				uid
 				name
 				age
 				role
@@ -52,21 +61,30 @@ func checkLoadedData(t *testing.T) {
 		}
 	`)
 	require.NoError(t, err)
-	z.CompareJSON(t, `
+
+	gotMap := z.UnmarshalJSON(t, string(resp.GetJson()))
+	wantMap := z.UnmarshalJSON(t, `
 		{
 		    "q": [
 					{
+					"uid": "0x2001",
 					"name": "Homer",
 					"age": 38,
 					"role": "father"
 			    }
 			]
 		}
-	`, string(resp.GetJson()))
+	`)
+	if newUids {
+		checkDifferentUid(t, wantMap, gotMap)
+	} else {
+		z.CompareJSONMaps(t, wantMap, gotMap)
+	}
 
 	resp, err = dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Maggie")) {
+				uid
 				name
 				role
 				carries
@@ -74,20 +92,28 @@ func checkLoadedData(t *testing.T) {
 		}
 	`)
 	require.NoError(t, err)
-	z.CompareJSON(t, `
+
+	gotMap = z.UnmarshalJSON(t, string(resp.GetJson()))
+	wantMap = z.UnmarshalJSON(t, `
 		{
 		    "q": [
 				{
+					"uid": "0x3003",
 					"name": "Maggie",
 					"role": "daughter",
 					"carries": "pacifier"
 			    }
 			]
 		}
-	`, string(resp.GetJson()))
+	`)
+	if newUids {
+		checkDifferentUid(t, wantMap, gotMap)
+	} else {
+		z.CompareJSONMaps(t, wantMap, gotMap)
+	}
 }
 
-func TestLiveLoadJSONFile(t *testing.T) {
+func TestLiveLoadJsonUidKeep(t *testing.T) {
 	z.DropAll(t, dg)
 
 	pipeline := [][]string{
@@ -98,48 +124,54 @@ func TestLiveLoadJSONFile(t *testing.T) {
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file ran successfully")
 
-	checkLoadedData(t)
+	checkLoadedData(t, false)
 }
 
-func TestLiveLoadJSONCompressedStream(t *testing.T) {
+func TestLiveLoadJsonUidDiscard(t *testing.T) {
 	z.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{"gzip", "-c", testDataDir + "/family.json"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live", "--new_uids",
+			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON stream ran successfully")
+	require.NoError(t, err, "live loading JSON file ran successfully")
 
-	checkLoadedData(t)
+	checkLoadedData(t, true)
 }
 
-func TestLiveLoadJSONMultipleFiles(t *testing.T) {
+func TestLiveLoadRdfUidKeep(t *testing.T) {
 	z.DropAll(t, dg)
-
-	files := []string{
-		testDataDir + "/family1.json",
-		testDataDir + "/family2.json",
-		testDataDir + "/family3.json",
-	}
-	fileList := strings.Join(files, ",")
 
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-			"--schema", testDataDir + "/family.schema", "--files", fileList,
+			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading multiple JSON files ran successfully")
+	require.NoError(t, err, "live loading JSON file ran successfully")
 
-	checkLoadedData(t)
+	checkLoadedData(t, false)
+}
+
+func TestLiveLoadRdfUidDiscard(t *testing.T) {
+	z.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live", "--new_uids",
+			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
+			"--dgraph", alphaService},
+	}
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file ran successfully")
+
+	checkLoadedData(t, true)
 }
 
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	testDataDir = path.Dir(thisFile) + "/test_data"
+	testDataDir = path.Dir(thisFile)
 
 	dg = z.DgraphClient(alphaService)
 
