@@ -38,16 +38,6 @@ function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
 }
 
-function RunCmd {
-    if eval "$@"; then
-        echo -e "\e[1;32mok $1\e[0m"
-        return 0
-    else
-        echo -e "\e[1;31mfail $1\e[0m"
-        return 1
-    fi
-}
-
 function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
     touch $CUSTOM_CLUSTER_TESTS
@@ -73,6 +63,16 @@ function Run {
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
     | GREP_COLORS='mt=01;31' egrep --line-buffered --color=always '.*FAIL.*|$'
+}
+
+function RunCmd {
+    if eval "$@"; then
+        echo -e "\e[1;32mok $1\e[0m"
+        return 0
+    else
+        echo -e "\e[1;31mfail $1\e[0m"
+        return 1
+    fi
 }
 
 function RunDefaultClusterTests {
