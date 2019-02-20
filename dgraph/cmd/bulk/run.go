@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 
@@ -198,6 +199,10 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
+	f, _ := os.Create("profile.cpu")
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
+
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
@@ -206,6 +211,11 @@ func run() {
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()
+
+	f, _ = os.Create("profile.mem")
+	runtime.GC()
+	pprof.WriteHeapProfile(f)
+	f.Close()
 }
 
 func maxOpenFilesWarning() {
