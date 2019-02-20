@@ -183,9 +183,11 @@ single group. Dgraph Zero assigns a group to each Alpha node.
 **Shard rebalancing**
 
 Dgraph Zero tries to rebalance the cluster based on the disk usage in each
-group. If Zero detects an imbalance, it would try to move a predicate along
-with index and reverse edges to a group that has minimum disk usage. This can
-make the predicate unavailable temporarily.
+group. If Zero detects an imbalance, it would try to move a predicate along with
+its indices to a group that has minimum disk usage. This can make the predicate
+temporarily read-only. Queries for the predicate will still be serviced, but any
+mutations for the predicate will be rejected and should be retried after the
+move is finished.
 
 Zero would continuously try to keep the amount of data on each server even,
 typically running this check on a 10-min frequency.  Thus, each additional
