@@ -432,14 +432,10 @@ func TestBinaryMultipleValues1(t *testing.T) {
 		var(func:uid(0x1)) {
 			x as math(max(1,2,3,1,2,3,4,1,1,1,11,2,2,1,10))
 			y as math(min(1,2,3,4,0,5,6,7,1))
-			z as math(pow(2,2,2,2))
-			w as math(logbase(256,16,2))
 		}
 		q(func:uid(0x1)) {
 			val(x)
 			val(y)
-			val(z)
-			val(w)
 		}
 	}`
 	js := processQueryNoErr(t, query)
@@ -449,9 +445,7 @@ func TestBinaryMultipleValues1(t *testing.T) {
 			"q": [
 				{
 					"val(x)": 11.000000,
-					"val(y)": 0.000000,
-					"val(z)": 256.000000,
-					"val(w)": 1.000000
+					"val(y)": 0.000000
 				}
 			]
 		}
@@ -536,32 +530,30 @@ func TestBinaryMultipleValues4(t *testing.T) {
 	query := `
 	{
 		var(func:uid(0x1)) {
-			x0 as math(pow(pow(pow(2,2),3),4))
-			x1 as math(pow(2,2,3,4))
-  		y0 as math(logbase(logbase(16,2),2))
-			y1 as math(logbase(16,2,2))
+			z as math(pow(2,2,2,2))
 		}
 		q(func:uid(0x1)) {
-			val(x0)
-			val(x1)
-			val(y0)
-			val(y1)
+			val(z)
 		}
 	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `
+	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected one item in value stack, but got 3")
+}
+
+func TestBinaryMultipleValues5(t *testing.T) {
+	query := `
 	{
-		"data": {
-			"q": [
-				{
-					"val(x0)": 16777216.000000,
-					"val(x1)": 16777216.000000,
-					"val(y0)": 2.000000,
-					"val(y1)": 2.000000
-				}
-			]
+		var(func:uid(0x1)) {
+			z as math(logbase(256,16,2))
 		}
-	}`, js)
+		q(func:uid(0x1)) {
+			val(z)
+		}
+	}`
+	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected one item in value stack, but got 2")
 }
 
 func TestDuplicateAlias(t *testing.T) {
