@@ -70,9 +70,6 @@ $ dgraph restore -p . -l /var/backups/dgraph
 # Restore from S3:
 $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
 
-# Restore since read timestamp 20001:
-$ dgraph restore -since 20001 -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
-
 		`,
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -112,7 +109,7 @@ func runRestore(pdir, location string) error {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return Load(location, func(r io.Reader, groupId int) error {
-		fmt.Printf("--- Restoring groupId: %d\n", groupId)
+		fmt.Printf("Restoring groupId: %d\n", groupId)
 		bo := badger.DefaultOptions
 		bo.SyncWrites = true
 		bo.TableLoadingMode = options.MemoryMap
@@ -125,7 +122,7 @@ func runRestore(pdir, location string) error {
 			return err
 		}
 		defer db.Close()
-		fmt.Println("--- Creating new db:", bo.Dir)
+		fmt.Println("Creating new db:", bo.Dir)
 		return db.Load(r)
 	})
 }
