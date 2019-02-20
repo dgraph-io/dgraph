@@ -1771,7 +1771,7 @@ By default, admin operations can only be initiated from the machine on which the
 You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
 
 ```sh
-dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third RAM> ...
+dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1:192.168.1.1 --lru_mb <one-third RAM> ...
 ```
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
