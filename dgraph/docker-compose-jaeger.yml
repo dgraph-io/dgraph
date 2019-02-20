@@ -22,6 +22,15 @@ services:
   dg3:
     environment:
       - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg4:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg5:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg6:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger

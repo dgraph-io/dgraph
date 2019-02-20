@@ -1,0 +1,14 @@
+{
+  me(func: allofterms(name@en, "Hark Tsui")) {
+    name@zh
+    name@en
+    director.film (orderasc: name@en) (first:6, offset:4)  {
+      genre {
+        name@en
+      }
+      name@zh
+      name@en
+      initial_release_date
+    }
+  }
+}

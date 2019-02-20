@@ -589,18 +589,28 @@ to use the `/commit` endpoint as explained in this section). To do this, add
 the `X-Dgraph-CommitNow: true` header to the final `/mutate` call.
 {{% /notice %}}
 
-Finally, we can commit the transaction using the `/commit` endpoint. We need
-the `start_ts` we've been using for the transaction along with the `keys`.
-If we had performed multiple mutations in the transaction instead of the just
-the one, then the keys provided during the commit would be the union of all
-keys returned in the responses from the `/mutate` endpoint.
+Finally, we can commit the transaction using the `/commit` endpoint. We need the
+`start_ts` we've been using for the transaction along with the `keys` and the
+`preds`. If we had performed multiple mutations in the transaction instead of
+just one, then the keys and preds provided during the commit would be the union
+of all keys and preds returned in the responses from the `/mutate` endpoint.
+
+The `preds` field is used to abort the transaction in cases where some of the
+predicates are moved. This field is not required and the `/commit` endpoint also
+accepts the old format, which was a single array of keys.
 
 ```sh
 curl -X POST localhost:8080/commit/4 -d $'
-  [
-    "i4elpex2rwx3",
-    "nkvfdz3ltmvv"
-  ]' | jq
+{
+    "keys": [
+		"i4elpex2rwx3",
+		"nkvfdz3ltmvv"
+	],
+	"preds": [
+		"1-predicate",
+		"1-name"
+	]
+}' | jq
 ```
 
 ```json

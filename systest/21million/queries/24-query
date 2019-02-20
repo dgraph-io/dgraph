@@ -1,0 +1,9 @@
+{
+  me(func: has(director.film), first: 5) {
+    name@en
+    director.film @filter(has(initial_release_date))  {
+      initial_release_date
+      name@en
+    }
+  }
+}

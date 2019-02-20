@@ -22,3 +22,12 @@ services:
   dg3:
     tmpfs:
       - /data/dg3/w
+  dg4:
+    tmpfs:
+      - /data/dg4/w
+  dg5:
+    tmpfs:
+      - /data/dg5/w
+  dg6:
+    tmpfs:
+      - /data/dg6/w

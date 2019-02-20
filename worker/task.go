@@ -780,6 +780,12 @@ func (qs *queryState) helpProcessTask(
 	out.List = schema.State().IsList(attr)
 	srcFn.atype = typ
 
+	// Reverse attributes might have more than 1 results even if the original attribute
+	// is not a list.
+	if q.Reverse {
+		out.List = true
+	}
+
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUID: uint64(q.AfterUid),

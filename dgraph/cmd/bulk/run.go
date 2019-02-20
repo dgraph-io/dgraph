@@ -49,8 +49,8 @@ func init() {
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("files", "f", "",
 		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
-	flag.StringP("schema_file", "s", "",
-		"Location of schema file to load.")
+	flag.StringP("schema", "s", "",
+		"Location of schema file")
 	flag.String("format", "",
 		"Specify file format (rdf or json) instead of getting it from filename")
 	flag.String("out", "out",
@@ -98,7 +98,7 @@ func run() {
 	opt := options{
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
-		SchemaFile:       Bulk.Conf.GetString("schema_file"),
+		SchemaFile:       Bulk.Conf.GetString("schema"),
 		DgraphsDir:       Bulk.Conf.GetString("out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
