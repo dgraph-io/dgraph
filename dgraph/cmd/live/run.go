@@ -99,7 +99,7 @@ func init() {
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
-	flag.Bool("new_uids", false, ""+
+	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
 
 	// TLS configuration
