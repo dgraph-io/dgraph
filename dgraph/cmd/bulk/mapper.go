@@ -25,14 +25,15 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgryski/go-farm"
+	"github.com/gogo/protobuf/proto"
+
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -41,8 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
-	"github.com/gogo/protobuf/proto"
 )
 
 type mapper struct {
@@ -123,21 +122,21 @@ func (m *mapper) run(inputFormat int) {
 	chunker := chunker.NewChunker(inputFormat)
 
 	done := make(chan bool)
-	go func() {
-		var secs int
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				secs++
-				if secs%2 == 0 {
-					debug.FreeOSMemory()
-				}
-				time.Sleep(1 * time.Second)
-			}
-		}
-	}()
+	//go func() {
+	//	var secs int
+	//	for {
+	//		select {
+	//		case <-done:
+	//			return
+	//		default:
+	//			secs++
+	//			if secs%2 == 0 {
+	//				debug.FreeOSMemory()
+	//			}
+	//			time.Sleep(1 * time.Second)
+	//		}
+	//	}
+	//}()
 
 	for chunkBuf := range m.readerChunkCh {
 		done := false
