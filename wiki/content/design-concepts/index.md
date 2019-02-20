@@ -276,7 +276,6 @@ Let's understand how query execution works, by looking at an example.
 
 Let's assume we have 3 Alpha instances, and instance id=2 receives this query. These are the steps:
 
-* Dgraph seeks for the node of provided UID.
 * Send queries to look up keys = `pred_A, 0x1`, `pred_B, 0x1`, and `pred_C, 0x1`. These predicates could
 belong to 3 different groups, served by potentially different servers. So, this would typically
 incur at max 3 network calls (equal to number of predicates at this step).
