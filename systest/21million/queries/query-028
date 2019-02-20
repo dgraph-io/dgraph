@@ -1,0 +1,363 @@
+{
+  me(func: allofterms(name@en, "Orlando")) @filter(has(actor.film)) {
+    name@en
+    count(actor.film)
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Orlando Orfei",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Zelaya Perez",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Antonio Orlando",
+      "count(actor.film)": 5
+    },
+    {
+      "name@en": "Orazio Orlando",
+      "count(actor.film)": 9
+    },
+    {
+      "name@en": "Richard Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando García",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Bloom",
+      "count(actor.film)": 33
+    },
+    {
+      "name@en": "Orlando Police",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "José Orlando Araque",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Sacha",
+      "count(actor.film)": 3
+    },
+    {
+      "name@en": "Orlando Nadres",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Fagin",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Rodriguez",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Bonner",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Juan Manuel Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Martins",
+      "count(actor.film)": 11
+    },
+    {
+      "name@en": "Orlando Seale",
+      "count(actor.film)": 13
+    },
+    {
+      "name@en": "Orlando Jones",
+      "count(actor.film)": 34
+    },
+    {
+      "name@en": "Orlando Stewart",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Brown",
+      "count(actor.film)": 8
+    },
+    {
+      "name@en": "Orlando Viera",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Silvio Orlando",
+      "count(actor.film)": 32
+    },
+    {
+      "name@en": "Orlando Toro",
+      "count(actor.film)": 3
+    },
+    {
+      "name@en": "Vince Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Rivas",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Michele Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Cecilia Orlando-Willberg",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Rubén Orlando Beltrán",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Paiva",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Sebeni",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando McNary",
+      "count(actor.film)": 3
+    },
+    {
+      "name@en": "Orlando Vargas Diaz",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Klaus",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Pallamari",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Deral Wilson",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Sol",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Tony Orlando",
+      "count(actor.film)": 6
+    },
+    {
+      "name@en": "Orlando Brooke",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Jon Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Costa",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Angel Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Jean Orlando",
+      "count(actor.film)": 3
+    },
+    {
+      "name@en": "Orlando Macedo",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Carlo Orlando",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Alfonso Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Rodríguez",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Delbert",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Cinque",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Angelo Orlando",
+      "count(actor.film)": 5
+    },
+    {
+      "name@en": "Ruggero Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Don Orlando",
+      "count(actor.film)": 4
+    },
+    {
+      "name@en": "Alvaro Orlando",
+      "count(actor.film)": 5
+    },
+    {
+      "name@en": "Orlando McGuire",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Daniele Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Sims",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Bor",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Thor Newman",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Urdaneta",
+      "count(actor.film)": 4
+    },
+    {
+      "name@en": "Orlando Diaz",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Valenzuela",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Coleman Orlando Swinton",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Berbert",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Estrada",
+      "count(actor.film)": 4
+    },
+    {
+      "name@en": "Orlando Dawson",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Nicoletti",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Pisegna",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Ashley",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Rita Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Parolini",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Wells",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Sérgio",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Griffin",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Matt Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Wright",
+      "count(actor.film)": 2
+    },
+    {
+      "name@en": "Orlando Beltran",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Fundichely",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Salvatore Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Jordan",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Richard Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orfeo Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando F. Cordova",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Varona",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Fenwick",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Pedro Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Joseph Orlando",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Rodriguez",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Carriera",
+      "count(actor.film)": 1
+    },
+    {
+      "name@en": "Orlando Ortega",
+      "count(actor.film)": 1
+    }
+  ]
+}

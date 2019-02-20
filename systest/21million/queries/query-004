@@ -1,0 +1,67 @@
+{
+  scott(func: eq(name@en, "Ridley Scott")) {
+    name@en
+    initial_release_date
+    director.film @filter(le(initial_release_date, "2000")) {
+      name@en
+      initial_release_date
+    }
+  }
+}
+---
+{
+  "scott": [
+    {
+      "name@en": "Ridley Scott",
+      "director.film": [
+        {
+          "name@en": "Thelma & Louise",
+          "initial_release_date": "1991-05-24T00:00:00Z"
+        },
+        {
+          "name@en": "Black Rain",
+          "initial_release_date": "1989-09-22T00:00:00Z"
+        },
+        {
+          "name@en": "White Squall",
+          "initial_release_date": "1996-02-02T00:00:00Z"
+        },
+        {
+          "name@en": "Alien",
+          "initial_release_date": "1979-05-25T00:00:00Z"
+        },
+        {
+          "name@en": "1492 Conquest of Paradise",
+          "initial_release_date": "1992-10-08T00:00:00Z"
+        },
+        {
+          "name@en": "Blade Runner",
+          "initial_release_date": "1982-06-25T00:00:00Z"
+        },
+        {
+          "name@en": "G.I. Jane",
+          "initial_release_date": "1997-08-22T00:00:00Z"
+        },
+        {
+          "name@en": "The Duellists",
+          "initial_release_date": "1977-12-01T00:00:00Z"
+        },
+        {
+          "name@en": "Legend",
+          "initial_release_date": "1985-08-28T00:00:00Z"
+        },
+        {
+          "name@en": "Someone to Watch Over Me",
+          "initial_release_date": "1987-10-09T00:00:00Z"
+        },
+        {
+          "name@en": "Boy and Bicycle",
+          "initial_release_date": "1997-09-07T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "name@en": "Ridley Scott"
+    }
+  ]
+}

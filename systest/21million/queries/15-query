@@ -1,8 +1,0 @@
-{
-  me(func: eq(count(genre), 13)) {
-    name@en
-    genre {
-    	name@en
-    }
-  }
-}

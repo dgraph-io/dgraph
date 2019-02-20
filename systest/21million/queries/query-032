@@ -1,0 +1,1045 @@
+{
+ AngelinaInfo(func:allofterms(name@en, "angelina jolie")) {
+  name@en
+   actor.film {
+    performance.film {
+      genre {
+        name@en
+      }
+    }
+   }
+  }
+
+ DirectorInfo(func: eq(name@en, "Peter Jackson")) {
+    name@en
+    director.film @filter(ge(initial_release_date, "2008"))  {
+        Release_date: initial_release_date
+        Name: name@en
+    }
+  }
+}
+---
+{
+  "AngelinaInfo": [
+    {
+      "name@en": "Angelina Jolie",
+      "actor.film": [
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Television film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Film adaptation"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Comedy"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Historical fiction"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "War film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Short Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Family"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Ensemble Film"
+              },
+              {
+                "name@en": "Comedy-drama"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "LGBT"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Slice of life"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Fantasy"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Computer Animation"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Psychological Drama"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Family"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Family"
+              },
+              {
+                "name@en": "Fantasy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Crime Thriller"
+              },
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Psychological thriller"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Docudrama"
+              },
+              {
+                "name@en": "Trial drama"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Drama"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Comedy"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "LGBT"
+              },
+              {
+                "name@en": "History"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Mystery"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Western"
+              },
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Film adaptation"
+              },
+              {
+                "name@en": "Epic Western"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Historical fiction"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Fantasy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Wuxia"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "LGBT"
+              },
+              {
+                "name@en": "Family"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Martial Arts Film"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Mockumentary"
+              },
+              {
+                "name@en": "Martial Arts Film"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Backstage Musical"
+              },
+              {
+                "name@en": "Musical comedy"
+              },
+              {
+                "name@en": "Media Satire"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Comedy-drama"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Romantic comedy"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Media Satire"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Fantasy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Indie film"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Romantic comedy"
+              },
+              {
+                "name@en": "Comedy"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Erotica"
+              },
+              {
+                "name@en": "Psychological thriller"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Mystery"
+              },
+              {
+                "name@en": "Slasher"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Comedy"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Mystery"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Historical period drama"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Political drama"
+              },
+              {
+                "name@en": "Spy film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Crime Thriller"
+              },
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Teen film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Suspense"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Cult film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Indie film"
+              },
+              {
+                "name@en": "Teen film"
+              },
+              {
+                "name@en": "Drama"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Historical period drama"
+              },
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Political drama"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Crime Thriller"
+              },
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Heist film"
+              },
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Family"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Children's/Family"
+              },
+              {
+                "name@en": "Computer Animation"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Historical period drama"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "War film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Family"
+              },
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Short Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Drama"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Mystery"
+              },
+              {
+                "name@en": "Science Fiction"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Animation"
+              },
+              {
+                "name@en": "Short Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Black comedy"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Romantic comedy"
+              },
+              {
+                "name@en": "Comedy"
+              },
+              {
+                "name@en": "Action Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Short Film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Historical fiction"
+              },
+              {
+                "name@en": "War film"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Science Fiction"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Crime Thriller"
+              },
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Psychological thriller"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Mystery"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Crime Fiction"
+              },
+              {
+                "name@en": "Action Film"
+              },
+              {
+                "name@en": "Mystery"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Thriller"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Drama"
+              },
+              {
+                "name@en": "Mystery"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Indie film"
+              },
+              {
+                "name@en": "Adventure Film"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "Action/Adventure"
+              },
+              {
+                "name@en": "Romantic comedy"
+              },
+              {
+                "name@en": "Comedy Thriller"
+              },
+              {
+                "name@en": "Comedy"
+              }
+            ]
+          }
+        },
+        {
+          "performance.film": {
+            "genre": [
+              {
+                "name@en": "Erotica"
+              },
+              {
+                "name@en": "Television film"
+              },
+              {
+                "name@en": "Romance Film"
+              },
+              {
+                "name@en": "LGBT"
+              },
+              {
+                "name@en": "Historical period drama"
+              },
+              {
+                "name@en": "Biographical film"
+              },
+              {
+                "name@en": "Drama"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name@en": "Angelina Jolie"
+    },
+    {
+      "name@en": "Angelina Jolie Look-a-Like"
+    }
+  ],
+  "DirectorInfo": [
+    {
+      "name@en": "Peter Jackson",
+      "director.film": [
+        {
+          "Release_date": "2012-11-28T00:00:00Z",
+          "Name": "The Hobbit: An Unexpected Journey"
+        },
+        {
+          "Release_date": "2009-11-24T00:00:00Z",
+          "Name": "The Lovely Bones"
+        },
+        {
+          "Release_date": "2014-12-10T00:00:00Z",
+          "Name": "The Hobbit: The Battle of the Five Armies"
+        },
+        {
+          "Release_date": "2013-12-02T00:00:00Z",
+          "Name": "The Hobbit: The Desolation of Smaug"
+        },
+        {
+          "Release_date": "2015-01-01T00:00:00Z",
+          "Name": "The Adventures of Tintin: Prisoners of the Sun"
+        },
+        {
+          "Release_date": "2008-04-01T00:00:00Z",
+          "Name": "Crossing the Line"
+        }
+      ]
+    },
+    {
+      "name@en": "Peter Jackson"
+    },
+    {
+      "name@en": "Peter Jackson"
+    },
+    {
+      "name@en": "Peter Jackson"
+    }
+  ]
+}

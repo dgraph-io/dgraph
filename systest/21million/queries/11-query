@@ -1,8 +1,0 @@
-{
-  me(func:anyofterms(name@en, "poison peacock")) {
-    name@en
-    genre {
-      name@en
-    }
-  }
-}

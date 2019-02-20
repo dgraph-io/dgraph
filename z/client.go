@@ -44,7 +44,16 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 		}
 		time.Sleep(time.Second)
 	}
+	x.Check(err)
 
+	return dg
+}
+
+func DgraphClientNoDropAll(serviceAddr string) *dgo.Dgraph {
+	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
+	x.Check(err)
+
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	x.Check(err)
 
 	return dg

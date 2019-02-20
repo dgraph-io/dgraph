@@ -1728,6 +1728,37 @@ func TestCountUidToVarCombinedWithNormalVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 5}]}}`, js)
 }
 
+func TestDefaultValueVar1(t *testing.T) {
+	query := `
+	{
+		var(func: has(pred)) {
+			n as uid
+			cnt as count(_predicate_)
+		}
+
+		data(func: uid(n)) @filter(gt(val(cnt), 4)) {
+			expand(_all_)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"data":[]}}`, js)
+}
+
+func TestDefaultValueVar2(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x1)) {
+			cnt as _predicate_
+		}
+
+		data(func: uid(0x1)) {
+			val(cnt)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"data":[]}}`, js)
+}
+
 func TestMain(m *testing.M) {
 	populateCluster()
 	os.Exit(m.Run())
