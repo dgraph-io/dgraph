@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -113,6 +114,31 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 		return err
 	}
 
+	if file.version == 0 {
+		var lastManifest string
+		done := make(chan struct{})
+		defer close(done)
+		for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
+			if strings.HasSuffix(object.Key, backupManifest) &&
+				strings.Compare(object.Key, lastManifest) == 1 {
+				lastManifest = object.Key
+			}
+		}
+		if lastManifest != "" {
+			var m Manifest
+			glog.Infof("lastManifest: %v", lastManifest)
+			reader, err := mc.GetObject(h.bucketName, lastManifest, minio.GetObjectOptions{})
+			if err != nil {
+				return err
+			}
+			if err = json.NewDecoder(reader).Decode(&m); err != nil {
+				return err
+			}
+			glog.Infof("lastManifest: Manifest: %+v", m)
+			file.version = m.Version
+		}
+	}
+
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
 	object := filepath.Join(h.objectPrefix, file.path, file.name)
 	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
@@ -147,13 +173,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 		return x.Errorf("No backup files found in %q", uri.String())
 	}
 	sort.Strings(objects)
-	glog.V(2).Infof("Loading from S3: %v", objects)
+	if glog.V(3) {
+		fmt.Printf("Loading from S3: %v\n", objects)
+	}
 
 	for _, object := range objects {
 		_, groupId, err := getInfo(object)
 		if err != nil {
 			if glog.V(2) {
-				fmt.Printf("--- Skip: invalid backup name format: %q\n", object)
+				fmt.Printf("Restore: skip invalid backup name format: %q\n", object)
 			}
 			continue
 		}
@@ -170,7 +198,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 			reader.Close()
 			return x.Errorf("Restore remote object is empty or inaccessible: %s", object)
 		}
-		fmt.Printf("--- Downloading %q, %d bytes\n", object, st.Size)
+		fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 		if err = fn(reader, groupId); err != nil {
 			reader.Close()
 			return err
