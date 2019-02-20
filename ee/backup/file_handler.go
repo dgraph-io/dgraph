@@ -13,7 +13,9 @@
 package backup
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -39,20 +41,51 @@ func (h *fileHandler) Create(uri *url.URL, file *object) error {
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
+	if file.path == "" {
+		return x.Errorf("Need to specify a file path")
+	}
 	if file.name == "" {
 		return x.Errorf("Need to specify a file name")
 	}
 	dir = uri.Path
 
-	// Create new dir at destination
-	if file.path != "" {
-		dir = filepath.Join(uri.Path, file.path)
-		if err := os.Mkdir(dir, 0700); err != nil {
-			if !os.IsExist(err) {
+	// Find the max version from the latest backup. This is done only when starting a new
+	// backup, not when creating a manifest.
+	if file.version == 0 {
+		var lastManifest string
+		// Walk the path and find the most recent backup.
+		// If not manifest is found, this is a full backup.
+		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+			if !isdir &&
+				strings.HasSuffix(path, backupManifest) &&
+				strings.Compare(path, lastManifest) == 1 {
+				lastManifest = path
+			}
+			return false
+		})
+		// Found a manifest now we extract the version to use in Backup().
+		if lastManifest != "" {
+			var m Manifest
+			glog.Infof("lastManifest: %v", lastManifest)
+			b, err := ioutil.ReadFile(lastManifest)
+			if err != nil {
 				return err
 			}
+			if err = json.Unmarshal(b, &m); err != nil {
+				return err
+			}
+			glog.Infof("lastManifest: Manifest: %+v", m)
+			file.version = m.Version
 		}
 	}
+
+	// Create new dir at destination
+	dir = filepath.Join(uri.Path, file.path)
+	if err := os.Mkdir(dir, 0700); err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	// Path to backup file
 	path = filepath.Join(dir, file.name)
 
 	fp, err := os.Create(path)
@@ -80,13 +113,15 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
 		return x.Errorf("No backup files found in %q", uri.Path)
 	}
 	sort.Strings(files)
-	glog.V(2).Infof("Loading backup file(s): %v", files)
+	if glog.V(3) {
+		fmt.Printf("Loading backup file(s): %v\n", files)
+	}
 
 	for _, file := range files {
 		_, groupId, err := getInfo(file)
 		if err != nil {
 			if glog.V(2) {
-				fmt.Printf("--- Skip: invalid backup name format: %q\n", file)
+				fmt.Printf("Restore: skip invalid backup name format: %q\n", file)
 			}
 			continue
 		}
