@@ -73,7 +73,7 @@ fi
 [[ $DGRAPH_LOAD_ONLY ]] && exit 0
 
 Info "running benchmarks/regression queries"
-go test -v -tags standalone
+go test -v -tags standalone || FOUND_DIFFS=1
 
 Info "bringing down zero and alpha containers"
 if [[ $DEGRAPH_RELOAD ]]; then
