@@ -38,6 +38,16 @@ function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
 }
 
+function RunCmd {
+    if eval "$@"; then
+        echo -e "\e[1;32mok $1\e[0m"
+        return 0
+    else
+        echo -e "\e[1;31mfail $1\e[0m"
+        return 1
+    fi
+}
+
 function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
     touch $CUSTOM_CLUSTER_TESTS
@@ -148,13 +158,13 @@ fi
 
 if [[ $RUN_ALL ]]; then
     Info "Running small load test"
-    ./contrib/scripts/load-test.sh || TEST_FAILED=1
+    RunCmd ./contrib/scripts/load-test.sh || TEST_FAILED=1
 
     Info "Running custom test scripts"
-    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
+    RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
 
     Info "Running large load test"
-    ./systest/21million/test-21million.sh || TEST_FAILED=1
+    RunCmd ./systest/21million/test-21million.sh || TEST_FAILED=1
 fi
 
 Info "Stopping cluster"
