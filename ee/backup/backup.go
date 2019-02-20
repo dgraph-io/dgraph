@@ -19,6 +19,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
 )
@@ -32,11 +33,12 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 		return err
 	}
 
-	h, err := create(object{
+	obj := &object{
 		uri:  req.Location,
 		path: fmt.Sprintf(backupPathFmt, req.UnixTs),
 		name: fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId),
-	})
+	}
+	h, err := create(obj)
 	if err != nil {
 		glog.Errorf("Unable to get handler for request: %+v. Error: %v", req, err)
 		return err
@@ -45,8 +47,8 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 	stream := db.NewStreamAt(req.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	// Here we return the max version in the original request obejct. We will use this
-	// to create our manifest after the backup is complete.
-	req.Since, err = stream.Backup(h, req.Since)
+	// to create our manifest to complete the backup.
+	req.Since, err = stream.Backup(h, obj.version)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
@@ -61,11 +63,11 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 }
 
 // Manifest records backup details, these are values used during restore.
-// Since is the maximum version seen.
+// Version is the maximum version seen.
 // Groups are the IDs of the groups involved.
 // Request is the original backup request.
 type Manifest struct {
-	Since   uint64           `json:"since"`
+	Version uint64           `json:"version"`
 	Groups  []uint32         `json:"groups"`
 	Request pb.BackupRequest `json:"request"`
 }
@@ -75,16 +77,24 @@ func (m *Manifest) Complete(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	h, err := create(object{
-		uri:  m.Request.Location,
-		path: fmt.Sprintf(backupPathFmt, m.Request.UnixTs),
-		name: `manifest.json`,
+	if m.Version == 0 {
+		return x.Errorf("Backup manifest version is zero")
+	}
+	h, err := create(&object{
+		uri:     m.Request.Location,
+		path:    fmt.Sprintf(backupPathFmt, m.Request.UnixTs),
+		name:    backupManifest,
+		version: m.Version,
 	})
 	if err != nil {
 		return err
 	}
-	if err := json.NewEncoder(h).Encode(&m); err != nil {
+	if err = json.NewEncoder(h).Encode(&m); err != nil {
 		return err
 	}
-	return h.Close()
+	if err = h.Close(); err != nil {
+		return err
+	}
+	glog.Infof("Backup completed OK.")
+	return nil
 }
