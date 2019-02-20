@@ -119,9 +119,9 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 		req.GroupId = gid
 		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
-			// This is the since (max version) result from Backup().
+			// This is the max version result from Backup().
 			if req.Since != 0 {
-				m.Since = req.Since
+				m.Version = req.Since
 			}
 		}(&req)
 	}
@@ -134,9 +134,5 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 		}
 	}
 
-	if err = m.Complete(ctx); err != nil {
-		return err
-	}
-	glog.Infof("Backup completed OK.")
-	return nil
+	return m.Complete(ctx)
 }
