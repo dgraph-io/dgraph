@@ -60,6 +60,15 @@ func WalkPathFunc(dir string, f func(string, bool) bool) []string {
 	return list
 }
 
+// FindFilesFunc walks the directory 'dir' and collects all file names matched by
+// func f. It will skip over directories.
+// Returns empty string slice if nothing found, otherwise returns all matched file names.
+func FindFilesFunc(dir string, f func(string) bool) []string {
+	return WalkPathFunc(dir, func(path string, isdir bool) bool {
+		return !isdir && f(path)
+	})
+}
+
 // FindDataFiles returns a list of data files as a string array. If str is a comma-separated list
 // of paths, it returns that list. If str is a single path that is not a directory, it returns that
 // path. If str is a directory, it returns the files in it that have one of the extensions in ext.
