@@ -1951,24 +1951,24 @@ func TestMultipleTypeDirectivesInPredicate(t *testing.T) {
 }
 
 func TestQueryUnknownType(t *testing.T) {
-	query := `types(UnknownType)`
+	query := `schema(type: UnknownType) {}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {}}`, js)
 }
 
 func TestQuerySingleType(t *testing.T) {
-	query := `types(Person)`
+	query := `schema(type: Person) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"typeName":"Person",
-		"fields":[{"fieldName":"name", "type":"string"}, {"fieldName":"pet", "type":"Animal"}]}]}}`,
+	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
+		"fields":[{"name":"name", "type":"string"}, {"name":"pet", "type":"Animal"}]}]}}`,
 		js)
 }
 
 func TestQueryMultipleTypes(t *testing.T) {
-	query := `types(Person, Animal)`
+	query := `schema(type: [Person, Animal]) {}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"types":[{"typeName":"Animal",
-		"fields":[{"fieldName":"name", "type":"string"}]},
-	{"typeName":"Person", "fields":[{"fieldName":"name", "type": "string"},
-		{"fieldName":"pet", "type":"Animal"}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
+		"fields":[{"name":"name", "type":"string"}]},
+	{"name":"Person", "fields":[{"name":"name", "type": "string"},
+		{"name":"pet", "type":"Animal"}]}]}}`, js)
 }

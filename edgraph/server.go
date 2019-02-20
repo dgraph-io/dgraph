@@ -581,7 +581,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, x.Wrap(err)
 	}
-
 	var js []byte
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
@@ -838,7 +837,7 @@ func validateKeys(nq *api.NQuad) error {
 // it into a map containing keys for the type name and the type.
 func formatField(field *pb.SchemaUpdate) map[string]string {
 	fieldMap := make(map[string]string)
-	fieldMap["fieldName"] = field.Predicate
+	fieldMap["name"] = field.Predicate
 	typ := ""
 	if field.List {
 		typ += "["
@@ -871,7 +870,7 @@ func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
 	var res []map[string]interface{}
 	for _, typ := range types {
 		typeMap := make(map[string]interface{})
-		typeMap["typeName"] = typ.TypeName
+		typeMap["name"] = typ.TypeName
 		typeMap["fields"] = make([]map[string]string, 0)
 
 		for _, field := range typ.Fields {

@@ -2719,9 +2719,7 @@ func (req *QueryRequest) Process(ctx context.Context) (er ExecutionResult, err e
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
 		}
-	}
-	if req.GqlQuery.Types != nil {
-		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Types); err != nil {
+		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching types")
 		}
 	}
