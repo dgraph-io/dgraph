@@ -21,16 +21,38 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// backupPathFmt defines the path to store or index backup objects.
-// The expected parameter is a date in string format.
-const backupPathFmt = `dgraph.%s`
+const (
+	// backupPathFmt defines the path to store or index backup objects.
+	// The expected parameter is a date in string format.
+	backupPathFmt = `dgraph.%s`
 
-// backupNameFmt defines the name of backups files or objects (remote).
-// The first parameter is the read timestamp at the time of backup. This is used for
-// incremental backups and partial restore.
-// The second parameter is the group ID when backup happened. This is used for partitioning
-// the posting directories 'p' during restore.
-const backupNameFmt = `r%d-g%d.backup`
+	// backupNameFmt defines the name of backups files or objects (remote).
+	// The first parameter is the read timestamp at the time of backup. This is used for
+	// incremental backups and partial restore.
+	// The second parameter is the group ID when backup happened. This is used for partitioning
+	// the posting directories 'p' during restore.
+	backupNameFmt = `r%d-g%d.backup`
+
+	// backupManifest is the name of backup manifests. This a JSON file that contains the
+	// details of the backup. A backup dir without a manifest is ignored.
+	//
+	// Example manifest:
+	// {
+	//   "version": 2280,
+	//   "groups": [ 1, 2, 3 ],
+	//   "request": {
+	//     "read_ts": 110001,
+	//     "unix_ts": "20190220.222326",
+	//     "location": "/tmp/dgraph"
+	//   }
+	// }
+	//
+	// "version" is the maximum data version, obtained from Backup() after it runs. This value
+	// is used for subsequent incremental backups.
+	// "groups" are the group IDs that participated.
+	// "request" is the original backup request.
+	backupManifest = `manifest.json`
+)
 
 // handler interface is implemented by URI scheme handlers.
 // When adding new scheme handles, for example 'azure://', an object will implement
@@ -64,6 +86,7 @@ type handler interface {
 // name is the name of the file or object at uri under path.
 type object struct {
 	uri, path, name string
+	version         uint64
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -101,7 +124,7 @@ func getHandler(scheme string) handler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func create(o object) (handler, error) {
+func create(o *object) (handler, error) {
 	uri, err := url.Parse(o.uri)
 	if err != nil {
 		return nil, err
@@ -113,7 +136,7 @@ func create(o object) (handler, error) {
 		return nil, x.Errorf("Unable to handle url: %v", uri)
 	}
 
-	if err := h.Create(uri, &o); err != nil {
+	if err := h.Create(uri, o); err != nil {
 		return nil, err
 	}
 	return h, nil
