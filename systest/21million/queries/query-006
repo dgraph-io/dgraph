@@ -1,0 +1,51 @@
+{
+  q(func: allofterms(name@en, "Farhan Akhtar")) {
+    name@hi
+    name@en
+
+    director.film {
+      name@ru:hi:en
+      name@en
+      name@hi
+      name@ru
+    }
+  }
+}
+---
+{
+  "q": [
+    {
+      "name@hi": "फरहान अख्तर",
+      "name@en": "Farhan Akhtar",
+      "director.film": [
+        {
+          "name@ru:hi:en": "दिल चाहता है",
+          "name@en": "Dil Chahta Hai",
+          "name@hi": "दिल चाहता है"
+        },
+        {
+          "name@ru:hi:en": "पोज़िटिव",
+          "name@en": "Positive",
+          "name@hi": "पोज़िटिव"
+        },
+        {
+          "name@ru:hi:en": "Дон. Главарь мафии 2",
+          "name@en": "Don 2",
+          "name@hi": "डॉन २",
+          "name@ru": "Дон. Главарь мафии 2"
+        },
+        {
+          "name@ru:hi:en": "लक्ष्य",
+          "name@en": "Lakshya",
+          "name@hi": "लक्ष्य"
+        },
+        {
+          "name@ru:hi:en": "Дон. Главарь мафии",
+          "name@en": "Don: The Chase Begins Again",
+          "name@hi": "डॉन",
+          "name@ru": "Дон. Главарь мафии"
+        }
+      ]
+    }
+  ]
+}

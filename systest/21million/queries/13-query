@@ -1,8 +1,0 @@
-{
-  directors(func: regexp(name@en, /^Steven Sp.*$/)) {
-    name@en
-    director.film @filter(regexp(name@en, /ryan/i)) {
-      name@en
-    }
-  }
-}
