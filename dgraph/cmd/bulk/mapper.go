@@ -25,10 +25,12 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
@@ -119,6 +121,24 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 
 func (m *mapper) run(inputFormat int) {
 	chunker := chunker.NewChunker(inputFormat)
+
+	done := make(chan bool)
+	go func() {
+		var secs int
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				secs++
+				if secs%2 == 0 {
+					debug.FreeOSMemory()
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
+
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
@@ -163,6 +183,8 @@ func (m *mapper) run(inputFormat int) {
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
+
+	close(done)
 }
 
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
