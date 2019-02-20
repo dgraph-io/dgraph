@@ -23,6 +23,7 @@ A GraphQL+- query finds nodes based on search criteria, matches patterns in a gr
 
 A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
 
+{{% notice "note" %}}See more about Queries in [Queries design concept]({{< relref "design-concepts/index.md#queries" >}}) {{% /notice %}}
 
 ### Returning Values
 
