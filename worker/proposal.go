@@ -119,7 +119,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeMs := x.SinceInMilliseconds(startTime)
+		timeMs := x.SinceMs(startTime)
 		ostats.Record(ctx, x.LatencyMs.M(timeMs))
 	}()
 

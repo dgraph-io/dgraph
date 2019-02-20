@@ -22,6 +22,15 @@ services:
   dg3:
     environment:
       - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg4:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg5:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
+  dg6:
+    environment:
+      - DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
@@ -33,5 +42,5 @@ services:
     # The jaeger all-in-one container stores all traces in memory. Set
     # --memory.max-traces to some number if you don't want to store all traces
     # indefinitely.
-    # command:
-    #   - --memory.max-traces=1000
+    command:
+      - --memory.max-traces=1000000

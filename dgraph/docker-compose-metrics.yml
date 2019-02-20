@@ -1,4 +1,7 @@
 version: "3.5"
+volumes:
+  prometheus-volume:
+  grafana-volume:
 services:
   node-exporter:
     image: quay.io/prometheus/node-exporter
@@ -16,6 +19,9 @@ services:
     ports:
       - "9090:9090"
     volumes:
+      - type: volume
+        source: prometheus-volume
+        target: /prometheus
       - type: bind
         source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/prometheus.yml
         target: /etc/prometheus/prometheus.yml
@@ -26,3 +32,11 @@ services:
     hostname: grafana
     ports:
      - "3000:3000"
+    environment:
+      # Skip login
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - type: volume
+        source: grafana-volume
+        target: /var/lib/grafana

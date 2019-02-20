@@ -32,11 +32,12 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
+	nqjson "github.com/dgraph-io/dgraph/chunker/json"
+	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -304,9 +305,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return nil, err
 	}
 
-	// All checks done.
-
 	defer glog.Infof("ALTER op: %+v done", op)
+
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
@@ -318,7 +318,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		ResetAcl()
 		return empty, err
 	}
+
 	if len(op.DropAttr) > 0 {
+		// Reserved predicates cannot be dropped.
+		if x.IsReservedPredicate(op.DropAttr) {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
+				op.DropAttr)
+			return nil, err
+		}
+
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   op.DropAttr,
@@ -339,6 +347,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if err != nil {
 		return empty, err
 	}
+
+	// Reserved predicates cannot be altered.
+	for _, update := range result.Schemas {
+		if x.IsReservedPredicate(update.Predicate) {
+			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
+				update.Predicate)
+			return nil, err
+		}
+	}
+
 	glog.Infof("Got schema: %+v\n", result.Schemas)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Schemas
@@ -373,7 +391,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceInMilliseconds(startTime)
+		timeSpentMs := x.SinceMs(startTime)
 		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
 	}()
 
@@ -511,7 +529,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceInMilliseconds(startTime)
+		timeSpentMs := x.SinceMs(startTime)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
 	}()
@@ -685,14 +703,14 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
-		nqs, err := nquadsFromJson(mu.SetJson, set)
+		nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := nquadsFromJson(mu.DeleteJson, delete)
+		nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}

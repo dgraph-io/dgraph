@@ -551,6 +551,12 @@ func (s *Server) ShouldServe(
 	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
+	if x.IsAclPredicate(tablet.Predicate) {
+		// force all the acl predicates to be allocated to group 1
+		// this is to make it eaiser to stream ACL updates to all alpha servers
+		// since they only need to open one pipeline to receive updates for all ACL predicates
+		tablet.GroupId = 1
+	}
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		span.Annotatef(nil, "While proposing tablet: %v", err)

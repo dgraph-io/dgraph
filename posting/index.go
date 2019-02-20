@@ -989,8 +989,7 @@ func DeleteAll() error {
 			return true
 		} else if pk.IsSchema() {
 			// Don't delete schema for _predicate_
-			_, isInitialPred := x.InitialPreds[pk.Attr]
-			return !isInitialPred
+			return !x.IsReservedPredicate(pk.Attr)
 		}
 		return true
 	})

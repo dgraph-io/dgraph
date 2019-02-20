@@ -19,7 +19,7 @@ Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-
 
 ## Status
 
-Dgraph is [at version 1.0.x][rel] and is production ready. It is being used in
+Dgraph is [at version 1.0.x][rel] and is production ready. Apart from the vast open source community, it is being used in
 production at multiple Fortune 500 companies, and by
 [Intuit Katlas](https://github.com/intuit/katlas).
 
@@ -105,22 +105,8 @@ makes it easy to build applications with it.
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
 - Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/master/CONTRIBUTING.md) for guidelines on contributions.
 
-## Unofficial Client Libraries
-The Dgraph team maintain a number of [officially supported client libraries](https://docs.dgraph.io/clients/).  The following libraries are contributed by the community.
-
-**C# .NET**
-
-* [https://github.com/AlexandreDaSilva/DgraphNet](https://github.com/AlexandreDaSilva/DgraphNet)
-* [https://github.com/MichaelJCompton/Dgraph-dotnet](https://github.com/MichaelJCompton/Dgraph-dotnet)
-
-**Dart**
-
-* [https://github.com/katutz/dgraph](https://github.com/katutz/dgraph)
-
-**Elixir**
-
-* [https://github.com/liveforeverx/dlex](https://github.com/liveforeverx/dlex)
-* [https://github.com/ospaarmann/exdgraph](https://github.com/ospaarmann/exdgraph)
+## Client Libraries
+The Dgraph team maintain a number of [officially supported client libraries](https://docs.dgraph.io/clients/). There are also libraries contributed by the community [unofficial client libraries](https://docs.dgraph.io/clients#unofficial-dgraph-clients).
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.

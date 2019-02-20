@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strings"
 )
 
 const (
@@ -295,4 +296,29 @@ func Parse(key []byte) *ParsedKey {
 		return nil
 	}
 	return p
+}
+
+// IsReservedPredicate returns true if 'pred' is in the reserved predicate list.
+func IsReservedPredicate(pred string) bool {
+	var m = map[string]struct{}{
+		PredicateListAttr:   {},
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+		"type":              {},
+	}
+	_, ok := m[strings.ToLower(pred)]
+	return ok
+}
+
+func IsAclPredicate(pred string) bool {
+	var m = map[string]struct{}{
+		"dgraph.xid":        {},
+		"dgraph.password":   {},
+		"dgraph.user.group": {},
+		"dgraph.group.acl":  {},
+	}
+	_, ok := m[pred]
+	return ok
 }

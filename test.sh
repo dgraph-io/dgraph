@@ -58,6 +58,7 @@ function FindDefaultClusterTests {
 
 function Run {
     set -o pipefail
+    echo -en "...\r"
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
@@ -146,11 +147,14 @@ else
 fi
 
 if [[ $RUN_ALL ]]; then
-    Info "Running load-test.sh"
-    ./contrib/scripts/load-test.sh
+    Info "Running small load test"
+    ./contrib/scripts/load-test.sh || TEST_FAILED=1
 
     Info "Running custom test scripts"
-    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh
+    ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
+
+    Info "Running large load test"
+    ./systest/21million/test-21million.sh || TEST_FAILED=1
 fi
 
 Info "Stopping cluster"

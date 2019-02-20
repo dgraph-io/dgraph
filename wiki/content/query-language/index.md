@@ -23,6 +23,7 @@ A GraphQL+- query finds nodes based on search criteria, matches patterns in a gr
 
 A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
 
+{{% notice "note" %}}See more about Queries in [Queries design concept]({{< relref "design-concepts/index.md#queries" >}}) {{% /notice %}}
 
 ### Returning Values
 
@@ -353,6 +354,39 @@ Keep the following in mind when designing regular expression queries.
 - If the partial result (for subset of trigrams) exceeds 1000000 uids during index scan, the query is stopped to prohibit expensive queries.
 
 
+### Fuzzy matching
+
+
+Syntax: `match(predicate, string, distance)`
+
+Schema Types: `string`
+
+Index Required: `trigram`
+
+Matches predicate values by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) to the string,
+also known as _fuzzy matching_. The distance parameter must be greater than zero (0). Using a greater distance value can yield more but less accurate results.
+
+Query Example: At root, fuzzy match nodes similar to `Stephen`, with a distance value of 8.
+
+{{< runnable >}}
+{
+  directors(func: match(name@en, Stephen, 8)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+Same query with a Levenshtein distance of 3.
+
+{{< runnable >}}
+{
+  directors(func: match(name@en, Stephen, 3)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+
 ### Full Text Search
 
 Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
@@ -432,6 +466,7 @@ Syntax Examples:
 * `eq(predicate, val(varName))`
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
+* `eq(predicate, [$var1, "value", ..., $varN])`
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
@@ -2898,6 +2933,20 @@ query test($a: int, $b: int, $name: string) {
 {{< runnable vars="{\"$b\": \"10\", \"$name\": \"Steven Spielberg\"}" >}}
 query test($a: int = 2, $b: int!, $name: string) {
   me(func: allofterms(name@en, $name)) {
+    director.film (first: $a, offset: $b) {
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+You can also use array with GraphQL Variables.
+
+{{< runnable vars="{\"$b\": \"10\", \"$aName\": \"Steven Spielberg\", \"$bName\": \"Quentin Tarantino\"}" >}}
+query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
+  me(func: eq(name@en, [$aName, $bName])) {
     director.film (first: $a, offset: $b) {
       genre(first: $a) {
         name@en

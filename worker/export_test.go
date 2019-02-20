@@ -37,7 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 
-	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -149,22 +149,22 @@ func TestExport(t *testing.T) {
 	for scanner.Scan() {
 		nq, err := rdf.Parse(scanner.Text())
 		require.NoError(t, err)
-		require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4", "_:uid5"}, nq.Subject)
+		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5"}, nq.Subject)
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
-			case "_:uid1", "_:uid2":
+			case "0x1", "0x2":
 				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "pho\ton"}},
 					nq.ObjectValue)
-			case "_:uid3":
+			case "0x3":
 				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "First Line\nSecondLine"}},
 					nq.ObjectValue)
-			case "_:uid4":
-			case "_:uid5":
-				require.Equal(t, `<_:uid5> <name> "" .`, scanner.Text())
+			case "0x4":
+			case "0x5":
+				require.Equal(t, `<0x5> <name> "" .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
-			if nq.Subject == "_:uid1" || nq.Subject == "_:uid2" {
+			if nq.Subject == "_:uid1" || nq.Subject == "0x2" {
 				require.Equal(t, &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "pho\ton"}},
 					nq.ObjectValue)
 			}
@@ -172,14 +172,14 @@ func TestExport(t *testing.T) {
 
 		// The only objectId we set was uid 5.
 		if nq.ObjectId != "" {
-			require.Equal(t, "_:uid5", nq.ObjectId)
+			require.Equal(t, "0x5", nq.ObjectId)
 		}
 		// Test lang.
-		if nq.Subject == "_:uid2" && nq.Predicate == "name" {
+		if nq.Subject == "0x2" && nq.Predicate == "name" {
 			require.Equal(t, "en", nq.Lang)
 		}
 		// Test facets.
-		if nq.Subject == "_:uid4" {
+		if nq.Subject == "0x4" {
 			require.Equal(t, "age", nq.Facets[0].Key)
 			require.Equal(t, "close", nq.Facets[1].Key)
 			require.Equal(t, "game", nq.Facets[2].Key)

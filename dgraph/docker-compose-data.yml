@@ -1,0 +1,51 @@
+# Docker compose file for testing that includes Jaeger tracing. Use it with:
+# ./run.sh --data $HOME/dg
+# This would pick up dgraph binary from $GOPATH.
+
+version: "3.5"
+services:
+  zero1:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  zero2:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  zero3:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg1:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg2:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg3:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg4:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg5:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data
+  dg6:
+    volumes:
+      - type: bind
+        source: "${DATA}"
+        target: /data

@@ -1,0 +1,10 @@
+{
+  steve as var(func: allofterms(name@en, "Steven")) {
+    films as count(director.film)
+  }
+
+  stevens(func: uid(steve)) @filter(eq(val(films), [1,2,3])) {
+    name@en
+    numFilms : val(films)
+  }
+}

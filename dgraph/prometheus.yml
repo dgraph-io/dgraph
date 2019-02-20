@@ -7,11 +7,17 @@ scrape_configs:
     static_configs:
       - targets:
         - 'bank-dg1:8180'
+        - 'bank-dg2:8182'
+        - 'bank-dg3:8183'
+        - 'bank-dg4:8184'
+        - 'bank-dg5:8185'
+        - 'bank-dg6:8186'
         - 'bank-dg0.1:6080'
+        - 'bank-dg0.2:6082'
+        - 'bank-dg0.3:6083'
   - job_name: 'node-exporter'
     scrape_interval: 15s
     metrics_path: '/metrics'
     static_configs:
       - targets:
         - 'node-exporter:9100'
-    

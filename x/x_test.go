@@ -52,3 +52,45 @@ func TestDivideAndRule(t *testing.T) {
 
 	test(1755, 4, 439)
 }
+
+func TestValidateAddress(t *testing.T) {
+	t.Run("IPv4", func(t *testing.T) {
+		testData := []struct {
+			name    string
+			address string
+			isValid bool
+		}{
+			{"Valid without port", "190.0.0.1", false},
+			{"Valid with port", "192.5.32.1:333", true},
+			{"Invalid without port", "12.0.0", false},
+			// the following test returns true because 12.0.0 is considered as valid
+			// hostname
+			{"Invalid with port", "12.0.0:3333", true},
+		}
+		for _, subtest := range testData {
+			st := subtest
+			t.Run(st.name, func(t *testing.T) {
+				require.Equal(t, st.isValid, ValidateAddress(st.address))
+			})
+		}
+
+	})
+	t.Run("IPv6", func(t *testing.T) {
+		testData := []struct {
+			name    string
+			address string
+			isValid bool
+		}{
+			{"Valid without port", "[2001:db8::1]", false},
+			{"Valid with port", "[2001:db8::1]:8888", true},
+			{"Invalid without port", "[2001:db8]", false},
+			{"Invalid with port", "[2001:db8]:2222", false},
+		}
+		for _, subtest := range testData {
+			st := subtest
+			t.Run(st.name, func(t *testing.T) {
+				require.Equal(t, st.isValid, ValidateAddress(st.address))
+			})
+		}
+	})
+}

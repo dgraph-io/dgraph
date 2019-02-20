@@ -112,7 +112,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	))
 
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--rdfs", rdfFile,
+		"--files", rdfFile,
 		"--schema", schemaFile,
 		"--dgraph", ":9180",
 	)

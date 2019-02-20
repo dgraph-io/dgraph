@@ -1,0 +1,9 @@
+{
+  director(func: allofterms(name@en, "Quentin Tarantino")) {
+    director.film {
+      name@en
+      x as initial_release_date
+    }
+    max(val(x))
+  }
+}

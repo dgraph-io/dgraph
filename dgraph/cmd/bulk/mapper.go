@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -117,11 +118,11 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 }
 
 func (m *mapper) run(inputFormat int) {
-	chunker := newChunker(inputFormat)
+	chunker := chunker.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
 		for !done {
-			nqs, err := chunker.parse(chunkBuf)
+			nqs, err := chunker.Parse(chunkBuf)
 			if err == io.EOF {
 				done = true
 			} else if err != nil {
@@ -139,7 +140,7 @@ func (m *mapper) run(inputFormat int) {
 					}
 				}
 
-				m.processNQuad(nq)
+				m.processNQuad(gql.NQuad{NQuad: nq})
 				atomic.AddInt64(&m.prog.nquadCount, 1)
 			}
 
@@ -216,8 +217,8 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew := m.xids.AssignUid(xid)
-	if !isNew || !m.opt.StoreXids {
+	uid := m.xids.AssignUid(xid)
+	if !m.opt.StoreXids {
 		return uid
 	}
 	if strings.HasPrefix(xid, "_:") {

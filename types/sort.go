@@ -133,7 +133,7 @@ func less(a, b Val) bool {
 	case UidID:
 		return (a.Value.(uint64) < b.Value.(uint64))
 	case StringID, DefaultID:
-		return (a.Value.(string)) < (b.Value.(string))
+		return (a.Safe().(string)) < (b.Safe().(string))
 	}
 	return false
 }

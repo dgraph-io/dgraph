@@ -83,15 +83,7 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	InitialPreds   = map[string]struct{}{
-		PredicateListAttr:   {},
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-		"type":              {},
-	}
-	Nilbyte []byte
+	Nilbyte        []byte
 )
 
 func ShouldCrash(err error) bool {
@@ -287,7 +279,7 @@ func ValidateAddress(addr string) bool {
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
 		return false
 	}
-	if err := net.ParseIP(host); err == nil {
+	if ip := net.ParseIP(host); ip != nil {
 		return true
 	}
 	// try to parse as hostname as per hostname RFC
@@ -441,7 +433,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 
-	if tlsConf.CertRequired {
+	if tlsConf != nil && tlsConf.CertRequired {
 		tlsConf.ConfigType = TLSClientConfig
 		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
 		if err != nil {
