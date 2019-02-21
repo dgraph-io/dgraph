@@ -348,12 +348,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	// Reserved predicates cannot be altered.
 	for _, update := range result.Schemas {
+		// Reserved predicates cannot be altered.
 		if x.IsReservedPredicate(update.Predicate) {
 			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err
+		}
+
+		if len(update.Predicate) > math.MaxUint16 {
+			return nil, fmt.Errorf("Predicate size cannot be bigger than 2^16")
 		}
 	}
 
@@ -560,6 +564,11 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if err != nil {
 		return resp, err
 	}
+
+	if err = validatePredSize(parsedReq.Query); err != nil {
+		return resp, err
+	}
+
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
@@ -769,6 +778,9 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 
 func validateNQuads(set, del []*api.NQuad) error {
 	for _, nq := range set {
+		if len(nq.Predicate) > math.MaxUint16 {
+			return x.Errorf("Predicate size cannot be bigger than 2^16")
+		}
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
@@ -781,6 +793,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 	}
 	for _, nq := range del {
+		if len(nq.Predicate) > math.MaxUint16 {
+			return x.Errorf("Predicate size cannot be bigger than 2^16")
+		}
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
@@ -819,5 +834,21 @@ func validateKeys(nq *api.NQuad) error {
 			return x.Errorf("Facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}
+	return nil
+}
+
+// validatePredSize verifies that the query does not contain any preds that
+// are longer than the limit (2^16).
+func validatePredSize(queries []*gql.GraphQuery) error {
+	for _, q := range queries {
+		if len(q.Attr) > math.MaxUint16 {
+			return fmt.Errorf("Predicate size cannot be bigger than 2^16")
+		}
+
+		if err := validatePredSize(q.Children); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
