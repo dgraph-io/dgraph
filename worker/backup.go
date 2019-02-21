@@ -32,6 +32,6 @@ func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Sta
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(ctx context.Context, destination string, since uint64) error {
+func BackupOverNetwork(ctx context.Context, destination string) error {
 	return x.ErrNotSupported
 }
