@@ -108,14 +108,15 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 	time.Sleep(3 * time.Second)
 
+	// All test data will reside here
+	x.Check(os.Mkdir("./data", 0777))
 	x.Check(os.Mkdir("./data/backups", 0777))
 	x.Check(os.Mkdir("./data/restore", 0777))
 }
 
 // XXX: cleanup dgN dirs?
 func BackupCleanup(t *testing.T, c *dgo.Dgraph) {
-	x.Check(os.RemoveAll("./data/backups"))
-	x.Check(os.RemoveAll("./data/restore"))
+	x.Check(os.RemoveAll("./data"))
 }
 
 func BackupFull(t *testing.T, c *dgo.Dgraph) {
