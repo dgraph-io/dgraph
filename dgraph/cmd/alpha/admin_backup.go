@@ -21,7 +21,6 @@ package alpha
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -43,22 +42,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, "You must specify a 'destination' value", "Backup failed.")
 		return
 	}
-
-	var (
-		err   error
-		since uint64
-	)
-	if at := r.FormValue("at"); at != "" {
-		since, err = strconv.ParseUint(at, 10, 64)
-		if err != nil {
-			x.SetStatus(w,
-				"Invalid value for 'at', it must be an integer greater than zero (0)",
-				"Backup failed.")
-			return
-		}
-	}
-
-	if err = worker.BackupOverNetwork(context.Background(), destination, since); err != nil {
+	if err := worker.BackupOverNetwork(context.Background(), destination); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
