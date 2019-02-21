@@ -835,7 +835,7 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
 
-	// While we're doing rollups, we should also use this opportunity to calculate the tablet sizes.
+	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	amLeader := n.AmLeader()
 	m := new(sync.Map)
 
