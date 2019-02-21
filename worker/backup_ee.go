@@ -83,7 +83,7 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(ctx context.Context, destination string, since uint64) error {
+func BackupOverNetwork(ctx context.Context, destination string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -104,7 +104,6 @@ func BackupOverNetwork(ctx context.Context, destination string, since uint64) er
 	m.Groups = groups().KnownGroups()
 	m.Request = pb.BackupRequest{
 		ReadTs:   ts.ReadOnly,
-		Since:    since,
 		Location: destination,
 		UnixTs:   time.Now().UTC().Format("20060102.150405"),
 	}
