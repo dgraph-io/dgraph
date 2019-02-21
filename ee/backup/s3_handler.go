@@ -130,6 +130,7 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 			if err != nil {
 				return err
 			}
+			defer reader.Close()
 			if err = json.NewDecoder(reader).Decode(&m); err != nil {
 				return err
 			}
@@ -142,6 +143,7 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
 
 	h.cerr = make(chan error, 1)
+	h.preader, h.pwriter = io.Pipe()
 	go func() {
 		h.cerr <- h.upload(mc, object)
 	}()
@@ -187,18 +189,16 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 		if err != nil {
 			return x.Errorf("Restore closing due to error: %s", err)
 		}
+		defer reader.Close()
 		st, err := reader.Stat()
 		if err != nil {
-			reader.Close()
 			return x.Errorf("Restore got an unexpected error: %s", err)
 		}
 		if st.Size <= 0 {
-			reader.Close()
 			return x.Errorf("Restore remote object is empty or inaccessible: %s", object)
 		}
 		fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 		if err = fn(reader, groupId); err != nil {
-			reader.Close()
 			return err
 		}
 	}
@@ -208,7 +208,6 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 // upload will block until it's done or an error occurs.
 func (h *s3Handler) upload(mc *minio.Client, object string) error {
 	start := time.Now()
-	h.preader, h.pwriter = io.Pipe()
 
 	// We don't need to have a progress object, because we're using a Pipe. A write to Pipe would
 	// block until it can be fully read. So, the rate of the writes here would be equal to the rate
