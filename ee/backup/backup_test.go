@@ -114,7 +114,6 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	x.Check(os.Mkdir("./data/restore", 0777))
 }
 
-// XXX: cleanup dgN dirs?
 func BackupCleanup(t *testing.T, c *dgo.Dgraph) {
 	x.Check(os.RemoveAll("./data"))
 }
