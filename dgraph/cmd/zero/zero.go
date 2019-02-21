@@ -60,6 +60,7 @@ type Server struct {
 	closer         *y.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
+	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
 }
 
@@ -79,6 +80,7 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
+	s.moveOngoing = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 }
 
@@ -596,7 +598,69 @@ func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Pa
 			return nil, err
 		}
 	}
+
+	if len(group.Members) == 0 {
+		return &api.Payload{Data: []byte("OK")}, nil
+	}
+	select {
+	case s.moveOngoing <- struct{}{}:
+	default:
+		// If a move is going on, don't do the next steps of deleting predicates.
+		return &api.Payload{Data: []byte("OK")}, nil
+	}
+	defer func() {
+		<-s.moveOngoing
+	}()
+
+	if err := s.deletePredicates(ctx, group); err != nil {
+		glog.Warningf("While deleting predicates: %v", err)
+	}
 	return &api.Payload{Data: []byte("OK")}, nil
+}
+
+func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
+	if group == nil || group.Tablets == nil {
+		return nil
+	}
+	var gid uint32
+	for _, tablet := range group.Tablets {
+		gid = tablet.GroupId
+		break
+	}
+	if gid == 0 {
+		return x.Errorf("Unable to find group")
+	}
+	state, err := s.latestMembershipState(ctx)
+	if err != nil {
+		return err
+	}
+	sg, ok := state.Groups[gid]
+	if !ok {
+		return x.Errorf("Unable to find group: %d", gid)
+	}
+
+	pl := s.Leader(gid)
+	if pl == nil {
+		return x.Errorf("Unable to reach leader of group: %d", gid)
+	}
+	wc := pb.NewWorkerClient(pl.Get())
+
+	for pred := range group.Tablets {
+		if _, found := sg.Tablets[pred]; found {
+			continue
+		}
+		glog.Infof("Tablet: %v does not belong to group: %d. Sending delete instruction.",
+			pred, gid)
+		in := &pb.MovePredicatePayload{
+			Predicate: pred,
+			SourceGid: gid,
+			DestGid:   0,
+		}
+		if _, err := wc.MovePredicate(ctx, in); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershipServer) error {
