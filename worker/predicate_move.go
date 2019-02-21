@@ -175,7 +175,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errEmptyPredicate
 	}
 	if !groups().ServesTablet(in.Predicate) {
-		return &emptyPayload, errUnservedTablet
+		return &emptyPayload, ErrUnservedTablet
 	}
 	n := groups().Node
 	if !n.AmLeader() {

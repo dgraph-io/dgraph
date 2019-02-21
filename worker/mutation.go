@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	errUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
+	ErrUnservedTablet  = x.Errorf("Tablet isn't being served by this instance.")
 	errPredicateMoving = x.Errorf("Predicate is being moved. Please retry later")
 )
 
@@ -455,7 +455,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 		if gid == 0 {
 			span.Annotatef(nil, "state: %+v", groups().state)
 			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
-			return tctx, errUnservedTablet
+			return tctx, ErrUnservedTablet
 		}
 		mu.StartTs = m.StartTs
 		go proposeOrSend(ctx, gid, mu, resCh)

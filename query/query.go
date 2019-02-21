@@ -170,6 +170,7 @@ type Function struct {
 type SubGraph struct {
 	ReadTs       uint64
 	Attr         string
+	UnknownAttr  bool
 	Params       params
 	counts       []uint32
 	valueMatrix  []*pb.ValueList
@@ -2025,6 +2026,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			if err == worker.ErrUnservedTablet {
+				sg.UnknownAttr = true
+				rch <- nil
+				return
+			}
 			if err != nil {
 				rch <- err
 				return
