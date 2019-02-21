@@ -245,7 +245,6 @@ func BackupIncr1(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{"/data/backups"},
-		"at":          []string{fmt.Sprint(incr1.Context.StartTs)},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -303,7 +302,6 @@ func BackupIncr2(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{"/data/backups"},
-		"at":          []string{fmt.Sprint(incr2.Context.StartTs)},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
