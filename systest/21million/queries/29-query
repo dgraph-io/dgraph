@@ -1,8 +1,0 @@
-{
-  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
-    name@en
-    director.film @filter(allofterms(name@en, "jones indiana") OR allofterms(name@en, "jurassic park"))  {
-      name@en
-    }
-  }
-}

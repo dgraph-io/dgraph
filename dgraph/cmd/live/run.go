@@ -60,6 +60,7 @@ type options struct {
 	ignoreIndexConflict bool
 	authToken           string
 	useCompression      bool
+	newUids             bool
 }
 
 var (
@@ -98,6 +99,8 @@ func init() {
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
+	flag.Bool("new_uids", false,
+		"Ignore UIDs in load files and assign new ones.")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -134,7 +137,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	}
 
 	f, err := os.Open(file)
-	x.Check(err)
+	x.CheckfNoTrace(err)
 	defer f.Close()
 
 	var reader io.Reader
@@ -161,9 +164,11 @@ func (l *loader) uid(val string) string {
 	// to be an existing node in the graph. There is limited protection against
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
-	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-		l.alloc.BumpTo(uid)
-		return fmt.Sprintf("%#x", uid)
+	if !opt.newUids {
+		if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+			l.alloc.BumpTo(uid)
+			return fmt.Sprintf("%#x", uid)
+		}
 	}
 
 	uid := l.alloc.AssignUid(val)
@@ -292,6 +297,7 @@ func run() error {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
+		newUids:             Live.Conf.GetBool("new_uids"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")

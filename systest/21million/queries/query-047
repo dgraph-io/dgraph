@@ -1,0 +1,40 @@
+{
+	var(func:allofterms(name@en, "steven spielberg")) {
+		films as director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as math(p + q + r)
+		}
+	}
+
+	TopMovies(func: uid(films), orderdesc: val(score), first: 5){
+		name@en
+		val(score)
+	}
+}
+---
+{
+  "TopMovies": [
+    {
+      "name@en": "Lincoln",
+      "val(score)": 179
+    },
+    {
+      "name@en": "Minority Report",
+      "val(score)": 156
+    },
+    {
+      "name@en": "Schindler's List",
+      "val(score)": 145
+    },
+    {
+      "name@en": "The Terminal",
+      "val(score)": 118
+    },
+    {
+      "name@en": "Saving Private Ryan",
+      "val(score)": 99
+    }
+  ]
+}

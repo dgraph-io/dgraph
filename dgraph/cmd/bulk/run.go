@@ -90,6 +90,8 @@ func init() {
 			"more parallelism, but increases memory usage.")
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
+	flag.Bool("new_uids", false,
+		"Ignore UIDs in load files and assign new ones.")
 }
 
 func run() {
@@ -113,6 +115,7 @@ func run() {
 		MapShards:        Bulk.Conf.GetInt("map_shards"),
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:          Bulk.Conf.GetBool("new_uids"),
 	}
 
 	x.PrintVersion()

@@ -1,0 +1,603 @@
+{
+  var(func: allofterms(name@en, "Taraji Henson")) {
+    actor.film {
+      F as performance.film {
+        G as genre
+      }
+    }
+  }
+
+  Taraji_films_by_genre(func: uid(G)) {
+    genre_name : name@en
+    films : ~genre @filter(uid(F)) {
+      film_name : name@en
+    }
+  }
+}
+---
+{
+  "Taraji_films_by_genre": [
+    {
+      "genre_name": "Thriller",
+      "films": [
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "The Good Doctor"
+        },
+        {
+          "film_name": "Smokin' Aces"
+        },
+        {
+          "film_name": "No Good Deed"
+        },
+        {
+          "film_name": "Term Life"
+        },
+        {
+          "film_name": "Four Brothers"
+        }
+      ]
+    },
+    {
+      "genre_name": "Black comedy",
+      "films": [
+        {
+          "film_name": "Smokin' Aces"
+        }
+      ]
+    },
+    {
+      "genre_name": "Chase Movie",
+      "films": [
+        {
+          "film_name": "Date Night"
+        }
+      ]
+    },
+    {
+      "genre_name": "Comedy-drama",
+      "films": [
+        {
+          "film_name": "The Family That Preys"
+        },
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        },
+        {
+          "film_name": "Peep World"
+        }
+      ]
+    },
+    {
+      "genre_name": "Crime Fiction",
+      "films": [
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "Smokin' Aces"
+        },
+        {
+          "film_name": "Baby Boy"
+        },
+        {
+          "film_name": "No Good Deed"
+        },
+        {
+          "film_name": "Four Brothers"
+        },
+        {
+          "film_name": "Satan's School for Girls"
+        },
+        {
+          "film_name": "Once Fallen"
+        },
+        {
+          "film_name": "Hustle & Flow"
+        },
+        {
+          "film_name": "All or Nothing"
+        },
+        {
+          "film_name": "Animal"
+        },
+        {
+          "film_name": "Streetwise"
+        }
+      ]
+    },
+    {
+      "genre_name": "Hip hop film",
+      "films": [
+        {
+          "film_name": "Hustle & Flow"
+        }
+      ]
+    },
+    {
+      "genre_name": "Adventure Comedy",
+      "films": [
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        }
+      ]
+    },
+    {
+      "genre_name": "Coming of age",
+      "films": [
+        {
+          "film_name": "Baby Boy"
+        }
+      ]
+    },
+    {
+      "genre_name": "Horror",
+      "films": [
+        {
+          "film_name": "Satan's School for Girls"
+        }
+      ]
+    },
+    {
+      "genre_name": "Indie film",
+      "films": [
+        {
+          "film_name": "Once Fallen"
+        },
+        {
+          "film_name": "Hustle & Flow"
+        },
+        {
+          "film_name": "All or Nothing"
+        },
+        {
+          "film_name": "Peep World"
+        },
+        {
+          "film_name": "Hair Show"
+        }
+      ]
+    },
+    {
+      "genre_name": "Crime",
+      "films": [
+        {
+          "film_name": "Term Life"
+        }
+      ]
+    },
+    {
+      "genre_name": "Sports films",
+      "films": [
+        {
+          "film_name": "Hurricane Season"
+        },
+        {
+          "film_name": "The Karate Kid"
+        },
+        {
+          "film_name": "From the Rough"
+        }
+      ]
+    },
+    {
+      "genre_name": "Television film",
+      "films": [
+        {
+          "film_name": "Satan's School for Girls"
+        }
+      ]
+    },
+    {
+      "genre_name": "Adventure Film",
+      "films": [
+        {
+          "film_name": "The Curious Case of Benjamin Button"
+        },
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        }
+      ]
+    },
+    {
+      "genre_name": "Romance Film",
+      "films": [
+        {
+          "film_name": "The Curious Case of Benjamin Button"
+        },
+        {
+          "film_name": "The Family That Preys"
+        },
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        },
+        {
+          "film_name": "Something New"
+        },
+        {
+          "film_name": "Not Easily Broken"
+        },
+        {
+          "film_name": "Think Like A Man"
+        },
+        {
+          "film_name": "Hustle & Flow"
+        },
+        {
+          "film_name": "All or Nothing"
+        },
+        {
+          "film_name": "Larry Crowne"
+        }
+      ]
+    },
+    {
+      "genre_name": "Action/Adventure",
+      "films": [
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "Four Brothers"
+        }
+      ]
+    },
+    {
+      "genre_name": "Action Comedy",
+      "films": [
+        {
+          "film_name": "Date Night"
+        }
+      ]
+    },
+    {
+      "genre_name": "Musical Drama",
+      "films": [
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        },
+        {
+          "film_name": "Hustle & Flow"
+        }
+      ]
+    },
+    {
+      "genre_name": "Music",
+      "films": [
+        {
+          "film_name": "Talk to Me"
+        },
+        {
+          "film_name": "Hustle & Flow"
+        }
+      ]
+    },
+    {
+      "genre_name": "Family",
+      "films": [
+        {
+          "film_name": "The Karate Kid"
+        },
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        }
+      ]
+    },
+    {
+      "genre_name": "Biographical film",
+      "films": [
+        {
+          "film_name": "Talk to Me"
+        }
+      ]
+    },
+    {
+      "genre_name": "Animation",
+      "films": [
+        {
+          "film_name": "Madly Madagascar"
+        },
+        {
+          "film_name": "The Brotherly Love Table Read"
+        }
+      ]
+    },
+    {
+      "genre_name": "Romantic comedy",
+      "films": [
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        },
+        {
+          "film_name": "Think Like A Man"
+        },
+        {
+          "film_name": "Larry Crowne"
+        }
+      ]
+    },
+    {
+      "genre_name": "Martial Arts Film",
+      "films": [
+        {
+          "film_name": "The Karate Kid"
+        }
+      ]
+    },
+    {
+      "genre_name": "Action Thriller",
+      "films": [
+        {
+          "film_name": "Smokin' Aces"
+        }
+      ]
+    },
+    {
+      "genre_name": "Family Drama",
+      "films": [
+        {
+          "film_name": "The Family That Preys"
+        },
+        {
+          "film_name": "Four Brothers"
+        }
+      ]
+    },
+    {
+      "genre_name": "History",
+      "films": [
+        {
+          "film_name": "Talk to Me"
+        }
+      ]
+    },
+    {
+      "genre_name": "Drama",
+      "films": [
+        {
+          "film_name": "Hurricane Season"
+        },
+        {
+          "film_name": "The Karate Kid"
+        },
+        {
+          "film_name": "The Curious Case of Benjamin Button"
+        },
+        {
+          "film_name": "The Family That Preys"
+        },
+        {
+          "film_name": "From the Rough"
+        },
+        {
+          "film_name": "The Good Doctor"
+        },
+        {
+          "film_name": "Smokin' Aces"
+        },
+        {
+          "film_name": "Baby Boy"
+        },
+        {
+          "film_name": "Term Life"
+        },
+        {
+          "film_name": "Four Brothers"
+        },
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        },
+        {
+          "film_name": "Satan's School for Girls"
+        },
+        {
+          "film_name": "Something New"
+        },
+        {
+          "film_name": "Not Easily Broken"
+        },
+        {
+          "film_name": "Talk to Me"
+        },
+        {
+          "film_name": "Once Fallen"
+        },
+        {
+          "film_name": "Hustle & Flow"
+        },
+        {
+          "film_name": "All or Nothing"
+        },
+        {
+          "film_name": "Larry Crowne"
+        },
+        {
+          "film_name": "Animal"
+        },
+        {
+          "film_name": "Taken From Me: The Tiffany Rubin Story"
+        }
+      ]
+    },
+    {
+      "genre_name": "Comedy",
+      "films": [
+        {
+          "film_name": "The Karate Kid"
+        },
+        {
+          "film_name": "The Family That Preys"
+        },
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "Smokin' Aces"
+        },
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        },
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        },
+        {
+          "film_name": "Something New"
+        },
+        {
+          "film_name": "Not Easily Broken"
+        },
+        {
+          "film_name": "Think Like A Man"
+        },
+        {
+          "film_name": "Peep World"
+        },
+        {
+          "film_name": "Larry Crowne"
+        },
+        {
+          "film_name": "Hair Show"
+        },
+        {
+          "film_name": "The Brotherly Love Table Read"
+        },
+        {
+          "film_name": "Forehead Tittaes"
+        }
+      ]
+    },
+    {
+      "genre_name": "Backstage Musical",
+      "films": [
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        }
+      ]
+    },
+    {
+      "genre_name": "Crime Drama",
+      "films": [
+        {
+          "film_name": "Four Brothers"
+        }
+      ]
+    },
+    {
+      "genre_name": "Musical comedy",
+      "films": [
+        {
+          "film_name": "I Can Do Bad All by Myself"
+        }
+      ]
+    },
+    {
+      "genre_name": "Action Film",
+      "films": [
+        {
+          "film_name": "The Karate Kid"
+        },
+        {
+          "film_name": "Date Night"
+        },
+        {
+          "film_name": "Smokin' Aces"
+        },
+        {
+          "film_name": "Four Brothers"
+        },
+        {
+          "film_name": "Streetwise"
+        }
+      ]
+    },
+    {
+      "genre_name": "Children's/Family",
+      "films": [
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        }
+      ]
+    },
+    {
+      "genre_name": "Film adaptation",
+      "films": [
+        {
+          "film_name": "Not Easily Broken"
+        }
+      ]
+    },
+    {
+      "genre_name": "Mystery",
+      "films": [
+        {
+          "film_name": "Satan's School for Girls"
+        },
+        {
+          "film_name": "Murder, She Wrote: The Last Free Man"
+        }
+      ]
+    },
+    {
+      "genre_name": "Cult film",
+      "films": [
+        {
+          "film_name": "Satan's School for Girls"
+        }
+      ]
+    },
+    {
+      "genre_name": "Screwball comedy",
+      "films": [
+        {
+          "film_name": "Date Night"
+        }
+      ]
+    },
+    {
+      "genre_name": "War film",
+      "films": [
+        {
+          "film_name": "Talk to Me"
+        }
+      ]
+    },
+    {
+      "genre_name": "Buddy film",
+      "films": [
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        }
+      ]
+    },
+    {
+      "genre_name": "Short Film",
+      "films": [
+        {
+          "film_name": "Madly Madagascar"
+        },
+        {
+          "film_name": "The Brotherly Love Table Read"
+        },
+        {
+          "film_name": "Forehead Tittaes"
+        }
+      ]
+    },
+    {
+      "genre_name": "Fantasy Adventure",
+      "films": [
+        {
+          "film_name": "The Adventures of Rocky and Bullwinkle"
+        }
+      ]
+    }
+  ]
+}

@@ -26,8 +26,11 @@ import (
 )
 
 // for debugging the tests
-const showOutput = false
-const showCommands = false
+
+var (
+	showOutput  bool = os.Getenv("DEBUG_SHOW_OUTPUT") != ""
+	showCommand bool = os.Getenv("DEBUG_SHOW_COMMAND") != ""
+)
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
@@ -41,7 +44,7 @@ func Pipeline(cmds [][]string) error {
 	// Run all commands in parallel, connecting stdin of each to the stdout of the previous.
 	for i, c := range cmds {
 		lastCmd := i == numCmds-1
-		if showCommands {
+		if showCommand {
 			fmt.Fprintf(os.Stderr, "%+v", c)
 		}
 
@@ -58,7 +61,7 @@ func Pipeline(cmds [][]string) error {
 			}
 		}
 
-		if showCommands {
+		if showCommand {
 			if lastCmd {
 				fmt.Fprintf(os.Stderr, "\n")
 			} else {

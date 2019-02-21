@@ -21,12 +21,16 @@ WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
-trap ForceClean EXIT
+trap ErrorExit EXIT
 
-function ForceClean
+function ErrorExit
 {
+    local ev=$?
     if [[ ! $DEBUG ]]; then
         rm -rf $WORKDIR
+    fi
+    if [[ $ev -ne 0 ]]; then
+        FATAL "*** unexpected error ***"
     fi
 }
 
@@ -117,7 +121,7 @@ function BulkLoadExportedData
   INFO "bulk loading exported data"
   dgraph bulk -z localhost:$ZERO_PORT \
               -s ../dir1/export/*/g01.schema.gz \
-              -r ../dir1/export/*/g01.rdf.gz \
+              -f ../dir1/export/*/g01.rdf.gz \
      >bulk.log 2>&1 </dev/null
 }
 
@@ -145,7 +149,7 @@ _:et <genre> "Science Fiction" .
 _:et <revenue> "792.9" .
 EOF
 
-  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -r fixture.rdf \
+  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -f fixture.rdf \
      >bulk.log 2>&1 </dev/null
 }
 

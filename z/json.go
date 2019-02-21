@@ -26,17 +26,22 @@ import (
 )
 
 func CompareJSON(t *testing.T, want, got string) {
-	wantMap := map[string]interface{}{}
-	err := json.Unmarshal([]byte(want), &wantMap)
+	wantMap := UnmarshalJSON(t, want)
+	gotMap := UnmarshalJSON(t, got)
+	CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
+	jsonMap := map[string]interface{}{}
+	err := json.Unmarshal([]byte(jsonStr), &jsonMap)
 	if err != nil {
 		t.Fatalf("Could not unmarshal want JSON: %v", err)
 	}
-	gotMap := map[string]interface{}{}
-	err = json.Unmarshal([]byte(got), &gotMap)
-	if err != nil {
-		t.Fatalf("Could not unmarshal got JSON: %v", err)
-	}
 
+	return jsonMap
+}
+
+func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
