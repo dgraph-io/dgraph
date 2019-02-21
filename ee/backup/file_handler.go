@@ -66,7 +66,6 @@ func (h *fileHandler) Create(uri *url.URL, file *object) error {
 		// Found a manifest now we extract the version to use in Backup().
 		if lastManifest != "" {
 			var m Manifest
-			glog.Infof("lastManifest: %v", lastManifest)
 			b, err := ioutil.ReadFile(lastManifest)
 			if err != nil {
 				return err
@@ -74,7 +73,6 @@ func (h *fileHandler) Create(uri *url.URL, file *object) error {
 			if err = json.Unmarshal(b, &m); err != nil {
 				return err
 			}
-			glog.Infof("lastManifest: Manifest: %+v", m)
 			file.version = m.Version
 		}
 	}

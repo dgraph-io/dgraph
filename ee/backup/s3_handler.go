@@ -126,7 +126,6 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 		}
 		if lastManifest != "" {
 			var m Manifest
-			glog.Infof("lastManifest: %v", lastManifest)
 			reader, err := mc.GetObject(h.bucketName, lastManifest, minio.GetObjectOptions{})
 			if err != nil {
 				return err
@@ -134,7 +133,6 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 			if err = json.NewDecoder(reader).Decode(&m); err != nil {
 				return err
 			}
-			glog.Infof("lastManifest: Manifest: %+v", m)
 			file.version = m.Version
 		}
 	}
