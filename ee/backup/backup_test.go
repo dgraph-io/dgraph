@@ -53,14 +53,24 @@ func TestBackup(t *testing.T) {
 		}
 	}
 
-	t.Run("setup", wrap(BackupSetup))
-	t.Run("full backup", wrap(BackupFull))
-	t.Run("full restore", wrap(RestoreFull))
-	t.Run("incr backup 1", wrap(BackupIncr1))
-	t.Run("incr restore 1", wrap(RestoreIncr1))
-	t.Run("incr backup 2", wrap(BackupIncr2))
-	t.Run("incr restore 2", wrap(RestoreIncr2))
-	t.Run("cleanup", wrap(BackupCleanup))
+	tests := []struct {
+		name string
+		f    func(t *testing.T, c *dgo.Dgraph)
+	}{
+		{"setup", BackupSetup},
+		{"full backup", BackupFull},
+		{"full restore", RestoreFull},
+		{"incr backup 1", BackupIncr1},
+		{"incr restore 1", RestoreIncr1},
+		{"incr backup 2", BackupIncr2},
+		{"incr restore 2", RestoreIncr2},
+		{"cleanup", BackupCleanup},
+	}
+	for _, tc := range tests {
+		if !t.Run(tc.name, wrap(tc.f)) {
+			break
+		}
+	}
 }
 
 var original *api.Assigned
