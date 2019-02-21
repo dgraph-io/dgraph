@@ -22,11 +22,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	humanize "github.com/dustin/go-humanize"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
@@ -773,11 +775,34 @@ func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
 	writer.BlindWrite = true // Do overwrite keys.
 
+	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
+	amLeader := n.AmLeader()
+	m := new(sync.Map)
+
+	addTo := func(key []byte, delta int64) {
+		if !amLeader {
+			// Only leader needs to calculate the tablet sizes.
+			return
+		}
+		pk := x.Parse(key)
+		if pk == nil {
+			return
+		}
+		val, ok := m.Load(pk.Attr)
+		if !ok {
+			sz := new(int64)
+			val, _ = m.LoadOrStore(pk.Attr, sz)
+		}
+		size := val.(*int64)
+		atomic.AddInt64(size, delta)
+	}
+
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
+			addTo(item.Key(), item.EstimatedSize())
 			return false
 		default:
 			return true
@@ -791,6 +816,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		atomic.AddUint64(&numKeys, 1)
 		kv, err := l.MarshalToKv()
+		addTo(key, int64(kv.Size()))
 		return listWrap(kv), err
 	}
 	stream.Send = func(list *bpb.KVList) error {
@@ -807,6 +833,40 @@ func (n *node) rollupLists(readTs uint64) error {
 
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
+
+	if amLeader {
+		// Only leader sends the tablet size updates to Zero. No one else does.
+		// doSendMembership is also being concurrently called from another goroutine.
+		go func() {
+			tablets := make(map[string]*pb.Tablet)
+			var total int64
+			m.Range(func(key, val interface{}) bool {
+				pred := key.(string)
+				size := atomic.LoadInt64(val.(*int64))
+				tablets[pred] = &pb.Tablet{
+					GroupId:   n.gid,
+					Predicate: pred,
+					Space:     size,
+				}
+				total += size
+				return true
+			})
+			// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
+			// this group, it would send instruction to delete that tablet. There's an edge case
+			// here if the followers are still running Rollup, and happen to read a key before and
+			// write after the tablet deletion, causing that tablet key to resurface. Then, only the
+			// follower would have that key, not the leader.
+			// However, if the follower then becomes the leader, we'd be able to get rid of that
+			// key then. Alternatively, we could look into cancelling the Rollup if we see a
+			// predicate deletion.
+			if err := groups().doSendMembership(tablets); err != nil {
+				glog.Warningf("While sending membership to Zero. Error: %v", err)
+			} else {
+				glog.V(2).Infof("Sent tablet size update to Zero. Total size: %s",
+					humanize.Bytes(uint64(total)))
+			}
+		}()
+	}
 	return nil
 }
 
