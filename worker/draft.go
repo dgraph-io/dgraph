@@ -29,6 +29,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	humanize "github.com/dustin/go-humanize"
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
@@ -853,8 +854,8 @@ func (n *node) rollupLists(readTs uint64) error {
 			sz := new(int64)
 			val, _ = m.LoadOrStore(pk.Attr, sz)
 		}
-		sz := val.(*int64)
-		atomic.AddInt64(sz, delta)
+		size := val.(*int64)
+		atomic.AddInt64(size, delta)
 	}
 
 	stream := pstore.NewStreamAt(readTs)
@@ -895,21 +896,35 @@ func (n *node) rollupLists(readTs uint64) error {
 	pstore.SetDiscardTs(readTs)
 
 	if amLeader {
+		// Only leader sends the tablet size updates to Zero. No one else does.
+		// doSendMembership is also being concurrently called from another goroutine.
 		go func() {
 			tablets := make(map[string]*pb.Tablet)
+			var total int64
 			m.Range(func(key, val interface{}) bool {
 				pred := key.(string)
-				space := val.(*int64)
-				sz := atomic.LoadInt64(space)
+				size := atomic.LoadInt64(val.(*int64))
 				tablets[pred] = &pb.Tablet{
 					GroupId:   n.gid,
 					Predicate: pred,
-					Space:     sz,
+					Space:     size,
 				}
+				total += size
 				return true
 			})
+			// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
+			// this group, it would send instruction to delete that tablet. There's an edge case
+			// here if the followers are still running Rollup, and happen to read a key before and
+			// write after the tablet deletion, causing that tablet key to resurface. Then, only the
+			// follower would have that key, not the leader.
+			// However, if the follower then becomes the leader, we'd be able to get rid of that
+			// key then. Alternatively, we could look into cancelling the Rollup if we see a
+			// predicate deletion.
 			if err := groups().doSendMembership(tablets); err != nil {
 				glog.Warningf("While sending membership to Zero. Error: %v", err)
+			} else {
+				glog.V(2).Infof("Sent tablet size update to Zero. Total size: %d",
+					humanize.Bytes(uint64(total)))
 			}
 		}()
 	}

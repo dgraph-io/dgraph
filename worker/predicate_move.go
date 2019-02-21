@@ -179,7 +179,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errEmptyPredicate
 	}
 	if in.DestGid == 0 {
-		glog.Infof("Got instructed to delete tablet: %v", in.Predicate)
+		glog.Infof("Was instructed to delete tablet: %v", in.Predicate)
 		p := &pb.Proposal{CleanPredicate: in.Predicate}
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}

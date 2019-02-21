@@ -152,12 +152,17 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	glog.Info(msg)
 	span.Annotate(nil, msg)
 
-	in.DestGid = 0 // Indicates deletion for the predicate.
+	// Now that the move has happened, we can delete the predicate from the source group.
+	in.DestGid = 0 // Indicates deletion of predicate in the source group.
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
 		msg = fmt.Sprintf("While deleting predicate [%v] in group %d. Error: %v",
 			in.Predicate, in.SourceGid, err)
 		span.Annotate(nil, msg)
 		glog.Warningf(msg)
+	} else {
+		msg = fmt.Sprintf("Deleted predicate %v in group %d", in.Predicate, in.SourceGid)
+		span.Annotate(nil, msg)
+		glog.V(1).Infof(msg)
 	}
 	return nil
 }

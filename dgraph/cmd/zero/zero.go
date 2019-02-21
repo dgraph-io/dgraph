@@ -641,7 +641,7 @@ func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
 
 	pl := s.Leader(gid)
 	if pl == nil {
-		return x.Errorf("Unable to reach leader of group: %d.", gid)
+		return x.Errorf("Unable to reach leader of group: %d", gid)
 	}
 	wc := pb.NewWorkerClient(pl.Get())
 
