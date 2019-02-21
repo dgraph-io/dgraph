@@ -19,7 +19,6 @@ package worker
 import (
 	"fmt"
 	"io"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -221,45 +220,6 @@ func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 // Don't acquire RW lock during this, otherwise we might deadlock.
 func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
-}
-
-// calculateTabletSizes iterates through badger and gets a size of the space occupied by each
-// predicate (including data and indexes). All data for a predicate forms a Tablet.
-func (g *groupi) calculateTabletSizes() map[string]*pb.Tablet {
-	opt := badger.DefaultIteratorOptions
-	opt.PrefetchValues = false
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(opt)
-	defer itr.Close()
-
-	gid := g.groupId()
-	tablets := make(map[string]*pb.Tablet)
-
-	for itr.Rewind(); itr.Valid(); {
-		item := itr.Item()
-
-		pk := x.Parse(item.Key())
-		if pk == nil {
-			itr.Next()
-			continue
-		}
-
-		// We should not be skipping schema keys here, otherwise if there is no data for them, they
-		// won't be added to the tablets map returned by this function and would ultimately be
-		// removed from the membership state.
-		tablet, has := tablets[pk.Attr]
-		if !has {
-			if pk.IsSchema() {
-				itr.Next()
-			}
-			tablet = &pb.Tablet{GroupId: gid, Predicate: pk.Attr}
-			tablets[pk.Attr] = tablet
-		}
-		tablet.Space += item.EstimatedSize()
-		itr.Next()
-	}
-	return tablets
 }
 
 func MaxLeaseId() uint64 {
@@ -628,12 +588,8 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 func (g *groupi) sendMembershipUpdates() {
 	defer g.closer.Done() // CLOSER:1
 
-	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
-	slowTicker := time.NewTicker(time.Minute * 5)
-	defer slowTicker.Stop()
-
-	fastTicker := time.NewTicker(time.Second)
-	defer fastTicker.Stop()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
 	consumeTriggers := func() {
 		for {
@@ -651,7 +607,7 @@ func (g *groupi) sendMembershipUpdates() {
 		select {
 		case <-g.closer.HasBeenClosed():
 			return
-		case <-fastTicker.C:
+		case <-ticker.C:
 			if time.Since(lastSent) > 10*time.Second {
 				// On start of node if it becomes a leader, we would send tablets size for sure.
 				g.triggerMembershipSync()
@@ -663,16 +619,6 @@ func (g *groupi) sendMembershipUpdates() {
 			consumeTriggers()
 			if err := g.doSendMembership(nil); err != nil {
 				glog.Errorf("While sending membership update: %v", err)
-			} else {
-				lastSent = time.Now()
-			}
-		case <-slowTicker.C:
-			if !g.Node.AmLeader() {
-				break // breaks select case, not for loop.
-			}
-			tablets := g.calculateTabletSizes()
-			if err := g.doSendMembership(tablets); err != nil {
-				glog.Errorf("While sending membership update with tablet: %v", err)
 			} else {
 				lastSent = time.Now()
 			}

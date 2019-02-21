@@ -619,9 +619,13 @@ func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Pa
 }
 
 func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
+	if group == nil || group.Tablets == nil {
+		return nil
+	}
 	var gid uint32
-	for _, member := range group.Members {
-		gid = member.GroupId
+	for _, tablet := range group.Tablets {
+		gid = tablet.GroupId
+		break
 	}
 	if gid == 0 {
 		return x.Errorf("Unable to find group")
@@ -641,7 +645,7 @@ func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
 	}
 	wc := pb.NewWorkerClient(pl.Get())
 
-	for pred := range group.GetTablets() {
+	for pred := range group.Tablets {
 		if _, found := sg.Tablets[pred]; found {
 			continue
 		}

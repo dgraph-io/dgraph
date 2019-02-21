@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -834,11 +835,34 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
 
+	// While we're doing rollups, we should also use this opportunity to calculate the tablet sizes.
+	amLeader := n.AmLeader()
+	m := new(sync.Map)
+
+	addTo := func(key []byte, delta int64) {
+		if !amLeader {
+			// Only leader needs to calculate the tablet sizes.
+			return
+		}
+		pk := x.Parse(key)
+		if pk == nil {
+			return
+		}
+		val, ok := m.Load(pk.Attr)
+		if !ok {
+			sz := new(int64)
+			val, _ = m.LoadOrStore(pk.Attr, sz)
+		}
+		sz := val.(*int64)
+		atomic.AddInt64(sz, delta)
+	}
+
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
+			addTo(item.Key(), item.EstimatedSize())
 			return false
 		default:
 			return true
@@ -852,6 +876,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		atomic.AddUint64(&numKeys, 1)
 		kv, err := l.MarshalToKv()
+		addTo(key, int64(kv.Size()))
 		return listWrap(kv), err
 	}
 	stream.Send = func(list *bpb.KVList) error {
@@ -868,6 +893,26 @@ func (n *node) rollupLists(readTs uint64) error {
 
 	// We can now discard all invalid versions of keys below this ts.
 	pstore.SetDiscardTs(readTs)
+
+	if amLeader {
+		go func() {
+			tablets := make(map[string]*pb.Tablet)
+			m.Range(func(key, val interface{}) bool {
+				pred := key.(string)
+				space := val.(*int64)
+				sz := atomic.LoadInt64(space)
+				tablets[pred] = &pb.Tablet{
+					GroupId:   n.gid,
+					Predicate: pred,
+					Space:     sz,
+				}
+				return true
+			})
+			if err := groups().doSendMembership(tablets); err != nil {
+				glog.Warningf("While sending membership to Zero. Error: %v", err)
+			}
+		}()
+	}
 	return nil
 }
 
