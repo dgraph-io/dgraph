@@ -923,7 +923,7 @@ func (n *node) rollupLists(readTs uint64) error {
 			if err := groups().doSendMembership(tablets); err != nil {
 				glog.Warningf("While sending membership to Zero. Error: %v", err)
 			} else {
-				glog.V(2).Infof("Sent tablet size update to Zero. Total size: %d",
+				glog.V(2).Infof("Sent tablet size update to Zero. Total size: %s",
 					humanize.Bytes(uint64(total)))
 			}
 		}()
