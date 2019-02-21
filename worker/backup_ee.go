@@ -125,7 +125,7 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 		}(&req)
 	}
 
-	for i := 0; i < len(m.Groups); i++ {
+	for range m.Groups {
 		err := <-errCh
 		if err != nil {
 			glog.Errorf("Error received during backup: %v", err)

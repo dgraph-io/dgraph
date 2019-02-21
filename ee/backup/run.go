@@ -90,18 +90,17 @@ $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgr
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
 
-func run() (err error) {
+func run() error {
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
 	start := time.Now()
-	defer func() {
-		if err == nil {
-			fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
-		}
-	}()
-
-	return runRestore(opt.pdir, opt.location)
+	err := runRestore(opt.pdir, opt.location)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
+	return nil
 }
 
 // runRestore calls badger.Load and tries to load data into a new DB.

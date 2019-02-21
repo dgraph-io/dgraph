@@ -38,7 +38,7 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 		path: fmt.Sprintf(backupPathFmt, req.UnixTs),
 		name: fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId),
 	}
-	h, err := create(obj)
+	handler, err := create(obj)
 	if err != nil {
 		glog.Errorf("Unable to get handler for request: %+v. Error: %v", req, err)
 		return err
@@ -48,13 +48,13 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 	stream.LogPrefix = "Dgraph.Backup"
 	// Here we return the max version in the original request obejct. We will use this
 	// to create our manifest to complete the backup.
-	req.Since, err = stream.Backup(h, obj.version)
+	req.Since, err = stream.Backup(handler, obj.version)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
 	glog.V(3).Infof("Backup maximum version: %d", req.Since)
-	if err = h.Close(); err != nil {
+	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return err
 	}
@@ -80,7 +80,7 @@ func (m *Manifest) Complete(ctx context.Context) error {
 	if m.Version == 0 {
 		return x.Errorf("Backup manifest version is zero")
 	}
-	h, err := create(&object{
+	handler, err := create(&object{
 		uri:     m.Request.Location,
 		path:    fmt.Sprintf(backupPathFmt, m.Request.UnixTs),
 		name:    backupManifest,
@@ -89,10 +89,10 @@ func (m *Manifest) Complete(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = json.NewEncoder(h).Encode(&m); err != nil {
+	if err = json.NewEncoder(handler).Encode(&m); err != nil {
 		return err
 	}
-	if err = h.Close(); err != nil {
+	if err = handler.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Backup completed OK.")

@@ -71,7 +71,7 @@ type handler interface {
 	Create(*url.URL, *object) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
-	// Objects implementing this function will use for retrieving (dowload) backup files
+	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
 	//
 	// The URL object is parsed as described in `newHandler`.
