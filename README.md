@@ -1,5 +1,5 @@
 # Go-PRE
- ## Golang Polkadot Runtime Environment Implementation 
+ ## Golang Implementation of Polkadot Runtime Environment  
 
 [![GoDoc](https://godoc.org/github.com/ChainSafeSystems/go-pre?status.svg)](https://godoc.org/github.com/ChainSafeSystems/go-pre)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ChainSafeSystems/go-pre)](https://goreportcard.com/report/github.com/ChainSafeSystems/go-pre)
@@ -10,26 +10,21 @@
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 [![](https://img.shields.io/twitter/follow/espadrine.svg?label=Follow&style=social)](https://twitter.com/chainsafeth)
 
-# Go-PRE
-
-
 
 ## Install
 
 ```
+go get -v -t -d ./...
 ```
 
-## Usage
-
+## Test
 ```
+go test -v ./...
 ```
 
 ## Contributing
-
-
-Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)  
 
 ## License
-
-
+_GNU General Public License v3.0_
 
