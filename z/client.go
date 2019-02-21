@@ -38,14 +38,16 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	x.Check(err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		err = dg.Login(ctx, x.GrootId, "password")
 		if err == nil || !strings.Contains(err.Error(), "Please retry") {
 			break
 		}
 		time.Sleep(time.Second)
 	}
+	err = dg.Alter(ctx, &api.Operation{DropAll: true})
 	x.Check(err)
 
 	return dg

@@ -38,7 +38,7 @@ func userPasswd(conf *viper.Viper) error {
 	defer cancel()
 
 	// 2. get the new password
-	newPassword := conf.GetString("new_password")
+	newPassword := conf.GetString("new")
 	if len(newPassword) == 0 {
 		var err error
 		newPassword, err = askUserPassword(userid, "New", 2)

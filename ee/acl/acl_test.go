@@ -343,7 +343,7 @@ func TestPasswordReset(t *testing.T) {
 	// reset password for the user alice
 	newPassword := userpassword + "123"
 	chPdCmd := exec.Command("dgraph", "acl", "passwd", "-d", dgraphEndpoint, "-u",
-		userid, "--new_password", newPassword, "-x", "password")
+		userid, "--new", newPassword, "-x", "password")
 	checkOutput(t, chPdCmd, false)
 	glog.Infof("Successfully changed password for %v", userid)
 

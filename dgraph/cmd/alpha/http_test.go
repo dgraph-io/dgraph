@@ -294,8 +294,14 @@ func TestTransactionBasic(t *testing.T) {
 }
 
 func TestTransactionBasicNoPreds(t *testing.T) {
-	require.NoError(t, dropAll())
-	require.NoError(t, alterSchema(`name: string @index(term) .`))
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+	require.NoError(t, dropAll(accessJwt))
+	require.NoError(t, alterSchema(accessJwt, `name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -318,7 +324,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(accessJwt, m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
@@ -340,59 +346,12 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
-	require.NoError(t, dropAll())
-	require.NoError(t, alterSchema(`name: string @index(term) .`))
-
-	q1 := `
-	{
-	  balances(func: anyofterms(name, "Alice Bob")) {
-	    name
-	    balance
-	  }
-	}
-	`
-	_, ts, err := queryWithTs(q1, 0)
-	require.NoError(t, err)
-
-	m1 := `
-    {
-	  set {
-		_:alice <name> "Bob" .
-		_:alice <balance> "110" .
-		_:bob <balance> "60" .
-	  }
-	}
-	`
-
-	keys, _, mts, err := mutationWithTs(m1, false, false, true, ts)
-	require.NoError(t, err)
-	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
-
-	data, _, err := queryWithTs(q1, 0)
-	require.NoError(t, err)
-	require.Equal(t, `{"data":{"balances":[]}}`, data)
-
-	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, ts)
-	require.NoError(t, err)
-	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
-
-	// Commit (using a list of keys instead of a map) and query.
-	require.NoError(t, commitWithTsKeysOnly(keys, ts))
-	data, _, err = queryWithTs(q1, 0)
-	require.NoError(t, err)
-	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
-}
-
-func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
-
 	require.NoError(t, dropAll(accessJwt))
 	require.NoError(t, alterSchema(accessJwt, `name: string @index(term) .`))
 
