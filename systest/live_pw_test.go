@@ -25,15 +25,13 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestLivePassword(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+			dg, cancel := x.GetDgraphClient()
+			defer cancel()
 			fn(t, dg)
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))

@@ -37,6 +37,8 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -127,18 +129,19 @@ func runQuery(q string) (string, error) {
 	return string(output), err
 }
 
-func runMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, false, true, false, 0)
+func runMutation(accessJwt string, m string) error {
+	_, _, _, err := mutationWithTs(accessJwt, m, false, true, false, 0)
 	return err
 }
 
-func runJsonMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, true, true, false, 0)
+func runJsonMutation(accessJwt string, m string) error {
+	_, _, _, err := mutationWithTs(accessJwt, m, true, true, false, 0)
 	return err
 }
 
-func alterSchema(s string) error {
+func alterSchema(accessJwt string, s string) error {
 	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(s))
+	req.Header.Set("X-Dgraph-AccessJWT", accessJwt)
 	if err != nil {
 		return err
 	}
@@ -153,19 +156,20 @@ func alterSchema(s string) error {
 	return err
 }
 
-func alterSchemaWithRetry(s string) error {
+func alterSchemaWithRetry(accessJwt string, s string) error {
 	var err error
 	for i := 0; i < 3; i++ {
-		if err = alterSchema(s); err == nil {
+		if err = alterSchema(accessJwt, s); err == nil {
 			return nil
 		}
 	}
 	return err
 }
 
-func dropAll() error {
+func dropAll(accessJwt string) error {
 	op := `{"drop_all": true}`
 	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(op))
+	req.Header["X-Dgraph-AccessJWT"] = []string{accessJwt}
 	if err != nil {
 		return err
 	}
@@ -252,13 +256,17 @@ func TestDeletePredicate(t *testing.T) {
 	var s2 = `
 	friend: string @index(term) .
 	`
-
-	require.NoError(t, dropAll())
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, dropAll(accessJwt))
 	schema.ParseBytes([]byte(""), 1)
-	err := alterSchemaWithRetry(s1)
+	err = alterSchemaWithRetry(accessJwt, s1)
 	require.NoError(t, err)
 
-	err = runMutation(m1)
+	err = runMutation(accessJwt, m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -289,10 +297,11 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(`schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[`+
+	z.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
+		x.AclPredicates+","+
 		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}`+
 		`]}}`, output)
 
@@ -313,7 +322,7 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
-	err = alterSchemaWithRetry(s2)
+	err = alterSchemaWithRetry(accessJwt, s2)
 	require.NoError(t, err)
 }
 
@@ -329,7 +338,13 @@ type Received struct {
 }
 
 func TestSchemaMutation(t *testing.T) {
-	require.NoError(t, dropAll())
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+
+	require.NoError(t, dropAll(accessJwt))
 	var m = `
 			name: string @index(term, exact) .
 			alias: string @index(exact, term) .
@@ -351,7 +366,7 @@ func TestSchemaMutation(t *testing.T) {
 		Tokenizer: []string{"term", "exact"},
 	}
 
-	err := alterSchemaWithRetry(m)
+	err = alterSchemaWithRetry(accessJwt, m)
 	require.NoError(t, err)
 
 	output, err := runQuery("schema {}")
@@ -372,7 +387,13 @@ func TestSchemaMutation(t *testing.T) {
 }
 
 func TestSchemaMutation1(t *testing.T) {
-	require.NoError(t, dropAll())
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+
+	require.NoError(t, dropAll(accessJwt))
 	var m = `
 	{
 		set {
@@ -382,7 +403,7 @@ func TestSchemaMutation1(t *testing.T) {
 	}
 
 `
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	output, err := runQuery("schema {}")
@@ -410,8 +431,13 @@ func TestSchemaMutation2Error(t *testing.T) {
 	var m = `
             age:string @reverse .
 	`
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
 
-	err := alterSchema(m)
+	err = alterSchema(accessJwt, m)
 	require.Error(t, err)
 }
 
@@ -420,7 +446,13 @@ func TestSchemaMutation3Error(t *testing.T) {
 	var m = `
             age: uid @index .
 	`
-	err := alterSchema(m)
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+
+	err = alterSchema(accessJwt, m)
 	require.Error(t, err)
 }
 
@@ -433,18 +465,30 @@ func TestMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err := runMutation(m)
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	err = runMutation(accessJwt, m)
 	require.Error(t, err)
 }
 
 func TestMutationSingleUid(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	// reset Schema
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 
 	var s = `
             friend: uid .
 	`
-	require.NoError(t, alterSchema(s))
+	require.NoError(t, alterSchema(accessJwt, s))
 
 	var m = `
 	{
@@ -454,18 +498,25 @@ func TestMutationSingleUid(t *testing.T) {
 		}
 	}
 	`
-	require.Error(t, runMutation(m))
+	require.Error(t, runMutation(accessJwt, m))
 }
 
 // Verify multiple uids are allowed after mutation.
 func TestSchemaMutationUid(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	// reset Schema
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 
 	var s1 = `
             friend: uid .
 	`
-	require.NoError(t, alterSchema(s1))
+	require.NoError(t, alterSchema(accessJwt, s1))
 	var m1 = `
 	{
 		set {
@@ -474,12 +525,12 @@ func TestSchemaMutationUid(t *testing.T) {
 		}
 	}
 	`
-	require.Error(t, runMutation(m1))
+	require.Error(t, runMutation(accessJwt, m1))
 
 	var s2 = `
             friend: [uid] .
 	`
-	require.NoError(t, alterSchema(s2))
+	require.NoError(t, alterSchema(accessJwt, s2))
 	var m2 = `
 	{
 		set {
@@ -488,27 +539,41 @@ func TestSchemaMutationUid(t *testing.T) {
 		}
 	}
 	`
-	require.NoError(t, runMutation(m2))
+	require.NoError(t, runMutation(accessJwt, m2))
 }
 
 // Verify a list uid predicate cannot be converted to a single-element predicate.
 func TestSchemaMutationUidError1(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	// reset Schema
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
 
 	var s1 = `
             friend: [uid] .
 	`
-	require.NoError(t, alterSchema(s1))
+	require.NoError(t, alterSchema(accessJwt, s1))
 
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchema(s2))
+	require.Error(t, alterSchema(accessJwt, s2))
 }
 
 // add index
 func TestSchemaMutationIndexAdd(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var q1 = `
 	{
 		user(func:anyofterms(name, "Alice")) {
@@ -531,11 +596,11 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -546,6 +611,13 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 
 // Remove index
 func TestSchemaMutationIndexRemove(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var q1 = `
 	{
 		user(func:anyofterms(name, "Alice")) {
@@ -572,10 +644,10 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	// add index to name
-	err := alterSchemaWithRetry(s1)
+	err = alterSchemaWithRetry(accessJwt, s1)
 	require.NoError(t, err)
 
-	err = runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -583,7 +655,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
 	// remove index
-	err = alterSchemaWithRetry(s2)
+	err = alterSchemaWithRetry(accessJwt, s2)
 	require.NoError(t, err)
 
 	_, err = runQuery(q1)
@@ -592,6 +664,13 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 
 // add reverse edge
 func TestSchemaMutationReverseAdd(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var q1 = `
 	{
 		user(func: uid(0x3)) {
@@ -615,11 +694,11 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -630,6 +709,13 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 
 // Remove reverse edge
 func TestSchemaMutationReverseRemove(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var q1 = `
 	{
 		user(func: uid(0x3)) {
@@ -659,11 +745,11 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add reverse edge to name
-	err = alterSchemaWithRetry(s1)
+	err = alterSchemaWithRetry(accessJwt, s1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -671,7 +757,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
-	err = alterSchemaWithRetry(s2)
+	err = alterSchemaWithRetry(accessJwt, s2)
 	require.NoError(t, err)
 
 	_, err = runQuery(q1)
@@ -680,6 +766,13 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 // add count edges
 func TestSchemaMutationCountAdd(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var q1 = `
 	{
 		user(func:eq(count(friend),4)) {
@@ -706,11 +799,11 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -760,13 +853,19 @@ func TestJsonMutation(t *testing.T) {
 	var s1 = `
             name: string @index(exact) .
 	`
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
 
-	require.NoError(t, dropAll())
+	require.NoError(t, dropAll(accessJwt))
 	schema.ParseBytes([]byte(""), 1)
-	err := alterSchemaWithRetry(s1)
+	err = alterSchemaWithRetry(accessJwt, s1)
 	require.NoError(t, err)
 
-	err = runJsonMutation(m1)
+	err = runJsonMutation(accessJwt, m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -789,7 +888,7 @@ func TestJsonMutation(t *testing.T) {
 	}
 	require.Equal(t, 1, count)
 
-	err = runJsonMutation(fmt.Sprintf(m2, uid))
+	err = runJsonMutation(accessJwt, fmt.Sprintf(m2, uid))
 	require.NoError(t, err)
 
 	output, err = runQuery(q2)
@@ -816,10 +915,16 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 		]
 	}
 	`
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
 
-	require.NoError(t, dropAll())
+	require.NoError(t, dropAll(accessJwt))
 	schema.ParseBytes([]byte(""), 1)
-	err := runJsonMutation(m1)
+	err = runJsonMutation(accessJwt, m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -906,11 +1011,18 @@ func TestDeleteAll(t *testing.T) {
       		friend: [uid] @reverse .
 		name: string @index(term) .
 	`
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	schema.ParseBytes([]byte(""), 1)
-	err := alterSchemaWithRetry(s1)
+	err = alterSchemaWithRetry(accessJwt, s1)
 	require.NoError(t, err)
 
-	err = runMutation(m1)
+	err = runMutation(accessJwt, m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -922,7 +1034,7 @@ func TestDeleteAll(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}}`,
 		output)
 
-	err = runMutation(m2)
+	err = runMutation(accessJwt, m2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -941,8 +1053,14 @@ func TestDeleteAllSP1(t *testing.T) {
 			<2000> * * .
 		}
 	}`
-	time.Sleep(20 * time.Millisecond)
-	err := runMutation(m)
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 }
 
@@ -1010,16 +1128,22 @@ var q6 = `
 //	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
 //}
 
-var qErr = `
+func TestMutationError(t *testing.T) {
+	var qErr = `
  	{
  		set {
  			<0x0> <name> "Alice" .
  		}
  	}
  `
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
 
-func TestMutationError(t *testing.T) {
-	err := runMutation(qErr)
+	err = runMutation(accessJwt, qErr)
 	require.Error(t, err)
 }
 
@@ -1076,7 +1200,14 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestListPred(t *testing.T) {
-	require.NoError(t, alterSchema(`{"drop_all": true}`))
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
+	require.NoError(t, alterSchema(accessJwt, `{"drop_all": true}`))
 	var q1 = `
 	{
 		listpred(func:anyofterms(name, "Alice")) {
@@ -1099,11 +1230,11 @@ func TestListPred(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1137,13 +1268,20 @@ func TestExpandPredError(t *testing.T) {
 			name:string @index(term) .
 	`
 
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	_, err = runQuery(q1)
@@ -1175,13 +1313,21 @@ func TestExpandPred(t *testing.T) {
 	var s = `
 			name:string @index(term) .
 	`
+
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1212,12 +1358,19 @@ var threeNiceFriends = `{
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var m = `
             age:int .
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := alterSchemaWithRetry(m)
+	err = alterSchemaWithRetry(accessJwt, m)
 	require.NoError(t, err)
 
 	m = `
@@ -1227,7 +1380,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	m = `
@@ -1237,18 +1390,25 @@ func TestSchemaMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err = alterSchema(m)
+	err = alterSchema(accessJwt, m)
 	require.Error(t, err)
 }
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation5Error(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var m = `
             friends: [uid] .
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := alterSchemaWithRetry(m)
+	err = alterSchemaWithRetry(accessJwt, m)
 	require.NoError(t, err)
 
 	m = `
@@ -1258,23 +1418,30 @@ func TestSchemaMutation5Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	m = `
             friends: string .
 	`
-	err = alterSchema(m)
+	err = alterSchema(accessJwt, m)
 	require.Error(t, err)
 }
 
 // A basic sanity check. We will do more extensive testing for multiple values in query.
 func TestMultipleValues(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	schema.ParseBytes([]byte(""), 1)
 	m := `
 			occupations: [string] .
 `
-	err := alterSchemaWithRetry(m)
+	err = alterSchemaWithRetry(accessJwt, m)
 	require.NoError(t, err)
 
 	m = `
@@ -1286,7 +1453,7 @@ func TestMultipleValues(t *testing.T) {
 		}
 	`
 
-	err = runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	q := `{
@@ -1300,13 +1467,20 @@ func TestMultipleValues(t *testing.T) {
 }
 
 func TestListTypeSchemaChange(t *testing.T) {
-	require.NoError(t, dropAll())
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
+	require.NoError(t, dropAll(accessJwt))
 	schema.ParseBytes([]byte(""), 1)
 	m := `
 			occupations: [string] @index(term) .
 	`
 
-	err := alterSchemaWithRetry(m)
+	err = alterSchemaWithRetry(accessJwt, m)
 	require.NoError(t, err)
 
 	m = `
@@ -1318,7 +1492,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 		}
 	`
 
-	err = runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	q := `{
@@ -1355,25 +1529,33 @@ func TestListTypeSchemaChange(t *testing.T) {
 	`
 
 	// Cant change from list-type to non-list till we have data.
-	err = alterSchema(m)
+	err = alterSchema(accessJwt, m)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Schema change not allowed from [string] => string")
 
 	err = deletePredicate("occupations")
 	require.NoError(t, err)
 
-	require.NoError(t, alterSchemaWithRetry(m))
+	require.NoError(t, alterSchemaWithRetry(accessJwt, m))
 
 	q = `schema{}`
 	res, err = runQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[`+
+	z.CompareJSON(t, `{"data":{"schema":[`+
+		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"type", "type":"string", "index":true, "tokenizer": ["exact"]}]}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var m = `
 	{
 	  set {
@@ -1389,7 +1571,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	  }
 	}
 	`
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	q := fmt.Sprintf(`
@@ -1415,7 +1597,7 @@ func TestDeleteAllSP2(t *testing.T) {
 			}
 		}`, "0x12345")
 
-	err = runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	output, err = runQuery(q)
@@ -1424,9 +1606,16 @@ func TestDeleteAllSP2(t *testing.T) {
 }
 
 func TestDeleteScalarValue(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	var s = `name: string .`
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
-	require.NoError(t, alterSchemaWithRetry(s))
+	require.NoError(t, alterSchemaWithRetry(accessJwt, s))
 
 	var m = `
 	{
@@ -1435,7 +1624,7 @@ func TestDeleteScalarValue(t *testing.T) {
 	  }
 	}
 	`
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	// This test has been flaky at the step that verifies whether the triple exists
@@ -1463,7 +1652,7 @@ func TestDeleteScalarValue(t *testing.T) {
       }
     }
 	`
-	err = runMutation(d1)
+	err = runMutation(accessJwt, d1)
 	require.NoError(t, err)
 
 	// Verify triple was not deleted because the value in the request did
@@ -1479,7 +1668,7 @@ func TestDeleteScalarValue(t *testing.T) {
       }
     }
 	`
-	err = runMutation(d2)
+	err = runMutation(accessJwt, d2)
 	require.NoError(t, err)
 
 	// Verify triple was actually deleted this time.
@@ -1504,10 +1693,17 @@ func TestDropAll(t *testing.T) {
 	}`
 
 	s := `name: string @index(term) .`
-	err := alterSchemaWithRetry(s)
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
-	err = runMutation(m1)
+	err = runMutation(accessJwt, m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1518,18 +1714,19 @@ func TestDropAll(t *testing.T) {
 	name := queryResults[0].(map[string]interface{})["name"].(string)
 	require.Equal(t, "Foo", name)
 
-	err = dropAll()
+	err = dropAll(accessJwt)
 	require.NoError(t, err)
 
 	q3 := "schema{}"
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},
-			{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
+	z.CompareJSON(t,
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
+			x.AclPredicates+","+
+			`{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	q5 := `
@@ -1565,13 +1762,19 @@ func TestRecurseExpandAll(t *testing.T) {
 	`
 
 	var s = `name:string @index(term) .`
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	err = runMutation(accessJwt, m)
 	require.NoError(t, err)
 
-	err = alterSchemaWithRetry(s)
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1580,8 +1783,15 @@ func TestRecurseExpandAll(t *testing.T) {
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
 	s := `friend: [uid] @count .`
-	require.NoError(t, alterSchemaWithRetry(s))
+	require.NoError(t, alterSchemaWithRetry(accessJwt, s))
 
 	q := `
 	{
@@ -1589,7 +1799,7 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 			count
 		}
 	}`
-	_, err := runQuery(q)
+	_, err = runQuery(q)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "count")
 	require.Contains(t, err.Error(), "zero")
@@ -1599,7 +1809,14 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 // This test couldn't like in query package because that package tries to do some extra JSON
 // marshal, which causes issues for this case.
 func TestJsonUnicode(t *testing.T) {
-	err := runJsonMutation(`{
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
+
+	err = runJsonMutation(accessJwt, `{
   "set": [
   { "uid": "0x10", "log.message": "\u001b[32mHello World 1!\u001b[39m\n" }
   ]
@@ -1655,12 +1872,18 @@ func TestTypeMutationAndQuery(t *testing.T) {
 	var s = `
             name: string @index(exact) .
 	`
+	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: addr + "/login",
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
 
-	require.NoError(t, dropAll())
-	err := alterSchemaWithRetry(s)
+	require.NoError(t, dropAll(accessJwt))
+	err = alterSchemaWithRetry(accessJwt, s)
 	require.NoError(t, err)
 
-	err = runJsonMutation(m)
+	err = runJsonMutation(accessJwt, m)
 	require.NoError(t, err)
 
 	output, err := runQuery(q)

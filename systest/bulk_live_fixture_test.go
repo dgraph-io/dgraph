@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -94,12 +95,20 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	)
 
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
-		"-r", rdfFile,
+		"-f", rdfFile,
 		"-s", schemaFile,
 		"--http", ":"+strconv.Itoa(freePort(0)),
 		"-j=1",
 		"-x=true",
 	)
+	cmds := []string{os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
+		"-r", rdfFile,
+		"-s", schemaFile,
+		"--http", ":" + strconv.Itoa(freePort(0)),
+		"-j=1",
+		"-x=true",
+	}
+	fmt.Println(strings.Join(cmds, " "))
 	bulkCmd.Dir = bulkDir
 	if err := bulkCmd.Run(); err != nil {
 		s.cleanup()

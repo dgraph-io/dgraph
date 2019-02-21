@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
+
+const loginEndpoint = "localhost:8180/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
@@ -32,14 +35,18 @@ func TestCurlAuthorization(t *testing.T) {
 	createAccountAndData(t, dg)
 
 	// test query through curl
-	accessJwt, refreshJwt := curlLogin(t, "")
+	accessJwt, refreshJwt, err := z.CurlLogin(&z.LoginParams{
+		Endpoint: loginEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
 
 	// test fail open with the accessJwt
 	queryArgs := func() []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessJWT:%s", accessJwt),
 			"-d", query, curlQueryEndpoint}
 	}
-
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: false,
 	})
@@ -59,7 +66,6 @@ func TestCurlAuthorization(t *testing.T) {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessJWT:%s", accessJwt),
 			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
 	}
-
 	verifyCurlCmd(t, alterArgs(), &FailureConfig{
 		shouldFail: false,
 	})
@@ -82,7 +88,11 @@ func TestCurlAuthorization(t *testing.T) {
 		failMsg:    "Token is expired",
 	})
 	// login again using the refreshJwt
-	accessJwt, refreshJwt = curlLogin(t, refreshJwt)
+	accessJwt, refreshJwt, err = z.CurlLogin(&z.LoginParams{
+		Endpoint:   loginEndpoint,
+		RefreshJwt: refreshJwt,
+	})
+	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that the query works again with the new access jwt
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: false,
@@ -97,7 +107,11 @@ func TestCurlAuthorization(t *testing.T) {
 		failMsg:    "Token is expired",
 	})
 	// refresh the jwts again
-	accessJwt, refreshJwt = curlLogin(t, refreshJwt)
+	accessJwt, refreshJwt, err = z.CurlLogin(&z.LoginParams{
+		Endpoint:   loginEndpoint,
+		RefreshJwt: refreshJwt,
+	})
+	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that with an ACL rule defined, all the operations should be denied when the acsess JWT
 	// does not have the required permissions
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
@@ -117,7 +131,11 @@ func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	// refresh the jwts again
-	accessJwt, refreshJwt = curlLogin(t, refreshJwt)
+	accessJwt, refreshJwt, err = z.CurlLogin(&z.LoginParams{
+		Endpoint:   loginEndpoint,
+		RefreshJwt: refreshJwt,
+	})
+	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that the operations should be allowed again through the dev group
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: false,
@@ -134,50 +152,6 @@ var curlLoginEndpoint = "localhost:8180/login"
 var curlQueryEndpoint = "localhost:8180/query"
 var curlMutateEndpoint = "localhost:8180/mutate"
 var curlAlterEndpoint = "localhost:8180/alter"
-
-// curlLogin sends a curl request to the curlLoginEndpoint
-// and returns the access JWT and refresh JWT extracted from
-// the curl command output
-func curlLogin(t *testing.T, refreshJwt string) (string, string) {
-	// login with alice's account using curl
-	args := []string{"-X", "POST",
-		curlLoginEndpoint}
-
-	if len(refreshJwt) > 0 {
-		args = append(args,
-			"-H", fmt.Sprintf(`X-Dgraph-RefreshJWT:%s`, refreshJwt))
-	} else {
-		args = append(args,
-			"-H", fmt.Sprintf(`X-Dgraph-User:%s`, userid),
-			"-H", fmt.Sprintf(`X-Dgraph-Password:%s`, userpassword))
-	}
-
-	userLoginCmd := exec.Command("curl", args...)
-	out, err := userLoginCmd.Output()
-	require.NoError(t, err, "the login should have succeeded")
-
-	var outputJson map[string]map[string]string
-	if err := json.Unmarshal(out, &outputJson); err != nil {
-		t.Fatal("unable to unmarshal the output to get JWTs")
-	}
-	glog.Infof("got output: %v", outputJson)
-
-	data, found := outputJson["data"]
-	if !found {
-		t.Fatal("no data entry found in the output")
-	}
-
-	newAccessJwt, found := data["accessJWT"]
-	if !found {
-		t.Fatal("no access JWT found in the output")
-	}
-	newRefreshJwt, found := data["refreshJWT"]
-	if !found {
-		t.Fatal("no refresh JWT found in the output")
-	}
-
-	return newAccessJwt, newRefreshJwt
-}
 
 type ErrorEntry struct {
 	Code    string `json:"code"`

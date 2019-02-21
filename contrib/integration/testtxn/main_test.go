@@ -42,12 +42,12 @@ var addr string = "localhost:9180"
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	dg, cancel := x.GetDgraphClient()
+	defer cancel()
+	err := dg.Login(context.Background(), x.GrootId, "password")
 	if err != nil {
-		log.Fatal(err)
+		panic("unable to login with the groot account")
 	}
-	dc := api.NewDgraphClient(conn)
-	dg := dgo.NewDgraphClient(dc)
 	s.dg = dg
 
 	r := m.Run()

@@ -18,7 +18,6 @@ package counter
 
 import (
 	"context"
-	"log"
 	"strings"
 	"sync"
 	"testing"
@@ -27,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -95,20 +93,17 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 }
 
 func TestIncrement(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	dc := api.NewDgraphClient(conn)
-	dg := dgo.NewDgraphClient(dc)
-
+	dg, cancel := x.GetDgraphClient()
+	defer cancel()
+	ctx := context.Background()
+	require.NoError(t, dg.Login(ctx, x.GrootId, "password"), "login failed")
 	op := api.Operation{DropAll: true}
 
 	// The following piece of code shows how one can set metadata with
 	// auth-token, to allow Alter operation, if the server requires it.
 	md := metadata.New(nil)
 	md.Append("auth-token", "mrjn2")
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	x.Check(dg.Alter(ctx, &op))
 
 	cnt, err := process(dg, false, pred)

@@ -19,6 +19,7 @@ package x
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -77,7 +78,13 @@ const (
 	TlsClientCert = "client.crt"
 	TlsClientKey  = "client.key"
 
-	GrootId = "groot"
+	GrootId       = "groot"
+	AclPredicates = `
+{"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
+{"predicate":"dgraph.password","type":"password"},
+{"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
+{"predicate":"dgraph.group.acl","type":"string"}
+`
 )
 
 var (
@@ -497,9 +504,20 @@ func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
 	}
 
 	dc := api.NewDgraphClient(conn)
-	return dgo.NewDgraphClient(dc), func() {
+	dg, cancel := dgo.NewDgraphClient(dc), func() {
 		if err := conn.Close(); err != nil {
 			log.Printf("Error while closing connection:%v", err)
 		}
 	}
+
+	ctx := context.Background()
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err = dg.Login(ctx, GrootId, "password")
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	return dg, cancel
 }

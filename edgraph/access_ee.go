@@ -464,7 +464,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			groups:    groupIds,
 			predicate: op.DropAttr,
 			operation: acl.Modify,
-			allowed:   err != nil,
+			allowed:   err == nil,
 		})
 
 		if err != nil {
@@ -485,7 +485,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			groups:    groupIds,
 			predicate: update.Predicate,
 			operation: acl.Modify,
-			allowed:   err != nil,
+			allowed:   err == nil,
 		})
 		if err != nil {
 			return status.Error(codes.PermissionDenied,
@@ -538,7 +538,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 			groups:    groupIds,
 			predicate: pred,
 			operation: acl.Write,
-			allowed:   err != nil,
+			allowed:   err == nil,
 		})
 		if err != nil {
 			return status.Error(codes.PermissionDenied,
@@ -584,8 +584,8 @@ type AccessEntry struct {
 }
 
 func logAccess(log *AccessEntry) {
-	glog.V(1).Infof("ACL-LOG Authorizing user %s with groups %s on predicate %s "+
-		"for %s, allowed %v", log.userId, strings.Join(log.groups, ","),
+	glog.V(1).Infof("ACL-LOG Authorizing user %q with groups %q on predicate %q "+
+		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
 		log.predicate, log.operation.Name, log.allowed)
 }
 
@@ -627,7 +627,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 			groups:    groupIds,
 			predicate: pred,
 			operation: acl.Read,
-			allowed:   err != nil,
+			allowed:   err == nil,
 		})
 		if err != nil {
 			return status.Error(codes.PermissionDenied,

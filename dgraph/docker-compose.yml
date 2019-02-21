@@ -68,13 +68,17 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+        read_only: true
     ports:
       - 8180:8180
       - 9180:9180
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
 
   dg2:
     image: dgraph/dgraph:latest
@@ -87,13 +91,17 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+        read_only: true
     ports:
       - 8182:8182
       - 9182:9182
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
 
   dg3:
     image: dgraph/dgraph:latest
@@ -106,13 +114,17 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+        read_only: true
     ports:
       - 8183:8183
       - 9183:9183
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
   dg4:
     image: dgraph/dgraph:latest
     container_name: bank-dg4
@@ -124,13 +136,17 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+        read_only: true
     ports:
       - 8184:8184
       - 9184:9184
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
   dg5:
     image: dgraph/dgraph:latest
     container_name: bank-dg5
@@ -142,13 +158,17 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+        read_only: true
     ports:
       - 8185:8185
       - 9185:9185
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
   dg6:
     image: dgraph/dgraph:latest
     container_name: bank-dg6
@@ -160,10 +180,14 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
+        target: /dgraph-acl
+        read_only: true
     ports:
       - 8186:8186
       - 9186:9186
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg6:7186 --lru_mb=1024 --zero=zero1:5080 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg6:7186 --lru_mb=1024 --zero=zero1:5080 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
