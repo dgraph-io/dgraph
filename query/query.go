@@ -2028,10 +2028,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err == worker.ErrUnservedTablet {
 				sg.UnknownAttr = true
-				rch <- nil
-				return
 			}
-			if err != nil {
+			if err != nil && err != worker.ErrUnservedTablet {
 				rch <- err
 				return
 			}
