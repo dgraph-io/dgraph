@@ -445,18 +445,12 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	})
 }
 
-func deleteAllEntries(prefix []byte) error {
-	return deleteEntries(prefix, func(key []byte) bool {
-		return true
-	})
-}
-
 // deleteAllTokens deletes the index for the given attribute. All tokenizers are
 // used by this function.
 func deleteAllTokens(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	return deleteAllEntries(prefix)
+	return pstore.DropPrefix(prefix)
 }
 
 // deleteTokensFor deletes the index for the given attribute and token.
@@ -469,22 +463,21 @@ func deleteTokensFor(attr, tokenizerName string) error {
 	}
 	prefix = append(prefix, tokenizer.Identifier())
 
-	return deleteAllEntries(prefix)
+	return pstore.DropPrefix(prefix)
 }
 
 func deleteReverseEdges(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
-	return deleteAllEntries(prefix)
+	return pstore.DropPrefix(prefix)
 }
 
 func deleteCountIndex(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
-	if err := deleteAllEntries(pk.CountPrefix(false)); err != nil {
+	if err := pstore.DropPrefix(pk.CountPrefix(false)); err != nil {
 		return err
 	}
-
-	return deleteAllEntries(pk.CountPrefix(true))
+	return pstore.DropPrefix(pk.CountPrefix(true))
 }
 
 // Index rebuilding logic here.
@@ -998,36 +991,9 @@ func DeleteAll() error {
 // DeletePredicate deletes all entries and indices for a given predicate.
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
-	pk := x.ParsedKey{
-		Attr: attr,
-	}
-	prefix := pk.DataPrefix()
-	// Delete all data postings for the given predicate.
-	err := deleteEntries(prefix, func(key []byte) bool {
-		return true
-	})
-	if err != nil {
+	prefix := x.PredicatePrefix(attr)
+	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
-	}
-
-	// TODO - We will still have the predicate present in <uid, _predicate_> posting lists.
-	indexed := schema.State().IsIndexed(attr)
-	reversed := schema.State().IsReversed(attr)
-	if indexed {
-		if err := deleteAllTokens(attr); err != nil {
-			return err
-		}
-	} else if reversed {
-		if err := deleteReverseEdges(attr); err != nil {
-			return err
-		}
-	}
-
-	hasCountIndex := schema.State().HasCount(attr)
-	if hasCountIndex {
-		if err := deleteCountIndex(attr); err != nil {
-			return err
-		}
 	}
 
 	return schema.State().Delete(attr)
