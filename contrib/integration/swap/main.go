@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	"google.golang.org/grpc"
+	dx "github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -78,7 +78,8 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := newClient()
+	c, cancel := dx.GetDgraphClient()
+	defer cancel()
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
@@ -164,14 +165,6 @@ func createSentences(n int) []string {
 		}
 		same *= 2
 	}
-}
-
-func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*addr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(
-		api.NewDgraphClient(d),
-	)
 }
 
 func setup(c *dgo.Dgraph, sentences []string) []string {

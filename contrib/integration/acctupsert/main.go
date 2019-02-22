@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/y"
-	"google.golang.org/grpc"
+	dx "github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -70,20 +70,13 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := newClient()
+	c, cancel := dx.GetDgraphClient()
+	defer cancel()
 	setup(c)
 	fmt.Println("Doing upserts")
 	doUpserts(c)
 	fmt.Println("Checking integrity")
 	checkIntegrity(c)
-}
-
-func newClient() *dgo.Dgraph {
-	d, err := grpc.Dial(*addr, grpc.WithInsecure())
-	x.Check(err)
-	return dgo.NewDgraphClient(
-		api.NewDgraphClient(d),
-	)
 }
 
 func setup(c *dgo.Dgraph) {
