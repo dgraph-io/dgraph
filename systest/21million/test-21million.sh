@@ -76,7 +76,7 @@ Info "running benchmarks/regression queries"
 go test -v -tags standalone || FOUND_DIFFS=1
 
 Info "bringing down zero and alpha containers"
-if [[ $DEGRAPH_RELOAD ]]; then
+if [[ $DGRAPH_RELOAD ]]; then
     DockerCompose down -v
 else
     DockerCompose down
