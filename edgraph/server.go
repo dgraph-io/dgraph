@@ -856,7 +856,7 @@ func validateQuery(queries []*gql.GraphQuery) error {
 func validatePredName(name string) error {
 	if len(name) > math.MaxUint16 {
 		return fmt.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
-		name[:80])
+			name[:80])
 	}
 	return nil
 }
