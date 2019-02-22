@@ -262,7 +262,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, 3, len(preds))
 	var parsedPreds []string
 	for _, pred := range preds {
-		parsedPreds = append(parsedPreds, strings.Split(pred, "-")[1])
+		parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
 	}
 	sort.Strings(parsedPreds)
 	require.Equal(t, "_predicate_", parsedPreds[0])
