@@ -1972,5 +1972,5 @@ func TestMaxPredicateSize(t *testing.T) {
 
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Predicate size cannot be bigger than 2^16")
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 }

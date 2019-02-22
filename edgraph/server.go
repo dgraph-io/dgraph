@@ -356,8 +356,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return nil, err
 		}
 
-		if len(update.Predicate) > math.MaxUint16 {
-			return nil, fmt.Errorf("Predicate size cannot be bigger than 2^16")
+		if err := validatePredName(update.Predicate); err != nil {
+			return nil, err
 		}
 	}
 
@@ -565,7 +565,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
-	if err = validatePredSize(parsedReq.Query); err != nil {
+	if err = validateQuery(parsedReq.Query); err != nil {
 		return resp, err
 	}
 
@@ -778,8 +778,8 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 
 func validateNQuads(set, del []*api.NQuad) error {
 	for _, nq := range set {
-		if len(nq.Predicate) > math.MaxUint16 {
-			return x.Errorf("Predicate size cannot be bigger than 2^16")
+		if err := validatePredName(nq.Predicate); err != nil {
+			return err
 		}
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
@@ -793,8 +793,8 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 	}
 	for _, nq := range del {
-		if len(nq.Predicate) > math.MaxUint16 {
-			return x.Errorf("Predicate size cannot be bigger than 2^16")
+		if err := validatePredName(nq.Predicate); err != nil {
+			return err
 		}
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
@@ -837,18 +837,26 @@ func validateKeys(nq *api.NQuad) error {
 	return nil
 }
 
-// validatePredSize verifies that the query does not contain any preds that
+// validateQuery verifies that the query does not contain any preds that
 // are longer than the limit (2^16).
-func validatePredSize(queries []*gql.GraphQuery) error {
+func validateQuery(queries []*gql.GraphQuery) error {
 	for _, q := range queries {
-		if len(q.Attr) > math.MaxUint16 {
-			return fmt.Errorf("Predicate size cannot be bigger than 2^16")
+		if err := validatePredName(q.Attr); err != nil {
+			return err
 		}
 
-		if err := validatePredSize(q.Children); err != nil {
+		if err := validateQuery(q.Children); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func validatePredName(name string) error {
+	if len(name) > math.MaxUint16 {
+		return fmt.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
+		name[:80])
+	}
 	return nil
 }

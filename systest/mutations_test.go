@@ -1694,7 +1694,7 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 		Schema: fmt.Sprintf(`%s: uid @reverse .`, largePred),
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Predicate size cannot be bigger than 2^16")
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 
 	// Verify that Mutate requests with predicates that are too large are rejected.
 	txn := c.NewTxn()
@@ -1703,7 +1703,7 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 		SetNquads: []byte(fmt.Sprintf(`_:test <%s> "value" .`, largePred)),
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Predicate size cannot be bigger than 2^16")
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 	_ = txn.Discard(ctx)
 
 	// Do the same thing as above but for the predicates in DelNquads.
@@ -1714,5 +1714,5 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 		DelNquads: []byte(fmt.Sprintf(`_:test <%s> "value" .`, largePred)),
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Predicate size cannot be bigger than 2^16")
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 }
