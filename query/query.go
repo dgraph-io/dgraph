@@ -1419,6 +1419,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		doneVars[sg.Params.Var] = varValue{
 			strList: sg.valueMatrix,
 			path:    sgPath,
+			Vals:    make(map[uint64]types.Val),
 		}
 	} else if len(sg.counts) > 0 {
 		// This implies it is a value variable.
@@ -1445,6 +1446,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			doneVars[sg.Params.Var] = varValue{
 				Uids: uids,
 				path: sgPath,
+				Vals: make(map[uint64]types.Val),
 			}
 			return nil
 		}
