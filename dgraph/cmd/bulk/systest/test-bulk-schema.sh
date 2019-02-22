@@ -21,17 +21,22 @@ WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
-trap ErrorExit EXIT
+LOGFILE=$WORKDIR/output.log
 
+trap ErrorExit EXIT
 function ErrorExit
 {
     local ev=$?
+    if [[ $ev -ne 0 ]]; then
+        ERROR "*** unexpected error ***"
+        if [[ -e $LOGFILE ]]; then
+            tail -40 $LOGFILE
+        fi
+    fi
     if [[ ! $DEBUG ]]; then
         rm -rf $WORKDIR
     fi
-    if [[ $ev -ne 0 ]]; then
-        FATAL "*** unexpected error ***"
-    fi
+    exit $ev
 }
 
 function StartZero
@@ -110,10 +115,12 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
+  set -x
   docker exec -it bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
   docker cp bank-dg1:/data/dg1/export .
   sleep 1
+  set +x
 }
 
 function BulkLoadExportedData
@@ -122,7 +129,8 @@ function BulkLoadExportedData
   dgraph bulk -z localhost:$ZERO_PORT \
               -s ../dir1/export/*/g01.schema.gz \
               -f ../dir1/export/*/g01.rdf.gz \
-     >bulk.log 2>&1 </dev/null
+     >$LOGFILE 2>&1 </dev/null
+  rm -f $LOGFILE
 }
 
 function BulkLoadFixtureData
@@ -150,7 +158,8 @@ _:et <revenue> "792.9" .
 EOF
 
   dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -f fixture.rdf \
-     >bulk.log 2>&1 </dev/null
+     >$LOGFILE 2>&1 </dev/null
+  rm -f $LOGFILE
 }
 
 function StopServers

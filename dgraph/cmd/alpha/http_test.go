@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -259,9 +260,14 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
 	require.Equal(t, 3, len(preds))
-	require.Equal(t, "1-_predicate_", preds[0])
-	require.Equal(t, "1-balance", preds[1])
-	require.Equal(t, "1-name", preds[2])
+	var parsedPreds []string
+	for _, pred := range preds {
+		parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
+	}
+	sort.Strings(parsedPreds)
+	require.Equal(t, "_predicate_", parsedPreds[0])
+	require.Equal(t, "balance", parsedPreds[1])
+	require.Equal(t, "name", parsedPreds[2])
 
 	data, _, err := queryWithTs(q1, 0)
 	require.NoError(t, err)
