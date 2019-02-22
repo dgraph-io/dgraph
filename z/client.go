@@ -21,9 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -32,26 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 )
-
-func DgraphClient(serviceAddr string) *dgo.Dgraph {
-	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	x.Check(err)
-
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	ctx := context.Background()
-	for {
-		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Login(ctx, x.GrootId, "password")
-		if err == nil || !strings.Contains(err.Error(), "Please retry") {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	err = dg.Alter(ctx, &api.Operation{DropAll: true})
-	x.Check(err)
-
-	return dg
-}
 
 func DgraphClientNoDropAll(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
