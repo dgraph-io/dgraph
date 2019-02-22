@@ -142,7 +142,31 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
+	go gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
+}
+
+func (g *groupi) informZeroAboutTablets() {
+	// Before we start this Alpha, let's pick up all the predicates we have in our postings
+	// directory, and ask Zero if we are allowed to serve it. Do this irrespective of whether
+	// this node is the leader or the follower, because this early on, we might not have
+	// figured that out.
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		failed := false
+		preds := schema.State().Predicates()
+		for _, pred := range preds {
+			if tablet := g.Tablet(pred); tablet == nil {
+				failed = true
+			}
+		}
+		if !failed {
+			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
+			return
+		}
+	}
 }
 
 func (g *groupi) proposeInitialSchema() {
