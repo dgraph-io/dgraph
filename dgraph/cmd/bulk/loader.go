@@ -238,9 +238,16 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) writeSchema() {
+	m := make(map[string]struct{})
 	for _, db := range ld.dbs {
-		ld.schema.write(db)
+		preds := ld.schema.getPredicates(db)
+		ld.schema.write(db, preds)
+		for _, p := range preds {
+			m[p] = struct{}{}
+		}
 	}
+	// Diff against the schema provided, and write those out.
+
 }
 
 func (ld *loader) cleanup() {

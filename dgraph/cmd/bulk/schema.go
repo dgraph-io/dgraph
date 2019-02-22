@@ -123,18 +123,22 @@ func (s *schemaStore) write(db *badger.DB) {
 
 	// Get predicates from the schema store so that the db includes all
 	// predicates from the schema file.
-	preds := make([]string, 0, len(s.m))
-	for pred := range s.m {
-		preds = append(preds, pred)
-	}
+
+	// TODO: This should not happen here.
+	// preds := make([]string, 0, len(s.m))
+	// for pred := range s.m {
+	// 	preds = append(preds, pred)
+	// }
 
 	// Add predicates from the db so that final schema includes predicates
 	// used in the rdf file but not included in the schema file.
-	for _, pred := range s.getPredicates(db) {
-		if _, ok := s.m[pred]; !ok {
-			preds = append(preds, pred)
-		}
-	}
+
+	// TODO: Done by the caller.
+	// for _, pred := range s.getPredicates(db) {
+	// 	if _, ok := s.m[pred]; !ok {
+	// 		preds = append(preds, pred)
+	// 	}
+	// }
 
 	txn := db.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
