@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 # verify fix of https://github.com/dgraph-io/dgraph/issues/2616
 # uses configuration in dgraph/docker-compose.yml
 
