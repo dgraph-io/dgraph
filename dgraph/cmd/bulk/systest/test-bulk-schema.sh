@@ -120,7 +120,6 @@ function DoExport
   sleep 2
   docker cp bank-dg1:/data/dg1/export .
   sleep 1
-  set +x
 }
 
 function BulkLoadExportedData
