@@ -976,16 +976,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 // DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
-	return deleteEntries(nil, func(key []byte) bool {
-		pk := x.Parse(key)
-		if pk == nil {
-			return true
-		} else if pk.IsSchema() {
-			// Don't delete schema for _predicate_
-			return !x.IsReservedPredicate(pk.Attr)
-		}
-		return true
-	})
+	return pstore.DropAll()
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
