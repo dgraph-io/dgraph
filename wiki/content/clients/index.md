@@ -53,13 +53,33 @@ documentation for the client API along with examples showing how to use it.
 ### Create the client
 
 To create a client, dial a connection to Dgraph's external gRPC port (typically
-9080). The following code snippet shows just one connection. You can connect to multiple Dgraph alphas to distribute the workload evenly.
+9080). The following code snippet shows just one connection. You can connect to multiple Dgraph Alphas to distribute the workload evenly.
 
 ```go
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
 	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return dgo.NewDgraphClient(
+		api.NewDgraphClient(d),
+	)
+}
+```
+
+The client can be configured to use gRPC compression:
+
+```go
+func newClient() *dgo.Dgraph {
+	// Dial a gRPC connection. The address to dial to can be configured when
+	// setting up the dgraph cluster.
+	dialOpts := append([]grpc.CallOption{},
+		grpc.WithInsecure(),
+		grpc.UseCompressor("gzip"))
+	d, err := grpc.Dial("localhost:9080", dialOpts...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -338,14 +358,14 @@ working example of how to use the Java client.
 
 [DgraphJavaSample]:https://github.com/dgraph-io/dgraph4j/tree/master/samples/DgraphJavaSample
 
-## Javascript
+## JavaScript
 
-The official Javascript client [can be found here](https://github.com/dgraph-io/dgraph-js)
+The official JavaScript client [can be found here](https://github.com/dgraph-io/dgraph-js)
 and it fully supports Dgraph v1.0.x. Follow the instructions in the
 [README](https://github.com/dgraph-io/dgraph-js#readme) to get it up and running.
 
 We also have a [simple example](https://github.com/dgraph-io/dgraph-js/tree/master/examples/simple)
-project, which contains an end-to-end working example of how to use the Javascript client,
+project, which contains an end-to-end working example of how to use the JavaScript client,
 for Node.js >= v6.
 
 ## Python
@@ -425,7 +445,7 @@ predicate `name` is the name of an account. It's indexed so that we can look up
 accounts based on their name.
 
 ```sh
-curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
+$ curl -X POST localhost:8080/alter -d 'name: string @index(term) .'
 ```
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
@@ -435,11 +455,11 @@ predicate or the entire database can be dropped.
 
 E.g. to drop the predicate `name`:
 ```sh
-curl -X POST localhost:8080/alter -d '{"drop_attr": "name"}'
+$ curl -X POST localhost:8080/alter -d '{"drop_attr": "name"}'
 ```
 To drop all data and schema:
 ```sh
-curl -X POST localhost:8080/alter -d '{"drop_all": true}'
+$ curl -X POST localhost:8080/alter -d '{"drop_all": true}'
 ```
 
 ### Start a transaction
@@ -470,7 +490,7 @@ To query the database, the `/query` endpoint is used.
 To get the balances for both accounts:
 
 ```sh
-curl -X POST localhost:8080/query -d $'
+$ curl -X POST localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -538,7 +558,7 @@ transaction start timestamp as a path parameter, so that Dgraph knows which
 transaction the mutation should be part of.
 
 ```sh
-curl -X POST localhost:8080/mutate/4 -d $'
+$ curl -X POST localhost:8080/mutate/4 -d $'
 {
   set {
     <0x1> <balance> "110" .
@@ -636,3 +656,57 @@ successful.  This is indicated in the response when the commit is attempted.
 
 In this case, it should be up to the user of the client to decide if they wish
 to retry the transaction.
+
+### Compression via HTTP
+
+Dgraph supports gzip-compressed requests to and from Dgraph Alphas for `/query`, `/mutate`, and `/alter`.
+
+Compressed requests: To send compressed requests, set the HTTP request header
+`Content-Encoding: gzip` along with the gzip-compressed payload.
+
+Compressed responses: To receive gzipped responses, set the HTTP request header
+`Accept-Encoding: gzip` and Alpha will return gzipped responses.
+
+Example of a compressed request via curl:
+
+```sh
+$ curl -X POST \
+  -H 'X-Dgraph-CommitNow: true' \
+  -H 'Content-Encoding: gzip' \
+  localhost:8080/mutate --data-binary @mutation.gz
+```
+
+Example of a compressed request via curl:
+
+```sh
+$ curl -X POST \
+  -H 'Accept-Encoding: gzip' \
+  localhost:8080/query -d $'schema {}' | gzip --decompress
+```
+
+Example of a compressed request and response via curl:
+
+```sh
+$ zcat query.gz # query.gz is gzipped compressed
+{
+  all(func: anyofterms(name, "Alice Bob")) {
+    uid
+    balance
+  }
+}
+```
+
+```sh
+$ curl -X POST \
+  -H 'Content-Encoding: gzip' \
+  -H 'Accept-Encoding: gzip' \
+  localhost:8080/query --data-binary @query.gz | gzip --decompress
+```
+
+{{% notice "note" %}}
+Curl has a `--compressed` option that automatically requests for a compressed response (`Accept-Encoding` header) and decompresses the compressed response.
+
+```sh
+$ curl -X POST --compressed localhost:8080/query -d $'schema {}'
+```
+{{% /notice %}}
