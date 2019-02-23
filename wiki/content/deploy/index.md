@@ -1446,6 +1446,9 @@ $ dgraph live --help # To see the available flags.
 # Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
 $ dgraph live -r <path-to-rdf-gzipped-file>
 
+# Use compressed gRPC connections to and from Dgraph
+$ dgraph live -C -r <path-to-rdf-gzipped-file>
+
 # Read RDFs and a schema file and send to Dgraph running at given address
 $ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
