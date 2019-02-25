@@ -65,12 +65,25 @@ func TestBackup(t *testing.T) {
 		{"incr restore 1", RestoreIncr1},
 		{"incr backup 2", BackupIncr2},
 		{"incr restore 2", RestoreIncr2},
-		{"cleanup", BackupCleanup},
 	}
 	for _, tc := range tests {
 		if !t.Run(tc.name, wrap(tc.f)) {
 			break
 		}
+	}
+
+	// Cleanup for the next test
+	dirs := []string{
+		"data/backups",
+		"data/restore",
+		"data/dg0.1",
+		"data/dg1",
+		"data/dg2",
+		"data/dg3",
+		"data/minio",
+	}
+	for i := range dirs {
+		x.Check(os.RemoveAll(dirs[i]))
 	}
 }
 
@@ -111,13 +124,8 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	// All test data will reside here
-	x.Check(os.Mkdir("./data", 0777))
 	x.Check(os.Mkdir("./data/backups", 0777))
 	x.Check(os.Mkdir("./data/restore", 0777))
-}
-
-func BackupCleanup(t *testing.T, c *dgo.Dgraph) {
-	x.Check(os.RemoveAll("./data"))
 }
 
 func BackupFull(t *testing.T, c *dgo.Dgraph) {
