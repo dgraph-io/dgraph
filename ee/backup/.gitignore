@@ -1,1 +1,2 @@
-data
+data/*
+!data/.gitkeep
