@@ -128,7 +128,7 @@ function BulkLoadExportedData
               -s ../dir1/export/*/g01.schema.gz \
               -f ../dir1/export/*/g01.rdf.gz \
      >$LOGFILE 2>&1 </dev/null
-  rm -f $LOGFILE
+  mv $LOGFILE $LOGFILE.export
 }
 
 function BulkLoadFixtureData
@@ -157,7 +157,7 @@ EOF
 
   dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -f fixture.rdf \
      >$LOGFILE 2>&1 </dev/null
-  rm -f $LOGFILE
+  mv $LOGFILE $LOGFILE.fixture
 }
 
 function StopServers
