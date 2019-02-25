@@ -131,7 +131,7 @@ func setGlogFlags(conf *viper.Viper) {
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
 		if stringValue, ok := conf.Get(gflag).(string); ok {
-			flag.Lookup(gflag).Value.Set(stringValue)
+			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 		}
 	}
 }
