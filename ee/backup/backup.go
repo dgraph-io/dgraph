@@ -59,7 +59,7 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 		return err
 	}
 	glog.Infof("Backup complete: group %d at %d", req.GroupId, req.ReadTs)
-	return err
+	return nil
 }
 
 // Manifest records backup details, these are values used during restore.
