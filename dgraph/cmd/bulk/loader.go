@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"os"
@@ -238,16 +239,31 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) writeSchema() {
+	numDBs := uint32(len(ld.dbs))
+	preds := make([][]string, numDBs)
+
+	// Get all predicates that have data in some DB.
 	m := make(map[string]struct{})
-	for _, db := range ld.dbs {
-		preds := ld.schema.getPredicates(db)
-		ld.schema.write(db, preds)
-		for _, p := range preds {
+	for i, db := range ld.dbs {
+		preds[i] = ld.schema.getPredicates(db)
+		for _, p := range preds[i] {
 			m[p] = struct{}{}
 		}
 	}
-	// Diff against the schema provided, and write those out.
 
+	// Find any predicates that don't have data in any DB
+	// and distribute them among all the DBs.
+	for p := range ld.schema.m {
+		if _, ok := m[p]; !ok {
+			i := adler32.Checksum([]byte(p)) % numDBs
+			preds[i] = append(preds[i], p)
+		}
+	}
+
+	// Write out each DB's final predicate list.
+	for i, db := range ld.dbs {
+		ld.schema.write(db, preds[i])
+	}
 }
 
 func (ld *loader) cleanup() {
