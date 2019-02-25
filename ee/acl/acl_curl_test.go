@@ -160,7 +160,6 @@ func curlLogin(t *testing.T, refreshJwt string) (string, string) {
 	if err := json.Unmarshal(out, &outputJson); err != nil {
 		t.Fatal("unable to unmarshal the output to get JWTs")
 	}
-	glog.Infof("got output: %v", outputJson)
 
 	data, found := outputJson["data"]
 	if !found {
