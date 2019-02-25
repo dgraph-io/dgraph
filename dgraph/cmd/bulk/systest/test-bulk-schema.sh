@@ -3,9 +3,8 @@
 # uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
-readonly SRCROOT=$(readlink -f ${BASH_SOURCE[0]%/*}/../../../..)
+readonly SRCROOT=$(git rev-parse --show-toplevel)
 readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
-readonly WAIT_FOR_IT=$SRCROOT/contrib/wait-for-it.sh
 
 declare -ri ZERO_PORT=5080 HTTP_PORT=8180
 
@@ -21,13 +20,22 @@ WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
-trap ForceClean EXIT
+LOGFILE=$WORKDIR/output.log
 
-function ForceClean
+trap ErrorExit EXIT
+function ErrorExit
 {
+    local ev=$?
+    if [[ $ev -ne 0 ]]; then
+        ERROR "*** unexpected error ***"
+        if [[ -e $LOGFILE ]]; then
+            tail -40 $LOGFILE
+        fi
+    fi
     if [[ ! $DEBUG ]]; then
         rm -rf $WORKDIR
     fi
+    exit $ev
 }
 
 function StartZero
@@ -106,10 +114,11 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec -it bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec bank-dg1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
   docker cp bank-dg1:/data/dg1/export .
   sleep 1
+  set +x
 }
 
 function BulkLoadExportedData
@@ -117,8 +126,9 @@ function BulkLoadExportedData
   INFO "bulk loading exported data"
   dgraph bulk -z localhost:$ZERO_PORT \
               -s ../dir1/export/*/g01.schema.gz \
-              -r ../dir1/export/*/g01.rdf.gz \
-     >bulk.log 2>&1 </dev/null
+              -f ../dir1/export/*/g01.rdf.gz \
+     >$LOGFILE 2>&1 </dev/null
+  rm -f $LOGFILE
 }
 
 function BulkLoadFixtureData
@@ -145,8 +155,9 @@ _:et <genre> "Science Fiction" .
 _:et <revenue> "792.9" .
 EOF
 
-  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -r fixture.rdf \
-     >bulk.log 2>&1 </dev/null
+  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -f fixture.rdf \
+     >$LOGFILE 2>&1 </dev/null
+  rm -f $LOGFILE
 }
 
 function StopServers

@@ -183,9 +183,11 @@ single group. Dgraph Zero assigns a group to each Alpha node.
 **Shard rebalancing**
 
 Dgraph Zero tries to rebalance the cluster based on the disk usage in each
-group. If Zero detects an imbalance, it would try to move a predicate along
-with index and reverse edges to a group that has minimum disk usage. This can
-make the predicate unavailable temporarily.
+group. If Zero detects an imbalance, it would try to move a predicate along with
+its indices to a group that has minimum disk usage. This can make the predicate
+temporarily read-only. Queries for the predicate will still be serviced, but any
+mutations for the predicate will be rejected and should be retried after the
+move is finished.
 
 Zero would continuously try to keep the amount of data on each server even,
 typically running this check on a 10-min frequency.  Thus, each additional
@@ -1444,6 +1446,9 @@ $ dgraph live --help # To see the available flags.
 # Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
 $ dgraph live -r <path-to-rdf-gzipped-file>
 
+# Use compressed gRPC connections to and from Dgraph
+$ dgraph live -C -r <path-to-rdf-gzipped-file>
+
 # Read RDFs and a schema file and send to Dgraph running at given address
 $ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
@@ -1488,7 +1493,9 @@ will run 6 Alphas with 3 replicas per group, then there are 2 groups and
 predicates between the reduce shards.
 
 ```sh
-$ dgraph bulk -r goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:5080
+$ dgraph bulk -f goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_shards=2 --http localhost:8000 --zero=localhost:5080
+```
+```
 {
 	"RDFDir": "goldendata.rdf.gz",
 	"SchemaFile": "goldendata.schema",
@@ -1540,6 +1547,8 @@ load output from the example above:
 
 ```sh
 $ tree ./out
+```
+```
 ./out
 ├── 0
 │   └── p

@@ -1,0 +1,1065 @@
+{
+  me(func:anyofterms(name@en, "poison peacock")) {
+    name@en
+    genre {
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Kyle Peacock"
+    },
+    {
+      "name@en": "David Peacock"
+    },
+    {
+      "name@en": "Peacock Lady",
+      "genre": [
+        {
+          "name@en": "East Asian cinema"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Bullet for My Valentine: The Poison: Live at Brixton",
+      "genre": [
+        {
+          "name@en": "Music"
+        }
+      ]
+    },
+    {
+      "name@en": "Durban Poison",
+      "genre": [
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "The Peacock Spring",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Peacock"
+    },
+    {
+      "name@en": "Trevor Peacock"
+    },
+    {
+      "name@en": "Poison Apple",
+      "genre": [
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Backstage Musical"
+        },
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison for the Fairies",
+      "genre": [
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Mystery"
+        }
+      ]
+    },
+    {
+      "name@en": "La Poison",
+      "genre": [
+        {
+          "name@en": "Comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "Peacock",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Another Man's Poison",
+      "genre": [
+        {
+          "name@en": "Crime Thriller"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Black-and-white"
+        },
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Melodrama"
+        },
+        {
+          "name@en": "Suspense"
+        }
+      ]
+    },
+    {
+      "name@en": "Ice Poison",
+      "genre": [
+        {
+          "name@en": "Experimental film"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Kim Peacock"
+    },
+    {
+      "name@en": "Clifford L. Peacock"
+    },
+    {
+      "name@en": "Poison",
+      "genre": [
+        {
+          "name@en": "Experimental film"
+        },
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "LGBT"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Satire"
+        },
+        {
+          "name@en": "Science Fiction"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Mary Slavish"
+    },
+    {
+      "name@en": "The New York Peacock",
+      "genre": [
+        {
+          "name@en": "Silent film"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Peacock",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Psychological thriller"
+        },
+        {
+          "name@en": "Mystery"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy II: Lily",
+      "genre": [
+        {
+          "name@en": "Erotic thriller"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Erotica"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Suspense"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy: The New Seduction",
+      "genre": [
+        {
+          "name@en": "Crime Thriller"
+        },
+        {
+          "name@en": "Erotic thriller"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Erotica"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "Softcore pornography"
+        },
+        {
+          "name@en": "Pornographic film"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Walter Peacock"
+    },
+    {
+      "name@en": "Tea & Poison",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Melodrama"
+        }
+      ]
+    },
+    {
+      "name@en": "Madame Peacock",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Simon Peacock"
+    },
+    {
+      "name@en": "Pretty Poison",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "Pretty Poison",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Romance Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Pen",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "The Poison Tasters",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy: The Secret Society",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Friends",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Sweethearts",
+      "genre": [
+        {
+          "name@en": "B movie"
+        },
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Slasher"
+        }
+      ]
+    },
+    {
+      "name@en": "Lillian Peacock"
+    },
+    {
+      "name@en": "Poison Ivy",
+      "genre": [
+        {
+          "name@en": "Erotic thriller"
+        },
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Indie film"
+        },
+        {
+          "name@en": "LGBT"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Suspense"
+        }
+      ]
+    },
+    {
+      "name@en": "Peacock King",
+      "genre": [
+        {
+          "name@en": "Chinese Movies"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Japanese Movies"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Fantasy Adventure"
+        }
+      ]
+    },
+    {
+      "name@en": "'Poison' Tribute Band Member #4"
+    },
+    {
+      "name@en": "Christopher Peacock"
+    },
+    {
+      "name@en": "Peacock Alley",
+      "genre": [
+        {
+          "name@en": "Black-and-white"
+        },
+        {
+          "name@en": "Silent film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy",
+      "genre": [
+        {
+          "name@en": "Romantic comedy"
+        },
+        {
+          "name@en": "Comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "Jason Peacock"
+    },
+    {
+      "name@en": "Joan Peacock"
+    },
+    {
+      "name@en": "The Peacock Eye",
+      "genre": [
+        {
+          "name@en": "Animation"
+        },
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Peacock Alley",
+      "genre": [
+        {
+          "name@en": "Black-and-white"
+        },
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Ann Peacock"
+    },
+    {
+      "name@en": "Dorothy L. Sayers Mysteries: Strong Poison",
+      "genre": [
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "Drama"
+        },
+        {
+          "name@en": "Mystery"
+        }
+      ]
+    },
+    {
+      "name@en": "Love Like Poison",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison",
+      "genre": [
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy"
+    },
+    {
+      "name@en": "Bestowal of Poison",
+      "genre": [
+        {
+          "name@en": "East Asian cinema"
+        },
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison City",
+      "genre": [
+        {
+          "name@en": "Documentary film"
+        },
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison"
+    },
+    {
+      "name@en": "Justine Peacock"
+    },
+    {
+      "name@en": "Falguni Peacock"
+    },
+    {
+      "name@en": "Catwalk Poison 22",
+      "genre": [
+        {
+          "name@en": "Hardcore pornography"
+        },
+        {
+          "name@en": "Japanese Movies"
+        }
+      ]
+    },
+    {
+      "name@en": "Another Mans Poison"
+    },
+    {
+      "name@en": "Lilly Poison"
+    },
+    {
+      "name@en": "Poison: Seven Days Live",
+      "genre": [
+        {
+          "name@en": "Concert film"
+        },
+        {
+          "name@en": "Music"
+        }
+      ]
+    },
+    {
+      "name@en": "Chicken/Peacock"
+    },
+    {
+      "name@en": "Poison Wood Productions"
+    },
+    {
+      "name@en": "Larry Peacock"
+    },
+    {
+      "name@en": "Love is Poison",
+      "genre": [
+        {
+          "name@en": "Romance Film"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Raphael Peacock"
+    },
+    {
+      "name@en": "Poison Dust",
+      "genre": [
+        {
+          "name@en": "Culture & Society"
+        },
+        {
+          "name@en": "Documentary film"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    },
+    {
+      "name@en": "Abner Audubon Peacock IV"
+    },
+    {
+      "name@en": "Catwalk Poison 27",
+      "genre": [
+        {
+          "name@en": "Hardcore pornography"
+        },
+        {
+          "name@en": "Japanese Movies"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy"
+    },
+    {
+      "name@en": "Linda Peacock"
+    },
+    {
+      "name@en": "HIM: Poison Arrow",
+      "genre": [
+        {
+          "name@en": "Music"
+        }
+      ]
+    },
+    {
+      "name@en": "Kerry Peacock"
+    },
+    {
+      "name@en": "One Man's Poison",
+      "genre": [
+        {
+          "name@en": "Gay pornography"
+        }
+      ]
+    },
+    {
+      "name@en": "David Peacock"
+    },
+    {
+      "name@en": "Daniel Peacock"
+    },
+    {
+      "name@en": "Matthew Peacock"
+    },
+    {
+      "name@en": "Patrick Peacock"
+    },
+    {
+      "name@en": "Police Commissioner 'Poison Strawberry' Dokuichigo"
+    },
+    {
+      "name@en": "'Poison' Tribute Band Member #2"
+    },
+    {
+      "name@en": "Shane Peacock"
+    },
+    {
+      "name@en": "The Sea and Poison",
+      "genre": [
+        {
+          "name@en": "Japanese Movies"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "'Poison' Tribute Band  Member #1"
+    },
+    {
+      "name@en": "Poison Angel",
+      "genre": [
+        {
+          "name@en": "Pornographic film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Ivy",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Crime Fiction"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Pen Films"
+    },
+    {
+      "name@en": "Jim Peacock"
+    },
+    {
+      "name@en": "Rat poison seller"
+    },
+    {
+      "name@en": "Sweet Poison",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        }
+      ]
+    },
+    {
+      "name@en": "Michael Peacock"
+    },
+    {
+      "name@en": "Poison Dagger"
+    },
+    {
+      "name@en": "Cut Poison Burn",
+      "genre": [
+        {
+          "name@en": "Documentary film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison: Nothing But a Good Time! Unauthorized",
+      "genre": [
+        {
+          "name@en": "Documentary film"
+        },
+        {
+          "name@en": "Music"
+        }
+      ]
+    },
+    {
+      "name@en": "Russell Peacock"
+    },
+    {
+      "name@en": "Poison Ivy"
+    },
+    {
+      "name@en": "Aaron Peacock"
+    },
+    {
+      "name@en": "The White Peacock",
+      "genre": [
+        {
+          "name@en": "Silent film"
+        },
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Gordon A. Peacock"
+    },
+    {
+      "name@en": "Peacock"
+    },
+    {
+      "name@en": "Tom Peacock"
+    },
+    {
+      "name@en": "John Peacock"
+    },
+    {
+      "name@en": "Sheila Peacock"
+    },
+    {
+      "name@en": "Genetically Modified Food: Panacea or Poison?",
+      "genre": [
+        {
+          "name@en": "Documentary film"
+        }
+      ]
+    },
+    {
+      "name@en": "Josette Peacock"
+    },
+    {
+      "name@en": "Poison: Greatest Video Hits",
+      "genre": [
+        {
+          "name@en": "Documentary film"
+        },
+        {
+          "name@en": "Music"
+        }
+      ]
+    },
+    {
+      "name@en": "Kali Peacock"
+    },
+    {
+      "name@en": "Lewis Peacock"
+    },
+    {
+      "name@en": "Catwalk Poison 02",
+      "genre": [
+        {
+          "name@en": "Japanese Movies"
+        }
+      ]
+    },
+    {
+      "name@en": "Kira Peacock"
+    },
+    {
+      "name@en": "Poison"
+    },
+    {
+      "name@en": "Mrs. Peacock"
+    },
+    {
+      "name@en": "Mark Peacock"
+    },
+    {
+      "name@en": "Peacock"
+    },
+    {
+      "name@en": "Poison d'avril",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "'Poison' Tribute Band Member #3"
+    },
+    {
+      "name@en": "Poison Idea"
+    },
+    {
+      "name@en": "Steven Peacock Jacoby"
+    },
+    {
+      "name@en": "Peacock Films"
+    },
+    {
+      "name@en": "Captain Poison"
+    },
+    {
+      "name@en": "Sean Peacock"
+    },
+    {
+      "name@en": "Poison Waters"
+    },
+    {
+      "name@en": "Gary Peacock"
+    },
+    {
+      "name@en": "Angelo's Poison Tester"
+    },
+    {
+      "name@en": "David Peacock"
+    },
+    {
+      "name@en": "Peacock"
+    },
+    {
+      "name@en": "Natasha Peacock"
+    },
+    {
+      "name@en": "Poison Video Hits",
+      "genre": [
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Maureen Peacock"
+    },
+    {
+      "name@en": "Poison 13"
+    },
+    {
+      "name@en": "Rat Poison"
+    },
+    {
+      "name@en": "Chris Peacock"
+    },
+    {
+      "name@en": "Michelle Peacock"
+    },
+    {
+      "name@en": "China Peacock"
+    },
+    {
+      "name@en": "Gourmet of Poison",
+      "genre": [
+        {
+          "name@en": "Chinese Movies"
+        }
+      ]
+    },
+    {
+      "name@en": "Holly Peacock"
+    },
+    {
+      "name@en": "Jena Peacock"
+    },
+    {
+      "name@en": "Poison Dart"
+    },
+    {
+      "name@en": "Chiara Peacock"
+    },
+    {
+      "name@en": "Battle's Poison Cloud",
+      "genre": [
+        {
+          "name@en": "Documentary film"
+        },
+        {
+          "name@en": "History"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    },
+    {
+      "name@en": "Teresa Peacock"
+    },
+    {
+      "name@en": "Poison Waters"
+    },
+    {
+      "name@en": "Poison"
+    },
+    {
+      "name@en": "Poison Idea: Mating Walruses",
+      "genre": [
+        {
+          "name@en": "Punk rock"
+        }
+      ]
+    },
+    {
+      "name@en": "Peacock Films"
+    },
+    {
+      "name@en": "Assassination - Poison Spider Tactics"
+    },
+    {
+      "name@en": "Peacock Films"
+    },
+    {
+      "name@en": "Out of the Poison Tree",
+      "genre": [
+        {
+          "name@en": "World cinema"
+        },
+        {
+          "name@en": "Documentary film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Arrow Frogs",
+      "genre": [
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison",
+      "genre": [
+        {
+          "name@en": "Drama"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison the Well"
+    },
+    {
+      "name@en": "Helen Peacock"
+    },
+    {
+      "name@en": "Poison Ivy: Lustful Deceit",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Erotica"
+        }
+      ]
+    },
+    {
+      "name@en": "John Peacock"
+    },
+    {
+      "name@en": "Lucy Peacock"
+    },
+    {
+      "name@en": "Catwalk Poison 25",
+      "genre": [
+        {
+          "name@en": "Hardcore pornography"
+        }
+      ]
+    },
+    {
+      "name@en": "Poison Cock Machine",
+      "genre": [
+        {
+          "name@en": "Gay pornography"
+        }
+      ]
+    },
+    {
+      "name@en": "Captain Poison",
+      "genre": [
+        {
+          "name@en": "Black-and-white"
+        }
+      ]
+    },
+    {
+      "name@en": "Peacock Films Ltd."
+    },
+    {
+      "name@en": "Synte Peacock"
+    }
+  ]
+}

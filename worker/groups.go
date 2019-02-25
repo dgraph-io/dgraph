@@ -19,7 +19,6 @@ package worker
 import (
 	"fmt"
 	"io"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -138,14 +137,36 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
 
-	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
+	gr.closer = y.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
-
-	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
+	go gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
+}
+
+func (g *groupi) informZeroAboutTablets() {
+	// Before we start this Alpha, let's pick up all the predicates we have in our postings
+	// directory, and ask Zero if we are allowed to serve it. Do this irrespective of whether
+	// this node is the leader or the follower, because this early on, we might not have
+	// figured that out.
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		failed := false
+		preds := schema.State().Predicates()
+		for _, pred := range preds {
+			if tablet := g.Tablet(pred); tablet == nil {
+				failed = true
+			}
+		}
+		if !failed {
+			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
+			return
+		}
+	}
 }
 
 func (g *groupi) proposeInitialSchema() {
@@ -223,51 +244,6 @@ func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 // Don't acquire RW lock during this, otherwise we might deadlock.
 func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
-}
-
-// calculateTabletSizes iterates through badger and gets a size of the space occupied by each
-// predicate (including data and indexes). All data for a predicate forms a Tablet.
-func (g *groupi) calculateTabletSizes() map[string]*pb.Tablet {
-	opt := badger.DefaultIteratorOptions
-	opt.PrefetchValues = false
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(opt)
-	defer itr.Close()
-
-	gid := g.groupId()
-	tablets := make(map[string]*pb.Tablet)
-
-	for itr.Rewind(); itr.Valid(); {
-		item := itr.Item()
-
-		pk := x.Parse(item.Key())
-		if pk == nil {
-			itr.Next()
-			continue
-		}
-
-		// We should not be skipping schema keys here, otherwise if there is no data for them, they
-		// won't be added to the tablets map returned by this function and would ultimately be
-		// removed from the membership state.
-		tablet, has := tablets[pk.Attr]
-		if !has {
-			if !g.ServesTablet(pk.Attr) {
-				if pk.IsSchema() {
-					itr.Next()
-				} else {
-					// data key for predicate we don't serve, skip it.
-					itr.Seek(pk.SkipPredicate())
-				}
-				continue
-			}
-			tablet = &pb.Tablet{GroupId: gid, Predicate: pk.Attr}
-			tablets[pk.Attr] = tablet
-		}
-		tablet.Space += item.EstimatedSize()
-		itr.Next()
-	}
-	return tablets
 }
 
 func MaxLeaseId() uint64 {
@@ -636,12 +612,8 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 func (g *groupi) sendMembershipUpdates() {
 	defer g.closer.Done() // CLOSER:1
 
-	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
-	slowTicker := time.NewTicker(time.Minute * 5)
-	defer slowTicker.Stop()
-
-	fastTicker := time.NewTicker(time.Second)
-	defer fastTicker.Stop()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
 	consumeTriggers := func() {
 		for {
@@ -659,7 +631,7 @@ func (g *groupi) sendMembershipUpdates() {
 		select {
 		case <-g.closer.HasBeenClosed():
 			return
-		case <-fastTicker.C:
+		case <-ticker.C:
 			if time.Since(lastSent) > 10*time.Second {
 				// On start of node if it becomes a leader, we would send tablets size for sure.
 				g.triggerMembershipSync()
@@ -671,16 +643,6 @@ func (g *groupi) sendMembershipUpdates() {
 			consumeTriggers()
 			if err := g.doSendMembership(nil); err != nil {
 				glog.Errorf("While sending membership update: %v", err)
-			} else {
-				lastSent = time.Now()
-			}
-		case <-slowTicker.C:
-			if !g.Node.AmLeader() {
-				break // breaks select case, not for loop.
-			}
-			tablets := g.calculateTabletSizes()
-			if err := g.doSendMembership(tablets); err != nil {
-				glog.Errorf("While sending membership update with tablet: %v", err)
 			} else {
 				lastSent = time.Now()
 			}
@@ -775,79 +737,6 @@ OUTER:
 	}
 	cancel()
 	goto START
-}
-
-func (g *groupi) cleanupTablets() {
-	defer g.closer.Done() // CLOSER:1
-	defer func() {
-		glog.Infof("EXITING cleanupTablets.")
-	}()
-
-	// TODO: Do not clean tablets for now. This causes race conditions where we end up deleting
-	// predicate which is being streamed over by another group.
-	return
-
-	cleanup := func() {
-		g.blockDeletes.Lock()
-		defer g.blockDeletes.Unlock()
-		if !g.Node.AmLeader() {
-			return
-		}
-		glog.Infof("Running cleaning at Node: %#x Group: %d", g.Node.Id, g.groupId())
-		defer glog.Info("Cleanup Done")
-
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		txn := pstore.NewTransactionAt(math.MaxUint64, false)
-		defer txn.Discard()
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		for itr.Rewind(); itr.Valid(); {
-			item := itr.Item()
-			pk := x.Parse(item.Key())
-			if pk == nil {
-				itr.Next()
-				continue
-			}
-
-			// Delete at most one predicate at a time.
-			// Tablet is not being served by me and is not read only.
-			// Don't use servesTablet function because it can return false even if
-			// request made to group zero fails. We might end up deleting a predicate
-			// on failure of network request even though no one else is serving this
-			// tablet.
-			if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
-				glog.Warningf("Node: %d Group: %d. Proposing predicate delete: %v. Tablet: %+v",
-					g.Node.Id, g.groupId(), pk.Attr, tablet)
-				// Predicate moves are disabled during deletion, deletePredicate purges everything.
-				p := &pb.Proposal{CleanPredicate: pk.Attr}
-				err := groups().Node.proposeAndWait(context.Background(), p)
-				glog.Errorf("Cleaning up predicate: %+v. Error: %v", p, err)
-				return
-			}
-			if pk.IsSchema() {
-				itr.Seek(pk.SkipSchema())
-				continue
-			}
-			if pk.IsType() {
-				itr.Seek(pk.SkipType())
-				continue
-			}
-			itr.Seek(pk.SkipPredicate())
-		}
-	}
-
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-g.closer.HasBeenClosed():
-			return
-		case <-ticker.C:
-			cleanup()
-		}
-	}
 }
 
 // processOracleDeltaStream is used to process oracle delta stream from Zero.

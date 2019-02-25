@@ -1,0 +1,324 @@
+{
+  me(func: allofterms(name@en, "jones indiana")) {
+    name@en
+    genre {
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "The Adventures of Young Indiana Jones: The Perils of Cupid",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "Indiana Jones and the Temple of Doom",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action/Adventure"
+        },
+        {
+          "name@en": "Costume Adventure"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Daredevils of the Desert",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Passion for Life",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "Indiana Jones and the Last Crusade",
+      "genre": [
+        {
+          "name@en": "Adventure Comedy"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Costume Adventure"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Indiana Jones and the Kingdom of the Crystal Skull",
+      "genre": [
+        {
+          "name@en": "Thriller"
+        },
+        {
+          "name@en": "Adventure Comedy"
+        },
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Family"
+        },
+        {
+          "name@en": "Fantasy"
+        },
+        {
+          "name@en": "Costume Adventure"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Demons of Deception",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "Indiana Jones and the Raiders of the Lost Ark",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Young Indiana Jones Chronicles 2",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Travels with Father",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Family"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: My First Adventure",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Treasure of the Peacock's Eye",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Winds of Change",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Journey of Radiance",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: The Phantom Train of Doom",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    },
+    {
+      "name@en": "Indiana Jones"
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Spring Break Adventure",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Indiana Jones"
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Love's Sweet Song",
+      "genre": [
+        {
+          "name@en": "History"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Hollywood Follies",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Action Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Tales of Innocence",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "Romance Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Adventures in the Secret Service",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Oganga, the Giver and Taker of Life",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: The Trenches of Hell",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Espionage Escapades",
+      "genre": [
+        {
+          "name@en": "Comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Scandal of 1920",
+      "genre": [
+        {
+          "name@en": "Backstage Musical"
+        }
+      ]
+    },
+    {
+      "name@en": "Lego Indiana Jones and the Raiders of the Lost Brick",
+      "genre": [
+        {
+          "name@en": "Animation"
+        },
+        {
+          "name@en": "Parody"
+        },
+        {
+          "name@en": "Comedy"
+        },
+        {
+          "name@en": "Short Film"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Masks of Evil",
+      "genre": [
+        {
+          "name@en": "Horror"
+        },
+        {
+          "name@en": "Adventure Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Please Don't Use The Force: Indiana Jones Vs. Darth Vader",
+      "genre": [
+        {
+          "name@en": "Comedy"
+        }
+      ]
+    },
+    {
+      "name@en": "The Adventures of Young Indiana Jones: Attack of the Hawkmen",
+      "genre": [
+        {
+          "name@en": "Adventure Film"
+        },
+        {
+          "name@en": "War film"
+        }
+      ]
+    }
+  ]
+}

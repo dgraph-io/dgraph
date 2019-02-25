@@ -1,0 +1,92 @@
+{
+	var(func: allofterms(name@en, "eat drink man woman")) {
+    starring {
+      actors as performance.actor {
+        totalRoles as count(actor.film)
+      }
+    }
+  }
+
+  edmw(func: uid(actors), orderdesc: val(totalRoles)) {
+    name@en
+    name@zh
+    totalRoles : val(totalRoles)
+  }
+}
+---
+{
+  "edmw": [
+    {
+      "name@en": "Sylvia Chang",
+      "name@zh": "张艾嘉",
+      "totalRoles": 35
+    },
+    {
+      "name@en": "Chien-lien Wu",
+      "name@zh": "吴倩莲",
+      "totalRoles": 20
+    },
+    {
+      "name@en": "Yang Kuei-mei",
+      "name@zh": "杨贵媚",
+      "totalRoles": 14
+    },
+    {
+      "name@en": "Winston Chao",
+      "name@zh": "赵文瑄",
+      "totalRoles": 11
+    },
+    {
+      "name@en": "Gua Aleh",
+      "name@zh": "归亚蕾",
+      "totalRoles": 10
+    },
+    {
+      "name@en": "Chen Chao-jung",
+      "name@zh": "陈昭荣",
+      "totalRoles": 8
+    },
+    {
+      "name@en": "Sihung Lung",
+      "name@zh": "郎雄",
+      "totalRoles": 8
+    },
+    {
+      "name@en": "Lester Chit Man Chan",
+      "totalRoles": 7
+    },
+    {
+      "name@en": "Wang Yu-wen",
+      "name@zh": "王渝文",
+      "totalRoles": 3
+    },
+    {
+      "name@en": "Shui Wang",
+      "totalRoles": 2
+    },
+    {
+      "name@en": "Gin-Ming Hsu",
+      "totalRoles": 1
+    },
+    {
+      "name@en": "Shih-Jay Lin",
+      "totalRoles": 1
+    },
+    {
+      "name@en": "Chi-Der Hong",
+      "totalRoles": 1
+    },
+    {
+      "name@en": "Huel-Yi Lin",
+      "totalRoles": 1
+    },
+    {
+      "name@en": "Chung Ting",
+      "totalRoles": 1
+    },
+    {
+      "name@en": "Chin-Cheng Lu",
+      "totalRoles": 1
+    }
+  ]
+}

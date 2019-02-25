@@ -1,0 +1,170 @@
+{
+  me(func: allofterms(name@en, "Hark Tsui")) {
+    name@zh
+    name@en
+    director.film (orderasc: name@en) (first:6, offset:4)  {
+      genre {
+        name@en
+      }
+      name@zh
+      name@en
+      initial_release_date
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@zh": "小倩",
+      "name@en": "A Chinese Ghost Story: The Tsui Hark Animation"
+    },
+    {
+      "name@zh": "徐克",
+      "name@en": "Tsui Hark",
+      "director.film": [
+        {
+          "genre": [
+            {
+              "name@en": "Chinese Movies"
+            },
+            {
+              "name@en": "Superhero movie"
+            },
+            {
+              "name@en": "World cinema"
+            },
+            {
+              "name@en": "Action/Adventure"
+            },
+            {
+              "name@en": "Martial Arts Film"
+            },
+            {
+              "name@en": "Action Film"
+            },
+            {
+              "name@en": "Science Fiction"
+            }
+          ],
+          "name@en": "Black Mask 2: City of Masks",
+          "initial_release_date": "2002-01-01T00:00:00Z"
+        },
+        {
+          "genre": [
+            {
+              "name@en": "Adventure game"
+            },
+            {
+              "name@en": "Drama"
+            },
+            {
+              "name@en": "Action Film"
+            }
+          ],
+          "name@zh": "狄仁杰之通天帝国",
+          "name@en": "Detective Dee: Mystery of the Phantom Flame",
+          "initial_release_date": "2010-09-05T00:00:00Z"
+        },
+        {
+          "genre": [
+            {
+              "name@en": "Thriller"
+            },
+            {
+              "name@en": "Crime Fiction"
+            },
+            {
+              "name@en": "Action Film"
+            }
+          ],
+          "name@en": "Don't Play with Fire",
+          "initial_release_date": "1980-12-04T00:00:00Z"
+        },
+        {
+          "genre": [
+            {
+              "name@en": "Thriller"
+            },
+            {
+              "name@en": "Action/Adventure"
+            },
+            {
+              "name@en": "Martial Arts Film"
+            },
+            {
+              "name@en": "Action Thriller"
+            },
+            {
+              "name@en": "Action Film"
+            },
+            {
+              "name@en": "Buddy film"
+            }
+          ],
+          "name@en": "Double Team",
+          "initial_release_date": "1997-04-04T00:00:00Z"
+        },
+        {
+          "genre": [
+            {
+              "name@en": "Adventure Film"
+            },
+            {
+              "name@en": "Martial Arts Film"
+            },
+            {
+              "name@en": "Drama"
+            },
+            {
+              "name@en": "Action Film"
+            }
+          ],
+          "name@zh": "龙门飞甲",
+          "name@en": "Flying Swords of Dragon Gate",
+          "initial_release_date": "2011-12-15T00:00:00Z"
+        },
+        {
+          "genre": [
+            {
+              "name@en": "Chinese Movies"
+            },
+            {
+              "name@en": "World cinema"
+            },
+            {
+              "name@en": "Adventure Film"
+            },
+            {
+              "name@en": "Romance Film"
+            },
+            {
+              "name@en": "Action/Adventure"
+            },
+            {
+              "name@en": "Romantic fantasy"
+            },
+            {
+              "name@en": "Fantasy"
+            },
+            {
+              "name@en": "Drama"
+            },
+            {
+              "name@en": "Costume Adventure"
+            },
+            {
+              "name@en": "Fantasy Adventure"
+            }
+          ],
+          "name@zh": "青蛇",
+          "name@en": "Green Snake",
+          "initial_release_date": "1993-01-01T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "name@en": "Tsui Hark Movie Studio"
+    }
+  ]
+}

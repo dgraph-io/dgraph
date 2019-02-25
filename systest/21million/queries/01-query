@@ -1,7 +1,0 @@
-{
-  bladerunner(func: eq(name@en, "Blade Runner")) {
-    name@en
-    initial_release_date
-    netflix_id
-  }
-}
