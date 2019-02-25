@@ -1,17 +1,34 @@
 package codec
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
+	"math/big"
 	"reflect"
 )
+
+// Encoder is a wrapping around io.Writer
+type Encoder struct {
+	writer io.Writer
+}
 
 // Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64,
 // or bool
 func Encode(b interface{}) ([]byte, error) {
+	var buffer = bytes.Buffer{}
+	se := Encoder{&buffer}
+
 	switch v := b.(type) {
 	case []byte:
 		return encodeByteArray(v)
+	case *big.Int:
+		_, err := se.encodeBigInteger(v)
+		if err != nil {
+			return nil, err
+		}
+		return buffer.Bytes(), nil
 	case int16:
 		return encodeInteger(int(v))
 	case int32:
@@ -63,8 +80,6 @@ func encodeInteger(i int) ([]byte, error) {
 		return o, nil
 	}
 
-	// TODO: this case only works for integers between 2**30 and 2**64 due to the fact that Go's integers only hold up
-	// to 2 ** 64. need to implement this case for integers > 2**64 using the big.Int library
 	o := make([]byte, 8)
 	m := i
 	var numBytes uint
@@ -86,6 +101,35 @@ func encodeInteger(i int) ([]byte, error) {
 	binary.LittleEndian.PutUint64(o, uint64(i))
 
 	return append([]byte{bl[0]}, o[0:numBytes]...), nil
+}
+
+// encodeBigInteger performs the same encoding as encodeInteger, except on a big.Int.
+// if 2^30 <= n < 2^536 write [lower 2 bits of first byte = 11] [upper 6 bits of first byte = # of bytes following less 4]
+// [append i as a byte array to the first byte]
+func (se *Encoder) encodeBigInteger(i *big.Int) (bytesEncoded int, err error) {
+	if i.Cmp(new(big.Int).Lsh(big.NewInt(1), 6)) < 0 { // if i < 1<<6
+		err = binary.Write(se.writer, binary.LittleEndian, uint8(i.Int64()<<2))
+		return 1, err
+	} else if i.Cmp(new(big.Int).Lsh(big.NewInt(1), 14)) < 0 { // if i < 1<<14
+		err = binary.Write(se.writer, binary.LittleEndian, uint16(i.Int64()<<2)+1)
+		return 2, err
+	} else if i.Cmp(new(big.Int).Lsh(big.NewInt(1), 30)) < 0 { //if i < 1<<30
+		err = binary.Write(se.writer, binary.LittleEndian, uint32(i.Int64()<<2)+2)
+		return 4, err
+	}
+
+	numBytes := len(i.Bytes())
+	topSixBits := uint8(numBytes - 4)
+	lengthByte := topSixBits<<2 + 3
+
+	// write byte which encodes mode and length
+	err = binary.Write(se.writer, binary.LittleEndian, lengthByte)
+	if err == nil {
+		// write integer itself
+		err = binary.Write(se.writer, binary.LittleEndian, i.Bytes())
+	}
+
+	return numBytes + 1, err
 }
 
 // encodeBool performs the following:
