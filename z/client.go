@@ -20,7 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
+	"io/ioutil"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgo"
@@ -79,30 +80,36 @@ type LoginParams struct {
 	RefreshJwt string
 }
 
-// CurlLogin sends a curl request to the curlLoginEndpoint
+// HttpLogin sends a HTTP request to the server
 // and returns the access JWT and refresh JWT extracted from
-// the curl command output
-func CurlLogin(params *LoginParams) (string, string, error) {
-	// login with alice's account using curl
-	args := []string{"-X", "POST", params.Endpoint}
-
-	if len(params.RefreshJwt) > 0 {
-		args = append(args,
-			"-H", fmt.Sprintf(`X-Dgraph-RefreshJWT:%s`, params.RefreshJwt))
-	} else {
-		args = append(args,
-			"-H", fmt.Sprintf(`X-Dgraph-User:%s`, params.UserID),
-			"-H", fmt.Sprintf(`X-Dgraph-Password:%s`, params.Passwd))
+// the HTTP response
+func HttpLogin(params *LoginParams) (string, string, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", params.Endpoint, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to create request: %v", err)
 	}
 
-	userLoginCmd := exec.Command("curl", args...)
-	out, err := userLoginCmd.Output()
+	if len(params.RefreshJwt) > 0 {
+		req.Header.Add("X-Dgraph-RefreshJWT", params.RefreshJwt)
+	} else {
+		req.Header.Add("X-Dgraph-User", params.UserID)
+		req.Header.Add("X-Dgraph-Password", params.Passwd)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("login through curl failed: %v", err)
 	}
+	defer resp.Body.Close()
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to read from response: %v", err)
+	}
 
 	var outputJson map[string]map[string]string
-	if err := json.Unmarshal(out, &outputJson); err != nil {
+	if err := json.Unmarshal(respBody, &outputJson); err != nil {
 		return "", "", fmt.Errorf("unable to unmarshal the output to get JWTs: %v", err)
 	}
 

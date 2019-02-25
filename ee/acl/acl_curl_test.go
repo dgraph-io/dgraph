@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const loginEndpoint = "localhost:8180/login"
+const loginEndpoint = "http://localhost:8180/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
@@ -35,7 +35,7 @@ func TestCurlAuthorization(t *testing.T) {
 	createAccountAndData(t, dg)
 
 	// test query through curl
-	accessJwt, refreshJwt, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: loginEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
@@ -88,7 +88,7 @@ func TestCurlAuthorization(t *testing.T) {
 		failMsg:    "Token is expired",
 	})
 	// login again using the refreshJwt
-	accessJwt, refreshJwt, err = z.CurlLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
@@ -107,7 +107,7 @@ func TestCurlAuthorization(t *testing.T) {
 		failMsg:    "Token is expired",
 	})
 	// refresh the jwts again
-	accessJwt, refreshJwt, err = z.CurlLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
@@ -131,7 +131,7 @@ func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
 	time.Sleep(35 * time.Second)
 	// refresh the jwts again
-	accessJwt, refreshJwt, err = z.CurlLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})

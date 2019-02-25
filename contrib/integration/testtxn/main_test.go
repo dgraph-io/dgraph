@@ -46,7 +46,7 @@ func TestMain(m *testing.M) {
 	defer cancel()
 	err := dg.Login(context.Background(), x.GrootId, "password")
 	if err != nil {
-		panic("unable to login with the groot account")
+		log.Fatalf("unable to login with the groot account")
 	}
 	s.dg = dg
 

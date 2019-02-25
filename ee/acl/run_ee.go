@@ -256,8 +256,7 @@ func info(conf *viper.Viper) error {
 			return err
 		}
 		if user == nil {
-			fmt.Printf("The user %q does not exist.\n", userId)
-			return nil
+			return fmt.Errorf("The user %q does not exist.\n", userId)
 		}
 
 		fmt.Println()
@@ -275,8 +274,7 @@ func info(conf *viper.Viper) error {
 			return err
 		}
 		if group == nil {
-			fmt.Printf("The group %q does not exist.\n", groupId)
-			return nil
+			return fmt.Errorf("The group %q does not exist.\n", groupId)
 		}
 		fmt.Printf("Group: %5s\n", groupId)
 		fmt.Printf("UID  : %5s\n", group.Uid)
