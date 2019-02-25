@@ -19,6 +19,7 @@ package backup
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -96,17 +97,18 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	// move tablet to group 1 to avoid messes later.
-	resp, err := http.Get("http://localhost:6080/moveTablet?tablet=movie&group=1")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	_, err = http.Get("http://localhost:6080/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 	// if the move happened, we need to pause a bit to give zero a chance to quorum
-	if bytes.Contains(b, []byte("Predicate: [movie] moved from group")) {
-		t.Log("Pausing for 15s to let zero move tablet...")
-		time.Sleep(15 * time.Second)
+	t.Log("Pausing to let zero move tablet...")
+	for retry := 5; retry > 0; retry-- {
+		time.Sleep(3 * time.Second)
+		state, err := getState()
+		require.NoError(t, err)
+		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+			break
+		}
 	}
-	time.Sleep(3 * time.Second)
 
 	// All test data will reside here
 	x.Check(os.Mkdir("./data", 0777))
@@ -351,4 +353,42 @@ func getError(rc io.ReadCloser) error {
 		return fmt.Errorf("%s", string(b))
 	}
 	return nil
+}
+
+type response struct {
+	Groups map[string]struct {
+		Members map[string]interface{} `json:"members"`
+		Tablets map[string]struct {
+			GroupID   int    `json:"groupId"`
+			Predicate string `json:"predicate"`
+		} `json:"tablets"`
+	} `json:"groups"`
+	Removed []struct {
+		Addr    string `json:"addr"`
+		GroupID int    `json:"groupId"`
+		ID      string `json:"id"`
+	} `json:"removed"`
+}
+
+func getState() (*response, error) {
+	resp, err := http.Get("http://localhost:6080/state")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if bytes.Contains(b, []byte("Error")) {
+		return nil, fmt.Errorf("Failed to get state: %s", string(b))
+	}
+
+	var st response
+	if err := json.Unmarshal(b, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
 }
