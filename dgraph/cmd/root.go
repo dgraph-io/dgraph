@@ -126,7 +126,8 @@ func setGlogFlags(conf *viper.Viper) {
 	// https://github.com/golang/glog/blob/master/glog.go#L399
 	// and https://github.com/golang/glog/blob/master/glog_file.go#L41
 	glogFlags := [...]string{
-		"log_dir", "logtostderr", "alsologtostderr", "v", "stderrthreshold", "vmodule", "log_backtrace_at",
+		"log_dir", "logtostderr", "alsologtostderr", "v",
+		"stderrthreshold", "vmodule", "log_backtrace_at",
 	}
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
