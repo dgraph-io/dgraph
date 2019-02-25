@@ -80,6 +80,7 @@ func TestSystem(t *testing.T) {
 	t.Run("has should have reverse edges", wrap(HasReverseEdge))
 	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
 	t.Run("max predicate size", wrap(MaxPredicateSize))
+	t.Run("restore reserved preds", wrap(RestoreReservedPreds))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1715,4 +1716,18 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
+}
+
+func RestoreReservedPreds(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	err := c.Alter(ctx, &api.Operation{
+		DropAll: true,
+	})
+	require.NoError(t, err)
+
+	// Verify that the reserved predicates were restored to the schema.
+	query := `schema(preds: type) {predicate}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, `{"schema": [{"predicate":"type"}]}`, string(resp.Json))
 }

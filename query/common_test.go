@@ -57,6 +57,15 @@ func setSchema(schema string) {
 	}
 }
 
+func dropPredicate(pred string) {
+	err := client.Alter(context.Background(), &api.Operation{
+		DropAttr: pred,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
+	}
+}
+
 func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)

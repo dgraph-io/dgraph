@@ -445,14 +445,6 @@ func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
 	})
 }
 
-// deleteAllTokens deletes the index for the given attribute. All tokenizers are
-// used by this function.
-func deleteAllTokens(attr string) error {
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.IndexPrefix()
-	return pstore.DropPrefix(prefix)
-}
-
 // deleteTokensFor deletes the index for the given attribute and token.
 func deleteTokensFor(attr, tokenizerName string) error {
 	pk := x.ParsedKey{Attr: attr}
