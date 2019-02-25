@@ -34,6 +34,25 @@ var encodeTests = []encodeTest{
 	// booleans
 	{val: true, output: []byte{0x01}},
 	{val: false, output: []byte{0x00}},
+
+	// structs
+	{val: struct {
+		Foo []byte
+		Bar int64
+	}{[]byte{0x01}, 2}, output: []byte{0x04, 0x01, 0x08}},
+	{val: struct {
+		Foo []byte
+		Bar int64
+		Ok  bool
+	}{[]byte{0x01}, 2, true}, output: []byte{0x04, 0x01, 0x08, 0x01}},
+	{val: struct {
+		Foo int64
+		Bar []byte
+	}{int64(16384), []byte{0xff}}, output: []byte{0x02, 0x00, 0x01, 0x00, 0x04, 0xff}},
+	{val: struct {
+		Foo int64
+		Bar []byte
+	}{int64(1073741824), byteArray(64)}, output: append([]byte{0x03, 0x00, 0x00, 0x00, 0x40, 0x01, 0x01}, byteArray(64)...)},
 }
 
 func TestEncode(t *testing.T) {

@@ -3,6 +3,7 @@ package codec
 import (
 	"encoding/binary"
 	"errors"
+	"reflect"
 )
 
 // Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64,
@@ -17,8 +18,12 @@ func Encode(b interface{}) ([]byte, error) {
 		return encodeInteger(int(v))
 	case int64:
 		return encodeInteger(int(v))
+	case string:
+		return encodeByteArray([]byte(v))
 	case bool:
 		return encodeBool(v)
+	case interface{}:
+		return encodeTuple(v)
 	default:
 		return nil, errors.New("unsupported type")
 	}
@@ -91,4 +96,26 @@ func encodeBool(l bool) ([]byte, error) {
 		return []byte{0x01}, nil
 	}
 	return []byte{0x00}, nil
+}
+
+func encodeTuple(t interface{}) ([]byte, error) {
+	v := reflect.ValueOf(t)
+
+	values := make([]interface{}, v.NumField())
+
+	for i := 0; i < v.NumField(); i++ {
+		values[i] = v.Field(i).Interface()
+	}
+
+	o := []byte{}
+	for _, item := range values {
+		encodedItem, err := Encode(item)
+		if err != nil {
+			return nil, err
+		}
+
+		o = append(o, encodedItem...)
+	}
+
+	return o, nil
 }
