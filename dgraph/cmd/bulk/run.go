@@ -125,9 +125,15 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
+	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
+		os.Exit(1)
 	}
 	if opt.DataFiles == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
+		os.Exit(1)
+	} else if _, err := os.Stat(opt.DataFiles); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist .\n", opt.DataFiles)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {
