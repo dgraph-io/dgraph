@@ -117,7 +117,7 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 	return preds
 }
 
-func (s *schemaStore) write(db *badger.DB) {
+func (s *schemaStore) write(db *badger.DB, preds []string) {
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
 	// if bulk loader was restarted or other similar scenarios.
 
