@@ -32,8 +32,8 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 	s1 := testSchema + "\n numerology: string @index(exact, term, fulltext) .\n"
 	setSchema(s1)
 	triples := `
-		<666> <numerology> "This number is evil"  .
-		<777> <numerology> "This number is good"  .
+		<0x666> <numerology> "This number is evil"  .
+		<0x777> <numerology> "This number is good"  .
 	`
 	addTriplesToCluster(triples)
 
@@ -47,8 +47,8 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
-		{"uid": "0x29a", "numerology": "This number is evil"},
-		{"uid": "0x309", "numerology": "This number is good"}
+		{"uid": "0x666", "numerology": "This number is evil"},
+		{"uid": "0x777", "numerology": "This number is good"}
 	]}}`, js)
 
 	// Remove the fulltext index and verify the previous query is no longer supported.
@@ -68,16 +68,16 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 	}`
 	js = processQueryNoErr(t, q2)
 	require.JSONEq(t, `{"data": {"me": [
-		{"uid": "0x29a", "numerology": "This number is evil"},
-		{"uid": "0x309", "numerology": "This number is good"}
+		{"uid": "0x666", "numerology": "This number is evil"},
+		{"uid": "0x777", "numerology": "This number is good"}
 	]}}`, js)
 
 	// Re-add index and verify that the original query works again.
 	setSchema(s1)
 	js = processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
-		{"uid": "0x29a", "numerology": "This number is evil"},
-		{"uid": "0x309", "numerology": "This number is good"}
+		{"uid": "0x666", "numerology": "This number is evil"},
+		{"uid": "0x777", "numerology": "This number is good"}
 	]}}`, js)
 
 	// Finally, drop the predicate and restore schema.
@@ -90,8 +90,8 @@ func TestDeleteAndReaddCount(t *testing.T) {
 	s1 := testSchema + "\n numerology: string @count .\n"
 	setSchema(s1)
 	triples := `
-		<666> <numerology> "This number is evil"  .
-		<777> <numerology> "This number is good"  .
+		<0x666> <numerology> "This number is evil"  .
+		<0x777> <numerology> "This number is good"  .
 	`
 	addTriplesToCluster(triples)
 
@@ -105,8 +105,8 @@ func TestDeleteAndReaddCount(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
-		{"uid": "0x29a", "numerology": "This number is evil"},
-		{"uid": "0x309", "numerology": "This number is good"}
+		{"uid": "0x666", "numerology": "This number is evil"},
+		{"uid": "0x777", "numerology": "This number is good"}
 	]}}`, js)
 
 	// Remove the count index and verify the previous query is no longer supported.
@@ -120,8 +120,8 @@ func TestDeleteAndReaddCount(t *testing.T) {
 	setSchema(s1)
 	js = processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
-		{"uid": "0x29a", "numerology": "This number is evil"},
-		{"uid": "0x309", "numerology": "This number is good"}
+		{"uid": "0x666", "numerology": "This number is evil"},
+		{"uid": "0x777", "numerology": "This number is good"}
 	]}}`, js)
 
 	// Finally, drop the predicate and restore schema.
@@ -133,20 +133,20 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 	// Add new predicate with a reverse edge.
 	s1 := testSchema + "\n child_pred: uid @reverse .\n"
 	setSchema(s1)
-	triples := `<666> <child_pred> <777>  .`
+	triples := `<0x666> <child_pred> <0x777>  .`
 	addTriplesToCluster(triples)
 
 	// Verify reverse edges works as expected.
 	q1 := `
 	{
-		me(func: uid(777)) {
+		me(func: uid(0x777)) {
 			~child_pred {
 				uid
 			}
 		}
 	}`
 	js := processQueryNoErr(t, q1)
-	require.JSONEq(t, `{"data": {"me": [{"~child_pred": [{"uid": "0x29a"}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me": [{"~child_pred": [{"uid": "0x666"}]}]}}`, js)
 
 	// Remove the reverse edges and verify the previous query is no longer supported.
 	s2 := testSchema + "\n child_pred: uid .\n"
@@ -158,7 +158,7 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 	// Re-add reverse edges and verify that the original query works again.
 	setSchema(s1)
 	js = processQueryNoErr(t, q1)
-	require.JSONEq(t, `{"data": {"me": [{"~child_pred": [{"uid": "0x29a"}]}]}}`, js)
+	require.JSONEq(t, `{"data": {"me": [{"~child_pred": [{"uid": "0x666"}]}]}}`, js)
 
 	// Finally, drop the predicate and restore schema.
 	dropPredicate("child_pred")
@@ -170,8 +170,8 @@ func TestDropPredicate(t *testing.T) {
 	s1 := testSchema + "\n numerology: string @index(term) .\n"
 	setSchema(s1)
 	triples := `
-		<666> <numerology> "This number is evil"  .
-		<777> <numerology> "This number is good"  .
+		<0x666> <numerology> "This number is evil"  .
+		<0x777> <numerology> "This number is good"  .
 	`
 	addTriplesToCluster(triples)
 
@@ -185,8 +185,8 @@ func TestDropPredicate(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, q1)
 	require.JSONEq(t, `{"data": {"me": [
-		{"uid": "0x29a", "numerology": "This number is evil"},
-		{"uid": "0x309", "numerology": "This number is good"}
+		{"uid": "0x666", "numerology": "This number is evil"},
+		{"uid": "0x777", "numerology": "This number is good"}
 	]}}`, js)
 
 	// Finally, drop the predicate and verify the query no longer works because
