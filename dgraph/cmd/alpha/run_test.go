@@ -256,7 +256,7 @@ func TestDeletePredicate(t *testing.T) {
 	var s2 = `
 	friend: string @index(term) .
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -338,7 +338,7 @@ type Received struct {
 }
 
 func TestSchemaMutation(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -387,7 +387,7 @@ func TestSchemaMutation(t *testing.T) {
 }
 
 func TestSchemaMutation1(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -431,7 +431,7 @@ func TestSchemaMutation2Error(t *testing.T) {
 	var m = `
             age:string @reverse .
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -446,7 +446,7 @@ func TestSchemaMutation3Error(t *testing.T) {
 	var m = `
             age: uid @index .
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -465,7 +465,7 @@ func TestMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -475,7 +475,7 @@ func TestMutation4Error(t *testing.T) {
 }
 
 func TestMutationSingleUid(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -503,7 +503,7 @@ func TestMutationSingleUid(t *testing.T) {
 
 // Verify multiple uids are allowed after mutation.
 func TestSchemaMutationUid(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -544,7 +544,7 @@ func TestSchemaMutationUid(t *testing.T) {
 
 // Verify a list uid predicate cannot be converted to a single-element predicate.
 func TestSchemaMutationUidError1(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -567,7 +567,7 @@ func TestSchemaMutationUidError1(t *testing.T) {
 
 // add index
 func TestSchemaMutationIndexAdd(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -611,7 +611,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 
 // Remove index
 func TestSchemaMutationIndexRemove(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -664,7 +664,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 
 // add reverse edge
 func TestSchemaMutationReverseAdd(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -709,7 +709,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 
 // Remove reverse edge
 func TestSchemaMutationReverseRemove(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -766,7 +766,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 // add count edges
 func TestSchemaMutationCountAdd(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -853,7 +853,7 @@ func TestJsonMutation(t *testing.T) {
 	var s1 = `
             name: string @index(exact) .
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -915,7 +915,7 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 		]
 	}
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1011,7 +1011,7 @@ func TestDeleteAll(t *testing.T) {
       		friend: [uid] @reverse .
 		name: string @index(term) .
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1053,7 +1053,7 @@ func TestDeleteAllSP1(t *testing.T) {
 			<2000> * * .
 		}
 	}`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1136,7 +1136,7 @@ func TestMutationError(t *testing.T) {
  		}
  	}
  `
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1200,7 +1200,7 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestListPred(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1268,7 +1268,7 @@ func TestExpandPredError(t *testing.T) {
 			name:string @index(term) .
 	`
 
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1314,7 +1314,7 @@ func TestExpandPred(t *testing.T) {
 			name:string @index(term) .
 	`
 
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1358,7 +1358,7 @@ var threeNiceFriends = `{
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1396,7 +1396,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 
 // change from uid to scalar or vice versa
 func TestSchemaMutation5Error(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1430,7 +1430,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 // A basic sanity check. We will do more extensive testing for multiple values in query.
 func TestMultipleValues(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1467,7 +1467,7 @@ func TestMultipleValues(t *testing.T) {
 }
 
 func TestListTypeSchemaChange(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1549,7 +1549,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 }
 
 func TestDeleteAllSP2(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1606,7 +1606,7 @@ func TestDeleteAllSP2(t *testing.T) {
 }
 
 func TestDeleteScalarValue(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1693,7 +1693,7 @@ func TestDropAll(t *testing.T) {
 	}`
 
 	s := `name: string @index(term) .`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1762,7 +1762,7 @@ func TestRecurseExpandAll(t *testing.T) {
 	`
 
 	var s = `name:string @index(term) .`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1783,7 +1783,7 @@ func TestRecurseExpandAll(t *testing.T) {
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1809,7 +1809,7 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 // This test couldn't like in query package because that package tries to do some extra JSON
 // marshal, which causes issues for this case.
 func TestJsonUnicode(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -1872,7 +1872,7 @@ func TestTypeMutationAndQuery(t *testing.T) {
 	var s = `
             name: string @index(exact) .
 	`
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
