@@ -145,7 +145,6 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		peers:       make(map[uint64]string),
 		requestCh:   make(chan linReadReq),
 	}
-	// No closer is necessary so simply pass a closer with an initial count of zero.
 	n.Applied.Init(y.NewCloser(0))
 	// This should match up to the Applied index set above.
 	n.Applied.SetDoneUntil(n.Cfg.Applied)

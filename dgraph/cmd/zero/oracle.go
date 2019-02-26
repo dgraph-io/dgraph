@@ -60,7 +60,6 @@ func (o *Oracle) Init() {
 	o.keyCommit = make(map[string]uint64)
 	o.subscribers = make(map[int]chan *pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
-	// No closer is necessary so simply pass a closer with an initial count of zero.
 	o.doneUntil.Init(y.NewCloser(0))
 	go o.sendDeltasToSubscribers()
 }
