@@ -47,39 +47,39 @@ func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
 
 func TestCreateAndDeleteUsers(t *testing.T) {
 	// clean up the user to allow repeated running of this test
-	cleanUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
+	cleanUserCmd := exec.Command("dgraph", "acl", "del", "-d", dgraphEndpoint,
 		"-u", userid, "-x", "password")
 	cleanUserCmd.Run()
 	glog.Infof("cleaned up db user state")
 
-	createUserCmd1 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+	createUserCmd1 := exec.Command("dgraph", "acl", "add", "-d", dgraphEndpoint, "-u", userid,
 		"-p", userpassword, "-x", "password")
 	checkOutput(t, createUserCmd1, false)
 
-	createUserCmd2 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+	createUserCmd2 := exec.Command("dgraph", "acl", "add", "-d", dgraphEndpoint, "-u", userid,
 		"-p", userpassword, "-x", "password")
 	// create the user again should fail
 	checkOutput(t, createUserCmd2, true)
 
 	// delete the user
-	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint, "-u", userid,
+	deleteUserCmd := exec.Command("dgraph", "acl", "del", "-d", dgraphEndpoint, "-u", userid,
 		"-x", "password")
 	checkOutput(t, deleteUserCmd, false)
 
 	// now we should be able to create the user again
-	createUserCmd3 := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u", userid,
+	createUserCmd3 := exec.Command("dgraph", "acl", "add", "-d", dgraphEndpoint, "-u", userid,
 		"-p", userpassword, "-x", "password")
 	checkOutput(t, createUserCmd3, false)
 }
 
 func resetUser(t *testing.T) {
 	// delete and recreate the user to ensure a clean state
-	deleteUserCmd := exec.Command("dgraph", "acl", "userdel", "-d", dgraphEndpoint,
+	deleteUserCmd := exec.Command("dgraph", "acl", "del", "-d", dgraphEndpoint,
 		"-u", userid, "-x", "password")
 	deleteUserCmd.Run()
 	glog.Infof("deleted user")
 
-	createUserCmd := exec.Command("dgraph", "acl", "useradd", "-d", dgraphEndpoint, "-u",
+	createUserCmd := exec.Command("dgraph", "acl", "add", "-d", dgraphEndpoint, "-u",
 		userid, "-p", userpassword, "-x", "password")
 	checkOutput(t, createUserCmd, false)
 	glog.Infof("created user")
@@ -270,63 +270,66 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 	// create a new group
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "groupadd",
+		"acl", "add",
 		"-d", dgraphEndpoint,
 		"-g", group, "-x", "password")
-	if err := createGroupCmd.Run(); err != nil {
-		t.Fatalf("Unable to create group: %v", err)
+	if errOutput, err := createGroupCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Unable to create group: %v", string(errOutput))
 	}
 
 	// add the user to the group
 	if addUserToGroup {
 		addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-			"acl", "usermod",
+			"acl", "mod",
 			"-d", dgraphEndpoint,
-			"-u", userid, "-g", group, "-x", "password")
-		if err := addUserToGroupCmd.Run(); err != nil {
-			t.Fatalf("Unable to add user %s to group %s:%v", userid, group, err)
+			"-u", userid, "--group_list", group, "-x", "password")
+		if errOutput, err := addUserToGroupCmd.CombinedOutput(); err != nil {
+			t.Fatalf("Unable to add user %s to group %s:%v", userid, group, string(errOutput))
 		}
 	}
 
 	// add READ permission on the predicateToRead to the group
 	addReadPermCmd1 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
 		"-g", group, "-p", predicateToRead, "-P", strconv.Itoa(int(Read.Code)), "-x",
 		"password")
-	if err := addReadPermCmd1.Run(); err != nil {
+	if errOutput, err := addReadPermCmd1.CombinedOutput(); err != nil {
 		t.Fatalf("Unable to add READ permission on %s to group %s: %v",
-			predicateToRead, group, err)
+			predicateToRead, group, string(errOutput))
 	}
 
 	// also add read permission to the attribute queryAttr, which is used inside the query block
 	addReadPermCmd2 := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
 		"-g", group, "-p", queryAttr, "-P", strconv.Itoa(int(Read.Code)), "-x",
 		"password")
-	if err := addReadPermCmd2.Run(); err != nil {
-		t.Fatalf("Unable to add READ permission on %s to group %s: %v", queryAttr, group, err)
+	if errOutput, err := addReadPermCmd2.CombinedOutput(); err != nil {
+		t.Fatalf("Unable to add READ permission on %s to group %s: %v", queryAttr, group,
+			string(errOutput))
 	}
 
 	// add WRITE permission on the predicateToWrite
 	addWritePermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
 		"-g", group, "-p", predicateToWrite, "-P", strconv.Itoa(int(Write.Code)), "-x",
 		"password")
-	if err := addWritePermCmd.Run(); err != nil {
-		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToWrite, group, err)
+	if errOutput, err := addWritePermCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToWrite, group,
+			string(errOutput))
 	}
 
 	// add MODIFY permission on the predicateToAlter
 	addModifyPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
 		"-g", group, "-p", predicateToAlter, "-P", strconv.Itoa(int(Modify.Code)), "-x",
 		"password")
-	if err := addModifyPermCmd.Run(); err != nil {
-		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToAlter, group, err)
+	if errOutput, err := addModifyPermCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Unable to add permission on %s to group %s: %v", predicateToAlter, group,
+			string(errOutput))
 	}
 }
 
@@ -342,8 +345,8 @@ func TestPasswordReset(t *testing.T) {
 
 	// reset password for the user alice
 	newPassword := userpassword + "123"
-	chPdCmd := exec.Command("dgraph", "acl", "passwd", "-d", dgraphEndpoint, "-u",
-		userid, "--new", newPassword, "-x", "password")
+	chPdCmd := exec.Command("dgraph", "acl", "mod", "-d", dgraphEndpoint, "-u",
+		userid, "--new_password", newPassword, "-x", "password")
 	checkOutput(t, chPdCmd, false)
 	glog.Infof("Successfully changed password for %v", userid)
 
@@ -382,43 +385,43 @@ func TestPredicateRegex(t *testing.T) {
 
 	// create a new group
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "groupadd",
+		"acl", "add",
 		"-d", dgraphEndpoint,
 		"-g", devGroup, "-x", "password")
-	if err := createGroupCmd.Run(); err != nil {
-		t.Fatalf("Unable to create group:%v", err)
+	if errOutput, err := createGroupCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Unable to create group:%v", string(errOutput))
 	}
 
 	// add the user to the group
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "usermod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
-		"-u", userid, "-g", devGroup, "-x", "password")
-	if err := addUserToGroupCmd.Run(); err != nil {
-		t.Fatalf("Unable to add user %s to group %s:%v", userid, devGroup, err)
+		"-u", userid, "--group_list", devGroup, "-x", "password")
+	if errOutput, err := addUserToGroupCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Unable to add user %s to group %s:%v", userid, devGroup, string(errOutput))
 	}
 
 	addReadToNameCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
 		"-g", devGroup, "--pred", "name", "-P", strconv.Itoa(int(Read.Code)|int(Write.Code)),
 		"-x",
 		"password")
-	if err := addReadToNameCmd.Run(); err != nil {
+	if errOutput, err := addReadToNameCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Unable to add READ permission on %s to group %s:%v",
-			"name", devGroup, err)
+			"name", devGroup, string(errOutput))
 	}
 
 	// add READ+WRITE permission on the regex ^predicate_to(.*)$ pred filter to the group
 	predRegex := "^predicate_to(.*)$"
 	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
-		"acl", "chmod",
+		"acl", "mod",
 		"-d", dgraphEndpoint,
 		"-g", devGroup, "--pred_regex", predRegex, "-P",
 		strconv.Itoa(int(Read.Code)|int(Write.Code)), "-x", "password")
-	if err := addReadWriteToRegexPermCmd.Run(); err != nil {
+	if errOutput, err := addReadWriteToRegexPermCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Unable to add READ+WRITE permission on %s to group %s:%v",
-			predRegex, devGroup, err)
+			predRegex, devGroup, string(errOutput))
 	}
 
 	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")

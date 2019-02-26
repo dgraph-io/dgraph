@@ -68,119 +68,61 @@ func init() {
 }
 
 func initSubcommands() []*x.SubCommand {
-	// user creation command
-	var cmdUserAdd x.SubCommand
-	cmdUserAdd.Cmd = &cobra.Command{
-		Use:   "useradd",
-		Short: "Run Dgraph acl tool to add a user",
+	var cmdAdd x.SubCommand
+	cmdAdd.Cmd = &cobra.Command{
+		Use:   "add",
+		Short: "Run Dgraph acl tool to add a user or group",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := userAdd(cmdUserAdd.Conf); err != nil {
-				fmt.Printf("Unable to add user: %v\n", err)
+			if err := add(cmdAdd.Conf); err != nil {
+				fmt.Printf("Unable to add user or group: %v\n", err)
 				os.Exit(1)
 			}
 		},
 	}
-	userAddFlags := cmdUserAdd.Cmd.Flags()
-	userAddFlags.StringP("user", "u", "", "The user id to be created")
-	userAddFlags.StringP("password", "p", "", "The password for the user")
 
-	// user change password command
-	var cmdPasswd x.SubCommand
-	cmdPasswd.Cmd = &cobra.Command{
-		Use:   "passwd",
-		Short: "Run Dgraph acl tool to change a user's password",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := userPasswd(cmdPasswd.Conf); err != nil {
-				fmt.Printf("Unable to change password for user: %v\n", err)
-				os.Exit(1)
-			}
-		},
-	}
-	chPwdFlags := cmdPasswd.Cmd.Flags()
-	chPwdFlags.StringP("user", "u", "", "The user id to be created")
-	chPwdFlags.StringP("new", "", "", "The new password for the user")
+	addFlags := cmdAdd.Cmd.Flags()
+	addFlags.StringP("user", "u", "", "The user id to be created")
+	addFlags.StringP("password", "p", "", "The password for the user")
+	addFlags.StringP("group", "g", "", "The group id to be created")
 
-	// user deletion command
-	var cmdUserDel x.SubCommand
-	cmdUserDel.Cmd = &cobra.Command{
-		Use:   "userdel",
-		Short: "Run Dgraph acl tool to delete a user",
+	var cmdDel x.SubCommand
+	cmdDel.Cmd = &cobra.Command{
+		Use:   "del",
+		Short: "Run Dgraph acl tool to delete a user or group",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := userDel(cmdUserDel.Conf); err != nil {
+			if err := del(cmdDel.Conf); err != nil {
 				fmt.Printf("Unable to delete the user: %v\n", err)
 				os.Exit(1)
 			}
 		},
 	}
-	userDelFlags := cmdUserDel.Cmd.Flags()
-	userDelFlags.StringP("user", "u", "", "The user id to be deleted")
 
-	// group creation command
-	var cmdGroupAdd x.SubCommand
-	cmdGroupAdd.Cmd = &cobra.Command{
-		Use:   "groupadd",
-		Short: "Run Dgraph acl tool to add a group",
+	delFlags := cmdDel.Cmd.Flags()
+	delFlags.StringP("user", "u", "", "The user id to be deleted")
+	delFlags.StringP("group", "g", "", "The group id to be deleted")
+
+	var cmdMod x.SubCommand
+	cmdMod.Cmd = &cobra.Command{
+		Use: "mod",
+		Short: "Run Dgraph acl tool to modify a user's password, a user's group list, or a" +
+			"group's predicate permissions",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := groupAdd(cmdGroupAdd.Conf); err != nil {
-				fmt.Printf("Unable to add group: %v\n", err)
+			if err := mod(cmdMod.Conf); err != nil {
+				fmt.Printf("Unable to modify: %v\n", err)
 				os.Exit(1)
 			}
 		},
 	}
-	groupAddFlags := cmdGroupAdd.Cmd.Flags()
-	groupAddFlags.StringP("group", "g", "", "The group id to be created")
 
-	// group deletion command
-	var cmdGroupDel x.SubCommand
-	cmdGroupDel.Cmd = &cobra.Command{
-		Use:   "groupdel",
-		Short: "Run Dgraph acl tool to delete a group",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := groupDel(cmdGroupDel.Conf); err != nil {
-				fmt.Printf("Unable to delete group: %v\n", err)
-				os.Exit(1)
-			}
-		},
-	}
-	groupDelFlags := cmdGroupDel.Cmd.Flags()
-	groupDelFlags.StringP("group", "g", "", "The group id to be deleted")
-
-	// the usermod command used to set a user's groups
-	var cmdUserMod x.SubCommand
-	cmdUserMod.Cmd = &cobra.Command{
-		Use:   "usermod",
-		Short: "Run Dgraph acl tool to change a user's groups",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := userMod(cmdUserMod.Conf); err != nil {
-				fmt.Printf("Unable to modify user: %v\n", err)
-				os.Exit(1)
-			}
-		},
-	}
-	userModFlags := cmdUserMod.Cmd.Flags()
-	userModFlags.StringP("user", "u", "", "The user id to be changed")
-	userModFlags.StringP("groups", "g", "", "The groups to be set for the user")
-
-	// the chmod command is used to change a group's permissions
-	var cmdChMod x.SubCommand
-	cmdChMod.Cmd = &cobra.Command{
-		Use:   "chmod",
-		Short: "Run Dgraph acl tool to change a group's permissions",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := chMod(cmdChMod.Conf); err != nil {
-				fmt.Printf("Unable to change permisson for group: %v\n", err)
-				os.Exit(1)
-			}
-		},
-	}
-	chModFlags := cmdChMod.Cmd.Flags()
-	chModFlags.StringP("group", "g", "", "The group whose permission "+
-		"is to be changed")
-	chModFlags.StringP("pred", "p", "", "The predicates whose acls"+
-		" are to be changed")
-	chModFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
+	modFlags := cmdMod.Cmd.Flags()
+	modFlags.StringP("user", "u", "", "The user id to be changed")
+	modFlags.StringP("new_password", "", "", "The new password for the user")
+	modFlags.StringP("group_list", "l", "", "The list of groups to be set for the user")
+	modFlags.StringP("group", "g", "", "The group whose permission is to be changed")
+	modFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
+	modFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
 		" whose acls are to be changed")
-	chModFlags.IntP("perm", "P", 0, "The acl represented using "+
+	modFlags.IntP("perm", "P", 0, "The acl represented using "+
 		"an integer: 4 for read, 2 for write, and 1 for modify.")
 
 	var cmdInfo x.SubCommand
@@ -197,10 +139,7 @@ func initSubcommands() []*x.SubCommand {
 	infoFlags := cmdInfo.Cmd.Flags()
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
-	return []*x.SubCommand{
-		&cmdUserAdd, &cmdPasswd, &cmdUserDel, &cmdGroupAdd, &cmdGroupDel, &cmdUserMod,
-		&cmdChMod, &cmdInfo,
-	}
+	return []*x.SubCommand{&cmdAdd, &cmdDel, &cmdMod, &cmdInfo}
 }
 
 type CloseFunc func()
@@ -260,8 +199,8 @@ func info(conf *viper.Viper) error {
 		}
 
 		fmt.Println()
-		fmt.Printf("User  : %-5s\n", userId)
-		fmt.Printf("UID   : %-5s\n", user.Uid)
+		fmt.Printf("User  : %s\n", userId)
+		fmt.Printf("UID   : %s\n", user.Uid)
 		for _, group := range user.Groups {
 			fmt.Printf("Group : %-5s\n", group.GroupID)
 		}
@@ -276,24 +215,26 @@ func info(conf *viper.Viper) error {
 		if group == nil {
 			return fmt.Errorf("The group %q does not exist.\n", groupId)
 		}
-		fmt.Printf("Group: %5s\n", groupId)
-		fmt.Printf("UID  : %5s\n", group.Uid)
-		fmt.Printf("ID   : %5s\n", group.GroupID)
+		fmt.Printf("Group: %s\n", groupId)
+		fmt.Printf("UID  : %s\n", group.Uid)
+		fmt.Printf("ID   : %s\n", group.GroupID)
 
 		var userNames []string
 		for _, user := range group.Users {
 			userNames = append(userNames, user.UserID)
 		}
-		fmt.Printf("Users: %5s\n", strings.Join(userNames, " "))
+		fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
 
 		var acls []Acl
-		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
-				groupId, err)
-		}
+		if len(group.Acls) != 0 {
+			if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
+				return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
+					groupId, err)
+			}
 
-		for _, acl := range acls {
-			fmt.Printf("ACL  : %5v\n", acl)
+			for _, acl := range acls {
+				fmt.Printf("ACL  : %v\n", acl)
+			}
 		}
 	}
 
