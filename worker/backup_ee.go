@@ -84,9 +84,6 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 
 // BackupOverNetwork handles a request coming from an HTTP client.
 func BackupOverNetwork(ctx context.Context, destination string) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	// Check that this node can accept requests.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
@@ -108,26 +105,28 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 		UnixTs:   time.Now().UTC().Format("20060102.150405"),
 	}
 
-	glog.Infof("Created backup request: %+v. Groups=%v\n", m.Request, m.Groups)
+	glog.Infof("Created backup request: %s. Groups=%v\n", &m.Request, m.Groups)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
-	errCh := make(chan error, 1)
+	errCh := make(chan error, len(m.Groups))
 	for _, gid := range m.Groups {
 		req := m.Request
 		req.GroupId = gid
 		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
 			// This is the max version result from Backup().
-			if req.Since != 0 {
+			if req.Since > m.Version {
 				m.Version = req.Since
 			}
 		}(&req)
 	}
 
 	for range m.Groups {
-		err := <-errCh
-		if err != nil {
+		if err := <-errCh; err != nil {
 			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
