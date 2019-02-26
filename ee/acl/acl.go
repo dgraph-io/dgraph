@@ -245,7 +245,6 @@ func mod(conf *viper.Viper) error {
 	userId := conf.GetString("user")
 	groupList := conf.GetString("group_list")
 	groupId := conf.GetString("group")
-	fmt.Printf("user:%v group:%v", userId, groupId)
 
 	if (len(userId) == 0 && len(groupId) == 0) ||
 		(len(userId) != 0 && len(groupId) != 0) {
