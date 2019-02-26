@@ -189,7 +189,7 @@ EOF
 
   dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
   dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
-  diff <(sort all_dbs.out | uniq -c) - <<EOF
+  diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
       1 _predicate_
       1 genre
       1 language
