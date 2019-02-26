@@ -196,8 +196,8 @@ func info(conf *viper.Viper) error {
 		}
 
 		fmt.Println()
-		fmt.Printf("User  : %-5s\n", userId)
-		fmt.Printf("UID   : %-5s\n", user.Uid)
+		fmt.Printf("User  : %s\n", userId)
+		fmt.Printf("UID   : %s\n", user.Uid)
 		for _, group := range user.Groups {
 			fmt.Printf("Group : %-5s\n", group.GroupID)
 		}
@@ -213,24 +213,26 @@ func info(conf *viper.Viper) error {
 			fmt.Printf("The group %s does not exist.\n", groupId)
 			return nil
 		}
-		fmt.Printf("Group: %5s\n", groupId)
-		fmt.Printf("UID  : %5s\n", group.Uid)
-		fmt.Printf("ID   : %5s\n", group.GroupID)
+		fmt.Printf("Group: %s\n", groupId)
+		fmt.Printf("UID  : %s\n", group.Uid)
+		fmt.Printf("ID   : %s\n", group.GroupID)
 
 		var userNames []string
 		for _, user := range group.Users {
 			userNames = append(userNames, user.UserID)
 		}
-		fmt.Printf("Users: %5s\n", strings.Join(userNames, " "))
+		fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
 
 		var acls []Acl
-		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
-				groupId, err)
-		}
+		if len(group.Acls) != 0 {
+			if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
+				return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
+					groupId, err)
+			}
 
-		for _, acl := range acls {
-			fmt.Printf("ACL  : %5v\n", acl)
+			for _, acl := range acls {
+				fmt.Printf("ACL  : %v\n", acl)
+			}
 		}
 	}
 
