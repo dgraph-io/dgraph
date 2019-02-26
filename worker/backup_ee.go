@@ -74,11 +74,6 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
 		return err
 	}
-	if res.Val == 0 {
-		err = x.Errorf("Backup error group %d: current version is zero", in.GroupId)
-		glog.Errorln(err)
-		return err
-	}
 	// Attach distributed max version value
 	in.Since = res.Val
 	glog.V(2).Infof("Backup request to gid=%d, since=%d. OK\n", in.GroupId, in.Since)
