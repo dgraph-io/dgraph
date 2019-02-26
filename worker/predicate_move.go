@@ -187,7 +187,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, x.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
 	if !groups().ServesTablet(in.Predicate) {
-		return &emptyPayload, ErrUnservedTablet
+		return &emptyPayload, errUnservedTablet
 	}
 
 	msg := fmt.Sprintf("Move predicate request: %+v", in)

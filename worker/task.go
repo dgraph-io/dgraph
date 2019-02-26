@@ -139,7 +139,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	attr := q.Attr
 	gid := groups().BelongsToReadOnly(attr)
 	if gid == 0 {
-		return &emptyResult, ErrUnservedTablet
+		return &emptyResult, errUnservedTablet
 	}
 
 	span := otrace.FromContext(ctx)
@@ -158,8 +158,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 
-	if err == ErrUnservedTablet {
-		return &emptyResult, ErrUnservedTablet
+	if err == errUnservedTablet {
+		return &emptyResult, errUnservedTablet
 	}
 	if err != nil {
 		return nil, err
@@ -733,7 +733,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// ServesTabletReadOnly is called instead of ServesTablet to prevent this
 	// alpha from requesting to serve this tablet.
 	if !groups().ServesTabletReadOnly(q.Attr) {
-		return &emptyResult, ErrUnservedTablet
+		return &emptyResult, errUnservedTablet
 	}
 	qs := queryState{cache: posting.Oracle().CacheAt(q.ReadTs)}
 	if qs.cache == nil {
@@ -1614,7 +1614,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	gid := groups().BelongsToReadOnly(q.Attr)
 	if gid == 0 {
-		return &emptyResult, ErrUnservedTablet
+		return &emptyResult, errUnservedTablet
 	}
 
 	var numUids int

@@ -364,12 +364,9 @@ func (g *groupi) BelongsTo(key string) uint32 {
 // the tablet for key if no group is currently serving it.
 func (g *groupi) BelongsToReadOnly(key string) uint32 {
 	g.RLock()
-	tablet, ok := g.tablets[key]
+	tablet := g.tablets[key]
 	g.RUnlock()
 
-	if !ok {
-		return 0
-	}
 	if tablet != nil {
 		return tablet.GroupId
 	}
@@ -387,17 +384,7 @@ func (g *groupi) ServesTablet(key string) bool {
 // ServesTabletReadOnly acts like ServesTablet except it does not ask zero to
 // serve the tablet for key if no group is currently serving it.
 func (g *groupi) ServesTabletReadOnly(key string) bool {
-	g.RLock()
-	tablet, ok := g.tablets[key]
-	g.RUnlock()
-
-	if !ok {
-		return false
-	}
-	if tablet != nil && tablet.GroupId == groups().groupId() {
-		return true
-	}
-	return false
+	return g.BelongsToReadOnly(key) == groups().groupId()
 }
 
 // Do not modify the returned Tablet

@@ -136,7 +136,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	checkTablet := func(pred string) error {
 		if tablet := groups().Tablet(pred); tablet == nil ||
 			tablet.GroupId != groups().groupId() {
-			return ErrUnservedTablet
+			return errUnservedTablet
 		}
 		return nil
 	}

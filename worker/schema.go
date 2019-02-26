@@ -181,7 +181,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api
 
 	for gid, s := range schemaMap {
 		if gid == 0 {
-			return schemaNodes, ErrUnservedTablet
+			return schemaNodes, errUnservedTablet
 		}
 		go getSchemaOverNetwork(ctx, gid, s, results)
 	}
