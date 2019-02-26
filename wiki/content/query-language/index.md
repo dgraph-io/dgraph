@@ -657,8 +657,8 @@ Query Example: Taraji Henson films ordered by numer of genres, with genres liste
 
 Syntax Examples:
 
-* `q(func: ...) @filter(uid_in(predicate, <uid>)`
-* `predicate1 @filter(uid_in(predicate2, <uid>)`
+* `q(func: ...) @filter(uid_in(predicate, <uid>))`
+* `predicate1 @filter(uid_in(predicate2, <uid>))`
 
 Schema Types: UID
 
