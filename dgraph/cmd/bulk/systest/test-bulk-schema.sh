@@ -14,6 +14,11 @@ FATAL() { ERROR "$@"; exit 1; }
 
 set -e
 
+INFO "rebuilding dgraph"
+
+cd $SRCROOT
+make install >/dev/null
+
 INFO "running bulk load schema test"
 
 WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
