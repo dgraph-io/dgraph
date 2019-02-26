@@ -233,7 +233,7 @@ func commitWithTsKeysOnly(keys []string, ts uint64) error {
 }
 
 func TestTransactionBasic(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -294,7 +294,7 @@ func TestTransactionBasic(t *testing.T) {
 }
 
 func TestTransactionBasicNoPreds(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -346,7 +346,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
@@ -414,7 +414,7 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 }
 
 func TestHttpCompressionSupport(t *testing.T) {
-	accessJwt, _, err := z.CurlLogin(&z.LoginParams{
+	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
 		Endpoint: addr + "/login",
 		UserID:   x.GrootId,
 		Passwd:   "password",
