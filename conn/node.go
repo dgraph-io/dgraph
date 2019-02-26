@@ -145,7 +145,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		peers:       make(map[uint64]string),
 		requestCh:   make(chan linReadReq),
 	}
-	n.Applied.Init(y.NewCloser(0))
+	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
 	n.Applied.SetDoneUntil(n.Cfg.Applied)
 	glog.Infof("Setting raft.Config to: %+v\n", n.Cfg)
