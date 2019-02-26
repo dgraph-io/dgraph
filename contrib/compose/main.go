@@ -18,9 +18,9 @@ type Volume struct {
 
 type Instance struct {
 	Image         string
-	ContainerName string `yaml:"container_name"`
-	WorkingDir    string `yaml:"working_dir"`
-	DependsOn     string `yaml:"depends_on,omitempty"`
+	ContainerName string   `yaml:"container_name"`
+	WorkingDir    string   `yaml:"working_dir"`
+	DependsOn     []string `yaml:"depends_on,omitempty"`
 	Labels        map[string]string
 	Ports         []string
 	Volumes       []Volume
@@ -32,11 +32,19 @@ type Config struct {
 	Services map[string]Instance
 }
 
+type State struct {
+	ZeroIdx  int
+	AlphaIdx int
+}
+
+var state State
+
+const zeroBasePort int = 5080
+const alphaBasePort int = 7080
+
 func name(prefix string, idx int) string {
 	return fmt.Sprintf("%s%d", prefix, idx)
 }
-
-const alphaBasePort int = 7180
 
 func toString(i int) string {
 	return fmt.Sprintf("%d", i)
@@ -55,15 +63,39 @@ func binVolume() Volume {
 	}
 }
 
-func getAlpha(idx int) Instance {
+func getZero() Instance {
+	state.ZeroIdx++
+	idx := state.ZeroIdx
+
+	var i Instance
+	i.Image = "dgraph/dgraph:latest"
+	i.ContainerName = name("dg0.", idx)
+	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
+	if idx > 1 {
+		i.DependsOn = append(i.DependsOn, name("dg0.", idx-1))
+	}
+	i.Labels = map[string]string{"cluster": "test"}
+
+	grpc := toPort(zeroBasePort + idx - 1)
+	http := toPort(zeroBasePort + 1000 + idx - 1)
+	i.Ports = []string{grpc, http}
+
+	i.Volumes = append(i.Volumes, binVolume())
+	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d", 100+idx-1)
+	return i
+}
+func getAlpha() Instance {
+	state.AlphaIdx++
+	idx := state.AlphaIdx
+
 	var i Instance
 	i.Image = "dgraph/dgraph:latest"
 	i.ContainerName = name("dg", idx)
 	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
 	if idx > 1 {
-		i.DependsOn = name("dg", idx-1)
+		i.DependsOn = append(i.DependsOn, name("dg", idx-1))
 	}
-	i.Labels = map[string]string{"cluster": "test", "service": "alpha"}
+	i.Labels = map[string]string{"cluster": "test"}
 
 	http := toPort(alphaBasePort + 1100 + idx - 1)
 	grpc := toPort(alphaBasePort + 2100 + idx - 1)
@@ -75,7 +107,13 @@ func getAlpha(idx int) Instance {
 }
 
 func main() {
-	c := Config{Version: "3.5", Services: map[string]Instance{"dg1": getAlpha(1), "dg2": getAlpha(2)}}
+	c := Config{
+		Version: "3.5",
+		Services: map[string]Instance{
+			"dg0.1": getZero(),
+			"dg1":   getAlpha(),
+		},
+	}
 
 	out, err := yaml.Marshal(c)
 	x.Check(err)
