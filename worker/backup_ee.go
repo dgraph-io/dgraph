@@ -45,15 +45,16 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 }
 
 // Backup handles a request coming from another node.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	var resp pb.Status
+func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Num, error) {
+	var num pb.Num
 	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
 	if err := backupProcess(ctx, req); err != nil {
-		resp.Code = -1
-		resp.Msg = err.Error()
-		return &resp, err
+		return nil, err
 	}
-	return &resp, nil
+	// num.Val is the max version value from `Backup()`
+	num.Val = req.Since
+	num.ReadOnly = true
+	return &num, nil
 }
 
 func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
@@ -68,17 +69,19 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 	if pl == nil {
 		return x.Errorf("Couldn't find a server in group %d", in.GroupId)
 	}
-	status, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
+	res, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {
 		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
 		return err
 	}
-	if status.Code != 0 {
-		err := x.Errorf("Backup error group %d: %s", in.GroupId, status.Msg)
+	if res.Val == 0 {
+		err = x.Errorf("Backup error group %d: current version is zero", in.GroupId)
 		glog.Errorln(err)
 		return err
 	}
-	glog.V(2).Infof("Backup request to gid=%d. OK\n", in.GroupId)
+	// Attach distributed max version value
+	in.Since = res.Val
+	glog.V(2).Infof("Backup request to gid=%d, since=%d. OK\n", in.GroupId, in.Since)
 	return nil
 }
 
@@ -118,7 +121,7 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 		req.GroupId = gid
 		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
-			// This is the max version result from Backup().
+			// req.Since is the max version result from Backup().
 			if req.Since > m.Version {
 				m.Version = req.Since
 			}
