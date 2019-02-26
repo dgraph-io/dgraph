@@ -32,18 +32,23 @@ type Config struct {
 	Services map[string]Instance
 }
 
-type State struct {
-	ZeroIdx  int
-	AlphaIdx int
+// TODO set these from command line
+type Options struct {
+	NumZeros       int
+	NumAlphas      int
+	NumGroups      int
+	LruSizeMB      int
+	EnterpriseMode bool
+	TestPortRange  bool
 }
 
-var state State
+var Opts Options
 
 const zeroBasePort int = 5080
 const alphaBasePort int = 7080
 
 func name(prefix string, idx int) string {
-	return fmt.Sprintf("%s%d", prefix, idx)
+	return fmt.Sprintf("%s%02d", prefix, idx)
 }
 
 func toString(i int) string {
@@ -63,31 +68,40 @@ func binVolume() Volume {
 	}
 }
 
-func getZero() Instance {
-	state.ZeroIdx++
-	idx := state.ZeroIdx
+func getZero(idx int) Instance {
+	namePfx := "zero"
+	svcName := name(namePfx, idx)
+	grpcPort := zeroBasePort + idx - 1
+	httpPort := grpcPort + 1000
 
 	var i Instance
 	i.Image = "dgraph/dgraph:latest"
-	i.ContainerName = name("dg0.", idx)
+	i.ContainerName = svcName
 	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
 	if idx > 1 {
-		i.DependsOn = append(i.DependsOn, name("dg0.", idx-1))
+		i.DependsOn = append(i.DependsOn, name(namePfx, idx-1))
 	}
 	i.Labels = map[string]string{"cluster": "test"}
 
-	grpc := toPort(zeroBasePort + idx - 1)
-	http := toPort(zeroBasePort + 1000 + idx - 1)
-	i.Ports = []string{grpc, http}
+	i.Ports = []string{
+		toPort(grpcPort),
+		toPort(httpPort),
+	}
 
 	i.Volumes = append(i.Volumes, binVolume())
-	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d", 100+idx-1)
+	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
+	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, grpcPort)
+	i.Command += fmt.Sprintf(" --replicas=%d", Opts.NumAlphas)
+	i.Command += " --logtostderr"
+	if idx == 1 {
+		i.Command += fmt.Sprintf(" --bindall")
+	} else {
+		i.Command += fmt.Sprintf(" --peer=%s:%d", name(namePfx, 1), zeroBasePort)
+	}
+
 	return i
 }
-func getAlpha() Instance {
-	state.AlphaIdx++
-	idx := state.AlphaIdx
-
+func getAlpha(idx int) Instance {
 	var i Instance
 	i.Image = "dgraph/dgraph:latest"
 	i.ContainerName = name("dg", idx)
@@ -107,12 +121,26 @@ func getAlpha() Instance {
 }
 
 func main() {
+	Opts = Options{
+		NumZeros:  3,
+		NumAlphas: 3,
+		NumGroups: 2,
+		LruSizeMB: 2018,
+	}
+
+	services := make(map[string]Instance)
+	for i := 1; i <= Opts.NumZeros; i++ {
+		instance := getZero(i)
+		services[instance.ContainerName] = instance
+	}
+
 	c := Config{
-		Version: "3.5",
-		Services: map[string]Instance{
-			"dg0.1": getZero(),
-			"dg1":   getAlpha(),
-		},
+		Version:  "3.5",
+		Services: services,
+		//Services: map[string]Instance{
+		//	"dg0.1": getZero(1),
+		//	"dg1":   getAlpha(1),
+		//},
 	}
 
 	out, err := yaml.Marshal(c)
