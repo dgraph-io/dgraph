@@ -48,12 +48,13 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 	stream.LogPrefix = "Dgraph.Backup"
 	// Here we return the max version in the original request obejct. We will use this
 	// to create our manifest to complete the backup.
+	glog.V(3).Infof("Backup previous version: %d", obj.version)
 	req.Since, err = stream.Backup(handler, obj.version)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
-	glog.V(3).Infof("Backup maximum version: %d", req.Since)
+	glog.V(3).Infof("Backup current version: %d", req.Since)
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return err
