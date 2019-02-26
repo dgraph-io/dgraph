@@ -123,6 +123,9 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "schema file must be specified.\n")
 		os.Exit(1)
+	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
+		os.Exit(1)
 	}
 	if opt.RDFDir == "" && opt.JSONDir == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
@@ -131,6 +134,9 @@ func run() {
 	if opt.RDFDir != "" && opt.JSONDir != "" {
 		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
 			opt.RDFDir, opt.JSONDir)
+		os.Exit(1)
+	} else if _, err := os.Stat(opt.RDFDir); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", opt.RDFDir)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {

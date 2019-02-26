@@ -15,11 +15,18 @@ FATAL() { ERROR "$@"; exit 1; }
 
 set -e
 
+INFO "rebuilding dgraph"
+
+cd $SRCROOT
+make install >/dev/null
+
 INFO "running bulk load schema test"
 
 WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
+
+LOGFILE=$WORKDIR/output.log
 
 trap ForceClean EXIT
 
@@ -118,7 +125,8 @@ function BulkLoadExportedData
   dgraph bulk -z localhost:$ZERO_PORT \
               -s ../dir1/export/*/g01.schema.gz \
               -r ../dir1/export/*/g01.rdf.gz \
-     >bulk.log 2>&1 </dev/null
+     >$LOGFILE 2>&1 </dev/null
+  mv $LOGFILE $LOGFILE.export
 }
 
 function BulkLoadFixtureData
@@ -146,7 +154,42 @@ _:et <revenue> "792.9" .
 EOF
 
   dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -r fixture.rdf \
-     >bulk.log 2>&1 </dev/null
+     >$LOGFILE 2>&1 </dev/null
+  mv $LOGFILE $LOGFILE.fixture
+}
+
+function TestBulkLoadMultiShard
+{
+  INFO "bulk loading into multiple shards"
+
+  cat >fixture.schema <<EOF
+name:string @index(term) .
+genre:default .
+language:string .
+EOF
+
+  cat >fixture.rdf <<EOF
+_:et <name> "E.T. the Extra-Terrestrial" .
+_:et <genre> "Science Fiction" .
+_:et <revenue> "792.9" .
+EOF
+
+  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -r fixture.rdf \
+              --map_shards 2 --reduce_shards 2 \
+     >$LOGFILE 2>&1 </dev/null
+  mv $LOGFILE $LOGFILE.multi
+
+  INFO "checking that each predicate appears in only one shard"
+
+  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
+  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
+  diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
+      1 _predicate_
+      1 genre
+      1 language
+      1 name
+      1 revenue
+EOF
 }
 
 function StopServers
@@ -227,6 +270,10 @@ diff -b - dir3/schema.out <<EOF || FATAL "schema incorrect"
   ]
 }
 EOF
+
+StartZero
+TestBulkLoadMultiShard
+StopServers
 
 INFO "schema is correct"
 
