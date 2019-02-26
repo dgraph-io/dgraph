@@ -133,7 +133,7 @@ func run() {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
 		os.Exit(1)
 	} else if _, err := os.Stat(opt.DataFiles); err != nil && os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist .\n", opt.DataFiles)
+		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", opt.DataFiles)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {
