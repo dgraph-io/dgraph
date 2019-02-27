@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path"
 
 	"github.com/dgraph-io/dgraph/x"
 	yaml "gopkg.in/yaml.v2"
@@ -32,7 +30,6 @@ type Config struct {
 	Services map[string]Instance
 }
 
-// TODO set these from command line
 type Options struct {
 	NumZeros       int
 	NumAlphas      int
@@ -48,7 +45,7 @@ const zeroBasePort int = 5080
 const alphaBasePort int = 7080
 
 func name(prefix string, idx int) string {
-	return fmt.Sprintf("%s%02d", prefix, idx)
+	return fmt.Sprintf("%s%d", prefix, idx)
 }
 
 func toString(i int) string {
@@ -62,7 +59,7 @@ func toPort(i int) string {
 func binVolume() Volume {
 	return Volume{
 		Type:     "bind",
-		Source:   path.Join(os.Getenv("GOPATH"), "bin"),
+		Source:   "$GOPATH/bin",
 		Target:   "/gobin",
 		ReadOnly: true,
 	}
@@ -91,7 +88,7 @@ func getZero(idx int) Instance {
 	i.Volumes = append(i.Volumes, binVolume())
 	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
 	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, grpcPort)
-	i.Command += fmt.Sprintf(" --replicas=%d", Opts.NumAlphas)
+	i.Command += fmt.Sprintf(" --replicas=%d", Opts.NumAlphas/Opts.NumGroups)
 	i.Command += " --logtostderr"
 	if idx == 1 {
 		i.Command += fmt.Sprintf(" --bindall")
@@ -102,45 +99,71 @@ func getZero(idx int) Instance {
 	return i
 }
 func getAlpha(idx int) Instance {
+	baseOffset := 0
+	if Opts.TestPortRange {
+		baseOffset += 100
+	}
+
+	namePfx := "alpha"
+	svcName := name(namePfx, idx)
+	itnlPort := alphaBasePort + baseOffset + idx - 1
+	grpcPort := itnlPort + 1000
+	httpPort := grpcPort + 1000
+
 	var i Instance
 	i.Image = "dgraph/dgraph:latest"
-	i.ContainerName = name("dg", idx)
+	i.ContainerName = svcName
 	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
 	if idx > 1 {
-		i.DependsOn = append(i.DependsOn, name("dg", idx-1))
+		i.DependsOn = append(i.DependsOn, name(namePfx, idx-1))
 	}
 	i.Labels = map[string]string{"cluster": "test"}
 
-	http := toPort(alphaBasePort + 1100 + idx - 1)
-	grpc := toPort(alphaBasePort + 2100 + idx - 1)
-	i.Ports = []string{http, grpc}
+	i.Ports = []string{
+		toPort(grpcPort),
+		toPort(httpPort),
+	}
 
 	i.Volumes = append(i.Volumes, binVolume())
-	i.Command = fmt.Sprintf("/gobin/dgraph alpha --lru_mb=1024 -o %d", 100+idx-1)
+	i.Command = fmt.Sprintf("/gobin/dgraph alpha -o %d", baseOffset+idx-1)
+	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, itnlPort)
+	i.Command += fmt.Sprintf(" --lru_mb=%d", Opts.LruSizeMB)
+	i.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
+	i.Command += " --logtostderr"
+	i.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	if Opts.EnterpriseMode {
+		i.Command += " --enterprise_features"
+	}
+
 	return i
 }
 
 func main() {
+	// TODO set these from command line
 	Opts = Options{
-		NumZeros:  3,
-		NumAlphas: 3,
-		NumGroups: 2,
-		LruSizeMB: 2018,
+		NumZeros:       3,
+		NumAlphas:      6,
+		NumGroups:      2,
+		LruSizeMB:      1536,
+		EnterpriseMode: true,
+		TestPortRange:  true,
 	}
 
 	services := make(map[string]Instance)
+
 	for i := 1; i <= Opts.NumZeros; i++ {
 		instance := getZero(i)
+		services[instance.ContainerName] = instance
+	}
+
+	for i := 1; i <= Opts.NumAlphas; i++ {
+		instance := getAlpha(i)
 		services[instance.ContainerName] = instance
 	}
 
 	c := Config{
 		Version:  "3.5",
 		Services: services,
-		//Services: map[string]Instance{
-		//	"dg0.1": getZero(1),
-		//	"dg1":   getAlpha(1),
-		//},
 	}
 
 	out, err := yaml.Marshal(c)
