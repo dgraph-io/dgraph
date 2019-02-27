@@ -159,7 +159,7 @@ func main() {
 	flag.BoolVar(&Opts.EnterpriseMode, "enterprise", false,
 		"enable enterprise features in alphas")
 	flag.BoolVar(&Opts.TestPortRange, "test_ports", true,
-		"use port range expected by regression tests in alphas ")
+		"use alpha ports expected by regression tests")
 	flag.Parse()
 
 	// Do some sanity checks.
