@@ -44,9 +44,10 @@ type Instance struct {
 	Command       string
 }
 
-type Config struct {
+type ComposeConfig struct {
 	Version  string
 	Services map[string]Instance
+	Volumes  map[string]map[string]string
 }
 
 type Options struct {
@@ -54,6 +55,7 @@ type Options struct {
 	NumAlphas      int
 	NumGroups      int
 	LruSizeMB      int
+	PersistData    bool
 	EnterpriseMode bool
 	TestPortRange  bool
 }
@@ -82,6 +84,14 @@ func binVolume() Volume {
 	}
 }
 
+func dataVolume() Volume {
+	return Volume{
+		Type:   "volume",
+		Source: "data",
+		Target: "/data",
+	}
+}
+
 func getZero(idx int) Instance {
 	prefix := "zero"
 	svcName := name(prefix, idx)
@@ -103,6 +113,10 @@ func getZero(idx int) Instance {
 	}
 
 	i.Volumes = append(i.Volumes, binVolume())
+	if opts.PersistData {
+		i.Volumes = append(i.Volumes, dataVolume())
+	}
+
 	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
 	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, grpcPort)
 	i.Command += fmt.Sprintf(" --replicas=%d", int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
@@ -142,6 +156,10 @@ func getAlpha(idx int) Instance {
 	}
 
 	i.Volumes = append(i.Volumes, binVolume())
+	if opts.PersistData {
+		i.Volumes = append(i.Volumes, dataVolume())
+	}
+
 	i.Command = fmt.Sprintf("/gobin/dgraph alpha -o %d", baseOffset+idx-1)
 	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, itnlPort)
 	i.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
@@ -170,6 +188,8 @@ func main() {
 		"number of groups in dgraph cluster")
 	flag.IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
+	flag.BoolVar(&opts.PersistData, "persist_data", false,
+		"use a persistent data volume")
 	flag.BoolVar(&opts.EnterpriseMode, "enterprise", false,
 		"enable enterprise features in alphas")
 	flag.BoolVar(&opts.TestPortRange, "test_ports", true,
@@ -199,12 +219,16 @@ func main() {
 		services[instance.ContainerName] = instance
 	}
 
-	c := Config{
+	cfg := ComposeConfig{
 		Version:  "3.5",
 		Services: services,
 	}
+	if opts.PersistData {
+		cfg.Volumes = make(map[string]map[string]string)
+		cfg.Volumes["data"] = map[string]string{}
+	}
 
-	out, err := yaml.Marshal(c)
+	out, err := yaml.Marshal(cfg)
 	x.Check(err)
 	fmt.Printf("%s", out)
 }
