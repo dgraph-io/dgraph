@@ -38,6 +38,12 @@ type decodeTupleTest struct {
 	output interface{}
 }
 
+type decodeArrayTest struct {
+	val    []byte
+	t      interface{}
+	output interface{}
+}
+
 var decodeIntTests = []decodeIntTest{
 	// compact integers
 	{val: []byte{0x00}, output: int64(0)},
@@ -134,6 +140,18 @@ var decodeTupleTests = []decodeTupleTest{
 	}{[]byte{0x01}, 16383, true, int64(1 << 32)}},
 }
 
+var decodeArrayTests = []decodeArrayTest{
+	{val: []byte{0x00}, t: []int{}, output: []int{}},
+	{val: []byte{0x04, 0x04}, t: []int{}, output: []int{1}},
+	{val: []byte{0x10, 0x04, 0x08, 0x0c, 0x10}, t: []int{}, output: []int{1, 2, 3, 4}},
+	{val: []byte{0x10, 0x02, 0x00, 0x01, 0x00, 0x08, 0x0c, 0x10}, t: []int{}, output: []int{16384, 2, 3, 4}},
+	{val: []byte{0x10, 0x03, 0x00, 0x00, 0x00, 0x40, 0x08, 0x0c, 0x10}, t: []int{}, output: []int{1073741824, 2, 3, 4}},
+	{val: []byte{0x10, 0x07, 0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x0c, 0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, t: []int{}, output: []int{1 << 32, 2, 3, 1 << 32}},
+	{val: []byte{0x00}, t: []bool{}, output: []bool{}},
+	{val: []byte{0x0c, 0x01, 0x00, 0x01}, t: []bool{}, output: []bool{true, false, true}},
+	{val: []byte{0x08, 0x00, 0x04}, t: []*big.Int{}, output: []*big.Int{big.NewInt(0), big.NewInt(1)}},
+}
+
 var reverseByteTests = []reverseByteTest{
 	{val: []byte{0x00, 0x01, 0x02}, output: []byte{0x02, 0x01, 0x00}},
 	{val: []byte{0x04, 0x05, 0x06, 0x07}, output: []byte{0x07, 0x06, 0x05, 0x04}},
@@ -197,12 +215,11 @@ func TestDecodeByteArrays(t *testing.T) {
 		sd := Decoder{&buf}
 		buf.Write(test.val)
 		var tmp []byte
-		o, err := sd.Decode(tmp)
-		output := o.([]byte)
+		output, err := sd.Decode(tmp)
 		if err != nil {
 			t.Error(err)
-		} else if !bytes.Equal(output, test.output) {
-			t.Errorf("Fail: got %d expected %d", len(output), len(test.output))
+		} else if !bytes.Equal(output.([]byte), test.output) {
+			t.Errorf("Fail: got %d expected %d", len(output.([]byte)), len(test.output))
 		}
 	}
 }
@@ -234,6 +251,20 @@ func TestDecodeBool(t *testing.T) {
 
 func TestDecodeTuples(t *testing.T) {
 	for _, test := range decodeTupleTests {
+		buf := bytes.Buffer{}
+		buf.Write(test.val)
+		sd := Decoder{&buf}
+		output, err := sd.Decode(test.t)
+		if err != nil {
+			t.Error(err)
+		} else if !reflect.DeepEqual(output, test.output) {
+			t.Errorf("Fail: got %d expected %d", output, test.output)
+		}
+	}
+}
+
+func TestDecodeArrays(t *testing.T) {
+	for _, test := range decodeArrayTests {
 		buf := bytes.Buffer{}
 		buf.Write(test.val)
 		sd := Decoder{&buf}

@@ -45,14 +45,6 @@ var encodeTests = []encodeTest{
 	{val: big.NewInt(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
 	{val: big.NewInt(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
 
-	// big ints
-	{val: big.NewInt(0), output: []byte{0x00}, bytesEncoded: 1},
-	{val: big.NewInt(1), output: []byte{0x04}, bytesEncoded: 1},
-	{val: big.NewInt(42), output: []byte{0xa8}, bytesEncoded: 1},
-	{val: big.NewInt(69), output: []byte{0x15, 0x01}, bytesEncoded: 2},
-	{val: big.NewInt(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
-	{val: big.NewInt(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
-
 	// structs
 	{val: struct {
 		Foo []byte
@@ -71,6 +63,15 @@ var encodeTests = []encodeTest{
 		Foo int64
 		Bar []byte
 	}{int64(1073741824), byteArray(64)}, output: append([]byte{0x03, 0x00, 0x00, 0x00, 0x40, 0x01, 0x01}, byteArray(64)...), bytesEncoded: 71},
+
+	// Arrays
+	{val: []int{1, 2, 3, 4}, output: []byte{0x10, 0x04, 0x08, 0x0c, 0x10}, bytesEncoded: 5},
+	{val: []int{16384, 2, 3, 4}, output: []byte{0x10, 0x02, 0x00, 0x01, 0x00, 0x08, 0x0c, 0x10}, bytesEncoded: 8},
+	{val: []int{1073741824, 2, 3, 4}, output: []byte{0x10, 0x03, 0x00, 0x00, 0x00, 0x40, 0x08, 0x0c, 0x10}, bytesEncoded: 9},
+	{val: []int{1 << 32, 2, 3, 1 << 32}, output: []byte{0x10, 0x07, 0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x0c, 0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, bytesEncoded: 15},
+	{val: []bool{true, false, true}, output: []byte{0x0c, 0x01, 0x00, 0x01}, bytesEncoded: 4},
+	{val: [][]int{[]int{0, 1}, []int{1, 0}}, output: []byte{0x08, 0x08, 0x00, 0x04, 0x08, 0x04, 0x00}, bytesEncoded: 7},
+	{val: []*big.Int{big.NewInt(0), big.NewInt(1)}, output: []byte{0x08, 0x00, 0x04}, bytesEncoded: 3},
 }
 
 func TestEncode(t *testing.T) {

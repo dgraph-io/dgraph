@@ -24,6 +24,12 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 		out, err = sd.DecodeByteArray()
 	case bool:
 		out, err = sd.DecodeBool()
+	case []int:
+		out, err = sd.DecodeIntArray()
+	case []bool:
+		out, err = sd.DecodeBoolArray()
+	case []*big.Int:
+		out, err = sd.DecodeBigIntArray()
 	case interface{}:
 		out, err = sd.DecodeTuple(t)
 	default:
@@ -46,13 +52,14 @@ func (sd *Decoder) decodeSmallInt(firstByte byte) (o int64, err error) {
 	if mode == 0 { // 1 byte mode
 		o = int64(firstByte >> 2)
 	} else if mode == 1 { // 2 byte mode
-		buf, err := sd.ReadByte()
+		var buf byte
+		buf, err = sd.ReadByte()
 		if err == nil {
 			o = int64(binary.LittleEndian.Uint16([]byte{firstByte, buf}) >> 2)
 		}
 	} else if mode == 2 { // 4 byte mode
 		buf := make([]byte, 3)
-		_, err := sd.reader.Read(buf)
+		_, err = sd.reader.Read(buf)
 		if err == nil {
 			o = int64(binary.LittleEndian.Uint32(append([]byte{firstByte}, buf...)) >> 2)
 		}
@@ -117,7 +124,8 @@ func (sd *Decoder) DecodeBigInt() (output *big.Int, err error) {
 	// check mode of encoding, stored at 2 least significant bits
 	mode := b & 0x03
 	if mode <= 2 {
-		tmp, err := sd.decodeSmallInt(b)
+		var tmp int64
+		tmp, err = sd.decodeSmallInt(b)
 		if err != nil {
 			return nil, err
 		}
@@ -182,6 +190,11 @@ func (sd *Decoder) DecodeBool() (bool, error) {
 // Note that we return the same interface that was passed to this function; this is because we are writing directly to the
 // struct that is passed in, using reflect to get each of the fields.
 func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
+	switch reflect.ValueOf(t).Kind() {
+	case reflect.Slice, reflect.Array:
+		return nil, errors.New("cannot decode invalid tuple")
+	}
+
 	v := reflect.ValueOf(t).Elem()
 
 	var err error
@@ -220,6 +233,11 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 
 			ptr := fieldValue.Addr().Interface().(*bool)
 			*ptr = o.(bool)
+		default:
+			_, err = sd.Decode(v.Field(i).Interface())
+			if err != nil {
+				break
+			}
 		}
 
 		if err != nil {
@@ -228,4 +246,59 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 	}
 
 	return t, err
+}
+
+// DecodeIntArray decodes a byte array to an array of ints
+func (sd *Decoder) DecodeIntArray() ([]int, error) {
+	length, err := sd.DecodeInteger()
+	if err != nil {
+		return nil, err
+	}
+
+	o := make([]int, length)
+	for i := range o {
+		var t int64
+		t, err = sd.DecodeInteger()
+		o[i] = int(t)
+		if err != nil {
+			break
+		}
+	}
+	return o, nil
+}
+
+// DecodeBigIntArray decodes a byte array to an array of *big.Ints
+func (sd *Decoder) DecodeBigIntArray() ([]*big.Int, error) {
+	length, err := sd.DecodeInteger()
+	if err != nil {
+		return nil, err
+	}
+
+	o := make([]*big.Int, length)
+	for i := range o {
+		var t *big.Int
+		t, err = sd.DecodeBigInt()
+		o[i] = t
+		if err != nil {
+			break
+		}
+	}
+	return o, nil
+}
+
+// DecodeBoolArray decodes a byte array to an array of bools
+func (sd *Decoder) DecodeBoolArray() ([]bool, error) {
+	length, err := sd.DecodeInteger()
+	if err != nil {
+		return nil, err
+	}
+
+	o := make([]bool, length)
+	for i := range o {
+		o[i], err = sd.DecodeBool()
+		if err != nil {
+			break
+		}
+	}
+	return o, nil
 }
