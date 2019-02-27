@@ -84,9 +84,11 @@ type handler interface {
 // uri is the local or remote destination.
 // path is an optional path to create at destination.
 // name is the name of the file or object at uri under path.
+// version is the known max version
+// verify whether or not we must check for manifest.
 type object struct {
 	uri, path, name string
-	version         uint64
+	version, snapTs uint64
 }
 
 // getHandler returns a handler for the URI scheme.
