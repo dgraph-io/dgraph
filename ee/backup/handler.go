@@ -84,8 +84,8 @@ type handler interface {
 // uri is the local or remote destination.
 // path is an optional path to create at destination.
 // name is the name of the file or object at uri under path.
-// version is the known max version
-// verify whether or not we must check for manifest.
+// version is the known max version.
+// snapTs the version from snapshot, used for manifest version check.
 type object struct {
 	uri, path, name string
 	version, snapTs uint64
