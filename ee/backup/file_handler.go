@@ -73,6 +73,10 @@ func (h *fileHandler) Create(uri *url.URL, file *object) error {
 			if err = json.Unmarshal(b, &m); err != nil {
 				return err
 			}
+			// No new changes since last check
+			if m.Version == file.snapTs {
+				return ErrBackupNoChanges
+			}
 			file.version = m.Version
 		}
 	}
