@@ -457,11 +457,12 @@ message Status {
 }
 
 message BackupRequest {
-	uint64 read_ts  = 1;
-	uint32 group_id = 2;
-	string unix_ts  = 3;
-	string location = 4;
-	uint64 since    = 5;
+	uint64 read_ts      = 1;
+	uint32 group_id     = 2;
+	string unix_ts      = 3;
+	string location     = 4;
+	uint64 since        = 5;
+	uint64 snapshot_ts  = 6;
 }
 
 message ExportRequest {
