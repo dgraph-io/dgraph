@@ -27,7 +27,7 @@ var (
 
 	// ErrValueThreshold is returned when ValueThreshold is set to a value close to or greater than
 	// uint16.
-	ErrValueThreshold = errors.New("Invalid ValueThreshold, must be lower than uint16.")
+	ErrValueThreshold = errors.New("Invalid ValueThreshold, must be lower than uint16")
 
 	// ErrKeyNotFound is returned when key isn't found on a txn.Get.
 	ErrKeyNotFound = errors.New("Key not found")
