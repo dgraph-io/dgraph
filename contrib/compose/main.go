@@ -33,7 +33,8 @@ type Volume struct {
 	ReadOnly bool `yaml:"read_only"`
 }
 
-type Instance struct {
+type Service struct {
+	name          string // not exported
 	Image         string
 	ContainerName string   `yaml:"container_name"`
 	WorkingDir    string   `yaml:"working_dir"`
@@ -46,7 +47,7 @@ type Instance struct {
 
 type ComposeConfig struct {
 	Version  string
-	Services map[string]Instance
+	Services map[string]Service
 	Volumes  map[string]map[string]string
 }
 
@@ -75,102 +76,84 @@ func toExposedPort(i int) string {
 	return fmt.Sprintf("%d:%d", i, i)
 }
 
-func binVolume() Volume {
-	return Volume{
+func getService(basename string, idx, grpcPort int) Service {
+	var svc Service
+
+	svc.name = name(basename, idx)
+	svc.Image = "dgraph/dgraph:latest"
+	svc.ContainerName = svc.name
+	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
+	if idx > 1 {
+		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
+	}
+	svc.Labels = map[string]string{"cluster": "test"}
+
+	svc.Ports = []string{
+		toExposedPort(grpcPort),
+		toExposedPort(grpcPort + 1000), // http port
+	}
+
+	svc.Volumes = append(svc.Volumes, Volume{
 		Type:     "bind",
 		Source:   "$GOPATH/bin",
 		Target:   "/gobin",
 		ReadOnly: true,
-	}
-}
-
-func dataVolume() Volume {
-	return Volume{
-		Type:   "volume",
-		Source: "data",
-		Target: "/data",
-	}
-}
-
-func getZero(idx int) Instance {
-	prefix := "zero"
-	svcName := name(prefix, idx)
-	grpcPort := zeroBasePort + idx - 1
-	httpPort := grpcPort + 1000
-
-	var i Instance
-	i.Image = "dgraph/dgraph:latest"
-	i.ContainerName = svcName
-	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
-	if idx > 1 {
-		i.DependsOn = append(i.DependsOn, name(prefix, idx-1))
-	}
-	i.Labels = map[string]string{"cluster": "test"}
-
-	i.Ports = []string{
-		toExposedPort(grpcPort),
-		toExposedPort(httpPort),
-	}
-
-	i.Volumes = append(i.Volumes, binVolume())
+	})
 	if opts.PersistData {
-		i.Volumes = append(i.Volumes, dataVolume())
+		svc.Volumes = append(svc.Volumes, Volume{
+			Type:     "volume",
+			Source:   "data",
+			Target:   "/data",
+			ReadOnly: false,
+		})
 	}
 
-	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
-	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, grpcPort)
-	i.Command += fmt.Sprintf(" --replicas=%d", int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
-	i.Command += " --logtostderr -v=2"
-	if idx == 1 {
-		i.Command += fmt.Sprintf(" --bindall")
-	} else {
-		i.Command += fmt.Sprintf(" --peer=%s:%d", name(prefix, 1), zeroBasePort)
-	}
-
-	return i
+	return svc
 }
-func getAlpha(idx int) Instance {
+
+func getZero(idx int) Service {
+	basename := "zero"
+	grpcPort := zeroBasePort + idx - 1
+
+	svc := getService(basename, idx, grpcPort)
+
+	svc.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
+	svc.Command += fmt.Sprintf(" --replicas=%d",
+		int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
+	svc.Command += " --logtostderr -v=2"
+	if idx == 1 {
+		svc.Command += fmt.Sprintf(" --bindall")
+	} else {
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), zeroBasePort)
+	}
+
+	return svc
+}
+
+func getAlpha(idx int) Service {
 	baseOffset := 0
 	if opts.TestPortRange {
 		baseOffset += 100
 	}
 
-	prefix := "alpha"
-	svcName := name(prefix, idx)
-	itnlPort := alphaBasePort + baseOffset + idx - 1
-	grpcPort := itnlPort + 1000
-	httpPort := grpcPort + 1000
+	basename := "alpha"
+	internalPort := alphaBasePort + baseOffset + idx - 1
+	grpcPort := internalPort + 1000
 
-	var i Instance
-	i.Image = "dgraph/dgraph:latest"
-	i.ContainerName = svcName
-	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
-	if idx > 1 {
-		i.DependsOn = append(i.DependsOn, name(prefix, idx-1))
-	}
-	i.Labels = map[string]string{"cluster": "test"}
+	svc := getService(basename, idx, grpcPort)
 
-	i.Ports = []string{
-		toExposedPort(grpcPort),
-		toExposedPort(httpPort),
-	}
-
-	i.Volumes = append(i.Volumes, binVolume())
-	if opts.PersistData {
-		i.Volumes = append(i.Volumes, dataVolume())
-	}
-
-	i.Command = fmt.Sprintf("/gobin/dgraph alpha -o %d", baseOffset+idx-1)
-	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, itnlPort)
-	i.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
-	i.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
-	i.Command += " --logtostderr -v=2"
-	i.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	svc.Command = fmt.Sprintf("/gobin/dgraph alpha -o %d", baseOffset+idx-1)
+	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
+	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
+	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
+	svc.Command += " --logtostderr -v=2"
+	svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	if opts.EnterpriseMode {
-		i.Command += " --enterprise_features"
+		svc.Command += " --enterprise_features"
 	}
 
-	return i
+	return svc
 }
 
 func fatal(err error) {
@@ -207,16 +190,16 @@ func main() {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
 	}
 
-	services := make(map[string]Instance)
+	services := make(map[string]Service)
 
 	for i := 1; i <= opts.NumZeros; i++ {
-		instance := getZero(i)
-		services[instance.ContainerName] = instance
+		svc := getZero(i)
+		services[svc.name] = svc
 	}
 
 	for i := 1; i <= opts.NumAlphas; i++ {
-		instance := getAlpha(i)
-		services[instance.ContainerName] = instance
+		svc := getAlpha(i)
+		services[svc.name] = svc
 	}
 
 	cfg := ComposeConfig{
