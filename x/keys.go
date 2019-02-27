@@ -72,6 +72,24 @@ func DataKey(attr string, uid uint64) []byte {
 	return buf
 }
 
+func DataKeyMultiPart(attr string, uid, startUid uint64) []byte {
+	buf := make([]byte, 2+len(attr)+2+8+8)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
+
+	rest = writeAttr(rest, attr)
+	rest[0] = ByteData
+
+	rest = rest[1:]
+	binary.BigEndian.PutUint64(rest, uid)
+
+	// This list is split in multiple parts. startUid represents the first UID
+	// in the range of UIDs stored by this part of the list.
+	rest = rest[8:]
+	binary.BigEndian.PutUint64(rest, startUid)
+	return buf
+}
+
 func ReverseKey(attr string, uid uint64) []byte {
 	buf := make([]byte, 2+len(attr)+2+8)
 	buf[0] = defaultPrefix

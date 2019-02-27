@@ -414,36 +414,37 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
 }
 
-func TestMillion(t *testing.T) {
-	key := x.DataKey("bal", 1331)
-	ol, err := getNew(key, ps)
-	require.NoError(t, err)
-	var commits int
-	N := int(1e6)
-	for i := 2; i <= N; i += 2 {
-		edge := &pb.DirectedEdge{
-			ValueId: uint64(i),
-		}
-		txn := Txn{StartTs: uint64(i)}
-		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
-		if i%10000 == 0 {
-			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
-			// list.
-			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			require.NoError(t, ol.Rollup(math.MaxUint64))
-		}
-		commits++
-	}
-	t.Logf("Completed a million writes.\n")
-	opt := ListOptions{ReadTs: uint64(N) + 1}
-	l, err := ol.Uids(opt)
-	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
-		require.Equal(t, uint64(i+1)*2, uid)
-	}
-}
+// TODO: size calculations are slow so this test is extremely slow. Fix that.
+// func TestMillion(t *testing.T) {
+// 	key := x.DataKey("bal", 1331)
+// 	ol, err := getNew(key, ps)
+// 	require.NoError(t, err)
+// 	var commits int
+// 	N := int(1e6)
+// 	for i := 2; i <= N; i += 2 {
+// 		edge := &pb.DirectedEdge{
+// 			ValueId: uint64(i),
+// 		}
+// 		txn := Txn{StartTs: uint64(i)}
+// 		addMutationHelper(t, ol, edge, Set, &txn)
+// 		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+// 		if i%10000 == 0 {
+// 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
+// 			// list.
+// 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
+// 			require.NoError(t, ol.Rollup(math.MaxUint64))
+// 		}
+// 		commits++
+// 	}
+// 	t.Logf("Completed a million writes.\n")
+// 	opt := ListOptions{ReadTs: uint64(N) + 1}
+// 	l, err := ol.Uids(opt)
+// 	require.NoError(t, err)
+// 	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
+// 	for i, uid := range l.Uids {
+// 		require.Equal(t, uint64(i+1)*2, uid)
+// 	}
+// }
 
 // Test the various mutate, commit and abort sequences.
 func TestAddMutation_mrjn2(t *testing.T) {
@@ -899,5 +900,41 @@ func BenchmarkAddMutations(b *testing.B) {
 		if err = l.AddMutation(ctx, txn, edge); err != nil {
 			b.Error(err)
 		}
+	}
+}
+
+func TestMultiPartList(t *testing.T) {
+	// For testing, set the max list length to a lower threshold.
+	maxListLength = 2000
+	defer func() {
+		maxListLength = 2000000
+	}()
+
+	key := x.DataKey("bal", 1331)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	var commits int
+	N := int(1e5)
+	for i := 2; i <= N; i += 2 {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		if i%2000 == 0 {
+			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
+			// list.
+			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
+			require.NoError(t, ol.Rollup(math.MaxUint64))
+		}
+		commits++
+	}
+	opt := ListOptions{ReadTs: uint64(N) + 1}
+	l, err := ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, uint64(i+1)*2, uid)
 	}
 }
