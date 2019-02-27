@@ -1853,7 +1853,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+		if !x.WorkerConfig.ExpandEdge && child.Attr == "_predicate_" {
 			return out,
 				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
 		}
@@ -1863,7 +1863,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			continue
 		}
 
-		if !worker.Config.ExpandEdge {
+		if !x.WorkerConfig.ExpandEdge {
 			return out,
 				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}

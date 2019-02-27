@@ -146,7 +146,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	return rebuild.Run(ctx)
 }
 
-// We commit schema to disk in blocking way, should be ok because this happens
+// updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateSchema(attr string, s pb.SchemaUpdate) error {
 	schema.State().Set(attr, s)
@@ -507,7 +507,7 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 
 func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	m *pb.Mutations) error {
-	if Config.StrictMutations {
+	if x.WorkerConfig.StrictMutations {
 		for _, edge := range m.Edges {
 			if _, err := schema.State().TypeOf(edge.Attr); err != nil {
 				return err

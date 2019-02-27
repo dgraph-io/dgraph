@@ -72,32 +72,32 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
-	if len(Config.MyAddr) == 0 {
-		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
+	if len(x.WorkerConfig.MyAddr) == 0 {
+		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
-		ok := x.ValidateAddress(Config.MyAddr)
-		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
+		ok := x.ValidateAddress(x.WorkerConfig.MyAddr)
+		x.AssertTruef(ok, "%s is not valid address", x.WorkerConfig.MyAddr)
 		if !bindall {
 			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}
 	}
 
-	x.AssertTruef(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-	x.AssertTruef(Config.ZeroAddr != Config.MyAddr,
+	x.AssertTruef(len(x.WorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	x.AssertTruef(x.WorkerConfig.ZeroAddr != x.WorkerConfig.MyAddr,
 		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
-	if Config.RaftId == 0 {
+	if x.WorkerConfig.RaftId == 0 {
 		id, err := raftwal.RaftId(walStore)
 		x.Check(err)
-		Config.RaftId = id
+		x.WorkerConfig.RaftId = id
 	}
-	glog.Infof("Current Raft Id: %#x\n", Config.RaftId)
+	glog.Infof("Current Raft Id: %#x\n", x.WorkerConfig.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 
 	// Connect with Zero leader and figure out what group we should belong to.
-	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	m := &pb.Member{Id: x.WorkerConfig.RaftId, Addr: x.WorkerConfig.MyAddr}
 	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
@@ -116,8 +116,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
 	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
-	Config.RaftId = connState.GetMember().GetId()
-	glog.Infof("Raft Id after connection to Zero: %#x\n", Config.RaftId)
+	x.WorkerConfig.RaftId = connState.GetMember().GetId()
+	glog.Infof("Raft Id after connection to Zero: %#x\n", x.WorkerConfig.RaftId)
 
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
@@ -128,8 +128,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	store := raftwal.Init(walStore, Config.RaftId, gid)
-	gr.Node = newNode(store, gid, Config.RaftId, Config.MyAddr)
+	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
+	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
@@ -170,47 +170,9 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) proposeInitialSchema() {
-	// propose the schema for _predicate_
-	if Config.ExpandEdge {
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: x.PredicateListAttr,
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		})
-	}
-
-	g.upsertSchema(&pb.SchemaUpdate{
-		Predicate: "type",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-	})
-
-	if Config.AclEnabled {
-		// propose the schema update for acl predicates
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.xid",
-			ValueType: pb.Posting_STRING,
-			Directive: pb.SchemaUpdate_INDEX,
-			Upsert:    true,
-			Tokenizer: []string{"exact"},
-		})
-
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.password",
-			ValueType: pb.Posting_PASSWORD,
-		})
-
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.user.group",
-			Directive: pb.SchemaUpdate_REVERSE,
-			ValueType: pb.Posting_UID,
-			List:      true,
-		})
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.group.acl",
-			ValueType: pb.Posting_STRING,
-		})
+	initialSchema := schema.InitialSchema()
+	for _, s := range initialSchema {
+		g.upsertSchema(s)
 	}
 }
 
@@ -289,11 +251,11 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
-			if Config.RaftId == member.Id {
+			if x.WorkerConfig.RaftId == member.Id {
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
-			if Config.MyAddr != member.Addr {
+			if x.WorkerConfig.MyAddr != member.Addr {
 				conn.Get().Connect(member.Addr)
 			}
 		}
@@ -305,7 +267,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		}
 	}
 	for _, member := range g.state.Zeros {
-		if Config.MyAddr != member.Addr {
+		if x.WorkerConfig.MyAddr != member.Addr {
 			conn.Get().Connect(member.Addr)
 		}
 	}
@@ -569,7 +531,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.Get().Connect(Config.ZeroAddr)
+			pl = conn.Get().Connect(x.WorkerConfig.ZeroAddr)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -587,9 +549,9 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	leader := g.Node.AmLeader()
 	member := &pb.Member{
-		Id:         Config.RaftId,
+		Id:         x.WorkerConfig.RaftId,
 		GroupId:    g.groupId(),
-		Addr:       Config.MyAddr,
+		Addr:       x.WorkerConfig.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
