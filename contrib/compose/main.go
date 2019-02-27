@@ -1,10 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgraph/x"
-	yaml "gopkg.in/yaml.v2"
 )
 
 type Volume struct {
@@ -138,15 +141,44 @@ func getAlpha(idx int) Instance {
 	return i
 }
 
+func fatal(err error) {
+	fmt.Fprintf(os.Stderr, "compose: %v", err)
+	os.Exit(1)
+}
+
 func main() {
-	// TODO set these from command line
-	Opts = Options{
-		NumZeros:       3,
-		NumAlphas:      6,
-		NumGroups:      2,
-		LruSizeMB:      1536,
-		EnterpriseMode: true,
-		TestPortRange:  true,
+	flag.CommandLine = flag.NewFlagSet("compose", flag.ExitOnError)
+	flag.IntVar(&Opts.NumZeros, "num_zeros", 1,
+		"number of zeros in dgraph cluster")
+	flag.IntVar(&Opts.NumAlphas, "num_alphas", 1,
+		"number of alphas in dgraph cluster")
+	flag.IntVar(&Opts.NumGroups, "num_groups", 1,
+		"number of groups in dgraph cluster")
+	flag.IntVar(&Opts.LruSizeMB, "lru_mb", 1024,
+		"approximate size of LRU cache")
+	flag.BoolVar(&Opts.EnterpriseMode, "enterprise", false,
+		"enable enterprise features in alphas")
+	flag.BoolVar(&Opts.TestPortRange, "test_ports", true,
+		"use port range expected by regression tests in alphas ")
+	flag.Parse()
+
+	// Do some sanity checks.
+	if Opts.NumZeros < 1 || Opts.NumZeros > 99 {
+		fatal(fmt.Errorf("number of zeros must be 1-99"))
+	}
+	if Opts.NumAlphas < 1 || Opts.NumAlphas > 99 {
+		fatal(fmt.Errorf("number of alphas must be 1-99"))
+	}
+	if Opts.LruSizeMB < 1024 {
+		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
+	}
+	if Opts.NumAlphas%Opts.NumGroups != 0 {
+		fatal(fmt.Errorf("%d alphas do not divide evenly into %d groups\n",
+			Opts.NumAlphas, Opts.NumGroups))
+	}
+	if (Opts.NumAlphas/Opts.NumGroups)%2 == 0 {
+		fatal(fmt.Errorf("groups with even number (%d) of nodes are not recommended\n",
+			Opts.NumAlphas/Opts.NumGroups))
 	}
 
 	services := make(map[string]Instance)
@@ -168,5 +200,5 @@ func main() {
 
 	out, err := yaml.Marshal(c)
 	x.Check(err)
-	fmt.Printf("%s\n", out)
+	fmt.Printf("%s", out)
 }
