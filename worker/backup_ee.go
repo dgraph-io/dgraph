@@ -32,15 +32,24 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 		glog.Errorf("Context error during backup: %v\n", err)
 		return err
 	}
+	g := groups()
 	// sanity, make sure this is our group.
-	if groups().groupId() != req.GroupId {
+	if g.groupId() != req.GroupId {
 		return x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
-			groups().groupId(), req.GroupId)
+			g.groupId(), req.GroupId)
 	}
 	// wait for this node to catch-up.
 	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
 		return err
 	}
+	// Get snapshot to fill any gaps.
+	snap, err := g.Node.Snapshot()
+	if err != nil {
+		return err
+	}
+	glog.V(3).Infof("Backup group %d snapshot: %+v", req.GroupId, snap)
+	// Attach snapshot readTs to request to compare with any previous version.
+	req.SnapshotTs = snap.ReadTs
 	return backup.Process(ctx, pstore, req)
 }
 
