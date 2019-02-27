@@ -1,8 +1,24 @@
+/*
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package main
 
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 
 	"gopkg.in/yaml.v2"
@@ -42,21 +58,19 @@ type Options struct {
 	TestPortRange  bool
 }
 
-var Opts Options
+var opts Options
 
-const zeroBasePort int = 5080
-const alphaBasePort int = 7080
+const (
+	zeroBasePort  int = 5080
+	alphaBasePort int = 7080
+)
 
 func name(prefix string, idx int) string {
 	return fmt.Sprintf("%s%d", prefix, idx)
 }
 
-func toString(i int) string {
-	return fmt.Sprintf("%d", i)
-}
-
-func toPort(i int) string {
-	return toString(i) + ":" + toString(i)
+func toExposedPort(i int) string {
+	return fmt.Sprintf("%d:%d", i, i)
 }
 
 func binVolume() Volume {
@@ -69,8 +83,8 @@ func binVolume() Volume {
 }
 
 func getZero(idx int) Instance {
-	namePfx := "zero"
-	svcName := name(namePfx, idx)
+	prefix := "zero"
+	svcName := name(prefix, idx)
 	grpcPort := zeroBasePort + idx - 1
 	httpPort := grpcPort + 1000
 
@@ -79,36 +93,36 @@ func getZero(idx int) Instance {
 	i.ContainerName = svcName
 	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
 	if idx > 1 {
-		i.DependsOn = append(i.DependsOn, name(namePfx, idx-1))
+		i.DependsOn = append(i.DependsOn, name(prefix, idx-1))
 	}
 	i.Labels = map[string]string{"cluster": "test"}
 
 	i.Ports = []string{
-		toPort(grpcPort),
-		toPort(httpPort),
+		toExposedPort(grpcPort),
+		toExposedPort(httpPort),
 	}
 
 	i.Volumes = append(i.Volumes, binVolume())
 	i.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
 	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, grpcPort)
-	i.Command += fmt.Sprintf(" --replicas=%d", Opts.NumAlphas/Opts.NumGroups)
-	i.Command += " --logtostderr"
+	i.Command += fmt.Sprintf(" --replicas=%d", int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
+	i.Command += " --logtostderr -v=2"
 	if idx == 1 {
 		i.Command += fmt.Sprintf(" --bindall")
 	} else {
-		i.Command += fmt.Sprintf(" --peer=%s:%d", name(namePfx, 1), zeroBasePort)
+		i.Command += fmt.Sprintf(" --peer=%s:%d", name(prefix, 1), zeroBasePort)
 	}
 
 	return i
 }
 func getAlpha(idx int) Instance {
 	baseOffset := 0
-	if Opts.TestPortRange {
+	if opts.TestPortRange {
 		baseOffset += 100
 	}
 
-	namePfx := "alpha"
-	svcName := name(namePfx, idx)
+	prefix := "alpha"
+	svcName := name(prefix, idx)
 	itnlPort := alphaBasePort + baseOffset + idx - 1
 	grpcPort := itnlPort + 1000
 	httpPort := grpcPort + 1000
@@ -118,23 +132,23 @@ func getAlpha(idx int) Instance {
 	i.ContainerName = svcName
 	i.WorkingDir = fmt.Sprintf("/data/%s", i.ContainerName)
 	if idx > 1 {
-		i.DependsOn = append(i.DependsOn, name(namePfx, idx-1))
+		i.DependsOn = append(i.DependsOn, name(prefix, idx-1))
 	}
 	i.Labels = map[string]string{"cluster": "test"}
 
 	i.Ports = []string{
-		toPort(grpcPort),
-		toPort(httpPort),
+		toExposedPort(grpcPort),
+		toExposedPort(httpPort),
 	}
 
 	i.Volumes = append(i.Volumes, binVolume())
 	i.Command = fmt.Sprintf("/gobin/dgraph alpha -o %d", baseOffset+idx-1)
 	i.Command += fmt.Sprintf(" --my=%s:%d", svcName, itnlPort)
-	i.Command += fmt.Sprintf(" --lru_mb=%d", Opts.LruSizeMB)
+	i.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	i.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
-	i.Command += " --logtostderr"
+	i.Command += " --logtostderr -v=2"
 	i.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-	if Opts.EnterpriseMode {
+	if opts.EnterpriseMode {
 		i.Command += " --enterprise_features"
 	}
 
@@ -148,47 +162,39 @@ func fatal(err error) {
 
 func main() {
 	flag.CommandLine = flag.NewFlagSet("compose", flag.ExitOnError)
-	flag.IntVar(&Opts.NumZeros, "num_zeros", 1,
+	flag.IntVar(&opts.NumZeros, "num_zeros", 1,
 		"number of zeros in dgraph cluster")
-	flag.IntVar(&Opts.NumAlphas, "num_alphas", 1,
+	flag.IntVar(&opts.NumAlphas, "num_alphas", 1,
 		"number of alphas in dgraph cluster")
-	flag.IntVar(&Opts.NumGroups, "num_groups", 1,
+	flag.IntVar(&opts.NumGroups, "num_groups", 1,
 		"number of groups in dgraph cluster")
-	flag.IntVar(&Opts.LruSizeMB, "lru_mb", 1024,
+	flag.IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	flag.BoolVar(&Opts.EnterpriseMode, "enterprise", false,
+	flag.BoolVar(&opts.EnterpriseMode, "enterprise", false,
 		"enable enterprise features in alphas")
-	flag.BoolVar(&Opts.TestPortRange, "test_ports", true,
+	flag.BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
 	flag.Parse()
 
 	// Do some sanity checks.
-	if Opts.NumZeros < 1 || Opts.NumZeros > 99 {
+	if opts.NumZeros < 1 || opts.NumZeros > 99 {
 		fatal(fmt.Errorf("number of zeros must be 1-99"))
 	}
-	if Opts.NumAlphas < 1 || Opts.NumAlphas > 99 {
+	if opts.NumAlphas < 1 || opts.NumAlphas > 99 {
 		fatal(fmt.Errorf("number of alphas must be 1-99"))
 	}
-	if Opts.LruSizeMB < 1024 {
+	if opts.LruSizeMB < 1024 {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
-	}
-	if Opts.NumAlphas%Opts.NumGroups != 0 {
-		fatal(fmt.Errorf("%d alphas do not divide evenly into %d groups\n",
-			Opts.NumAlphas, Opts.NumGroups))
-	}
-	if (Opts.NumAlphas/Opts.NumGroups)%2 == 0 {
-		fatal(fmt.Errorf("groups with even number (%d) of nodes are not recommended\n",
-			Opts.NumAlphas/Opts.NumGroups))
 	}
 
 	services := make(map[string]Instance)
 
-	for i := 1; i <= Opts.NumZeros; i++ {
+	for i := 1; i <= opts.NumZeros; i++ {
 		instance := getZero(i)
 		services[instance.ContainerName] = instance
 	}
 
-	for i := 1; i <= Opts.NumAlphas; i++ {
+	for i := 1; i <= opts.NumAlphas; i++ {
 		instance := getAlpha(i)
 		services[instance.ContainerName] = instance
 	}
