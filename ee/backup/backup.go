@@ -24,6 +24,11 @@ import (
 	"github.com/golang/glog"
 )
 
+// ErrBackupNoChanges is returned when the manifest version is lesser or equal to the
+// snapshot version. This means that no significant data updates happened since the last
+// backup.
+var ErrBackupNoChanges = x.Errorf("No changes since last backup")
+
 // Process uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
@@ -34,27 +39,28 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 	}
 
 	obj := &object{
-		uri:  req.Location,
-		path: fmt.Sprintf(backupPathFmt, req.UnixTs),
-		name: fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId),
+		uri:    req.Location,
+		path:   fmt.Sprintf(backupPathFmt, req.UnixTs),
+		name:   fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId),
+		snapTs: req.SnapshotTs, // used to verify version changes
 	}
 	handler, err := create(obj)
 	if err != nil {
 		glog.Errorf("Unable to get handler for request: %+v. Error: %v", req, err)
 		return err
 	}
+	glog.V(3).Infof("Backup manifest version: %d", obj.version)
 
 	stream := db.NewStreamAt(req.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	// Here we return the max version in the original request obejct. We will use this
 	// to create our manifest to complete the backup.
-	glog.V(3).Infof("Backup previous version: %d", obj.version)
 	req.Since, err = stream.Backup(handler, obj.version)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
-	glog.V(3).Infof("Backup current version: %d", req.Since)
+	glog.V(3).Infof("Backup group %d version: %d", req.GroupId, req.Since)
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return err
