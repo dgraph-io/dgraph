@@ -336,8 +336,8 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	if num.Val == 0 && num.ReadOnly {
 		if readTs := posting.Oracle().MaxAssigned(); readTs > 0 {
-			glog.V(3).Infof("... Timestamp served from memory: %v", readTs)
-			return &pb.AssignedIds{ReadOnly: readTs + 1}, nil
+			glog.Infof("Timestamp served from memory: %v", readTs)
+			return &pb.AssignedIds{ReadOnly: readTs}, nil
 		}
 	}
 
