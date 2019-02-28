@@ -578,9 +578,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		if !req.ReadOnly {
 			return resp, x.Errorf("A best effort query must be read-only.")
 		}
-		if readTs := posting.Oracle().MaxAssigned(); readTs > 0 {
-			req.StartTs = readTs
-		}
+		req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
