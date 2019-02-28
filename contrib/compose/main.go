@@ -181,7 +181,7 @@ func main() {
 		"number of groups in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	cmd.PersistentFlags().BoolVarP(&opts.PersistData, "persist_data", "p", false,git stat
+	cmd.PersistentFlags().BoolVarP(&opts.PersistData, "persist_data", "p", false,
 		"use a persistent data volume")
 	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
