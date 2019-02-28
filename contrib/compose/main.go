@@ -27,6 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type StringMap map[string]string
+
 type Volume struct {
 	Type     string
 	Source   string
@@ -40,7 +42,7 @@ type Service struct {
 	ContainerName string   `yaml:"container_name"`
 	WorkingDir    string   `yaml:"working_dir"`
 	DependsOn     []string `yaml:"depends_on,omitempty"`
-	Labels        map[string]string
+	Labels        StringMap
 	Ports         []string
 	Volumes       []Volume
 	Command       string
@@ -49,7 +51,7 @@ type Service struct {
 type ComposeConfig struct {
 	Version  string
 	Services map[string]Service
-	Volumes  map[string]map[string]string
+	Volumes  map[string]StringMap
 }
 
 type Options struct {
@@ -57,6 +59,7 @@ type Options struct {
 	NumAlphas      int
 	NumGroups      int
 	LruSizeMB      int
+	AclSecret      string
 	PersistData    bool
 	EnterpriseMode bool
 	TestPortRange  bool
@@ -152,9 +155,22 @@ func getAlpha(idx int) Service {
 	svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	if opts.EnterpriseMode {
 		svc.Command += " --enterprise_features"
+		if opts.AclSecret != "" {
+			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 10s"
+			svc.Volumes = append(svc.Volumes, Volume{
+				Type:     "bind",
+				Source:   opts.AclSecret,
+				Target:   "/secret/hmac",
+				ReadOnly: true,
+			})
+		}
 	}
 
 	return svc
+}
+
+func warning(str string) {
+	fmt.Fprintf(os.Stderr, "compose: %v\n", str)
 }
 
 func fatal(err error) {
@@ -185,6 +201,8 @@ func main() {
 		"use a persistent data volume")
 	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
+	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
+		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
 
@@ -207,6 +225,10 @@ func main() {
 	if opts.LruSizeMB < 1024 {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
 	}
+	if opts.AclSecret != "" && !opts.EnterpriseMode {
+		warning("adding --enterprise because it is required by ACL feature")
+		opts.EnterpriseMode = true
+	}
 
 	services := make(map[string]Service)
 
@@ -223,10 +245,10 @@ func main() {
 	cfg := ComposeConfig{
 		Version:  "3.5",
 		Services: services,
+		Volumes:  make(map[string]StringMap),
 	}
 	if opts.PersistData {
-		cfg.Volumes = make(map[string]map[string]string)
-		cfg.Volumes["data"] = map[string]string{}
+		cfg.Volumes["data"] = StringMap{}
 	}
 
 	out, err := yaml.Marshal(cfg)
