@@ -102,7 +102,7 @@ func BackupOverNetwork(pctx context.Context, dst string) error {
 	}
 
 	// Get ReadTs from zero and wait for stream to catch up.
-	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true}, false)
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
 		return err
