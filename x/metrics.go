@@ -41,11 +41,11 @@ var (
 		"Latency of the various methods", stats.UnitMilliseconds)
 
 	// value at particular point of time
-	PendingQueries = stats.Int64("pending_queries",
+	PendingQueries = stats.Int64("pending_queries_total",
 		"Number of pending queries", stats.UnitDimensionless)
-	PendingProposals = stats.Int64("pending_proposals",
+	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
-	NumGoRoutines = stats.Int64("num_goroutines",
+	NumGoRoutines = stats.Int64("goroutines_total",
 		"Number of goroutines", stats.UnitDimensionless)
 	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
