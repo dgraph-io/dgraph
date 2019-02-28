@@ -569,7 +569,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
-	if req.StartTs == 0 {
+	switch {
+	case req.BestEffort:
+		req.StartTs = State.getTimestamp(true)
+	case req.StartTs == 0:
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
 	resp.Txn = &api.TxnContext{
