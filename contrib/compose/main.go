@@ -16,11 +16,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"math"
 	"os"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -157,27 +158,44 @@ func getAlpha(idx int) Service {
 }
 
 func fatal(err error) {
-	fmt.Fprintf(os.Stderr, "compose: %v", err)
+	fmt.Fprintf(os.Stderr, "compose: %v\n", err)
 	os.Exit(1)
 }
 
 func main() {
-	flag.CommandLine = flag.NewFlagSet("compose", flag.ExitOnError)
-	flag.IntVar(&opts.NumZeros, "num_zeros", 1,
+	var cmd = &cobra.Command{
+		Use:     "compose",
+		Short:   "docker-compose config file generator for dgraph",
+		Long:    "Dynamically generate a docker-compose.yml file for running a dgraph cluster.",
+		Example: "$ compose --num_zeros=3 --num_alphas=3 | docker-compose -f- up",
+		Run: func(cmd *cobra.Command, args []string) {
+			// dummy to get "Usage:" template in Usage() output.
+		},
+	}
+
+	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 1,
 		"number of zeros in dgraph cluster")
-	flag.IntVar(&opts.NumAlphas, "num_alphas", 1,
+	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 1,
 		"number of alphas in dgraph cluster")
-	flag.IntVar(&opts.NumGroups, "num_groups", 1,
+	cmd.PersistentFlags().IntVarP(&opts.NumGroups, "num_groups", "g", 1,
 		"number of groups in dgraph cluster")
-	flag.IntVar(&opts.LruSizeMB, "lru_mb", 1024,
+	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	flag.BoolVar(&opts.PersistData, "persist_data", false,
+	cmd.PersistentFlags().BoolVarP(&opts.PersistData, "persist_data", "p", false,git stat
 		"use a persistent data volume")
-	flag.BoolVar(&opts.EnterpriseMode, "enterprise", false,
+	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
-	flag.BoolVar(&opts.TestPortRange, "test_ports", true,
+	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
-	flag.Parse()
+
+	err := cmd.ParseFlags(os.Args)
+	if err != nil {
+		if err == pflag.ErrHelp {
+			cmd.Usage()
+			os.Exit(0)
+		}
+		fatal(err)
+	}
 
 	// Do some sanity checks.
 	if opts.NumZeros < 1 || opts.NumZeros > 99 {
