@@ -79,6 +79,7 @@ func TestSystem(t *testing.T) {
 	t.Run("has should not have deleted edge", wrap(HasDeletedEdge))
 	t.Run("has should have reverse edges", wrap(HasReverseEdge))
 	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
+	t.Run("max predicate size", wrap(MaxPredicateSize))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1677,4 +1678,41 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 
 	require.Equal(t, len(revs), 1)
 	require.Equal(t, revs[0].Name, "carol")
+}
+
+func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
+	// Create a string that has more than than 2^16 chars.
+	var b strings.Builder
+	for i := 0; i < 10000; i++ {
+		b.WriteString("abcdefg")
+	}
+	largePred := b.String()
+
+	// Verify that Alter requests with predicates that are too large are rejected.
+	ctx := context.Background()
+	err := c.Alter(ctx, &api.Operation{
+		Schema: fmt.Sprintf(`%s: uid @reverse .`, largePred),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
+
+	// Verify that Mutate requests with predicates that are too large are rejected.
+	txn := c.NewTxn()
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`_:test <%s> "value" .`, largePred)),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
+	_ = txn.Discard(ctx)
+
+	// Do the same thing as above but for the predicates in DelNquads.
+	txn = c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf(`_:test <%s> "value" .`, largePred)),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 }
