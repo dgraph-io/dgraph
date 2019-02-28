@@ -570,21 +570,19 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
-	switch {
-	case req.StartTs == 0:
-		// Best effort set from client Txn.
-		if req.BestEffort {
-			// Sanity: check that request is read-only too.
-			if !req.ReadOnly {
-				return resp, x.Errorf("A best effort query must be read-only.")
-			}
-			if readTs := posting.Oracle().MaxAssigned(); readTs > 0 {
-				glog.Infof("Timestamp served from memory: %v", readTs)
-				req.StartTs = readTs
-				break
-			}
-			// Our best effort failed, fall back to normal mode.
+	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
+	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
+	// If we haven't processed any updates yet then fall back to getting TS from Zero.
+	if req.BestEffort {
+		// Sanity: check that request is read-only too.
+		if !req.ReadOnly {
+			return resp, x.Errorf("A best effort query must be read-only.")
 		}
+		if readTs := posting.Oracle().MaxAssigned(); readTs > 0 {
+			req.StartTs = readTs
+		}
+	}
+	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
 	resp.Txn = &api.TxnContext{
