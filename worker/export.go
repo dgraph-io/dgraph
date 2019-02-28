@@ -406,7 +406,7 @@ func ExportOverNetwork(ctx context.Context) error {
 		return err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
-	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true}, false)
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly ts for export: %v\n", err)
 		return err
