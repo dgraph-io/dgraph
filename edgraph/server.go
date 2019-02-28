@@ -223,11 +223,14 @@ func (s *ServerState) fillTimestampRequests() {
 			}
 		}
 
+		var bestEffort bool
+
 		// Generate the request.
 		num := &pb.Num{}
 		for _, r := range reqs {
 			if r.readOnly {
 				num.ReadOnly = true
+				bestEffort = r.bestEffort
 			} else {
 				num.Val++
 			}
@@ -236,7 +239,7 @@ func (s *ServerState) fillTimestampRequests() {
 		// Execute the request with infinite retries.
 	retry:
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		ts, err := worker.Timestamps(ctx, num)
+		ts, err := worker.Timestamps(ctx, num, bestEffort)
 		cancel()
 		if err != nil {
 			glog.Warningf("Error while retrieving timestamps: %v with delay: %v."+
@@ -262,13 +265,13 @@ func (s *ServerState) fillTimestampRequests() {
 }
 
 type tsReq struct {
-	readOnly bool
+	readOnly, bestEffort bool
 	// A one-shot chan which we can send a txn timestamp upon.
 	ch chan uint64
 }
 
-func (s *ServerState) getTimestamp(readOnly bool) uint64 {
-	tr := tsReq{readOnly: readOnly, ch: make(chan uint64)}
+func (s *ServerState) getTimestamp(readOnly, bestEffort bool) uint64 {
+	tr := tsReq{readOnly: readOnly, bestEffort: readOnly && bestEffort, ch: make(chan uint64)}
 	s.needTs <- tr
 	return <-tr.ch
 }
@@ -309,7 +312,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
-	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
+	m := &pb.Mutations{StartTs: State.getTimestamp(false, false)}
 	if op.DropAll {
 		m.DropAll = true
 		_, err := query.ApplyMutations(ctx, m)
@@ -415,7 +418,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		return nil, x.Errorf("No mutations allowed.")
 	}
 	if mu.StartTs == 0 {
-		mu.StartTs = State.getTimestamp(false)
+		mu.StartTs = State.getTimestamp(false, false)
 	}
 	annotateStartTs(span, mu.StartTs)
 	emptyMutation :=
@@ -569,11 +572,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
-	switch {
-	case req.BestEffort:
-		req.StartTs = State.getTimestamp(true)
-	case req.StartTs == 0:
-		req.StartTs = State.getTimestamp(req.ReadOnly)
+	if req.StartTs == 0 {
+		req.StartTs = State.getTimestamp(req.ReadOnly, req.BestEffort)
 	}
 	resp.Txn = &api.TxnContext{
 		StartTs: req.StartTs,
