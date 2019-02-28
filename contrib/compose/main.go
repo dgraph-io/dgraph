@@ -231,5 +231,6 @@ func main() {
 
 	out, err := yaml.Marshal(cfg)
 	x.Check(err)
+	fmt.Printf("# Auto-generated with: %v\n#\n", os.Args[:])
 	fmt.Printf("%s", out)
 }
