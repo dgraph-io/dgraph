@@ -477,6 +477,24 @@
 			"versionExact": "HEAD"
 		},
 		{
+			"checksumSHA1": "42fA4qDLim57x0O15dkMgpO+9dg=",
+			"path": "github.com/dgraph-io/dgo",
+			"revision": "d5a1729ba70542920754c5fd2e9d5ad64fe886a5",
+			"revisionTime": "2019-02-01T21:43:00Z"
+		},
+		{
+			"checksumSHA1": "TZl2XEsnow5Aog9P3FTuvGnCjEE=",
+			"path": "github.com/dgraph-io/dgo/protos/api",
+			"revision": "d5a1729ba70542920754c5fd2e9d5ad64fe886a5",
+			"revisionTime": "2019-02-01T21:43:00Z"
+		},
+		{
+			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
+			"path": "github.com/dgraph-io/dgo/y",
+			"revision": "d5a1729ba70542920754c5fd2e9d5ad64fe886a5",
+			"revisionTime": "2019-02-01T21:43:00Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
