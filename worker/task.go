@@ -343,7 +343,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
@@ -534,7 +534,7 @@ func (qs *queryState) handleUidPostings(
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
 	calculate := func(start, end int) error {

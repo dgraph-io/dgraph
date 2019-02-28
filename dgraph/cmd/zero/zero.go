@@ -573,7 +573,7 @@ func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Pa
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error)
+	errCh := make(chan error, len(proposals))
 	for _, pr := range proposals {
 		go func(pr *pb.ZeroProposal) {
 			errCh <- s.Node.proposeAndWait(ctx, pr)

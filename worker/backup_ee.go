@@ -118,7 +118,7 @@ func BackupOverNetwork(pctx context.Context, dst string) error {
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
-	errCh := make(chan error, 1)
+	errCh := make(chan error, len(gids))
 	for _, gid := range gids {
 		req.GroupId = gid
 		go func() {
