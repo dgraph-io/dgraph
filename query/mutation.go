@@ -34,7 +34,7 @@ import (
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	if worker.Config.ExpandEdge {
+	if x.WorkerConfig.ExpandEdge {
 		edges, err := expandEdges(ctx, m)
 		if err != nil {
 			return nil, x.Wrapf(err, "While adding pb.edges")
@@ -42,7 +42,7 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 		m.Edges = edges
 	} else {
 		for _, mu := range m.Edges {
-			if mu.Attr == x.Star && !worker.Config.ExpandEdge {
+			if mu.Attr == x.Star && !x.WorkerConfig.ExpandEdge {
 				return nil, x.Errorf("Expand edge (--expand_edge) is set to false." +
 					" Cannot perform S * * deletion.")
 			}

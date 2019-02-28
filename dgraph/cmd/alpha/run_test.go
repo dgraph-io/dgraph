@@ -36,12 +36,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
 )
@@ -1897,7 +1895,7 @@ func TestTypeMutationAndQuery(t *testing.T) {
 }
 
 func TestIPStringParsing(t *testing.T) {
-	var addrRange []worker.IPRange
+	var addrRange []x.IPRange
 	var err error
 
 	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244")

@@ -53,7 +53,7 @@ func workerPort() int {
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config
-	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
+	pendingProposals = make(chan struct{}, x.WorkerConfig.NumPendingProposals)
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),

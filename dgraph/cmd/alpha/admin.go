@@ -120,7 +120,7 @@ func ipInIPWhitelistRanges(ipString string) bool {
 		return false
 	}
 
-	for _, ipRange := range worker.Config.WhiteListedIPRanges {
+	for _, ipRange := range x.WorkerConfig.WhiteListedIPRanges {
 		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
 			return true
 		}

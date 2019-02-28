@@ -553,10 +553,13 @@ func (s *Server) ShouldServe(
 	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
-	if x.IsAclPredicate(tablet.Predicate) {
-		// force all the acl predicates to be allocated to group 1
-		// this is to make it eaiser to stream ACL updates to all alpha servers
-		// since they only need to open one pipeline to receive updates for all ACL predicates
+	if x.IsReservedPredicate(tablet.Predicate) {
+		// Force all the reserved predicates to be allocated to group 1.
+		// This is to make it eaiser to stream ACL updates to all alpha servers
+		// since they only need to open one pipeline to receive updates for all
+		// ACL predicates.
+		// This will also make it easier to restore the reserved predicates after
+		// a DropAll operation.
 		tablet.GroupId = 1
 	}
 	proposal.Tablet = tablet

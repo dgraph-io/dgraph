@@ -62,7 +62,7 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 	for _, attr := range predicates {
 		// This can happen after a predicate is moved. We don't delete predicate from schema state
 		// immediately. So lets ignore this predicate.
-		if !groups().ServesTablet(attr) {
+		if !groups().ServesTabletReadOnly(attr) {
 			continue
 		}
 		if schemaNode := populateSchema(attr, fields); schemaNode != nil {

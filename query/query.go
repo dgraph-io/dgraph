@@ -170,6 +170,7 @@ type Function struct {
 type SubGraph struct {
 	ReadTs       uint64
 	Attr         string
+	UnknownAttr  bool
 	Params       params
 	counts       []uint32
 	valueMatrix  []*pb.ValueList
@@ -1852,7 +1853,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+		if !x.WorkerConfig.ExpandEdge && child.Attr == "_predicate_" {
 			return out,
 				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
 		}
@@ -1862,7 +1863,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			continue
 		}
 
-		if !worker.Config.ExpandEdge {
+		if !x.WorkerConfig.ExpandEdge {
 			return out,
 				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}
@@ -2025,7 +2026,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil {
+			if err != nil && strings.Contains(err.Error(), worker.ErrUnservedTabletMessage) {
+				sg.UnknownAttr = true
+			} else if err != nil {
 				rch <- err
 				return
 			}
