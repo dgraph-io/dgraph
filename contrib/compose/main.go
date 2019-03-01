@@ -27,6 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type StringMap map[string]string
+
 type Volume struct {
 	Type     string
 	Source   string
@@ -40,7 +42,7 @@ type Service struct {
 	ContainerName string   `yaml:"container_name"`
 	WorkingDir    string   `yaml:"working_dir"`
 	DependsOn     []string `yaml:"depends_on,omitempty"`
-	Labels        map[string]string
+	Labels        StringMap
 	Ports         []string
 	Volumes       []Volume
 	Command       string
@@ -49,7 +51,7 @@ type Service struct {
 type ComposeConfig struct {
 	Version  string
 	Services map[string]Service
-	Volumes  map[string]map[string]string
+	Volumes  map[string]StringMap
 }
 
 type Options struct {
@@ -57,7 +59,9 @@ type Options struct {
 	NumAlphas      int
 	NumGroups      int
 	LruSizeMB      int
-	PersistData    bool
+	AclSecret      string
+	DataDir        string
+	DataVol        bool
 	EnterpriseMode bool
 	TestPortRange  bool
 }
@@ -100,13 +104,24 @@ func getService(basename string, idx, grpcPort int) Service {
 		Target:   "/gobin",
 		ReadOnly: true,
 	})
-	if opts.PersistData {
+
+	switch {
+	case opts.DataVol == true:
 		svc.Volumes = append(svc.Volumes, Volume{
 			Type:     "volume",
 			Source:   "data",
 			Target:   "/data",
 			ReadOnly: false,
 		})
+	case opts.DataDir != "":
+		svc.Volumes = append(svc.Volumes, Volume{
+			Type:     "bind",
+			Source:   opts.DataDir,
+			Target:   "/data",
+			ReadOnly: false,
+		})
+	default:
+		// none
 	}
 
 	return svc
@@ -152,9 +167,22 @@ func getAlpha(idx int) Service {
 	svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	if opts.EnterpriseMode {
 		svc.Command += " --enterprise_features"
+		if opts.AclSecret != "" {
+			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 10s"
+			svc.Volumes = append(svc.Volumes, Volume{
+				Type:     "bind",
+				Source:   opts.AclSecret,
+				Target:   "/secret/hmac",
+				ReadOnly: true,
+			})
+		}
 	}
 
 	return svc
+}
+
+func warning(str string) {
+	fmt.Fprintf(os.Stderr, "compose: %v\n", str)
 }
 
 func fatal(err error) {
@@ -181,10 +209,14 @@ func main() {
 		"number of groups in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	cmd.PersistentFlags().BoolVarP(&opts.PersistData, "persist_data", "p", false,
-		"use a persistent data volume")
+	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "v", false,
+		"mount a docker volume as /data in containers")
+	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
+		"mount the host directory as /data in containers")
 	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
+	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
+		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
 
@@ -207,6 +239,13 @@ func main() {
 	if opts.LruSizeMB < 1024 {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
 	}
+	if opts.AclSecret != "" && !opts.EnterpriseMode {
+		warning("adding --enterprise because it is required by ACL feature")
+		opts.EnterpriseMode = true
+	}
+	if opts.DataVol && opts.DataDir != "" {
+		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
+	}
 
 	services := make(map[string]Service)
 
@@ -223,10 +262,11 @@ func main() {
 	cfg := ComposeConfig{
 		Version:  "3.5",
 		Services: services,
+		Volumes:  make(map[string]StringMap),
 	}
-	if opts.PersistData {
-		cfg.Volumes = make(map[string]map[string]string)
-		cfg.Volumes["data"] = map[string]string{}
+
+	if opts.DataVol {
+		cfg.Volumes["data"] = StringMap{}
 	}
 
 	out, err := yaml.Marshal(cfg)
