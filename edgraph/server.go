@@ -34,6 +34,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -476,6 +477,16 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		return resp, err
 	}
 
+	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
+	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
+	// If we haven't processed any updates yet then fall back to getting TS from Zero.
+	if req.BestEffort {
+		// Sanity: check that request is read-only too.
+		if !req.ReadOnly {
+			return resp, x.Errorf("A best effort query must be read-only.")
+		}
+		req.StartTs = posting.Oracle().MaxAssigned()
+	}
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}

@@ -450,8 +450,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		n.lastCommitTs = status.CommitTs
 	}
 	if err := writer.Flush(); err != nil {
-		x.Errorf("Error while flushing to disk: %v", err)
-		return err
+		return x.Errorf("Error while flushing to disk: %v", err)
 	}
 
 	g := groups()
