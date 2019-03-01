@@ -46,9 +46,10 @@ var (
 type Txn struct {
 	context *api.TxnContext
 
-	finished bool
-	mutated  bool
-	readOnly bool
+	finished   bool
+	mutated    bool
+	readOnly   bool
+	bestEffort bool
 
 	dg *Dgraph
 	dc api.DgraphClient
@@ -56,6 +57,20 @@ type Txn struct {
 
 func (txn *Txn) Sequencing(sequencing api.LinRead_Sequencing) {
 	// Sequencing is no longer used.
+}
+
+// BestEffort enables best effort in read-only queries. Using this flag will ask the
+// Dgraph Alpha to try to get timestamps from memory in a best effort to reduce the number of
+// outbound requests to Zero. This may yield improved latencies in read-bound datasets.
+//
+// This method will panic if the transaction is not read-only.
+// Returns the transaction itself.
+func (txn *Txn) BestEffort() *Txn {
+	if !txn.readOnly {
+		panic("Best effort only works for read-only queries.")
+	}
+	txn.bestEffort = true
+	return txn
 }
 
 // NewTxn creates a new transaction.
@@ -88,10 +103,11 @@ func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 		return nil, ErrFinished
 	}
 	req := &api.Request{
-		Query:    q,
-		Vars:     vars,
-		StartTs:  txn.context.StartTs,
-		ReadOnly: txn.readOnly,
+		Query:      q,
+		Vars:       vars,
+		StartTs:    txn.context.StartTs,
+		ReadOnly:   txn.readOnly,
+		BestEffort: txn.bestEffort,
 	}
 	ctx = txn.dg.getContext(ctx)
 	resp, err := txn.dc.Query(ctx, req)
