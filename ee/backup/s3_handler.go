@@ -119,8 +119,7 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 		done := make(chan struct{})
 		defer close(done)
 		for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-			if strings.HasSuffix(object.Key, backupManifest) &&
-				strings.Compare(object.Key, lastManifest) == 1 {
+			if strings.HasSuffix(object.Key, backupManifest) && object.Key > lastManifest {
 				lastManifest = object.Key
 			}
 		}
@@ -184,9 +183,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 	for _, object := range objects {
 		_, groupId, err := getInfo(object)
 		if err != nil {
-			if glog.V(2) {
-				fmt.Printf("Restore: skip invalid backup name format: %q\n", object)
-			}
+			fmt.Printf("Restore: skip invalid backup name format: %q\n", object)
 			continue
 		}
 		reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
