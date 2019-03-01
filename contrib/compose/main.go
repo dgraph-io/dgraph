@@ -57,7 +57,8 @@ type Options struct {
 	NumAlphas      int
 	NumGroups      int
 	LruSizeMB      int
-	PersistData    bool
+	DataDir        string
+	DataVol        bool
 	EnterpriseMode bool
 	TestPortRange  bool
 }
@@ -100,10 +101,17 @@ func getService(basename string, idx, grpcPort int) Service {
 		Target:   "/gobin",
 		ReadOnly: true,
 	})
-	if opts.PersistData {
+	if opts.DataVol {
 		svc.Volumes = append(svc.Volumes, Volume{
 			Type:     "volume",
 			Source:   "data",
+			Target:   "/data",
+			ReadOnly: false,
+		})
+	} else if opts.DataDir != "" {
+		svc.Volumes = append(svc.Volumes, Volume{
+			Type:     "bind",
+			Source:   opts.DataDir,
 			Target:   "/data",
 			ReadOnly: false,
 		})
@@ -181,8 +189,10 @@ func main() {
 		"number of groups in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	cmd.PersistentFlags().BoolVarP(&opts.PersistData, "persist_data", "p", false,
-		"use a persistent data volume")
+	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "v", false,
+		"mount a docker volume as /data in containers")
+	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
+		"mount the host directory as /data in containers")
 	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
@@ -207,6 +217,9 @@ func main() {
 	if opts.LruSizeMB < 1024 {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
 	}
+	if opts.DataVol && opts.DataDir != "" {
+		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
+	}
 
 	services := make(map[string]Service)
 
@@ -224,7 +237,7 @@ func main() {
 		Version:  "3.5",
 		Services: services,
 	}
-	if opts.PersistData {
+	if opts.DataVol {
 		cfg.Volumes = make(map[string]map[string]string)
 		cfg.Volumes["data"] = map[string]string{}
 	}
