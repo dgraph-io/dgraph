@@ -55,8 +55,9 @@ func (h *fileHandler) Create(uri *url.URL, file *object) error {
 		var lastManifest string
 		// Walk the path and find the most recent backup.
 		// If not manifest is found, this is a full backup.
+		suffix := "/" + backupManifest
 		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-			if !isdir && strings.HasSuffix(path, backupManifest) && path > lastManifest {
+			if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
 				lastManifest = path
 			}
 			return false

@@ -118,8 +118,9 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 		var lastManifest string
 		done := make(chan struct{})
 		defer close(done)
+		suffix := "/" + backupManifest
 		for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-			if strings.HasSuffix(object.Key, backupManifest) && object.Key > lastManifest {
+			if strings.HasSuffix(object.Key, suffix) && object.Key > lastManifest {
 				lastManifest = object.Key
 			}
 		}
