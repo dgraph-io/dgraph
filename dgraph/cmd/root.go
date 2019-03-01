@@ -132,6 +132,15 @@ func setGlogFlags(conf *viper.Viper) {
 	for _, gflag := range glogFlags {
 		// Set value of flag to the value in config
 		if stringValue, ok := conf.Get(gflag).(string); ok {
+			// Special handling for log_backtrace_at flag because the flag is of
+			// type tracelocation. The nil value for tracelocation type is
+			// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
+			// But we can't set nil value for the flag because of
+			// https://github.com/golang/glog/blob/master/glog.go#L374
+			// Skip setting value if log_backstrace_at is nil in config.
+			if gflag == "log_backtrace_at" && stringValue == ":0" {
+				continue
+			}
 			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 		}
 	}

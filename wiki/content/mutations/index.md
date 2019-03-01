@@ -133,7 +133,7 @@ While Robin Wright might get UID `0x321` and triples
 An appropriate schema might be as follows.
 ```
 xid: string @index(exact) .
-<http://schema.org/type>: uid @reverse .
+<http://schema.org/type>: [uid] @reverse .
 ```
 
 Query Example: All people.

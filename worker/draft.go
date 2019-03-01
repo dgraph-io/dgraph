@@ -170,7 +170,24 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
-		return posting.DeleteAll()
+
+		if err := posting.DeleteAll(); err != nil {
+			return err
+		}
+
+		if groups().groupId() == 1 {
+			initialSchema := schema.InitialSchema()
+			for _, s := range initialSchema {
+				if err := updateSchema(s.Predicate, *s); err != nil {
+					return err
+				}
+
+				if !groups().ServesTablet(s.Predicate) {
+					return fmt.Errorf("Group 1 should always serve reserved predicate %s",
+						s.Predicate)
+				}
+			}
+		}
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -484,7 +501,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
-		err := x.RetryUntilSuccess(Config.MaxRetries, 10*time.Millisecond, func() error {
+		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
 
@@ -628,7 +645,7 @@ func (n *node) Run() {
 		<-n.closer.HasBeenClosed()
 		glog.Infof("Stopping node.Run")
 		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-			n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
+			n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
 			time.Sleep(time.Second) // Let transfer happen.
 		}
 		n.Raft().Stop()

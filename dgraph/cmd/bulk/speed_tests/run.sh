@@ -42,11 +42,11 @@ echo " 1 million data set      "
 echo "========================="
 
 run_test '
-director.film:        uid @reverse @count .
-genre:                uid @reverse .
+director.film:        [uid] @reverse @count .
+genre:                [uid] @reverse .
 initial_release_date: dateTime @index(year) .
 name:                 string @index(term) .
-starring:             uid @count .
+starring:             [uid] @count .
 ' 1million.rdf.gz
 
 echo "========================="
@@ -54,15 +54,15 @@ echo " 21 million data set     "
 echo "========================="
 
 run_test '
-director.film        : uid @reverse @count .
-actor.film           : uid @count .
-genre                : uid @reverse @count .
+director.film        : [uid] @reverse @count .
+actor.film           : [uid] @count .
+genre                : [uid] @reverse @count .
 initial_release_date : datetime @index(year) .
-rating               : uid @reverse .
-country              : uid @reverse .
+rating               : [uid] @reverse .
+country              : [uid] @reverse .
 loc                  : geo @index(geo) .
 name                 : string @index(hash, fulltext, trigram) .
-starring             : uid @count .
+starring             : [uid] @count .
 _share_hash_         : string @index(exact) .
 ' 21million.rdf.gz
 
@@ -82,18 +82,18 @@ Text: string @index(fulltext) .
 Tag.Text: string @index(hash) .
 Type: string @index(exact) .
 ViewCount: int @index(int) .
-Vote: uid @reverse .
-Title: uid @reverse .
+Vote: [uid] @reverse .
+Title: [uid] @reverse .
 Body: uid @reverse .
 Post: uid @reverse .
 PostCount: int @index(int) .
-Tags: uid @reverse .
+Tags: [uid] @reverse .
 Timestamp: datetime .
 GitHubID: string @index(hash) .
-Has.Answer: uid @reverse @count .
+Has.Answer: [uid] @reverse @count .
 Chosen.Answer: uid @count .
-Comment: uid @reverse .
-Upvote: uid @reverse .
-Downvote: uid @reverse .
-Tag: uid @reverse .
+Comment: [uid] @reverse .
+Upvote: [uid] @reverse .
+Downvote: [uid] @reverse .
+Tag: [uid] @reverse .
 ' comments.rdf.gz,posts.rdf.gz,tags.rdf.gz,users.rdf.gz,votes.rdf.gz

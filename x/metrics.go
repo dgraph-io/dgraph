@@ -31,31 +31,31 @@ import (
 
 var (
 	// These are cumulative
-	NumQueries = stats.Int64("dgraph/queries",
+	NumQueries = stats.Int64("num_queries_total",
 		"Total number of queries", stats.UnitDimensionless)
-	NumMutations = stats.Int64("dgraph/mutations",
+	NumMutations = stats.Int64("num_mutations_total",
 		"Total number of mutations", stats.UnitDimensionless)
-	NumEdges = stats.Int64("dgraph/num_edges",
+	NumEdges = stats.Int64("num_edges_total",
 		"Total number of edges created", stats.UnitDimensionless)
-	LatencyMs = stats.Float64("dgraph/latency",
+	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
 
 	// value at particular point of time
-	PendingQueries = stats.Int64("dgraph/queries_pending",
+	PendingQueries = stats.Int64("pending_queries_total",
 		"Number of pending queries", stats.UnitDimensionless)
-	PendingProposals = stats.Int64("dgraph/proposals_pending",
+	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
-	NumGoRoutines = stats.Int64("dgraph/goroutines",
+	NumGoRoutines = stats.Int64("goroutines_total",
 		"Number of goroutines", stats.UnitDimensionless)
-	MemoryInUse = stats.Int64("dgraph/memory_in_use",
+	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
-	MemoryIdle = stats.Int64("dgraph/memory_idle",
+	MemoryIdle = stats.Int64("memory_idle_bytes",
 		"Amount of memory in idle spans", stats.UnitBytes)
-	MemoryProc = stats.Int64("dgraph/memory_proc",
+	MemoryProc = stats.Int64("memory_proc_bytes",
 		"Amount of memory used in processes", stats.UnitBytes)
-	ActiveMutations = stats.Int64("dgraph/active_mutations",
+	ActiveMutations = stats.Int64("active_mutations_total",
 		"Number of active mutations", stats.UnitDimensionless)
-	AlphaHealth = stats.Int64("dgraph/alpha_status",
+	AlphaHealth = stats.Int64("alpha_health_status",
 		"Status of the alphas", stats.UnitDimensionless)
 
 	// TODO: Request statistics, latencies, 500, timeouts

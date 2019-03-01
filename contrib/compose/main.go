@@ -104,6 +104,7 @@ func getService(basename string, idx, grpcPort int) Service {
 		Target:   "/gobin",
 		ReadOnly: true,
 	})
+
 	switch {
 	case opts.DataVol == true:
 		svc.Volumes = append(svc.Volumes, Volume{
@@ -119,6 +120,8 @@ func getService(basename string, idx, grpcPort int) Service {
 			Target:   "/data",
 			ReadOnly: false,
 		})
+	default:
+		// none
 	}
 
 	return svc

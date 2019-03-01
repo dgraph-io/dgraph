@@ -111,7 +111,7 @@ func TestExport(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	Config.ExportPath = bdir
+	x.WorkerConfig.ExportPath = bdir
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})

@@ -137,10 +137,11 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
-	gid := groups().BelongsTo(attr)
+	gid := groups().BelongsToReadOnly(attr)
 	if gid == 0 {
-		return &pb.Result{}, errUnservedTablet
+		return &emptyResult, errUnservedTablet
 	}
+
 	span := otrace.FromContext(ctx)
 	if span != nil {
 		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d, node id: %d",
@@ -157,6 +158,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 
+	if err == errUnservedTablet {
+		return &emptyResult, errUnservedTablet
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +357,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
@@ -544,7 +548,7 @@ func (qs *queryState) handleUidPostings(
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
 	calculate := func(start, end int) error {
@@ -722,11 +726,13 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 
-	// If a group stops serving tablet and it gets partitioned away from group zero, then it
-	// wouldn't know that this group is no longer serving this predicate.
-	// There's no issue if a we are serving a particular tablet and we get partitioned away from
-	// group zero as long as it's not removed.
-	if !groups().ServesTablet(q.Attr) {
+	// If a group stops serving tablet and it gets partitioned away from group
+	// zero, then it wouldn't know that this group is no longer serving this
+	// predicate. There's no issue if a we are serving a particular tablet and
+	// we get partitioned away from group zero as long as it's not removed.
+	// ServesTabletReadOnly is called instead of ServesTablet to prevent this
+	// alpha from requesting to serve this tablet.
+	if !groups().ServesTabletReadOnly(q.Attr) {
 		return &emptyResult, errUnservedTablet
 	}
 	qs := queryState{cache: posting.Oracle().CacheAt(q.ReadTs)}
@@ -1606,7 +1612,11 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return &emptyResult, ctx.Err()
 	}
 
-	gid := groups().BelongsTo(q.Attr)
+	gid := groups().BelongsToReadOnly(q.Attr)
+	if gid == 0 {
+		return &emptyResult, errUnservedTablet
+	}
+
 	var numUids int
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
