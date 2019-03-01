@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"flag"
+	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -105,6 +106,9 @@ func initCmds() {
 		// environment variable.
 		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
+	// For bash shell completion
+	RootCmd.AddCommand(bashCompletionCmd())
+
 	cobra.OnInitialize(func() {
 		cfg := rootConf.GetString("config")
 		if cfg == "" {
@@ -143,5 +147,24 @@ func setGlogFlags(conf *viper.Viper) {
 			}
 			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 		}
+	}
+}
+
+func bashCompletionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "bash-completion",
+		Short: "Generates bash completion scripts",
+		Long: `To load bash completion run:
+. < (dgraph completion)
+
+To configure your bash shell to load completions for each session,
+add to your bashrc:
+
+# ~/.bashrc or ~/.profile
+. < (dgraph completion)
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			RootCmd.GenBashCompletion(os.Stdout)
+		},
 	}
 }
