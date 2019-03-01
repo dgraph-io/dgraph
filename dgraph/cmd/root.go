@@ -107,7 +107,7 @@ func initCmds() {
 		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 	// For bash shell completion
-	RootCmd.AddCommand(bashCompletionCmd())
+	RootCmd.AddCommand(shellCompletionCmd())
 
 	cobra.OnInitialize(func() {
 		cfg := rootConf.GetString("config")
@@ -150,21 +150,49 @@ func setGlogFlags(conf *viper.Viper) {
 	}
 }
 
-func bashCompletionCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "bash-completion",
-		Short: "Generates bash completion scripts",
+func shellCompletionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "completion",
+		Short: "Generates shell completion scripts for bash or zsh",
+	}
+
+	// bash subcommand
+	cmd.AddCommand(&cobra.Command{
+		Use:   "bash",
+		Short: "bash shell completion",
 		Long: `To load bash completion run:
-. < (dgraph completion)
+. < (dgraph completion bash)
 
 To configure your bash shell to load completions for each session,
 add to your bashrc:
 
 # ~/.bashrc or ~/.profile
-. < (dgraph completion)
+. < (dgraph completion bash)
 `,
-		Run: func(cmd *cobra.Command, args []string) {
-			RootCmd.GenBashCompletion(os.Stdout)
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RootCmd.GenBashCompletion(os.Stdout)
 		},
-	}
+	})
+
+	// zsh subcommand
+	cmd.AddCommand(&cobra.Command{
+		Use:   "zsh",
+		Short: "zsh shell completion",
+		Long: `To load bash completion run:
+. < (dgraph completion zsh)
+
+To configure your zsh shell to load completions for each session,
+add to your zshrc:
+
+# ~/.zshrc or ~/.profile
+. < (dgraph completion zsh)
+`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RootCmd.GenZshCompletion(os.Stdout)
+		},
+	})
+
+	return cmd
 }
