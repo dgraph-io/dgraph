@@ -142,14 +142,7 @@ func alterSchema(s string) error {
 	if err != nil {
 		return err
 	}
-	for {
-		// keep retrying until we succeed or receive a non-retriable error
-		_, _, err = runRequest(req)
-		if err == nil || !strings.Contains(err.Error(), "Please retry operation") {
-			break
-		}
-	}
-
+	_, _, err = runRequest(req)
 	return err
 }
 
@@ -499,12 +492,12 @@ func TestSchemaMutationUidError1(t *testing.T) {
 	var s1 = `
             friend: [uid] .
 	`
-	require.NoError(t, alterSchema(s1))
+	require.NoError(t, alterSchemaWithRetry(s1))
 
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchema(s2))
+	require.Error(t, alterSchemaWithRetry(s2))
 }
 
 // add index
