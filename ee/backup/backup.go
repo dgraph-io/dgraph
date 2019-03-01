@@ -24,9 +24,8 @@ import (
 	"github.com/golang/glog"
 )
 
-// ErrBackupNoChanges is returned when the manifest version is lesser or equal to the
-// snapshot version. This means that no significant data updates happened since the last
-// backup.
+// ErrBackupNoChanges is returned when the manifest version is equal to the snapshot version.
+// This means that no data updates happened since the last backup.
 var ErrBackupNoChanges = x.Errorf("No changes since last backup")
 
 // Process uses the request values to create a stream writer then hand off the data
