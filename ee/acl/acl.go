@@ -118,7 +118,7 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 		return fmt.Errorf("error while querying group: %v", err)
 	}
 	if group != nil {
-		return fmt.Errorf("the group with id %v already exists", groupId)
+		return fmt.Errorf("group %q already exists", groupId)
 	}
 
 	createGroupNQuads := []*api.NQuad{
@@ -293,7 +293,7 @@ func chPasswd(conf *viper.Viper, userId string) error {
 		return fmt.Errorf("error while querying user:%v", err)
 	}
 	if user == nil {
-		return fmt.Errorf("the user does not exist: %v", userId)
+		return fmt.Errorf("user %q does not exist", userId)
 	}
 
 	// 4. mutate the user's password
@@ -331,10 +331,10 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 
 	user, err := queryUser(ctx, txn, userId)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return fmt.Errorf("error while querying user: %v", err)
 	}
 	if user == nil {
-		return fmt.Errorf("the user does not exist: %v", userId)
+		return fmt.Errorf("user %q does not exist", userId)
 	}
 
 	targetGroupsMap := make(map[string]struct{})
@@ -360,7 +360,7 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 		fmt.Printf("Adding user %v to group %v\n", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("error while getting the user mod nquad: %v", err)
+			return err
 		}
 		mu.Set = append(mu.Set, nquad)
 	}
@@ -369,7 +369,7 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 		fmt.Printf("Deleting user %v from group %v\n", userId, g)
 		nquad, err := getUserModNQuad(ctx, txn, user.Uid, g)
 		if err != nil {
-			return fmt.Errorf("error while getting the user mod nquad: %v", err)
+			return err
 		}
 		mu.Del = append(mu.Del, nquad)
 	}
@@ -514,7 +514,7 @@ func getUserModNQuad(ctx context.Context, txn *dgo.Txn, userId string,
 		return nil, err
 	}
 	if group == nil {
-		return nil, fmt.Errorf("the group does not exist:%v", groupId)
+		return nil, fmt.Errorf("group %q does not exist", groupId)
 	}
 
 	createUserGroupNQuads := &api.NQuad{
