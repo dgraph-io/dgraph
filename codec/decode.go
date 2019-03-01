@@ -10,7 +10,7 @@ import (
 
 // Decoder is a wrapping around io.Reader
 type Decoder struct {
-	reader io.Reader
+	Reader io.Reader
 }
 
 // Decode is the high level function wrapping the specific type decoding functions
@@ -41,7 +41,7 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 // ReadByte reads the one byte from the buffer
 func (sd *Decoder) ReadByte() (byte, error) {
 	b := make([]byte, 1)        // make buffer
-	_, err := sd.reader.Read(b) // read what's in the Decoder's underlying buffer to our new buffer b
+	_, err := sd.Reader.Read(b) // read what's in the Decoder's underlying buffer to our new buffer b
 	return b[0], err
 }
 
@@ -59,7 +59,7 @@ func (sd *Decoder) decodeSmallInt(firstByte byte) (o int64, err error) {
 		}
 	} else if mode == 2 { // 4 byte mode
 		buf := make([]byte, 3)
-		_, err = sd.reader.Read(buf)
+		_, err = sd.Reader.Read(buf)
 		if err == nil {
 			o = int64(binary.LittleEndian.Uint32(append([]byte{firstByte}, buf...)) >> 2)
 		}
@@ -91,7 +91,7 @@ func (sd *Decoder) DecodeInteger() (o int64, err error) {
 	byteLen := int(topSixBits) + 4
 
 	buf := make([]byte, byteLen)
-	_, err = sd.reader.Read(buf)
+	_, err = sd.Reader.Read(buf)
 	if err != nil {
 		return 0, err
 	}
@@ -137,7 +137,7 @@ func (sd *Decoder) DecodeBigInt() (output *big.Int, err error) {
 	byteLen := int(topSixBits) + 4
 
 	buf := make([]byte, byteLen)
-	_, err = sd.reader.Read(buf)
+	_, err = sd.Reader.Read(buf)
 	if err == nil {
 		o := reverseBytes(buf)
 		output = new(big.Int).SetBytes(o)
@@ -159,7 +159,7 @@ func (sd *Decoder) DecodeByteArray() (o []byte, err error) {
 	}
 
 	b := make([]byte, length)
-	_, err = sd.reader.Read(b)
+	_, err = sd.Reader.Read(b)
 	if err != nil {
 		return nil, errors.New("could not decode invalid byte array: reached early EOF")
 	}

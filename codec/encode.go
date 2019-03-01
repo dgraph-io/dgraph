@@ -10,7 +10,7 @@ import (
 
 // Encoder is a wrapping around io.Writer
 type Encoder struct {
-	writer io.Writer
+	Writer io.Writer
 }
 
 // Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64,
@@ -60,7 +60,7 @@ func (se *Encoder) encodeByteArray(b []byte) (bytesEncoded int, err error) {
 	}
 
 	bytesEncoded = bytesEncoded + n
-	n, err = se.writer.Write(b)
+	n, err = se.Writer.Write(b)
 	return bytesEncoded + n, err
 }
 
@@ -75,13 +75,13 @@ func (se *Encoder) encodeByteArray(b []byte) (bytesEncoded int, err error) {
 // [append i as a byte array to the first byte]
 func (se *Encoder) encodeInteger(i int) (bytesEncoded int, err error) {
 	if i < 1<<6 {
-		err = binary.Write(se.writer, binary.LittleEndian, byte(i)<<2)
+		err = binary.Write(se.Writer, binary.LittleEndian, byte(i)<<2)
 		return 1, err
 	} else if i < 1<<14 {
-		err = binary.Write(se.writer, binary.LittleEndian, uint16(i<<2)+1)
+		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i<<2)+1)
 		return 2, err
 	} else if i < 1<<30 {
-		err = binary.Write(se.writer, binary.LittleEndian, uint32(i<<2)+2)
+		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i<<2)+2)
 		return 4, err
 	}
 
@@ -100,11 +100,11 @@ func (se *Encoder) encodeInteger(i int) (bytesEncoded int, err error) {
 	topSixBits := uint8(numBytes - 4)
 	lengthByte := topSixBits<<2 + 3
 
-	err = binary.Write(se.writer, binary.LittleEndian, lengthByte)
+	err = binary.Write(se.Writer, binary.LittleEndian, lengthByte)
 	bytesEncoded++
 	if err == nil {
 		binary.LittleEndian.PutUint64(o, uint64(i))
-		err = binary.Write(se.writer, binary.LittleEndian, o[0:numBytes])
+		err = binary.Write(se.Writer, binary.LittleEndian, o[0:numBytes])
 		bytesEncoded += numBytes
 	}
 
@@ -116,13 +116,13 @@ func (se *Encoder) encodeInteger(i int) (bytesEncoded int, err error) {
 // [append i as a byte array to the first byte]
 func (se *Encoder) encodeBigInteger(i *big.Int) (bytesEncoded int, err error) {
 	if i.Cmp(new(big.Int).Lsh(big.NewInt(1), 6)) < 0 { // if i < 1<<6
-		err = binary.Write(se.writer, binary.LittleEndian, uint8(i.Int64()<<2))
+		err = binary.Write(se.Writer, binary.LittleEndian, uint8(i.Int64()<<2))
 		return 1, err
 	} else if i.Cmp(new(big.Int).Lsh(big.NewInt(1), 14)) < 0 { // if i < 1<<14
-		err = binary.Write(se.writer, binary.LittleEndian, uint16(i.Int64()<<2)+1)
+		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i.Int64()<<2)+1)
 		return 2, err
 	} else if i.Cmp(new(big.Int).Lsh(big.NewInt(1), 30)) < 0 { //if i < 1<<30
-		err = binary.Write(se.writer, binary.LittleEndian, uint32(i.Int64()<<2)+2)
+		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i.Int64()<<2)+2)
 		return 4, err
 	}
 
@@ -131,10 +131,10 @@ func (se *Encoder) encodeBigInteger(i *big.Int) (bytesEncoded int, err error) {
 	lengthByte := topSixBits<<2 + 3
 
 	// write byte which encodes mode and length
-	err = binary.Write(se.writer, binary.LittleEndian, lengthByte)
+	err = binary.Write(se.Writer, binary.LittleEndian, lengthByte)
 	if err == nil {
 		// write integer itself
-		err = binary.Write(se.writer, binary.LittleEndian, i.Bytes())
+		err = binary.Write(se.Writer, binary.LittleEndian, i.Bytes())
 	}
 
 	return numBytes + 1, err
@@ -145,10 +145,10 @@ func (se *Encoder) encodeBigInteger(i *big.Int) (bytesEncoded int, err error) {
 // l = false -> write [0]
 func (se *Encoder) encodeBool(l bool) (bytesEncoded int, err error) {
 	if l {
-		bytesEncoded, err = se.writer.Write([]byte{0x01})
+		bytesEncoded, err = se.Writer.Write([]byte{0x01})
 		return bytesEncoded, err
 	}
-	bytesEncoded, err = se.writer.Write([]byte{0x00})
+	bytesEncoded, err = se.Writer.Write([]byte{0x00})
 	return bytesEncoded, err
 }
 
