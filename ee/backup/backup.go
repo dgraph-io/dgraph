@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -28,43 +29,51 @@ import (
 // This means that no data updates happened since the last backup.
 var ErrBackupNoChanges = x.Errorf("No changes since last backup")
 
+// Request has all the information needed to perform a backup.
+type Request struct {
+	DB     *badger.DB // Badger pstore managed by this node.
+	Backup *pb.BackupRequest
+}
+
 // Process uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
+func (r *Request) Process(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	obj := &object{
-		uri:    req.Location,
-		path:   fmt.Sprintf(backupPathFmt, req.UnixTs),
-		name:   fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId),
-		snapTs: req.SnapshotTs, // used to verify version changes
+		uri:    r.Backup.Location,
+		path:   fmt.Sprintf(backupPathFmt, r.Backup.UnixTs),
+		name:   fmt.Sprintf(backupNameFmt, r.Backup.ReadTs, r.Backup.GroupId),
+		snapTs: r.Backup.SnapshotTs, // used to verify version changes
 	}
 	handler, err := create(obj)
 	if err != nil {
-		glog.Errorf("Unable to get handler for request: %+v. Error: %v", req, err)
+		if err != ErrBackupNoChanges {
+			glog.Errorf("Unable to get handler for request: %+v. Error: %v", r.Backup, err)
+		}
 		return err
 	}
 	glog.V(3).Infof("Backup manifest version: %d", obj.version)
 
-	stream := db.NewStreamAt(req.ReadTs)
+	stream := r.DB.NewStreamAt(r.Backup.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	// Here we return the max version in the original request obejct. We will use this
 	// to create our manifest to complete the backup.
-	req.Since, err = stream.Backup(handler, obj.version)
+	r.Backup.Since, err = stream.Backup(handler, obj.version)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
-	glog.V(3).Infof("Backup group %d version: %d", req.GroupId, req.Since)
+	glog.V(3).Infof("Backup group %d version: %d", r.Backup.GroupId, r.Backup.Since)
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return err
 	}
-	glog.Infof("Backup complete: group %d at %d", req.GroupId, req.ReadTs)
+	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
 	return nil
 }
 
@@ -73,6 +82,7 @@ func Process(ctx context.Context, db *badger.DB, req *pb.BackupRequest) error {
 // Groups are the IDs of the groups involved.
 // Request is the original backup request.
 type Manifest struct {
+	sync.Mutex
 	Version uint64           `json:"version"`
 	Groups  []uint32         `json:"groups"`
 	Request pb.BackupRequest `json:"request"`
@@ -83,8 +93,9 @@ func (m *Manifest) Complete(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// None of the groups produced backup files.
 	if m.Version == 0 {
-		return x.Errorf("Backup manifest version is zero")
+		return ErrBackupNoChanges
 	}
 	handler, err := create(&object{
 		uri:     m.Request.Location,
