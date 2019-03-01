@@ -27,7 +27,7 @@ import (
 
 // ErrBackupNoChanges is returned when the manifest version is equal to the snapshot version.
 // This means that no data updates happened since the last backup.
-var ErrBackupNoChanges = x.Errorf("No changes since last backup")
+var ErrBackupNoChanges = x.Errorf("No changes since last backup, OK.")
 
 // Request has all the information needed to perform a backup.
 type Request struct {
@@ -95,7 +95,8 @@ func (m *Manifest) Complete(ctx context.Context) error {
 	}
 	// None of the groups produced backup files.
 	if m.Version == 0 {
-		return ErrBackupNoChanges
+		glog.Infof("%s", ErrBackupNoChanges)
+		return nil
 	}
 	handler, err := create(&object{
 		uri:     m.Request.Location,
