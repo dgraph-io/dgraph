@@ -50,7 +50,9 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 	glog.V(3).Infof("Backup group %d snapshot: %+v", req.GroupId, snap)
 	// Attach snapshot readTs to request to compare with any previous version.
 	req.SnapshotTs = snap.ReadTs
-	return backup.Process(ctx, pstore, req)
+	// create backup request and process it.
+	br := &backup.Request{DB: pstore, Backup: req}
+	return br.Process(ctx)
 }
 
 // Backup handles a request coming from another node.
@@ -80,7 +82,9 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 	}
 	res, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {
-		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
+		if err != backup.ErrBackupNoChanges {
+			glog.Errorf("Backup error group %d: %s", in.GroupId, err)
+		}
 		return err
 	}
 	// Attach distributed max version value
@@ -126,15 +130,19 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
 			// req.Since is the max version result from Backup().
+			m.Lock()
 			if req.Since > m.Version {
 				m.Version = req.Since
 			}
+			m.Unlock()
 		}(&req)
 	}
 
 	for range m.Groups {
 		if err := <-errCh; err != nil {
-			glog.Errorf("Error received during backup: %v", err)
+			if err != backup.ErrBackupNoChanges {
+				glog.Errorf("Error received during backup: %v", err)
+			}
 			return err
 		}
 	}
