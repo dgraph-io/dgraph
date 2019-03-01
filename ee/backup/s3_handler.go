@@ -120,7 +120,7 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 		defer close(done)
 		for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
 			if strings.HasSuffix(object.Key, backupManifest) &&
-				strings.Compare(object.Key, lastManifest) == 1 {
+				strings.Compare(object.Key, lastManifest) > 0 {
 				lastManifest = object.Key
 			}
 		}
