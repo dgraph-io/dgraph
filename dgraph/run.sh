@@ -82,6 +82,6 @@ if [ "${#SERVICES[@]}" -gt 0 ]; then
     fi
 fi
 
-make install
-docker-compose ${COMPOSE_FILES[@]} down
+make install &&\
+docker-compose ${COMPOSE_FILES[@]} down &&\
 DATA=$DATA docker-compose ${COMPOSE_FILES[@]} up --force-recreate --remove-orphans ${SERVICES[@]}
