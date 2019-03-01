@@ -14,6 +14,7 @@ package edgraph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -43,8 +44,8 @@ func (s *Server) Login(ctx context.Context,
 
 	// record the client ip for this login request
 	var addr string
-	if ip, ok := peer.FromContext(ctx); ok {
-		addr = ip.Addr.String()
+	if peerInfo, ok := peer.FromContext(ctx); ok {
+		addr = peerInfo.Addr.String()
 		glog.Infof("Login request from: %s", addr)
 		span.Annotate([]otrace.Attribute{
 			otrace.StringAttribute("client_ip", addr),
@@ -499,7 +500,9 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 	}
 
-	logAccess(&AccessEntry{
+	ctx, span := otrace.StartSpan(ctx, "authorizeAlter")
+	defer span.End()
+	span.Annotatef(nil, "ACL-LOG: %v", &AccessEntry{
 		userId:    userId,
 		groups:    groupIds,
 		preds:     preds,
@@ -511,12 +514,45 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 }
 
 // parsePredsFromMutation returns a union set of all the predicate names in the input nquads
-func parsePredsFromMutation(nquads []*api.NQuad) map[string]struct{} {
-	preds := make(map[string]struct{})
+func parsePredsFromMutation(nquads []*api.NQuad) []string {
+	// use a map to dedup predicates
+	predsMap := make(map[string]struct{})
 	for _, nquad := range nquads {
-		preds[nquad.Predicate] = struct{}{}
+		predsMap[nquad.Predicate] = struct{}{}
 	}
+
+	var preds []string
+	for pred := range predsMap {
+		preds = append(preds, pred)
+	}
+
 	return preds
+}
+
+func isAclPredMutation(nquads []*api.NQuad) bool {
+	for _, nquad := range nquads {
+		if nquad.Predicate == "dgraph.group.acl" && nquad.ObjectValue != nil {
+			// this mutation is trying to change the permission of some predicate
+			// check if the predicate list contains an ACL predicate
+			if _, ok := nquad.ObjectValue.Val.(*api.Value_BytesVal); ok {
+				aclBytes := nquad.ObjectValue.Val.(*api.Value_BytesVal)
+				var aclsToChange []acl.Acl
+				err := json.Unmarshal(aclBytes.BytesVal, &aclsToChange)
+				if err != nil {
+					glog.Errorf(fmt.Sprintf("Unable to unmalshal bytes under the dgraph.group.acl "+
+						"predicate:	%v", err))
+					continue
+				}
+				for _, aclToChange := range aclsToChange {
+					if x.IsAclPredicate(aclToChange.Predicate) {
+						return true
+					}
+				}
+			}
+		}
+
+	}
+	return false
 }
 
 // authorizeMutation authorizes the mutation using the aclCache
@@ -526,11 +562,20 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		return nil
 	}
 
+	gmu, err := parseMutationObject(mu)
+	if err != nil {
+		return err
+	}
+
 	userData, err := extractUserAndGroups(ctx)
 	var userId string
 	var groupIds []string
 	if err == nil {
 		if isGroot(userData) {
+			// groot is allowed to mutate anything except the permission of the acl predicates
+			if isAclPredMutation(gmu.Set) {
+				return fmt.Errorf("the permission of ACL predicates can not be changed")
+			}
 			return nil
 		}
 		userId = userData[0]
@@ -542,15 +587,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
-	gmu, err := parseMutationObject(mu)
-	if err != nil {
-		return err
-	}
-	var preds []string
-
-	for pred := range parsePredsFromMutation(gmu.Set) {
-		preds = append(preds, pred)
-	}
+	preds := parsePredsFromMutation(gmu.Set)
 	for _, pred := range preds {
 		err := aclCache.authorizePredicate(groupIds, pred, acl.Write)
 		if err != nil {
@@ -567,7 +604,9 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		}
 	}
 
-	logAccess(&AccessEntry{
+	ctx, span := otrace.StartSpan(ctx, "authorizeMutation")
+	defer span.End()
+	span.Annotatef(nil, "ACL-LOG: %v", &AccessEntry{
 		userId:    userId,
 		groups:    groupIds,
 		preds:     preds,
@@ -671,12 +710,15 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		}
 	}
 
-	logAccess(&AccessEntry{
+	ctx, span := otrace.StartSpan(ctx, "authorizeQuery")
+	defer span.End()
+	span.Annotatef(nil, "ACL-LOG: %v", &AccessEntry{
 		userId:    userId,
 		groups:    groupIds,
 		preds:     preds,
 		operation: acl.Read,
 		allowed:   true,
 	})
+
 	return nil
 }

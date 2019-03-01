@@ -150,7 +150,7 @@ func mutationWithTs(accessJwt string, m string, isJson bool, commitNow bool, ign
 		return keys, preds, 0, err
 	}
 
-	req.Header.Set("X-Dgraph-AccessJWT", accessJwt)
+	req.Header.Set("X-Dgraph-AccessToken", accessJwt)
 	if isJson {
 		req.Header.Set("X-Dgraph-MutationType", "json")
 	}

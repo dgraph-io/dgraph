@@ -139,7 +139,7 @@ func runJsonMutation(accessJwt string, m string) error {
 
 func alterSchema(accessJwt string, s string) error {
 	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(s))
-	req.Header.Set("X-Dgraph-AccessJWT", accessJwt)
+	req.Header.Set("X-Dgraph-AccessToken", accessJwt)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func alterSchemaWithRetry(accessJwt string, s string) error {
 func dropAll(accessJwt string) error {
 	op := `{"drop_all": true}`
 	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(op))
-	req.Header["X-Dgraph-AccessJWT"] = []string{accessJwt}
+	req.Header["X-Dgraph-AccessToken"] = []string{accessJwt}
 	if err != nil {
 		return err
 	}
