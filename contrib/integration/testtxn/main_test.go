@@ -509,7 +509,7 @@ func TestFriendList(t *testing.T) {
 
 	op = &api.Operation{}
 	op.Schema = `
-	friend: uid @reverse .`
+	friend: [uid] @reverse .`
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
 	}

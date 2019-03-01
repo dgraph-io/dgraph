@@ -115,7 +115,7 @@ func TestFacets(t *testing.T) {
 func TestCountIndex(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(exact) .
-		friend: uid @count @reverse .
+		friend: [uid] @count @reverse .
 	`, `
 		_:alice <friend> _:bob   .
 		_:alice <friend> _:carol .

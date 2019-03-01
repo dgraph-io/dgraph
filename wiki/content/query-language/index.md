@@ -2020,7 +2020,7 @@ index for a predicate it is mandatory to specify the type of the index. For exam
 name: string @index(exact, fulltext) @count .
 multiname: string @lang .
 age: int @index(int) .
-friend: uid @count .
+friend: [uid] @count .
 dob: dateTime .
 location: geo @index(geo) .
 occupations: [string] @index(term) .
@@ -2329,7 +2329,7 @@ First we add some schema.
 ```sh
 curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact, term) .
-    rated: uid @reverse @count .
+    rated: [uid] @reverse @count .
 ' | python -m json.tool | less
 
 ```
