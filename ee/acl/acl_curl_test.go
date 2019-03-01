@@ -44,7 +44,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	// test fail open with the accessJwt
 	queryArgs := func() []string {
-		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessJWT:%s", accessJwt),
+		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", accessJwt),
 			"-d", query, curlQueryEndpoint}
 	}
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
@@ -52,7 +52,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	mutateArgs := func() []string {
-		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessJWT:%s", accessJwt),
+		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", accessJwt),
 			"-d", fmt.Sprintf(`{ set {
 	   _:a <%s>  "string" .
 	   }}`, predicateToWrite), curlMutateEndpoint}
@@ -63,7 +63,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	alterArgs := func() []string {
-		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessJWT:%s", accessJwt),
+		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", accessJwt),
 			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
 	}
 	verifyCurlCmd(t, alterArgs(), &FailureConfig{

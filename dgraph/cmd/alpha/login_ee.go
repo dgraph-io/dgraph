@@ -42,9 +42,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	refreshJwt := r.Header.Get("X-Dgraph-RefreshJWT")
 	ctx := context.Background()
 
-	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err != nil {
+	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		// add remote addr as peer info so that the remote address can be logged inside Server.Login
-		if intPort, convErr := strconv.Atoi(port); convErr != nil {
+		if intPort, convErr := strconv.Atoi(port); convErr == nil {
 			ctx = peer.NewContext(ctx, &peer.Peer{
 				Addr: &net.TCPAddr{
 					IP:   net.ParseIP(ip),
