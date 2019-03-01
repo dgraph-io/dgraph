@@ -87,7 +87,7 @@ func getService(basename string, idx, grpcPort int) Service {
 	svc.name = name(basename, idx)
 	svc.Image = "dgraph/dgraph:latest"
 	svc.ContainerName = svc.name
-	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
+	svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
 	if idx > 1 {
 		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
 	}
