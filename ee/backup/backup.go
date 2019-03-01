@@ -68,7 +68,7 @@ func (r *Request) Process(ctx context.Context) error {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
-	glog.V(3).Infof("Backup group %d version: %d", r.Backup.GroupId, r.Backup.Since)
+	glog.V(2).Infof("Backup group %d version: %d", r.Backup.GroupId, r.Backup.Since)
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return err
