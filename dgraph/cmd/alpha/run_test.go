@@ -1933,6 +1933,12 @@ func TestIPStringParsing(t *testing.T) {
 	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
 }
 
+var addr = "http://localhost:8180"
+
+// the grootAccessJWT stores the access JWT extracted from the response
+// of http login
+var grootAccessJwt string
+
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
 	conn, err := grpc.Dial("localhost:5080", grpc.WithInsecure())
@@ -1943,6 +1949,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
+	grootAccessJwt = z.GrootHttpLogin(addr + "/login")
 
 	r := m.Run()
 	os.Exit(r)

@@ -34,15 +34,12 @@ import (
 
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 )
 
 type res struct {
 	Data       json.RawMessage   `json:"data"`
 	Extensions *query.Extensions `json:"extensions,omitempty"`
 }
-
-var addr = "http://localhost:8180"
 
 func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, error) {
 	url := addr + "/query"
@@ -137,7 +134,7 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	return string(output), startTs, err
 }
 
-func mutationWithTs(accessJwt string, m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
+func mutationWithTs(grootAccessJwt string, m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
 	ts uint64) ([]string, []string, uint64, error) {
 	url := addr + "/mutate"
 	if ts != 0 {
@@ -150,7 +147,7 @@ func mutationWithTs(accessJwt string, m string, isJson bool, commitNow bool, ign
 		return keys, preds, 0, err
 	}
 
-	req.Header.Set("X-Dgraph-AccessToken", accessJwt)
+	req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
 	if isJson {
 		req.Header.Set("X-Dgraph-MutationType", "json")
 	}
@@ -233,14 +230,8 @@ func commitWithTsKeysOnly(keys []string, ts uint64) error {
 }
 
 func TestTransactionBasic(t *testing.T) {
-	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
-		Endpoint: addr + "/login",
-		UserID:   x.GrootId,
-		Passwd:   "password",
-	})
-	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
-	require.NoError(t, dropAll(accessJwt))
-	require.NoError(t, alterSchema(accessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll(grootAccessJwt))
+	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -263,7 +254,7 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, preds, mts, err := mutationWithTs(accessJwt, m1, false, false, true, ts)
+	keys, preds, mts, err := mutationWithTs(grootAccessJwt, m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
@@ -294,14 +285,8 @@ func TestTransactionBasic(t *testing.T) {
 }
 
 func TestTransactionBasicNoPreds(t *testing.T) {
-	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
-		Endpoint: addr + "/login",
-		UserID:   x.GrootId,
-		Passwd:   "password",
-	})
-	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
-	require.NoError(t, dropAll(accessJwt))
-	require.NoError(t, alterSchema(accessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll(grootAccessJwt))
+	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -324,7 +309,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(accessJwt, m1, false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(grootAccessJwt, m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
@@ -346,14 +331,8 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
-	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
-		Endpoint: addr + "/login",
-		UserID:   x.GrootId,
-		Passwd:   "password",
-	})
-	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
-	require.NoError(t, dropAll(accessJwt))
-	require.NoError(t, alterSchema(accessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll(grootAccessJwt))
+	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -376,7 +355,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(accessJwt, m1, false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(grootAccessJwt, m1, false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
@@ -414,15 +393,9 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 }
 
 func TestHttpCompressionSupport(t *testing.T) {
-	accessJwt, _, err := z.HttpLogin(&z.LoginParams{
-		Endpoint: addr + "/login",
-		UserID:   x.GrootId,
-		Passwd:   "password",
-	})
-	require.NoError(t, err, fmt.Sprintf("login failed: %v", err))
 
-	require.NoError(t, dropAll(accessJwt))
-	require.NoError(t, alterSchema(accessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll(grootAccessJwt))
+	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -455,7 +428,7 @@ func TestHttpCompressionSupport(t *testing.T) {
 	r1 := `{"data":{"names":[{"name":"Alice"},{"name":"Bob"},{"name":"Charlie"},{"name":"David"},` +
 		`{"name":"Emily"},{"name":"Frank"},{"name":"Gloria"},{"name":"Hannah"},{"name":"Ian"},` +
 		`{"name":"Judy"},{"name":"Kevin"},{"name":"Linda"},{"name":"Michael"}]}}`
-	err = runMutation(accessJwt, m1)
+	err := runMutation(grootAccessJwt, m1)
 	require.NoError(t, err)
 
 	data, resp, err := queryWithGz(q1, false, false)

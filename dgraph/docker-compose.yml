@@ -69,8 +69,8 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
-        target: /dgraph-acl
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
       - 8180:8180
@@ -92,8 +92,8 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
-        target: /dgraph-acl
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
       - 8182:8182
@@ -115,8 +115,8 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
-        target: /dgraph-acl
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
       - 8183:8183
@@ -137,8 +137,8 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
-        target: /dgraph-acl
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
       - 8184:8184
@@ -159,8 +159,8 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
-        target: /dgraph-acl
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
       - 8185:8185
@@ -181,8 +181,8 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl
-        target: /dgraph-acl
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/acl/hmac-secret
+        target: /dgraph-acl/hmac-secret
         read_only: true
     ports:
       - 8186:8186

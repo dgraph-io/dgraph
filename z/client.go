@@ -21,8 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -128,4 +131,49 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	}
 
 	return newAccessJwt, newRefreshJwt, nil
+}
+
+// GrootHttpLogin logins using the groot account with the default password
+// and returns the access JWT
+func GrootHttpLogin(endpoint string) string {
+	accessJwt, _, err := HttpLogin(&LoginParams{
+		Endpoint: endpoint,
+		UserID:   x.GrootId,
+		Passwd:   "password",
+	})
+	x.Check(err)
+	return accessJwt
+}
+
+type CancelFunc func()
+
+const DgraphAlphaPort = 9180
+
+func GetDgraphClient() (*dgo.Dgraph, CancelFunc) {
+	return GetDgraphClientOnPort(DgraphAlphaPort)
+}
+
+func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
+	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", alphaPort), grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("While trying to dial gRPC")
+	}
+
+	dc := api.NewDgraphClient(conn)
+	dg, cancel := dgo.NewDgraphClient(dc), func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error while closing connection:%v", err)
+		}
+	}
+
+	ctx := context.Background()
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err = dg.Login(ctx, GrootId, "password")
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	return dg, cancel
 }
