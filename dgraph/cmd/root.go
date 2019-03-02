@@ -161,13 +161,13 @@ func shellCompletionCmd() *cobra.Command {
 		Use:   "bash",
 		Short: "bash shell completion",
 		Long: `To load bash completion run:
-. < (dgraph completion bash)
+dgraph completion bash > dgraph-completion.sh
 
 To configure your bash shell to load completions for each session,
 add to your bashrc:
 
 # ~/.bashrc or ~/.profile
-. < (dgraph completion bash)
+. path/to/dgraph-completion.sh
 `,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -179,14 +179,14 @@ add to your bashrc:
 	cmd.AddCommand(&cobra.Command{
 		Use:   "zsh",
 		Short: "zsh shell completion",
-		Long: `To load bash completion run:
-. < (dgraph completion zsh)
+		Long: `To generate zsh completion run:
+dgraph completion zsh > _dgraph
 
-To configure your zsh shell to load completions for each session,
-add to your zshrc:
+Then install the completion file somewhere in your $fpath or
+$_compdir paths. You must enable the compinit and compinstall plugins.
 
-# ~/.zshrc or ~/.profile
-. < (dgraph completion zsh)
+For more information, see the official Zsh docs:
+http://zsh.sourceforge.net/Doc/Release/Completion-System.html
 `,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
