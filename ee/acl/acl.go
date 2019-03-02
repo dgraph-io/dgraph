@@ -26,9 +26,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+func getUserAndGroup() (userId string, groupId string, err error) {
+
+}
+
 func add(conf *viper.Viper) error {
-	userId := conf.GetString("user")
 	password := conf.GetString("password")
+	userId := conf.GetString("user")
 	groupId := conf.GetString("group")
 	if (len(userId) == 0 && len(groupId) == 0) ||
 		(len(userId) != 0 && len(groupId) != 0) {
@@ -150,12 +154,35 @@ func del(conf *viper.Viper) error {
 	}
 
 	if len(userId) != 0 {
-		return userDel(conf, userId)
+		return userOrGroupDel(conf, userId, func(ctx context.Context, txn *dgo.Txn,
+			userId string) (string, error) {
+			user, err := queryUser(ctx, txn, userId)
+			if err != nil {
+				return "", err
+			}
+			if user == nil {
+				return "", fmt.Errorf("Unable to delete user %q since it does not exist",
+					userId)
+			}
+			return user.Uid, nil
+		})
 	}
-	return groupDel(conf, groupId)
+	return userOrGroupDel(conf, userId, func(ctx context.Context, txn *dgo.Txn,
+		groupId string) (string, error) {
+		group, err := queryGroup(ctx, txn, groupId)
+		if err != nil {
+			return "", err
+		}
+		if group == nil {
+			return "", fmt.Errorf("Unable to delete group %q since it does not exist", groupId)
+		}
+		return group.Uid, nil
+	})
 }
 
-func userDel(conf *viper.Viper, userId string) error {
+type queryFunc func(context.Context, *dgo.Txn, string) (string, error)
+
+func userOrGroupDel(conf *viper.Viper, userOrGroupId string, queryFn queryFunc) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
@@ -170,18 +197,18 @@ func userDel(conf *viper.Viper, userId string) error {
 		}
 	}()
 
-	user, err := queryUser(ctx, txn, userId)
+	uid, err := queryFn(ctx, txn, userOrGroupId)
 	if err != nil {
 		return fmt.Errorf("error while querying user:%v", err)
 	}
 
-	if user == nil || len(user.Uid) == 0 {
-		return fmt.Errorf("unable to delete user because it does not exist: %v", userId)
+	if len(uid) == 0 {
+		return fmt.Errorf("unable to delete %q because it does not exist", userOrGroupId)
 	}
 
 	deleteUserNQuads := []*api.NQuad{
 		{
-			Subject:     user.Uid,
+			Subject:     uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		}}
@@ -195,49 +222,7 @@ func userDel(conf *viper.Viper, userId string) error {
 		return fmt.Errorf("unable to delete user: %v", err)
 	}
 
-	fmt.Printf("Deleted user with id %v\n", userId)
-	return nil
-}
-
-func groupDel(conf *viper.Viper, groupId string) error {
-	dc, cancel, err := getClientWithAdminCtx(conf)
-	if err != nil {
-		return fmt.Errorf("unable to get admin context: %v", err)
-	}
-	defer cancel()
-
-	ctx := context.Background()
-	txn := dc.NewTxn()
-	defer func() {
-		if err := txn.Discard(ctx); err != nil {
-			fmt.Printf("Unable to discard transaction: %v\n", err)
-		}
-	}()
-
-	group, err := queryGroup(ctx, txn, groupId)
-	if err != nil {
-		return fmt.Errorf("error while querying group: %v", err)
-	}
-	if group == nil || len(group.Uid) == 0 {
-		return fmt.Errorf("unable to delete group because it does not exist: %v", groupId)
-	}
-
-	deleteGroupNQuads := []*api.NQuad{
-		{
-			Subject:     group.Uid,
-			Predicate:   x.Star,
-			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
-		},
-	}
-	mu := &api.Mutation{
-		CommitNow: true,
-		Del:       deleteGroupNQuads,
-	}
-	if _, err := txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to delete group: %v", err)
-	}
-
-	fmt.Printf("Deleted group with id %v\n", groupId)
+	fmt.Printf("Successfully deleted %q\n", userOrGroupId)
 	return nil
 }
 
@@ -255,13 +240,13 @@ func mod(conf *viper.Viper) error {
 		if len(groupList) != 0 {
 			return userMod(conf, userId, groupList)
 		}
-		return chPasswd(conf, userId)
+		return changePassword(conf, userId)
 	}
 	return chMod(conf)
 }
 
-// chPasswd changes a user's password
-func chPasswd(conf *viper.Viper, userId string) error {
+// changePassword changes a user's password
+func changePassword(conf *viper.Viper, userId string) error {
 	// 1. get the dgo client with appropriete access JWT
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
