@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -720,6 +719,10 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if err := groups().ChecksumsMatch(ctx); err != nil {
 		return nil, err
 	}
+	if !groups().ServesTabletReadOnly(q.Attr) {
+		return nil, errUnservedTablet
+	}
+
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
 		span.Annotatef(nil, "Done waiting for maxAssigned. Attr: %q ReadTs: %d Max: %d",
@@ -733,8 +736,10 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// ServesTabletReadOnly is called instead of ServesTablet to prevent this
 	// alpha from requesting to serve this tablet.
 	if !groups().ServesTabletReadOnly(q.Attr) {
+		glog.Infof("------------> %q is not being served", q.Attr)
 		return &emptyResult, errUnservedTablet
 	}
+	glog.Infof("----------> %q is being served", q.Attr)
 	qs := queryState{cache: posting.Oracle().CacheAt(q.ReadTs)}
 	if qs.cache == nil {
 		qs.cache = posting.NewLocalCache()
@@ -1612,21 +1617,12 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return &emptyResult, ctx.Err()
 	}
 
-	gid := groups().BelongsToReadOnly(q.Attr)
-	if gid == 0 {
-		return &emptyResult, errUnservedTablet
-	}
-
 	var numUids int
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
+	gid := groups().groupId()
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
-
-	if !groups().ServesGroup(gid) {
-		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
-			q.Attr, gid)
-	}
 
 	type reply struct {
 		result *pb.Result

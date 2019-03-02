@@ -76,11 +76,8 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	ctx, span := otrace.StartSpan(ctx, "worker.Sort")
 	defer span.End()
 
-	gid := groups().BelongsTo(s.Order[0].Attr)
+	gid := groups().groupId()
 	span.Annotatef(nil, "Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
-	if gid != groups().groupId() {
-		return nil, x.Errorf("attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
-	}
 
 	var reply *pb.SortResult
 	c := make(chan error, 1)
@@ -388,6 +385,9 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 		return nil, err
 	}
 	span.Annotate(nil, "Done waiting")
+	if len(ts.GetOrder()) == 0 || !groups().ServesTablet(ts.Order[0].Attr) {
+		return nil, errUnservedTablet
+	}
 
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+

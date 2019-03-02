@@ -246,6 +246,8 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	}
 	g.state = state
 
+	// glog.V(2).Infof("Got state: %+v", state)
+
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
 	var foundSelf bool
 	g.tablets = make(map[string]*pb.Tablet)
@@ -327,6 +329,7 @@ func (g *groupi) BelongsTo(key string) uint32 {
 func (g *groupi) BelongsToReadOnly(key string) uint32 {
 	g.RLock()
 	defer g.RUnlock()
+	// TODO: if the tablet is not found locally, it should ask Zero, without changing its state.
 	tablet := g.tablets[key]
 	return tablet.GetGroupId()
 }
@@ -839,6 +842,9 @@ func (g *groupi) processOracleDeltaStream() {
 					} else {
 						glog.Infof("Committed: %d -> %d", txn.StartTs, txn.CommitTs)
 					}
+				}
+				for gid, sum := range delta.GetGroupChecksums() {
+					glog.Infof("Checksum: %d -> %d", gid, sum)
 				}
 			}
 			for {
