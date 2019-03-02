@@ -39,10 +39,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coreos/etcd/raft"
-	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/etcd/raft"
+	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
 func openBadger(dir string) (*badger.DB, error) {

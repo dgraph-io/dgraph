@@ -27,8 +27,6 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -36,6 +34,8 @@ import (
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/context"
 )
 

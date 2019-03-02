@@ -66,9 +66,9 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
 	// node would still think that it's the leader.
-	if !node.AmLeader() {
-		return &emptyAssignedIds, x.Errorf("Assigning IDs is only allowed on leader.")
-	}
+	// if !node.AmLeader() {
+	// 	return &emptyAssignedIds, x.Errorf("Assigning IDs is only allowed on leader.")
+	// }
 
 	if num.Val == 0 && !num.ReadOnly {
 		return &emptyAssignedIds, x.Errorf("Nothing to be leased")
