@@ -1765,7 +1765,7 @@ var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
 	var cancel x.CancelFunc
-	client, cancel = x.GetDgraphClient()
+	client, cancel = z.GetDgraphClient()
 	defer cancel()
 
 	populateCluster()

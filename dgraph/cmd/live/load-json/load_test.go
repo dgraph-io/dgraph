@@ -142,7 +142,7 @@ func TestMain(m *testing.M) {
 	testDataDir = path.Dir(thisFile)
 
 	var cancel x.CancelFunc
-	dg, cancel = x.GetDgraphClient()
+	dg, cancel = z.GetDgraphClient()
 	defer cancel()
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up

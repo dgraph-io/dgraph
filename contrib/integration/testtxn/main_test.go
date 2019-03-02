@@ -42,7 +42,7 @@ var addr string = "localhost:9180"
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	dg, cancel := x.GetDgraphClient()
+	dg, cancel := z.GetDgraphClient()
 	defer cancel()
 	err := dg.Login(context.Background(), x.GrootId, "password")
 	if err != nil {

@@ -90,7 +90,7 @@ func TestReservedPredicates(t *testing.T) {
 	// cannot be altered even if the permissions allow it.
 	ctx := context.Background()
 
-	dg1, cancel1 := x.GetDgraphClientOnPort(9180)
+	dg1, cancel1 := z.GetDgraphClientOnPort(9180)
 	defer cancel1()
 	if err := dg1.Login(ctx, x.GrootId, "password"); err != nil {
 		t.Fatalf("unable to login using the groot account:%v", err)
@@ -98,7 +98,7 @@ func TestReservedPredicates(t *testing.T) {
 	defer cancel1()
 	alterReservedPredicates(t, dg1)
 
-	dg2, cancel2 := x.GetDgraphClientOnPort(9180)
+	dg2, cancel2 := z.GetDgraphClientOnPort(9180)
 	defer cancel2()
 	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
 		t.Fatalf("unable to login using the groot account:%v", err)
@@ -108,13 +108,13 @@ func TestReservedPredicates(t *testing.T) {
 
 func TestAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
-	dg1, cancel := x.GetDgraphClientOnPort(9180)
+	dg1, cancel := z.GetDgraphClientOnPort(9180)
 	defer cancel()
 	testAuthorization(t, dg1)
 	glog.Infof("done")
 
 	glog.Infof("testing with port 9182")
-	dg2, cancel := x.GetDgraphClientOnPort(9182)
+	dg2, cancel := z.GetDgraphClientOnPort(9182)
 	defer cancel()
 	testAuthorization(t, dg2)
 	glog.Infof("done")
@@ -335,7 +335,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 
 func TestPasswordReset(t *testing.T) {
 	glog.Infof("testing with port 9180")
-	dg, cancel := x.GetDgraphClientOnPort(9180)
+	dg, cancel := z.GetDgraphClientOnPort(9180)
 	defer cancel()
 	createAccountAndData(t, dg)
 	// test login using the current password
@@ -361,7 +361,7 @@ func TestPasswordReset(t *testing.T) {
 
 func TestPredicateRegex(t *testing.T) {
 	glog.Infof("testing with port 9180")
-	dg, cancel := x.GetDgraphClientOnPort(9180)
+	dg, cancel := z.GetDgraphClientOnPort(9180)
 	defer cancel()
 	createAccountAndData(t, dg)
 	ctx := context.Background()
@@ -434,7 +434,7 @@ func TestPredicateRegex(t *testing.T) {
 }
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
-	dg, cancel := x.GetDgraphClientOnPort(9180)
+	dg, cancel := z.GetDgraphClientOnPort(9180)
 	defer cancel()
 
 	createAccountAndData(t, dg)

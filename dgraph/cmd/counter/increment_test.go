@@ -93,7 +93,7 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 }
 
 func TestIncrement(t *testing.T) {
-	dg, cancel := x.GetDgraphClient()
+	dg, cancel := z.GetDgraphClient()
 	defer cancel()
 	ctx := context.Background()
 	require.NoError(t, dg.Login(ctx, x.GrootId, "password"), "login failed")

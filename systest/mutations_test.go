@@ -39,7 +39,7 @@ import (
 func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg, cancel := x.GetDgraphClient()
+			dg, cancel := z.GetDgraphClient()
 			defer cancel()
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))

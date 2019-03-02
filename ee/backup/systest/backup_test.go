@@ -37,7 +37,7 @@ import (
 func TestBackup(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg, cancel := x.GetDgraphClient()
+			dg, cancel := z.GetDgraphClient()
 			defer cancel()
 			fn(t, dg)
 		}

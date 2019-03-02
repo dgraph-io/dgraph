@@ -30,7 +30,7 @@ const loginEndpoint = "http://localhost:8180/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
-	dg, cancel := x.GetDgraphClientOnPort(9180)
+	dg, cancel := z.GetDgraphClientOnPort(9180)
 	defer cancel()
 	createAccountAndData(t, dg)
 
