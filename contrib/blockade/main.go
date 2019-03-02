@@ -157,6 +157,7 @@ func runTests() error {
 	// }
 	// fmt.Println("===> Slow TEST: OK")
 
+<<<<<<< HEAD
 	// if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
 	// 	fmt.Printf("Error testRestart with stop: %v\n", err)
 	// 	return err
@@ -168,6 +169,13 @@ func runTests() error {
 	// 	return err
 	// }
 	// fmt.Println("===> Restart TEST2: OK")
+=======
+	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
+		fmt.Printf("Error testRestart with stop: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Restart TEST1: OK")
+>>>>>>> Remove network tests from blockade, so it can run faster.
 
 	for {
 		if err := testCommon("blockade partition", "blockade join", 2); err != nil {
