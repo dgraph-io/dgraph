@@ -291,6 +291,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 			g.tablets[tablet.Predicate] = tablet
 		}
 		if gid == g.gid {
+			glog.V(3).Infof("group %d checksum: %d", g.gid, group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}

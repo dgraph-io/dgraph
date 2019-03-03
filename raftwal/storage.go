@@ -23,10 +23,10 @@ import (
 	"math"
 	"sync"
 
-	"github.com/coreos/etcd/raft"
-	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
 	"github.com/golang/glog"
+	"go.etcd.io/etcd/raft"
+	pb "go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/x"

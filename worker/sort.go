@@ -380,6 +380,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
 		return nil, err
 	}
+	span.Annotatef(nil, "Waiting for checksum match")
 	if err := groups().ChecksumsMatch(ctx); err != nil {
 		return nil, err
 	}

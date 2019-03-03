@@ -21,13 +21,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/etcd/raft/raftpb"
 )
 
 func openBadger(dir string) (*badger.DB, error) {

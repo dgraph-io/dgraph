@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 var o *oracle
@@ -186,6 +187,18 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 }
 
 func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
+	if glog.V(3) {
+		glog.Infof("ProcessDelta: Max Assigned: %d", delta.MaxAssigned)
+		glog.Infof("ProcessDelta: Group checksum: %v", delta.GroupChecksums)
+		for _, txn := range delta.Txns {
+			if txn.CommitTs == 0 {
+				glog.Infof("ProcessDelta Aborted: %d", txn.StartTs)
+			} else {
+				glog.Infof("ProcessDelta Committed: %d -> %d", txn.StartTs, txn.CommitTs)
+			}
+		}
+	}
+
 	o.Lock()
 	defer o.Unlock()
 	for _, txn := range delta.Txns {
