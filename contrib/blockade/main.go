@@ -157,11 +157,11 @@ func runTests() error {
 	// }
 	// fmt.Println("===> Slow TEST: OK")
 
-	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
-		fmt.Printf("Error testRestart with stop: %v\n", err)
-		return err
-	}
-	fmt.Println("===> Restart TEST1: OK")
+	// if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
+	// 	fmt.Printf("Error testRestart with stop: %v\n", err)
+	// 	return err
+	// }
+	// fmt.Println("===> Restart TEST1: OK")
 
 	if err := testCommon("blockade restart", "", 3); err != nil {
 		fmt.Printf("Error testRestart with restart: %v\n", err)
