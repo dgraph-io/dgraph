@@ -145,11 +145,11 @@ func runTests() error {
 	}
 
 	// Setting flaky --all just does not converge. Too many network interruptions.
-	if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
-		fmt.Printf("Error testFlaky: %v\n", err)
-		return err
-	}
-	fmt.Println("===> Flaky TEST: OK")
+	// if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
+	// 	fmt.Printf("Error testFlaky: %v\n", err)
+	// 	return err
+	// }
+	// fmt.Println("===> Flaky TEST: OK")
 
 	if err := testCommon("blockade slow", "blockade fast --all", 3); err != nil {
 		fmt.Printf("Error testSlow: %v\n", err)
