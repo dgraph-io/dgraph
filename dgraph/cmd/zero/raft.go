@@ -17,11 +17,12 @@
 package zero
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -245,11 +246,12 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		// served by the group. If the tablets that a group is serving changes, and the Alpha does
 		// not know about these changes, then the read request must fail.
 		for _, g := range state.GetGroups() {
-			var buf bytes.Buffer
-			for name := range g.GetTablets() {
-				x.Check2(buf.WriteString(name))
+			preds := make([]string, 0, len(g.GetTablets()))
+			for pred := range g.GetTablets() {
+				preds = append(preds, pred)
 			}
-			g.Checksum = farm.Fingerprint64(buf.Bytes())
+			sort.Strings(preds)
+			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
 		}
 	}()
 
