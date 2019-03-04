@@ -94,7 +94,8 @@ func FindDataFiles(str string, ext []string) []string {
 	return list
 }
 
-// IsMissingOrEmptyDir returns true if the path either does not exist or is a directory that is empty.
+// IsMissingOrEmptyDir returns true if the path either does not exist
+// or is a directory that is empty.
 func IsMissingOrEmptyDir(path string) bool {
 	fi, err := os.Stat(path)
 	if os.IsNotExist(err) {
