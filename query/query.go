@@ -1339,7 +1339,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			doneVars[sg.Params.Var] = it
 			sg.Params.uidToVal = mp
 		} else {
-			glog.Errorf("Missing values/constant in math expression")
+			glog.V(3).Info("Warning: Math expression is using unassigned values or constants")
 		}
 		// Put it in this node.
 	} else if len(sg.Params.NeedsVar) > 0 {
