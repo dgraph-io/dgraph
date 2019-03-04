@@ -43,9 +43,10 @@ type Service struct {
 	WorkingDir    string   `yaml:"working_dir"`
 	DependsOn     []string `yaml:"depends_on,omitempty"`
 	Labels        StringMap
+	Environment   []string
 	Ports         []string
 	Volumes       []Volume
-	User          string
+	User          string `yaml:",omitempty"`
 	Command       string
 }
 
@@ -60,11 +61,12 @@ type Options struct {
 	NumAlphas      int
 	NumGroups      int
 	LruSizeMB      int
+	EnterpriseMode bool
 	AclSecret      string
 	DataDir        string
 	DataVol        bool
 	UserOwnership  bool
-	EnterpriseMode bool
+	Jaeger         bool
 	TestPortRange  bool
 }
 
@@ -94,6 +96,11 @@ func initService(basename string, idx, grpcPort int) Service {
 		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
 	}
 	svc.Labels = map[string]string{"cluster": "test"}
+
+	if opts.Jaeger {
+		svc.Environment = append(svc.Environment,
+			"DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268")
+	}
 
 	svc.Ports = []string{
 		toExposedPort(grpcPort),
@@ -189,6 +196,20 @@ func getAlpha(idx int) Service {
 	return svc
 }
 
+func getJaeger() Service {
+	svc := Service{
+		Image:         "jaegertracing/all-in-one:latest",
+		ContainerName: "jaeger",
+		WorkingDir:    "/working/jaeger",
+		Ports: []string{
+			toExposedPort(16686),
+		},
+		Environment: []string{"COLLECTOR_ZIPKIN_HTTP_PORT=9411"},
+		Command:     "--memory.max-traces=1000000",
+	}
+	return svc
+}
+
 func warning(str string) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", str)
 }
@@ -217,16 +238,18 @@ func main() {
 		"number of groups in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
+	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
+		"enable enterprise features in alphas")
+	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
+		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "v", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount the host directory as /data in containers")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
-	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
-		"enable enterprise features in alphas")
-	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
-		"enable ACL feature with specified HMAC secret file")
+	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
+		"include jaeger service")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
 
@@ -280,6 +303,10 @@ func main() {
 
 	if opts.DataVol {
 		cfg.Volumes["data"] = StringMap{}
+	}
+
+	if opts.Jaeger {
+		services["jaeger"] = getJaeger()
 	}
 
 	out, err := yaml.Marshal(cfg)
