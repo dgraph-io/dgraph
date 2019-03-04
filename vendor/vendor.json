@@ -461,22 +461,22 @@
 			"versionExact": "HEAD"
 		},
 		{
-			"checksumSHA1": "MyWnL/uCIaBZZ/MHCP32U7XwxM8=",
+			"checksumSHA1": "b0SSBiN/qXocMxGVb4kBfetDrYg=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "c438f7dd6d92874bbae93eee5a243fdd896e5b16",
-			"revisionTime": "2019-01-10T14:13:28Z"
+			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
+			"revisionTime": "2019-03-01T02:09:43Z"
 		},
 		{
-			"checksumSHA1": "TZl2XEsnow5Aog9P3FTuvGnCjEE=",
+			"checksumSHA1": "TyNDi94Qlav5+Q/kDNtIXh2JOHI=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "c438f7dd6d92874bbae93eee5a243fdd896e5b16",
-			"revisionTime": "2019-01-10T14:13:28Z"
+			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
+			"revisionTime": "2019-03-01T02:09:43Z"
 		},
 		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
-			"revision": "c438f7dd6d92874bbae93eee5a243fdd896e5b16",
-			"revisionTime": "2019-01-10T14:13:28Z"
+			"revision": "f8969c1ddf8f3f9a73929583b6a83205d49e2ea8",
+			"revisionTime": "2019-03-01T02:09:43Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
@@ -842,7 +842,7 @@
 			"version": "master",
 			"versionExact": "master"
 		},
-    {
+		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "22ddb68eccda408bbf17759ac18d3120ce0d4f3f",
@@ -863,8 +863,8 @@
 		{
 			"checksumSHA1": "GtamqiJoL7PGHsN454AoffBFMa8=",
 			"path": "golang.org/x/net/context",
-			"revision": "9b4f9f5ad5197c79fd623a3638e70d8b26cef344",
-			"revisionTime": "2018-10-23T11:20:58Z"
+			"revision": "16b79f2e4e95ea23b2bf9903c9809ff7b013ce85",
+			"revisionTime": "2019-03-01T08:36:47Z"
 		},
 		{
 			"checksumSHA1": "pCY4YtdNKVBYRbNvODjx8hj0hIs=",
@@ -881,14 +881,14 @@
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "915654e7eabcea33ae277abbecf52f0d8b7a9fdc",
-			"revisionTime": "2019-01-10T19:11:31Z"
+			"revision": "16b79f2e4e95ea23b2bf9903c9809ff7b013ce85",
+			"revisionTime": "2019-03-01T08:36:47Z"
 		},
 		{
 			"checksumSHA1": "HvmG9LfStMLF+hIC7xR4SxegMis=",
 			"path": "golang.org/x/net/trace",
-			"revision": "915654e7eabcea33ae277abbecf52f0d8b7a9fdc",
-			"revisionTime": "2019-01-10T19:11:31Z"
+			"revision": "16b79f2e4e95ea23b2bf9903c9809ff7b013ce85",
+			"revisionTime": "2019-03-01T08:36:47Z"
 		},
 		{
 			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
