@@ -556,6 +556,21 @@ func TestBinaryMultipleValues5(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected one item in value stack, but got 2")
 }
 
+func TestBinaryMultipleValues6(t *testing.T) {
+	query := `
+	{
+		var(func:uid(0x1)) {
+			z as math(max(1,2,3) - (3 / min(1,3)))
+		}
+		q(func:uid(0x1)) {
+			val(z)
+		}
+	}`
+	_, err := processQuery(t, context.Background(), query)
+	require.NoError(t, err)
+	// require.Contains(t, err.Error(), "Expected one item in value stack, but got 2")
+}
+
 func TestDuplicateAlias(t *testing.T) {
 
 	query := `

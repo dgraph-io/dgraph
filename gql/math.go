@@ -161,12 +161,12 @@ func evalMathStack(opStack, valueStack *mathTreeStack, flip bool) error {
 	return nil
 }
 
-// evalMVBStack determines if op is a multi-value binary (MVB) operation.
+// evalMultiStack determines if op is a multi-value binary (MVB) operation.
 // If the operation is MVB, it will reverse value stack and flip order of operands to
 // do a commutative eval of the values in valueStack. If the operation is not MVB, it will
 // pass the eval to evalMathStack for normal eval.
 // Returns nil if the operation was added to the valueStack, otherwise an error.
-func evalMVBStack(opStack, valueStack *mathTreeStack, op string) error {
+func evalMultiStack(opStack, valueStack *mathTreeStack, op string) error {
 	flip := (op == "min" || op == "max") && valueStack.size() > 2
 	if flip {
 		for valueStack.reverse(); valueStack.size() > 2; {
@@ -295,7 +295,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool, oper string) (*MathTree, bo
 				if topOp.Fn == "(" {
 					break
 				}
-				err := evalMVBStack(opStack, valueStack, oper)
+				err := evalMultiStack(opStack, valueStack, oper)
 				if err != nil {
 					return nil, false, err
 				}
@@ -322,7 +322,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool, oper string) (*MathTree, bo
 				if topOp.Fn == "(" {
 					break
 				}
-				err := evalMVBStack(opStack, valueStack, oper)
+				err := evalMultiStack(opStack, valueStack, oper)
 				if err != nil {
 					return nil, false, err
 				}
