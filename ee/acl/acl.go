@@ -170,7 +170,6 @@ func del(conf *viper.Viper) error {
 type AclEntity interface {
 	GetUid() string
 }
-type queryFunc func(context.Context, *dgo.Txn, string) (AclEntity, error)
 
 func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	queryFn func(context.Context, *dgo.Txn, string) (AclEntity, error)) error {
