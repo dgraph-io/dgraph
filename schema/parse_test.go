@@ -201,6 +201,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Predicate: "friend",
 			Directive: pb.SchemaUpdate_REVERSE,
 			Count:     true,
+			List:      true,
 		}},
 	})
 	require.True(t, State().IsIndexed("name"))
