@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/y"
-	dx "github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 var (
@@ -70,7 +70,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c, cancel := dx.GetDgraphClient()
+	c, cancel := z.GetDgraphClient()
 	defer cancel()
 	setup(c)
 	fmt.Println("Doing upserts")

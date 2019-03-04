@@ -141,7 +141,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	var cancel x.CancelFunc
+	var cancel z.CancelFunc
 	dg, cancel = z.GetDgraphClient()
 	defer cancel()
 

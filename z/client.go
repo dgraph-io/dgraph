@@ -169,7 +169,7 @@ func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
 	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Login(ctx, GrootId, "password")
+		err = dg.Login(ctx, x.GrootId, "password")
 		if err == nil || !strings.Contains(err.Error(), "Please retry") {
 			break
 		}

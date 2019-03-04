@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"

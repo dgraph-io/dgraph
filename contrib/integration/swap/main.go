@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	dx "github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 var (
@@ -78,7 +78,7 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c, cancel := dx.GetDgraphClient()
+	c, cancel := z.GetDgraphClient()
 	defer cancel()
 	uids := setup(c, sents)
 

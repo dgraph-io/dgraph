@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 func TestGetUID(t *testing.T) {
@@ -1764,7 +1764,7 @@ func TestDefaultValueVar2(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	var cancel x.CancelFunc
+	var cancel z.CancelFunc
 	client, cancel = z.GetDgraphClient()
 	defer cancel()
 

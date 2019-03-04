@@ -26,19 +26,22 @@ import (
 	"github.com/spf13/viper"
 )
 
-func getUserAndGroup() (userId string, groupId string, err error) {
-
+func getUserAndGroup(conf *viper.Viper) (userId string, groupId string, err error) {
+	userId = conf.GetString("user")
+	groupId = conf.GetString("group")
+	if (len(userId) == 0 && len(groupId) == 0) ||
+		(len(userId) != 0 && len(groupId) != 0) {
+		return "", "", fmt.Errorf("one of the --user or --group must be specified, but not both")
+	}
+	return userId, groupId, nil
 }
 
 func add(conf *viper.Viper) error {
-	password := conf.GetString("password")
-	userId := conf.GetString("user")
-	groupId := conf.GetString("group")
-	if (len(userId) == 0 && len(groupId) == 0) ||
-		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("one of the --user or --group must be specified, but not both")
+	userId, groupId, err := getUserAndGroup(conf)
+	if err != nil {
+		return err
 	}
-
+	password := conf.GetString("password")
 	if len(userId) != 0 {
 		return userAdd(conf, userId, password)
 	}
@@ -146,43 +149,31 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 }
 
 func del(conf *viper.Viper) error {
-	userId := conf.GetString("user")
-	groupId := conf.GetString("group")
-	if (len(userId) == 0 && len(groupId) == 0) ||
-		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("one of --user or --group must be specified, but not both")
+	userId, groupId, err := getUserAndGroup(conf)
+	if err != nil {
+		return err
 	}
-
 	if len(userId) != 0 {
-		return userOrGroupDel(conf, userId, func(ctx context.Context, txn *dgo.Txn,
-			userId string) (string, error) {
-			user, err := queryUser(ctx, txn, userId)
-			if err != nil {
-				return "", err
-			}
-			if user == nil {
-				return "", fmt.Errorf("Unable to delete user %q since it does not exist",
-					userId)
-			}
-			return user.Uid, nil
-		})
+		return userOrGroupDel(conf, userId,
+			func(ctx context.Context, txn *dgo.Txn, userId string) (AclEntity, error) {
+				user, err := queryUser(ctx, txn, userId)
+				return user, err
+			})
 	}
-	return userOrGroupDel(conf, userId, func(ctx context.Context, txn *dgo.Txn,
-		groupId string) (string, error) {
-		group, err := queryGroup(ctx, txn, groupId)
-		if err != nil {
-			return "", err
-		}
-		if group == nil {
-			return "", fmt.Errorf("Unable to delete group %q since it does not exist", groupId)
-		}
-		return group.Uid, nil
-	})
+	return userOrGroupDel(conf, groupId,
+		func(ctx context.Context, txn *dgo.Txn, groupId string) (AclEntity, error) {
+			group, err := queryGroup(ctx, txn, groupId)
+			return group, err
+		})
 }
 
-type queryFunc func(context.Context, *dgo.Txn, string) (string, error)
+type AclEntity interface {
+	GetUid() string
+}
+type queryFunc func(context.Context, *dgo.Txn, string) (AclEntity, error)
 
-func userOrGroupDel(conf *viper.Viper, userOrGroupId string, queryFn queryFunc) error {
+func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
+	queryFn func(context.Context, *dgo.Txn, string) (AclEntity, error)) error {
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
 		return fmt.Errorf("unable to get admin context:%v", err)
@@ -197,29 +188,29 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string, queryFn queryFunc) 
 		}
 	}()
 
-	uid, err := queryFn(ctx, txn, userOrGroupId)
+	entity, err := queryFn(ctx, txn, userOrGroupId)
 	if err != nil {
-		return fmt.Errorf("error while querying user:%v", err)
+		return err
+	}
+	if entity == nil || len(entity.GetUid()) == 0 {
+		return fmt.Errorf("unable to delete %q since it does not exist",
+			userOrGroupId)
 	}
 
-	if len(uid) == 0 {
-		return fmt.Errorf("unable to delete %q because it does not exist", userOrGroupId)
-	}
-
-	deleteUserNQuads := []*api.NQuad{
+	deleteNQuads := []*api.NQuad{
 		{
-			Subject:     uid,
+			Subject:     entity.GetUid(),
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
 		}}
 
 	mu := &api.Mutation{
 		CommitNow: true,
-		Del:       deleteUserNQuads,
+		Del:       deleteNQuads,
 	}
 
 	if _, err = txn.Mutate(ctx, mu); err != nil {
-		return fmt.Errorf("unable to delete user: %v", err)
+		return fmt.Errorf("unable to delete %q: %v", userOrGroupId, err)
 	}
 
 	fmt.Printf("Successfully deleted %q\n", userOrGroupId)
@@ -227,15 +218,11 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string, queryFn queryFunc) 
 }
 
 func mod(conf *viper.Viper) error {
-	userId := conf.GetString("user")
-	groupList := conf.GetString("group_list")
-	groupId := conf.GetString("group")
-
-	if (len(userId) == 0 && len(groupId) == 0) ||
-		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("one of the --user or --group must be specified, but not both")
+	userId, _, err := getUserAndGroup(conf)
+	if err != nil {
+		return err
 	}
-
+	groupList := conf.GetString("group_list")
 	if len(userId) != 0 {
 		if len(groupList) != 0 {
 			return userMod(conf, userId, groupList)
@@ -375,16 +362,14 @@ func chMod(conf *viper.Viper) error {
 	predicate := conf.GetString("pred")
 	predRegex := conf.GetString("pred_regex")
 	perm := conf.GetInt("perm")
-	if len(groupId) == 0 {
+	switch {
+	case len(groupId) == 0:
 		return fmt.Errorf("the groupid must not be empty")
-	}
-	if len(predicate) > 0 && len(predRegex) > 0 {
+	case len(predicate) > 0 && len(predRegex) > 0:
 		return fmt.Errorf("only one of --pred or --pred_regex must be specified")
-	}
-	if len(predicate) == 0 && len(predRegex) == 0 {
+	case len(predicate) == 0 && len(predRegex) == 0:
 		return fmt.Errorf("only one of --pred or --pred_regex must be specified")
-	}
-	if len(predRegex) > 0 {
+	case len(predRegex) > 0:
 		// make sure the predRegex can be compiled as a regex
 		if _, err := regexp.Compile(predRegex); err != nil {
 			return fmt.Errorf("unable to compile %v as a regular expression: %v",
