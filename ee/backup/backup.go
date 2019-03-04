@@ -95,8 +95,7 @@ func (m *Manifest) Complete(ctx context.Context) error {
 	}
 	// None of the groups produced backup files.
 	if m.Version == 0 {
-		glog.Infof("%s", ErrBackupNoChanges)
-		return nil
+		return ErrBackupNoChanges
 	}
 	handler, err := create(&object{
 		uri:     m.Request.Location,

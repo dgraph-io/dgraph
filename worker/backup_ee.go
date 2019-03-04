@@ -82,9 +82,7 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 	}
 	res, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {
-		if err != backup.ErrBackupNoChanges {
-			glog.Errorf("Backup error group %d: %s", in.GroupId, err)
-		}
+		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
 		return err
 	}
 	// Attach distributed max version value
@@ -140,9 +138,11 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 
 	for range m.Groups {
 		if err := <-errCh; err != nil {
-			if err != backup.ErrBackupNoChanges {
-				glog.Errorf("Error received during backup: %v", err)
+			// No changes, nothing was done.
+			if err == backup.ErrBackupNoChanges {
+				return nil
 			}
+			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
 	}
