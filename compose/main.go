@@ -46,7 +46,8 @@ type Service struct {
 	Environment   []string
 	Ports         []string
 	Volumes       []Volume
-	User          string `yaml:",omitempty"`
+	TempFS        []string `yaml:",omitempty"`
+	User          string   `yaml:",omitempty"`
 	Command       string
 }
 
@@ -65,6 +66,7 @@ type Options struct {
 	AclSecret      string
 	DataDir        string
 	DataVol        bool
+	TempFS         bool
 	UserOwnership  bool
 	Jaeger         bool
 	TestPortRange  bool
@@ -91,7 +93,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	svc.name = name(basename, idx)
 	svc.Image = "dgraph/dgraph:latest"
 	svc.ContainerName = svc.name
-	svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
+	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
 	if idx > 1 {
 		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
 	}
@@ -135,6 +137,7 @@ func initService(basename string, idx, grpcPort int) Service {
 
 	svc.Command = "/gobin/dgraph"
 	if opts.UserOwnership {
+		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
 		svc.User = "${UID:?UID env var not set}:${GID:-0}"
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
@@ -147,6 +150,10 @@ func getZero(idx int) Service {
 	grpcPort := zeroBasePort + idx - 1
 
 	svc := initService(basename, idx, grpcPort)
+
+	if opts.TempFS {
+		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
+	}
 
 	svc.Command += fmt.Sprintf(" zero -o %d --idx=%d", idx-1, idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
@@ -173,6 +180,10 @@ func getAlpha(idx int) Service {
 	grpcPort := internalPort + 1000
 
 	svc := initService(basename, idx, grpcPort)
+
+	if opts.TempFS {
+		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
+	}
 
 	svc.Command += fmt.Sprintf(" alpha -o %d", baseOffset+idx-1)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
@@ -248,6 +259,8 @@ func main() {
 		"mount the host directory as /data in containers")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
+	cmd.PersistentFlags().BoolVar(&opts.TempFS, "tmpfs", false,
+		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
