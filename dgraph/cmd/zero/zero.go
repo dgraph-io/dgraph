@@ -584,7 +584,8 @@ func (s *Server) Serves(
 		return nil, x.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
 
-	// Check who is serving this tablet. Return nil if no group is serving the tablet.
+	// Check who is serving this tablet. Return a dummy tablet with GroupId 0
+	// if no alpha is serving this predicate.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
 	if tab != nil {
