@@ -573,6 +573,26 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
+// Serves returns the tablet currently serving the predicate or nil if the predicate
+// is not being served by any alpha.
+func (s *Server) Serves(
+	ctx context.Context, tablet *pb.Tablet) (*pb.Tablet, error) {
+	ctx, span := otrace.StartSpan(ctx, "Zero.Serves")
+	defer span.End()
+
+	if len(tablet.Predicate) == 0 {
+		return nil, x.Errorf("Tablet predicate is empty in %+v", tablet)
+	}
+
+	// Check who is serving this tablet. Return nil if no group is serving the tablet.
+	tab := s.ServingTablet(tablet.Predicate)
+	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
+	if tab != nil {
+		return tab, nil
+	}
+	return &pb.Tablet{GroupId: 0}, nil
+}
+
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
 	proposals, err := s.createProposals(group)
 	if err != nil {

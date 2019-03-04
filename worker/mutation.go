@@ -39,7 +39,8 @@ import (
 )
 
 var (
-	errUnservedTablet = x.Errorf("Tablet isn't being served by this instance.")
+	ErrUnservedTabletMessage = "Tablet isn't being served by this instance"
+	errUnservedTablet        = x.Errorf(ErrUnservedTabletMessage)
 )
 
 func isStarAll(v []byte) bool {

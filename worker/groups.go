@@ -323,12 +323,49 @@ func (g *groupi) BelongsTo(key string) uint32 {
 	return 0
 }
 
+// BelongsToReadOnly acts like BelongsTo except it does not ask zero to serve
+// the tablet for key if no group is currently serving it.
+func (g *groupi) BelongsToReadOnly(key string) uint32 {
+	g.RLock()
+	tablet := g.tablets[key]
+	g.RUnlock()
+	if tablet != nil {
+		return tablet.GetGroupId()
+	}
+
+	// We don't know about this tablet. Talk to dgraphzero to find out who is
+	// serving this tablet.
+	pl := g.connToZeroLeader()
+	zc := pb.NewZeroClient(pl.Get())
+
+	tablet = &pb.Tablet{Predicate: key}
+	out, err := zc.Serves(context.Background(), tablet)
+	if err != nil {
+		glog.Errorf("Error while ShouldServe grpc call %v", err)
+		return 0
+	}
+	if out.GetGroupId() == 0 {
+		return 0
+	}
+
+	g.Lock()
+	defer g.Unlock()
+	g.tablets[key] = out
+	return out.GetGroupId()
+}
+
 func (g *groupi) ServesTablet(key string) bool {
 	tablet := g.Tablet(key)
 	if tablet != nil && tablet.GroupId == groups().groupId() {
 		return true
 	}
 	return false
+}
+
+// ServesTabletReadOnly acts like ServesTablet except it does not ask zero to
+// serve the tablet for key if no group is currently serving it.
+func (g *groupi) ServesTabletReadOnly(key string) bool {
+	return g.BelongsToReadOnly(key) == groups().groupId()
 }
 
 // Do not modify the returned Tablet

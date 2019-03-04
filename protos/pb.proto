@@ -412,6 +412,7 @@ service Zero {
 
 	rpc Oracle (api.Payload)           returns (stream OracleDelta) {}
 	rpc ShouldServe (Tablet)           returns (Tablet) {}
+	rpc Serves (Tablet)                returns (Tablet) {}
 	rpc AssignUids (Num)               returns (AssignedIds) {}
 	rpc Timestamps (Num)               returns (AssignedIds) {}
 	rpc CommitOrAbort (api.TxnContext) returns (api.TxnContext) {}
