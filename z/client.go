@@ -135,14 +135,14 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 
 // GrootHttpLogin logins using the groot account with the default password
 // and returns the access JWT
-func GrootHttpLogin(endpoint string) string {
-	accessJwt, _, err := HttpLogin(&LoginParams{
+func GrootHttpLogin(endpoint string) (string, string) {
+	accessJwt, refreshJwt, err := HttpLogin(&LoginParams{
 		Endpoint: endpoint,
 		UserID:   x.GrootId,
 		Passwd:   "password",
 	})
 	x.Check(err)
-	return accessJwt
+	return accessJwt, refreshJwt
 }
 
 type CancelFunc func()
