@@ -111,8 +111,8 @@ func initCmds() {
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward
 		// the process is run as another user. Creating a new working directory here
-		// ensures that it can be cleaned up without requiring root permissions when
-		// using a bind volume (i.e. a mounted host directory).
+		// ensures that it is owned by the user instead, so it can be cleaned up without
+		// requiring root when using a bind volume (i.e. a mounted host directory).
 		if cwd := rootConf.GetString("cwd"); cwd != "" {
 			x.CheckfNoTrace(os.Mkdir(cwd, 0777))
 			x.CheckfNoTrace(os.Chdir(cwd))
