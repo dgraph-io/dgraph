@@ -173,7 +173,7 @@ const mutatedSchemaVal = `
 name:string @index(term) .
 name2:string .
 dob:dateTime @index(year) .
-friend:uid @reverse .
+friend:[uid] @reverse .
 	`
 
 // TODO(Txn): We can't read index key on disk if it was written in same txn.

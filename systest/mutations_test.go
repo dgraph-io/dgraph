@@ -1640,7 +1640,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 
 	check(t, c.Alter(ctx, &api.Operation{
 		Schema: `
-			follow: uid @reverse .
+			follow: [uid] @reverse .
 		`,
 	}))
 	txn := c.NewTxn()

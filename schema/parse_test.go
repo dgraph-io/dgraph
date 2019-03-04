@@ -167,7 +167,7 @@ var schemaIndexVal5 = `
 age     : int @index(int) .
 name    : string @index(exact) @count .
 address : string @index(term) .
-friend  : uid @reverse @count .
+friend  : [uid] @reverse @count .
 `
 
 func TestSchemaIndexCustom(t *testing.T) {

@@ -230,8 +230,8 @@ func commitWithTsKeysOnly(keys []string, ts uint64) error {
 }
 
 func TestTransactionBasic(t *testing.T) {
-	require.NoError(t, dropAll(grootAccessJwt))
-	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -285,8 +285,8 @@ func TestTransactionBasic(t *testing.T) {
 }
 
 func TestTransactionBasicNoPreds(t *testing.T) {
-	require.NoError(t, dropAll(grootAccessJwt))
-	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -331,8 +331,8 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 }
 
 func TestTransactionBasicOldCommitFormat(t *testing.T) {
-	require.NoError(t, dropAll(grootAccessJwt))
-	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
 	{
@@ -394,8 +394,8 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 
 func TestHttpCompressionSupport(t *testing.T) {
 
-	require.NoError(t, dropAll(grootAccessJwt))
-	require.NoError(t, alterSchema(grootAccessJwt, `name: string @index(term) .`))
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
 	{
