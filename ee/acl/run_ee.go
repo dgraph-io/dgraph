@@ -74,7 +74,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to add a user or group",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := add(cmdAdd.Conf); err != nil {
-				fmt.Printf("Unable to add user or group: %v\n", err)
+				fmt.Printf("%v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -123,7 +123,8 @@ func initSubcommands() []*x.SubCommand {
 	modFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
 		" whose acls are to be changed")
 	modFlags.IntP("perm", "P", 0, "The acl represented using "+
-		"an integer: 4 for read, 2 for write, and 1 for modify.")
+		"an integer: 4 for read, 2 for write, and 1 for modify. Use a negative value to remove a "+
+		"predicate from the group")
 
 	var cmdInfo x.SubCommand
 	cmdInfo.Cmd = &cobra.Command{
