@@ -70,6 +70,7 @@ type Options struct {
 	UserOwnership  bool
 	Jaeger         bool
 	TestPortRange  bool
+	Verbosity      int
 }
 
 var opts Options
@@ -145,9 +146,16 @@ func initService(basename string, idx, grpcPort int) Service {
 	return svc
 }
 
+func getOffset(idx int) int {
+	if idx == 1 {
+		return 0
+	}
+	return idx
+}
+
 func getZero(idx int) Service {
 	basename := "zero"
-	grpcPort := zeroBasePort + idx - 1
+	grpcPort := zeroBasePort + getOffset(idx)
 
 	svc := initService(basename, idx, grpcPort)
 
@@ -159,7 +167,7 @@ func getZero(idx int) Service {
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	svc.Command += fmt.Sprintf(" --replicas=%d",
 		int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
-	svc.Command += " --logtostderr -v=2"
+	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
@@ -176,7 +184,7 @@ func getAlpha(idx int) Service {
 	}
 
 	basename := "alpha"
-	internalPort := alphaBasePort + baseOffset + idx - 1
+	internalPort := alphaBasePort + baseOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 
 	svc := initService(basename, idx, grpcPort)
@@ -189,7 +197,7 @@ func getAlpha(idx int) Service {
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
-	svc.Command += " --logtostderr -v=2"
+	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	if opts.EnterpriseMode {
 		svc.Command += " --enterprise_features"
@@ -241,22 +249,22 @@ func main() {
 		},
 	}
 
-	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 1,
+	cmd.PersistentFlags().IntVarP(&opts.NumZeros, "num_zeros", "z", 3,
 		"number of zeros in dgraph cluster")
-	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 1,
+	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
 		"number of alphas in dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumGroups, "num_groups", "g", 1,
 		"number of groups in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
+	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "o", false,
+		"mount a docker volume as /data in containers")
+	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
+		"mount a host directory as /data in containers")
 	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
-	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "v", false,
-		"mount a docker volume as /data in containers")
-	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
-		"mount the host directory as /data in containers")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
 	cmd.PersistentFlags().BoolVar(&opts.TempFS, "tmpfs", false,
@@ -265,6 +273,8 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
+	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
+		"glog verbosity level")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
