@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/user"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -138,8 +139,12 @@ func initService(basename string, idx, grpcPort int) Service {
 
 	svc.Command = "/gobin/dgraph"
 	if opts.UserOwnership {
+		user, err := user.Current()
+		if err != nil {
+			x.CheckfNoTrace(x.Errorf("unable to get current user: %v", err))
+		}
+		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
-		svc.User = "${UID:?UID env var not set}:${GID:-0}"
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
 
@@ -302,8 +307,8 @@ func main() {
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
 	}
-	if opts.UserOwnership {
-		warning("generated file will require UID to be set in the environment")
+	if opts.UserOwnership && opts.DataDir == "" {
+		fatal(fmt.Errorf("--user option requires --data_dir=<path>"))
 	}
 
 	services := make(map[string]Service)
