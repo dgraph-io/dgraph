@@ -176,10 +176,6 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 				rch <- ctx.Err()
 				return
 			default:
-				if subgraph.UnknownAttr {
-					continue
-				}
-
 				// Send the destuids in res chan.
 				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
 					for lIdx, toUID := range subgraph.uidMatrix[mIdx].Uids {

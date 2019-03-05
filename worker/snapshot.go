@@ -19,9 +19,9 @@ package worker
 import (
 	"sync/atomic"
 
-	"github.com/coreos/etcd/raft"
 	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
+	"go.etcd.io/etcd/raft"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
