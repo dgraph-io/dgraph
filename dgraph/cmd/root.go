@@ -116,7 +116,7 @@ func initCmds() {
 		if cwd := rootConf.GetString("cwd"); cwd != "" {
 			err := os.Mkdir(cwd, 0777)
 			if err != nil && !os.IsExist(err) {
-				x.Fatalf("unable to create directory", err)
+				x.Fatalf("unable to create directory: %v", err)
 			}
 			x.CheckfNoTrace(os.Chdir(cwd))
 		}
