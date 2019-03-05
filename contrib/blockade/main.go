@@ -34,7 +34,7 @@ func partition(instance string) error {
 }
 
 func increment(atLeast int) error {
-	errCh := make(chan error, 1)
+	errCh := make(chan error, atLeast)
 	ctx, cancel := context.WithTimeout(ctxb, time.Minute)
 	defer cancel()
 
@@ -103,7 +103,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 			return err
 		}
 		if err := increment(minAlphasUp); err != nil {
-			return err
+			panic(err)
 		}
 		// Then join, if available.
 		if len(join) == 0 {
@@ -113,7 +113,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 			return err
 		}
 		if err := increment(3); err != nil {
-			return err
+			panic(err)
 		}
 	}
 	return nil
@@ -127,7 +127,7 @@ func waitForHealthy() error {
 	}
 	for _, alpha := range []string{"localhost:9180", "localhost:9182", "localhost:9183"} {
 		if err := run(ctxb, "dgraph increment --addr="+alpha); err != nil {
-			return err
+			panic(err)
 		}
 	}
 	return nil
@@ -184,6 +184,9 @@ func main() {
 	if err := run(ctxb, "blockade up"); err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Println("Sleeping for 10s for the cluster to be ready")
+	time.Sleep(10 * time.Second)
 	// This defer can be moved within runTests, if we want to destroy blockade,
 	// in case our tests fail. We don't want to do that, because then we won't
 	// be able to get the logs.

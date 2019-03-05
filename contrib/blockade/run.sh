@@ -8,7 +8,7 @@
 #     ./run.sh 1
 
 function cleanup_blockade {
-    blockade destroy || true
+    blockade destroy 2>/dev/null
     docker container prune -f
     if docker network ls | grep -q 'blockade_net'; then
         docker network ls |
@@ -22,6 +22,8 @@ set -x -o pipefail
 
 times=${1:-32}
 
+echo "Installing the Dgraph binary"
+pushd $GOPATH/src/github.com/dgraph-io/dgraph/ && make install && popd
 go build -v .
 
 cleanup_blockade
