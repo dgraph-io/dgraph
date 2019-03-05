@@ -31,9 +31,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	x.Check(err)
+	x.CheckfNoTrace(err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	for {
@@ -44,24 +46,24 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 		}
 		time.Sleep(time.Second)
 	}
-	x.Check(err)
+	x.CheckfNoTrace(err)
 
 	return dg
 }
 
-func DgraphClientNoDropAll(serviceAddr string) *dgo.Dgraph {
+func DgraphClientNoDropAll(t *testing.T, serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	x.Check(err)
+	require.NoError(t, err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	x.Check(err)
+	require.NoError(t, err)
 
 	return dg
 }
 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	x.Check(err)
+	require.NoError(t, err)
 
 	nodes := DbNodeCount(t, dg)
 	require.Equal(t, 0, nodes)
@@ -75,7 +77,7 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 			}
 		}
 	`)
-	x.Check(err)
+	require.NoError(t, err)
 
 	type count struct {
 		Count int
@@ -85,7 +87,7 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	}
 	var response root
 	err = json.Unmarshal(resp.GetJson(), &response)
-	x.Check(err)
+	require.NoError(t, err)
 
 	return response.Q[0].Count
 }
