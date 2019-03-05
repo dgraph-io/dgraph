@@ -34,27 +34,20 @@ type fileHandler struct {
 
 // Create prepares the a path to save backup files.
 // Returns error on failure, nil on success.
-func (h *fileHandler) Create(uri *url.URL, file *object) error {
-	var dir, path string
+func (h *fileHandler) Create(uri *url.URL, req *Request) error {
+	var dir, path, fileName string
 
 	// check that the path exists and we can access it.
 	if !h.exists(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
-	if file.path == "" {
-		return x.Errorf("Need to specify a file path")
-	}
-	if file.name == "" {
-		return x.Errorf("Need to specify a file name")
-	}
-	dir = uri.Path
 
 	// Find the max version from the latest backup. This is done only when starting a new
 	// backup, not when creating a manifest.
-	if file.version == 0 {
-		var lastManifest string
+	if req.Manifest == nil {
 		// Walk the path and find the most recent backup.
-		// If not manifest is found, this is a full backup.
+		// If we can't find a manifest file, this is a full backup.
+		var lastManifest string
 		suffix := "/" + backupManifest
 		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 			if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
@@ -73,22 +66,23 @@ func (h *fileHandler) Create(uri *url.URL, file *object) error {
 				return err
 			}
 			// No new changes since last check
-			if m.Version == file.snapTs {
+			if m.Version == req.Backup.SnapshotTs {
 				return ErrBackupNoChanges
 			}
-			file.version = m.Version
+			// Return the version of last backup
+			req.Version = m.Version
 		}
+		fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
+	} else {
+		fileName = backupManifest
 	}
 
-	// Create new dir at destination
-	dir = filepath.Join(uri.Path, file.path)
+	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
 	if err := os.Mkdir(dir, 0700); err != nil && !os.IsExist(err) {
 		return err
 	}
 
-	// Path to backup file
-	path = filepath.Join(dir, file.name)
-
+	path = filepath.Join(dir, fileName)
 	fp, err := os.Create(path)
 	if err != nil {
 		return err

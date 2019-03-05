@@ -15,7 +15,6 @@ package backup
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -31,8 +30,10 @@ var ErrBackupNoChanges = x.Errorf("No changes since last backup, OK.")
 
 // Request has all the information needed to perform a backup.
 type Request struct {
-	DB     *badger.DB // Badger pstore managed by this node.
-	Backup *pb.BackupRequest
+	DB       *badger.DB // Badger pstore managed by this node.
+	Backup   *pb.BackupRequest
+	Manifest *Manifest
+	Version  uint64
 }
 
 // Process uses the request values to create a stream writer then hand off the data
@@ -44,26 +45,20 @@ func (r *Request) Process(ctx context.Context) error {
 		return err
 	}
 
-	obj := &object{
-		uri:    r.Backup.Location,
-		path:   fmt.Sprintf(backupPathFmt, r.Backup.UnixTs),
-		name:   fmt.Sprintf(backupNameFmt, r.Backup.ReadTs, r.Backup.GroupId),
-		snapTs: r.Backup.SnapshotTs, // used to verify version changes
-	}
-	handler, err := create(obj)
+	handler, err := r.newHandler()
 	if err != nil {
 		if err != ErrBackupNoChanges {
 			glog.Errorf("Unable to get handler for request: %+v. Error: %v", r.Backup, err)
 		}
 		return err
 	}
-	glog.V(3).Infof("Backup manifest version: %d", obj.version)
+	glog.V(3).Infof("Backup manifest version: %d", r.Version)
 
 	stream := r.DB.NewStreamAt(r.Backup.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	// Here we return the max version in the original request obejct. We will use this
 	// to create our manifest to complete the backup.
-	r.Backup.Since, err = stream.Backup(handler, obj.version)
+	r.Backup.Since, err = stream.Backup(handler, r.Version)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
@@ -83,30 +78,26 @@ func (r *Request) Process(ctx context.Context) error {
 // Request is the original backup request.
 type Manifest struct {
 	sync.Mutex
-	Version uint64           `json:"version"`
-	Groups  []uint32         `json:"groups"`
-	Request pb.BackupRequest `json:"request"`
+	Version uint64   `json:"version"`
+	Groups  []uint32 `json:"groups"`
 }
 
 // Complete will finalize a backup by writing the manifest at the backup destination.
-func (m *Manifest) Complete(ctx context.Context) error {
+func (r *Request) Complete(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	// None of the groups produced backup files.
-	if m.Version == 0 {
-		return ErrBackupNoChanges
-	}
-	handler, err := create(&object{
-		uri:     m.Request.Location,
-		path:    fmt.Sprintf(backupPathFmt, m.Request.UnixTs),
-		name:    backupManifest,
-		version: m.Version,
-	})
+	// handler, err := create(&object{
+	// 	uri:     m.Request.Location,
+	// 	path:    fmt.Sprintf(backupPathFmt, m.Request.UnixTs),
+	// 	name:    backupManifest,
+	// 	version: m.Version,
+	// })
+	handler, err := r.newHandler()
 	if err != nil {
 		return err
 	}
-	if err = json.NewEncoder(handler).Encode(&m); err != nil {
+	if err = json.NewEncoder(handler).Encode(r.Manifest); err != nil {
 		return err
 	}
 	if err = handler.Close(); err != nil {

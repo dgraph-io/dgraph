@@ -106,15 +106,13 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 		return err
 	}
 
-	var m backup.Manifest
-	m.Groups = groups().KnownGroups()
-	m.Request = pb.BackupRequest{
+	req := pb.BackupRequest{
 		ReadTs:   ts.ReadOnly,
 		Location: destination,
-		UnixTs:   time.Now().UTC().Format("20060102.150405"),
+		UnixTs:   time.Now().UTC().Format("20060102.1504"),
 	}
-
-	glog.Infof("Created backup request: %s. Groups=%v\n", &m.Request, m.Groups)
+	m := backup.Manifest{Groups: groups().KnownGroups()}
+	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -123,7 +121,7 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 	// If we receive any failures, we cancel the process.
 	errCh := make(chan error, len(m.Groups))
 	for _, gid := range m.Groups {
-		req := m.Request
+		req := req
 		req.GroupId = gid
 		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
@@ -147,5 +145,7 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 		}
 	}
 
-	return m.Complete(ctx)
+	// The manifest completes the backup.
+	br := &backup.Request{Backup: &req, Manifest: &m}
+	return br.Complete(ctx)
 }

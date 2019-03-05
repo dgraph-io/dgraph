@@ -106,7 +106,9 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 // URI formats:
 //   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
 //   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
-func (h *s3Handler) Create(uri *url.URL, file *object) error {
+func (h *s3Handler) Create(uri *url.URL, req *Request) error {
+	var objectName string
+
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
 	mc, err := h.setup(uri)
@@ -114,7 +116,11 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 		return err
 	}
 
-	if file.version == 0 {
+	// Find the max version from the latest backup. This is done only when starting a new
+	// backup, not when creating a manifest.
+	if req.Manifest == nil {
+		// Get list of objects inside the bucket and find the most recent backup.
+		// If we can't find a manifest file, this is a full backup.
 		var lastManifest string
 		done := make(chan struct{})
 		defer close(done)
@@ -135,15 +141,21 @@ func (h *s3Handler) Create(uri *url.URL, file *object) error {
 				return err
 			}
 			// No new changes since last check
-			if m.Version == file.snapTs {
+			if m.Version == req.Backup.SnapshotTs {
 				return ErrBackupNoChanges
 			}
-			file.version = m.Version
+			// Return the version of last backup
+			req.Version = m.Version
 		}
+		objectName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
+	} else {
+		objectName = backupManifest
 	}
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-	object := filepath.Join(h.objectPrefix, file.path, file.name)
+	object := filepath.Join(h.objectPrefix,
+		fmt.Sprintf(backupPathFmt, req.Backup.UnixTs),
+		objectName)
 	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
 
 	h.cerr = make(chan error, 1)

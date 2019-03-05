@@ -68,7 +68,7 @@ type handler interface {
 	//
 	// The URL object is parsed as described in `newHandler`.
 	// The Request object has the DB, estimated tablets size, and backup parameters.
-	Create(*url.URL, *object) error
+	Create(*url.URL, *Request) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
@@ -78,17 +78,6 @@ type handler interface {
 	// The loadFn receives the files as they are processed by a handler, to do the actual
 	// load to DB.
 	Load(*url.URL, loadFn) error
-}
-
-// object describes a file object, not necessarilly a backup file.
-// uri is the local or remote destination.
-// path is an optional path to create at destination.
-// name is the name of the file or object at uri under path.
-// version is the known max version.
-// snapTs the version from snapshot, used for manifest version check.
-type object struct {
-	uri, path, name string
-	version, snapTs uint64
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -126,8 +115,8 @@ func getHandler(scheme string) handler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func create(o *object) (handler, error) {
-	uri, err := url.Parse(o.uri)
+func (r *Request) newHandler() (handler, error) {
+	uri, err := url.Parse(r.Backup.Location)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +127,7 @@ func create(o *object) (handler, error) {
 		return nil, x.Errorf("Unable to handle url: %v", uri)
 	}
 
-	if err := h.Create(uri, o); err != nil {
+	if err := h.Create(uri, r); err != nil {
 		return nil, err
 	}
 	return h, nil
