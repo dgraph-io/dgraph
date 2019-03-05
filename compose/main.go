@@ -101,11 +101,6 @@ func initService(basename string, idx, grpcPort int) Service {
 	}
 	svc.Labels = map[string]string{"cluster": "test"}
 
-	if opts.Jaeger {
-		svc.Environment = append(svc.Environment,
-			"DGRAPH_ALPHA_JAEGER_COLLECTOR=http://jaeger:14268")
-	}
-
 	svc.Ports = []string{
 		toExposedPort(grpcPort),
 		toExposedPort(grpcPort + 1000), // http port
@@ -146,6 +141,9 @@ func initService(basename string, idx, grpcPort int) Service {
 		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
+	}
+	if opts.Jaeger {
+		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
 
 	return svc
