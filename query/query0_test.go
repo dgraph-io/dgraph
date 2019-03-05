@@ -946,7 +946,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 	`
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
+	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
 func TestQueryVarValOrderDesc(t *testing.T) {

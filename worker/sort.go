@@ -45,11 +45,7 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
-	gid := groups().BelongsToReadOnly(q.Order[0].Attr)
-	if gid == 0 {
-		return nil, fmt.Errorf("Cannot sort by unknown attribute %s", q.Order[0].Attr)
-	}
-
+	gid := groups().BelongsTo(q.Order[0].Attr)
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, "worker.SortOverNetwork. Attr: %s. Group: %d", q.Order[0].Attr, gid)
 	}
@@ -384,6 +380,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
 		return nil, err
 	}
+	span.Annotatef(nil, "Waiting for checksum match")
 	if err := groups().ChecksumsMatch(ctx); err != nil {
 		return nil, err
 	}
