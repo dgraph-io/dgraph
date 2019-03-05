@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/user"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -45,6 +46,7 @@ type Service struct {
 	Labels        StringMap
 	Ports         []string
 	Volumes       []Volume
+	User          string
 	Command       string
 }
 
@@ -62,6 +64,7 @@ type Options struct {
 	AclSecret      string
 	DataDir        string
 	DataVol        bool
+	UserOwnership  bool
 	EnterpriseMode bool
 	TestPortRange  bool
 }
@@ -81,7 +84,7 @@ func toExposedPort(i int) string {
 	return fmt.Sprintf("%d:%d", i, i)
 }
 
-func getService(basename string, idx, grpcPort int) Service {
+func initService(basename string, idx, grpcPort int) Service {
 	var svc Service
 
 	svc.name = name(basename, idx)
@@ -121,7 +124,18 @@ func getService(basename string, idx, grpcPort int) Service {
 			ReadOnly: false,
 		})
 	default:
-		// none
+		// no data volume
+	}
+
+	svc.Command = "/gobin/dgraph"
+	if opts.UserOwnership {
+		user, err := user.Current()
+		if err != nil {
+			x.CheckfNoTrace(x.Errorf("unable to get current user: %v", err))
+		}
+		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
+		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
+		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
 
 	return svc
@@ -131,9 +145,9 @@ func getZero(idx int) Service {
 	basename := "zero"
 	grpcPort := zeroBasePort + idx - 1
 
-	svc := getService(basename, idx, grpcPort)
+	svc := initService(basename, idx, grpcPort)
 
-	svc.Command = fmt.Sprintf("/gobin/dgraph zero -o %d --idx=%d", idx-1, idx)
+	svc.Command += fmt.Sprintf(" zero -o %d --idx=%d", idx-1, idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	svc.Command += fmt.Sprintf(" --replicas=%d",
 		int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
@@ -157,9 +171,9 @@ func getAlpha(idx int) Service {
 	internalPort := alphaBasePort + baseOffset + idx - 1
 	grpcPort := internalPort + 1000
 
-	svc := getService(basename, idx, grpcPort)
+	svc := initService(basename, idx, grpcPort)
 
-	svc.Command = fmt.Sprintf("/gobin/dgraph alpha -o %d", baseOffset+idx-1)
+	svc.Command += fmt.Sprintf(" alpha -o %d", baseOffset+idx-1)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
@@ -213,6 +227,8 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount the host directory as /data in containers")
+	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
+		"run as the current user rather than root")
 	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
 		"enable enterprise features in alphas")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
@@ -245,6 +261,9 @@ func main() {
 	}
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
+	}
+	if opts.UserOwnership && opts.DataDir == "" {
+		fatal(fmt.Errorf("--user option requires --data_dir=<path>"))
 	}
 
 	services := make(map[string]Service)
