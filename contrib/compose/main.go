@@ -133,7 +133,7 @@ func initService(basename string, idx, grpcPort int) Service {
 		if err != nil {
 			x.CheckfNoTrace(x.Errorf("unable to get current user: %v", err))
 		}
-		svc.User = fmt.Sprintf("%s", user.Uid)
+		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
