@@ -1394,7 +1394,7 @@ Dgraph Live Loader can be configured with following options:
 $ dgraph cert -c live
 
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s 21million.schema -r 21million.rdf.gz
+$ dgraph live --tls_dir tls -s 21million.schema -f 21million.rdf.gz
 ```
 
 ### Client authentication
@@ -1443,15 +1443,26 @@ given that live loader completed successfully in the previous run.{{% /notice %}
 ```sh
 $ dgraph live --help # To see the available flags.
 
-# Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
-$ dgraph live -r <path-to-rdf-gzipped-file>
+# Read RDFs or JSON from the passed file, and send them to Dgraph on localhost:9080.
+$ dgraph live -f <path-to-rdf-gzipped-file-or-JSON-file>
+
+# Read multiple RDFs or JSON from the passed path, and send them to Dgraph on localhost:9080.
+$ dgraph live -f <./path-to-rdf-gzipped-files-or-JSON-files>
 
 # Use compressed gRPC connections to and from Dgraph
-$ dgraph live -C -r <path-to-rdf-gzipped-file>
+$ dgraph live -C -f <path-to-rdf-gzipped-file-or-JSON-file>
 
 # Read RDFs and a schema file and send to Dgraph running at given address
-$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
+$ dgraph live -f <path-to-rdf-gzipped-file-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
+
+#### Other Live Loader options
+
+`--new_uids`: Ignore UIDs in load files and assign new ones. With this option you ignore predefined UIDs in file and assign new UIDs. Thus avoiding override the data in a DB already in operation.
+
+`--conc or -c`: Number of concurrent requests to make to Dgraph. Do not confuse with `-C`.
+
+`--use_compression or -C`: Enable compression on connection to alpha server.
 
 ### Bulk Loader
 
@@ -1497,7 +1508,8 @@ $ dgraph bulk -f goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_
 ```
 ```
 {
-	"RDFDir": "goldendata.rdf.gz",
+	"DataFiles": "goldendata.rdf.gz",
+	"DataFormat": "",
 	"SchemaFile": "goldendata.schema",
 	"DgraphsDir": "out",
 	"TmpDir": "tmp",
@@ -1511,6 +1523,7 @@ $ dgraph bulk -f goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_
 	"StoreXids": false,
 	"ZeroAddr": "localhost:5080",
 	"HttpAddr": "localhost:8000",
+	"IgnoreErrors": false,
 	"MapShards": 4,
 	"ReduceShards": 2
 }
@@ -1572,6 +1585,14 @@ Dgraph Alphas. Each Dgraph Alpha must have its own copy of the group's p
 directory output. Each replica of the first group should have its own copy of
 `./out/0/p`, each replica of the second group should have its own copy of
 `./out/1/p`, and so on.
+
+#### Other shared options with Live and Bulk Loader
+
+`--files or -f`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It will load multiple files in a given path. You can use dot path `-f .` or `-f ./path` to define current location in unix systems.
+
+`--format`: Specify file format (rdf or json) instead of getting it from filename. If you need to define a strict format manually.
+
+`--new_uids`: Ignore UIDs in load files and assign new ones. In Bulk Loader this option has a different propose from Live Loader. In Bulk it servers only to remap the UIDs.
 
 #### Tuning & monitoring
 
