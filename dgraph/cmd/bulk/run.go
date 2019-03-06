@@ -198,6 +198,8 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
+	go x.MonitorMemory()
+
 	loader := newLoader(opt)
 	if !opt.SkipMapPhase {
 		loader.mapStage()
