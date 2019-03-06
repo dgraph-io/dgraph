@@ -20,18 +20,20 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const redlineMemAvailKb = 1024 * 1024 // 1 GB
+const redlineMemAvailKb = 4 * 1024 * 1024 // 4 GB
 
 // NOTE: function does not return
 func MonitorMemory() {
+	var counter int
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
+		counter += 2
 
 		file, err := os.Open("/proc/meminfo")
 		if err != nil {
@@ -48,9 +50,14 @@ func MonitorMemory() {
 		}
 		_ = file.Close()
 
-		if memAvailKb > 0 && memAvailKb <= redlineMemAvailKb {
-			fmt.Fprintf(os.Stderr, "Available memory low. Attempting to free some.")
-			runtime.GC()
+		if memAvailKb > 0 {
+			if counter%10 == 0 || memAvailKb <= redlineMemAvailKb {
+				fmt.Fprintf(os.Stderr, "MEM available_memory: %d MiB\n", memAvailKb/1024)
+				if memAvailKb <= redlineMemAvailKb {
+					fmt.Fprintf(os.Stderr, "MEM attempting to release some memory\n")
+					debug.FreeOSMemory()
+				}
+			}
 		}
 	}
 }
