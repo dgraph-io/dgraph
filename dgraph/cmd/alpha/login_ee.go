@@ -37,6 +37,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: All things to login http call, must be in JSON.
 	user := r.Header.Get("X-Dgraph-User")
 	password := r.Header.Get("X-Dgraph-Password")
 	refreshJwt := r.Header.Get("X-Dgraph-RefreshJWT")

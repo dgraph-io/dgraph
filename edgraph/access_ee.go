@@ -288,7 +288,7 @@ func RefreshAcls(closer *y.Closer) {
 		return
 	}
 
-	ticker := time.NewTicker(Config.AclRefreshInterval)
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
