@@ -27,15 +27,12 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
-// DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
-// by all tests, so there is no testing.T instance for it to use.
-func DgraphClient(serviceAddr string) *dgo.Dgraph {
+// DgraphClientDropAll gets a Dgraph client and does DropAll before returning it.
+func DgraphClientDropAll(t *testing.T, serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	x.CheckfNoTrace(err)
+	require.NoError(t, err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	for {
@@ -46,11 +43,12 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 		}
 		time.Sleep(time.Second)
 	}
-	x.CheckfNoTrace(err)
+	require.NoError(t, err)
 
 	return dg
 }
 
+// DgraphClientDropAll gets a Dgraph client but does NOT DropAll before returning it.
 func DgraphClientNoDropAll(t *testing.T, serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
 	require.NoError(t, err)
