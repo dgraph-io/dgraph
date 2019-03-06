@@ -904,9 +904,9 @@ func BenchmarkAddMutations(b *testing.B) {
 
 func TestMultiPartList(t *testing.T) {
 	// For testing, set the max list length to a lower threshold.
-	maxListLength = 2000
+	maxListSize = 2000
 	defer func() {
-		maxListLength = 2000000
+		maxListSize = 2000000
 	}()
 
 	key := x.DataKey("bal", 1331)

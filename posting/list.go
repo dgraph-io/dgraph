@@ -52,7 +52,7 @@ var (
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
-	maxListLength    = 2000000
+	maxListSize      = 2000000
 )
 
 const (
@@ -948,10 +948,6 @@ func (l *List) rollup(readTs uint64) error {
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
-	return l.approxLen()
-}
-
-func (l *List) approxLen() int {
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
@@ -1241,7 +1237,7 @@ func (l *List) loadNextPart(readTs uint64) error {
 }
 
 func (l *List) needsSplit() bool {
-	return l.approxLen() >= maxListLength
+	return l.plist.Size() >= maxListSize
 }
 
 func (l *List) splitList(readTs uint64) error {
