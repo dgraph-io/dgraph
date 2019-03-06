@@ -51,12 +51,14 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
-func DgraphClientNoDropAll(t *testing.T, serviceAddr string) *dgo.Dgraph {
+// DgraphClientNoDropAll is intended to be called from TestMain() to establish a Dgraph connection
+// shared by all tests, so there is no testing.T instance for it to use.
+func DgraphClientNoDropAll(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	require.NoError(t, err)
+	x.CheckfNoTrace(err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	require.NoError(t, err)
+	x.CheckfNoTrace(err)
 
 	return dg
 }
