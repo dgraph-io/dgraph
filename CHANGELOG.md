@@ -4,8 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## 1.0.12 - [Unreleased]
-[Unreleased]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...release/v1.0
+## [1.0.12] - 2019-03-05
+[1.0.12]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...v1.0.12
 
 **Note: This release requires you to export and re-import data prior to
 upgrading or rolling back. The underlying data format has been changed.**
@@ -67,7 +67,7 @@ upgrading or rolling back. The underlying data format has been changed.**
 - Skip empty posting lists in `has` function.
 - Fix Rollup to pick max update commit ts.
 - Fix a race condition when processing concurrent queries. Fixes [#2849](https://github.com/dgraph-io/dgraph/issues/2849).
-- Show an error when running multiple mutation blocks. Fixes [#2815](https://github.com/dgraph-io/dgraph/issues/2815)
+- Show an error when running multiple mutation blocks. Fixes [#2815](https://github.com/dgraph-io/dgraph/issues/2815).
 - Bring in optimizations and bug fixes over from Badger.
 - Bulk Loader for multi-group (sharded data) clusters writes out per-group
   schema with only the predicates owned by the group instead of all predicates
