@@ -28,11 +28,17 @@ import (
 
 const redlineMemAvailKb = 1024 * 1024 // 1 GB
 
+// NOTE: function does not return
 func MonitorMemory() {
-	var memAvailKb int
-
 	for {
-		file, _ := os.Open("/proc/meminfo")
+		time.Sleep(5 * time.Second)
+
+		file, err := os.Open("/proc/meminfo")
+		if err != nil {
+			continue
+		}
+
+		var memAvailKb int
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -42,11 +48,9 @@ func MonitorMemory() {
 		}
 		_ = file.Close()
 
-		if memAvailKb <= redlineMemAvailKb {
+		if memAvailKb > 0 && memAvailKb <= redlineMemAvailKb {
 			fmt.Fprintf(os.Stderr, "Available memory low. Attempting to free some.")
 			runtime.GC()
 		}
-
-		time.Sleep(5 * time.Second)
 	}
 }
