@@ -810,18 +810,6 @@ func (l *List) length(readTs, afterUid uint64) int {
 	return count
 }
 
-func (l *List) partialLength(readTs uint64) int {
-	count := 0
-	err := l.partIterate(readTs, func(p *pb.Posting) error {
-		count++
-		return nil
-	})
-	if err != nil {
-		return -1
-	}
-	return count
-}
-
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(readTs, afterUid uint64) int {
 	l.RLock()
@@ -960,6 +948,10 @@ func (l *List) rollup(readTs uint64) error {
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
+	return l.approxLen()
+}
+
+func (l *List) approxLen() int {
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
@@ -1248,9 +1240,8 @@ func (l *List) loadNextPart(readTs uint64) error {
 	return nil
 }
 
-func (l *List) needsSplit(readTs uint64) bool {
-	length := l.partialLength(readTs)
-	return length >= maxListLength
+func (l *List) needsSplit() bool {
+	return l.approxLen() >= maxListLength
 }
 
 func (l *List) splitList(readTs uint64) error {
@@ -1260,7 +1251,7 @@ func (l *List) splitList(readTs uint64) error {
 	var prev *List
 	for curr != nil {
 
-		if curr.needsSplit(readTs) {
+		if curr.needsSplit() {
 			newLists := curr.splitListPart(readTs)
 
 			// If splitting a list for the first time, initialize it as a
