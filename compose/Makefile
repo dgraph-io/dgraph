@@ -17,7 +17,7 @@
 BIN	= compose
 GOPATH ?= $(shell go env GOPATH)
 
-$(BIN): main.go
+$(BIN): compose.go
 	@go build -o $(BIN)
 
 .PHONY: install

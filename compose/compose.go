@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"math"
 	"os"
@@ -72,6 +73,7 @@ type Options struct {
 	Jaeger         bool
 	TestPortRange  bool
 	Verbosity      int
+	OutFile        string
 }
 
 var opts Options
@@ -278,6 +280,8 @@ func main() {
 		"use alpha ports expected by regression tests")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
+	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O", "./docker-compose.yml",
+		"name of output file")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -335,8 +339,23 @@ func main() {
 		services["jaeger"] = getJaeger()
 	}
 
-	out, err := yaml.Marshal(cfg)
-	x.Check(err)
-	fmt.Printf("# Auto-generated with: %v\n#\n", os.Args[:])
-	fmt.Printf("%s", out)
+	yml, err := yaml.Marshal(cfg)
+	x.CheckfNoTrace(err)
+
+	header := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args[:])
+	if opts.OutFile == "-" {
+		_, _ = fmt.Printf("%s%s", header, yml)
+	} else {
+		file, err := os.Create(opts.OutFile)
+		if err != nil {
+			fatal(fmt.Errorf("unable to open file for writing: +v", err))
+		}
+
+		out := bufio.NewWriter(file)
+		_, _ = fmt.Fprintf(out, "%s%s", header, yml)
+
+		out.Flush()
+	}
+
+	return
 }
