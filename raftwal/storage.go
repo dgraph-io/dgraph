@@ -601,7 +601,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 	if err != nil {
 		return err
 	}
-	x.AssertTruef(firste <= last+1, "firste: %d. last: %d", firste, last)
+	// firste can exceed last if Raft makes a jump.
 
 	for _, e := range entries {
 		k := w.entryKey(e.Index)
