@@ -279,9 +279,8 @@ message PostingList {
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
   bool multi_part = 4;
-  bool first_part = 5;
-  uint64 start_uid = 6;
-  uint64 end_uid = 7;
+  uint64 start_uid = 5;
+  uint64 end_uid = 6;
 }
 
 message FacetParam {

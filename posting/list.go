@@ -767,10 +767,6 @@ func (l *List) rollup(readTs uint64) error {
 		return nil
 	}
 
-	if l.plist.MultiPart && !l.plist.FirstPart {
-		return fmt.Errorf("rollup can only be called from the first part of a multi-part list")
-	}
-
 	if !l.plist.MultiPart {
 		final := new(pb.PostingList)
 
@@ -1160,7 +1156,6 @@ func (l *List) splitList(readTs uint64) error {
 			l.plist = &pb.PostingList{
 				CommitTs:  l.plist.CommitTs,
 				MultiPart: true,
-				FirstPart: true,
 			}
 		}
 		return nil
@@ -1211,7 +1206,6 @@ func (l *List) splitPostingList(readTs uint64, partIdx int) []*pb.PostingList {
 	lowPl.Pack = lowEnc.Done()
 	lowPl.CommitTs = l.plist.CommitTs
 	lowPl.MultiPart = true
-	lowPl.FirstPart = false
 	if !l.plist.MultiPart {
 		lowPl.StartUid = 0
 	} else {
@@ -1238,7 +1232,6 @@ func (l *List) splitPostingList(readTs uint64, partIdx int) []*pb.PostingList {
 	highPl.Pack = highEnc.Done()
 	highPl.CommitTs = l.plist.CommitTs
 	highPl.MultiPart = true
-	highPl.FirstPart = false
 	highPl.StartUid = midUid
 	if !l.plist.MultiPart {
 		// We are splitting a list that was previously non-split. So the new
