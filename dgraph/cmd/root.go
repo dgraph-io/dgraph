@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"flag"
+	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -73,6 +74,8 @@ var subcommands = []*x.SubCommand{
 }
 
 func initCmds() {
+	RootCmd.PersistentFlags().String("cwd", "",
+		"Change working directory to the path specified. The parent must exist.")
 	RootCmd.PersistentFlags().String("profile_mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
 	RootCmd.PersistentFlags().Int("block_rate", 0,
@@ -84,7 +87,7 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	rootConf.BindPFlags(RootCmd.PersistentFlags())
+	_ = rootConf.BindPFlags(RootCmd.PersistentFlags())
 
 	// Add all existing global flag (eg: from glog) to rootCmd's flags
 	RootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
@@ -106,6 +109,18 @@ func initCmds() {
 		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 	cobra.OnInitialize(func() {
+		// When run inside docker, the working_dir is created by root even if afterward
+		// the process is run as another user. Creating a new working directory here
+		// ensures that it is owned by the user instead, so it can be cleaned up without
+		// requiring root when using a bind volume (i.e. a mounted host directory).
+		if cwd := rootConf.GetString("cwd"); cwd != "" {
+			err := os.Mkdir(cwd, 0777)
+			if err != nil && !os.IsExist(err) {
+				x.Fatalf("unable to create directory: %v", err)
+			}
+			x.CheckfNoTrace(os.Chdir(cwd))
+		}
+
 		cfg := rootConf.GetString("config")
 		if cfg == "" {
 			return

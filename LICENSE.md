@@ -1,6 +1,6 @@
 ## Dgraph Licensing
 
-Copyright 2016-2018 Dgraph Labs, Inc.
+Copyright 2016-2019 Dgraph Labs, Inc.
 
 Source code in this repository is variously licensed under the Apache Public
 License 2.0 (APL) and the Dgraph Community License (DCL). A copy of each license

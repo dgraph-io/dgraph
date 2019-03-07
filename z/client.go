@@ -36,19 +36,57 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func DgraphClientNoDropAll(serviceAddr string) *dgo.Dgraph {
+// DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
+func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
+	dg := DgraphClient(serviceAddr)
+	var err error
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	x.CheckfNoTrace(err)
+
+	return dg
+}
+
+func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
+	dg := DgraphClient(serviceAddr)
+
+	var err error
+	ctx := context.Background()
+	for {
+		// keep retrying until we succeed or receive a non-retriable error
+		err = dg.Login(ctx, x.GrootId, "password")
+		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	x.CheckfNoTrace(err)
+
+	return dg
+}
+
+// DgraphClientNoDropAll is intended to be called from TestMain() to establish a Dgraph connection
+// shared by all tests, so there is no testing.T instance for it to use.
+func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	x.Check(err)
+	x.CheckfNoTrace(err)
 
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	x.Check(err)
+	x.CheckfNoTrace(err)
 
 	return dg
 }
 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
-	x.Check(err)
+	require.NoError(t, err)
 
 	nodes := DbNodeCount(t, dg)
 	// the only node left should be the groot node
@@ -63,7 +101,7 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 			}
 		}
 	`)
-	x.Check(err)
+	require.NoError(t, err)
 
 	type count struct {
 		Count int
@@ -73,7 +111,8 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	}
 	var response root
 	err = json.Unmarshal(resp.GetJson(), &response)
-	x.Check(err)
+	require.NoError(t, err)
+
 	return response.Q[0].Count
 }
 
@@ -173,14 +212,5 @@ func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
 		}
 	}
 
-	ctx := context.Background()
-	for {
-		// keep retrying until we succeed or receive a non-retriable error
-		err = dg.Login(ctx, x.GrootId, "password")
-		if err == nil || !strings.Contains(err.Error(), "Please retry") {
-			break
-		}
-		time.Sleep(time.Second)
-	}
 	return dg, cancel
 }
