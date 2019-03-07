@@ -103,7 +103,6 @@ type PIterator struct {
 	uidPosting *pb.Posting
 	pidx       int // index of postings
 	plen       int
-	firstPart  bool
 
 	dec  *codec.Decoder
 	uids []uint64
