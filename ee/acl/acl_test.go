@@ -143,7 +143,7 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 
 	// now the operations should succeed again through the devGroup
 	queryPredicateWithUserAccount(t, dg, false)
-	// sleep long enough (10s per the docker-compose.yml in this directory)
+	// sleep long enough (10s per the docker-compose.yml)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
 	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
 	time.Sleep(12 * time.Second)
