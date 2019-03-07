@@ -30,7 +30,6 @@ upgrading or rolling back. The underlying data format has been changed.**
   instead of making an outbound request to Zero.
   ([#3071](https://github.com/dgraph-io/dgraph/issues/3071))
 
-
 ### Changed
 
 - Use the new Stream API from Badger instead of Dgraph's Stream framework. ([#2852](https://github.com/dgraph-io/dgraph/issues/2852))
@@ -49,6 +48,8 @@ upgrading or rolling back. The underlying data format has been changed.**
 - Introduce group checksums. ([#2964](https://github.com/dgraph-io/dgraph/issues/2964), [#3085](https://github.com/dgraph-io/dgraph/issues/3085))
 - Return aborted error if commit ts is 0.
 - Reduce number of "ClusterInfoOnly" requests to Zero by making VerifyUid wait for membership information. ([#2974](https://github.com/dgraph-io/dgraph/issues/2974))
+- Simplify Raft WAL storage caching. ([#3102](https://github.com/dgraph-io/dgraph/issues/3102))
+- Build release binary with Go version 1.11.5.
 
 ### Removed
 
@@ -74,6 +75,7 @@ upgrading or rolling back. The underlying data format has been changed.**
   in the cluster. This fixes an issue where queries made to one group may not
   return data served by other groups.
   ([#3065](https://github.com/dgraph-io/dgraph/issues/3065))
+- Remove the assert failure in raftwal/storage.go.
 
 ## [1.0.11] - 2018-12-17
 [1.0.11]: https://github.com/dgraph-io/dgraph/compare/v1.0.10...v1.0.11
