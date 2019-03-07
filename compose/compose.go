@@ -418,7 +418,11 @@ func main() {
 	if opts.OutFile == "-" {
 		_, _ = fmt.Printf("%s", doc)
 	} else {
-		ioutil.WriteFile(opts.OutFile, []byte(doc), 0777)
+		_, _ = fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile)
+		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0777)
+		if err != nil {
+			fatal(fmt.Errorf("unable to write file: %v", err))
+		}
 	}
 
 	return
