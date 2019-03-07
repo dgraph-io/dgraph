@@ -127,21 +127,16 @@ func run(conf *viper.Viper) {
 	}
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
-	if user := conf.GetString("user"); len(user) > 0 {
-		x.Check(dg.Login(context.Background(), user, conf.GetString("password")))
-	}
 
 	for num > 0 {
 		// for each increment, we will process up to maxRetries times
-		var cnt Counter
-		var err error
-		var now string
 		i := maxRetries
 		for {
-			now = time.Now().UTC().Format("0102 03:04:05.999")
-			cnt, err = process(dg, ro, pred)
+			now := time.Now().UTC().Format("0102 03:04:05.999")
+			cnt, err := process(dg, ro, pred)
 			if err == nil {
 				// break the retry look if the request has succeeded
+				fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
 				break
 			}
 
@@ -157,7 +152,6 @@ func run(conf *viper.Viper) {
 			log.Fatalf("unable to increment since retries have been exhausted")
 		}
 
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
 		num--
 		time.Sleep(waitDur)
 	}
