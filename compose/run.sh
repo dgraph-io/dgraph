@@ -43,5 +43,8 @@ fi
 Info "rebuilding dgraph ..."
 ( cd $DGRAPH_ROOT/dgraph && make install )
 
+# No need to down existings containers, if any.
+# The up command handles that automatically
+
 Info "bringing up containers"
 docker-compose -p dgraph up --force-recreate --remove-orphans
