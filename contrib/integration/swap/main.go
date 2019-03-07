@@ -78,8 +78,7 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c, cancel := z.GetDgraphClient()
-	defer cancel()
+	c := z.DgraphClientWithGroot(":9180")
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.

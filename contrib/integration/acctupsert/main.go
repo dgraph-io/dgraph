@@ -70,8 +70,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c, cancel := z.GetDgraphClient()
-	defer cancel()
+	c := z.DgraphClientWithGroot(":9180")
 	setup(c)
 	fmt.Println("Doing upserts")
 	doUpserts(c)
