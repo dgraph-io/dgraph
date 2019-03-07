@@ -1,16 +1,20 @@
 #!/bin/bash
 #
 
+readonly ME=${0##*/}
+readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
+
 if [[ $1 == "-h" || $1 == "--help" ]]; then
     cat <<EOF
-usage: ./run.sh
+usage: ./run.sh [./compose args ...]
 
 description:
 
-    Rebuild dgraph and bring up the docker-compose config found here.
+    Without arguments, rebuild dgraph and bring up the docker-compose.yml
+    config found here.
 
-    The docker-compose.yml file to bring up must be created with ./compose 
-    before running run.sh.
+    With arguments, pass them all to ./compose to create a docker-compose.yml
+    file first, then rebuild dgraph and bring up the config.
 EOF
     exit 0
 fi
@@ -19,8 +23,23 @@ function Info {
     echo -e "INFO: $*"
 }
 
+#
+# MAIN
+#
+
+if [[ $# -gt 0 ]]; then
+    Info "creating compose file ..."
+    go build compose.go
+    ./compose "$@"
+fi
+
+if [[ ! -e docker.compose.yml ]]; then
+    echo >&2 "$ME: no ./docker.compose.yml found"
+    exit 1
+fi
+
 Info "rebuilding dgraph ..."
-( cd ../dgraph ; make install )
+( cd $DGRAPH_ROOT/dgraph ; make install )
 
 Info "bringing up containers"
 docker-compose -p dgraph up --force-recreate --remove-orphans
