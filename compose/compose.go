@@ -43,6 +43,8 @@ type Service struct {
 	name          string // not exported
 	Image         string
 	ContainerName string   `yaml:"container_name"`
+	Hostname      string   `yaml:",omitempty"`
+	Pid           string   `yaml:",omitempty"`
 	WorkingDir    string   `yaml:"working_dir"`
 	DependsOn     []string `yaml:"depends_on,omitempty"`
 	Labels        StringMap
@@ -72,6 +74,7 @@ type Options struct {
 	TempFS         bool
 	UserOwnership  bool
 	Jaeger         bool
+	Metrics        bool
 	TestPortRange  bool
 	Verbosity      int
 	OutFile        string
@@ -235,6 +238,68 @@ func getJaeger() Service {
 	return svc
 }
 
+func addMetrics(cfg *ComposeConfig) {
+	cfg.Volumes["prometheus-volume"] = StringMap{}
+	cfg.Volumes["grafana-volume"] = StringMap{}
+
+	cfg.Services["node-exporter"] = Service{
+		Image:         "quay.io/prometheus/node-exporter",
+		ContainerName: "node-exporter",
+		Pid:           "host",
+		WorkingDir:    "/working/jaeger",
+		Volumes: []Volume{{
+			Type:     "bind",
+			Source:   "/",
+			Target:   "/host",
+			ReadOnly: true,
+		}},
+	}
+
+	cfg.Services["prometheus"] = Service{
+		Image:         "prom/prometheus",
+		ContainerName: "prometheus",
+		Hostname:      "prometheus",
+		Ports: []string{
+			toExposedPort(9090),
+		},
+		Volumes: []Volume{
+			{
+				Type:   "volume",
+				Source: "prometheus-volume",
+				Target: "/prometheus",
+			},
+			{
+				Type:     "bind",
+				Source:   "$GOPATH/src/github.com/dgraph-io/dgraph/compose/prometheus.yml",
+				Target:   "/etc/prometheus/prometheus.yml",
+				ReadOnly: true,
+			},
+		},
+	}
+
+	cfg.Services["grafana"] = Service{
+		Image:         "grafana/grafana",
+		ContainerName: "grafana",
+		Hostname:      "grafana",
+		Ports: []string{
+			toExposedPort(3000),
+		},
+		Environment: []string{
+			// Skip login
+			"GF_AUTH_ANONYMOUS_ENABLED=true",
+			"GF_AUTH_ANONYMOUS_ORG_ROLE=Admin",
+		},
+		Volumes: []Volume{{
+			Type:     "volume",
+			Source:   "grafana-volume",
+			Target:   "/var/lib/grafana",
+			ReadOnly: false,
+		}},
+	}
+
+	return
+}
+
 func warning(str string) {
 	fmt.Fprintf(os.Stderr, "compose: %v\n", str)
 }
@@ -277,6 +342,8 @@ func main() {
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
+	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
+		"include metrics (prometheus, grafana) services")
 	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
 		"use alpha ports expected by regression tests")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
@@ -338,6 +405,10 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
+	}
+
+	if opts.Metrics {
+		addMetrics(&cfg)
 	}
 
 	yml, err := yaml.Marshal(cfg)
