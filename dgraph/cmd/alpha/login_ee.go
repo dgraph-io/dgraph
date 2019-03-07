@@ -37,12 +37,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: All things to login http call, must be in JSON.
-	user := r.Header.Get("X-Dgraph-User")
-	password := r.Header.Get("X-Dgraph-Password")
-	refreshJwt := r.Header.Get("X-Dgraph-RefreshJWT")
 	ctx := context.Background()
-
 	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		// add remote addr as peer info so that the remote address can be logged inside Server.Login
 		if intPort, convErr := strconv.Atoi(port); convErr == nil {
@@ -55,12 +50,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp, err := (&edgraph.Server{}).Login(ctx, &api.LoginRequest{
-		Userid:       user,
-		Password:     password,
-		RefreshToken: refreshJwt,
-	})
+	body := readRequest(w, r)
+	loginReq := api.LoginRequest{}
+	if err := json.Unmarshal(body, &loginReq); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
 
+	resp, err := (&edgraph.Server{}).Login(ctx, &loginReq)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return

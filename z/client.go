@@ -17,6 +17,7 @@
 package z
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -87,19 +88,25 @@ type LoginParams struct {
 // and returns the access JWT and refresh JWT extracted from
 // the HTTP response
 func HttpLogin(params *LoginParams) (string, string, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("POST", params.Endpoint, nil)
+	loginPayload := api.LoginRequest{}
+	if len(params.RefreshJwt) > 0 {
+		loginPayload.RefreshToken = params.RefreshJwt
+	} else {
+		loginPayload.Userid = params.UserID
+		loginPayload.Password = params.Passwd
+	}
+
+	body, err := json.Marshal(&loginPayload)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to marshal body: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
 	if err != nil {
 		return "", "", fmt.Errorf("unable to create request: %v", err)
 	}
 
-	if len(params.RefreshJwt) > 0 {
-		req.Header.Add("X-Dgraph-RefreshJWT", params.RefreshJwt)
-	} else {
-		req.Header.Add("X-Dgraph-User", params.UserID)
-		req.Header.Add("X-Dgraph-Password", params.Passwd)
-	}
-
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("login through curl failed: %v", err)

@@ -36,6 +36,15 @@ func getUserAndGroup(conf *viper.Viper) (userId string, groupId string, err erro
 	return userId, groupId, nil
 }
 
+func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
+	for _, opt := range forbiddenOpts {
+		if len(conf.GetString(opt)) > 0 {
+			return fmt.Errorf("the option --%s should not be set", opt)
+		}
+	}
+	return nil
+}
+
 func add(conf *viper.Viper) error {
 	userId, groupId, err := getUserAndGroup(conf)
 	if err != nil {
@@ -46,6 +55,10 @@ func add(conf *viper.Viper) error {
 		return userAdd(conf, userId, password)
 	}
 
+	// if we are adding a group, then the password should not have been set
+	if err := checkForbiddenOpts(conf, []string{"password"}); err != nil {
+		return err
+	}
 	return groupAdd(conf, groupId)
 }
 
@@ -223,10 +236,20 @@ func mod(conf *viper.Viper) error {
 	}
 	groupList := conf.GetString("group_list")
 	if len(userId) != 0 {
+		// when modifying the user, some group options are forbidden
+		if err := checkForbiddenOpts(conf, []string{"pred", "pred_regex", "perm"}); err != nil {
+			return err
+		}
+
 		if len(groupList) != 0 {
 			return userMod(conf, userId, groupList)
 		}
 		return changePassword(conf, userId)
+	}
+
+	// when modifying the group, some user options are forbidden
+	if err := checkForbiddenOpts(conf, []string{"group_list", "new_password"}); err != nil {
+		return err
 	}
 	return chMod(conf)
 }
