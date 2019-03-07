@@ -176,7 +176,6 @@ func (it *PIterator) Init(l *List, opts PItrOpts) {
 	} else {
 		it.plist = l.plist
 	}
-	log.Printf("parts %v, currentPart %v", len(l.parts), opts.startPart)
 
 	it.l = l
 	it.opts = opts
@@ -733,13 +732,11 @@ func (l *List) partIterate(readTs uint64, partIdx int, f func(obj *pb.Posting) e
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
-			log.Printf("mp %v", mp.Uid)
 		} else {
 			mp = emptyPosting
 		}
 		if pitr.Valid() {
 			pp = pitr.Posting()
-			log.Printf("pp %v", pp.Uid)
 		} else {
 			pp = emptyPosting
 		}
@@ -908,7 +905,6 @@ func (l *List) rollup(readTs uint64) error {
 		for partIdx, part := range l.parts {
 			final := new(pb.PostingList)
 
-			log.Printf("part start %v part end %v", part.StartUid, part.EndUid)
 			enc := codec.Encoder{BlockSize: blockSize}
 			err := l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
 				// iterate already takes care of not returning entries whose commitTs
@@ -917,7 +913,6 @@ func (l *List) rollup(readTs uint64) error {
 				// here could result in a bug.
 				enc.Add(p.Uid)
 
-				log.Printf("rolling up %v", p.Uid)
 				// We want to add the posting if it has facets or has a value.
 				if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
 					// I think it's okay to take the pointer from the iterator, because
@@ -1260,7 +1255,6 @@ func (l *List) splitList(readTs uint64) error {
 
 	if !l.plist.MultiPart {
 		if needsSplit(l.plist) {
-			log.Printf("first split")
 			l.parts = l.splitPostingList(readTs, 0)
 			l.plist = &pb.PostingList{
 				CommitTs:  l.plist.CommitTs,
@@ -1274,7 +1268,6 @@ func (l *List) splitList(readTs uint64) error {
 	var newParts []*pb.PostingList
 	for partIdx, part := range l.parts {
 		if needsSplit(part) {
-			log.Printf("split part %v", partIdx)
 			splitParts := l.splitPostingList(readTs, partIdx)
 			newParts = append(newParts, splitParts...)
 		} else {
@@ -1287,7 +1280,6 @@ func (l *List) splitList(readTs uint64) error {
 }
 
 func (l *List) splitPostingList(readTs uint64, partIdx int) []*pb.PostingList {
-	log.Printf("split posting list")
 	var uids []uint64
 	err := l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
 		uids = append(uids, p.Uid)
