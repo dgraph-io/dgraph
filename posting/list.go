@@ -30,7 +30,6 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
@@ -72,14 +71,23 @@ type List struct {
 	x.SafeMutex
 	key         []byte
 	plist       *pb.PostingList
+	parts       []*pb.PostingList // If a multi-part list, the parts will be stored here.
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
 
 	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
-	next        *List // If a multi-part list, this is a pointer to the next list.
-	first       *List // If a multi-part list, points to the first part of the list.
+}
+
+func getNextPartKey(baseKey []byte, nextPartStart uint64) []byte {
+	keyCopy := make([]byte, len(baseKey))
+	copy(keyCopy, baseKey)
+
+	encNexStart := make([]byte, 8)
+	binary.BigEndian.PutUint64(encNexStart, nextPartStart)
+	keyCopy = append(keyCopy, encNexStart...)
+	return keyCopy
 }
 
 func appendNextStartToKey(key []byte, nextPartStart uint64) []byte {
@@ -132,21 +140,6 @@ func generateNextPartKey(currKey []byte, currPl *pb.PostingList, nextPartStart u
 	return replaceNextStartInKey(currKey, nextPartStart)
 }
 
-func (l *List) updateMinTs(readTs, minTs uint64) error {
-	l.AssertLock()
-
-	curr := l
-	for curr != nil {
-		curr.minTs = minTs
-		if err := curr.loadNextPart(readTs); err != nil {
-			return err
-		}
-		curr = curr.next
-	}
-
-	return nil
-}
-
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
@@ -155,6 +148,7 @@ func (l *List) maxVersion() uint64 {
 
 type PIterator struct {
 	l          *List
+	plist      *pb.PostingList
 	opts       PItrOpts
 	uidPosting *pb.Posting
 	pidx       int // index of postings
@@ -164,33 +158,37 @@ type PIterator struct {
 	dec  *codec.Decoder
 	uids []uint64
 	uidx int // Offset into the uids slice
+
+	partIndex int // Offset into the parts list (if a multi-part list).
 }
 
 type PItrOpts struct {
 	discardPl        bool
 	afterUid         uint64
 	partialIteration bool
+	startPart        int
 	readTs           uint64
 }
 
 func (it *PIterator) Init(l *List, opts PItrOpts) {
-	if l.plist.FirstPart {
-		l.loadNextPart(opts.readTs)
-		it.Init(l.next, opts)
-		return
+	if l.plist.MultiPart {
+		it.plist = l.parts[opts.startPart]
+	} else {
+		it.plist = l.plist
 	}
+	log.Printf("parts %v, currentPart %v", len(l.parts), opts.startPart)
 
 	it.l = l
 	it.opts = opts
 	it.uidPosting = &pb.Posting{}
 
-	it.dec = &codec.Decoder{Pack: l.plist.Pack}
+	it.dec = &codec.Decoder{Pack: it.plist.Pack}
 	it.uids = it.dec.Seek(opts.afterUid)
 	it.uidx = 0
 
-	it.plen = len(l.plist.Postings)
+	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
-		p := l.plist.Postings[idx]
+		p := it.plist.Postings[idx]
 		return it.opts.afterUid < p.Uid
 	})
 }
@@ -223,15 +221,20 @@ func (it *PIterator) Valid() bool {
 		return false
 	}
 
-	// Load the next part of the list if it exists, and reinitialize the
-	// iterator to move to the start of this new part.
-	if err := it.l.loadNextPart(it.l.plist.CommitTs); err != nil {
+	// Not a multi-part list, so nothing else to iterate through
+	if !it.l.plist.MultiPart {
 		return false
 	}
-	if it.l.next == nil {
+
+	// No more parts to iterate through
+	if len(it.l.parts) == it.opts.startPart+1 {
 		return false
 	}
-	it.Init(it.l.next, it.opts)
+
+	it.opts.startPart++
+	it.Init(it.l, it.opts)
+
+	// TODO: corner case, what if next part is empty but the one after that is not.
 	return len(it.uids) > 0
 }
 
@@ -239,7 +242,7 @@ func (it *PIterator) Posting() *pb.Posting {
 	uid := it.uids[it.uidx]
 
 	for it.pidx < it.plen {
-		p := it.l.plist.Postings[it.pidx]
+		p := it.plist.Postings[it.pidx]
 		if p.Uid > uid {
 			break
 		}
@@ -558,14 +561,15 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 }
 
 func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
-	return l.pickPostingsInternal(readTs, false)
+	return l.pickPostingsInternal(readTs, false, 0)
 }
 
-func (l *List) pickPartPostings(readTs uint64) (uint64, []*pb.Posting) {
-	return l.pickPostingsInternal(readTs, true)
+func (l *List) pickPartPostings(readTs uint64, partIdx int) (uint64, []*pb.Posting) {
+	return l.pickPostingsInternal(readTs, true, partIdx)
 }
 
-func (l *List) pickPostingsInternal(readTs uint64, partial bool) (uint64, []*pb.Posting) {
+func (l *List) pickPostingsInternal(readTs uint64, partial bool, partIdx int) (
+	uint64, []*pb.Posting) {
 	// This function would return zero ts for entries above readTs.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
@@ -582,17 +586,14 @@ func (l *List) pickPostingsInternal(readTs uint64, partial bool) (uint64, []*pb.
 	// First pick up the postings.
 	var deleteBelow uint64
 	var posts []*pb.Posting
-	mutationMap := l.mutationMap
-	if l.first != nil {
-		mutationMap = l.first.mutationMap
-	}
-	for startTs, plist := range mutationMap {
+	for startTs, plist := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
 		effectiveTs := effective(startTs, plist.CommitTs)
 		if effectiveTs > deleteBelow {
 			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
 			for _, mpost := range plist.Postings {
-				if partial && (mpost.Uid < l.plist.StartUid || l.plist.EndUid < mpost.Uid) {
+				if partial && (mpost.Uid < l.parts[partIdx].StartUid ||
+					l.parts[partIdx].EndUid < mpost.Uid) {
 					continue
 				}
 				if hasDeleteAll(mpost) {
@@ -708,15 +709,12 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	return err
 }
 
-func (l *List) partIterate(readTs uint64, f func(obj *pb.Posting) error) error {
+func (l *List) partIterate(readTs uint64, partIdx int, f func(obj *pb.Posting) error) error {
 	if !l.plist.MultiPart {
 		return l.iterate(readTs, 0, f)
 	}
 
-	if l.plist.FirstPart {
-		return nil
-	}
-	deleteBelow, mposts := l.pickPartPostings(readTs)
+	deleteBelow, mposts := l.pickPartPostings(readTs, partIdx)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -728,17 +726,20 @@ func (l *List) partIterate(readTs uint64, f func(obj *pb.Posting) error) error {
 		afterUid:         0,
 		discardPl:        deleteBelow > 0,
 		partialIteration: true,
+		startPart:        partIdx,
 	})
 	prevUid := uint64(0)
 	var err error
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
+			log.Printf("mp %v", mp.Uid)
 		} else {
 			mp = emptyPosting
 		}
 		if pitr.Valid() {
 			pp = pitr.Posting()
+			log.Printf("pp %v", pp.Uid)
 		} else {
 			pp = emptyPosting
 		}
@@ -825,21 +826,22 @@ func (l *List) MarshalToKv() ([]*bpb.KV, error) {
 	}
 
 	var kvs []*bpb.KV
-	curr := l
-	for curr != nil {
+	kv := &bpb.KV{}
+	kv.Version = l.minTs
+	kv.Key = l.key
+	val, meta := marshalPostingList(l.plist)
+	kv.UserMeta = []byte{meta}
+	kv.Value = val
+	kvs = append(kvs, kv)
+
+	for _, part := range l.parts {
 		kv := &bpb.KV{}
-		kv.Version = curr.minTs
-		kv.Key = curr.key
-		val, meta := marshalPostingList(curr.plist)
+		kv.Version = l.minTs
+		kv.Key = getNextPartKey(l.key, part.StartUid)
+		val, meta := marshalPostingList(part)
 		kv.UserMeta = []byte{meta}
 		kv.Value = val
 		kvs = append(kvs, kv)
-
-		// Load next part of the list if necessary.
-		if err := curr.loadNextPart(curr.plist.CommitTs); err != nil {
-			return nil, err
-		}
-		curr = curr.next
 	}
 
 	return kvs, nil
@@ -878,18 +880,11 @@ func (l *List) rollup(readTs uint64) error {
 		return fmt.Errorf("rollup can only be called from the first part of a multi-part list")
 	}
 
-	// Check if the list (or any of it's parts if it's been previously split) have
-	// become too big. Split the list if that is the case.
-	if err := l.splitList(readTs); err != nil {
-		return nil
-	}
-
-	curr := l
-	for curr != nil {
+	if !l.plist.MultiPart {
 		final := new(pb.PostingList)
 
 		enc := codec.Encoder{BlockSize: blockSize}
-		err := curr.partIterate(readTs, func(p *pb.Posting) error {
+		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 			// iterate already takes care of not returning entries whose commitTs
 			// is above curr.commitTs.
 			// So, we don't need to do any filtering here. In fact, doing filtering
@@ -907,13 +902,36 @@ func (l *List) rollup(readTs uint64) error {
 		})
 		x.Check(err)
 		final.Pack = enc.Done()
-		curr.plist.Pack = final.Pack
-		curr.plist.Postings = final.Postings
+		l.plist.Pack = final.Pack
+		l.plist.Postings = final.Postings
+	} else {
+		for partIdx, part := range l.parts {
+			final := new(pb.PostingList)
 
-		if err := curr.loadNextPart(readTs); err != nil {
-			return err
+			log.Printf("part start %v part end %v", part.StartUid, part.EndUid)
+			enc := codec.Encoder{BlockSize: blockSize}
+			err := l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
+				// iterate already takes care of not returning entries whose commitTs
+				// is above curr.commitTs.
+				// So, we don't need to do any filtering here. In fact, doing filtering
+				// here could result in a bug.
+				enc.Add(p.Uid)
+
+				log.Printf("rolling up %v", p.Uid)
+				// We want to add the posting if it has facets or has a value.
+				if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
+					// I think it's okay to take the pointer from the iterator, because
+					// we have a lock over List; which won't be released until final has
+					// been marshalled. Thus, the underlying data wouldn't be changed.
+					final.Postings = append(final.Postings, p)
+				}
+				return nil
+			})
+			x.Check(err)
+			final.Pack = enc.Done()
+			part.Pack = final.Pack
+			part.Postings = final.Postings
 		}
-		curr = curr.next
 	}
 
 	maxCommitTs := l.minTs
@@ -941,7 +959,14 @@ func (l *List) rollup(readTs uint64) error {
 		}
 	}
 
-	l.updateMinTs(readTs, maxCommitTs)
+	l.minTs = maxCommitTs
+
+	// Check if the list (or any of it's parts if it's been previously split) have
+	// become too big. Split the list if that is the case.
+	if err := l.splitList(readTs); err != nil {
+		return nil
+	}
+
 	return nil
 }
 
@@ -1198,87 +1223,73 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 	return facets.CopyFacets(p.Facets, param), nil
 }
 
-func (l *List) loadNextPart(readTs uint64) error {
-	// No plist so there's nothing that can be loaded.
-	if l.plist == nil {
-		return nil
-	}
-	// This is not a multi-part list so nothing to load.
+func (l *List) readListParts(baseKey []byte, readTs uint64) error {
 	if !l.plist.MultiPart {
 		return nil
 	}
-	// The next part has already been loaded so nothing else to do.
-	if l.next != nil {
-		return nil
-	}
-	// This is the end of the multi-part list so there's nothing to do.
-	if l.plist.EndUid == math.MaxUint64 {
-		return nil
-	}
 
-	txn := pstore.NewTransactionAt(readTs, false)
-	opts := badger.DefaultIteratorOptions
-	opts.AllVersions = true
-	it := txn.NewIterator(opts)
+	var nextPartStart uint64
+	for {
+		nextKey := getNextPartKey(baseKey, nextPartStart)
+		txn := pstore.NewTransactionAt(readTs, false)
+		item, err := txn.Get(nextKey)
+		if err != nil {
+			return err
+		}
+		var part pb.PostingList
+		if err := unmarshalOrCopy(&part, item); err != nil {
+			return err
+		}
+		l.parts = append(l.parts, &part)
 
-	nextPartKey := l.getNextPartKey()
-	if nextPartKey == nil {
-		return fmt.Errorf(
-			"Could not get find key for next part of the posting list. Current key %v", l.key)
+		nextPartStart = part.EndUid
+		if nextPartStart == math.MaxUint64 {
+			break
+		}
+		nextPartStart++
 	}
-
-	nextListPart, err := ReadPostingList(nextPartKey, it)
-	if err != nil {
-		return err
-	}
-	l.next = nextListPart
-
 	return nil
 }
 
-func (l *List) needsSplit() bool {
-	return l.plist.Size() >= maxListSize
+func needsSplit(plist *pb.PostingList) bool {
+	return plist.Size() >= maxListSize
 }
 
 func (l *List) splitList(readTs uint64) error {
 	l.AssertLock()
 
-	curr := l
-	var prev *List
-	for curr != nil {
-
-		if curr.needsSplit() {
-			newLists := curr.splitListPart(readTs)
-
-			// If splitting a list for the first time, initialize it as a
-			// multi-part list.
-			if !curr.plist.MultiPart {
-				curr.plist = &pb.PostingList{
-					CommitTs:  curr.plist.CommitTs,
-					MultiPart: true,
-					FirstPart: true,
-				}
-				curr.next = newLists[0]
-			} else {
-				prev.next = newLists[0]
+	if !l.plist.MultiPart {
+		if needsSplit(l.plist) {
+			log.Printf("first split")
+			l.parts = l.splitPostingList(readTs, 0)
+			l.plist = &pb.PostingList{
+				CommitTs:  l.plist.CommitTs,
+				MultiPart: true,
+				FirstPart: true,
 			}
-
-			curr = newLists[1]
 		}
-
-		if err := curr.loadNextPart(readTs); err != nil {
-			return err
-		}
-
-		prev = curr
-		curr = curr.next
+		return nil
 	}
+
+	var newParts []*pb.PostingList
+	for partIdx, part := range l.parts {
+		if needsSplit(part) {
+			log.Printf("split part %v", partIdx)
+			splitParts := l.splitPostingList(readTs, partIdx)
+			newParts = append(newParts, splitParts...)
+		} else {
+			newParts = append(newParts, part)
+		}
+	}
+
+	l.parts = newParts
 	return nil
 }
 
-func (l *List) splitListPart(readTs uint64) []*List {
+func (l *List) splitPostingList(readTs uint64, partIdx int) []*pb.PostingList {
+	log.Printf("split posting list")
 	var uids []uint64
-	err := l.partIterate(readTs, func(p *pb.Posting) error {
+	err := l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
 		uids = append(uids, p.Uid)
 		return nil
 	})
@@ -1290,7 +1301,7 @@ func (l *List) splitListPart(readTs uint64) []*List {
 	// Generate posting list holding the first half of the current list's postings.
 	lowPl := new(pb.PostingList)
 	lowEnc := codec.Encoder{BlockSize: blockSize}
-	err = l.partIterate(readTs, func(p *pb.Posting) error {
+	err = l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
 		// Skip all postings with an UID greater than or equal to midUid.
 		if p.Uid >= midUid {
 			return nil
@@ -1308,24 +1319,17 @@ func (l *List) splitListPart(readTs uint64) []*List {
 	lowPl.CommitTs = l.plist.CommitTs
 	lowPl.MultiPart = true
 	lowPl.FirstPart = false
-	lowPl.StartUid = l.plist.StartUid
-	lowPl.EndUid = midUid - 1
-
-	// Generate first list.
-	lowList := &List{}
 	if !l.plist.MultiPart {
-		lowList.key = generateNextPartKey(l.key, l.plist, 0)
+		lowPl.StartUid = 0
 	} else {
-		lowList.key = generateNextPartKey(l.key, l.plist, l.plist.StartUid)
+		lowPl.StartUid = l.parts[partIdx].StartUid
 	}
-	lowList.minTs = l.minTs
-	lowList.maxTs = l.maxTs
-	lowList.plist = lowPl
+	lowPl.EndUid = midUid - 1
 
 	// Generate posting list holding the second half of the current list's postings.
 	highPl := new(pb.PostingList)
 	highEnc := codec.Encoder{BlockSize: blockSize}
-	err = l.partIterate(readTs, func(p *pb.Posting) error {
+	err = l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
 		// Skip all postings with an UID less than midUid.
 		if p.Uid < midUid {
 			return nil
@@ -1350,28 +1354,8 @@ func (l *List) splitListPart(readTs uint64) []*List {
 	} else {
 		// Else, this posting list should point to the part the original list
 		// is pointing to.
-		highPl.EndUid = l.plist.EndUid
+		highPl.EndUid = l.parts[partIdx].EndUid
 	}
 
-	// Generate second list.
-	highList := &List{}
-	highList.key = generateNextPartKey(l.key, l.plist, midUid)
-	highList.minTs = l.minTs
-	highList.maxTs = l.maxTs
-	highList.plist = highPl
-
-	// Link the two lists together and to the rest of the list.
-	lowList.next = highList
-	highList.next = l.next
-
-	// Add a pointer to the start of the list.
-	if !l.plist.MultiPart {
-		lowList.first = l
-		highList.first = l
-	} else {
-		lowList.first = l.first
-		highList.first = l.first
-	}
-
-	return []*List{lowList, highList}
+	return []*pb.PostingList{lowPl, highPl}
 }

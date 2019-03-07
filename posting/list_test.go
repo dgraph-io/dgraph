@@ -904,7 +904,7 @@ func BenchmarkAddMutations(b *testing.B) {
 
 func TestMultiPartList(t *testing.T) {
 	// For testing, set the max list length to a lower threshold.
-	maxListSize = 2000
+	maxListSize = 50
 	defer func() {
 		maxListSize = 2000000
 	}()
@@ -913,7 +913,7 @@ func TestMultiPartList(t *testing.T) {
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	var commits int
-	N := int(1e5)
+	N := int(200)
 	for i := 2; i <= N; i += 2 {
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
@@ -921,7 +921,7 @@ func TestMultiPartList(t *testing.T) {
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
-		if i%2000 == 0 {
+		if i%50 == 0 {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
