@@ -765,11 +765,18 @@ func (l *List) rollup(readTs uint64) error {
 		return nil
 	}
 
-	if !l.plist.MultiPart {
+	var plsToRollup []*pb.PostingList
+	if l.plist.MultiPart {
+		plsToRollup = append(plsToRollup, l.parts...)
+	} else {
+		plsToRollup = append(plsToRollup, l.plist)
+	}
+
+	for partIdx, part := range plsToRollup {
 		final := new(pb.PostingList)
 
 		enc := codec.Encoder{BlockSize: blockSize}
-		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		err := l.iterateInternal(readTs, 0, true, partIdx, func(p *pb.Posting) error {
 			// iterate already takes care of not returning entries whose commitTs
 			// is above curr.commitTs.
 			// So, we don't need to do any filtering here. In fact, doing filtering
@@ -787,41 +794,8 @@ func (l *List) rollup(readTs uint64) error {
 		})
 		x.Check(err)
 		final.Pack = enc.Done()
-		l.plist.Pack = final.Pack
-		l.plist.Postings = final.Postings
-	} else {
-		for partIdx, part := range l.parts {
-			// If no changes have been made to this part, rollup does not need to
-			// change this list part.
-			deleteBelow, mposts := l.pickPartPostings(readTs, partIdx)
-			if deleteBelow == 0 && len(mposts) == 0 {
-				continue
-			}
-
-			final := new(pb.PostingList)
-
-			enc := codec.Encoder{BlockSize: blockSize}
-			err := l.partIterate(readTs, partIdx, func(p *pb.Posting) error {
-				// iterate already takes care of not returning entries whose commitTs
-				// is above curr.commitTs.
-				// So, we don't need to do any filtering here. In fact, doing filtering
-				// here could result in a bug.
-				enc.Add(p.Uid)
-
-				// We want to add the posting if it has facets or has a value.
-				if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-					// I think it's okay to take the pointer from the iterator, because
-					// we have a lock over List; which won't be released until final has
-					// been marshalled. Thus, the underlying data wouldn't be changed.
-					final.Postings = append(final.Postings, p)
-				}
-				return nil
-			})
-			x.Check(err)
-			final.Pack = enc.Done()
-			part.Pack = final.Pack
-			part.Postings = final.Postings
-		}
+		part.Pack = final.Pack
+		part.Postings = final.Postings
 	}
 
 	maxCommitTs := l.minTs
