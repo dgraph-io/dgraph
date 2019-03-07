@@ -39,10 +39,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coreos/etcd/raft"
-	pb "github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/etcd/raft"
+	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
 func openBadger(dir string) (*badger.DB, error) {
@@ -201,7 +201,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	batch := db.NewWriteBatch()
 	require.NoError(t, ds.deleteUntil(batch, 4))
 	require.NoError(t, batch.Flush())
-	ds.cache.firstIndex = 0
+	ds.cache.Store(firstKey, 0)
 	first, err = ds.FirstIndex()
 	if err != nil {
 		t.Errorf("err = %v, want nil", err)
@@ -244,7 +244,7 @@ func TestStorageCompact(t *testing.T) {
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
-		ds.cache.firstIndex = 0
+		ds.cache.Store(firstKey, 0)
 		index, err := ds.FirstIndex()
 		require.NoError(t, err)
 		// Do the minus one here to get the index of the snapshot.

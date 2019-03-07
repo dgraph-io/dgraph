@@ -158,9 +158,17 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), query.DebugKey, d)
 	ctx = attachAccessJwt(ctx, r)
-	// If ro is set, run this as a readonly query.
-	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {
-		if ro == "true" || ro == "1" {
+
+	if req.StartTs == 0 {
+		// If be is set, run this as a best-effort query.
+		be, _ := strconv.ParseBool(r.URL.Query().Get("be"))
+		if be {
+			req.BestEffort = true
+			req.ReadOnly = true
+		}
+		// If ro is set, run this as a readonly query.
+		ro, _ := strconv.ParseBool(r.URL.Query().Get("ro"))
+		if ro {
 			req.ReadOnly = true
 		}
 	}
