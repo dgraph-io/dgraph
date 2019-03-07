@@ -108,8 +108,6 @@ type PIterator struct {
 	dec  *codec.Decoder
 	uids []uint64
 	uidx int // Offset into the uids slice
-
-	partIndex int // Offset into the parts list (if a multi-part list).
 }
 
 type PItrOpts struct {
