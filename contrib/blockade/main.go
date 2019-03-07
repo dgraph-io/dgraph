@@ -14,6 +14,8 @@ import (
 )
 
 var ctxb = context.Background()
+var zeroAddrs = []string{"localhost:6080", "localhost:6082", "localhost:6083"}
+var alphaAddrs = []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 
 func run(ctx context.Context, command string) error {
 	args := strings.Split(command, " ")
@@ -34,23 +36,28 @@ func partition(instance string) error {
 }
 
 func increment(atLeast int) error {
-	errCh := make(chan error, atLeast)
+	errCh := make(chan error, len(alphaAddrs))
 	ctx, cancel := context.WithTimeout(ctxb, time.Minute)
 	defer cancel()
 
-	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
-	for _, addr := range addrs {
+	for _, addr := range alphaAddrs {
 		go func(addr string) {
 			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s", addr))
 		}(addr)
 	}
 	start := time.Now()
-	for i := 0; i < atLeast; i++ {
+	healthyHosts := 0
+	for i := 0; i < len(alphaAddrs); i++ {
 		if err := <-errCh; err != nil {
 			fmt.Printf("Got error during increment: %v\n", err)
-			return err
+		} else {
+			healthyHosts++
 		}
 	}
+	if healthyHosts < atLeast {
+		return fmt.Errorf("only %d hosts are healthy while %d are required", healthyHosts, atLeast)
+	}
+
 	dur := time.Since(start).Round(time.Millisecond)
 	fmt.Printf("\n===> TIME taken to converge %d alphas: %s\n\n", atLeast, dur)
 	return nil
@@ -120,12 +127,12 @@ func testCommon(remove, join string, minAlphasUp int) error {
 }
 
 func waitForHealthy() error {
-	for _, zero := range []string{"localhost:6080", "localhost:6082", "localhost:6083"} {
+	for _, zero := range zeroAddrs {
 		if err := getStatus(zero); err != nil {
 			return err
 		}
 	}
-	for _, alpha := range []string{"localhost:9180", "localhost:9182", "localhost:9183"} {
+	for _, alpha := range alphaAddrs {
 		if err := run(ctxb, "dgraph increment --addr="+alpha); err != nil {
 			panic(err)
 		}

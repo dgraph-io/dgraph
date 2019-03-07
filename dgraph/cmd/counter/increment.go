@@ -48,6 +48,7 @@ func init() {
 	flag := Increment.Cmd.Flags()
 	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
 	flag.Int("num", 1, "How many times to run.")
+	flag.Int("max_retries", 10, "How many times to retry if an error is found.")
 	flag.Bool("ro", false, "Only read the counter value, don't update it.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
@@ -119,21 +120,43 @@ func run(conf *viper.Viper) {
 	num := conf.GetInt("num")
 	ro := conf.GetBool("ro")
 	pred := conf.GetString("pred")
+	maxRetries := conf.GetInt("max_retries")
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
+	if user := conf.GetString("user"); len(user) > 0 {
+		x.Check(dg.Login(context.Background(), user, conf.GetString("password")))
+	}
 
 	for num > 0 {
-		cnt, err := process(dg, ro, pred)
-		now := time.Now().UTC().Format("0102 03:04:05.999")
-		if err != nil {
-			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
+		// for each increment, we will process up to maxRetries times
+		var cnt Counter
+		var err error
+		var now string
+		i := maxRetries
+		for {
+			now = time.Now().UTC().Format("0102 03:04:05.999")
+			cnt, err = process(dg, ro, pred)
+			if err == nil {
+				// break the retry look if the request has succeeded
+				break
+			}
+
+			i--
+			fmt.Printf("%-17s While trying to process counter: %v. Retrying (%d times left)...\n",
+				now, err, i)
+			if i <= 0 {
+				break
+			}
 			time.Sleep(time.Second)
-			continue
 		}
+		if i <= 0 {
+			log.Fatalf("unable to increment since retries have been exhausted")
+		}
+
 		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
 		num--
 		time.Sleep(waitDur)
