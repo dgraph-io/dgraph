@@ -18,6 +18,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"os/user"
@@ -342,20 +343,23 @@ func main() {
 	yml, err := yaml.Marshal(cfg)
 	x.CheckfNoTrace(err)
 
-	header := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args[:])
+	var out io.Writer
 	if opts.OutFile == "-" {
-		_, _ = fmt.Printf("%s%s", header, yml)
+		out = os.Stdout
 	} else {
+		fmt.Fprintf(os.Stderr, "writing file: %s\n", opts.OutFile)
 		file, err := os.Create(opts.OutFile)
 		if err != nil {
-			fatal(fmt.Errorf("unable to open file for writing: +v", err))
+			fatal(fmt.Errorf("unable to open file for writing: %+v", err))
 		}
+		defer func() { x.Ignore(file.Close()) }()
 
-		out := bufio.NewWriter(file)
-		_, _ = fmt.Fprintf(out, "%s%s", header, yml)
+		buf := bufio.NewWriter(file)
+		defer func() { x.Ignore(buf.Flush()) }()
 
-		out.Flush()
+		out = buf
 	}
 
-	return
+	_, _ = fmt.Fprintf(out, "# Auto-generated with: %v\n#\n", os.Args[:])
+	_, _ = fmt.Fprintf(out, "%s", yml)
 }
