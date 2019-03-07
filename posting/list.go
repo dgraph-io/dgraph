@@ -877,7 +877,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil {
+	if len(l.mutationMap) == 0 && opt.Intersect != nil && !l.plist.MultiPart {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, ErrTsTooOld
