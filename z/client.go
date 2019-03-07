@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"testing"
@@ -189,28 +188,4 @@ func GrootHttpLogin(endpoint string) (string, string) {
 	})
 	x.Check(err)
 	return accessJwt, refreshJwt
-}
-
-type CancelFunc func()
-
-const DgraphAlphaPort = 9180
-
-func GetDgraphClient() (*dgo.Dgraph, CancelFunc) {
-	return GetDgraphClientOnPort(DgraphAlphaPort)
-}
-
-func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
-	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", alphaPort), grpc.WithInsecure())
-	if err != nil {
-		log.Fatal("While trying to dial gRPC")
-	}
-
-	dc := api.NewDgraphClient(conn)
-	dg, cancel := dgo.NewDgraphClient(dc), func() {
-		if err := conn.Close(); err != nil {
-			log.Printf("Error while closing connection:%v", err)
-		}
-	}
-
-	return dg, cancel
 }

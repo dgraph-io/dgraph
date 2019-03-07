@@ -29,8 +29,7 @@ const loginEndpoint = "http://localhost:8180/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("testing with port 9180")
-	dg, cancel := z.GetDgraphClientOnPort(9180)
-	defer cancel()
+	dg := z.DgraphClientWithGroot(":9180")
 	createAccountAndData(t, dg)
 
 	// test query through curl

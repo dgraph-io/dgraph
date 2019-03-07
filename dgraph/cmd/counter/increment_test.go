@@ -94,10 +94,8 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 }
 
 func TestIncrement(t *testing.T) {
-	dg, cancel := z.GetDgraphClient()
-	defer cancel()
+	dg := z.DgraphClientWithGroot(":9180")
 	ctx := context.Background()
-	require.NoError(t, dg.Login(ctx, x.GrootId, "password"), "login failed")
 	op := api.Operation{DropAll: true}
 
 	// The following piece of code shows how one can set metadata with

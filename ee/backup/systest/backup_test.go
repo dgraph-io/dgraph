@@ -38,8 +38,7 @@ import (
 func TestBackup(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg, cancel := z.GetDgraphClient()
-			defer cancel()
+			dg := z.DgraphClientWithGroot(":9180")
 			fn(t, dg)
 		}
 	}

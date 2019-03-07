@@ -174,9 +174,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	var cancel z.CancelFunc
-	dg, cancel = z.GetDgraphClient()
-	defer cancel()
+	dg = z.DgraphClientWithGroot(":9180")
 	x.Check(dg.Alter(
 		context.Background(), &api.Operation{DropAll: true}))
 

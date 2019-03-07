@@ -38,10 +38,18 @@ func getUserAndGroup(conf *viper.Viper) (userId string, groupId string, err erro
 
 func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 	for _, opt := range forbiddenOpts {
-		if len(conf.GetString(opt)) > 0 {
+		var isSet bool
+		switch conf.Get(opt).(type) {
+		case string:
+			isSet = len(conf.GetString(opt)) > 0
+		case int:
+			isSet = conf.GetInt(opt) > 0
+		}
+		if isSet {
 			return fmt.Errorf("the option --%s should not be set", opt)
 		}
 	}
+
 	return nil
 }
 

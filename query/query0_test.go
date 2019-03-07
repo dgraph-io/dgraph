@@ -1764,9 +1764,7 @@ func TestDefaultValueVar2(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	var cancel z.CancelFunc
-	client, cancel = z.GetDgraphClient()
-	defer cancel()
+	client = z.DgraphClientWithGroot(":9180")
 
 	populateCluster()
 	os.Exit(m.Run())

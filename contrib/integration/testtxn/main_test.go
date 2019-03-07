@@ -43,12 +43,7 @@ var addr string = "localhost:9180"
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	dg, cancel := z.GetDgraphClient()
-	defer cancel()
-	err := dg.Login(context.Background(), x.GrootId, "password")
-	if err != nil {
-		log.Fatalf("unable to login with the groot account: %v", err)
-	}
+	dg := z.DgraphClientWithGroot(":9180")
 	s.dg = dg
 
 	r := m.Run()
