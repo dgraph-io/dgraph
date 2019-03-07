@@ -904,7 +904,7 @@ func BenchmarkAddMutations(b *testing.B) {
 
 func TestMultiPartList(t *testing.T) {
 	// For testing, set the max list length to a lower threshold.
-	maxListSize = 1000
+	maxListSize = 10000
 	defer func() {
 		maxListSize = 2000000
 	}()
@@ -929,6 +929,7 @@ func TestMultiPartList(t *testing.T) {
 		}
 		commits++
 	}
+	t.Logf("List parts %v", len(ol.parts))
 	opt := ListOptions{ReadTs: uint64(N) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)

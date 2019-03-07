@@ -632,9 +632,24 @@ func (l *List) pickPostingsInternal(readTs uint64, partial bool, partIdx int) (
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
+	return l.iterateInternal(readTs, afterUid, false, 0, f)
+}
+
+func (l *List) partIterate(readTs uint64, partIdx int, f func(obj *pb.Posting) error) error {
+	return l.iterateInternal(readTs, 0, true, partIdx, f)
+}
+
+func (l *List) iterateInternal(readTs uint64, afterUid uint64, partial bool, partIdx int,
+	f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
-	deleteBelow, mposts := l.pickPostings(readTs)
+	// If not a multi-part list iterate through the whole list.
+	if !l.plist.MultiPart {
+		partial = false
+		partIdx = 0
+	}
+
+	deleteBelow, mposts := l.pickPostingsInternal(readTs, partial, partIdx)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -650,81 +665,10 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	var mp, pp *pb.Posting
 	var pitr PIterator
 	pitr.Init(l, PItrOpts{
-		afterUid:  afterUid,
-		discardPl: deleteBelow > 0,
-		readTs:    readTs,
-	})
-	prevUid := uint64(0)
-	var err error
-	for err == nil {
-		if midx < mlen {
-			mp = mposts[midx]
-		} else {
-			mp = emptyPosting
-		}
-		if pitr.Valid() {
-			pp = pitr.Posting()
-		} else {
-			pp = emptyPosting
-		}
-
-		switch {
-		case mp.Uid > 0 && mp.Uid == prevUid:
-			// Only pick the latest version of this posting.
-			// mp.Uid can be zero if it's an empty posting.
-			midx++
-		case pp.Uid == 0 && mp.Uid == 0:
-			// Reached empty posting for both iterators.
-			return nil
-		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
-			// Either mp is empty, or pp is lower than mp.
-			err = f(pp)
-			if err := pitr.Next(); err != nil {
-				return err
-			}
-		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
-			// Either pp is empty, or mp is lower than pp.
-			if mp.Op != Del {
-				err = f(mp)
-			}
-			prevUid = mp.Uid
-			midx++
-		case pp.Uid == mp.Uid:
-			if mp.Op != Del {
-				err = f(mp)
-			}
-			prevUid = mp.Uid
-			if err := pitr.Next(); err != nil {
-				return err
-			}
-			midx++
-		default:
-			log.Fatalf("Unhandled case during iteration of posting list.")
-		}
-	}
-	if err == ErrStopIteration {
-		return nil
-	}
-	return err
-}
-
-func (l *List) partIterate(readTs uint64, partIdx int, f func(obj *pb.Posting) error) error {
-	if !l.plist.MultiPart {
-		return l.iterate(readTs, 0, f)
-	}
-
-	deleteBelow, mposts := l.pickPartPostings(readTs, partIdx)
-	if readTs < l.minTs {
-		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
-	}
-
-	midx, mlen := 0, len(mposts)
-	var mp, pp *pb.Posting
-	var pitr PIterator
-	pitr.Init(l, PItrOpts{
-		afterUid:         0,
+		afterUid:         afterUid,
 		discardPl:        deleteBelow > 0,
-		partialIteration: true,
+		readTs:           readTs,
+		partialIteration: partial,
 		startPart:        partIdx,
 	})
 	prevUid := uint64(0)
