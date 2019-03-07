@@ -902,7 +902,12 @@ func BenchmarkAddMutations(b *testing.B) {
 	}
 }
 
-func TestMultiPartList(t *testing.T) {
+func createMultiPartList(t *testing.T, size int) (*List, int) {
+	// For testing, set the max list size to a lower threshold.
+	maxListSize = 10000
+	defer func() {
+		maxListSize = 2000000
+	}()
 	// For testing, set the max list length to a lower threshold.
 	maxListSize = 10000
 	defer func() {
@@ -912,9 +917,8 @@ func TestMultiPartList(t *testing.T) {
 	key := x.DataKey("bal", 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
-	var commits int
-	N := int(1e5)
-	for i := 2; i <= N; i += 2 {
+	commits := 0
+	for i := 2; i <= size; i += 2 {
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
 		}
@@ -929,6 +933,13 @@ func TestMultiPartList(t *testing.T) {
 		}
 		commits++
 	}
+
+	return ol, commits
+}
+
+func TestMultiPartList(t *testing.T) {
+	N := int(1e5)
+	ol, commits := createMultiPartList(t, N)
 	t.Logf("List parts %v", len(ol.parts))
 	opt := ListOptions{ReadTs: uint64(N) + 1}
 	l, err := ol.Uids(opt)
@@ -980,5 +991,28 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	require.Equal(t, commits, len(labels))
 	for i, label := range labels {
 		require.Equal(t, label, strconv.Itoa(int(i+1)*2))
+	}
+}
+
+func TestMultiPartListMarshal(t *testing.T) {
+	N := int(1e5)
+	ol, _ := createMultiPartList(t, N)
+	t.Logf("List parts %v", len(ol.parts))
+
+	kvs, err := ol.MarshalToKv()
+	require.NoError(t, err)
+	require.Equal(t, len(kvs), len(ol.parts) + 1)
+
+	key := x.DataKey("bal", 1331)
+	require.Equal(t, key, kvs[0].Key)
+
+	for i, part := range ol.parts {
+		partKey := getNextPartKey(key, part.StartUid)
+		require.Equal(t, partKey, kvs[i+1].Key)
+		data, err := part.Marshal()
+		require.NoError(t, err)
+		require.Equal(t, data, kvs[i+1].Value)
+		require.Equal(t, []byte{BitCompletePosting}, kvs[i+1].UserMeta)
+		require.Equal(t, ol.minTs, kvs[i+1].Version)
 	}
 }
