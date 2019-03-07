@@ -185,6 +185,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.mutationMap = make(map[uint64]*pb.PostingList)
+	l.newParts = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
@@ -208,9 +209,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			if err := l.readListParts(key, item.Version()); err != nil {
-				return nil, err
-			}
 			// No need to do Next here. The outer loop can take care of skipping more versions of
 			// the same key.
 			return l, nil
