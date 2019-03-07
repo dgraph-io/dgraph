@@ -2954,7 +2954,7 @@ type PluginTokenizer interface {
 
     // Type is a string representing the type of data that is to be
     // tokenized. This must match the schema type of the predicate
-    // being indexd. Allowable values are shown in the table below.
+    // being indexed. Allowable values are shown in the table below.
     Type() string
 
     // Tokens should implement the tokenization logic. The input is
