@@ -1,8 +1,8 @@
 #!/bin/bash
-#
 
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
+readonly COMPOSE_FILE="./docker-compose.yml"
 
 if [[ $1 == "-h" || $1 == "--help" ]]; then
     cat <<EOF
@@ -27,19 +27,21 @@ function Info {
 # MAIN
 #
 
+set -e
+
 if [[ $# -gt 0 ]]; then
     Info "creating compose file ..."
     go build compose.go
     ./compose "$@"
 fi
 
-if [[ ! -e docker.compose.yml ]]; then
-    echo >&2 "$ME: no ./docker.compose.yml found"
+if [[ ! -e $COMPOSE_FILE ]]; then
+    echo >&2 "$ME: no $COMPOSE_FILE found"
     exit 1
 fi
 
 Info "rebuilding dgraph ..."
-( cd $DGRAPH_ROOT/dgraph ; make install )
+( cd $DGRAPH_ROOT/dgraph && make install )
 
 Info "bringing up containers"
 docker-compose -p dgraph up --force-recreate --remove-orphans
