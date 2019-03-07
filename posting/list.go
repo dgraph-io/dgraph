@@ -163,13 +163,13 @@ func (it *PIterator) Valid() bool {
 		return true
 	}
 
-	// Only iterate through this part of the list.
-	if it.opts.partialIteration {
+	// Not a multi-part list, so nothing else to iterate through
+	if !it.l.plist.MultiPart {
 		return false
 	}
 
-	// Not a multi-part list, so nothing else to iterate through
-	if !it.l.plist.MultiPart {
+	// Only iterate through this part of the list.
+	if it.opts.partialIteration {
 		return false
 	}
 
