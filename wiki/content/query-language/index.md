@@ -235,7 +235,7 @@ Matches strings that have all specified terms in any order; case insensitive.
 
 ##### Usage at root
 
-Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the english name and genre in english.
+Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the English name and genre in English.
 
 {{< runnable >}}
 {
@@ -862,7 +862,7 @@ An alias provides an alternate name in results.  Predicates, variables and aggre
 
 
 
-Query Example: Directors with `name` matching term `Steven`, their UID, english name, average number of actors per movie, total number of films and the name of each film in english and french.
+Query Example: Directors with `name` matching term `Steven`, their UID, English name, average number of actors per movie, total number of films, and the name of each film in English and French.
 {{< runnable >}}
 {
   ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
@@ -909,7 +909,7 @@ For positive `N`, `first: N` retrieves the first `N` results, by sorted or UID o
 For negative `N`, `first: N` retrieves the last `N` results, by sorted or UID order.  Currently, negative is only supported when no order is applied.  To achieve the effect of a negative with a sort, reverse the order of the sort and use a positive `N`.
 
 
-Query Example: Last two films, by UID order, directed by Steven Spielberg and the first 3 genres, sorted alphabetically by English name, of those movies.
+Query Example: Last two films, by UID order, directed by Steven Spielberg and the first three genres of those movies, sorted alphabetically by English name.
 
 {{< runnable >}}
 {
@@ -927,7 +927,7 @@ Query Example: Last two films, by UID order, directed by Steven Spielberg and th
 
 
 
-Query Example: The three directors with name Steven who have directed the most actors of all directors named Steven.
+Query Example: The three directors named Steven who have directed the most actors of all directors named Steven.
 
 {{< runnable >}}
 {
@@ -1182,7 +1182,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
 {{< /runnable >}}
 
 
-If queries contain some overlap in answers, the result sets are still independent
+If queries contain some overlap in answers, the result sets are still independent.
 
 Query Example: The movies Mackenzie Crook has acted in and the movies Jack Davenport has acted in.  The results sets overlap because both have acted in the Pirates of the Caribbean movies, but the results are independent and both contain the full answers sets.
 
@@ -1255,7 +1255,7 @@ Syntax Examples:
 
 Types : `uid`
 
-Nodes (UID's) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
+Nodes (UIDs) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
 
 Query variables do not affect the semantics of the query at the point of definition.  Query variables are evaluated to all nodes matched by the defining block.
 
@@ -1317,7 +1317,7 @@ Value variables are used by extracting the values with `val(var-name)`, or by ex
 
 [Facet]({{< relref "#facets-edge-attributes">}}) values can be stored in value variables.
 
-Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
+Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
 
 {{< runnable >}}
 {
@@ -2954,7 +2954,7 @@ type PluginTokenizer interface {
 
     // Type is a string representing the type of data that is to be
     // tokenized. This must match the schema type of the predicate
-    // being indexde. Allowable values are shown in the table below.
+    // being indexd. Allowable values are shown in the table below.
     Type() string
 
     // Tokens should implement the tokenization logic. The input is
@@ -3339,7 +3339,7 @@ Since a single token is only ever generated, it doesn't matter if `anyof` or
 
 #### Integer prime factors
 
-All all of the custom tokenizers shown previously have worked with strings.
+All of the custom tokenizers shown previously have worked with strings.
 However, other data types can be used as well. This example is contrived, but
 nonetheless shows some advanced usages of custom tokenizers.
 
@@ -3390,7 +3390,7 @@ Notice that the return of `Type()` is `"int"`, corresponding to the concrete
 type of the input to `Tokens` (which is `int64`).
 {{% /notice %}}
 
-This allows you do do things like search for all numbers that share prime
+This allows you do things like search for all numbers that share prime
 factors with a particular number.
 
 In particular, we search for numbers that contain any of the prime factors of
