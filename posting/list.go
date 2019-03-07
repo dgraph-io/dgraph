@@ -90,56 +90,6 @@ func getNextPartKey(baseKey []byte, nextPartStart uint64) []byte {
 	return keyCopy
 }
 
-func appendNextStartToKey(key []byte, nextPartStart uint64) []byte {
-	keyCopy := make([]byte, len(key))
-	copy(keyCopy, key)
-
-	encNexStart := make([]byte, 8)
-	binary.BigEndian.PutUint64(encNexStart, nextPartStart)
-	keyCopy = append(keyCopy, encNexStart...)
-	return keyCopy
-}
-
-func replaceNextStartInKey(key []byte, nextPartStart uint64) []byte {
-	keyCopy := make([]byte, len(key))
-	copy(keyCopy, key)
-
-	rest := keyCopy[len(keyCopy)-8:]
-	binary.BigEndian.PutUint64(rest, nextPartStart)
-	return keyCopy
-}
-
-func (l *List) getNextPartKey() []byte {
-	if l.plist != nil {
-		return nil
-	}
-
-	if !l.plist.MultiPart {
-		return nil
-	}
-
-	if l.plist.EndUid == math.MaxUint64 {
-		return nil
-	}
-
-	if l.plist.FirstPart {
-		// Add the start of the next list to the end of the key.
-		return appendNextStartToKey(l.key, l.plist.EndUid+1)
-	}
-
-	// In this case, the key already includes the extra bytes to encode the start
-	// UID of this part. Replace those bytes with the start UID of the next part.
-	return replaceNextStartInKey(l.key, l.plist.EndUid+1)
-}
-
-func generateNextPartKey(currKey []byte, currPl *pb.PostingList, nextPartStart uint64) []byte {
-	appendToKey := currPl.FirstPart || !currPl.MultiPart
-	if appendToKey {
-		return appendNextStartToKey(currKey, nextPartStart)
-	}
-	return replaceNextStartInKey(currKey, nextPartStart)
-}
-
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
@@ -847,6 +797,13 @@ func (l *List) rollup(readTs uint64) error {
 		l.plist.Postings = final.Postings
 	} else {
 		for partIdx, part := range l.parts {
+			// If no changes have been made to this part, rollup does not need to
+			// change this list part.
+			deleteBelow, mposts := l.pickPartPostings(readTs, partIdx)
+			if deleteBelow == 0 && len(mposts) == 0 {
+				continue
+			}
+
 			final := new(pb.PostingList)
 
 			enc := codec.Encoder{BlockSize: blockSize}
