@@ -909,10 +909,10 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "KuIPOjsnzI5EZHQjUFK3sTiLCTM=",
+			"checksumSHA1": "nl41+dMdtz3RmDFQRvKGdOQD3fE=",
 			"path": "go.opencensus.io",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "8734d3b4deb5b1369308eb92b16ca7c7dd5ff343",
+			"revisionTime": "2019-03-04T23:49:55Z"
 		},
 		{
 			"checksumSHA1": "TA3C6+5PM7V2zbsnLMp13Efy/BA=",
