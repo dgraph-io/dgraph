@@ -938,3 +938,47 @@ func TestMultiPartList(t *testing.T) {
 		require.Equal(t, uint64(i+1)*2, uid)
 	}
 }
+
+func TestMultiPartListWithPostings(t *testing.T) {
+	// For testing, set the max list length to a lower threshold.
+	maxListSize = 10000
+	defer func() {
+		maxListSize = 2000000
+	}()
+
+	key := x.DataKey("bal", 1331)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	var commits int
+	N := int(1e5)
+	for i := 2; i <= N; i += 2 {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+			Label: strconv.Itoa(i),
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		if i%1000 == 0 {
+			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
+			// list.
+			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
+			require.NoError(t, ol.Rollup(math.MaxUint64))
+		}
+		commits++
+	}
+	t.Logf("List parts %v", len(ol.parts))
+
+	var labels []string
+	ol.Iterate(uint64(N) + 1, 0, func(p *pb.Posting) error {
+		if len(p.Label) > 0 {
+			labels = append(labels, p.Label)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, commits, len(labels))
+	for i, label := range labels {
+		require.Equal(t, label, strconv.Itoa(int(i+1)*2))
+	}
+}
