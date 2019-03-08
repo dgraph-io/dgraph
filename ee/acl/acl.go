@@ -44,6 +44,8 @@ func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 			isSet = len(conf.GetString(opt)) > 0
 		case int:
 			isSet = conf.GetInt(opt) > 0
+		default:
+			return fmt.Errorf("unexpected option type for %s", opt)
 		}
 		if isSet {
 			return fmt.Errorf("the option --%s should not be set", opt)
@@ -222,7 +224,8 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 			Subject:     entity.GetUid(),
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
-		}}
+		}
+	}
 
 	mu := &api.Mutation{
 		CommitNow: true,
@@ -264,7 +267,7 @@ func mod(conf *viper.Viper) error {
 
 // changePassword changes a user's password
 func changePassword(conf *viper.Viper, userId string) error {
-	// 1. get the dgo client with appropriete access JWT
+	// 1. get the dgo client with appropriate access JWT
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	if err != nil {
 		return fmt.Errorf("unable to get dgo client:%v", err)

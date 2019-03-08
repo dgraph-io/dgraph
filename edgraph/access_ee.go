@@ -568,7 +568,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 
 	var userId string
 	var groupIds []string
-	// doAuthorizeMutation check if modification of all the predicates are allowed
+	// doAuthorizeMutation checks if modification of all the predicates are allowed
 	// as a byproduct, it also sets the userId and groups
 	doAuthorizeMutation := func() error {
 		userData, err := extractUserAndGroups(ctx)
