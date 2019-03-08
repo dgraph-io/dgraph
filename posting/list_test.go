@@ -935,7 +935,7 @@ func createMultiPartList(t *testing.T, size int) (*List, int) {
 func TestMultiPartList(t *testing.T) {
 	N := int(1e5)
 	ol, commits := createMultiPartList(t, N)
-	t.Logf("List parts %v", len(ol.plist.Parts))
+	t.Logf("List parts %v", len(ol.plist.Splits))
 	opt := ListOptions{ReadTs: uint64(N) + 1}
 	l, err := ol.Uids(opt)
 	require.NoError(t, err)
@@ -973,7 +973,7 @@ func TestMultiPartListWithPostings(t *testing.T) {
 		}
 		commits++
 	}
-	t.Logf("List parts %v", len(ol.plist.Parts))
+	t.Logf("List parts %v", len(ol.plist.Splits))
 
 	var labels []string
 	ol.Iterate(uint64(N)+1, 0, func(p *pb.Posting) error {
@@ -992,16 +992,16 @@ func TestMultiPartListWithPostings(t *testing.T) {
 func TestMultiPartListMarshal(t *testing.T) {
 	N := int(1e5)
 	ol, commits := createMultiPartList(t, N)
-	t.Logf("List parts %v", len(ol.plist.Parts))
+	t.Logf("List parts %v", len(ol.plist.Splits))
 
 	kvs, err := ol.MarshalToKv()
 	require.NoError(t, err)
-	require.Equal(t, len(kvs), len(ol.plist.Parts)+1)
+	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
 
 	key := x.DataKey("bal", 1331)
 	require.Equal(t, key, kvs[0].Key)
 
-	for i, startUid := range ol.plist.Parts {
+	for i, startUid := range ol.plist.Splits {
 		partKey := getNextPartKey(key, startUid)
 		require.Equal(t, partKey, kvs[i+1].Key)
 		part, err := ol.readListPart(startUid)

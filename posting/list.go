@@ -121,8 +121,8 @@ type PItrOpts struct {
 }
 
 func (it *PIterator) Init(l *List, opts PItrOpts) error {
-	if len(l.plist.Parts) > 0 {
-		plist, err := l.readListPart(l.plist.Parts[opts.startPart])
+	if len(l.plist.Splits) > 0 {
+		plist, err := l.readListPart(l.plist.Splits[opts.startPart])
 		if err != nil {
 			return err
 		}
@@ -170,11 +170,11 @@ func (it *PIterator) Valid() bool {
 		return true
 	}
 
-	if len(it.l.plist.Parts) == 0 {
+	if len(it.l.plist.Splits) == 0 {
 		return false
 	}
 
-	for it.opts.startPart+1 < len(it.l.plist.Parts) {
+	for it.opts.startPart+1 < len(it.l.plist.Splits) {
 		it.opts.startPart++
 		it.Init(it.l, it.opts)
 
@@ -698,7 +698,7 @@ func (l *List) MarshalToKv() ([]*bpb.KV, error) {
 	kv.Value = val
 	kvs = append(kvs, kv)
 
-	for _, startUid := range l.plist.Parts {
+	for _, startUid := range l.plist.Splits {
 		kv := &bpb.KV{}
 		kv.Version = l.minTs
 		kv.Key = getNextPartKey(l.key, startUid)
@@ -745,7 +745,7 @@ func (l *List) rollup(readTs uint64) error {
 	}
 
 	// Delete lists from the uncommittedParts map that are already in disk.
-	for _, startUid := range l.plist.Parts {
+	for _, startUid := range l.plist.Splits {
 		pl, version, err := l.readListPartFromDisk(startUid)
 		if err != nil || pl == nil {
 			// Ignore errors since this might be that the list has never
@@ -770,7 +770,7 @@ func (l *List) rollup(readTs uint64) error {
 		enc = codec.Encoder{BlockSize: blockSize}
 
 		// If not a multi-part list, all uids go to the same encoder.
-		if len(l.plist.Parts) == 0 {
+		if len(l.plist.Splits) == 0 {
 			plist = l.plist
 			endUid = math.MaxUint64
 			return nil
@@ -778,11 +778,11 @@ func (l *List) rollup(readTs uint64) error {
 
 		// Otherwise, load the corresponding part and set endUid  to correctly
 		// detect the end of the list.
-		startUid := l.plist.Parts[splitIdx]
-		if splitIdx+1 == len(l.plist.Parts) {
+		startUid := l.plist.Splits[splitIdx]
+		if splitIdx+1 == len(l.plist.Splits) {
 			endUid = math.MaxUint64
 		} else {
-			endUid = l.plist.Parts[splitIdx+1] - 1
+			endUid = l.plist.Splits[splitIdx+1] - 1
 		}
 
 		var err error
@@ -869,7 +869,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Parts) == 0 {
+	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, ErrTsTooOld
@@ -1136,42 +1136,41 @@ func needsSplit(plist *pb.PostingList) bool {
 func (l *List) splitList(readTs uint64) error {
 	l.AssertLock()
 
-	if len(l.plist.Parts) == 0 {
-		if needsSplit(l.plist) {
-			var newParts []uint64
-			parts := splitPostingList(l.plist)
-			for _, part := range parts {
-				l.uncommittedParts[part.StartUid] = part
-				newParts = append(newParts, part.StartUid)
+	var lists []*pb.PostingList
+	if len(l.plist.Splits) == 0 {
+		lists = append(lists, l.plist)
+	} else {
+		for _, startUid := range l.plist.Splits {
+			part, err := l.readListPart(startUid)
+			if err != nil {
+				return err
 			}
-
-			l.plist = &pb.PostingList{
-				CommitTs: l.plist.CommitTs,
-				Parts:    newParts,
-			}
+			lists = append(lists, part)
 		}
-		return nil
 	}
 
-	var newParts []uint64
-	for _, startUid := range l.plist.Parts {
-		part, err := l.readListPart(startUid)
-		if err != nil {
-			return err
-		}
-
-		if needsSplit(part) {
-			splitParts := splitPostingList(part)
-			for _, part := range splitParts {
+	var newLists []*pb.PostingList
+	for _, list := range lists {
+		if needsSplit(list) {
+			splitList := splitPostingList(list)
+			for _, part := range splitList {
 				l.uncommittedParts[part.StartUid] = part
-				newParts = append(newParts, part.StartUid)
+				newLists = append(newLists, part)
 			}
 		} else {
-			newParts = append(newParts, part.StartUid)
+			newLists = append(newLists, list)
 		}
 	}
-	l.plist.Parts = newParts
 
+	if len(newLists) == 1 || len(newLists) == len(l.plist.Splits) {
+		return nil
+	} else {
+		var splits []uint64
+		for _, list := range newLists {
+			splits = append(splits, list.StartUid)
+		}
+		l.plist.Splits = splits
+	}
 	return nil
 }
 

@@ -278,7 +278,7 @@ message PostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
-  repeated uint64 parts = 4;
+  repeated uint64 splits = 4;
   uint64 start_uid = 5;
 }
 
