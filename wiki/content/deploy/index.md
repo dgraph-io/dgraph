@@ -1444,28 +1444,41 @@ given that live loader completed successfully in the previous run.{{% /notice %}
 $ dgraph live --help # To see the available flags.
 
 # Read RDFs or JSON from the passed file, and send them to Dgraph on localhost:9080.
-$ dgraph live -f <path-to-rdf-gzipped-file-or-JSON-file>
+$ dgraph live -f <path-to-gzipped-RDF-or-JSON-file>
 
 # Read multiple RDFs or JSON from the passed path, and send them to Dgraph on localhost:9080.
-$ dgraph live -f <./path-to-rdf-gzipped-files-or-JSON-files>
+$ dgraph live -f <./path-to-gzipped-RDF-or-JSON-files>
 
 # Read multiple files strictly by name.
 $ dgraph live -f <file1.rdf, file2.rdf>
 
 # Use compressed gRPC connections to and from Dgraph.
-$ dgraph live -C -f <path-to-rdf-gzipped-file-or-JSON-file>
+$ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
 
 # Read RDFs and a schema file and send to Dgraph running at given address.
-$ dgraph live -f <path-to-rdf-gzipped-file-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
+$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
 #### Other Live Loader options
 
-`--new_uids`: Ignore UIDs in load files and assign new ones. With this option you ignore predefined UIDs in file and assign new UIDs. Thus avoiding override the data in a DB already in operation.
+`--new_uids` (default: false): Assign new UIDs instead of using the existing
+UIDs in data files. This is useful to avoid overriding the data in a DB already
+in operation.
 
-`--conc or -c`: Number of concurrent requests to make to Dgraph. Do not confuse with `-C`.
+`-f, --files`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
+load multiple files in a given path. If the path is a directory, then all files
+ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 
-`--use_compression or -C`: Enable compression on connection to alpha server.
+`--format`: Specify file format (rdf or json) instead of getting it from
+filenames. This is useful if you need to define a strict format manually.
+
+`-b, --batch` (default: 1000): Number of N-Quads to send as part of a mutation.
+
+`-c, --conc` (default: 10): Number of concurrent requests to make to Dgraph.
+Do not confuse with `-C`.
+
+`-C, --use_compression` (default: false): Enable compression for connections to and from the
+Alpha server.
 
 ### Bulk Loader
 
@@ -1593,26 +1606,28 @@ directory output. Each replica of the first group should have its own copy of
 $ dgraph bulk --help # To see the available flags.
 
 # Read RDFs or JSON from the passed file.
-$ dgraph bulk -f <path-to-rdf-gzipped-file-or-JSON-file> ...
+$ dgraph bulk -f <path-to-gzipped-RDF-or-JSON-file> ...
 
 # Read multiple RDFs or JSON from the passed path.
-$ dgraph bulk -f <./path-to-rdf-gzipped-files-or-JSON-files> ...
+$ dgraph bulk -f <./path-to-gzipped-RDF-or-JSON-files> ...
 
 # Read multiple files strictly by name.
 $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
 
-#### Other shared options with Live and Bulk Loader
+#### Other Bulk Loader options
 
-`--files or -f`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
+`--new_uids` (default: false): Assign new UIDs instead of using the existing
+UIDs in data files. This is useful to avoid overriding the data in a DB already
+in operation.
+
+`-f, --files`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
 load multiple files in a given path. If the path is a directory, then all files
 ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 
 `--format`: Specify file format (rdf or json) instead of getting it from
 filenames. This is useful if you need to define a strict format manually.
-
-`--new_uids`: Assign new UIDs instead of using the UIDs in the data files.
 
 #### Tuning & monitoring
 
