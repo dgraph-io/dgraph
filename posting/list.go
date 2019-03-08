@@ -174,7 +174,7 @@ func (it *PIterator) Valid() bool {
 		return false
 	}
 
-	for it.opts.startPart + 1  < len(it.l.plist.Parts) {
+	for it.opts.startPart+1 < len(it.l.plist.Parts) {
 		it.opts.startPart++
 		it.Init(it.l, it.opts)
 
@@ -758,86 +758,65 @@ func (l *List) rollup(readTs uint64) error {
 		}
 	}
 
-	if len(l.plist.Parts) == 0 {
-		// This is not a multi-part list so use a single encoder to collect all the changes.
-		final := new(pb.PostingList)
-		enc := codec.Encoder{BlockSize: blockSize}
-		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-			// iterate already takes care of not returning entries whose commitTs
-			// is above l.commitTs.
-			// So, we don't need to do any filtering here. In fact, doing filtering
-			// here could result in a bug.
-			enc.Add(p.Uid)
+	var plist *pb.PostingList
+	var final *pb.PostingList
+	var enc codec.Encoder
+	var endUid uint64
+	var splitIdx int
 
-			// We want to add the posting if it has facets or has a value.
-			if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-				// I think it's okay to take the pointer from the iterator, because
-				// we have a lock over List; which won't be released until final has
-				// been marshalled. Thus, the underlying data wouldn't be changed.
-				final.Postings = append(final.Postings, p)
-			}
-			return nil
-		})
-		x.Check(err)
-		final.Pack = enc.Done()
-		l.plist.Pack = final.Pack
-		l.plist.Postings = final.Postings
-	} else {
-		// This is a multi-part list. Use a single iteration but multiple encoders,
-		// one for each part of the list.
-		var plist *pb.PostingList
-		var final *pb.PostingList
-		var enc codec.Encoder
-		var endUid uint64
-		var splitIdx int
+	// Method to properly initialize all the variables described above.
+	init := func() error {
+		final = new(pb.PostingList)
+		enc = codec.Encoder{BlockSize: blockSize}
 
-		init := func() error {
-			startUid := l.plist.Parts[splitIdx]
-			if splitIdx+1 == len(l.plist.Parts) {
-				endUid = math.MaxUint64
-			} else {
-				endUid = l.plist.Parts[splitIdx+1] - 1
-			}
-
-			pl, err := l.readListPart(startUid)
-			if err != nil {
-				return err
-			}
-
-			plist = pl
-			final = new(pb.PostingList)
-			enc = codec.Encoder{BlockSize: blockSize}
+		// If not a multi-part list, all uids go to the same encoder.
+		if len(l.plist.Parts) == 0 {
+			plist = l.plist
+			endUid = math.MaxUint64
 			return nil
 		}
-		if err := init(); err != nil {
-			return err
+
+		// Otherwise, load the corresponding part and set endUid  to correctly
+		// detect the end of the list.
+		startUid := l.plist.Parts[splitIdx]
+		if splitIdx+1 == len(l.plist.Parts) {
+			endUid = math.MaxUint64
+		} else {
+			endUid = l.plist.Parts[splitIdx+1] - 1
 		}
 
-		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-			if p.Uid > endUid {
-				final.Pack = enc.Done()
-				plist.Pack = final.Pack
-				plist.Postings = final.Postings
-				l.uncommittedParts[plist.StartUid] = plist
-
-				splitIdx++
-				init()
-			}
-
-			enc.Add(p.Uid)
-			if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-				final.Postings = append(final.Postings, p)
-			}
-			return nil
-		})
-		x.Check(err)
-
-		// Finish  writing the last part of the list.
-		final.Pack = enc.Done()
-		plist.Pack = final.Pack
-		plist.Postings = final.Postings
-		l.uncommittedParts[plist.StartUid] = plist
+		var err error
+		plist, err = l.readListPart(startUid)
+		return err
 	}
+
+	if err := init(); err != nil {
+		return err
+	}
+
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		if p.Uid > endUid {
+			final.Pack = enc.Done()
+			plist.Pack = final.Pack
+			plist.Postings = final.Postings
+			l.uncommittedParts[plist.StartUid] = plist
+
+			splitIdx++
+			init()
+		}
+
+		enc.Add(p.Uid)
+		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
+			final.Postings = append(final.Postings, p)
+		}
+		return nil
+	})
+	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
+	x.Check(err)
+	final.Pack = enc.Done()
+	plist.Pack = final.Pack
+	plist.Postings = final.Postings
+	l.uncommittedParts[plist.StartUid] = plist
 
 	maxCommitTs := l.minTs
 	{
