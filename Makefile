@@ -5,7 +5,7 @@ GOBASE=$(shell pwd)
 GOBIN=$(GOBASE)/bin
 
 BIN_DIR := $(GOPATH)/bin
-GOMETALINTER := $(BIN_DIR)/gometalinter
+GOLANGCI-LINT := $(BIN_DIR)/golangci
 
 .PHONY: help
 all: help
@@ -21,14 +21,13 @@ help: Makefile
 test:
 	go test $(PKGS)
 
-$(GOMETALINTER):
-	go get -u github.com/alecthomas/gometalinter
-	gometalinter --install &> /dev/null
+$(GOLANGCI-LINT):
+	go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
-## lint: Lints project files, go gets gometalinter if missing. Runs `gometalinter` on project files.
+## lint: Lints project files, go gets golangci-lint if missing. Runs `golangci-lint run` on project files.
 .PHONY: lint
-lint: $(GOMETALINTER)
-	gometalinter ./... --vendor
+lint: $(GOLANGCI-LINT)
+	golangci-lint run ./... --enable gofmt --enable goimports
 
 ## install: Install missing dependencies. Runs `go get` internally.
 install:
