@@ -858,6 +858,20 @@ func (l *List) rollup(readTs uint64) error {
 		return nil
 	}
 
+	// Delete lists from the uncommittedParts map that are already in disk.
+	for _, startUid := range l.plist.Parts {
+		pl, version, err := l.readListPartFromDisk(startUid)
+		if err != nil || pl == nil {
+			// Ignore errors since this might be that the list has never
+			// been committed to disk.
+			continue
+		}
+
+		if version >= l.minTs {
+			delete(l.uncommittedParts, startUid)
+		}
+	}
+
 	return nil
 }
 
@@ -1118,18 +1132,22 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	if part, ok := l.uncommittedParts[startUid]; ok {
 		return part, nil
 	}
+	part, _, err := l.readListPartFromDisk(startUid)
+	return part, err
+}
 
+func (l *List) readListPartFromDisk(startUid uint64) (*pb.PostingList, uint64, error) {
 	nextKey := getNextPartKey(l.key, startUid)
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(nextKey)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var part pb.PostingList
 	if err := unmarshalOrCopy(&part, item); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return &part, nil
+	return &part, item.Version(), nil
 }
 
 func needsSplit(plist *pb.PostingList) bool {
