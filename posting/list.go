@@ -118,7 +118,7 @@ type PItrOpts struct {
 
 func (it *PIterator) Init(l *List, opts PItrOpts) error {
 	if len(l.plist.Parts) > 0 {
-		plist, err := l.readListPart(l.key, l.plist.Parts[opts.startPart])
+		plist, err := l.readListPart(l.plist.Parts[opts.startPart])
 		if err != nil {
 			return err
 		}
@@ -698,7 +698,7 @@ func (l *List) MarshalToKv() ([]*bpb.KV, error) {
 		kv := &bpb.KV{}
 		kv.Version = l.minTs
 		kv.Key = getNextPartKey(l.key, startUid)
-		plist, err := l.readListPart(l.key, startUid)
+		plist, err := l.readListPart(startUid)
 		if err != nil {
 			return nil, err
 		}
@@ -781,7 +781,7 @@ func (l *List) rollup(readTs uint64) error {
 				endUid = l.plist.Parts[splitIdx+1] - 1
 			}
 
-			pl, err := l.readListPart(l.key, startUid)
+			pl, err := l.readListPart(startUid)
 			if err != nil {
 				return err
 			}
@@ -1110,12 +1110,12 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 	return facets.CopyFacets(p.Facets, param), nil
 }
 
-func (l *List) readListPart(baseKey []byte, startUid uint64) (*pb.PostingList, error) {
+func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	if part, ok := l.newParts[startUid]; ok {
 		return part, nil
 	}
 
-	nextKey := getNextPartKey(baseKey, startUid)
+	nextKey := getNextPartKey(l.key, startUid)
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(nextKey)
 	if err != nil {
@@ -1154,7 +1154,7 @@ func (l *List) splitList(readTs uint64) error {
 
 	var newParts []uint64
 	for _, startUid := range l.plist.Parts {
-		part, err := l.readListPart(l.key, startUid)
+		part, err := l.readListPart(startUid)
 		if err != nil {
 			return err
 		}

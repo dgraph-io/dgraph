@@ -1004,7 +1004,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 	for i, startUid := range ol.plist.Parts {
 		partKey := getNextPartKey(key, startUid)
 		require.Equal(t, partKey, kvs[i+1].Key)
-		part, err := ol.readListPart(ol.key, startUid)
+		part, err := ol.readListPart(startUid)
 		require.NoError(t, err)
 		data, err := part.Marshal()
 		require.NoError(t, err)
