@@ -174,16 +174,16 @@ func (it *PIterator) Valid() bool {
 		return false
 	}
 
-	// No more parts to iterate through
-	if len(it.l.plist.Parts) == it.opts.startPart+1 {
-		return false
+	for it.opts.startPart + 1  < len(it.l.plist.Parts) {
+		it.opts.startPart++
+		it.Init(it.l, it.opts)
+
+		if len(it.uids) > 0 {
+			return true
+		}
 	}
 
-	it.opts.startPart++
-	it.Init(it.l, it.opts)
-
-	// TODO: corner case, what if next part is empty but the one after that is not.
-	return len(it.uids) > 0
+	return false
 }
 
 func (it *PIterator) Posting() *pb.Posting {
