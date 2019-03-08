@@ -112,7 +112,6 @@ type PIterator struct {
 type PItrOpts struct {
 	discardPl        bool
 	afterUid         uint64
-	partialIteration bool
 	startPart        int
 	readTs           uint64
 }
@@ -169,11 +168,6 @@ func (it *PIterator) Valid() bool {
 
 	// Not a multi-part list, so nothing else to iterate through
 	if !it.l.plist.MultiPart {
-		return false
-	}
-
-	// Only iterate through this part of the list.
-	if it.opts.partialIteration {
 		return false
 	}
 
