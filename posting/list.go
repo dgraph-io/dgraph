@@ -744,6 +744,20 @@ func (l *List) rollup(readTs uint64) error {
 		return nil
 	}
 
+	// Delete lists from the uncommittedParts map that are already in disk.
+	for _, startUid := range l.plist.Parts {
+		pl, version, err := l.readListPartFromDisk(startUid)
+		if err != nil || pl == nil {
+			// Ignore errors since this might be that the list has never
+			// been committed to disk.
+			continue
+		}
+
+		if version >= l.minTs {
+			delete(l.uncommittedParts, startUid)
+		}
+	}
+
 	if len(l.plist.Parts) == 0 {
 		// This is not a multi-part list so use a single encoder to collect all the changes.
 		final := new(pb.PostingList)
@@ -856,20 +870,6 @@ func (l *List) rollup(readTs uint64) error {
 	// become too big. Split the list if that is the case.
 	if err := l.splitList(readTs); err != nil {
 		return nil
-	}
-
-	// Delete lists from the uncommittedParts map that are already in disk.
-	for _, startUid := range l.plist.Parts {
-		pl, version, err := l.readListPartFromDisk(startUid)
-		if err != nil || pl == nil {
-			// Ignore errors since this might be that the list has never
-			// been committed to disk.
-			continue
-		}
-
-		if version >= l.minTs {
-			delete(l.uncommittedParts, startUid)
-		}
 	}
 
 	return nil
