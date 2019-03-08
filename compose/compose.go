@@ -18,7 +18,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"os/user"
 
@@ -64,7 +63,7 @@ type ComposeConfig struct {
 type Options struct {
 	NumZeros       int
 	NumAlphas      int
-	NumGroups      int
+	NumReplicas    int
 	LruSizeMB      int
 	EnterpriseMode bool
 	AclSecret      string
@@ -171,10 +170,9 @@ func getZero(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" zero -o %d --idx=%d", idx-1, idx)
+	svc.Command += fmt.Sprintf(" zero -o %d --idx=%d", getOffset(idx), idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
-	svc.Command += fmt.Sprintf(" --replicas=%d",
-		int(math.Ceil(float64(opts.NumAlphas)/float64(opts.NumGroups))))
+	svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
@@ -190,7 +188,6 @@ func getAlpha(idx int) Service {
 	if opts.TestPortRange {
 		baseOffset += 100
 	}
-
 	basename := "alpha"
 	internalPort := alphaBasePort + baseOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
@@ -201,7 +198,7 @@ func getAlpha(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" alpha -o %d", baseOffset+idx-1)
+	svc.Command += fmt.Sprintf(" alpha -o %d", baseOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
@@ -313,7 +310,7 @@ func main() {
 		Use:     "compose",
 		Short:   "docker-compose config file generator for dgraph",
 		Long:    "Dynamically generate a docker-compose.yml file for running a dgraph cluster.",
-		Example: "$ compose --num_zeros=3 --num_alphas=3 | docker-compose -f- up",
+		Example: "$ compose -z=3 -a=3",
 		Run: func(cmd *cobra.Command, args []string) {
 			// dummy to get "Usage:" template in Usage() output.
 		},
@@ -323,8 +320,8 @@ func main() {
 		"number of zeros in dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
 		"number of alphas in dgraph cluster")
-	cmd.PersistentFlags().IntVarP(&opts.NumGroups, "num_groups", "g", 1,
-		"number of groups in dgraph cluster")
+	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
+		"number of Alpha replicas in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
 	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "o", false,
@@ -365,6 +362,9 @@ func main() {
 	}
 	if opts.NumAlphas < 1 || opts.NumAlphas > 99 {
 		fatal(fmt.Errorf("number of alphas must be 1-99"))
+	}
+	if opts.NumReplicas%2 == 0 {
+		fatal(fmt.Errorf("number of replicas must be odd"))
 	}
 	if opts.LruSizeMB < 1024 {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
@@ -424,6 +424,4 @@ func main() {
 			fatal(fmt.Errorf("unable to write file: %v", err))
 		}
 	}
-
-	return
 }
