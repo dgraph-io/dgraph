@@ -14,9 +14,9 @@
 # limitations under the License.
 #
 
-BIN			 = compose
-BUILD_FLAGS	?= "-N -l"
-GOPATH		?= $(shell go env GOPATH)
+BIN           = compose
+BUILD_FLAGS  ?= "-N -l"
+GOPATH       ?= $(shell go env GOPATH)
 
 .PHONY: all
 all: $(BIN)
