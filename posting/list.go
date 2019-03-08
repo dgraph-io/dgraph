@@ -71,13 +71,17 @@ type List struct {
 	x.SafeMutex
 	key         []byte
 	plist       *pb.PostingList
-	newParts    map[uint64]*pb.PostingList
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
 
 	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
+
+	// Rolling up might create new parts (either because there were changes or
+	// a split occurred). These parts need to be kept in memory until they are
+	// committed to disk.
+	uncommittedParts map[uint64]*pb.PostingList
 }
 
 func getNextPartKey(baseKey []byte, nextPartStart uint64) []byte {
@@ -110,10 +114,10 @@ type PIterator struct {
 }
 
 type PItrOpts struct {
-	discardPl        bool
-	afterUid         uint64
-	startPart        int
-	readTs           uint64
+	discardPl bool
+	afterUid  uint64
+	startPart int
+	readTs    uint64
 }
 
 func (it *PIterator) Init(l *List, opts PItrOpts) error {
@@ -800,7 +804,7 @@ func (l *List) rollup(readTs uint64) error {
 				final.Pack = enc.Done()
 				plist.Pack = final.Pack
 				plist.Postings = final.Postings
-				l.newParts[plist.StartUid] = plist
+				l.uncommittedParts[plist.StartUid] = plist
 
 				splitIdx++
 				init()
@@ -818,7 +822,7 @@ func (l *List) rollup(readTs uint64) error {
 		final.Pack = enc.Done()
 		plist.Pack = final.Pack
 		plist.Postings = final.Postings
-		l.newParts[plist.StartUid] = plist
+		l.uncommittedParts[plist.StartUid] = plist
 	}
 
 	maxCommitTs := l.minTs
@@ -1111,7 +1115,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	if part, ok := l.newParts[startUid]; ok {
+	if part, ok := l.uncommittedParts[startUid]; ok {
 		return part, nil
 	}
 
@@ -1140,13 +1144,13 @@ func (l *List) splitList(readTs uint64) error {
 			var newParts []uint64
 			parts := splitPostingList(l.plist)
 			for _, part := range parts {
-				l.newParts[part.StartUid] = part
+				l.uncommittedParts[part.StartUid] = part
 				newParts = append(newParts, part.StartUid)
 			}
 
 			l.plist = &pb.PostingList{
-				CommitTs:  l.plist.CommitTs,
-				Parts:     newParts,
+				CommitTs: l.plist.CommitTs,
+				Parts:    newParts,
 			}
 		}
 		return nil
@@ -1162,7 +1166,7 @@ func (l *List) splitList(readTs uint64) error {
 		if needsSplit(part) {
 			splitParts := splitPostingList(part)
 			for _, part := range splitParts {
-				l.newParts[part.StartUid] = part
+				l.uncommittedParts[part.StartUid] = part
 				newParts = append(newParts, part.StartUid)
 			}
 		} else {
