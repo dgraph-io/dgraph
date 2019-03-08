@@ -62,12 +62,84 @@ type node struct {
 	gid      uint32
 	closer   *y.Closer
 
-	lastCommitTs uint64 // Only used to ensure that our commit Ts is monotonically increasing.
-
-	streaming int32 // Used to avoid calculating snapshot
+	lastCommitTs uint64          // Used to ensure that our commit Ts is monotonically increasing.
+	streaming    int32           // Used to avoid calculating snapshot
+	opCh         chan *operation // Used to track the ops going on in the system.
 
 	canCampaign bool
 	elog        trace.EventLog
+}
+
+type operation struct {
+	id     int
+	closer *y.Closer
+	done   bool
+	result chan error
+}
+
+const (
+	opRollup = iota + 1
+	opSnapshot
+)
+
+func (n *node) trackOperations() {
+	m := make(map[int]*operation)
+	handle := func(op *operation) error {
+		if op.done {
+			delete(m, op.id)
+			return nil
+		}
+		switch op.id {
+		case opRollup:
+			if len(m) > 0 {
+				return x.Errorf("another operation is running")
+			}
+			m[opRollup] = op
+		case opSnapshot:
+			if rop, has := m[opRollup]; has {
+				glog.V(1).Infof("Found an existing rollup going on. Cancelling...")
+				rop.closer.SignalAndWait()
+				delete(m, opRollup)
+				glog.V(1).Infof("Rollup cancelled.")
+			}
+			m[opSnapshot] = op
+		default:
+			glog.Infof("Got a new unhandled operation %d. Ignoring...", op.id)
+		}
+		return nil
+	}
+
+	defer n.closer.Done() // CLOSER:1
+	for {
+		select {
+		case op := <-n.opCh:
+			op.result <- handle(op)
+		case <-n.closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
+func (n *node) startTask(id int, closer *y.Closer) error {
+	op := &operation{
+		id:     id,
+		closer: closer,
+		done:   false,
+		result: make(chan error),
+	}
+	n.opCh <- op
+	return <-op.result
+}
+func (n *node) stopTask(id int) {
+	op := &operation{
+		id:     id,
+		done:   true,
+		result: make(chan error),
+	}
+	n.opCh <- op
+	if err := <-op.result; err != nil {
+		glog.Errorf("While stopping task: %v", err)
+	}
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -93,7 +165,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		applyCh:  make(chan []*pb.Proposal, 1000),
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:   y.NewCloser(3), // Matches CLOSER:1
+		closer:   y.NewCloser(4), // Matches CLOSER:1
 	}
 	return n
 }
@@ -568,6 +640,12 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 }
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
+	closer := y.NewCloser(1)
+	defer closer.Done()
+	if err := n.startTask(opSnapshot, closer); err != nil {
+		return err
+	}
+
 	// In some edge cases, the Zero leader might not have been able to update
 	// the status of Alpha leader. So, instead of blocking forever on waiting
 	// for Zero to send us the updates info about the leader, we can just use
@@ -852,6 +930,14 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 func (n *node) rollupLists(readTs uint64) error {
 	writer := posting.NewTxnWriter(pstore)
 
+	closer := y.NewCloser(1)
+	defer closer.Done()
+
+	if err := n.startTask(opRollup, closer); err != nil {
+		return err
+	}
+	defer n.stopTask(opRollup)
+
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	amLeader := n.AmLeader()
 	m := new(sync.Map)
@@ -899,7 +985,16 @@ func (n *node) rollupLists(readTs uint64) error {
 	stream.Send = func(list *bpb.KVList) error {
 		return writer.Send(&pb.KVS{Kv: list.Kv})
 	}
-	if err := stream.Orchestrate(context.Background()); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-closer.HasBeenClosed():
+			cancel()
+		}
+	}()
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
@@ -1231,6 +1326,7 @@ func (n *node) InitAndStartNode() {
 	go n.processRollups()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
+	go n.trackOperations()
 	go n.Run()
 }
 
