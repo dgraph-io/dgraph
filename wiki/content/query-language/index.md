@@ -2021,18 +2021,16 @@ Mutation:
 ```
 {
   set {
-    _:a <公司> "Dgraph Labs Inc"@en
-    _:b <公司> "夏新科技有限责任公司"@zh
+    _:a <公司> "Dgraph Labs Inc"@en .
+    _:b <公司> "夏新科技有限责任公司"@zh .
   }
 }
 ```
 Query:
 ```
-{
-  query {
-    q (func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
-      _predicate_
-    }
+query {
+  q(func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
+    _predicate_
   }
 }
 ```
