@@ -1605,11 +1605,14 @@ $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 #### Other shared options with Live and Bulk Loader
 
-`--files or -f`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can load multiple files in a given path. You can use dot path `-f .` or `-f ./path` to define current location in unix systems.
+`--files or -f`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
+load multiple files in a given path. If the path is a directory, then all files
+ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 
-`--format`: Specify file format (rdf or json) instead of getting it from filename. If you need to define a strict format manually.
+`--format`: Specify file format (rdf or json) instead of getting it from
+filenames. This is useful if you need to define a strict format manually.
 
-`--new_uids`: Ignore UIDs in load files and assign new ones. In Bulk Loader this option has a different propose from Live Loader. In Bulk it servers only to remap the UIDs.
+`--new_uids`: Assign new UIDs instead of using the UIDs in the data files.
 
 #### Tuning & monitoring
 
