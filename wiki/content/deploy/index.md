@@ -1449,10 +1449,13 @@ $ dgraph live -f <path-to-rdf-gzipped-file-or-JSON-file>
 # Read multiple RDFs or JSON from the passed path, and send them to Dgraph on localhost:9080.
 $ dgraph live -f <./path-to-rdf-gzipped-files-or-JSON-files>
 
-# Use compressed gRPC connections to and from Dgraph
+# Read multiple files strictly by name.
+$ dgraph live -f <file1.rdf, file2.rdf>
+
+# Use compressed gRPC connections to and from Dgraph.
 $ dgraph live -C -f <path-to-rdf-gzipped-file-or-JSON-file>
 
-# Read RDFs and a schema file and send to Dgraph running at given address
+# Read RDFs and a schema file and send to Dgraph running at given address.
 $ dgraph live -f <path-to-rdf-gzipped-file-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
@@ -1585,6 +1588,20 @@ Dgraph Alphas. Each Dgraph Alpha must have its own copy of the group's p
 directory output. Each replica of the first group should have its own copy of
 `./out/0/p`, each replica of the second group should have its own copy of
 `./out/1/p`, and so on.
+
+```sh
+$ dgraph bulk --help # To see the available flags.
+
+# Read RDFs or JSON from the passed file.
+$ dgraph bulk -f <path-to-rdf-gzipped-file-or-JSON-file> ...
+
+# Read multiple RDFs or JSON from the passed path.
+$ dgraph bulk -f <./path-to-rdf-gzipped-files-or-JSON-files> ...
+
+# Read multiple files strictly by name.
+$ dgraph bulk -f <file1.rdf, file2.rdf> ...
+
+```
 
 #### Other shared options with Live and Bulk Loader
 
