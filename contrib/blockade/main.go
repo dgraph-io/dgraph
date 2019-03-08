@@ -35,7 +35,7 @@ func partition(instance string) error {
 
 func increment(atLeast int) error {
 	errCh := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(ctxb, time.Minute)
+	ctx, cancel := context.WithTimeout(ctxb, 2*time.Minute)
 	defer cancel()
 
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
