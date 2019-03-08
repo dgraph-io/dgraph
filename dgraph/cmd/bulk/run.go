@@ -35,6 +35,8 @@ import (
 
 var Bulk x.SubCommand
 
+var defaultOutDir = "./out"
+
 func init() {
 	Bulk.Cmd = &cobra.Command{
 		Use:   "bulk",
@@ -48,18 +50,20 @@ func init() {
 
 	flag := Bulk.Cmd.Flags()
 	flag.StringP("files", "f", "",
-		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
+		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
 	flag.StringP("schema", "s", "",
-		"Location of schema file")
+		"Location of schema file.")
 	flag.String("format", "",
-		"Specify file format (rdf or json) instead of getting it from filename")
-	flag.String("out", "out",
+		"Specify file format (rdf or json) instead of getting it from filename.")
+	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
+	flag.Bool("replace_out", false,
+		"Replace out directory and its contents if it exists.")
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
 	flag.IntP("num_go_routines", "j", runtime.NumCPU(),
-		"Number of worker threads to use (defaults to the number of logical CPUs)")
+		"Number of worker threads to use (defaults to the number of logical CPUs).")
 	flag.Int64("mapoutput_mb", 64,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
 	flag.Bool("expand_edges", true,
@@ -99,7 +103,8 @@ func run() {
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
 		SchemaFile:       Bulk.Conf.GetString("schema"),
-		DgraphsDir:       Bulk.Conf.GetString("out"),
+		OutDir:           Bulk.Conf.GetString("out"),
+		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
 		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
@@ -125,9 +130,15 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
+	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
+		os.Exit(1)
 	}
 	if opt.DataFiles == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
+		os.Exit(1)
+	} else if _, err := os.Stat(opt.DataFiles); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", opt.DataFiles)
 		os.Exit(1)
 	}
 	if opt.ReduceShards > opt.MapShards {
@@ -158,10 +169,22 @@ func run() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
 	}()
 
+	// Make sure it's OK to create or replace the directory specified with the --out option.
+	// It is always OK to create or replace the default output directory.
+	if opt.OutDir != defaultOutDir && !opt.ReplaceOutDir {
+		missingOrEmpty, err := x.IsMissingOrEmptyDir(opt.OutDir)
+		x.CheckfNoTrace(err)
+		if !missingOrEmpty {
+			fmt.Fprintf(os.Stderr, "Output directory exists and is not empty."+
+				" Use --replace_out to overwrite it.\n")
+			os.Exit(1)
+		}
+	}
+
 	// Delete and recreate the output dirs to ensure they are empty.
-	x.Check(os.RemoveAll(opt.DgraphsDir))
+	x.Check(os.RemoveAll(opt.OutDir))
 	for i := 0; i < opt.ReduceShards; i++ {
-		dir := filepath.Join(opt.DgraphsDir, strconv.Itoa(i), "p")
+		dir := filepath.Join(opt.OutDir, strconv.Itoa(i), "p")
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 	}

@@ -29,8 +29,8 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other
@@ -39,10 +39,7 @@ import (
 func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
+			dg := z.DgraphClientWithGroot(":9180")
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
@@ -80,6 +77,7 @@ func TestSystem(t *testing.T) {
 	t.Run("has should have reverse edges", wrap(HasReverseEdge))
 	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
 	t.Run("max predicate size", wrap(MaxPredicateSize))
+	t.Run("restore reserved preds", wrap(RestoreReservedPreds))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -681,13 +679,13 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"schema": [`+
+	z.CompareJSON(t, asJson(`[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
+		x.AclPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]}`,
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
 		string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
@@ -703,12 +701,17 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err = c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"schema": [`+
+	z.CompareJSON(t, asJson(`[`+
+		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]}`,
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
 		string(resp.Json))
+}
+
+func asJson(schema string) string {
+	return fmt.Sprintf(`{"schema":%v}`, schema)
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
@@ -1624,7 +1627,7 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 
 	check(t, c.Alter(ctx, &api.Operation{
 		Schema: `
-			follow: uid @reverse .
+			follow: [uid] @reverse .
 		`,
 	}))
 	txn := c.NewTxn()
@@ -1706,4 +1709,18 @@ func MaxPredicateSize(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
+}
+
+func RestoreReservedPreds(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	err := c.Alter(ctx, &api.Operation{
+		DropAll: true,
+	})
+	require.NoError(t, err)
+
+	// Verify that the reserved predicates were restored to the schema.
+	query := `schema(preds: type) {predicate}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, `{"schema": [{"predicate":"type"}]}`, string(resp.Json))
 }

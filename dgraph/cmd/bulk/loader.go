@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"hash/adler32"
 	"io"
 	"io/ioutil"
 	"os"
@@ -44,7 +45,8 @@ type options struct {
 	DataFiles        string
 	DataFormat       string
 	SchemaFile       string
-	DgraphsDir       string
+	OutDir           string
+	ReplaceOutDir    bool
 	TmpDir           string
 	NumGoroutines    int
 	MapBufSize       int64
@@ -238,8 +240,30 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) writeSchema() {
-	for _, db := range ld.dbs {
-		ld.schema.write(db)
+	numDBs := uint32(len(ld.dbs))
+	preds := make([][]string, numDBs)
+
+	// Get all predicates that have data in some DB.
+	m := make(map[string]struct{})
+	for i, db := range ld.dbs {
+		preds[i] = ld.schema.getPredicates(db)
+		for _, p := range preds[i] {
+			m[p] = struct{}{}
+		}
+	}
+
+	// Find any predicates that don't have data in any DB
+	// and distribute them among all the DBs.
+	for p := range ld.schema.m {
+		if _, ok := m[p]; !ok {
+			i := adler32.Checksum([]byte(p)) % numDBs
+			preds[i] = append(preds[i], p)
+		}
+	}
+
+	// Write out each DB's final predicate list.
+	for i, db := range ld.dbs {
+		ld.schema.write(db, preds[i])
 	}
 }
 

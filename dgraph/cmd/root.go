@@ -17,7 +17,8 @@
 package cmd
 
 import (
-	goflag "flag"
+	"flag"
+	"os"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
@@ -31,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -55,9 +55,9 @@ cluster.
 func Execute() {
 	initCmds()
 
-	// Convinces goflags that Parse() has been called to avoid noisy logs.
+	// Convinces glog that Parse() has been called to avoid noisy logs.
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
-	x.Check(goflag.CommandLine.Parse([]string{}))
+	x.Check(flag.CommandLine.Parse([]string{}))
 
 	// Dumping the usage in case of an error makes the error messages harder to see.
 	RootCmd.SilenceUsage = true
@@ -74,6 +74,8 @@ var subcommands = []*x.SubCommand{
 }
 
 func initCmds() {
+	RootCmd.PersistentFlags().String("cwd", "",
+		"Change working directory to the path specified. The parent must exist.")
 	RootCmd.PersistentFlags().String("profile_mode", "",
 		"Enable profiling mode, one of [cpu, mem, mutex, block]")
 	RootCmd.PersistentFlags().Int("block_rate", 0,
@@ -85,12 +87,14 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	rootConf.BindPFlags(RootCmd.PersistentFlags())
+	_ = rootConf.BindPFlags(RootCmd.PersistentFlags())
 
-	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+	// Add all existing global flag (eg: from glog) to rootCmd's flags
+	RootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+
 	// Always set stderrthreshold=0. Don't let users set it themselves.
-	x.Check(flag.Set("stderrthreshold", "0"))
-	x.Check(flag.CommandLine.MarkDeprecated("stderrthreshold",
+	x.Check(RootCmd.PersistentFlags().Set("stderrthreshold", "0"))
+	x.Check(RootCmd.PersistentFlags().MarkDeprecated("stderrthreshold",
 		"Dgraph always sets this flag to 0. It can't be overwritten."))
 
 	for _, sc := range subcommands {
@@ -105,6 +109,18 @@ func initCmds() {
 		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
 	cobra.OnInitialize(func() {
+		// When run inside docker, the working_dir is created by root even if afterward
+		// the process is run as another user. Creating a new working directory here
+		// ensures that it is owned by the user instead, so it can be cleaned up without
+		// requiring root when using a bind volume (i.e. a mounted host directory).
+		if cwd := rootConf.GetString("cwd"); cwd != "" {
+			err := os.Mkdir(cwd, 0777)
+			if err != nil && !os.IsExist(err) {
+				x.Fatalf("unable to create directory: %v", err)
+			}
+			x.CheckfNoTrace(os.Chdir(cwd))
+		}
+
 		cfg := rootConf.GetString("config")
 		if cfg == "" {
 			return
@@ -112,6 +128,35 @@ func initCmds() {
 		for _, sc := range subcommands {
 			sc.Conf.SetConfigFile(cfg)
 			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			setGlogFlags(sc.Conf)
 		}
 	})
+}
+
+// setGlogFlags function sets the glog flags based on the configuration.
+// We need to manually set the flags from configuration because glog reads
+// values from flags, not configuration.
+func setGlogFlags(conf *viper.Viper) {
+	// List of flags taken from
+	// https://github.com/golang/glog/blob/master/glog.go#L399
+	// and https://github.com/golang/glog/blob/master/glog_file.go#L41
+	glogFlags := [...]string{
+		"log_dir", "logtostderr", "alsologtostderr", "v",
+		"stderrthreshold", "vmodule", "log_backtrace_at",
+	}
+	for _, gflag := range glogFlags {
+		// Set value of flag to the value in config
+		if stringValue, ok := conf.Get(gflag).(string); ok {
+			// Special handling for log_backtrace_at flag because the flag is of
+			// type tracelocation. The nil value for tracelocation type is
+			// ":0"(See https://github.com/golang/glog/blob/master/glog.go#L322).
+			// But we can't set nil value for the flag because of
+			// https://github.com/golang/glog/blob/master/glog.go#L374
+			// Skip setting value if log_backstrace_at is nil in config.
+			if gflag == "log_backtrace_at" && stringValue == ":0" {
+				continue
+			}
+			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
+		}
+	}
 }

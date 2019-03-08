@@ -44,6 +44,7 @@ func init() {
 			run(Increment.Conf)
 		},
 	}
+	Increment.EnvPrefix = "DGRAPH_INCREMENT"
 
 	flag := Increment.Cmd.Flags()
 	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
@@ -51,6 +52,8 @@ func init() {
 	flag.Bool("ro", false, "Only read the counter value, don't update it.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
+	flag.String("user", "", "Username if login is required.")
+	flag.String("password", "", "Password of the user.")
 }
 
 type Counter struct {
@@ -114,6 +117,7 @@ func process(dg *dgo.Dgraph, readOnly bool, pred string) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
+
 	addr := conf.GetString("addr")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
@@ -125,6 +129,9 @@ func run(conf *viper.Viper) {
 	}
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
+	if user := conf.GetString("user"); len(user) > 0 {
+		x.Check(dg.Login(context.Background(), user, conf.GetString("password")))
+	}
 
 	for num > 0 {
 		cnt, err := process(dg, ro, pred)

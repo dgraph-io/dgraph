@@ -60,11 +60,7 @@ func (s *state) DeleteAll() {
 	defer s.Unlock()
 
 	for pred := range s.predicate {
-		// Predicates in x.InitialPreds represent internal predicates which
-		// shouldn't be dropped.
-		if !x.IsReservedPredicate(pred) {
-			delete(s.predicate, pred)
-		}
+		delete(s.predicate, pred)
 	}
 
 	for typ := range s.types {
@@ -370,6 +366,54 @@ func LoadSchemaFromDb() error {
 		}
 	}
 	return nil
+}
+
+func InitialSchema() []*pb.SchemaUpdate {
+	var initialSchema []*pb.SchemaUpdate
+
+	// propose the schema for _predicate_
+	if x.WorkerConfig.ExpandEdge {
+		initialSchema = append(initialSchema, &pb.SchemaUpdate{
+			Predicate: x.PredicateListAttr,
+			ValueType: pb.Posting_STRING,
+			List:      true,
+		})
+	}
+
+	initialSchema = append(initialSchema, &pb.SchemaUpdate{
+		Predicate: "type",
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"},
+	})
+
+	if x.WorkerConfig.AclEnabled {
+		// propose the schema update for acl predicates
+		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
+			&pb.SchemaUpdate{
+				Predicate: "dgraph.xid",
+				ValueType: pb.Posting_STRING,
+				Directive: pb.SchemaUpdate_INDEX,
+				Upsert:    true,
+				Tokenizer: []string{"exact"},
+			},
+			&pb.SchemaUpdate{
+				Predicate: "dgraph.password",
+				ValueType: pb.Posting_PASSWORD,
+			},
+			&pb.SchemaUpdate{
+				Predicate: "dgraph.user.group",
+				Directive: pb.SchemaUpdate_REVERSE,
+				ValueType: pb.Posting_UID,
+				List:      true,
+			},
+			&pb.SchemaUpdate{
+				Predicate: "dgraph.group.acl",
+				ValueType: pb.Posting_STRING,
+			}}...)
+	}
+
+	return initialSchema
 }
 
 func LoadTypesFromDb() error {

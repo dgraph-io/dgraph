@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
@@ -510,6 +511,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
+	if glog.V(3) {
+		glog.Infof("Got a query: %+v", req)
+	}
 
 	return s.doQuery(ctx, req)
 }
@@ -519,9 +523,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
-	}
-	if glog.V(3) {
-		glog.Infof("Got a query: %+v", req)
 	}
 	startTime := time.Now()
 
@@ -571,6 +572,16 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
+	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
+	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
+	// If we haven't processed any updates yet then fall back to getting TS from Zero.
+	if req.BestEffort {
+		// Sanity: check that request is read-only too.
+		if !req.ReadOnly {
+			return resp, x.Errorf("A best effort query must be read-only.")
+		}
+		req.StartTs = posting.Oracle().MaxAssigned()
+	}
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
