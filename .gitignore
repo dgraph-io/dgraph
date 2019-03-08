@@ -27,3 +27,6 @@ dgraph.iml
 
 # Vscode configuration files
 .vscode
+
+#darwin
+.DS_Store
