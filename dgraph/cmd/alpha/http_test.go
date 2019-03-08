@@ -34,14 +34,13 @@ import (
 
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 type res struct {
 	Data       json.RawMessage   `json:"data"`
 	Extensions *query.Extensions `json:"extensions,omitempty"`
 }
-
-var addr = "http://localhost:8180"
 
 func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, error) {
 	url := addr + "/query"
@@ -114,11 +113,8 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	if ts != 0 {
 		url += "/" + strconv.FormatUint(ts, 10)
 	}
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(q))
-	if err != nil {
-		return "", 0, err
-	}
-	_, body, err := runRequest(req)
+
+	_, body, err := runWithRetries("POST", url, q, nil)
 	if err != nil {
 		return "", 0, err
 	}
@@ -144,18 +140,14 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	}
 	var keys []string
 	var preds []string
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(m))
-	if err != nil {
-		return keys, preds, 0, err
-	}
-
+	headers := make(map[string]string)
 	if isJson {
-		req.Header.Set("X-Dgraph-MutationType", "json")
+		headers["X-Dgraph-MutationType"] = "json"
 	}
 	if commitNow {
-		req.Header.Set("X-Dgraph-CommitNow", "true")
+		headers["X-Dgraph-CommitNow"] = "true"
 	}
-	_, body, err := runRequest(req)
+	_, body, err := runWithRetries("POST", url, m, headers)
 	if err != nil {
 		return keys, preds, 0, err
 	}
@@ -167,8 +159,47 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	return r.Extensions.Txn.Keys, r.Extensions.Txn.Preds, startTs, nil
 }
 
+func createRequest(method, url string, body string, headers map[string]string) (*http.Request,
+	error) {
+	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return req, nil
+}
+
+func runWithRetries(method, url string, body string, headers map[string]string) (*x.QueryResWithData, []byte, error) {
+	req, err := createRequest(method, url, body, headers)
+	if err != nil {
+		return nil, nil, err
+	}
+	// attach the headers
+
+	qr, respBody, err := runRequest(req)
+	if err != nil && strings.Contains(err.Error(), "Token is expired") {
+		grootAccessJwt, grootRefreshJwt, err = z.HttpLogin(&z.LoginParams{
+			Endpoint:   addr + "/login",
+			RefreshJwt: grootRefreshJwt,
+		})
+
+		// create a new request since the previous request would have been closed upon the err
+		retryReq, err := createRequest(method, url, body, headers)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return runRequest(retryReq)
+	}
+	return qr, respBody, err
+}
+
+// attach the grootAccessJWT to the request and sends the http request
 func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	client := &http.Client{}
+	req.Header.Set("X-Dgraph-AccessToken", grootAccessJwt)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, err
@@ -180,7 +211,7 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("unable to read from body: %v", err)
 	}
 
 	qr := new(x.QueryResWithData)
@@ -394,6 +425,7 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 }
 
 func TestHttpCompressionSupport(t *testing.T) {
+
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 

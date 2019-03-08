@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# usage: test.sh [-v] [pkg_regex]
+# usage: test.sh [pkg_regex]
 
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
@@ -10,7 +10,7 @@ source $DGRAPH_ROOT/contrib/scripts/functions.sh
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
 GO_TEST_OPTS=( "-short=true" )
 TEST_FAILED=0
-RUN_ALL=yes
+TEST_SET="unit"
 BUILD_TAGS=
 
 #
@@ -22,9 +22,12 @@ function Usage {
 
 options:
 
-    -h --help   output this help message
-    -c          run code tests only and skip integration tests
-    -v          run tests in verbose mode
+    -h --help       output this help message
+    -u --unit       run unit tests only
+    -c --cluster    run unit tests and custom cluster test
+    -f --full       run all tests
+    -v --verbose    run tests in verbose mode
+    -n --no-cache   re-run test even if previous result is in cache
 
 notes:
 
@@ -36,6 +39,14 @@ notes:
 
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
+}
+
+function FmtTime {
+    local secs=$(($1 % 60)) min=$(($1 / 60 % 60)) hrs=$(($1 / 60 / 60))
+
+    [[ $hrs -gt 0 ]]               && printf "%dh " $hrs
+    [[ $hrs -gt 0 || $min -gt 0 ]] && printf "%dm " $min
+                                      printf "%ds" $secs
 }
 
 function FindCustomClusterTests {
@@ -100,14 +111,18 @@ function RunCustomClusterTests {
 # MAIN
 #
 
-ARGS=$(/usr/bin/getopt -n$ME -o"vhc" -l"help,code-tests" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,verbose,no-cache" -- "$@") \
+    || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -v)         GO_TEST_OPTS+=( "-v" )  ;;
-        -c)         RUN_ALL=                ;;
-        -h|--help)  Usage; exit 0           ;;
-        --)         shift; break            ;;
+        -h|--help)      Usage; exit 0                 ;;
+        -u|--unit)      TEST_SET="unit"               ;;
+        -c|--cluster)   TEST_SET="unit:cluster"       ;;
+        -f|--full)      TEST_SET="unit:cluster:full"  ;;
+        -v|--verbose)   GO_TEST_OPTS+=( "-v" )        ;;
+        -n|--no-cache)  GO_TEST_OPTS+=( "-count=1" )  ;;
+        --)             shift; break                  ;;
     esac
     shift
 done
@@ -124,8 +139,8 @@ DEFAULT_CLUSTER_TESTS=$TMPDIR/default
 
 if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
-    if [[ ! $RUN_ALL ]]; then
-        Info "Running only code tests"
+    if [[ $TEST_SET == unit ]]; then
+        Info "Running only unit tests"
     fi
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
@@ -141,22 +156,28 @@ fi
 FindCustomClusterTests
 FindDefaultClusterTests
 
-if [[ -s $DEFAULT_CLUSTER_TESTS ]]; then
-    Info "Running tests using the default cluster"
-    restartCluster
-    RunDefaultClusterTests || TEST_FAILED=1
-else
-    Info "Skipping default cluster tests because none match"
+START_TIME=$(date +%s)
+
+if [[ :${TEST_SET}: == *:unit:* ]]; then
+    if [[ -s $DEFAULT_CLUSTER_TESTS ]]; then
+        Info "Running tests using the default cluster"
+        restartCluster
+        RunDefaultClusterTests || TEST_FAILED=1
+    else
+        Info "Skipping default cluster tests because none match"
+    fi
 fi
 
-if [[ -s $CUSTOM_CLUSTER_TESTS ]]; then
-    Info "Running tests using custom clusters"
-    RunCustomClusterTests || TEST_FAILED=1
-else
-    Info "Skipping custom cluster tests because none match"
+if [[ :${TEST_SET}: == *:cluster:* ]]; then
+    if [[ -s $CUSTOM_CLUSTER_TESTS ]]; then
+        Info "Running tests using custom clusters"
+        RunCustomClusterTests || TEST_FAILED=1
+    else
+        Info "Skipping custom cluster tests because none match"
+    fi
 fi
 
-if [[ $RUN_ALL ]]; then
+if [[ :${TEST_SET}: == *:full:* ]]; then
     Info "Running small load test"
     RunCmd ./contrib/scripts/load-test.sh || TEST_FAILED=1
 
@@ -169,6 +190,9 @@ fi
 
 Info "Stopping cluster"
 stopCluster
+
+END_TIME=$(date +%s)
+Info "Tests completed in" $( FmtTime $((END_TIME - START_TIME)) )
 
 if [[ $TEST_FAILED -eq 0 ]]; then
     Info "\e[1;32mAll tests passed!"

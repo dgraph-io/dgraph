@@ -509,6 +509,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
+	if glog.V(3) {
+		glog.Infof("Got a query: %+v", req)
+	}
 
 	return s.doQuery(ctx, req)
 }
@@ -518,9 +521,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
-	}
-	if glog.V(3) {
-		glog.Infof("Got a query: %+v", req)
 	}
 	startTime := time.Now()
 

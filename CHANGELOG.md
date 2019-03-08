@@ -4,8 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## 1.0.12 - [Unreleased]
-[Unreleased]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...release/v1.0
+## [1.0.12] - 2019-03-05
+[1.0.12]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...v1.0.12
+
+**Note: This release requires you to export and re-import data prior to
+upgrading or rolling back. The underlying data format has been changed.**
 
 ### Added
 
@@ -22,7 +25,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   integer counter value, and mutates the result back to Dgraph. Useful for
   testing end-to-end txns to verify cluster health.
   ([#2955](https://github.com/dgraph-io/dgraph/issues/2955))
-
+- Support best-effort queries. This would relax the requirement of linearizible
+  reads. For best-effort queries, Alpha would request timestamps from memory
+  instead of making an outbound request to Zero.
+  ([#3071](https://github.com/dgraph-io/dgraph/issues/3071))
 
 ### Changed
 
@@ -39,9 +45,11 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Simplify design and make tablet moves robust. ([#2800](https://github.com/dgraph-io/dgraph/issues/2800))
 - Switch all node IDs to hex in logs (e.g., ID 0xa instead of ID 10), so they are consistent with Raft logs.
 - Refactor reindexing code to only reindex specific tokenizers. ([#2948](https://github.com/dgraph-io/dgraph/issues/2948))
-- Introduce group checksums ([#2964](https://github.com/dgraph-io/dgraph/issues/2964))
+- Introduce group checksums. ([#2964](https://github.com/dgraph-io/dgraph/issues/2964), [#3085](https://github.com/dgraph-io/dgraph/issues/3085))
 - Return aborted error if commit ts is 0.
 - Reduce number of "ClusterInfoOnly" requests to Zero by making VerifyUid wait for membership information. ([#2974](https://github.com/dgraph-io/dgraph/issues/2974))
+- Simplify Raft WAL storage caching. ([#3102](https://github.com/dgraph-io/dgraph/issues/3102))
+- Build release binary with Go version 1.11.5.
 
 ### Removed
 
@@ -60,8 +68,14 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Skip empty posting lists in `has` function.
 - Fix Rollup to pick max update commit ts.
 - Fix a race condition when processing concurrent queries. Fixes [#2849](https://github.com/dgraph-io/dgraph/issues/2849).
-- Show an error when running multiple mutation blocks. Fixes [#2815](https://github.com/dgraph-io/dgraph/issues/2815)
+- Show an error when running multiple mutation blocks. Fixes [#2815](https://github.com/dgraph-io/dgraph/issues/2815).
 - Bring in optimizations and bug fixes over from Badger.
+- Bulk Loader for multi-group (sharded data) clusters writes out per-group
+  schema with only the predicates owned by the group instead of all predicates
+  in the cluster. This fixes an issue where queries made to one group may not
+  return data served by other groups.
+  ([#3065](https://github.com/dgraph-io/dgraph/issues/3065))
+- Remove the assert failure in raftwal/storage.go.
 
 ## [1.0.11] - 2018-12-17
 [1.0.11]: https://github.com/dgraph-io/dgraph/compare/v1.0.10...v1.0.11

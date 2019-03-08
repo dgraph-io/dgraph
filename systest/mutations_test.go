@@ -29,8 +29,8 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other
@@ -39,10 +39,7 @@ import (
 func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
+			dg := z.DgraphClientWithGroot(":9180")
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
@@ -691,12 +688,14 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	sortSchema(resp.Schema)
 	b, err := json.Marshal(resp.Schema)
 	require.NoError(t, err)
-	require.JSONEq(t, `[`+
+	z.CompareJSON(t, asJson(`[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
+		x.AclPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`, string(b))
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
+		asJson(string(b)))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -714,11 +713,17 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	sortSchema(resp.Schema)
 	b, err = json.Marshal(resp.Schema)
 	require.NoError(t, err)
-	require.JSONEq(t, `[`+
+	z.CompareJSON(t, asJson(`[`+
+		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`, string(b))
+		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
+		asJson(string(b)))
+}
+
+func asJson(schema string) string {
+	return fmt.Sprintf(`{"schema":%v}`, schema)
 }
 
 func FullTextEqual(t *testing.T, c *dgo.Dgraph) {

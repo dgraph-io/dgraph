@@ -45,7 +45,8 @@ type options struct {
 	DataFiles        string
 	DataFormat       string
 	SchemaFile       string
-	DgraphsDir       string
+	OutDir           string
+	ReplaceOutDir    bool
 	TmpDir           string
 	NumGoroutines    int
 	MapBufSize       int64
