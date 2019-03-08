@@ -17,7 +17,10 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+	"github.com/golang/glog"
+)
 
 const (
 	leftCurl    = '{'
@@ -60,11 +63,38 @@ const (
 	itemBackslash                               // \
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
+	itemMutationTxn                             // mutation txn
+	itemMutationTxnOp                           // mutation txn operation
 	itemLeftSquare
 	itemRightSquare
 	itemComma
 	itemMathOp
 )
+
+func lexInsideTxn(l *lex.Lexer) lex.StateFn {
+	// l.Mode = lexInsideTxn
+	l.Mode = lexNameMutation
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.Depth--
+			l.Emit(itemRightCurl)
+		case r == leftCurl:
+			l.Depth++
+			l.Emit(itemLeftCurl)
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexTxnMutation
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Unclosed txn action")
+		default:
+			return l.Errorf("Unrecognized character inside txn: %#U", r)
+		}
+	}
+}
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
@@ -385,10 +415,37 @@ func lexNameMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		if word == "txn" {
+			l.Emit(itemMutationTxn)
+			return lexInsideTxn
+		}
 		l.Emit(itemMutationOp)
 		break
 	}
 	return l.Mode
+}
+
+func lexTxnMutation(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		glog.Infof("... lexTxnMutation word: %q", word)
+		switch word {
+		case "query":
+			l.Emit(itemMutationTxnOp)
+			return lexTextQuery
+		case "mutation":
+			l.Emit(itemMutationOp)
+			return lexTextMutation
+		}
+		break
+	}
+	return lexInsideTxn
 }
 
 // lexTextMutation lexes and absorbs the text inside a mutation operation block.
@@ -411,6 +468,35 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 		l.Backup()
 		l.Emit(itemMutationContent)
 		break
+	}
+	return lexInsideMutation
+}
+
+func lexTextQuery(l *lex.Lexer) lex.StateFn {
+	depth := l.Depth
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			return l.Errorf("Unclosed query text")
+		}
+		if r == leftCurl {
+			if l.Depth == depth {
+				l.Emit(itemLeftCurl)
+			}
+			l.Depth++
+		}
+		if r == rightCurl {
+			l.Depth--
+			if l.Depth == depth {
+				l.Backup()
+				l.Emit(itemRightCurl)
+				l.Next()
+				l.Emit(itemMutationContent)
+				break
+			} else if l.Depth < depth {
+				return l.Errorf("Invalid character '}' inside query text")
+			}
+		}
 	}
 	return lexInsideMutation
 }

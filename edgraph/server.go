@@ -519,9 +519,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if glog.V(3) {
-		glog.Infof("Got a query: %+v", req)
-	}
+	glog.V(3).Infof("Got a query: %+v", req)
 	startTime := time.Now()
 
 	var measurements []ostats.Measurement
