@@ -154,11 +154,15 @@ func (o *Oracle) removeSubscriber(id int) {
 	delete(o.subscribers, id)
 }
 
+// sendDeltasToSubscribers reads updates from the o.updates
+// constructs a delta object containing transactions from one or more updates
+// and sends the delta object to each subscriber's channel
 func (o *Oracle) sendDeltasToSubscribers() {
 	delta := &pb.OracleDelta{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	// waitFor calculates the maximum value of delta.MaxAssigned and all the CommitTs of delta.Txns
 	waitFor := func() uint64 {
 		w := delta.MaxAssigned
 		for _, txn := range delta.Txns {

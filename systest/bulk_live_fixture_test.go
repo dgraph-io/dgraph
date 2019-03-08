@@ -31,8 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/pkg/errors"
 )
 
@@ -51,9 +50,7 @@ type suite struct {
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
-	dg, close := x.GetDgraphClient()
-	defer close()
-
+	dg := z.DgraphClientWithGroot(":9180")
 	err := dg.Alter(context.Background(), &api.Operation{
 		DropAll: true,
 	})
@@ -94,7 +91,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	)
 
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
-		"-r", rdfFile,
+		"-f", rdfFile,
 		"-s", schemaFile,
 		"--http", ":"+strconv.Itoa(freePort(0)),
 		"-j=1",
@@ -138,8 +135,7 @@ func (s *suite) cleanup() {
 
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		dg, close := x.GetDgraphClient()
-		defer close()
+		dg := z.DgraphClientWithGroot(":9180")
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 

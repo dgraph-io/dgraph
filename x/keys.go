@@ -301,12 +301,19 @@ func Parse(key []byte) *ParsedKey {
 // IsReservedPredicate returns true if 'pred' is in the reserved predicate list.
 func IsReservedPredicate(pred string) bool {
 	var m = map[string]struct{}{
-		PredicateListAttr:   {},
+		PredicateListAttr: {},
+		"type":            {},
+	}
+	_, ok := m[strings.ToLower(pred)]
+	return ok || IsAclPredicate(pred)
+}
+
+func IsAclPredicate(pred string) bool {
+	var m = map[string]struct{}{
 		"dgraph.xid":        {},
 		"dgraph.password":   {},
 		"dgraph.user.group": {},
 		"dgraph.group.acl":  {},
-		"type":              {},
 	}
 	_, ok := m[strings.ToLower(pred)]
 	return ok

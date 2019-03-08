@@ -177,13 +177,6 @@ func (g *groupi) proposeInitialSchema() {
 }
 
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
-	g.RLock()
-	_, ok := g.tablets[schema.Predicate]
-	g.RUnlock()
-	if ok {
-		return
-	}
-
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.

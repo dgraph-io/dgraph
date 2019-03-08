@@ -304,6 +304,8 @@ func main() {
 		}
 		dc := api.NewDgraphClient(conn)
 		dg := dgo.NewDgraphClient(dc)
+		// login as groot to perform the DropAll operation later
+		x.Check(dg.Login(context.Background(), "groot", "password"))
 		clients = append(clients, dg)
 	}
 
