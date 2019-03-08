@@ -166,8 +166,7 @@ func (it *PIterator) Valid() bool {
 		return true
 	}
 
-	// Not a multi-part list, so nothing else to iterate through
-	if !it.l.plist.MultiPart {
+	if len(it.l.plist.Parts) == 0 {
 		return false
 	}
 
@@ -873,7 +872,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil && !l.plist.MultiPart {
+	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Parts) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, ErrTsTooOld
@@ -1112,10 +1111,6 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 }
 
 func (l *List) readListPart(baseKey []byte, startUid uint64) (*pb.PostingList, error) {
-	if !l.plist.MultiPart {
-		return nil, nil
-	}
-
 	if part, ok := l.newParts[startUid]; ok {
 		return part, nil
 	}
@@ -1151,7 +1146,6 @@ func (l *List) splitList(readTs uint64) error {
 
 			l.plist = &pb.PostingList{
 				CommitTs:  l.plist.CommitTs,
-				MultiPart: true,
 				Parts:     newParts,
 			}
 		}

@@ -278,10 +278,8 @@ message PostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
-  bool multi_part = 4;
-  repeated uint64 parts = 5;
-  uint64 start_uid = 6;
-  uint64 end_uid = 7;
+  repeated uint64 parts = 4;
+  uint64 start_uid = 5;
 }
 
 message FacetParam {
