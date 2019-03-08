@@ -535,7 +535,7 @@ func (s *Server) ShouldServe(
 	if len(tablet.Predicate) == 0 {
 		return resp, x.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
-	if tablet.GroupId == 0 {
+	if tablet.GroupId == 0 && !tablet.ReadOnly {
 		return resp, x.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
@@ -547,6 +547,11 @@ func (s *Server) ShouldServe(
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
 		return tab, nil
+	}
+	if tab == nil && tablet.ReadOnly {
+		// Read-only requests should return an empty tablet instead of asking zero to serve
+		// the predicate.
+		return &pb.Tablet{}, nil
 	}
 
 	// Set the tablet to be served by this server's group.
@@ -571,27 +576,6 @@ func (s *Server) ShouldServe(
 	x.AssertTrue(tab != nil)
 	span.Annotatef(nil, "Now serving tablet for %s: %+v", tablet.Predicate, tab)
 	return tab, nil
-}
-
-// Serves returns the tablet currently serving the predicate or nil if the predicate
-// is not being served by any alpha.
-func (s *Server) Serves(
-	ctx context.Context, tablet *pb.Tablet) (*pb.Tablet, error) {
-	ctx, span := otrace.StartSpan(ctx, "Zero.Serves")
-	defer span.End()
-
-	if len(tablet.Predicate) == 0 {
-		return nil, x.Errorf("Tablet predicate is empty in %+v", tablet)
-	}
-
-	// Check who is serving this tablet. Return a dummy tablet with GroupId 0
-	// if no alpha is serving this predicate.
-	tab := s.ServingTablet(tablet.Predicate)
-	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
-	if tab != nil {
-		return tab, nil
-	}
-	return &pb.Tablet{GroupId: 0}, nil
 }
 
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {

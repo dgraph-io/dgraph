@@ -62,9 +62,12 @@ func getSchema(ctx context.Context, s *pb.SchemaRequest) (*pb.SchemaResult, erro
 	for _, attr := range predicates {
 		// This can happen after a predicate is moved. We don't delete predicate from schema state
 		// immediately. So lets ignore this predicate.
-		if !groups().ServesTabletReadOnly(attr) {
+		if servesTablet, err := groups().ServesTabletReadOnly(attr); err != nil {
+			return nil, err
+		} else if !servesTablet {
 			continue
 		}
+
 		if schemaNode := populateSchema(attr, fields); schemaNode != nil {
 			result.Schema = append(result.Schema, schemaNode)
 		}
@@ -111,9 +114,13 @@ func populateSchema(attr string, fields []string) *api.SchemaNode {
 
 // addToSchemaMap groups the predicates by group id, if list of predicates is
 // empty then it adds all known groups
-func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) {
+func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) error {
 	for _, attr := range schema.Predicates {
-		gid := groups().BelongsTo(attr)
+		gid, err := groups().BelongsTo(attr)
+		if err != nil {
+			return err
+		}
+
 		s := schemaMap[gid]
 		if s == nil {
 			s = &pb.SchemaRequest{GroupId: gid}
@@ -123,7 +130,7 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 		s.Predicates = append(s.Predicates, attr)
 	}
 	if len(schema.Predicates) > 0 {
-		return
+		return nil
 	}
 	// TODO: Janardhan - node shouldn't serve any request until membership
 	// information is synced, should we fail health check till then ?
@@ -139,6 +146,7 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 			schemaMap[gid] = s
 		}
 	}
+	return nil
 }
 
 // If the current node serves the group serve the schema or forward
@@ -174,7 +182,9 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api
 
 	// Map of groupd id => Predicates for that group.
 	schemaMap := make(map[uint32]*pb.SchemaRequest)
-	addToSchemaMap(schemaMap, schema)
+	if err := addToSchemaMap(schemaMap, schema); err != nil {
+		return nil, err
+	}
 
 	results := make(chan resultErr, len(schemaMap))
 	var schemaNodes []*api.SchemaNode

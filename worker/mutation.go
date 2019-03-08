@@ -112,10 +112,12 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	if !groups().ServesTablet(update.Predicate) {
-		tablet := groups().Tablet(update.Predicate)
+	if tablet, err := groups().Tablet(update.Predicate); err != nil {
+		return err
+	} else if tablet.GetGroupId() != groups().groupId() {
 		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 	}
+
 	if err := checkSchema(update); err != nil {
 		return err
 	}
@@ -394,10 +396,14 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 
 // populateMutationMap populates a map from group id to the mutation that
 // should be sent to that group.
-func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
+func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 	mm := make(map[uint32]*pb.Mutations)
 	for _, edge := range src.Edges {
-		gid := groups().BelongsTo(edge.Attr)
+		gid, err := groups().BelongsTo(edge.Attr)
+		if err != nil {
+			return nil, err
+		}
+
 		mu := mm[gid]
 		if mu == nil {
 			mu = &pb.Mutations{GroupId: gid}
@@ -406,7 +412,11 @@ func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
 		mu.Edges = append(mu.Edges, edge)
 	}
 	for _, schema := range src.Schema {
-		gid := groups().BelongsTo(schema.Predicate)
+		gid, err := groups().BelongsTo(schema.Predicate)
+		if err != nil {
+			return nil, err
+		}
+
 		mu := mm[gid]
 		if mu == nil {
 			mu = &pb.Mutations{GroupId: gid}
@@ -424,7 +434,7 @@ func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
 			mu.DropAll = true
 		}
 	}
-	return mm
+	return mm, nil
 }
 
 func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
@@ -448,7 +458,10 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	defer span.End()
 
 	tctx := &api.TxnContext{StartTs: m.StartTs}
-	mutationMap := populateMutationMap(m)
+	mutationMap, err := populateMutationMap(m)
+	if err != nil {
+		return tctx, err
+	}
 
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {

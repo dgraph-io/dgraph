@@ -137,8 +137,10 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
-	gid := groups().BelongsToReadOnly(attr)
-	if gid == 0 {
+	gid, err := groups().BelongsToReadOnly(attr)
+	if err != nil {
+		return &emptyResult, err
+	} else if gid == 0 {
 		return &emptyResult, errUnservedTablet
 	}
 
@@ -715,7 +717,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
@@ -723,7 +725,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
 	span.Annotatef(nil, "Done waiting for checksum match")
 
@@ -733,9 +735,12 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// we get partitioned away from group zero as long as it's not removed.
 	// ServesTabletReadOnly is called instead of ServesTablet to prevent this
 	// alpha from requesting to serve this tablet.
-	if !groups().ServesTabletReadOnly(q.Attr) {
+	if servesTablet, err := groups().ServesTabletReadOnly(q.Attr); err != nil {
+		return &emptyResult, err
+	} else if !servesTablet {
 		return &emptyResult, errUnservedTablet
 	}
+
 	qs := queryState{cache: posting.Oracle().CacheAt(q.ReadTs)}
 	if qs.cache == nil {
 		qs.cache = posting.NewLocalCache()
@@ -1613,8 +1618,10 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return &emptyResult, ctx.Err()
 	}
 
-	gid := groups().BelongsToReadOnly(q.Attr)
-	if gid == 0 {
+	gid, err := groups().BelongsToReadOnly(q.Attr)
+	if err != nil {
+		return &emptyResult, err
+	} else if gid == 0 {
 		return &emptyResult, errUnservedTablet
 	}
 
@@ -1625,8 +1632,8 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
-			q.Attr, gid)
+		return &emptyResult, fmt.Errorf(
+			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 
 	type reply struct {
@@ -1641,7 +1648,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return &emptyResult, ctx.Err()
 	case reply := <-c:
 		return reply.result, reply.err
 	}
