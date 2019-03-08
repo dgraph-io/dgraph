@@ -224,8 +224,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 			Subject:     entity.GetUid(),
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
-		}
-	}
+		}}
 
 	mu := &api.Mutation{
 		CommitNow: true,
