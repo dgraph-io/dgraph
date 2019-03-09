@@ -376,6 +376,40 @@ func LoadSchemaFromDb() error {
 	return nil
 }
 
+func LoadTypesFromDb() error {
+	prefix := x.TypePrefix()
+	txn := pstore.NewTransactionAt(1, false)
+	defer txn.Discard()
+	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
+	defer itr.Close()
+
+	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pk := x.Parse(key)
+		if pk == nil {
+			continue
+		}
+		attr := pk.Attr
+		var t pb.TypeUpdate
+		err := item.Value(func(val []byte) error {
+			if len(val) == 0 {
+				t = pb.TypeUpdate{TypeName: attr}
+			}
+			x.Checkf(t.Unmarshal(val), "Error while loading types from db")
+			State().SetType(attr, t)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func InitialSchema() []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
@@ -422,40 +456,6 @@ func InitialSchema() []*pb.SchemaUpdate {
 	}
 
 	return initialSchema
-}
-
-func LoadTypesFromDb() error {
-	prefix := x.TypePrefix()
-	txn := pstore.NewTransactionAt(1, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
-	defer itr.Close()
-
-	for itr.Seek(prefix); itr.Valid(); itr.Next() {
-		item := itr.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
-		pk := x.Parse(key)
-		if pk == nil {
-			continue
-		}
-		attr := pk.Attr
-		var t pb.TypeUpdate
-		err := item.Value(func(val []byte) error {
-			if len(val) == 0 {
-				t = pb.TypeUpdate{TypeName: attr}
-			}
-			x.Checkf(t.Unmarshal(val), "Error while loading types from db")
-			State().SetType(attr, t)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func reset() {
