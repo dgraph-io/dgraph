@@ -313,7 +313,16 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s pb.Snapshot) error
 		return err
 	}
 
-	// Cache it.
+	// Update the last index cache here. This is useful so when a follower gets a jump due to
+	// receiving a snapshot and Save is called, addEntries wouldn't have much. So, the last index
+	// cache would need to rely upon this update here.
+	if val, ok := w.cache.Load(lastKey); ok {
+		le := val.(uint64)
+		if le < e.Index {
+			w.cache.Store(lastKey, e.Index)
+		}
+	}
+	// Cache snapshot.
 	w.cache.Store(snapshotKey, proto.Clone(&s))
 	return nil
 }
@@ -614,9 +623,9 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 		}
 	}
 	laste := entries[len(entries)-1].Index
+	w.cache.Store(lastKey, laste) // Update the last index cache.
 	if laste < last {
 		return w.deleteFrom(batch, laste+1)
 	}
-	w.cache.Store(lastKey, laste)
 	return nil
 }
