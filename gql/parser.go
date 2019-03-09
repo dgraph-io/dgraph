@@ -1582,16 +1582,15 @@ L:
 			}
 			val += v
 
-			if function.Name != "eq" {
-				switch {
-				// allow eq(attr, "")
-				case val == "":
-					return nil, itemInFunc.Errorf("Empty argument received")
+			switch {
+			// allow eq(attr, "")
+			case val == "" && function.Name != "eq":
+				return nil, x.Errorf("Empty argument received")
 
-				// allow value of "uid" - issue#2827
-				case val == "uid":
-					return nil, itemInFunc.Errorf("Argument cannot be %q", val)
-				}
+			// allow value of "uid" - issue#2827
+			// disallow uid as attribute - issue#3110
+			case val == "uid" && (function.Name != "eq" || function.Attr == ""):
+				return nil, x.Errorf("Argument cannot be %q", val)
 			}
 
 			if isDollar {
