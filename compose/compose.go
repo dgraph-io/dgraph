@@ -40,18 +40,18 @@ type Volume struct {
 type Service struct {
 	name          string // not exported
 	Image         string
-	ContainerName string   `yaml:"container_name"`
-	Hostname      string   `yaml:",omitempty"`
-	Pid           string   `yaml:",omitempty"`
-	WorkingDir    string   `yaml:"working_dir"`
-	DependsOn     []string `yaml:"depends_on,omitempty"`
-	Labels        StringMap
-	Environment   []string
-	Ports         []string
-	Volumes       []Volume
-	TempFS        []string `yaml:",omitempty"`
-	User          string   `yaml:",omitempty"`
-	Command       string
+	ContainerName string    `yaml:"container_name"`
+	Hostname      string    `yaml:",omitempty"`
+	Pid           string    `yaml:",omitempty"`
+	WorkingDir    string    `yaml:"working_dir,omitempty"`
+	DependsOn     []string  `yaml:"depends_on,omitempty"`
+	Labels        StringMap `yaml:",omitempty"`
+	Environment   []string  `yaml:",omitempty"`
+	Ports         []string  `yaml:",omitempty"`
+	Volumes       []Volume  `yaml:",omitempty"`
+	TempFS        []string  `yaml:",omitempty"`
+	User          string    `yaml:",omitempty"`
+	Command       string    `yaml:",omitempty"`
 }
 
 type ComposeConfig struct {
@@ -120,17 +120,15 @@ func initService(basename string, idx, grpcPort int) Service {
 	switch {
 	case opts.DataVol == true:
 		svc.Volumes = append(svc.Volumes, Volume{
-			Type:     "volume",
-			Source:   "data",
-			Target:   "/data",
-			ReadOnly: false,
+			Type:   "volume",
+			Source: "data",
+			Target: "/data",
 		})
 	case opts.DataDir != "":
 		svc.Volumes = append(svc.Volumes, Volume{
-			Type:     "bind",
-			Source:   opts.DataDir,
-			Target:   "/data",
-			ReadOnly: false,
+			Type:   "bind",
+			Source: opts.DataDir,
+			Target: "/data",
 		})
 	default:
 		// no data volume
@@ -286,10 +284,9 @@ func addMetrics(cfg *ComposeConfig) {
 			"GF_AUTH_ANONYMOUS_ORG_ROLE=Admin",
 		},
 		Volumes: []Volume{{
-			Type:     "volume",
-			Source:   "grafana-volume",
-			Target:   "/var/lib/grafana",
-			ReadOnly: false,
+			Type:   "volume",
+			Source: "grafana-volume",
+			Target: "/var/lib/grafana",
 		}},
 	}
 
@@ -321,7 +318,7 @@ func main() {
 	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
 		"number of alphas in dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
-		"number of Alpha replicas in dgraph cluster")
+		"number of alpha replicas in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
 	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "o", false,
