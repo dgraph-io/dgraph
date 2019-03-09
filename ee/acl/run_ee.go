@@ -169,13 +169,62 @@ func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 	}
 }
 
-func info(conf *viper.Viper) error {
-	userId := conf.GetString("user")
-	groupId := conf.GetString("group")
-	if (len(userId) == 0 && len(groupId) == 0) ||
-		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("either the user or group should be specified, not both")
+func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
+	user, err := queryUser(ctx, txn, userId)
+	if err != nil {
+		return err
 	}
+	if user == nil {
+		return fmt.Errorf("The user %q does not exist.\n", userId)
+	}
+
+	fmt.Printf("User  : %s\n", userId)
+	fmt.Printf("UID   : %s\n", user.Uid)
+	for _, group := range user.Groups {
+		fmt.Printf("Group : %-5s\n", group.GroupID)
+	}
+	return nil
+}
+
+func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error {
+	group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
+		"dgraph.group.acl")
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return fmt.Errorf("The group %q does not exist.\n", groupId)
+	}
+	fmt.Printf("Group: %s\n", groupId)
+	fmt.Printf("UID  : %s\n", group.Uid)
+	fmt.Printf("ID   : %s\n", group.GroupID)
+
+	var userNames []string
+	for _, user := range group.Users {
+		userNames = append(userNames, user.UserID)
+	}
+	fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
+
+	var acls []Acl
+	if len(group.Acls) != 0 {
+		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
+				groupId, err)
+		}
+
+		for _, acl := range acls {
+			fmt.Printf("ACL  : %v\n", acl)
+		}
+	}
+	return nil
+}
+
+func info(conf *viper.Viper) error {
+	userId, groupId, err := getUserAndGroup(conf)
+	if err != nil {
+		return err
+	}
+
 	dc, cancel, err := getClientWithAdminCtx(conf)
 	defer cancel()
 	if err != nil {
@@ -191,53 +240,8 @@ func info(conf *viper.Viper) error {
 	}()
 
 	if len(userId) != 0 {
-		user, err := queryUser(ctx, txn, userId)
-		if err != nil {
-			return err
-		}
-		if user == nil {
-			return fmt.Errorf("The user %q does not exist.\n", userId)
-		}
-
-		fmt.Println()
-		fmt.Printf("User  : %s\n", userId)
-		fmt.Printf("UID   : %s\n", user.Uid)
-		for _, group := range user.Groups {
-			fmt.Printf("Group : %-5s\n", group.GroupID)
-		}
+		return queryAndPrintUser(ctx, txn, userId)
 	}
 
-	if len(groupId) != 0 {
-		group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
-			"dgraph.group.acl")
-		if err != nil {
-			return err
-		}
-		if group == nil {
-			return fmt.Errorf("The group %q does not exist.\n", groupId)
-		}
-		fmt.Printf("Group: %s\n", groupId)
-		fmt.Printf("UID  : %s\n", group.Uid)
-		fmt.Printf("ID   : %s\n", group.GroupID)
-
-		var userNames []string
-		for _, user := range group.Users {
-			userNames = append(userNames, user.UserID)
-		}
-		fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
-
-		var acls []Acl
-		if len(group.Acls) != 0 {
-			if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-				return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
-					groupId, err)
-			}
-
-			for _, acl := range acls {
-				fmt.Printf("ACL  : %v\n", acl)
-			}
-		}
-	}
-
-	return nil
+	return queryAndPrintGroup(ctx, txn, groupId)
 }

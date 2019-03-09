@@ -244,15 +244,15 @@ func mod(conf *viper.Viper) error {
 	if err != nil {
 		return err
 	}
-	groupList := conf.GetString("group_list")
+
 	if len(userId) != 0 {
 		// when modifying the user, some group options are forbidden
 		if err := checkForbiddenOpts(conf, []string{"pred", "pred_regex", "perm"}); err != nil {
 			return err
 		}
 
-		if len(groupList) != 0 {
-			return userMod(conf, userId, groupList)
+		if conf.Get("group_list") != nil {
+			return userMod(conf, userId, conf.GetString("group_list"))
 		}
 		return changePassword(conf, userId)
 	}
@@ -385,8 +385,9 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 	if _, err := txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("error while mutating the group: %+v", err)
 	}
-	fmt.Printf("Successfully modified groups for user %v\n", userId)
-	return nil
+	fmt.Printf("Successfully modified groups for user %v.\n", userId)
+	fmt.Println("The latest info is:")
+	return queryAndPrintUser(ctx, dc.NewReadOnlyTxn(), userId)
 }
 
 func chMod(conf *viper.Viper) error {
@@ -401,6 +402,8 @@ func chMod(conf *viper.Viper) error {
 		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
 	case len(predicate) == 0 && len(predRegex) == 0:
 		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
+	case perm > 7:
+		return fmt.Errorf("the perm value must be less than 7, the provided value is %d", perm)
 	case len(predRegex) > 0:
 		// make sure the predRegex can be compiled as a regex
 		if _, err := regexp.Compile(predRegex); err != nil {
@@ -479,7 +482,8 @@ func chMod(conf *viper.Viper) error {
 	}
 	fmt.Printf("Successfully changed permission for group %v on predicate %v to %v\n",
 		groupId, predicate, perm)
-	return nil
+	fmt.Println("The latest info is:")
+	return queryAndPrintGroup(ctx, dc.NewReadOnlyTxn(), groupId)
 }
 
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
