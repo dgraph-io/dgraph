@@ -262,7 +262,7 @@ func SchemaPrefix() []byte {
 	return buf[:]
 }
 
-// SchemaPrefix returns the prefix for Schema keys.
+// TypePrefix returns the prefix for Schema keys.
 func TypePrefix() []byte {
 	var buf [1]byte
 	buf[0] = byteType

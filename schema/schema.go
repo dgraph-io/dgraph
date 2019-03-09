@@ -74,13 +74,17 @@ func (s *state) Delete(attr string) error {
 	defer s.Unlock()
 
 	glog.Infof("Deleting schema for predicate: [%s]", attr)
-	delete(s.predicate, attr)
 	txn := pstore.NewTransactionAt(1, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	return txn.CommitAt(1, nil)
+	if err := txn.CommitAt(1, nil); err != nil {
+		return err
+	}
+
+	delete(s.predicate, attr)
+	return nil
 }
 
 // DeleteType updates the schema in memory and disk
@@ -89,13 +93,17 @@ func (s *state) DeleteType(typeName string) error {
 	defer s.Unlock()
 
 	glog.Infof("Deleting type definition for type: [%s]", typeName)
-	delete(s.types, typeName)
 	txn := pstore.NewTransactionAt(1, true)
 	if err := txn.Delete(x.TypeKey(typeName)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	return txn.CommitAt(1, nil)
+	if err := txn.CommitAt(1, nil); err != nil {
+		return err
+	}
+
+	delete(s.types, typeName)
+	return nil
 }
 
 func logUpdate(schema pb.SchemaUpdate, pred string) string {

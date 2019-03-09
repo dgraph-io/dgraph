@@ -886,7 +886,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 
 // parseSchemaPredsOrTypes parses till rightround is found
 func parseSchemaPredsOrTypes(it *lex.ItemIterator, s *pb.SchemaRequest) error {
-	// pred (or type) should be followed by colon
+	// pred or type should be followed by colon
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemName && !(item.Val == "pred" || item.Val == "type") {
