@@ -182,9 +182,7 @@ func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, startTs uint64)
 	}
 	current := *update
 
-	// Sets only in memory, we will update it on disk only after schema mutations are successful and
 	schema.State().SetType(update.TypeName, current)
-
 	return updateType(update.TypeName, *update)
 }
 
