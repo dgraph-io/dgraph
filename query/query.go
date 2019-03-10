@@ -1909,7 +1909,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
+		if sg.SrcUIDs == nil {
+			glog.Errorf("SrcUIDs is unexpectedly nil. Subgraph: %+v", sg)
+			rch <- x.Errorf("SrcUIDs shouldn't be nil.")
+			return
+		}
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.

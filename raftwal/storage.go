@@ -341,6 +341,8 @@ func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st pb.HardState) er
 
 // reset resets the entries. Used for testing.
 func (w *DiskStorage) reset(es []pb.Entry) error {
+	w.cache = new(sync.Map) // reset cache.
+
 	// Clean out the state.
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
