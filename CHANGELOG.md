@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.13] - 2019-03-10
+[1.0.13]: https://github.com/dgraph-io/dgraph/compare/v1.0.12...v1.0.13
+
+**Note: This release supersedes v1.0.12 with bug fixes. If you're running v1.0.12, please upgrade to v1.0.13. It is safe to upgrade in-place without a data export and import.**
+
+### Fixed
+
+- Fix Raft panic. ([8cb69ea](https://github.com/dgraph-io/dgraph/commit/8cb69ea))
+- Log an error instead of an assertion check for SrcUIDs being nil. ([691b3b3](https://github.com/dgraph-io/dgraph/commit/691b3b3))
+
 ## [1.0.12] - 2019-03-05
 [1.0.12]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...v1.0.12
 
