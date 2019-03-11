@@ -78,10 +78,7 @@ type List struct {
 	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 
-	// Rolling up might create new parts (either because there were changes or
-	// a split occurred). These parts need to be kept in memory until they are
-	// committed to disk.
-	uncommittedParts map[uint64]*pb.PostingList
+	partCache map[uint64]*pb.PostingList
 }
 
 func getNextPartKey(baseKey []byte, nextPartStart uint64) []byte {
@@ -103,7 +100,6 @@ func (l *List) maxVersion() uint64 {
 type PIterator struct {
 	l          *List
 	plist      *pb.PostingList
-	opts       PItrOpts
 	uidPosting *pb.Posting
 	pidx       int // index of postings
 	plen       int
@@ -111,18 +107,17 @@ type PIterator struct {
 	dec  *codec.Decoder
 	uids []uint64
 	uidx int // Offset into the uids slice
+
+	afterUid    uint64
+	deleteBelow uint64
+	splitIdx    int
 }
 
-type PItrOpts struct {
-	discardPl bool
-	afterUid  uint64
-	startPart int
-	readTs    uint64
-}
-
-func (it *PIterator) Init(l *List, opts PItrOpts) error {
-	if len(l.plist.Splits) > 0 {
-		plist, err := l.readListPart(l.plist.Splits[opts.startPart])
+func (it *PIterator) Init(l *List, afterUid, deleteBelow uint64) error {
+	it.l = l
+	it.splitIdx = 0
+	if len(it.l.plist.Splits) > 0 {
+		plist, err := l.readListPart(it.l.plist.Splits[0])
 		if err != nil {
 			return err
 		}
@@ -131,24 +126,46 @@ func (it *PIterator) Init(l *List, opts PItrOpts) error {
 		it.plist = l.plist
 	}
 
-	it.l = l
-	it.opts = opts
-	it.uidPosting = &pb.Posting{}
+	it.afterUid = afterUid
+	it.deleteBelow = deleteBelow
 
+	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	it.uids = it.dec.Seek(opts.afterUid)
+	it.uids = it.dec.Seek(it.afterUid)
 	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := it.plist.Postings[idx]
-		return it.opts.afterUid < p.Uid
+		return it.afterUid < p.Uid
 	})
 	return nil
 }
 
+func (it *PIterator) moveToNextSplit() error {
+	it.splitIdx++
+	plist, err := it.l.readListPart(it.l.plist.Splits[it.splitIdx])
+	if err != nil {
+		return err
+	}
+	it.plist = plist
+
+	it.uidPosting = &pb.Posting{}
+	it.dec = &codec.Decoder{Pack: it.plist.Pack}
+	it.uids = it.dec.Seek(it.afterUid)
+	it.uidx = 0
+
+	it.plen = len(it.plist.Postings)
+	it.pidx = sort.Search(it.plen, func(idx int) bool {
+		p := it.plist.Postings[idx]
+		return it.afterUid < p.Uid
+	})
+
+	return nil
+}
+
 func (it *PIterator) Next() error {
-	if it.opts.discardPl {
+	if it.deleteBelow > 0 {
 		return nil
 	}
 
@@ -162,7 +179,7 @@ func (it *PIterator) Next() error {
 }
 
 func (it *PIterator) Valid() bool {
-	if it.opts.discardPl {
+	if it.deleteBelow > 0 {
 		return false
 	}
 
@@ -174,9 +191,8 @@ func (it *PIterator) Valid() bool {
 		return false
 	}
 
-	for it.opts.startPart+1 < len(it.l.plist.Splits) {
-		it.opts.startPart++
-		it.Init(it.l, it.opts)
+	for it.splitIdx+1 < len(it.l.plist.Splits) {
+		it.moveToNextSplit()
 
 		if len(it.uids) > 0 {
 			return true
@@ -585,12 +601,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 
 	var mp, pp *pb.Posting
 	var pitr PIterator
-	err := pitr.Init(l, PItrOpts{
-		afterUid:  afterUid,
-		discardPl: deleteBelow > 0,
-		readTs:    readTs,
-		startPart: 0,
-	})
+	err := pitr.Init(l, afterUid, deleteBelow)
 	if err != nil {
 		return err
 	}
@@ -682,7 +693,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
-func (l *List) MarshalToKv() ([]*bpb.KV, error) {
+func (l *List) Rollup() ([]*bpb.KV, error) {
 	l.Lock()
 	defer l.Unlock()
 	if err := l.rollup(math.MaxUint64); err != nil {
@@ -716,7 +727,7 @@ func (l *List) MarshalToKv() ([]*bpb.KV, error) {
 }
 
 func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
+	if (plist.Pack == nil || len(plist.Pack.Blocks) == 0) && len(plist.Splits) == 0 {
 		return nil, BitEmptyPosting
 	}
 	data, err := plist.Marshal()
@@ -725,12 +736,6 @@ func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
 }
 
 const blockSize int = 256
-
-func (l *List) Rollup(readTs uint64) error {
-	l.Lock()
-	defer l.Unlock()
-	return l.rollup(readTs)
-}
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
@@ -742,20 +747,6 @@ func (l *List) rollup(readTs uint64) error {
 	if l.minTs > readTs {
 		// If we are already past the readTs, then skip the rollup.
 		return nil
-	}
-
-	// Delete lists from the uncommittedParts map that are already in disk.
-	for _, startUid := range l.plist.Splits {
-		pl, version, err := l.readListPartFromDisk(startUid)
-		if err != nil || pl == nil {
-			// Ignore errors since this might be that the list has never
-			// been committed to disk.
-			continue
-		}
-
-		if version >= l.minTs {
-			delete(l.uncommittedParts, startUid)
-		}
 	}
 
 	var plist *pb.PostingList
@@ -799,7 +790,7 @@ func (l *List) rollup(readTs uint64) error {
 			final.Pack = enc.Done()
 			plist.Pack = final.Pack
 			plist.Postings = final.Postings
-			l.uncommittedParts[plist.StartUid] = plist
+			l.partCache[plist.StartUid] = plist
 
 			splitIdx++
 			init()
@@ -816,7 +807,7 @@ func (l *List) rollup(readTs uint64) error {
 	final.Pack = enc.Done()
 	plist.Pack = final.Pack
 	plist.Postings = final.Postings
-	l.uncommittedParts[plist.StartUid] = plist
+	l.partCache[plist.StartUid] = plist
 
 	maxCommitTs := l.minTs
 	{
@@ -847,7 +838,7 @@ func (l *List) rollup(readTs uint64) error {
 
 	// Check if the list (or any of it's parts if it's been previously split) have
 	// become too big. Split the list if that is the case.
-	if err := l.splitList(readTs); err != nil {
+	if err := l.splitList(); err != nil {
 		return nil
 	}
 
@@ -1108,7 +1099,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	if part, ok := l.uncommittedParts[startUid]; ok {
+	if part, ok := l.partCache[startUid]; ok {
 		return part, nil
 	}
 	part, _, err := l.readListPartFromDisk(startUid)
@@ -1133,7 +1124,7 @@ func needsSplit(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
-func (l *List) splitList(readTs uint64) error {
+func (l *List) splitList() error {
 	l.AssertLock()
 
 	var lists []*pb.PostingList
@@ -1154,7 +1145,7 @@ func (l *List) splitList(readTs uint64) error {
 		if needsSplit(list) {
 			splitList := splitPostingList(list)
 			for _, part := range splitList {
-				l.uncommittedParts[part.StartUid] = part
+				l.partCache[part.StartUid] = part
 				newLists = append(newLists, part)
 			}
 		} else {
@@ -1169,7 +1160,10 @@ func (l *List) splitList(readTs uint64) error {
 		for _, list := range newLists {
 			splits = append(splits, list.StartUid)
 		}
-		l.plist.Splits = splits
+		l.plist = &pb.PostingList{
+			CommitTs: l.plist.CommitTs,
+			Splits:   splits,
+		}
 	}
 	return nil
 }

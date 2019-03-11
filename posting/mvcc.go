@@ -185,7 +185,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.mutationMap = make(map[uint64]*pb.PostingList)
-	l.uncommittedParts = make(map[uint64]*pb.PostingList)
+	l.partCache = make(map[uint64]*pb.PostingList)
 	l.plist = new(pb.PostingList)
 
 	// Iterates from highest Ts to lowest Ts

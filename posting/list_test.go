@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -415,6 +416,9 @@ func TestAddMutation_mrjn1(t *testing.T) {
 }
 
 func TestMillion(t *testing.T) {
+	// Ensure list is stored in a single part.
+	maxListSize = math.MaxInt32
+
 	key := x.DataKey("bal", 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
@@ -431,7 +435,8 @@ func TestMillion(t *testing.T) {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			require.NoError(t, ol.Rollup(math.MaxUint64))
+			_, err := ol.Rollup()
+			require.NoError(t, err)
 		}
 		commits++
 	}
@@ -852,6 +857,144 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 300))
 }
 
+func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
+	// For testing, set the max list size to a lower threshold.
+	maxListSize = 5000
+	defer func() {
+		maxListSize = math.MaxInt32
+	}()
+
+	key := x.DataKey("bal", 1331)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	commits := 0
+	for i := 2; i <= size; i += 2 {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		if addLabel {
+			edge.Label = strconv.Itoa(i)
+		}
+
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		if i%2000 == 0 {
+			kvs, err := ol.Rollup()
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps)
+			require.NoError(t, err)
+		}
+		commits++
+	}
+
+	return ol, commits
+}
+
+func writePostingListToDisk(kvs []*bpb.KV) error {
+	writer := NewTxnWriter(pstore)
+	for _, kv := range kvs {
+		if err := writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version); err != nil {
+			return err
+		}
+	}
+	return writer.Flush()
+}
+
+func TestMultiPartListBasic(t *testing.T) {
+	N := int(1e5)
+	ol, commits := createMultiPartList(t, N, false)
+	t.Logf("List parts %v", len(ol.plist.Splits))
+	opt := ListOptions{ReadTs: uint64(N) + 1}
+	l, err := ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, uint64(i+1)*2, uid)
+	}
+}
+
+func TestMultiPartListWithPostings(t *testing.T) {
+	N := int(1e5)
+	ol, commits := createMultiPartList(t, N, true)
+	t.Logf("List parts %v", len(ol.plist.Splits))
+
+	var labels []string
+	err := ol.Iterate(uint64(N)+1, 0, func(p *pb.Posting) error {
+		if len(p.Label) > 0 {
+			labels = append(labels, p.Label)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, commits, len(labels))
+	for i, label := range labels {
+		require.Equal(t, label, strconv.Itoa(int(i+1)*2))
+	}
+}
+
+func TestMultiPartListMarshal(t *testing.T) {
+	N := int(1e5)
+	ol, commits := createMultiPartList(t, N, false)
+	t.Logf("List parts %v", len(ol.plist.Splits))
+
+	kvs, err := ol.Rollup()
+	require.NoError(t, err)
+	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
+
+	require.NoError(t, writePostingListToDisk(kvs))
+
+	key := x.DataKey("bal", 1331)
+	require.Equal(t, key, kvs[0].Key)
+
+	for i, startUid := range ol.plist.Splits {
+		partKey := getNextPartKey(key, startUid)
+		require.Equal(t, partKey, kvs[i+1].Key)
+		part, err := ol.readListPart(startUid)
+		require.NoError(t, err)
+		data, err := part.Marshal()
+		require.NoError(t, err)
+		require.Equal(t, data, kvs[i+1].Value)
+		require.Equal(t, []byte{BitCompletePosting}, kvs[i+1].UserMeta)
+		require.Equal(t, ol.minTs, kvs[i+1].Version)
+	}
+
+	// Marshalling causes the mutation map to be cleaned up. Verify all changes
+	// can still be seen even though the posting lists have not been committed to
+	// disk yet.
+	opt := ListOptions{ReadTs: uint64(N) + 1}
+	l, err := ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, uint64(i+1)*2, uid)
+	}
+}
+
+func TestMultiPartListWrite(t *testing.T) {
+	N := int(1e5)
+	originalList, commits := createMultiPartList(t, N, false)
+
+	kvs, err := originalList.Rollup()
+	require.NoError(t, err)
+	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
+
+	require.NoError(t, writePostingListToDisk(kvs))
+	newList, err := getNew(kvs[0].Key, ps)
+
+	opt := ListOptions{ReadTs: uint64(N) + 1}
+	originalUids, err := originalList.Uids(opt)
+	require.NoError(t, err)
+	newUids, err := newList.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, commits, len(originalUids.Uids))
+	require.Equal(t, len(originalUids.Uids), len(newUids.Uids))
+	for i, _ := range originalUids.Uids {
+		require.Equal(t, originalUids.Uids[i], newUids.Uids[i])
+	}
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
@@ -900,128 +1043,4 @@ func BenchmarkAddMutations(b *testing.B) {
 			b.Error(err)
 		}
 	}
-}
-
-func createMultiPartList(t *testing.T, size int) (*List, int) {
-	// For testing, set the max list size to a lower threshold.
-	maxListSize = 10000
-	defer func() {
-		maxListSize = 2000000
-	}()
-
-	key := x.DataKey("bal", 1331)
-	ol, err := getNew(key, ps)
-	require.NoError(t, err)
-	commits := 0
-	for i := 2; i <= size; i += 2 {
-		edge := &pb.DirectedEdge{
-			ValueId: uint64(i),
-		}
-		txn := Txn{StartTs: uint64(i)}
-		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
-		if i%1000 == 0 {
-			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
-			// list.
-			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			require.NoError(t, ol.Rollup(math.MaxUint64))
-		}
-		commits++
-	}
-
-	return ol, commits
-}
-
-func TestMultiPartList(t *testing.T) {
-	N := int(1e5)
-	ol, commits := createMultiPartList(t, N)
-	t.Logf("List parts %v", len(ol.plist.Splits))
-	opt := ListOptions{ReadTs: uint64(N) + 1}
-	l, err := ol.Uids(opt)
-	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
-		require.Equal(t, uint64(i+1)*2, uid)
-	}
-}
-
-func TestMultiPartListWithPostings(t *testing.T) {
-	// For testing, set the max list length to a lower threshold.
-	maxListSize = 10000
-	defer func() {
-		maxListSize = 2000000
-	}()
-
-	key := x.DataKey("bal", 1331)
-	ol, err := getNew(key, ps)
-	require.NoError(t, err)
-	var commits int
-	N := int(1e5)
-	for i := 2; i <= N; i += 2 {
-		edge := &pb.DirectedEdge{
-			ValueId: uint64(i),
-			Label:   strconv.Itoa(i),
-		}
-		txn := Txn{StartTs: uint64(i)}
-		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
-		if i%1000 == 0 {
-			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
-			// list.
-			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			require.NoError(t, ol.Rollup(math.MaxUint64))
-		}
-		commits++
-	}
-	t.Logf("List parts %v", len(ol.plist.Splits))
-
-	var labels []string
-	ol.Iterate(uint64(N)+1, 0, func(p *pb.Posting) error {
-		if len(p.Label) > 0 {
-			labels = append(labels, p.Label)
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, commits, len(labels))
-	for i, label := range labels {
-		require.Equal(t, label, strconv.Itoa(int(i+1)*2))
-	}
-}
-
-func TestMultiPartListMarshal(t *testing.T) {
-	N := int(1e5)
-	ol, commits := createMultiPartList(t, N)
-	t.Logf("List parts %v", len(ol.plist.Splits))
-
-	kvs, err := ol.MarshalToKv()
-	require.NoError(t, err)
-	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
-
-	key := x.DataKey("bal", 1331)
-	require.Equal(t, key, kvs[0].Key)
-
-	for i, startUid := range ol.plist.Splits {
-		partKey := getNextPartKey(key, startUid)
-		require.Equal(t, partKey, kvs[i+1].Key)
-		part, err := ol.readListPart(startUid)
-		require.NoError(t, err)
-		data, err := part.Marshal()
-		require.NoError(t, err)
-		require.Equal(t, data, kvs[i+1].Value)
-		require.Equal(t, []byte{BitCompletePosting}, kvs[i+1].UserMeta)
-		require.Equal(t, ol.minTs, kvs[i+1].Version)
-	}
-
-	// Marshalling causes the mutation map to be cleaned up. Verify all changes
-	// can still be seen even though the posting lists have not been committed to
-	// disk yet.
-	opt := ListOptions{ReadTs: uint64(N) + 1}
-	l, err := ol.Uids(opt)
-	require.NoError(t, err)
-	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
-	for i, uid := range l.Uids {
-		require.Equal(t, uint64(i+1)*2, uid)
-	}
-
 }

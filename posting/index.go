@@ -550,7 +550,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 		if le == 0 {
 			continue
 		}
-		kvs, err := pl.MarshalToKv()
+		kvs, err := pl.Rollup()
 		if err != nil {
 			return err
 		}

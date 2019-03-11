@@ -892,7 +892,7 @@ func (n *node) rollupLists(readTs uint64) error {
 			return nil, err
 		}
 		atomic.AddUint64(&numKeys, 1)
-		kvs, err := l.MarshalToKv()
+		kvs, err := l.Rollup()
 
 		// If there are multiple keys, the posting list was split into multiple
 		// parts. The key of the first part is the right key to use for tablet
