@@ -17,3 +17,14 @@ func KeyEncode(k []byte) []byte {
 	}
 	return result
 }
+
+// keyToHex turns bytes into nibbles
+func keyToHex(in []byte) []byte {
+	res := make([]byte, len(in)*2)
+	for i, b := range in {
+		res[2*i] = b / 16
+		res[2*i+1] = b % 16
+	}
+
+	return res
+}

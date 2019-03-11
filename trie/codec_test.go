@@ -46,3 +46,24 @@ func TestKeyEncode(t *testing.T) {
 	}
 
 }
+
+func TestKeyToHex(t *testing.T) {
+	tests := []struct {
+		input    []byte
+		expected []byte
+	}{
+		{[]byte{0xFF}, []byte{0xF, 0xF}},
+		{[]byte{0x3a, 0x05}, []byte{0x3, 0xa, 0x0, 0x5}},
+		{[]byte{0xAA, 0xFF, 0x01}, []byte{0xa, 0xa, 0xf, 0xf, 0x0, 0x1}},
+		{[]byte{0xAA, 0xFF, 0x01, 0xc2}, []byte{0xa, 0xa, 0xf, 0xf, 0x0, 0x1, 0xc, 0x2}},
+	}
+
+	for _, test := range tests {
+		res := keyToHex(test.input)
+		for i := 0; i < len(res); i++ {
+			if res[i] != test.expected[i] {
+				t.Errorf("Output doesn't match expected. got=%v expected=%v\n", res, test.expected)
+			}
+		}
+	}
+}
