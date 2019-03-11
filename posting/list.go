@@ -1102,22 +1102,18 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	if part, ok := l.partCache[startUid]; ok {
 		return part, nil
 	}
-	part, _, err := l.readListPartFromDisk(startUid)
-	return part, err
-}
 
-func (l *List) readListPartFromDisk(startUid uint64) (*pb.PostingList, uint64, error) {
 	nextKey := getNextPartKey(l.key, startUid)
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(nextKey)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	var part pb.PostingList
 	if err := unmarshalOrCopy(&part, item); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	return &part, item.Version(), nil
+	return &part, nil
 }
 
 func needsSplit(plist *pb.PostingList) bool {
