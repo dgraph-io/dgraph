@@ -192,7 +192,9 @@ func (it *PIterator) Valid() bool {
 	}
 
 	for it.splitIdx+1 < len(it.l.plist.Splits) {
-		it.moveToNextSplit()
+		if err := it.moveToNextSplit(); err != nil {
+			return false
+		}
 
 		if len(it.uids) > 0 {
 			return true
