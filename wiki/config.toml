@@ -41,6 +41,11 @@ title = "Dgraph Documentation"
   identifier = "deploy"
   weight = 7
 [[menu.main]]
+  name = "Enterprise Features"
+  url = "/enterprise/"
+  identifier = "enterprise"
+  weight = 8
+[[menu.main]]
   name = "FAQ"
   url = "/faq/"
   identifier = "faq"
