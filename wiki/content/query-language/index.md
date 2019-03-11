@@ -2117,6 +2117,7 @@ The following types are also accepted.
 #### Password type
 
 A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
+The passwords are encrypted using [Bcrypt](https://en.wikipedia.org/wiki/Bcrypt) in the background.
 
 For example: to set a password, first set schema, then the password:
 ```
