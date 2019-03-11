@@ -173,7 +173,7 @@ RDF N-Quad allows specifying a language for string values and an RDF type.  Lang
 <0x01> <name> "Аделаида"@ru .
 <0x01> <name> "Adélaïde"@fr .
 ```
-See also [how language is handled in query]({{< relref "#language-support" >}}).
+See also [how language strings are handled in queries]({{< relref "query-language/index.md#language-support" >}}).
 
 RDF types are attached to literals with the standard `^^` separator.  For example
 ```
