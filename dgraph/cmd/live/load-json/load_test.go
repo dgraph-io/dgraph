@@ -141,7 +141,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = z.DgraphClient(alphaService)
+	dg = z.DgraphClientWithGroot(":9180")
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.

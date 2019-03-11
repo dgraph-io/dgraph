@@ -38,6 +38,7 @@ var (
 
 func (s *state) init() {
 	s.predicate = make(map[string]*pb.SchemaUpdate)
+	s.types = make(map[string]*pb.TypeUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
 }
 
@@ -45,6 +46,7 @@ type state struct {
 	sync.RWMutex
 	// Map containing predicate to type information.
 	predicate map[string]*pb.SchemaUpdate
+	types     map[string]*pb.TypeUpdate
 	elog      trace.EventLog
 }
 
@@ -60,6 +62,10 @@ func (s *state) DeleteAll() {
 	for pred := range s.predicate {
 		delete(s.predicate, pred)
 	}
+
+	for typ := range s.types {
+		delete(s.types, typ)
+	}
 }
 
 // Delete updates the schema in memory and disk
@@ -68,13 +74,36 @@ func (s *state) Delete(attr string) error {
 	defer s.Unlock()
 
 	glog.Infof("Deleting schema for predicate: [%s]", attr)
-	delete(s.predicate, attr)
 	txn := pstore.NewTransactionAt(1, true)
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
 		return err
 	}
 	// Delete is called rarely so sync write should be fine.
-	return txn.CommitAt(1, nil)
+	if err := txn.CommitAt(1, nil); err != nil {
+		return err
+	}
+
+	delete(s.predicate, attr)
+	return nil
+}
+
+// DeleteType updates the schema in memory and disk
+func (s *state) DeleteType(typeName string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	glog.Infof("Deleting type definition for type: [%s]", typeName)
+	txn := pstore.NewTransactionAt(1, true)
+	if err := txn.Delete(x.TypeKey(typeName)); err != nil {
+		return err
+	}
+	// Delete is called rarely so sync write should be fine.
+	if err := txn.CommitAt(1, nil); err != nil {
+		return err
+	}
+
+	delete(s.types, typeName)
+	return nil
 }
 
 func logUpdate(schema pb.SchemaUpdate, pred string) string {
@@ -86,9 +115,12 @@ func logUpdate(schema pb.SchemaUpdate, pred string) string {
 		pred, typ, schema.Tokenizer, schema.Directive, schema.Count)
 }
 
-// Set sets the schema for given predicate in memory
-// schema mutations must flow through update function, which are
-// synced to db
+func logTypeUpdate(typ pb.TypeUpdate, typeName string) string {
+	return fmt.Sprintf("Setting type definition for type %s: %v\n", typeName, typ)
+}
+
+// Set sets the schema for the given predicate in memory.
+// Schema mutations must flow through the update function, which are synced to the db.
 func (s *state) Set(pred string, schema pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
@@ -96,7 +128,16 @@ func (s *state) Set(pred string, schema pb.SchemaUpdate) {
 	s.elog.Printf(logUpdate(schema, pred))
 }
 
-// Get gets the schema for given predicate
+// SetType sets the type for the given predicate in memory.
+// schema mutations must flow through the update function, which are synced to the db.
+func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
+	s.Lock()
+	defer s.Unlock()
+	s.types[typeName] = &typ
+	s.elog.Printf(logTypeUpdate(typ, typeName))
+}
+
+// Get gets the schema for the given predicate.
 func (s *state) Get(pred string) (pb.SchemaUpdate, bool) {
 	s.RLock()
 	defer s.RUnlock()
@@ -105,6 +146,17 @@ func (s *state) Get(pred string) (pb.SchemaUpdate, bool) {
 		return pb.SchemaUpdate{}, false
 	}
 	return *schema, true
+}
+
+// GetType gets the type definition for the given type name.
+func (s *state) GetType(typeName string) (pb.TypeUpdate, bool) {
+	s.RLock()
+	defer s.RUnlock()
+	typ, has := s.types[typeName]
+	if !has {
+		return pb.TypeUpdate{}, false
+	}
+	return *typ, true
 }
 
 // TypeOf returns the schema type of predicate
@@ -146,6 +198,17 @@ func (s *state) Predicates() []string {
 	defer s.RUnlock()
 	var out []string
 	for k := range s.predicate {
+		out = append(out, k)
+	}
+	return out
+}
+
+// Types returns the list of types.
+func (s *state) Types() []string {
+	s.RLock()
+	defer s.RUnlock()
+	var out []string
+	for k := range s.types {
 		out = append(out, k)
 	}
 	return out
@@ -270,6 +333,16 @@ func Load(predicate string) error {
 
 // LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
+	if err := LoadSchemaFromDb(); err != nil {
+		return err
+	}
+	if err := LoadTypesFromDb(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func LoadSchemaFromDb() error {
 	prefix := x.SchemaPrefix()
 	txn := pstore.NewTransactionAt(1, false)
 	defer txn.Discard()
@@ -294,6 +367,40 @@ func LoadFromDb() error {
 			}
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
 			State().Set(attr, s)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func LoadTypesFromDb() error {
+	prefix := x.TypePrefix()
+	txn := pstore.NewTransactionAt(1, false)
+	defer txn.Discard()
+	itr := txn.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
+	defer itr.Close()
+
+	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pk := x.Parse(key)
+		if pk == nil {
+			continue
+		}
+		attr := pk.Attr
+		var t pb.TypeUpdate
+		err := item.Value(func(val []byte) error {
+			if len(val) == 0 {
+				t = pb.TypeUpdate{TypeName: attr}
+			}
+			x.Checkf(t.Unmarshal(val), "Error while loading types from db")
+			State().SetType(attr, t)
 			return nil
 		})
 		if err != nil {

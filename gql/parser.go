@@ -884,14 +884,19 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 	return items, it.Errorf("Expecting ] to end list but none was found")
 }
 
-// parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
-	// pred should be followed by colon
+// parseSchemaPredsOrTypes parses till rightround is found
+func parseSchemaPredsOrTypes(it *lex.ItemIterator, s *pb.SchemaRequest) error {
+	// pred or type should be followed by colon
 	it.Next()
 	item := it.Item()
-	if item.Typ != itemName && item.Val != "pred" {
+	if item.Typ != itemName && !(item.Val == "pred" || item.Val == "type") {
 		return item.Errorf("Invalid schema block")
 	}
+	parseTypes := false
+	if item.Val == "type" {
+		parseTypes = true
+	}
+
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemColon {
@@ -902,11 +907,21 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	it.Next()
 	item = it.Item()
 	if item.Typ == itemName {
-		s.Predicates = append(s.Predicates, item.Val)
+		if parseTypes {
+			s.Types = append(s.Types, item.Val)
+		} else {
+			s.Predicates = append(s.Predicates, item.Val)
+		}
 	} else if item.Typ == itemLeftSquare {
-		var err error
-		if s.Predicates, err = parseListItemNames(it); err != nil {
+		names, err := parseListItemNames(it)
+		if err != nil {
 			return err
+		}
+
+		if parseTypes {
+			s.Types = names
+		} else {
+			s.Predicates = names
 		}
 	} else {
 		return item.Errorf("Invalid schema block")
@@ -952,7 +967,7 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 				return nil, item.Errorf("Too many left rounds in schema block")
 			}
 			leftRoundSeen = true
-			if err := parseSchemaPredicates(it, &s); err != nil {
+			if err := parseSchemaPredsOrTypes(it, &s); err != nil {
 				return nil, err
 			}
 		default:

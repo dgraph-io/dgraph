@@ -27,16 +27,14 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestQuery(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+			dg := z.DgraphClientWithGroot(":9180")
 			require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
 		}
@@ -332,7 +330,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	js := `
   {
-    "schema": [
+    "schema": [` + x.AclPredicates + `,
       {
         "predicate": "_predicate_",
         "type": "string",
@@ -388,6 +386,18 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	js := `
   {
     "schema": [
+      {
+        "predicate": "dgraph.xid"
+      },
+      {
+        "predicate": "dgraph.password"
+      },
+      {
+        "predicate": "dgraph.group.acl"
+      },
+      {
+        "predicate": "dgraph.user.group"
+      },
       {
         "predicate": "_predicate_"
       },
@@ -515,7 +525,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 
 	js := `
   {
-    "schema": [
+    "schema": [` + x.AclPredicates + `,
       {
         "predicate": "_predicate_",
         "type": "string",

@@ -24,7 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 func TestGetUID(t *testing.T) {
@@ -1759,7 +1761,11 @@ func TestDefaultValueVar2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"data":[]}}`, js)
 }
 
+var client *dgo.Dgraph
+
 func TestMain(m *testing.M) {
+	client = z.DgraphClientWithGroot(":9180")
+
 	populateCluster()
 	os.Exit(m.Run())
 }

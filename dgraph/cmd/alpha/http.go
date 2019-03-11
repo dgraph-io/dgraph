@@ -423,7 +423,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
-	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			md = metadata.New(nil)
