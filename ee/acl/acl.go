@@ -410,7 +410,7 @@ func chMod(conf *viper.Viper) error {
 	case len(predicate) == 0 && len(predRegex) == 0:
 		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
 	case perm > 7:
-		return fmt.Errorf("the perm value must be less than 7, the provided value is %d", perm)
+		return fmt.Errorf("the perm value must be less than or equal to 7, the provided value is %d", perm)
 	case len(predRegex) > 0:
 		// make sure the predRegex can be compiled as a regex
 		if _, err := regexp.Compile(predRegex); err != nil {
