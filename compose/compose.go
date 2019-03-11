@@ -76,6 +76,8 @@ type Options struct {
 	TestPortRange  bool
 	Verbosity      int
 	OutFile        string
+	LocalBin       bool
+	WhiteList      bool
 }
 
 var opts Options
@@ -134,7 +136,10 @@ func initService(basename string, idx, grpcPort int) Service {
 		// no data volume
 	}
 
-	svc.Command = "/gobin/dgraph"
+	svc.Command = "dgraph"
+	if opts.LocalBin {
+		svc.Command = "/gobin/dgraph"
+	}
 	if opts.UserOwnership {
 		user, err := user.Current()
 		if err != nil {
@@ -144,6 +149,7 @@ func initService(basename string, idx, grpcPort int) Service {
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
+	svc.Command += " " + basename
 	if opts.Jaeger {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
@@ -168,7 +174,7 @@ func getZero(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" zero -o %d --idx=%d", getOffset(idx), idx)
+	svc.Command += fmt.Sprintf(" -o %d --idx=%d", getOffset(idx), idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
@@ -196,12 +202,14 @@ func getAlpha(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" alpha -o %d", baseOffset+getOffset(idx))
+	svc.Command += fmt.Sprintf(" -o %d", baseOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
-	svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	if opts.WhiteList {
+		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	}
 	if opts.EnterpriseMode {
 		svc.Command += " --enterprise_features"
 		if opts.AclSecret != "" {
@@ -343,6 +351,10 @@ func main() {
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O", "./docker-compose.yml",
 		"name of output file")
+	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
+		"Use locally compiled binary. Set to false to pick binary from docker container.")
+	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
+		"If true, include a whitelist.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
