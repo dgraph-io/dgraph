@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl/lib"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -235,7 +236,17 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	return nil
 }
 
-func mod(conf *viper.Viper) error {
+func isFlagPassed(f *pflag.FlagSet, name string) bool {
+	found := false
+	f.Visit(func(f *pflag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+func mod(flags *pflag.FlagSet, conf *viper.Viper) error {
 	userId, _, err := getUserAndGroup(conf)
 	if err != nil {
 		return err
@@ -247,7 +258,7 @@ func mod(conf *viper.Viper) error {
 			return err
 		}
 
-		if conf.Get("group_list") != nil {
+		if isFlagPassed(flags, "group_list") {
 			return userMod(conf, userId, conf.GetString("group_list"))
 		}
 		return changePassword(conf, userId)
