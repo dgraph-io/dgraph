@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/ee/acl/lib"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
@@ -103,17 +104,7 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 		return fmt.Errorf("unable to create user because of conflict: %v", userid)
 	}
 
-	createUserNQuads := []*api.NQuad{
-		{
-			Subject:     "_:newuser",
-			Predicate:   "dgraph.xid",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userid}},
-		},
-		{
-			Subject:     "_:newuser",
-			Predicate:   "dgraph.password",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
-		}}
+	createUserNQuads := lib.GetCreateUserNQuads(userid, password)
 
 	mu := &api.Mutation{
 		CommitNow: true,
@@ -156,6 +147,11 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 			Subject:     "_:newgroup",
 			Predicate:   "dgraph.xid",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
+		},
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
 		},
 	}
 
@@ -489,7 +485,7 @@ func chMod(conf *viper.Viper) error {
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
 	query := `
     query search($userid: string){
-      user(func: eq(dgraph.xid, $userid)) {
+      user(func: eq(dgraph.xid, $userid)) @filter(type(User)) {
 	    uid
         dgraph.xid
         dgraph.user.group {
@@ -537,7 +533,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 
 	// write query header
 	query := fmt.Sprintf(`query search($groupid: string){
-        group(func: eq(dgraph.xid, $groupid)) {
+        group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
 			uid
 		    %s }}`, strings.Join(fields, ", "))
 
