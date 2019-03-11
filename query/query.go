@@ -2003,7 +2003,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
+		if sg.SrcUIDs == nil {
+			glog.Errorf("SrcUIDs is unexpectedly nil. Subgraph: %+v", sg)
+			rch <- x.Errorf("SrcUIDs shouldn't be nil.")
+			return
+		}
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
@@ -2702,13 +2706,13 @@ func (e *InternalError) Error() string {
 	return "pb.error: " + e.err.Error()
 }
 
-// TODO: This looks unnecessary.
-type ExecuteResult struct {
+type ExecutionResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*api.SchemaNode
+	Types      []*pb.TypeUpdate
 }
 
-func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err error) {
+func (req *QueryRequest) Process(ctx context.Context) (er ExecutionResult, err error) {
 	err = req.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
@@ -2718,6 +2722,9 @@ func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err err
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
+		}
+		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching types")
 		}
 	}
 	return er, nil

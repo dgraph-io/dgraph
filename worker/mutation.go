@@ -120,8 +120,8 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	}
 	old, _ := schema.State().Get(update.Predicate)
 	current := *update
-	// Sets only in memory, we will update it on disk only after schema mutations are successful and
-	// written to disk.
+	// Sets only in memory, we will update it on disk only after schema mutations
+	// are successful and  written to disk.
 	schema.State().Set(update.Predicate, current)
 
 	// Once we remove index or reverse edges from schema, even though the values
@@ -176,6 +176,30 @@ func updateSchemaType(attr string, typ types.TypeID, index uint64) {
 	updateSchema(attr, s)
 }
 
+func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, startTs uint64) error {
+	if err := checkType(update); err != nil {
+		return err
+	}
+	current := *update
+
+	schema.State().SetType(update.TypeName, current)
+	return updateType(update.TypeName, *update)
+}
+
+// We commit schema to disk in blocking way, should be ok because this happens
+// only during schema mutations or we see a new predicate.
+func updateType(typeName string, t pb.TypeUpdate) error {
+	schema.State().SetType(typeName, t)
+	txn := pstore.NewTransactionAt(1, true)
+	defer txn.Discard()
+	data, err := t.Marshal()
+	x.Check(err)
+	if err := txn.SetWithMeta(x.TypeKey(typeName), data, posting.BitSchemaPosting); err != nil {
+		return err
+	}
+	return txn.CommitAt(1, nil)
+}
+
 func hasEdges(attr string, startTs uint64) bool {
 	pk := x.ParsedKey{Attr: attr}
 	iterOpt := badger.DefaultIteratorOptions
@@ -200,7 +224,6 @@ func hasEdges(attr string, startTs uint64) bool {
 	}
 	return false
 }
-
 func checkSchema(s *pb.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
 		return x.Errorf("No predicate specified in schema mutation")
@@ -260,6 +283,32 @@ func checkSchema(s *pb.SchemaUpdate) error {
 				" while there is data for pred: %s", s.Predicate)
 		}
 	}
+	return nil
+}
+
+func checkType(t *pb.TypeUpdate) error {
+	if len(t.TypeName) == 0 {
+		return x.Errorf("Type name must be specified in type update")
+	}
+
+	for _, field := range t.Fields {
+		if len(field.Predicate) == 0 {
+			return x.Errorf("Field in type definition must have a name")
+		}
+
+		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
+			return x.Errorf("Field with value type OBJECT must specify the name of the object type")
+		}
+
+		if field.Directive != pb.SchemaUpdate_NONE {
+			return x.Errorf("Field in type definition cannot have a directive")
+		}
+
+		if len(field.Tokenizer) > 0 {
+			return x.Errorf("Field in type definition cannot have tokenizers")
+		}
+	}
+
 	return nil
 }
 
@@ -404,6 +453,7 @@ func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
 		}
 		mu.Edges = append(mu.Edges, edge)
 	}
+
 	for _, schema := range src.Schema {
 		gid := groups().BelongsTo(schema.Predicate)
 		mu := mm[gid]
@@ -413,6 +463,7 @@ func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
 		}
 		mu.Schema = append(mu.Schema, schema)
 	}
+
 	if src.DropAll {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
@@ -423,6 +474,19 @@ func populateMutationMap(src *pb.Mutations) map[uint32]*pb.Mutations {
 			mu.DropAll = true
 		}
 	}
+
+	// Type definitions are sent to all groups.
+	if len(src.Types) > 0 {
+		for _, gid := range groups().KnownGroups() {
+			mu := mm[gid]
+			if mu == nil {
+				mu = &pb.Mutations{GroupId: gid}
+				mm[gid] = mu
+			}
+			mu.Types = src.Types
+		}
+	}
+
 	return mm
 }
 
