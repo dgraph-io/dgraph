@@ -1974,3 +1974,26 @@ func TestMaxPredicateSize(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 }
+
+func TestQueryUnknownType(t *testing.T) {
+	query := `schema(type: UnknownType) {}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestQuerySingleType(t *testing.T) {
+	query := `schema(type: Person) {}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
+		"fields":[{"name":"name", "type":"string"}, {"name":"pet", "type":"Animal"}]}]}}`,
+		js)
+}
+
+func TestQueryMultipleTypes(t *testing.T) {
+	query := `schema(type: [Person, Animal]) {}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
+		"fields":[{"name":"name", "type":"string"}]},
+	{"name":"Person", "fields":[{"name":"name", "type": "string"},
+		{"name":"pet", "type":"Animal"}]}]}}`, js)
+}
