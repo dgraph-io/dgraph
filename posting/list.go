@@ -831,7 +831,9 @@ func (l *List) rollup(readTs uint64) error {
 			l.partCache[plist.StartUid] = plist
 
 			splitIdx++
-			init()
+			if err := init(); err != nil {
+				return err
+			}
 		}
 
 		enc.Add(p.Uid)
