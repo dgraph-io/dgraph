@@ -42,9 +42,16 @@ func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 		var isSet bool
 		switch conf.Get(opt).(type) {
 		case string:
-			isSet = len(conf.GetString(opt)) > 0
+			if opt == "group_list" {
+				// handle group_list specially since the default value is not an empty string
+				isSet = conf.GetString(opt) != defaultGroupList
+			} else {
+				isSet = len(conf.GetString(opt)) > 0
+			}
 		case int:
 			isSet = conf.GetInt(opt) > 0
+		case bool:
+			isSet = conf.GetBool(opt)
 		default:
 			return fmt.Errorf("unexpected option type for %s", opt)
 		}
