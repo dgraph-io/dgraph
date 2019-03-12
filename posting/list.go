@@ -51,7 +51,6 @@ var (
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
-	maxListSize      = 2000000
 )
 
 const (
@@ -1156,7 +1155,7 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 }
 
 func needsSplit(plist *pb.PostingList) bool {
-	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+	return plist.Size() >= MaxListSize && len(plist.Pack.Blocks) > 1
 }
 
 func (l *List) splitList() error {

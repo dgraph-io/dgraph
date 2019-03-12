@@ -1010,7 +1010,7 @@ func TestMain(m *testing.M) {
 	opt.ValueDir = dir
 	ps, err = badger.OpenManaged(opt)
 	x.Check(err)
-	Init(ps)
+	Init(ps, 0)
 	schema.Init(ps)
 
 	r := m.Run()

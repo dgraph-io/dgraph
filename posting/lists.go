@@ -145,12 +145,16 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore *badger.DB
-	closer *y.Closer
+	pstore      *badger.DB
+	closer      *y.Closer
+	MaxListSize = 10 * MB
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB) {
+func Init(ps *badger.DB, maxListSize int) {
+	if maxListSize > 0 {
+		MaxListSize = maxListSize
+	}
 	pstore = ps
 	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
