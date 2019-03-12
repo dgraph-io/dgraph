@@ -17,10 +17,11 @@
 package gql
 
 import (
+	"errors"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 func ParseMutation(mutation string) (*api.Mutation, error) {
@@ -28,75 +29,65 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
 	var mu api.Mutation
-
 	var inTxn bool
+
+	if !it.Next() {
+		return nil, errors.New("Invalid mutation")
+	}
+	item := it.Item()
+	if item.Typ == itemMutationTxn {
+		inTxn = true
+		for it.Next() {
+			item = it.Item()
+			if item.Typ == itemLeftCurl {
+				continue
+			}
+			if item.Typ != itemMutationTxnOp {
+				return nil, x.Errorf("Unexpected %q inside of txn block.", item.Val)
+			}
+			if item.Val == "query" {
+				if err := parseMutationTxnQuery(it); err != nil {
+					return nil, err
+				}
+				item = it.Item()
+			} else if item.Val == "mutation" {
+				if !it.Next() {
+					return nil, errors.New("Invalid mutation block")
+				}
+				item = it.Item()
+				break
+			}
+		}
+	}
+	if item.Typ != itemLeftCurl {
+		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+	}
+
 	for it.Next() {
 		item := it.Item()
-		glog.Infof("*** ParseMutation ITEM: %+v", item)
-		switch item.Typ {
-		case itemText:
-		case itemMutationTxn:
-			glog.Infof("**** itemMutationTxn: %+v", item)
-			if inTxn {
-				return nil, x.Errorf("Too many txn blocks")
-			}
-			if !it.Next() { // eat '{'
-				return nil, x.Errorf("Empty txn block")
-			}
-		case itemMutationTxnOp:
-			glog.Infof("**** itemMutationTxnOp: %+v", item)
-			peek, ok := it.PeekOne()
-			if !ok {
-				return nil, x.Errorf("Invalid query block")
-			}
-			glog.Infof("**** itemMutationTxnOp ITEM: %+v", peek)
-			if peek.Typ != itemLeftCurl {
-				return nil, x.Errorf("Expected { at the start of block. Got: [%s]!", item.Val)
-			}
-			if err := parseTxnQueryOp(it); err != nil {
-				return nil, err
-			}
-
-		case itemMutationOp:
-			glog.Infof("**** itemMutationOp: %+v", item)
-			item := it.Item()
-			if item.Typ != itemLeftCurl {
-				return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
-			}
-			if err := parseMutationOp(it, item.Val, &mu); err != nil {
-				return nil, err
-			}
-
-		case itemRightCurl:
+		if item.Typ == itemText {
+			continue
+		}
+		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
-			if it.Next() && it.Item().Typ != lex.ItemEOF {
+			if !inTxn && it.Next() && it.Item().Typ != lex.ItemEOF {
 				return nil, x.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
 			}
 			return &mu, nil
+		}
+		if item.Typ == itemMutationOp {
+			if err := parseMutationOp(it, item.Val, &mu); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return nil, x.Errorf("Invalid mutation.")
 }
 
-func parseTxnQueryOp(it *lex.ItemIterator) error {
-	// var parse bool
+func parseMutationTxnQuery(it *lex.ItemIterator) error {
 	for it.Next() {
 		item := it.Item()
-		glog.Infof("QUERY ITEM: %+v", item)
-		if item.Typ == itemText {
-			continue
-		}
-		// if item.Typ == itemLeftCurl {
-		// 	if parse {
-		// 		return nil, x.Errorf("Too many left curls in set mutation.")
-		// 	}
-		// 	parse = true
-		// }
 		if item.Typ == itemMutationContent {
-			// 	if !parse {
-			// 		return nil, x.Errorf("Mutation syntax invalid.")
-			// 	}
-			glog.Infof("*** itemMutationContent: %+v", item)
 			return nil
 		}
 	}

@@ -19,7 +19,6 @@ package gql
 
 import (
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/golang/glog"
 )
 
 const (
@@ -72,8 +71,7 @@ const (
 )
 
 func lexInsideTxn(l *lex.Lexer) lex.StateFn {
-	// l.Mode = lexInsideTxn
-	l.Mode = lexNameMutation
+	l.Mode = lexInsideMutation
 	for {
 		switch r := l.Next(); {
 		case r == rightCurl:
@@ -85,13 +83,13 @@ func lexInsideTxn(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
 		case isNameBegin(r):
-			return lexTxnMutation
+			return lexMutationTxn
 		case r == '#':
 			return lexComment
 		case r == lex.EOF:
 			return l.Errorf("Unclosed txn action")
 		default:
-			return l.Errorf("Unrecognized character inside txn: %#U", r)
+			return l.Errorf("Unrecognized character in lexInsideTxn: %#U", r)
 		}
 	}
 }
@@ -426,7 +424,7 @@ func lexNameMutation(l *lex.Lexer) lex.StateFn {
 	return l.Mode
 }
 
-func lexTxnMutation(l *lex.Lexer) lex.StateFn {
+func lexMutationTxn(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if isNameSuffix(r) {
@@ -434,14 +432,16 @@ func lexTxnMutation(l *lex.Lexer) lex.StateFn {
 		}
 		l.Backup()
 		word := l.Input[l.Start:l.Pos]
-		glog.Infof("... lexTxnMutation word: %q", word)
 		switch word {
 		case "query":
 			l.Emit(itemMutationTxnOp)
 			return lexTextQuery
 		case "mutation":
-			l.Emit(itemMutationOp)
-			return lexTextMutation
+			l.Depth = 0
+			l.Emit(itemMutationTxnOp)
+			return lexInsideMutation
+		default:
+			l.Errorf("Invalid operation type: %s", word)
 		}
 		break
 	}
@@ -473,32 +473,31 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 }
 
 func lexTextQuery(l *lex.Lexer) lex.StateFn {
-	depth := l.Depth
+	depth := 0
 	for {
 		r := l.Next()
 		if r == lex.EOF {
 			return l.Errorf("Unclosed query text")
 		}
+		if isSpace(r) || lex.IsEndOfLine(r) {
+			continue
+		}
 		if r == leftCurl {
-			if l.Depth == depth {
-				l.Emit(itemLeftCurl)
-			}
-			l.Depth++
+			depth++
 		}
 		if r == rightCurl {
-			l.Depth--
-			if l.Depth == depth {
-				l.Backup()
-				l.Emit(itemRightCurl)
-				l.Next()
-				l.Emit(itemMutationContent)
-				break
-			} else if l.Depth < depth {
+			depth--
+			if l.Depth < depth {
 				return l.Errorf("Invalid character '}' inside query text")
 			}
 		}
+		if depth > 0 {
+			continue
+		}
+		l.Emit(itemMutationContent)
+		break
 	}
-	return lexInsideMutation
+	return lexInsideTxn
 }
 
 // This function is used to absorb the object value.
