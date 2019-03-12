@@ -112,14 +112,14 @@ UID   : 0x3
 Group : dev  
 Group : sre  
 ```
+
 7. check information about a group
 ```bash
 dgraph acl info -d localhost:9180 -g dev
 ```
-and the output should include the users in the group, as well as the permissions that the group has access to, e.g.
+and the output should include the users in the group, as well as the permissions the group's ACL rules, e.g.
 ```bash
 Current password for groot:
-
 Running transaction with dgraph endpoint: localhost:9180
 Login successful.
 Group: dev
@@ -131,9 +131,30 @@ ACL  : {name  7}
 ```
 
 ## Access data using a client
-Now that the ACL rules are set, if we want to use a client to access the data
+Now that the ACL data are set, to access the data protected by ACL rules, we need to first login through an user.
+In the dgo client, this is done through the `Login` method:
+```go
+	serviceAddr := "localhost:9180"
+	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
 
-A similar example using the dgraph4j client is [Place holder here](http://www.dgraph.io)
+	ctx := context.Background()
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	if err := dg.Login(ctx, "alice", "password123"); err != nil {
+		return err
+	}
+
+	txn := dg.NewTxn()
+	defer txn.Discard(ctx)
+	_, err = txn.Mutate(...)
+```
+
+Similarly, this can be done using the dgraph4j client:
+```java
+
+```
 
 ## Implementation details
 If you are curious about how we implemented ACL, you can find the details [here](./impl)
