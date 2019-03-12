@@ -677,16 +677,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	michael := assigned.Uids["michael"]
 
-	sortSchema := func(schema []*api.SchemaNode) {
-		sort.Slice(schema, func(i, j int) bool {
-			return schema[i].Predicate < schema[j].Predicate
-		})
-	}
-
 	resp, err := c.NewTxn().Query(ctx, `schema{}`)
-	require.NoError(t, err)
-	sortSchema(resp.Schema)
-	b, err := json.Marshal(resp.Schema)
 	require.NoError(t, err)
 	z.CompareJSON(t, asJson(`[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
@@ -695,7 +686,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
-		asJson(string(b)))
+		string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
 
@@ -710,16 +701,13 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err = c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
-	sortSchema(resp.Schema)
-	b, err = json.Marshal(resp.Schema)
-	require.NoError(t, err)
 	z.CompareJSON(t, asJson(`[`+
 		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
-		asJson(string(b)))
+		string(resp.Json))
 }
 
 func asJson(schema string) string {

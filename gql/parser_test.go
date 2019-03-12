@@ -1572,6 +1572,33 @@ func TestParseSchemaAndQuery(t *testing.T) {
 	require.Contains(t, err.Error(), "Schema block is not allowed with query block")
 }
 
+func TestParseSchemaType(t *testing.T) {
+	query := `
+		schema (type: Person) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 1)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaTypeMulti(t *testing.T) {
+	query := `
+		schema (type: [Person, Animal]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 2)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, res.Schema.Types[1], "Animal")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
 func TestParseSchemaError(t *testing.T) {
 	query := `
 		schema () {

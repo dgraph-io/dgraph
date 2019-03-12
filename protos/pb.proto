@@ -199,6 +199,7 @@ message Mutations {
 	repeated SchemaUpdate schema = 4;
 	bool drop_all                = 5;
 	bool ignore_index_conflict   = 6;
+	repeated TypeUpdate types    = 7;
 }
 
 message Snapshot {
@@ -316,6 +317,8 @@ message SchemaRequest {
 	repeated string predicates = 2;
 	// fields can be on of type, index, reverse or tokenizer
 	repeated string fields = 3;
+
+  repeated string types = 4;
 }
 
 message SchemaResult {
