@@ -46,7 +46,7 @@ Query Example: In the example dataset, edges that link movies to directors and a
 
 The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique 64 bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
+Every node had a unique 64-bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
 Query Example: "Blade Runner" movie data found by UID.
 
@@ -182,7 +182,9 @@ For example:
 
 {{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
 
-{{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
+---
+
+In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -348,7 +350,7 @@ Keep the following in mind when designing regular expression queries.
 - If the partial result (for subset of trigrams) exceeds 1000000 uids during index scan, the query is stopped to prohibit expensive queries.
 
 
-### Full Text Search
+### Full-Text Search
 
 Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
 
@@ -357,9 +359,9 @@ Schema Types: `string`
 Index Required: `fulltext`
 
 
-Apply full text search with stemming and stop words to find strings matching all or any of the given text.
+Apply full-text search with stemming and stop words to find strings matching all or any of the given text.
 
-The following steps are applied during index generation and to process full text search arguments:
+The following steps are applied during index generation and to process full-text search arguments:
 
 1. Tokenization (according to Unicode word boundaries).
 1. Conversion to lowercase.
@@ -367,7 +369,7 @@ The following steps are applied during index generation and to process full text
 1. Stemming using language-specific stemmer (if supported by language).
 1. Stop words removal (if supported by language).
 
-Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full-text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
 Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
@@ -2028,8 +2030,8 @@ Mutation:
 ```
 Query:
 ```
-query {
-  q(func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
+{
+  q(func: alloftext(<公司>@zh, "夏新科技有限责任公司")) {
     _predicate_
   }
 }
@@ -2139,7 +2141,7 @@ The indices available for strings are as follows.
 
 | Dgraph function            | Required index / tokenizer             | Notes |
 | :-----------------------   | :------------                          | :---  |
-| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
+| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full-text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
 | `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                   |
 | `allofterms`, `anyofterms` | `term`                                 | Allows searching by a term in a sentence.                |
 | `alloftext`, `anyoftext`   | `fulltext`                             | Matching with language specific stemming and stopwords.  |
@@ -3027,14 +3029,14 @@ more concrete.
 #### Unicode Characters
 
 This example shows the type of tokenization that is similar to term
-tokenization of full text search. Instead of being broken down into terms or
+tokenization of full-text search. Instead of being broken down into terms or
 stem words, the text is instead broken down into its constituent unicode
 codepoints (in Go terminology these are called *runes*).
 
 {{% notice "note" %}}
 This tokenizer would create a very large index that would be expensive to
 manage and store. That's one of the reasons that text indexing usually occurs
-at a higher level; stem words for full text search or terms for term search.
+at a higher level; stem words for full-text search or terms for term search.
 {{% /notice %}}
 
 The implementation of the plugin looks like this:
