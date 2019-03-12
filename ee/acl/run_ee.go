@@ -108,7 +108,7 @@ func initSubcommands() []*x.SubCommand {
 		Short: "Run Dgraph acl tool to modify a user's password, a user's group list, or a" +
 			"group's predicate permissions",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := mod(cmdMod.Cmd.Flags(), cmdMod.Conf); err != nil {
+			if err := mod(cmdMod.Conf); err != nil {
 				fmt.Printf("Unable to modify: %v\n", err)
 				os.Exit(1)
 			}

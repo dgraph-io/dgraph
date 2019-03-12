@@ -23,7 +23,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -242,7 +241,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	return nil
 }
 
-func mod(flags *pflag.FlagSet, conf *viper.Viper) error {
+func mod(conf *viper.Viper) error {
 	userId, _, err := getUserAndGroup(conf)
 	if err != nil {
 		return err
