@@ -201,16 +201,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 
 		switch item.UserMeta() {
-		case BitEmptyPosting:
-			l.minTs = item.Version()
-			return l, nil
-		case BitCompletePosting:
+		case BitEmptyPosting, BitCompletePosting:
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			// No need to do Next here. The outer loop can take care of skipping more versions of
-			// the same key.
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {

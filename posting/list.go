@@ -695,6 +695,33 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
+func (l *List) plsAreEmpty() (bool, error) {
+	if len(l.plist.Splits) == 0 {
+		if l.plist.Pack == nil || len(l.plist.Pack.Blocks) == 0 {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	}
+
+	for _, startUid := range l.plist.Splits {
+		kv := &bpb.KV{}
+		kv.Version = l.minTs
+		kv.Key = getNextPartKey(l.key, startUid)
+		plist, err := l.readListPart(startUid)
+		if err != nil {
+			return false, err
+		}
+
+		if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
+			continue
+		} else {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 func (l *List) Rollup() ([]*bpb.KV, error) {
 	l.Lock()
 	defer l.Unlock()
@@ -706,7 +733,10 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(l.plist)
+	val, meta, err := l.marshalPostingList(l.plist)
+	if err != nil {
+		return nil, err
+	}
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
@@ -719,7 +749,10 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		if err != nil {
 			return nil, err
 		}
-		val, meta := marshalPostingList(plist)
+		val, meta, err := l.marshalPostingList(plist)
+		if err != nil {
+			return nil, err
+		}
 		kv.UserMeta = []byte{meta}
 		kv.Value = val
 		kvs = append(kvs, kv)
@@ -728,13 +761,16 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	return kvs, nil
 }
 
-func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if (plist.Pack == nil || len(plist.Pack.Blocks) == 0) && len(plist.Splits) == 0 {
-		return nil, BitEmptyPosting
-	}
+func (l *List) marshalPostingList(plist *pb.PostingList) ([]byte, byte, error) {
 	data, err := plist.Marshal()
 	x.Check(err)
-	return data, BitCompletePosting
+
+	if empty, err := l.plsAreEmpty(); err != nil {
+		return nil, BitEmptyPosting, err
+	} else if empty {
+		return data, BitEmptyPosting, nil
+	}
+	return data, BitCompletePosting, nil
 }
 
 const blockSize int = 256
