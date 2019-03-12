@@ -34,6 +34,8 @@ func TestDataKey(t *testing.T) {
 		require.True(t, pk.IsData())
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, uid, pk.Uid)
+		require.Equal(t, uint64(0), pk.StartUid)
+		require.Equal(t, false, pk.HasStartUid)
 	}
 
 	keys := make([]string, 0, 1024)
@@ -46,6 +48,35 @@ func TestDataKey(t *testing.T) {
 	require.True(t, sort.StringsAreSorted(keys))
 	for i, key := range keys {
 		exp := DataKey("testing.key", uint64(i+1))
+		require.Equal(t, string(exp), key)
+	}
+}
+
+func TestDataKeyWithStartUid(t *testing.T) {
+	var uid uint64
+	startUid := uint64(1024)
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+		key := DataKeyWithStartUid(sattr, uid, startUid)
+		pk := Parse(key)
+
+		require.True(t, pk.IsData())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, uid, pk.Uid)
+		require.Equal(t, startUid, pk.StartUid)
+		require.Equal(t, true, pk.HasStartUid)
+	}
+
+	keys := make([]string, 0, 1024)
+	for uid = 1024; uid >= 1; uid-- {
+		key := DataKeyWithStartUid("testing.key", uid, startUid)
+		keys = append(keys, string(key))
+	}
+	// Test that sorting is as expected.
+	sort.Strings(keys)
+	require.True(t, sort.StringsAreSorted(keys))
+	for i, key := range keys {
+		exp := DataKeyWithStartUid("testing.key", uint64(i+1), startUid)
 		require.Equal(t, string(exp), key)
 	}
 }

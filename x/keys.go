@@ -83,7 +83,7 @@ func DataKey(attr string, uid uint64) []byte {
 	return buf
 }
 
-func DataKeyMultiPart(attr string, uid, startUid uint64) []byte {
+func DataKeyWithStartUid(attr string, uid, startUid uint64) []byte {
 	buf := make([]byte, 2+len(attr)+2+8+8)
 	buf[0] = defaultPrefix
 	rest := buf[1:]
@@ -145,12 +145,14 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 }
 
 type ParsedKey struct {
-	byteType   byte
-	Attr       string
-	Uid        uint64
-	Term       string
-	Count      uint32
-	bytePrefix byte
+	byteType    byte
+	Attr        string
+	Uid         uint64
+	StartUid    uint64
+	HasStartUid bool
+	Term        string
+	Count       uint32
+	bytePrefix  byte
 }
 
 func (p ParsedKey) IsData() bool {
@@ -327,6 +329,19 @@ func Parse(key []byte) *ParsedKey {
 			return nil
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
+
+		if len(k) == 8 {
+			return p
+		}
+		k = k[8:]
+		if len(k) < 8 {
+			if Config.DebugMode {
+				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			}
+			return nil
+		}
+		p.StartUid = binary.BigEndian.Uint64(k)
+		p.HasStartUid = true
 	case ByteIndex:
 		p.Term = string(k)
 	case ByteCount, ByteCountRev:
