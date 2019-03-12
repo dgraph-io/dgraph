@@ -729,14 +729,18 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		return nil, err
 	}
 
+	var setEmptyBit bool
+	if empty, err := l.plsAreEmpty(); err != nil {
+		return nil, err
+	} else if empty {
+		setEmptyBit = true
+	}
+
 	var kvs []*bpb.KV
 	kv := &bpb.KV{}
 	kv.Version = l.minTs
 	kv.Key = l.key
-	val, meta, err := l.marshalPostingList(l.plist)
-	if err != nil {
-		return nil, err
-	}
+	val, meta := marshalPostingList(l.plist, setEmptyBit)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
@@ -749,10 +753,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		if err != nil {
 			return nil, err
 		}
-		val, meta, err := l.marshalPostingList(plist)
-		if err != nil {
-			return nil, err
-		}
+		val, meta := marshalPostingList(plist, setEmptyBit)
 		kv.UserMeta = []byte{meta}
 		kv.Value = val
 		kvs = append(kvs, kv)
@@ -761,16 +762,14 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	return kvs, nil
 }
 
-func (l *List) marshalPostingList(plist *pb.PostingList) ([]byte, byte, error) {
+func marshalPostingList(plist *pb.PostingList, setEmptyBit bool) ([]byte, byte) {
 	data, err := plist.Marshal()
 	x.Check(err)
 
-	if empty, err := l.plsAreEmpty(); err != nil {
-		return nil, BitEmptyPosting, err
-	} else if empty {
-		return data, BitEmptyPosting, nil
+	if setEmptyBit {
+		return data, BitEmptyPosting
 	}
-	return data, BitCompletePosting, nil
+	return data, BitCompletePosting
 }
 
 const blockSize int = 256
