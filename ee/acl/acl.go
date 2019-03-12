@@ -21,7 +21,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/ee/acl/lib"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -105,7 +104,7 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 		return fmt.Errorf("unable to create user because of conflict: %v", userid)
 	}
 
-	createUserNQuads := lib.GetCreateUserNQuads(userid, password)
+	createUserNQuads := CreateUserNQuads(userid, password)
 
 	mu := &api.Mutation{
 		CommitNow: true,
@@ -236,16 +235,6 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	return nil
 }
 
-func isFlagPassed(f *pflag.FlagSet, name string) bool {
-	found := false
-	f.Visit(func(f *pflag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
-}
-
 func mod(flags *pflag.FlagSet, conf *viper.Viper) error {
 	userId, _, err := getUserAndGroup(conf)
 	if err != nil {
@@ -258,10 +247,16 @@ func mod(flags *pflag.FlagSet, conf *viper.Viper) error {
 			return err
 		}
 
-		if isFlagPassed(flags, "group_list") {
-			return userMod(conf, userId, conf.GetString("group_list"))
+		if (conf.GetBool("new_password") && conf.GetString("group_list") != defaultGroupList) ||
+			(!conf.GetBool("new_password") && conf.GetString("group_list") == defaultGroupList) {
+			return fmt.Errorf("one of --new_password or --group_list must be provided, but not both")
 		}
-		return changePassword(conf, userId)
+
+		if conf.GetBool("new_password") {
+			return changePassword(conf, userId)
+		}
+
+		return userMod(conf, userId, conf.GetString("group_list"))
 	}
 
 	// when modifying the group, some user options are forbidden
@@ -281,13 +276,9 @@ func changePassword(conf *viper.Viper, userId string) error {
 	defer cancel()
 
 	// 2. get the new password
-	newPassword := conf.GetString("new_password")
-	if len(newPassword) == 0 {
-		var err error
-		newPassword, err = askUserPassword(userId, "New", 2)
-		if err != nil {
-			return err
-		}
+	newPassword, err := askUserPassword(userId, "New", 2)
+	if err != nil {
+		return err
 	}
 
 	ctx := context.Background()

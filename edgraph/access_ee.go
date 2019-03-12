@@ -25,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/ee/acl/lib"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -370,7 +369,7 @@ func ResetAcl() {
 		}
 
 		// Insert Groot.
-		createUserNQuads := lib.GetCreateUserNQuads(x.GrootId, "password")
+		createUserNQuads := acl.CreateUserNQuads(x.GrootId, "password")
 		mu := &api.Mutation{
 			StartTs:   startTs,
 			CommitNow: true,

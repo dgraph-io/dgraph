@@ -206,3 +206,23 @@ func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) 
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
 	return getClientWithUserCtx(x.GrootId, gPassword, conf)
 }
+
+func CreateUserNQuads(userId string, password string) []*api.NQuad {
+	return []*api.NQuad{
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userId}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
+		},
+	}
+}
