@@ -811,6 +811,7 @@ func (g *groupi) processOracleDeltaStream() {
 			})
 			if len(delta.Txns) > 0 {
 				last := delta.Txns[len(delta.Txns)-1]
+				// Update MaxAssigned on commit so best effort queries can get back latest data.
 				delta.MaxAssigned = x.Max(delta.MaxAssigned, last.CommitTs)
 			}
 			if glog.V(3) {
