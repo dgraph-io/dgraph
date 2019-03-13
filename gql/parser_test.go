@@ -4302,44 +4302,6 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 	require.Contains(t, err.Error(), "Invalid usage of '@' in function argument")
 }
 
-func TestParseUidAsArgument(t *testing.T) {
-	// This is a fix for #1655 and #1656 and #3110
-	tests := []struct {
-		in string
-	}{
-		{in: `{q(func: has(uid)) { uid }}`},
-		{in: `{q(func: gt(uid, 0)) { uid }}`},
-		{in: `{q(func: lt(uid, 0)) { uid }}`},
-		{in: `{q(func: eq(uid, 0)) { uid }}`},
-	}
-	for _, tc := range tests {
-		_, err := Parse(Request{Str: tc.in})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
-	}
-}
-
-func TestParseUidAsValue(t *testing.T) {
-	// issue #2827
-	tests := []struct {
-		in      string
-		failure bool
-	}{
-		{in: `{q(func: eq(name, "uid")) { uid }}`},
-		{in: `{q(func: gt(name, "uid")) { uid }}`, failure: true},
-		{in: `{q(func: lt(name, "uid")) { uid }}`, failure: true},
-	}
-	for _, tc := range tests {
-		_, err := Parse(Request{Str: tc.in})
-		if tc.failure {
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
-		} else {
-			require.NoError(t, err)
-		}
-	}
-}
-
 func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
