@@ -477,29 +477,39 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (resp *api.Respons
 		return resp, err
 	}
 
+	// if err = validateQuery(parsedReq.Query); err != nil {
+	// 	return resp, err
+	// }
+
+	var queryRequest = query.QueryRequest{
+		Latency:  &l,
+		GqlQuery: &parsedReq,
+	}
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
 	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
 	// If we haven't processed any updates yet then fall back to getting TS from Zero.
+	switch {
+	case req.BestEffort:
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("be", true)}, "")
+	case req.ReadOnly:
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("ro", true)}, "")
+	default:
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("no", true)}, "")
+	}
 	if req.BestEffort {
 		// Sanity: check that request is read-only too.
 		if !req.ReadOnly {
 			return resp, x.Errorf("A best effort query must be read-only.")
 		}
 		req.StartTs = posting.Oracle().MaxAssigned()
+		queryRequest.Cache = worker.NoTxnCache
 	}
 	if req.StartTs == 0 {
 		req.StartTs = State.getTimestamp(req.ReadOnly)
 	}
-	resp.Txn = &api.TxnContext{
-		StartTs: req.StartTs,
-	}
+	queryRequest.ReadTs = req.StartTs
+	resp.Txn = &api.TxnContext{StartTs: req.StartTs}
 	annotateStartTs(span, req.StartTs)
-
-	var queryRequest = query.QueryRequest{
-		Latency:  &l,
-		GqlQuery: &parsedReq,
-		ReadTs:   req.StartTs,
-	}
 
 	// Core processing happens here.
 	var er query.ExecuteResult

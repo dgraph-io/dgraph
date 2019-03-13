@@ -849,6 +849,11 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
+			if len(delta.Txns) > 0 {
+				last := delta.Txns[len(delta.Txns)-1]
+				// Update MaxAssigned on commit so best effort queries can get back latest data.
+				delta.MaxAssigned = x.Max(delta.MaxAssigned, last.CommitTs)
+			}
 			if glog.V(3) {
 				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
 					batch, delta.MaxAssigned)
