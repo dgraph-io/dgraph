@@ -69,6 +69,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
+	int32 cache = 14;
 }
 
 message ValueList {
