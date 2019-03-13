@@ -909,60 +909,6 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "nl41+dMdtz3RmDFQRvKGdOQD3fE=",
-			"path": "go.opencensus.io",
-			"revision": "8734d3b4deb5b1369308eb92b16ca7c7dd5ff343",
-			"revisionTime": "2019-03-04T23:49:55Z"
-		},
-		{
-			"checksumSHA1": "TA3C6+5PM7V2zbsnLMp13Efy/BA=",
-			"path": "go.opencensus.io/exemplar",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "2/AeXGzgJVVVn3HD6xyscTJydvg=",
-			"path": "go.opencensus.io/exporter/prometheus",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "i14BcfXTuovfz9TuShdFGtcuSC4=",
-			"path": "go.opencensus.io/internal",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "Vcwr4P/uIN4haoJPglU7liURepM=",
-			"path": "go.opencensus.io/internal/tagencoding",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "iITJeCEWl7VUPxOB8ThLRAGYTJU=",
-			"path": "go.opencensus.io/stats",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "SEHKoV2p561oIgFTqzQ67a/XU7I=",
-			"path": "go.opencensus.io/stats/internal",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "R26x5lc61+27q3Fd2SMGKJGj6kI=",
-			"path": "go.opencensus.io/stats/view",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
-			"checksumSHA1": "uGBQ6ZVQ7R2OpALxUZIaNXEkBSA=",
-			"path": "go.opencensus.io/tag",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
-		},
-		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "22ddb68eccda408bbf17759ac18d3120ce0d4f3f",
