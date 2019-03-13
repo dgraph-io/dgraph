@@ -19,6 +19,7 @@ package counter
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -119,10 +120,9 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 	conf.Set("be", true)
 	var last int
 	for i := 0; i < M; i++ {
-		fmt.Printf("readbest effort: %d\n", i)
 		cnt, err := process(dg, conf)
 		if err != nil {
-			t.Logf("Error while reading: %v\n", err)
+			t.Errorf("Error while reading: %v", err)
 		} else {
 			if last > cnt.Val {
 				t.Errorf("Current %d < Last %d", cnt.Val, last)
@@ -135,6 +135,7 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 
 func setup(t *testing.T) *dgo.Dgraph {
 	dg := z.DgraphClientWithGroot(":9180")
+	// dg := z.DgraphClient(":9180")
 	ctx := context.Background()
 	op := api.Operation{DropAll: true}
 
@@ -192,13 +193,28 @@ func TestBestEffort(t *testing.T) {
 	}()
 	wg.Wait()
 	t.Logf("Write/Best-Effort read stage OK.")
+}
 
-	wg = sync.WaitGroup{}
-	wg.Add(1)
+func TestBestEffortOnly(t *testing.T) {
+	dg := setup(t)
+	readBestEffort(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1)
+	time.Sleep(time.Second)
+
+	doneCh := make(chan struct{})
 	go func() {
-		for i := 0; i < 100; i++ {
-			readBestEffort(t, dg, fmt.Sprintf("counter.val.%d", i), 1)
+		for i := 0; i < 32; i++ {
+			readBestEffort(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1)
 		}
+		doneCh <- struct{}{}
 	}()
+
+	timer := time.NewTimer(15 * time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		t.FailNow()
+	case <-doneCh:
+	}
 	t.Logf("Best-Effort only reads with multiple preds OK.")
 }
