@@ -417,7 +417,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 func TestMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
-	MaxListSize = math.MaxInt32
+	maxListSize = math.MaxInt32
 
 	key := x.DataKey("bal", 1331)
 	ol, err := getNew(key, ps)
@@ -859,9 +859,9 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 
 func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
-	MaxListSize = 5000
+	maxListSize = 5000
 	defer func() {
-		MaxListSize = math.MaxInt32
+		maxListSize = math.MaxInt32
 	}()
 
 	key := x.DataKey("bal", 1331)
@@ -1010,7 +1010,7 @@ func TestMain(m *testing.M) {
 	opt.ValueDir = dir
 	ps, err = badger.OpenManaged(opt)
 	x.Check(err)
-	Init(ps, 0)
+	Init(ps)
 	schema.Init(ps)
 
 	r := m.Run()

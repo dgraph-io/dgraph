@@ -152,8 +152,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
 			" This applies to shortest path and recursive queries.")
-	flag.Int("max_posting_list_size", posting.MaxListSize,
-		"Limit for the maximum size of a posting list before it is split into multiple parts.")
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
@@ -523,7 +521,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(edgraph.State.Pstore)
-	posting.Init(edgraph.State.Pstore, Alpha.Conf.GetInt("max_posting_list_size"))
+	posting.Init(edgraph.State.Pstore)
 	defer posting.Cleanup()
 	worker.Init(edgraph.State.Pstore)
 
