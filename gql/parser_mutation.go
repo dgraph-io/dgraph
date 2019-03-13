@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
 
 func ParseMutation(mutation string) (*api.Mutation, error) {
@@ -35,29 +36,19 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		return nil, errors.New("Invalid mutation")
 	}
 	item := it.Item()
+	// Inside txn{ ... } block.
+	// Here we switch into txn mode and try to fetch any query inside a txn block.
+	// If no query text is found, this txn is a no-op.
 	if item.Typ == itemMutationTxn {
-		inTxn = true
-		for it.Next() {
-			item = it.Item()
-			if item.Typ == itemLeftCurl {
-				continue
-			}
-			if item.Typ != itemMutationTxnOp {
-				return nil, x.Errorf("Unexpected %q inside of txn block.", item.Val)
-			}
-			if item.Val == "query" {
-				if err := parseMutationTxnQuery(it); err != nil {
-					return nil, err
-				}
-				item = it.Item()
-			} else if item.Val == "mutation" {
-				if !it.Next() {
-					return nil, errors.New("Invalid mutation block")
-				}
-				item = it.Item()
-				break
-			}
+		// Get the query text: txn{ query { ... }}
+		q, err := parseMutationTxnQuery(it)
+		if err != nil {
+			return nil, err
 		}
+		glog.V(2).Infof("... txn.query: %s", q)
+		inTxn = true
+		item = it.Item()
+		// fallthrough to regular mutation parsing.
 	}
 	if item.Typ != itemLeftCurl {
 		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
@@ -84,14 +75,38 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	return nil, x.Errorf("Invalid mutation.")
 }
 
-func parseMutationTxnQuery(it *lex.ItemIterator) error {
+// parseMutationTxnQuery gets the text inside a txn query block.
+func parseMutationTxnQuery(it *lex.ItemIterator) (string, error) {
+	var query string
+	var parse bool
+LOOP:
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemMutationContent {
-			return nil
+		switch item.Typ {
+		case itemLeftCurl:
+			continue
+		case itemMutationContent:
+			if !parse {
+				return "", x.Errorf("Invalid query block.")
+			}
+			query = item.Val
+		case itemMutationTxnOp:
+			if item.Val == "query" {
+				parse = true
+				continue
+			}
+			if item.Val != "mutation" {
+				return "", x.Errorf("Unexpected %q inside of txn block.", item.Val)
+			}
+			if !it.Next() {
+				return "", errors.New("Invalid mutation block")
+			}
+			break LOOP
+		default:
+			return "", x.Errorf("Unexpected %q inside of txn block.", item.Val)
 		}
 	}
-	return x.Errorf("Invalid query formatting.")
+	return query, nil
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
