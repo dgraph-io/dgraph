@@ -50,6 +50,7 @@ func init() {
 	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
 	flag.Int("num", 1, "How many times to run.")
 	flag.Bool("ro", false, "Only read the counter value, don't update it.")
+	flag.Bool("bo", false, "Read counter value without retrieving timestamp from Zero.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 	flag.String("user", "", "Username if login is required.")
@@ -88,20 +89,31 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	return counter, nil
 }
 
-func process(dg *dgo.Dgraph, readOnly bool, pred string) (Counter, error) {
-	if readOnly {
-		txn := dg.NewReadOnlyTxn()
-		defer txn.Discard(nil)
-		return queryCounter(txn, pred)
-	}
+func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
+	ro := conf.GetBool("ro")
+	be := conf.GetBool("be")
+	pred := conf.GetString("pred")
+	var txn *dgo.Txn
 
-	txn := dg.NewTxn()
+	switch {
+	case be:
+		txn = dg.NewReadOnlyTxn().BestEffort()
+	case ro:
+		txn = dg.NewReadOnlyTxn()
+	default:
+		txn = dg.NewTxn()
+	}
+	defer txn.Discard(nil)
+
 	counter, err := queryCounter(txn, pred)
 	if err != nil {
 		return Counter{}, err
 	}
-	counter.Val++
+	if be || ro {
+		return counter, nil
+	}
 
+	counter.Val++
 	var mu api.Mutation
 	if len(counter.Uid) == 0 {
 		counter.Uid = "_:new"
@@ -117,12 +129,9 @@ func process(dg *dgo.Dgraph, readOnly bool, pred string) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
-
 	addr := conf.GetString("addr")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
-	ro := conf.GetBool("ro")
-	pred := conf.GetString("pred")
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
@@ -134,7 +143,7 @@ func run(conf *viper.Viper) {
 	}
 
 	for num > 0 {
-		cnt, err := process(dg, ro, pred)
+		cnt, err := process(dg, conf)
 		now := time.Now().UTC().Format("0102 03:04:05.999")
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)

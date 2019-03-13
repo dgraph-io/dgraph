@@ -516,7 +516,9 @@ func run() {
 		}
 	}
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler: otrace.ProbabilitySampler(x.WorkerConfig.Tracing)})
+		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Tracing),
+		MaxAnnotationEventsPerSpan: 64,
+	})
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

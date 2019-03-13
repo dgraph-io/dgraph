@@ -108,6 +108,9 @@ func initCmds() {
 		// environment variable.
 		sc.Conf.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	}
+	// For bash shell completion
+	RootCmd.AddCommand(shellCompletionCmd())
+
 	cobra.OnInitialize(func() {
 		// When run inside docker, the working_dir is created by root even if afterward
 		// the process is run as another user. Creating a new working directory here
@@ -159,4 +162,51 @@ func setGlogFlags(conf *viper.Viper) {
 			x.Check(flag.Lookup(gflag).Value.Set(stringValue))
 		}
 	}
+}
+
+func shellCompletionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "completion",
+		Short: "Generates shell completion scripts for bash or zsh",
+	}
+
+	// bash subcommand
+	cmd.AddCommand(&cobra.Command{
+		Use:   "bash",
+		Short: "bash shell completion",
+		Long: `To load bash completion run:
+dgraph completion bash > dgraph-completion.sh
+
+To configure your bash shell to load completions for each session,
+add to your bashrc:
+
+# ~/.bashrc or ~/.profile
+. path/to/dgraph-completion.sh
+`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RootCmd.GenBashCompletion(os.Stdout)
+		},
+	})
+
+	// zsh subcommand
+	cmd.AddCommand(&cobra.Command{
+		Use:   "zsh",
+		Short: "zsh shell completion",
+		Long: `To generate zsh completion run:
+dgraph completion zsh > _dgraph
+
+Then install the completion file somewhere in your $fpath or
+$_compdir paths. You must enable the compinit and compinstall plugins.
+
+For more information, see the official Zsh docs:
+http://zsh.sourceforge.net/Doc/Release/Completion-System.html
+`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RootCmd.GenZshCompletion(os.Stdout)
+		},
+	})
+
+	return cmd
 }
