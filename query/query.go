@@ -975,7 +975,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		} else {
 			// Disallow uid as attribute - issue#3110
 			if len(gq.Func.UID) == 0 {
-				return nil, x.Errorf("Invalid argument 'uid' in function %s", gq.Func.Name)
+				return nil, x.Errorf(`Argument cannot be "uid"`)
 			}
 		}
 		if !isValidFuncName(gq.Func.Name) {
