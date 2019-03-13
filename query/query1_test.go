@@ -1299,18 +1299,29 @@ func TestMathCeil2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }
 
-func TestAppendDummyValuesPanic(t *testing.T) {
-	// This is a fix for #1359. We should check that SrcUIDs is not nil before accessing Uids.
-
-	query := `
-	{
-		n(func:ge(uid, 0)) {
-			count(uid)
+func TestUidAttr(t *testing.T) {
+	tests := []struct {
+		in, failure string
+	}{
+		{in: `{q(func:ge(uid, 1)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:eq(uid, 2)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:lt(uid, 3)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:has(uid)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:uid(0x1)) { uid }}`},
+	}
+	for _, tc := range tests {
+		_, err := processQuery(t, context.Background(), tc.in)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), `Argument cannot be "uid"`)
+		} else {
+			require.NoError(t, err)
 		}
-	}`
-	_, err := processQuery(t, context.Background(), query)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), `Argument cannot be "uid"`)
+	}
 }
 
 func TestMultipleValueFilter(t *testing.T) {
