@@ -62,6 +62,10 @@ func TestXidmap(t *testing.T) {
 }
 
 func TestXidmapMemory(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	var loop uint32
 	bToMb := func(b uint64) uint64 {
 		return b / 1024 / 1024
