@@ -19,6 +19,7 @@ package counter
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -133,9 +135,11 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 }
 
 func setup(t *testing.T) *dgo.Dgraph {
-	dg := z.DgraphClientWithGroot(":9180")
-	// dg := z.DgraphClient(":9180")
-	ctx := context.Background()
+	conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal(err)
+	}
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	op := api.Operation{DropAll: true}
 
 	// The following piece of code shows how one can set metadata with
