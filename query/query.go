@@ -972,9 +972,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		// Uid function doesnt have Attr. It just has a list of ids
 		if gq.Func.Attr != "uid" {
 			sg.Attr = gq.Func.Attr
+		} else {
+			// Disallow uid as attribute - issue#3110
+			if len(gq.Func.UID) == 0 {
+				return nil, x.Errorf("Invalid argument 'uid' in function %s", gq.Func.Name)
+			}
 		}
 		if !isValidFuncName(gq.Func.Name) {
-			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
+			return nil, x.Errorf("Invalid function name: %s", gq.Func.Name)
 		}
 
 		sg.createSrcFunction(gq.Func)
