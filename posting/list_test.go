@@ -417,7 +417,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 func TestMillion(t *testing.T) {
 	// Ensure list is stored in a single part.
-	maxListSize = math.MaxInt32
+	MaxListSize = math.MaxInt32
 
 	key := x.DataKey("bal", 1331)
 	ol, err := getNew(key, ps)
@@ -859,9 +859,9 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 
 func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
-	maxListSize = 5000
+	MaxListSize = 5000
 	defer func() {
-		maxListSize = math.MaxInt32
+		MaxListSize = math.MaxInt32
 	}()
 
 	key := x.DataKey("bal", 1331)
