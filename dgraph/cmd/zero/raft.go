@@ -253,6 +253,13 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 			sort.Strings(preds)
 			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
 		}
+		if n.AmLeader() {
+			// It is important to push something to Oracle updates channel, so the subscribers would
+			// get the latest checksum that we calculated above. Otherwise, if all the queries are
+			// best effort queries which don't create any transaction, then the OracleDelta never
+			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
+			n.server.orc.updates <- &pb.OracleDelta{}
+		}
 	}()
 
 	if tablet.GroupId == 0 {
