@@ -91,12 +91,12 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 
 func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	ro := conf.GetBool("ro")
-	bo := conf.GetBool("bo")
+	be := conf.GetBool("be")
 	pred := conf.GetString("pred")
 	var txn *dgo.Txn
 
 	switch {
-	case bo:
+	case be:
 		txn = dg.NewReadOnlyTxn().BestEffort()
 	case ro:
 		txn = dg.NewReadOnlyTxn()
@@ -109,7 +109,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	if err != nil {
 		return Counter{}, err
 	}
-	if bo || ro {
+	if be || ro {
 		return counter, nil
 	}
 
