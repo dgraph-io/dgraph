@@ -176,6 +176,32 @@ func askUserPassword(userid string, pwdType string, times int) (string, error) {
 	return password, nil
 }
 
+type CloseFunc func()
+
+func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
+	opt = options{
+		dgraph: conf.GetString("dgraph"),
+	}
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.dgraph)
+
+	if len(opt.dgraph) == 0 {
+		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
+	}
+
+	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
+	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
+
+	conn, err := x.SetupConnection(opt.dgraph, &tlsConf, false)
+	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
+
+	dc := api.NewDgraphClient(conn)
+	return dgo.NewDgraphClient(dc), func() {
+		if err := conn.Close(); err != nil {
+			fmt.Printf("Error while closing connection: %v\n", err)
+		}
+	}
+}
+
 func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) (*dgo.Dgraph,
 	CloseFunc, error) {
 	password := conf.GetString(passwordOpt)
@@ -188,7 +214,7 @@ func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) 
 	}
 
 	dc, closeClient := getDgraphClient(conf)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	cleanFunc := func() {
 		cancel()
