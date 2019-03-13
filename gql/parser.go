@@ -1597,17 +1597,6 @@ L:
 			}
 			val += v
 
-			switch {
-			// allow eq(attr, "")
-			case val == "" && function.Name != "eq":
-				return nil, x.Errorf("Empty argument received")
-
-			// allow value of "uid" - issue#2827
-			// disallow uid as attribute - issue#3110
-			case val == "uid" && (function.Name != "eq" || function.Attr == ""):
-				return nil, x.Errorf("Argument cannot be %q", val)
-			}
-
 			if isDollar {
 				val = "$" + val
 				isDollar = false
