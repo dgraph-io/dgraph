@@ -51,7 +51,7 @@ var (
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
-	maxListSize = MB/2
+	maxListSize      = MB / 2
 )
 
 const (
@@ -115,9 +115,9 @@ type PIterator struct {
 
 func (it *PIterator) Init(l *List, afterUid, deleteBelow uint64) error {
 	it.l = l
-	it.splitIdx = 0
+	it.splitIdx = it.selectInitialSplit(afterUid)
 	if len(it.l.plist.Splits) > 0 {
-		plist, err := l.readListPart(it.l.plist.Splits[0])
+		plist, err := l.readListPart(it.l.plist.Splits[it.splitIdx])
 		if err != nil {
 			return err
 		}
@@ -140,6 +140,15 @@ func (it *PIterator) Init(l *List, afterUid, deleteBelow uint64) error {
 		return it.afterUid < p.Uid
 	})
 	return nil
+}
+
+func (it *PIterator) selectInitialSplit(afterUid uint64) int {
+	for i, startUid := range it.l.plist.Splits {
+		if startUid > afterUid {
+			return i - 1
+		}
+	}
+	return len(it.l.plist.Splits) - 1
 }
 
 func (it *PIterator) moveToNextSplit() error {

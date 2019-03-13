@@ -145,8 +145,8 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore      *badger.DB
-	closer      *y.Closer
+	pstore *badger.DB
+	closer *y.Closer
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
