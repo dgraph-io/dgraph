@@ -69,6 +69,10 @@ type User struct {
 	Groups        []Group `json:"dgraph.user.group"`
 }
 
+func (u *User) GetUid() string {
+	return u.Uid
+}
+
 // Extract the first User pointed by the userKey in the query response
 func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 	m := make(map[string][]User)
@@ -102,6 +106,10 @@ type Group struct {
 	GroupID string `json:"dgraph.xid"`
 	Users   []User `json:"~dgraph.user.group"`
 	Acls    string `json:"dgraph.group.acl"`
+}
+
+func (g *Group) GetUid() string {
+	return g.Uid
 }
 
 // Extract the first User pointed by the userKey in the query response

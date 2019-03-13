@@ -46,13 +46,13 @@ Query Example: In the example dataset, edges that link movies to directors and a
 
 The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique 64 bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
+Every node had a unique 64-bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
 Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x107b2c)) {
+  bladerunner(func: uid(0x579683)) {
     uid
     name@en
     initial_release_date
@@ -81,15 +81,11 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x107b2c, 0x85f961)) {
+  movies(func: uid(0x579683, 0x5af1c7)) {
     uid
     name@en
     initial_release_date
     netflix_id
-    ~director.film {
-      uid
-      name@en
-    }
   }
 }
 {{< /runnable >}}
@@ -186,9 +182,11 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists (including the * notation) are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists (including the `@*` notation) are not allowed. Untagged predicates, Single language tags, and `.` notation work as described above.
 
-{{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
+---
+
+In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -387,7 +385,7 @@ Same query with a Levenshtein distance of 3.
 {{< /runnable >}}
 
 
-### Full Text Search
+### Full-Text Search
 
 Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
 
@@ -396,9 +394,9 @@ Schema Types: `string`
 Index Required: `fulltext`
 
 
-Apply full text search with stemming and stop words to find strings matching all or any of the given text.
+Apply full-text search with stemming and stop words to find strings matching all or any of the given text.
 
-The following steps are applied during index generation and to process full text search arguments:
+The following steps are applied during index generation and to process full-text search arguments:
 
 1. Tokenization (according to Unicode word boundaries).
 1. Conversion to lowercase.
@@ -406,7 +404,7 @@ The following steps are applied during index generation and to process full text
 1. Stemming using language-specific stemmer (if supported by language).
 1. Stop words removal (if supported by language).
 
-Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full-text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
 Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
@@ -629,7 +627,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x878110)) {
+  films(func: uid(0x7de2ec)) {
     name@hi
     actor.film {
       performance.film {
@@ -705,12 +703,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x6777ba).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x679de1).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 0x6777ba)){
+    director.film @filter(uid_in(~director.film, 0x679de1)){
       name@en
     }
   }
@@ -1040,13 +1038,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x264ce8`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x8116e4`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x264ce8) {
+    director.film (first:5, after: 0x8116e4) {
       uid
       name@en
     }
@@ -2061,18 +2059,16 @@ Mutation:
 ```
 {
   set {
-    _:a <公司> "Dgraph Labs Inc"@en
-    _:b <公司> "夏新科技有限责任公司"@zh
+    _:a <公司> "Dgraph Labs Inc"@en .
+    _:b <公司> "夏新科技有限责任公司"@zh .
   }
 }
 ```
 Query:
 ```
 {
-  query {
-    q (func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
-      _predicate_
-    }
+  q(func: alloftext(<公司>@zh, "夏新科技有限责任公司")) {
+    _predicate_
   }
 }
 ```
@@ -2181,7 +2177,7 @@ The indices available for strings are as follows.
 
 | Dgraph function            | Required index / tokenizer             | Notes |
 | :-----------------------   | :------------                          | :---  |
-| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
+| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full-text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
 | `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                   |
 | `allofterms`, `anyofterms` | `term`                                 | Allows searching by a term in a sentence.                |
 | `alloftext`, `anyoftext`   | `fulltext`                             | Matching with language specific stemming and stopwords.  |
@@ -3093,14 +3089,14 @@ more concrete.
 #### Unicode Characters
 
 This example shows the type of tokenization that is similar to term
-tokenization of full text search. Instead of being broken down into terms or
+tokenization of full-text search. Instead of being broken down into terms or
 stem words, the text is instead broken down into its constituent unicode
 codepoints (in Go terminology these are called *runes*).
 
 {{% notice "note" %}}
 This tokenizer would create a very large index that would be expensive to
 manage and store. That's one of the reasons that text indexing usually occurs
-at a higher level; stem words for full text search or terms for term search.
+at a higher level; stem words for full-text search or terms for term search.
 {{% /notice %}}
 
 The implementation of the plugin looks like this:

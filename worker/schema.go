@@ -172,6 +172,10 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api
 		return nil, err
 	}
 
+	if len(schema.Predicates) == 0 && len(schema.Types) > 0 {
+		return nil, nil
+	}
+
 	// Map of groupd id => Predicates for that group.
 	schemaMap := make(map[uint32]*pb.SchemaRequest)
 	addToSchemaMap(schemaMap, schema)
@@ -213,4 +217,30 @@ func (w *grpcWorker) Schema(ctx context.Context, s *pb.SchemaRequest) (*pb.Schem
 		return &emptySchemaResult, x.Errorf("This server doesn't serve group id: %v", s.GroupId)
 	}
 	return getSchema(ctx, s)
+}
+
+// GetTypes processes the type requests and retrieves the desired types.
+func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, error) {
+	if len(req.Types) == 0 && len(req.Predicates) > 0 {
+		return nil, nil
+	}
+
+	var typeNames []string
+	var out []*pb.TypeUpdate
+
+	if len(req.Types) == 0 {
+		typeNames = schema.State().Types()
+	} else {
+		typeNames = req.Types
+	}
+
+	for _, name := range typeNames {
+		typeUpdate, found := schema.State().GetType(name)
+		if !found {
+			continue
+		}
+		out = append(out, &typeUpdate)
+	}
+
+	return out, nil
 }
