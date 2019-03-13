@@ -15,8 +15,8 @@ function restartCluster {
   pushd $basedir/dgraph >/dev/null
   echo "Rebuilding dgraph ..."
   make install
-  docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
-  docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
+  docker-compose -p dgraph -f $compose_file down --remove-orphans
+  docker-compose -p dgraph -f $compose_file up --force-recreate --detach || exit 1
   popd >/dev/null
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6080 || exit 1
@@ -27,9 +27,6 @@ function restartCluster {
 function stopCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
-  docker ps --filter label="cluster=test" --format "{{.Names}}" \
-  | xargs -r docker stop | sed 's/^/Stopped /'
-  docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
-  | xargs -r docker rm | sed 's/^/Removed /'
+  docker-compose -p dgraph down --remove-orphans
   popd >/dev/null
 }
