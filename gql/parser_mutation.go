@@ -75,11 +75,12 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	return nil, x.Errorf("Invalid mutation.")
 }
 
-// parseMutationTxnQuery gets the text inside a txn query block.
+// parseMutationTxnQuery gets the text inside a txn query block. It is possible that there's
+// no query to be found, in that case it's the caller's responsbility to fail.
+// Returns the query text if any is found, otherwise an empty string with error.
 func parseMutationTxnQuery(it *lex.ItemIterator) (string, error) {
 	var query string
 	var parse bool
-LOOP:
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -101,7 +102,7 @@ LOOP:
 			if !it.Next() {
 				return "", errors.New("Invalid mutation block")
 			}
-			break LOOP
+			return query, nil
 		default:
 			return "", x.Errorf("Unexpected %q inside of txn block.", item.Val)
 		}
