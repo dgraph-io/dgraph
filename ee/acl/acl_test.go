@@ -102,6 +102,10 @@ func TestReservedPredicates(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	glog.Infof("testing with port 9180")
 	dg1 := z.DgraphClientWithGroot(":9180")
 	testAuthorization(t, dg1)
@@ -352,6 +356,10 @@ func TestPasswordReset(t *testing.T) {
 }
 
 func TestPredicateRegex(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	glog.Infof("testing with port 9180")
 	dg := z.DgraphClientWithGroot(":9180")
 	createAccountAndData(t, dg)

@@ -28,6 +28,10 @@ import (
 const loginEndpoint = "http://localhost:8180/login"
 
 func TestCurlAuthorization(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	glog.Infof("testing with port 9180")
 	dg := z.DgraphClientWithGroot(":9180")
 	createAccountAndData(t, dg)
