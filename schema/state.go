@@ -54,7 +54,7 @@ Loop:
 		case r == '.':
 			l.Emit(itemDot)
 		case r == '#':
-			return lexComment
+			return lexTextComment
 		case r == ',':
 			l.Emit(itemComma)
 		case r == '<':
@@ -107,8 +107,8 @@ func lexWord(l *lex.Lexer) lex.StateFn {
 	return lexText
 }
 
-// lexComment lexes a comment text.
-func lexComment(l *lex.Lexer) lex.StateFn {
+// lexTextComment lexes a comment text inside a schema.
+func lexTextComment(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if r == lex.EOF {
