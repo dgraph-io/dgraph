@@ -202,7 +202,7 @@ func TestBestEffortOnly(t *testing.T) {
 
 	doneCh := make(chan struct{})
 	go func() {
-		for i := 0; i < 32; i++ {
+		for i := 0; i < 10; i++ {
 			readBestEffort(t, dg, fmt.Sprintf("counter.val.%d", rand.Int()), 1)
 		}
 		doneCh <- struct{}{}
