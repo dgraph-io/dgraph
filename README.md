@@ -59,8 +59,8 @@ presentation videos on [YouTube channel](https://www.youtube.com/channel/UCghE41
 
 ## Is Dgraph the right choice for me?
 
-- Do you have more than 10 SQL tables, connected to each other via foreign ids?
-- Do you have sparse data, which doesn't correctly fit into SQL tables?
+- Do you have more than 10 SQL tables, connected to each other via foreign keys?
+- Do you have sparse data, which doesn't elegantly fit into SQL tables?
 - Do you want a simple and flexible schema, which is readable and maintainable
   over time?
 - Do you care about speed and performance at scale?
