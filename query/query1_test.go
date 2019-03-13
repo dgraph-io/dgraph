@@ -1312,6 +1312,7 @@ func TestUidAttr(t *testing.T) {
 		{in: `{q(func:has(uid)) { uid }}`,
 			failure: `Argument cannot be "uid`},
 		{in: `{q(func:uid(0x1)) { uid }}`},
+		{in: `{q(func:eq(name, "uid")) { uid }}`},
 	}
 	for _, tc := range tests {
 		_, err := processQuery(t, context.Background(), tc.in)
