@@ -562,15 +562,17 @@ func run() {
 	_ = numShutDownSig
 
 	// Setup external communication.
+	worker.StartRaftNodes(edgraph.State.WALstore, bindall)
+	// initialization of the admin account can only be done after raft nodes are running
+	// and health check passes
+	edgraph.ResetAcl()
+
 	aclCloser := y.NewCloser(1)
 	go func() {
-		worker.StartRaftNodes(edgraph.State.WALstore, bindall)
-		// initialization of the admin account can only be done after raft nodes are running
-		// and health check passes
-		edgraph.ResetAcl()
 		edgraph.RefreshAcls(aclCloser)
 	}()
 
+	// we should only start accepting requests after the ACL cache has been initialized
 	setupServer()
 	glog.Infoln("GRPC and HTTP stopped.")
 	aclCloser.SignalAndWait()
