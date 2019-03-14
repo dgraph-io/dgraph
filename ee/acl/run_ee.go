@@ -13,14 +13,9 @@
 package acl
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
@@ -38,6 +33,7 @@ var (
 )
 
 const gPassword = "gpassword"
+const defaultGroupList = "dgraph-unused-group"
 
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
@@ -116,13 +112,14 @@ func initSubcommands() []*x.SubCommand {
 
 	modFlags := cmdMod.Cmd.Flags()
 	modFlags.StringP("user", "u", "", "The user id to be changed")
-	modFlags.StringP("new_password", "", "", "The new password for the user")
-	modFlags.StringP("group_list", "l", "", "The list of groups to be set for the user")
+	modFlags.BoolP("new_password", "n", false, "Whether to reset password for the user")
+	modFlags.StringP("group_list", "l", defaultGroupList,
+		"The list of groups to be set for the user")
 	modFlags.StringP("group", "g", "", "The group whose permission is to be changed")
 	modFlags.StringP("pred", "p", "", "The predicates whose acls are to be changed")
-	modFlags.StringP("pred_regex", "", "", "The regular expression specifying predicates"+
+	modFlags.StringP("pred_regex", "P", "", "The regular expression specifying predicates"+
 		" whose acls are to be changed")
-	modFlags.IntP("perm", "P", 0, "The acl represented using "+
+	modFlags.IntP("perm", "m", 0, "The acl represented using "+
 		"an integer: 4 for read, 2 for write, and 1 for modify. Use a negative value to remove a "+
 		"predicate from the group")
 
@@ -141,103 +138,4 @@ func initSubcommands() []*x.SubCommand {
 	infoFlags.StringP("user", "u", "", "The user to be shown")
 	infoFlags.StringP("group", "g", "", "The group to be shown")
 	return []*x.SubCommand{&cmdAdd, &cmdDel, &cmdMod, &cmdInfo}
-}
-
-type CloseFunc func()
-
-func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
-	opt = options{
-		dgraph: conf.GetString("dgraph"),
-	}
-	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.dgraph)
-
-	if len(opt.dgraph) == 0 {
-		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
-	}
-
-	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
-	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
-
-	conn, err := x.SetupConnection(opt.dgraph, &tlsConf, false)
-	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
-
-	dc := api.NewDgraphClient(conn)
-	return dgo.NewDgraphClient(dc), func() {
-		if err := conn.Close(); err != nil {
-			fmt.Printf("Error while closing connection: %v\n", err)
-		}
-	}
-}
-
-func info(conf *viper.Viper) error {
-	userId := conf.GetString("user")
-	groupId := conf.GetString("group")
-	if (len(userId) == 0 && len(groupId) == 0) ||
-		(len(userId) != 0 && len(groupId) != 0) {
-		return fmt.Errorf("either the user or group should be specified, not both")
-	}
-	dc, cancel, err := getClientWithAdminCtx(conf)
-	defer cancel()
-	if err != nil {
-		return fmt.Errorf("unable to get admin context: %v\n", err)
-	}
-
-	ctx := context.Background()
-	txn := dc.NewTxn()
-	defer func() {
-		if err := txn.Discard(ctx); err != nil {
-			fmt.Printf("Unable to discard transaction: %v\n", err)
-		}
-	}()
-
-	if len(userId) != 0 {
-		user, err := queryUser(ctx, txn, userId)
-		if err != nil {
-			return err
-		}
-		if user == nil {
-			return fmt.Errorf("The user %q does not exist.\n", userId)
-		}
-
-		fmt.Println()
-		fmt.Printf("User  : %s\n", userId)
-		fmt.Printf("UID   : %s\n", user.Uid)
-		for _, group := range user.Groups {
-			fmt.Printf("Group : %-5s\n", group.GroupID)
-		}
-	}
-
-	if len(groupId) != 0 {
-		group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
-			"dgraph.group.acl")
-		if err != nil {
-			return err
-		}
-		if group == nil {
-			return fmt.Errorf("The group %q does not exist.\n", groupId)
-		}
-		fmt.Printf("Group: %s\n", groupId)
-		fmt.Printf("UID  : %s\n", group.Uid)
-		fmt.Printf("ID   : %s\n", group.GroupID)
-
-		var userNames []string
-		for _, user := range group.Users {
-			userNames = append(userNames, user.UserID)
-		}
-		fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
-
-		var acls []Acl
-		if len(group.Acls) != 0 {
-			if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
-				return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
-					groupId, err)
-			}
-
-			for _, acl := range acls {
-				fmt.Printf("ACL  : %v\n", acl)
-			}
-		}
-	}
-
-	return nil
 }
