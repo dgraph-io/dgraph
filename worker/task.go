@@ -1281,7 +1281,6 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
 		defer glog.Infof("Done filterStringFunction")
 	}
-
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values [][]types.Val
@@ -1593,7 +1592,11 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
-		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64); err != nil {
+		fc.uidPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64)
+		if err != nil {
+			if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+				return nil, x.Errorf("Value in %s is not a number", q.SrcFunc.Name)
+			}
 			return nil, err
 		}
 		checkRoot(q, fc)
