@@ -102,6 +102,10 @@ func TestReservedPredicates(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping because -short=true")
+	}
+
 	glog.Infof("testing with port 9180")
 	dg1 := z.DgraphClientWithGroot(":9180")
 	testAuthorization(t, dg1)
@@ -327,6 +331,10 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 }
 
 func TestPredicateRegex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping because -short=true")
+	}
+
 	glog.Infof("testing with port 9180")
 	dg := z.DgraphClientWithGroot(":9180")
 	createAccountAndData(t, dg)
