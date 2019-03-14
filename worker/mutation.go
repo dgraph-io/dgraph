@@ -498,7 +498,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		}
 	}
 
-	return mm
+	return mm, nil
 }
 
 func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
