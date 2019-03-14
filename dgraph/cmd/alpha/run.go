@@ -568,9 +568,7 @@ func run() {
 	edgraph.ResetAcl()
 
 	aclCloser := y.NewCloser(1)
-	go func() {
-		edgraph.RefreshAcls(aclCloser)
-	}()
+	go edgraph.RefreshAcls(aclCloser)
 
 	// we should only start accepting requests after the ACL cache has been initialized
 	setupServer()
