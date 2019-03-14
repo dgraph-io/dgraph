@@ -422,29 +422,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	return nil
 }
 
-func deleteEntries(prefix []byte, remove func(key []byte) bool) error {
-	return pstore.View(func(txn *badger.Txn) error {
-		opt := badger.DefaultIteratorOptions
-		opt.Prefix = prefix
-		opt.PrefetchValues = false
-
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		writer := NewTxnWriter(pstore)
-		for itr.Rewind(); itr.Valid(); itr.Next() {
-			item := itr.Item()
-			if !remove(item.Key()) {
-				continue
-			}
-			if err := writer.Delete(item.KeyCopy(nil), item.Version()); err != nil {
-				return err
-			}
-		}
-		return writer.Flush()
-	})
-}
-
 // deleteTokensFor deletes the index for the given attribute and token.
 func deleteTokensFor(attr, tokenizerName string) error {
 	pk := x.ParsedKey{Attr: attr}
