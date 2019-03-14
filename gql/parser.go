@@ -948,7 +948,7 @@ func parseSchemaFields(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 			return item.Errorf("Invalid schema block.")
 		}
 	}
-	return it.Errorf("Expecting }  to end fields list, but none was found")
+	return it.Errorf("Expecting } to end fields list, but none was found")
 }
 
 func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
