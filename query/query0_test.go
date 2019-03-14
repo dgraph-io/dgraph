@@ -147,7 +147,7 @@ func TestQueryNamesCompareEmpty(t *testing.T) {
 
 func TestQueryCountEmptyNames(t *testing.T) {
 	tests := []struct {
-		in, out string
+		in, out, failure string
 	}{
 		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
@@ -159,10 +159,25 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			out: `{"data":{"q": [{"count":0}]}}`},
 		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
+		{in: `{q(func: has(name)) @filter(anyofterms(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":2}]}}`},
+		{in: `{q(func: has(name)) @filter(allofterms(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":2}]}}`},
+		// NOTE: match with empty string filters values greater than the max distance.
+		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":26}]}}`},
+		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
+			failure: `Value in uid_in is not a number`},
 	}
 	for _, tc := range tests {
-		js := processQueryNoErr(t, tc.in)
-		require.JSONEq(t, tc.out, js)
+		js, err := processQuery(t, context.Background(), tc.in)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.failure)
+		} else {
+			require.NoError(t, err)
+			require.JSONEq(t, tc.out, js)
+		}
 	}
 }
 
