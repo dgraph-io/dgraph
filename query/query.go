@@ -169,6 +169,7 @@ type Function struct {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	ReadTs       uint64
+	Cache        int
 	Attr         string
 	Params       params
 	counts       []uint32
@@ -1061,6 +1062,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
+		Cache:        int32(sg.Cache),
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
@@ -2537,6 +2539,7 @@ func ConvertUidsToHex(m map[string]uint64) map[string]string {
 // and schemaUpdate are filled when processing query.
 type QueryRequest struct {
 	ReadTs   uint64
+	Cache    int
 	Latency  *Latency
 	GqlQuery *gql.Result
 
@@ -2571,6 +2574,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
+			sg.Cache = req.Cache
 		})
 		span.Annotate(nil, "Query parsed")
 		req.Subgraphs = append(req.Subgraphs, sg)
