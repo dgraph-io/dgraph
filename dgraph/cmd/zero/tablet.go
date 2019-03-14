@@ -89,6 +89,11 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	ctx, span := otrace.StartSpan(ctx, "Zero.MovePredicate")
 	defer span.End()
 
+	// Ensure that reserved predicates cannot be moved.
+	if x.IsReservedPredicate(predicate) {
+		return x.Errorf("Unable to move reserved predicate %s", predicate)
+	}
+
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {
 		return x.Errorf("Unable to reach quorum: %v", err)
@@ -216,6 +221,11 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		size := int64(0)
 		group := s.state.Groups[srcGroup]
 		for _, tab := range group.Tablets {
+			// Reserved predicates should always be in group 1 so do not re-balance them.
+			if x.IsReservedPredicate(tab.Predicate) {
+				continue
+			}
+
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
 			if tab.Space <= sizeDiff/2 && tab.Space > size {
