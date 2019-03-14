@@ -31,16 +31,14 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestBackup(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+			dg := z.DgraphClientWithGroot(":9180")
 			fn(t, dg)
 		}
 	}
@@ -52,8 +50,6 @@ func TestBackup(t *testing.T) {
 // BackupSetup loads some data into the cluster so we can test backup.
 func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
-
-	require.NoError(t, c.Alter(ctx, &api.Operation{DropAll: true}))
 
 	schema, err := ioutil.ReadFile(`data/goldendata.schema`)
 	require.NoError(t, err)

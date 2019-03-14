@@ -1572,6 +1572,33 @@ func TestParseSchemaAndQuery(t *testing.T) {
 	require.Contains(t, err.Error(), "Schema block is not allowed with query block")
 }
 
+func TestParseSchemaType(t *testing.T) {
+	query := `
+		schema (type: Person) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 1)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaTypeMulti(t *testing.T) {
+	query := `
+		schema (type: [Person, Animal]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 2)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, res.Schema.Types[1], "Animal")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
 func TestParseSchemaError(t *testing.T) {
 	query := `
 		schema () {
@@ -4466,6 +4493,82 @@ func TestParseGraphQLVarPaginationRootMultiple(t *testing.T) {
 	require.Equal(t, gq.Query[0].Order[0].Attr, "name")
 }
 
+func TestParseGraphQLVarArray(t *testing.T) {
+	tests := []struct {
+		q    string
+		vars map[string]string
+		args int
+	}{
+		{q: `query test($a: string){q(func: eq(name, [$a])) {name}}`,
+			vars: map[string]string{"$a": "srfrog"}, args: 1},
+		{q: `query test($a: string, $b: string){q(func: eq(name, [$a, $b])) {name}}`,
+			vars: map[string]string{"$a": "srfrog", "$b": "horseman"}, args: 2},
+		{q: `query test($a: string, $b: string, $c: string){q(func: eq(name, [$a, $b, $c])) {name}}`,
+			vars: map[string]string{"$a": "srfrog", "$b": "horseman", "$c": "missbug"}, args: 3},
+		// mixed var and value
+		{q: `query test($a: string){q(func: eq(name, [$a, "mrtrout"])) {name}}`,
+			vars: map[string]string{"$a": "srfrog"}, args: 2},
+		{q: `query test($a: string){q(func: eq(name, ["mrtrout", $a])) {name}}`,
+			vars: map[string]string{"$a": "srfrog"}, args: 2},
+	}
+	for _, tc := range tests {
+		gq, err := Parse(Request{Str: tc.q, Variables: tc.vars})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(gq.Query))
+		require.Equal(t, "eq", gq.Query[0].Func.Name)
+		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
+		found := false
+		for _, val := range tc.vars {
+			for _, arg := range gq.Query[0].Func.Args {
+				if val == arg.Value {
+					found = true
+					break
+				}
+			}
+		}
+		require.True(t, found, "vars not matched: %v", tc.vars)
+	}
+}
+
+func TestParseGraphQLValueArray(t *testing.T) {
+	q := `
+	{
+		q(func: eq(name, ["srfrog", "horseman"])) {
+			name
+		}
+	}`
+	gq, err := Parse(Request{Str: q})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "eq", gq.Query[0].Func.Name)
+	require.Equal(t, 2, len(gq.Query[0].Func.Args))
+	require.Equal(t, "srfrog", gq.Query[0].Func.Args[0].Value)
+	require.Equal(t, "horseman", gq.Query[0].Func.Args[1].Value)
+}
+
+func TestParseGraphQLMixedVarArray(t *testing.T) {
+	q := `
+	query test($a: string, $b: string, $c: string){
+		q(func: eq(name, ["uno", $a, $b, "cuatro", $c])) {
+			name
+		}
+	}`
+	r := Request{
+		Str:       q,
+		Variables: map[string]string{"$a": "dos", "$b": "tres", "$c": "cinco"},
+	}
+	gq, err := Parse(r)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "eq", gq.Query[0].Func.Name)
+	require.Equal(t, 5, len(gq.Query[0].Func.Args))
+	require.Equal(t, "uno", gq.Query[0].Func.Args[0].Value)
+	require.Equal(t, "dos", gq.Query[0].Func.Args[1].Value)
+	require.Equal(t, "tres", gq.Query[0].Func.Args[2].Value)
+	require.Equal(t, "cuatro", gq.Query[0].Func.Args[3].Value)
+	require.Equal(t, "cinco", gq.Query[0].Func.Args[4].Value)
+}
+
 func TestLineAndColumnNumberInErrorOutput(t *testing.T) {
 	q := `
 	query {
@@ -4526,4 +4629,82 @@ func TestTypeInFilter(t *testing.T) {
 	require.Equal(t, "type", gq.Query[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Filter.Func.Args))
 	require.Equal(t, "Person", gq.Query[0].Filter.Func.Args[0].Value)
+}
+
+func TestTypeFilterInPredicate(t *testing.T) {
+	q := `
+	query {
+		me(func: uid(0x01)) {
+			friend @filter(type(Person)) {
+				name
+			}
+		}
+	}`
+	gq, err := Parse(Request{Str: q})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "uid", gq.Query[0].Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
+
+	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
+
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
+	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
+}
+
+func TestTypeInPredicate(t *testing.T) {
+	q := `
+	query {
+		me(func: uid(0x01)) {
+			friend @type(Person) {
+				name
+			}
+		}
+	}`
+	gq, err := Parse(Request{Str: q})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "uid", gq.Query[0].Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
+
+	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
+
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
+	require.Equal(t, "name", gq.Query[0].Children[0].Children[0].Attr)
+}
+
+func TestMultipleTypeDirectives(t *testing.T) {
+	q := `
+	query {
+		me(func: uid(0x01)) {
+			friend @type(Person) {
+				pet @type(Animal) {
+					name
+				}
+			}
+		}
+	}`
+	gq, err := Parse(Request{Str: q})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gq.Query))
+	require.Equal(t, "uid", gq.Query[0].Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children))
+	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
+
+	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
+	require.Equal(t, "Person", gq.Query[0].Children[0].Filter.Func.Args[0].Value)
+
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
+	require.Equal(t, "pet", gq.Query[0].Children[0].Children[0].Attr)
+
+	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
+	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
+	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
 }

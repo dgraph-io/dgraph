@@ -884,14 +884,19 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 	return items, it.Errorf("Expecting ] to end list but none was found")
 }
 
-// parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
-	// pred should be followed by colon
+// parseSchemaPredsOrTypes parses till rightround is found
+func parseSchemaPredsOrTypes(it *lex.ItemIterator, s *pb.SchemaRequest) error {
+	// pred or type should be followed by colon
 	it.Next()
 	item := it.Item()
-	if item.Typ != itemName && item.Val != "pred" {
+	if item.Typ != itemName && !(item.Val == "pred" || item.Val == "type") {
 		return item.Errorf("Invalid schema block")
 	}
+	parseTypes := false
+	if item.Val == "type" {
+		parseTypes = true
+	}
+
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemColon {
@@ -902,11 +907,21 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 	it.Next()
 	item = it.Item()
 	if item.Typ == itemName {
-		s.Predicates = append(s.Predicates, item.Val)
+		if parseTypes {
+			s.Types = append(s.Types, item.Val)
+		} else {
+			s.Predicates = append(s.Predicates, item.Val)
+		}
 	} else if item.Typ == itemLeftSquare {
-		var err error
-		if s.Predicates, err = parseListItemNames(it); err != nil {
+		names, err := parseListItemNames(it)
+		if err != nil {
 			return err
+		}
+
+		if parseTypes {
+			s.Types = names
+		} else {
+			s.Predicates = names
 		}
 	} else {
 		return item.Errorf("Invalid schema block")
@@ -952,7 +967,7 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 				return nil, item.Errorf("Too many left rounds in schema block")
 			}
 			leftRoundSeen = true
-			if err := parseSchemaPredicates(it, &s); err != nil {
+			if err := parseSchemaPredsOrTypes(it, &s); err != nil {
 				return nil, err
 			}
 		default:
@@ -1342,6 +1357,62 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	return nil
 }
 
+// parseIneqArgs will try to parse the arguments inside an array ([]). If the values
+// are prefixed with $ they are treated as Gql variables, otherwise they are used as scalar values.
+// Returns nil on success while appending arguments to the function Args slice. Otherwise
+// returns an error, which can be a parsing or value error.
+func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
+	var expectArg, isDollar bool
+
+	expectArg = true
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightSquare:
+			return nil
+		case itemDollar:
+			if !expectArg {
+				return item.Errorf("Missing comma in argument list declaration")
+			}
+			if item, ok := it.PeekOne(); !ok || item.Typ != itemName {
+				return item.Errorf("Expecting a variable name. Got: %v", item)
+			}
+			isDollar = true
+			continue
+		case itemName:
+			// This is not a $variable, just add the value.
+			if !isDollar {
+				val, err := getValueArg(item.Val)
+				if err != nil {
+					return err
+				}
+				g.Args = append(g.Args, Arg{Value: val})
+				break
+			}
+			// This is a $variable that must be expanded later.
+			val := "$" + item.Val
+			g.Args = append(g.Args, Arg{Value: val, IsGraphQLVar: true})
+		case itemComma:
+			if expectArg {
+				return item.Errorf("Invalid comma in argument list")
+			}
+			expectArg = true
+			continue
+		default:
+			return item.Errorf("Invalid arg list")
+		}
+		expectArg = false
+		isDollar = false
+	}
+	return it.Errorf("Expecting ] to end list but got %v instead", it.Item().Val)
+}
+
+// getValueArg returns a space-trimmed and unquoted version of val.
+// Returns the cleaned string, otherwise empty string and an error.
+func getValueArg(val string) (string, error) {
+	return unquoteIfQuoted(strings.TrimSpace(val))
+}
+
 func validFuncName(name string) bool {
 	if isGeoFunc(name) || isInequalityFn(name) {
 		return true
@@ -1349,7 +1420,7 @@ func validFuncName(name string) bool {
 
 	switch name {
 	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext",
-		"has", "uid", "uid_in", "anyof", "allof", "type":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match":
 		return true
 	}
 	return false
@@ -1375,7 +1446,7 @@ func parseRegexArgs(val string) (regexArgs, error) {
 }
 
 func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
-	var function *Function
+	function := &Function{}
 	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
@@ -1386,9 +1457,7 @@ L:
 		}
 
 		name := collectName(it, item.Val)
-		function = &Function{
-			Name: strings.ToLower(name),
-		}
+		function.Name = strings.ToLower(name)
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
@@ -1476,24 +1545,22 @@ L:
 				continue
 				// Lets reassemble the geo tokens.
 			} else if itemInFunc.Typ == itemLeftSquare {
-				isGeo := isGeoFunc(function.Name)
-				if !isGeo && !isInequalityFn(function.Name) {
-					return nil, itemInFunc.Errorf("Unexpected character [ while parsing request.")
-				}
+				var err error
+				switch {
+				case isGeoFunc(function.Name):
+					err = parseGeoArgs(it, function)
 
-				if isGeo {
-					if err := parseGeoArgs(it, function); err != nil {
-						return nil, err
-					}
-					expectArg = false
-					continue
-				}
+				case isInequalityFn(function.Name):
+					err = parseIneqArgs(it, function)
 
-				if valid := it.Next(); !valid {
-					return nil,
-						itemInFunc.Errorf("Unexpected EOF while parsing args")
+				default:
+					err = itemInFunc.Errorf("Unexpected character [ while parsing request.")
 				}
-				itemInFunc = it.Item()
+				if err != nil {
+					return nil, err
+				}
+				expectArg = false
+				continue
 			} else if itemInFunc.Typ == itemRightSquare {
 				if _, err := it.Peek(1); err != nil {
 					return nil,
@@ -1880,6 +1947,40 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	return nil
 }
 
+func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
+	it.Next()
+	if it.Item().Typ != itemLeftRound {
+		return it.Item().Errorf("Expected a left round after type")
+	}
+
+	it.Next()
+	if it.Item().Typ != itemName {
+		return it.Item().Errorf("Expected a type name inside type directive")
+	}
+	typeName := it.Item().Val
+
+	it.Next()
+	if it.Item().Typ != itemRightRound {
+		return it.Item().Errorf("Expected ) after the type name in type directive")
+	}
+
+	// For now @type(TypeName) is equivalent of filtering using the type function.
+	// Later the type declarations will be used to ensure that the fields inside
+	// each block correspond to the specified type.
+	gq.Filter = &FilterTree{
+		Func: &Function{
+			Name: "type",
+			Args: []Arg{
+				Arg{
+					Value: typeName,
+				},
+			},
+		},
+	}
+
+	return nil
+}
+
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
 func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	it.Next()
@@ -2110,6 +2211,11 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			}
 			curp.IsGroupby = true
 			parseGroupby(it, curp)
+		case "type":
+			err := parseType(it, curp)
+			if err != nil {
+				return err
+			}
 		default:
 			return item.Errorf("Unknown directive [%s]", item.Val)
 		}

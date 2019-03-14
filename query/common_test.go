@@ -31,13 +31,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	client = getNewClient()
-)
-
-func assignUids(t *testing.T, num uint64) {
+func assignUids(num uint64) {
 	_, err := http.Get(fmt.Sprintf("http://localhost:6080/assign?what=uids&num=%d", num))
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
+	}
 }
 
 func getNewClient() *dgo.Dgraph {
@@ -46,14 +44,28 @@ func getNewClient() *dgo.Dgraph {
 	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
 }
 
-func setSchema(t *testing.T, schema string) {
-	require.NoError(t, client.Alter(context.Background(), &api.Operation{
+func setSchema(schema string) {
+	err := client.Alter(context.Background(), &api.Operation{
 		Schema: schema,
-	}))
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+	}
+}
+
+func dropPredicate(pred string) {
+	err := client.Alter(context.Background(), &api.Operation{
+		DropAttr: pred,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
+	}
 }
 
 func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
 	res, err := txn.Query(ctx, query)
 	if err != nil {
 		return "", err
@@ -76,6 +88,8 @@ func processQueryNoErr(t *testing.T, query string) string {
 func processQueryWithVars(t *testing.T, query string,
 	vars map[string]string) (string, error) {
 	txn := client.NewTxn()
+	defer txn.Discard(context.Background())
+
 	res, err := txn.QueryWithVars(context.Background(), query, vars)
 	if err != nil {
 		return "", err
@@ -89,32 +103,43 @@ func processQueryWithVars(t *testing.T, query string,
 	return string(jsonResponse), err
 }
 
-func addTriplesToCluster(t *testing.T, triples string) {
+func addTriplesToCluster(triples string) {
 	txn := client.NewTxn()
-	_, err := txn.Mutate(context.Background(), &api.Mutation{
+	ctx := context.Background()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(triples),
 		CommitNow: true,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Could not add triples. Got error %v", err.Error()))
+	}
+
 }
 
-func deleteTriplesInCluster(t *testing.T, triples string) {
+func deleteTriplesInCluster(triples string) {
 	txn := client.NewTxn()
-	_, err := txn.Mutate(context.Background(), &api.Mutation{
+	ctx := context.Background()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(triples),
 		CommitNow: true,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
+	}
 }
 
-func addGeoPointToCluster(t *testing.T, uid uint64, pred string, point []float64) {
+func addGeoPointToCluster(uid uint64, pred string, point []float64) {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Point', 'coordinates':[%v, %v]}"^^<geo:geojson> .`,
 		uid, pred, point[0], point[1])
-	addTriplesToCluster(t, triple)
+	addTriplesToCluster(triple)
 }
 
-func addGeoPolygonToCluster(t *testing.T, uid uint64, pred string, polygon [][][]float64) {
+func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) {
 	coordinates := "["
 	for i, ring := range polygon {
 		coordinates += "["
@@ -136,10 +161,10 @@ func addGeoPolygonToCluster(t *testing.T, uid uint64, pred string, polygon [][][
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Polygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, pred, coordinates)
-	addTriplesToCluster(t, triple)
+	addTriplesToCluster(triple)
 }
 
-func addGeoMultiPolygonToCluster(t *testing.T, uid uint64, polygons [][][][]float64) {
+func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
 	coordinates := "["
 	for i, polygon := range polygons {
 		coordinates += "["
@@ -169,10 +194,19 @@ func addGeoMultiPolygonToCluster(t *testing.T, uid uint64, polygons [][][][]floa
 	triple := fmt.Sprintf(
 		`<%d> <geometry> "{'type':'MultiPolygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, coordinates)
-	addTriplesToCluster(t, triple)
+	addTriplesToCluster(triple)
 }
 
 const testSchema = `
+type Person {
+	name: string
+	pet: Animal
+}
+
+type Animal {
+	name: string
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
@@ -201,17 +235,27 @@ pass                           : password .
 symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : [uid] .
-best_friend                    : uid .
-type                           : string @index(exact) .
+best_friend                    : uid @reverse .
+pet                            : [uid] .
 `
 
-func populateCluster(t *testing.T) {
-	require.NoError(t, client.Alter(context.Background(), &api.Operation{DropAll: true}))
-	setSchema(t, testSchema)
-	assignUids(t, 100000)
+func populateCluster() {
+	err := client.Alter(context.Background(), &api.Operation{DropAll: true})
+	if err != nil {
+		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
+	}
 
-	addTriplesToCluster(t, `
+	setSchema(testSchema)
+	assignUids(100000)
+
+	addTriplesToCluster(`
 		<1> <name> "Michonne" .
+		<2> <name> "King Lear" .
+		<3> <name> "Margaret" .
+		<4> <name> "Leonard" .
+		<5> <name> "Garfield" .
+		<6> <name> "Bear" .
+		<7> <name> "Nemo" .
 		<23> <name> "Rick Grimes" .
 		<24> <name> "Glenn Rhee" .
 		<25> <name> "Daryl Dixon" .
@@ -281,6 +325,8 @@ func populateCluster(t *testing.T) {
 		<23> <friend> <1> .
 
 		<2> <best_friend> <64> .
+		<3> <best_friend> <64> .
+		<4> <best_friend> <64> .
 
 		<1> <age> "38" .
 		<23> <age> "15" .
@@ -426,32 +472,41 @@ func populateCluster(t *testing.T) {
 		<2> <type> "Person" .
 		<3> <type> "Person" .
 		<4> <type> "Person" .
+		<5> <type> "Animal" .
+		<6> <type> "Animal" .
+
+		<2> <pet> <5> .
+		<3> <pet> <6> .
+		<4> <pet> <7> .
+
+		<2> <enemy> <3> .
+		<2> <enemy> <4> .
 	`)
 
-	addGeoPointToCluster(t, 1, "loc", []float64{1.1, 2.0})
-	addGeoPointToCluster(t, 24, "loc", []float64{1.10001, 2.000001})
-	addGeoPointToCluster(t, 25, "loc", []float64{1.1, 2.0})
-	addGeoPointToCluster(t, 5101, "geometry", []float64{-122.082506, 37.4249518})
-	addGeoPointToCluster(t, 5102, "geometry", []float64{-122.080668, 37.426753})
-	addGeoPointToCluster(t, 5103, "geometry", []float64{-122.2527428, 37.513653})
+	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
+	addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})
+	addGeoPointToCluster(25, "loc", []float64{1.1, 2.0})
+	addGeoPointToCluster(5101, "geometry", []float64{-122.082506, 37.4249518})
+	addGeoPointToCluster(5102, "geometry", []float64{-122.080668, 37.426753})
+	addGeoPointToCluster(5103, "geometry", []float64{-122.2527428, 37.513653})
 
-	addGeoPolygonToCluster(t, 23, "loc", [][][]float64{
+	addGeoPolygonToCluster(23, "loc", [][][]float64{
 		{{0.0, 0.0}, {2.0, 0.0}, {2.0, 2.0}, {0.0, 2.0}, {0.0, 0.0}},
 	})
-	addGeoPolygonToCluster(t, 5104, "geometry", [][][]float64{
+	addGeoPolygonToCluster(5104, "geometry", [][][]float64{
 		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38},
 			{-121.6, 37.1}},
 	})
-	addGeoPolygonToCluster(t, 5105, "geometry", [][][]float64{
+	addGeoPolygonToCluster(5105, "geometry", [][][]float64{
 		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43},
 			{-122.04, 37.43}, {-122.06, 37.37}},
 	})
-	addGeoPolygonToCluster(t, 5106, "geometry", [][][]float64{
+	addGeoPolygonToCluster(5106, "geometry", [][][]float64{
 		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
 			{-122.25, 37.49}},
 	})
 
-	addGeoMultiPolygonToCluster(t, 5107, [][][][]float64{
+	addGeoMultiPolygonToCluster(5107, [][][][]float64{
 		{{{-74.29504394531249, 40.19146303804063}, {-74.59716796875, 40.39258071969131},
 			{-74.6466064453125, 40.20824570152502}, {-74.454345703125, 40.06125658140474},
 			{-74.28955078125, 40.17467622056341}, {-74.29504394531249, 40.19146303804063}}},
@@ -473,7 +528,7 @@ func populateCluster(t *testing.T) {
 			<%d> <value> "%s" .
 			<0x1234> <pattern> <%d> .
 		`, nextId, p, nextId)
-		addTriplesToCluster(t, triples)
+		addTriplesToCluster(triples)
 		nextId++
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -49,6 +50,7 @@ import (
 
 type options struct {
 	dataFiles           string
+	dataFormat          string
 	schemaFile          string
 	dgraph              string
 	zero                string
@@ -58,6 +60,7 @@ type options struct {
 	ignoreIndexConflict bool
 	authToken           string
 	useCompression      bool
+	newUids             bool
 }
 
 var (
@@ -82,6 +85,7 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
+	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
 	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
@@ -95,6 +99,8 @@ func init() {
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
+	flag.Bool("new_uids", false,
+		"Ignore UIDs in load files and assign new ones.")
 
 	// TLS configuration
 	x.RegisterTLSFlags(flag)
@@ -131,7 +137,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	}
 
 	f, err := os.Open(file)
-	x.Check(err)
+	x.CheckfNoTrace(err)
 	defer f.Close()
 
 	var reader io.Reader
@@ -158,38 +164,36 @@ func (l *loader) uid(val string) string {
 	// to be an existing node in the graph. There is limited protection against
 	// a user selecting an unassigned UID in this way - it may be assigned
 	// later to another node. It is up to the user to avoid this.
-	if strings.HasPrefix(val, "0x") {
-		if _, err := strconv.ParseUint(val[2:], 16, 64); err == nil {
-			return val
+	if !opt.newUids {
+		if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+			l.alloc.BumpTo(uid)
+			return fmt.Sprintf("%#x", uid)
 		}
 	}
 
-	uid, _ := l.alloc.AssignUid(val)
+	uid := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
-func (l *loader) processFile(ctx context.Context, file string) error {
-	fmt.Printf("Processing data file %q\n", file)
+func (l *loader) processFile(ctx context.Context, filename string) error {
+	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(file)
+	rd, cleanup := chunker.FileReader(filename)
 	defer cleanup()
 
-	var err error
-	var isJson bool
-	if strings.HasSuffix(file, ".rdf") || strings.HasSuffix(file, ".rdf.gz") {
-		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.RdfInput))
-	} else if strings.HasSuffix(file, ".json") || strings.HasSuffix(file, ".json.gz") {
-		err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
-	} else if isJson, err = chunker.IsJSONData(rd); err == nil {
-		if isJson {
-			err = l.processLoadFile(ctx, rd, chunker.NewChunker(chunker.JsonInput))
-		} else {
-			err = fmt.Errorf("Unable to determine file content format: %s", file)
+	loadType := chunker.DataFormat(filename, opt.dataFormat)
+	if loadType == chunker.UnknownFormat {
+		if isJson, err := chunker.IsJSONData(rd); err == nil {
+			if isJson {
+				loadType = chunker.JsonFormat
+			} else {
+				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
+			}
 		}
 	}
 
-	return err
+	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
@@ -241,36 +245,32 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
-	x.Check(os.MkdirAll(opt.clientDir, 0700))
-	o := badger.DefaultOptions
-	o.SyncWrites = true // So that checkpoints are persisted immediately.
-	o.TableLoadingMode = bopt.MemoryMap
-	o.Dir = opt.clientDir
-	o.ValueDir = opt.clientDir
+	var db *badger.DB
+	if len(opt.clientDir) > 0 {
+		x.Check(os.MkdirAll(opt.clientDir, 0700))
+		o := badger.DefaultOptions
+		o.Dir = opt.clientDir
+		o.ValueDir = opt.clientDir
+		o.TableLoadingMode = bopt.MemoryMap
+		o.SyncWrites = false
 
-	kv, err := badger.Open(o)
-	x.Checkf(err, "Error while creating badger KV posting store")
+		var err error
+		db, err = badger.Open(o)
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
 
 	// compression with zero server actually makes things worse
 	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(
-		kv,
-		connzero,
-		xidmap.Options{
-			NumShards: 100,
-			LRUSize:   1e5,
-		},
-	)
-
+	alloc := xidmap.New(connzero, db)
 	l := &loader{
 		opts:     opts,
 		dc:       dc,
 		start:    time.Now(),
 		reqs:     make(chan api.Mutation, opts.Pending*2),
 		alloc:    alloc,
-		kv:       kv,
+		db:       db,
 		zeroconn: connzero,
 	}
 
@@ -287,6 +287,7 @@ func run() error {
 	x.PrintVersion()
 	opt = options{
 		dataFiles:           Live.Conf.GetString("files"),
+		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
 		dgraph:              Live.Conf.GetString("dgraph"),
 		zero:                Live.Conf.GetString("zero"),
@@ -296,6 +297,7 @@ func run() error {
 		ignoreIndexConflict: Live.Conf.GetBool("ignore_index_conflict"),
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
+		newUids:             Live.Conf.GetBool("new_uids"),
 	}
 	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
 	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
@@ -314,7 +316,7 @@ func run() error {
 	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := x.SetupConnection(d, &tlsConf, opt.useCompression)
-		x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
+		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
 		defer conn.Close()
 
 		dc := api.NewDgraphClient(conn)
@@ -322,17 +324,8 @@ func run() error {
 	}
 	dgraphClient := dgo.NewDgraphClient(clients...)
 
-	if len(opt.clientDir) == 0 {
-		var err error
-		opt.clientDir, err = ioutil.TempDir("", "x")
-		x.Checkf(err, "Error while trying to create temporary client directory.")
-		fmt.Printf("Creating temp client directory at %s\n", opt.clientDir)
-		defer os.RemoveAll(opt.clientDir)
-	}
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
-	defer l.kv.Close()
-	defer l.alloc.EvictAll()
 
 	if len(opt.schemaFile) > 0 {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
@@ -346,11 +339,14 @@ func run() error {
 		fmt.Printf("Processed schema file %q\n\n", opt.schemaFile)
 	}
 
+	if opt.dataFiles == "" {
+		return errors.New("RDF or JSON file(s) location must be specified")
+	}
+
 	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		fmt.Printf("No data files to process\n")
-		return nil
+		return fmt.Errorf("No data files found in %s", opt.dataFiles)
 	} else {
 		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
@@ -397,5 +393,9 @@ func run() error {
 	fmt.Printf("Time spent                   : %v\n", c.Elapsed)
 	fmt.Printf("N-Quads processed per second : %d\n", rate)
 
+	if l.db != nil {
+		l.alloc.Flush()
+		l.db.Close()
+	}
 	return nil
 }

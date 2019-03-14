@@ -1,0 +1,188 @@
+{
+  director(func: eq(name@en, "Steven Spielberg")) {
+    name@en
+    director.film {
+      name@en
+      numGenres : g as count(genre)
+    }
+    totalGenres : sum(val(g))
+    genresPerMovie : avg(val(g))
+  }
+}
+---
+{
+  "director": [
+    {
+      "name@en": "Steven Spielberg",
+      "director.film": [
+        {
+          "name@en": "Twilight Zone: The Movie",
+          "numGenres": 3
+        },
+        {
+          "name@en": "Duel",
+          "numGenres": 4
+        },
+        {
+          "name@en": "Lincoln",
+          "numGenres": 5
+        },
+        {
+          "name@en": "Minority Report",
+          "numGenres": 12
+        },
+        {
+          "name@en": "Indiana Jones and the Temple of Doom",
+          "numGenres": 4
+        },
+        {
+          "name@en": "Schindler's List",
+          "numGenres": 5
+        },
+        {
+          "name@en": "Amistad",
+          "numGenres": 3
+        },
+        {
+          "name@en": "1941",
+          "numGenres": 5
+        },
+        {
+          "name@en": "Jaws",
+          "numGenres": 8
+        },
+        {
+          "name@en": "Indiana Jones and the Last Crusade",
+          "numGenres": 4
+        },
+        {
+          "name@en": "Saving Private Ryan",
+          "numGenres": 3
+        },
+        {
+          "name@en": "War Horse",
+          "numGenres": 2
+        },
+        {
+          "name@en": "Close Encounters of the Third Kind",
+          "numGenres": 3
+        },
+        {
+          "name@en": "Empire of the Sun",
+          "numGenres": 7
+        },
+        {
+          "name@en": "The Adventures of Tintin: The Secret of the Unicorn",
+          "numGenres": 6
+        },
+        {
+          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull",
+          "numGenres": 7
+        },
+        {
+          "name@en": "Jurassic Park",
+          "numGenres": 3
+        },
+        {
+          "name@en": "The Lost World: Jurassic Park",
+          "numGenres": 5
+        },
+        {
+          "name@en": "Hook",
+          "numGenres": 8
+        },
+        {
+          "name@en": "The Color Purple",
+          "numGenres": 1
+        },
+        {
+          "name@en": "Slipstream",
+          "numGenres": 1
+        },
+        {
+          "name@en": "Indiana Jones and the Raiders of the Lost Ark",
+          "numGenres": 2
+        },
+        {
+          "name@en": "Munich",
+          "numGenres": 5
+        },
+        {
+          "name@en": "The Terminal",
+          "numGenres": 5
+        },
+        {
+          "name@en": "Catch Me If You Can",
+          "numGenres": 4
+        },
+        {
+          "name@en": "War of the Worlds",
+          "numGenres": 9
+        },
+        {
+          "name@en": "A.I. Artificial Intelligence",
+          "numGenres": 4
+        },
+        {
+          "name@en": "Bridge of Spies",
+          "numGenres": 1
+        },
+        {
+          "name@en": "The Sugarland Express",
+          "numGenres": 3
+        },
+        {
+          "name@en": "E.T. the Extra-Terrestrial",
+          "numGenres": 5
+        },
+        {
+          "name@en": "The BFG",
+          "numGenres": 0
+        },
+        {
+          "name@en": "Amblin",
+          "numGenres": 1
+        },
+        {
+          "name@en": "Something Evil",
+          "numGenres": 3
+        },
+        {
+          "name@en": "Savage",
+          "numGenres": 2
+        },
+        {
+          "name@en": "Always",
+          "numGenres": 4
+        },
+        {
+          "name@en": "Robopocalypse",
+          "numGenres": 3
+        },
+        {
+          "name@en": "The Attack of the Mummies",
+          "numGenres": 0
+        },
+        {
+          "name@en": "Firelight",
+          "numGenres": 2
+        },
+        {
+          "name@en": "Amazing Stories: Book One",
+          "numGenres": 2
+        }
+      ],
+      "totalGenres": 154,
+      "genresPerMovie": 3.948718
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    }
+  ]
+}

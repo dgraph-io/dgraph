@@ -94,6 +94,20 @@ type Val struct {
 	Value interface{}
 }
 
+// Safe ensures that Val's Value is not nil. This is useful when doing type
+// assertions and default values might be involved.
+// This function won't change the original v.Value, may it be nil.
+// See: "Default value vars" in `fillVars()`
+// Returns a safe v.Value suitable for type assertions.
+func (v Val) Safe() interface{} {
+	if v.Value == nil {
+		// get zero value for this v.Tid
+		va := ValueForType(v.Tid)
+		return va.Value
+	}
+	return v.Value
+}
+
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
 func TypeForName(name string) (TypeID, bool) {

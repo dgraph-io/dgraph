@@ -17,6 +17,7 @@
 package x
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,4 +92,36 @@ func FindDataFiles(str string, ext []string) []string {
 	}
 
 	return list
+}
+
+// IsMissingOrEmptyDir returns true if the path either does not exist
+// or is a directory that is empty.
+func IsMissingOrEmptyDir(path string) (bool, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		} else {
+			return false, err
+		}
+	}
+
+	if !fi.IsDir() {
+		return false, nil
+	}
+
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		return false, err
+	}
+
+	_, err = file.Readdir(1)
+	if err == nil {
+		return false, nil
+	} else if err != io.EOF {
+		return false, err
+	}
+
+	return true, nil
 }

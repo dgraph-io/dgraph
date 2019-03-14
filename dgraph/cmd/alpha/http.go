@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -156,10 +157,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), query.DebugKey, d)
+	ctx = attachAccessJwt(ctx, r)
 
-	// If ro is set, run this as a readonly query.
-	if ro := r.URL.Query().Get("ro"); len(ro) > 0 && req.StartTs == 0 {
-		if ro == "true" || ro == "1" {
+	if req.StartTs == 0 {
+		// If be is set, run this as a best-effort query.
+		be, _ := strconv.ParseBool(r.URL.Query().Get("be"))
+		if be {
+			req.BestEffort = true
+			req.ReadOnly = true
+		}
+		// If ro is set, run this as a readonly query.
+		ro, _ := strconv.ParseBool(r.URL.Query().Get("ro"))
+		if ro {
 			req.ReadOnly = true
 		}
 	}
@@ -252,6 +261,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		mu.CommitNow = c
 	}
+	ctx := attachAccessJwt(context.Background(), r)
 
 	ts, err := extractStartTs(r.URL.Path)
 	if err != nil {
@@ -260,7 +270,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.StartTs = ts
 
-	resp, err := (&edgraph.Server{}).Mutate(context.Background(), mu)
+	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -271,6 +281,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		Txn:     resp.Context,
 		Latency: resp.Latency,
 	}
+	sort.Strings(e.Txn.Keys)
+	sort.Strings(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
 	if mu.CommitNow {
@@ -317,19 +329,29 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	tc.StartTs = ts
 
 	// Keys are sent as an array in the body.
-	keys := readRequest(w, r)
-	if keys == nil {
+	reqText := readRequest(w, r)
+	if reqText == nil {
 		return
 	}
 
-	var encodedKeys []string
-	if err := json.Unmarshal([]byte(keys), &encodedKeys); err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"Error while unmarshalling keys header into array")
+	var reqList []string
+	useList := false
+	if err := json.Unmarshal(reqText, &reqList); err == nil {
+		useList = true
+	}
+
+	var reqMap map[string][]string
+	if err := json.Unmarshal(reqText, &reqMap); err != nil && !useList {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Error while unmarshalling request body")
 		return
 	}
 
-	tc.Keys = encodedKeys
+	if useList {
+		tc.Keys = reqList
+	} else {
+		tc.Keys = reqMap["keys"]
+		tc.Preds = reqMap["preds"]
+	}
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
@@ -400,6 +422,19 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, r, js)
 }
 
+func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("accessJwt", accessJwt)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
+}
+
 func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if commonHandler(w, r) {
 		return
@@ -427,6 +462,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	// Pass in an auth token, if present.
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
 	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx = attachAccessJwt(ctx, r)
 	if _, err = (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return

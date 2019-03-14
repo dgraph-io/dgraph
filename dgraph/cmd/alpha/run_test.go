@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -36,9 +35,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
 )
@@ -127,22 +127,21 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, err := mutationWithTs(m, false, true, false, 0)
+	_, _, _, err := mutationWithTs(m, false, true, false, 0)
 	return err
 }
 
 func runJsonMutation(m string) error {
-	_, _, err := mutationWithTs(m, true, true, false, 0)
+	_, _, _, err := mutationWithTs(m, true, true, false, 0)
 	return err
 }
 
 func alterSchema(s string) error {
-	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(s))
+	_, _, err := runWithRetries("PUT", addr+"/alter", s, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("error while running request with retries: %v", err)
 	}
-	_, _, err = runRequest(req)
-	return err
+	return nil
 }
 
 func alterSchemaWithRetry(s string) error {
@@ -157,21 +156,13 @@ func alterSchemaWithRetry(s string) error {
 
 func dropAll() error {
 	op := `{"drop_all": true}`
-	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(op))
-	if err != nil {
-		return err
-	}
-	_, _, err = runRequest(req)
+	_, _, err := runWithRetries("PUT", addr+"/alter", op, nil)
 	return err
 }
 
 func deletePredicate(pred string) error {
 	op := `{"drop_attr": "` + pred + `"}`
-	req, err := http.NewRequest("PUT", addr+"/alter", bytes.NewBufferString(op))
-	if err != nil {
-		return err
-	}
-	_, _, err = runRequest(req)
+	_, _, err := runWithRetries("PUT", addr+"/alter", op, nil)
 	return err
 }
 
@@ -244,7 +235,6 @@ func TestDeletePredicate(t *testing.T) {
 	var s2 = `
 	friend: string @index(term) .
 	`
-
 	require.NoError(t, dropAll())
 	schema.ParseBytes([]byte(""), 1)
 	err := alterSchemaWithRetry(s1)
@@ -281,10 +271,11 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(`schema{}`)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[`+
+	z.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
+		x.AclPredicates+","+
 		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}`+
 		`]}}`, output)
 
@@ -402,7 +393,6 @@ func TestSchemaMutation2Error(t *testing.T) {
 	var m = `
             age:string @reverse .
 	`
-
 	err := alterSchema(m)
 	require.Error(t, err)
 }
@@ -491,12 +481,12 @@ func TestSchemaMutationUidError1(t *testing.T) {
 	var s1 = `
             friend: [uid] .
 	`
-	require.NoError(t, alterSchema(s1))
+	require.NoError(t, alterSchemaWithRetry(s1))
 
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchema(s2))
+	require.Error(t, alterSchemaWithRetry(s2))
 }
 
 // add index
@@ -752,7 +742,6 @@ func TestJsonMutation(t *testing.T) {
 	var s1 = `
             name: string @index(exact) .
 	`
-
 	require.NoError(t, dropAll())
 	schema.ParseBytes([]byte(""), 1)
 	err := alterSchemaWithRetry(s1)
@@ -808,7 +797,6 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 		]
 	}
 	`
-
 	require.NoError(t, dropAll())
 	schema.ParseBytes([]byte(""), 1)
 	err := runJsonMutation(m1)
@@ -933,7 +921,6 @@ func TestDeleteAllSP1(t *testing.T) {
 			<2000> * * .
 		}
 	}`
-	time.Sleep(20 * time.Millisecond)
 	err := runMutation(m)
 	require.NoError(t, err)
 }
@@ -1002,15 +989,14 @@ var q6 = `
 //	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
 //}
 
-var qErr = `
+func TestMutationError(t *testing.T) {
+	var qErr = `
  	{
  		set {
  			<0x0> <name> "Alice" .
  		}
  	}
  `
-
-func TestMutationError(t *testing.T) {
 	err := runMutation(qErr)
 	require.Error(t, err)
 }
@@ -1167,6 +1153,7 @@ func TestExpandPred(t *testing.T) {
 	var s = `
 			name:string @index(term) .
 	`
+
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(m)
@@ -1359,7 +1346,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"schema":[`+
+	z.CompareJSON(t, `{"data":{"schema":[`+
+		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"type", "type":"string", "index":true, "tokenizer": ["exact"]}]}}`, res)
@@ -1414,6 +1402,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
+
 func TestDeleteScalarValue(t *testing.T) {
 	var s = `name: string .`
 	require.NoError(t, schema.ParseBytes([]byte(""), 1))
@@ -1429,6 +1418,24 @@ func TestDeleteScalarValue(t *testing.T) {
 	err := runMutation(m)
 	require.NoError(t, err)
 
+	// This test has been flaky at the step that verifies whether the triple exists
+	// after the first deletion. To try to combat that, verify the triple can be
+	// queried before performing the deletion.
+	q := `
+	{
+	  me(func: uid(0x12345)) {
+		name
+	  }
+	}`
+	for i := 0; i < 5; i++ {
+		output, err := runQuery(q)
+		if err != nil || !assert.JSONEq(t, output, `{"data": {"me":[{"name":"xxx"}]}}`) {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		break
+	}
+
 	var d1 = `
     {
       delete {
@@ -1441,13 +1448,6 @@ func TestDeleteScalarValue(t *testing.T) {
 
 	// Verify triple was not deleted because the value in the request did
 	// not match the existing value.
-	q := fmt.Sprintf(`
-	{
-	  me(func: uid(%s)) {
-		name
-	  }
-	}`, "0x12345")
-
 	output, err := runQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
@@ -1504,9 +1504,10 @@ func TestDropAll(t *testing.T) {
 	q3 := "schema{}"
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},
-			{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
+	z.CompareJSON(t,
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
+			x.AclPredicates+","+
+			`{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1545,7 +1546,6 @@ func TestRecurseExpandAll(t *testing.T) {
 	`
 
 	var s = `name:string @index(term) .`
-
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(m)
@@ -1654,7 +1654,7 @@ func TestTypeMutationAndQuery(t *testing.T) {
 }
 
 func TestIPStringParsing(t *testing.T) {
-	var addrRange []worker.IPRange
+	var addrRange []x.IPRange
 	var err error
 
 	addrRange, err = getIPsFromString("144.142.126.222:144.142.126.244")
@@ -1692,6 +1692,13 @@ func TestIPStringParsing(t *testing.T) {
 	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
 }
 
+var addr = "http://localhost:8180"
+
+// the grootAccessJWT stores the access JWT extracted from the response
+// of http login
+var grootAccessJwt string
+var grootRefreshJwt string
+
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
 	conn, err := grpc.Dial("localhost:5080", grpc.WithInsecure())
@@ -1702,6 +1709,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
+	grootAccessJwt, grootRefreshJwt = z.GrootHttpLogin(addr + "/login")
 
 	r := m.Run()
 	os.Exit(r)

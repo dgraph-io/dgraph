@@ -69,6 +69,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
+	int32 cache = 14;
 }
 
 message ValueList {
@@ -199,6 +200,7 @@ message Mutations {
 	repeated SchemaUpdate schema = 4;
 	bool drop_all                = 5;
 	bool ignore_index_conflict   = 6;
+	repeated TypeUpdate types    = 7;
 }
 
 message Snapshot {
@@ -316,6 +318,8 @@ message SchemaRequest {
 	repeated string predicates = 2;
 	// fields can be on of type, index, reverse or tokenizer
 	repeated string fields = 3;
+
+  repeated string types = 4;
 }
 
 message SchemaResult {

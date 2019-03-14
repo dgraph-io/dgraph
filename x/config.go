@@ -16,6 +16,8 @@
 
 package x
 
+import "net"
+
 type Options struct {
 	DebugMode      bool
 	PortOffset     int
@@ -23,3 +25,24 @@ type Options struct {
 }
 
 var Config Options
+
+type IPRange struct {
+	Lower, Upper net.IP
+}
+
+type WorkerOptions struct {
+	ExportPath          string
+	NumPendingProposals int
+	// TODO: Get rid of this here.
+	Tracing             float64
+	MyAddr              string
+	ZeroAddr            string
+	RaftId              uint64
+	ExpandEdge          bool
+	WhiteListedIPRanges []IPRange
+	MaxRetries          int
+	StrictMutations     bool
+	AclEnabled          bool
+}
+
+var WorkerConfig WorkerOptions

@@ -152,6 +152,10 @@ type params struct {
 	shortest       bool
 }
 
+type pathMetadata struct {
+	weight float64 // Total weight of the path.
+}
+
 // Function holds the information about gql functions.
 type Function struct {
 	Name       string    // Specifies the name of the function.
@@ -165,6 +169,7 @@ type Function struct {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	ReadTs       uint64
+	Cache        int
 	Attr         string
 	Params       params
 	counts       []uint32
@@ -189,6 +194,8 @@ type SubGraph struct {
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *pb.List
 	List     bool // whether predicate is of list type
+
+	pathMeta *pathMetadata
 }
 
 func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
@@ -572,6 +579,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	// nothing else at that level.
 	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.shortest {
 		dst.SetUID(uid, "uid")
+	}
+
+	if sg.pathMeta != nil {
+		totalWeight := types.Val{
+			Tid:   types.FloatID,
+			Value: sg.pathMeta.weight,
+		}
+		dst.AddValue("_weight_", totalWeight)
 	}
 
 	return nil
@@ -1047,6 +1062,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
+		Cache:        int32(sg.Cache),
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
@@ -1325,7 +1341,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			doneVars[sg.Params.Var] = it
 			sg.Params.uidToVal = mp
 		} else {
-			glog.Errorf("Missing values/constant in math expression")
+			glog.V(3).Info("Warning: Math expression is using unassigned values or constants")
 		}
 		// Put it in this node.
 	} else if len(sg.Params.NeedsVar) > 0 {
@@ -1481,6 +1497,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		doneVars[sg.Params.Var] = varValue{
 			strList: sg.valueMatrix,
 			path:    sgPath,
+			Vals:    make(map[uint64]types.Val),
 		}
 	} else if len(sg.counts) > 0 {
 		// This implies it is a value variable.
@@ -1518,6 +1535,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			doneVars[sg.Params.Var] = varValue{
 				Uids: uids,
 				path: sgPath,
+				Vals: make(map[uint64]types.Val),
 			}
 			return nil
 		}
@@ -1678,9 +1696,16 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			default:
 				// This var does not match any uids or vals but we are still trying to access it.
 				if v.Typ == gql.ValueVar {
+					// * * * * * * * * * * * * * * * * * * *
+					// Default value vars
+					// * * * * * * * * * * * * * * * * * * *
+					//
 					// Provide a default value for valueVarAggregation() to eval val().
 					// This is a noop for aggregation funcs that would fail.
 					// The zero aggs won't show because there are no uids matched.
+					//
+					// NOTE: If you need to make type assertions that might involve
+					// default value vars, use `Safe()` func and not val.Value directly.
 					mp[v.Name].Vals[0] = types.Val{}
 					sg.Params.uidToVal = mp[v.Name].Vals
 				}
@@ -1829,7 +1854,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+		if !x.WorkerConfig.ExpandEdge && child.Attr == "_predicate_" {
 			return out,
 				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
 		}
@@ -1839,7 +1864,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			continue
 		}
 
-		if !worker.Config.ExpandEdge {
+		if !x.WorkerConfig.ExpandEdge {
 			return out,
 				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}
@@ -1980,7 +2005,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
+		if sg.SrcUIDs == nil {
+			glog.Errorf("SrcUIDs is unexpectedly nil. Subgraph: %+v", sg)
+			rch <- x.Errorf("SrcUIDs shouldn't be nil.")
+			return
+		}
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
@@ -2423,7 +2452,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext",
-		"has", "uid", "uid_in", "anyof", "allof", "type":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
@@ -2510,6 +2539,7 @@ func ConvertUidsToHex(m map[string]uint64) map[string]string {
 // and schemaUpdate are filled when processing query.
 type QueryRequest struct {
 	ReadTs   uint64
+	Cache    int
 	Latency  *Latency
 	GqlQuery *gql.Result
 
@@ -2535,7 +2565,8 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
-			return x.Errorf("Invalid query, query pb.id is zero and generator is nil")
+			return x.Errorf("Invalid query. No function used at root and no aggregation" +
+				" or math variables found in the body.")
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
@@ -2543,6 +2574,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
+			sg.Cache = req.Cache
 		})
 		span.Annotate(nil, "Query parsed")
 		req.Subgraphs = append(req.Subgraphs, sg)
@@ -2678,13 +2710,13 @@ func (e *InternalError) Error() string {
 	return "pb.error: " + e.err.Error()
 }
 
-// TODO: This looks unnecessary.
-type ExecuteResult struct {
+type ExecutionResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*api.SchemaNode
+	Types      []*pb.TypeUpdate
 }
 
-func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err error) {
+func (req *QueryRequest) Process(ctx context.Context) (er ExecutionResult, err error) {
 	err = req.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
@@ -2694,6 +2726,9 @@ func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err err
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
+		}
+		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching types")
 		}
 	}
 	return er, nil

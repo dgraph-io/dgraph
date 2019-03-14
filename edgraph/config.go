@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -41,10 +40,9 @@ type Options struct {
 	AuthToken      string
 	AllottedMemory float64
 
-	HmacSecret         []byte
-	AccessJwtTtl       time.Duration
-	RefreshJwtTtl      time.Duration
-	AclRefreshInterval time.Duration
+	HmacSecret    []byte
+	AccessJwtTtl  time.Duration
+	RefreshJwtTtl time.Duration
 }
 
 var Config Options
@@ -89,9 +87,9 @@ func setConfVar(conf Options) {
 	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
 
 	// Set some vars from worker.Config.
-	x.Conf.Set("tracing", newFloat(worker.Config.Tracing))
-	x.Conf.Set("num_pending_proposals", newInt(worker.Config.NumPendingProposals))
-	x.Conf.Set("expand_edge", newIntFromBool(worker.Config.ExpandEdge))
+	x.Conf.Set("tracing", newFloat(x.WorkerConfig.Tracing))
+	x.Conf.Set("num_pending_proposals", newInt(x.WorkerConfig.NumPendingProposals))
+	x.Conf.Set("expand_edge", newIntFromBool(x.WorkerConfig.ExpandEdge))
 }
 
 func SetConfiguration(newConfig Options) {

@@ -1,0 +1,939 @@
+{
+  var(func:allofterms(name@en, "angelina jolie")) {
+    name@en
+    actor.film {
+      A AS performance.film {
+        B AS genre
+      }
+    }
+  }
+
+  films(func: uid(B), orderasc: name@en) {
+    name@en
+    ~genre @filter(uid(A)) {
+      name@en
+    }
+  }
+}
+---
+{
+  "films": [
+    {
+      "name@en": "Action Film",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Cyborg 2"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "True Women"
+        }
+      ]
+    },
+    {
+      "name@en": "Action/Adventure",
+      "~genre": [
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "True Women"
+        }
+      ]
+    },
+    {
+      "name@en": "Adventure Film",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Wanted"
+        }
+      ]
+    },
+    {
+      "name@en": "Animation",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Beowulf"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Kung Fu Panda: Secrets of the Masters"
+        }
+      ]
+    },
+    {
+      "name@en": "Backstage Musical",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        }
+      ]
+    },
+    {
+      "name@en": "Biographical film",
+      "~genre": [
+        {
+          "name@en": "Girl, Interrupted"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "George Wallace"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Cleopatra"
+        }
+      ]
+    },
+    {
+      "name@en": "Black comedy",
+      "~genre": [
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        }
+      ]
+    },
+    {
+      "name@en": "Children's/Family",
+      "~genre": [
+        {
+          "name@en": "Shark Tale"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        },
+        {
+          "name@en": "Pushing Tin"
+        },
+        {
+          "name@en": "Lookin' to Get Out"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy Thriller",
+      "~genre": [
+        {
+          "name@en": "Mojave Moon"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy-drama",
+      "~genre": [
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Playing by Heart"
+        }
+      ]
+    },
+    {
+      "name@en": "Computer Animation",
+      "~genre": [
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Beowulf"
+        }
+      ]
+    },
+    {
+      "name@en": "Crime Fiction",
+      "~genre": [
+        {
+          "name@en": "Playing God"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Hell's Kitchen"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "Foxfire"
+        }
+      ]
+    },
+    {
+      "name@en": "Crime Thriller",
+      "~genre": [
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Hackers"
+        }
+      ]
+    },
+    {
+      "name@en": "Cult film",
+      "~genre": [
+        {
+          "name@en": "Hackers"
+        }
+      ]
+    },
+    {
+      "name@en": "Docudrama",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        }
+      ]
+    },
+    {
+      "name@en": "Drama",
+      "~genre": [
+        {
+          "name@en": "Original Sin"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "Playing God"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "Pushing Tin"
+        },
+        {
+          "name@en": "Hell's Kitchen"
+        },
+        {
+          "name@en": "George Wallace"
+        },
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "Foxfire"
+        },
+        {
+          "name@en": "The Fever"
+        }
+      ]
+    },
+    {
+      "name@en": "Ensemble Film",
+      "~genre": [
+        {
+          "name@en": "Playing by Heart"
+        }
+      ]
+    },
+    {
+      "name@en": "Epic Western",
+      "~genre": [
+        {
+          "name@en": "True Women"
+        }
+      ]
+    },
+    {
+      "name@en": "Erotica",
+      "~genre": [
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Gia"
+        }
+      ]
+    },
+    {
+      "name@en": "Family",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda 3"
+        },
+        {
+          "name@en": "Shark Tale"
+        },
+        {
+          "name@en": "Kung Fu Panda"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        }
+      ]
+    },
+    {
+      "name@en": "Fantasy",
+      "~genre": [
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Beowulf"
+        }
+      ]
+    },
+    {
+      "name@en": "Film adaptation",
+      "~genre": [
+        {
+          "name@en": "True Women"
+        },
+        {
+          "name@en": "The Fever"
+        }
+      ]
+    },
+    {
+      "name@en": "Heist film",
+      "~genre": [
+        {
+          "name@en": "Gone in 60 Seconds"
+        }
+      ]
+    },
+    {
+      "name@en": "Historical fiction",
+      "~genre": [
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Cleopatra"
+        }
+      ]
+    },
+    {
+      "name@en": "Historical period drama",
+      "~genre": [
+        {
+          "name@en": "The Good Shepherd"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "George Wallace"
+        }
+      ]
+    },
+    {
+      "name@en": "History",
+      "~genre": [
+        {
+          "name@en": "Changeling"
+        }
+      ]
+    },
+    {
+      "name@en": "Indie film",
+      "~genre": [
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        },
+        {
+          "name@en": "Foxfire"
+        }
+      ]
+    },
+    {
+      "name@en": "LGBT",
+      "~genre": [
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        }
+      ]
+    },
+    {
+      "name@en": "Martial Arts Film",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        },
+        {
+          "name@en": "Kung Fu Panda 2"
+        }
+      ]
+    },
+    {
+      "name@en": "Media Satire",
+      "~genre": [
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Confessions of an Action Star"
+        }
+      ]
+    },
+    {
+      "name@en": "Mockumentary",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        }
+      ]
+    },
+    {
+      "name@en": "Musical comedy",
+      "~genre": [
+        {
+          "name@en": "Confessions of an Action Star"
+        }
+      ]
+    },
+    {
+      "name@en": "Mystery",
+      "~genre": [
+        {
+          "name@en": "Original Sin"
+        },
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        }
+      ]
+    },
+    {
+      "name@en": "Political drama",
+      "~genre": [
+        {
+          "name@en": "The Good Shepherd"
+        },
+        {
+          "name@en": "George Wallace"
+        }
+      ]
+    },
+    {
+      "name@en": "Psychological Drama",
+      "~genre": [
+        {
+          "name@en": "Girl, Interrupted"
+        }
+      ]
+    },
+    {
+      "name@en": "Psychological thriller",
+      "~genre": [
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "Without Evidence"
+        }
+      ]
+    },
+    {
+      "name@en": "Romance Film",
+      "~genre": [
+        {
+          "name@en": "Original Sin"
+        },
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        },
+        {
+          "name@en": "Valencia: The Movie/S"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "Playing by Heart"
+        },
+        {
+          "name@en": "Maleficent"
+        },
+        {
+          "name@en": "Alexander"
+        },
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "Pushing Tin"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        }
+      ]
+    },
+    {
+      "name@en": "Romantic comedy",
+      "~genre": [
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        },
+        {
+          "name@en": "Mojave Moon"
+        },
+        {
+          "name@en": "Life or Something Like It"
+        },
+        {
+          "name@en": "Love Is All There Is"
+        }
+      ]
+    },
+    {
+      "name@en": "Science Fiction",
+      "~genre": [
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Cyborg 2"
+        }
+      ]
+    },
+    {
+      "name@en": "Short Film",
+      "~genre": [
+        {
+          "name@en": "Alice & Viril"
+        },
+        {
+          "name@en": "Kung Fu Panda Holiday"
+        },
+        {
+          "name@en": "Kung Fu Panda: Secrets of the Masters"
+        },
+        {
+          "name@en": "Angela & Viril"
+        }
+      ]
+    },
+    {
+      "name@en": "Slasher",
+      "~genre": [
+        {
+          "name@en": "Taking Lives"
+        }
+      ]
+    },
+    {
+      "name@en": "Slice of life",
+      "~genre": [
+        {
+          "name@en": "Playing by Heart"
+        }
+      ]
+    },
+    {
+      "name@en": "Spy film",
+      "~genre": [
+        {
+          "name@en": "The Good Shepherd"
+        }
+      ]
+    },
+    {
+      "name@en": "Suspense",
+      "~genre": [
+        {
+          "name@en": "Hackers"
+        }
+      ]
+    },
+    {
+      "name@en": "Teen film",
+      "~genre": [
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Foxfire"
+        }
+      ]
+    },
+    {
+      "name@en": "Television film",
+      "~genre": [
+        {
+          "name@en": "Gia"
+        },
+        {
+          "name@en": "The Fever"
+        }
+      ]
+    },
+    {
+      "name@en": "Thriller",
+      "~genre": [
+        {
+          "name@en": "Original Sin"
+        },
+        {
+          "name@en": "Lara Croft: Tomb Raider"
+        },
+        {
+          "name@en": "Mr. & Mrs. Smith"
+        },
+        {
+          "name@en": "Changeling"
+        },
+        {
+          "name@en": "Playing God"
+        },
+        {
+          "name@en": "Gone in 60 Seconds"
+        },
+        {
+          "name@en": "The Tourist"
+        },
+        {
+          "name@en": "The Good Shepherd"
+        },
+        {
+          "name@en": "Lara Croft Tomb Raider: The Cradle of Life"
+        },
+        {
+          "name@en": "Taking Lives"
+        },
+        {
+          "name@en": "Salt"
+        },
+        {
+          "name@en": "The Bone Collector"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Without Evidence"
+        },
+        {
+          "name@en": "Sky Captain and the World of Tomorrow"
+        },
+        {
+          "name@en": "Hackers"
+        },
+        {
+          "name@en": "Wanted"
+        },
+        {
+          "name@en": "True Women"
+        }
+      ]
+    },
+    {
+      "name@en": "Trial drama",
+      "~genre": [
+        {
+          "name@en": "Without Evidence"
+        }
+      ]
+    },
+    {
+      "name@en": "War film",
+      "~genre": [
+        {
+          "name@en": "Beyond Borders"
+        },
+        {
+          "name@en": "A Mighty Heart"
+        },
+        {
+          "name@en": "Alexander"
+        }
+      ]
+    },
+    {
+      "name@en": "Western",
+      "~genre": [
+        {
+          "name@en": "True Women"
+        }
+      ]
+    },
+    {
+      "name@en": "Wuxia",
+      "~genre": [
+        {
+          "name@en": "Kung Fu Panda 2"
+        }
+      ]
+    }
+  ]
+}

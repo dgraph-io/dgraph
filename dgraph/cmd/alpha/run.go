@@ -89,6 +89,8 @@ they form a Raft group and provide synchronous replication.
 	// with the flag name so that the values are picked up by Cobra/Viper's various config inputs
 	// (e.g, config file, env vars, cli flags, etc.)
 	flag := Alpha.Cmd.Flags()
+	flag.Bool("enterprise_features", false, "Enable Dgraph enterprise features. "+
+		"If you set this to true, you agree to the Dgraph Community License.")
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 
 	// Options around how to set up Badger.
@@ -128,13 +130,12 @@ they form a Raft group and provide synchronous replication.
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
 
-	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
-		" that is used for signing the JWT. Enterprise feature.")
+	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
+		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
+		"Enterprise feature.")
 	flag.Duration("acl_access_ttl", 6*time.Hour, "The TTL for the access jwt. "+
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
-		"Enterprise feature.")
-	flag.Duration("acl_cache_ttl", 30*time.Second, "The interval to refresh the acl cache. "+
 		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
@@ -150,7 +151,7 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
-			" This is only useful for shortest path queries.")
+			" This applies to shortest path and recursive queries.")
 
 	// TLS configurations
 	x.RegisterTLSFlags(flag)
@@ -179,12 +180,12 @@ func setupCustomTokenizers() {
 // and returns a slice of []IPRange.
 //
 // e.g. "144.142.126.222:144.142.126.244,144.142.126.254,192.168.0.0/16,host.docker.internal"
-func getIPsFromString(str string) ([]worker.IPRange, error) {
+func getIPsFromString(str string) ([]x.IPRange, error) {
 	if str == "" {
-		return []worker.IPRange{}, nil
+		return []x.IPRange{}, nil
 	}
 
-	var ipRanges []worker.IPRange
+	var ipRanges []x.IPRange
 	rangeStrings := strings.Split(str, ",")
 
 	for _, s := range rangeStrings {
@@ -198,7 +199,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
 				ipAddr := net.ParseIP(s)
 				if ipAddr != nil {
-					ipRanges = append(ipRanges, worker.IPRange{Lower: ipAddr, Upper: ipAddr})
+					ipRanges = append(ipRanges, x.IPRange{Lower: ipAddr, Upper: ipAddr})
 				} else {
 					ipAddrs, err := net.LookupIP(s)
 					if err != nil {
@@ -206,7 +207,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 					}
 
 					for _, addr := range ipAddrs {
-						ipRanges = append(ipRanges, worker.IPRange{Lower: addr, Upper: addr})
+						ipRanges = append(ipRanges, x.IPRange{Lower: addr, Upper: addr})
 					}
 				}
 			} else {
@@ -223,7 +224,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 					rangeHi[addrLen-i] |= ^network.Mask[maskLen-i]
 				}
 
-				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+				ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
 		case len(tuple) == 2:
 			// string is range like a.b.c.d:w.x.y.z
@@ -236,7 +237,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
 				return nil, fmt.Errorf("inverted IP address range: %s", s)
 			} else {
-				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+				ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
 		default:
 			return nil, fmt.Errorf("invalid IP address range: %s", s)
@@ -440,12 +441,11 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	secretFile := Alpha.Conf.GetString("hmac_secret_file")
+	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
 		if !Alpha.Conf.GetBool("enterprise_features") {
-			glog.Errorf("You must enable Dgraph enterprise features with the " +
+			glog.Fatalf("You must enable Dgraph enterprise features with the " +
 				"--enterprise_features option in order to use ACL.")
-			os.Exit(1)
 		}
 
 		hmacSecret, err := ioutil.ReadFile(secretFile)
@@ -453,14 +453,12 @@ func run() {
 			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
 		}
 		if len(hmacSecret) < 32 {
-			glog.Errorf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
-			os.Exit(1)
+			glog.Fatalf("The HMAC secret file should contain at least 256 bits (32 ascii chars)")
 		}
 
 		opts.HmacSecret = hmacSecret
 		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
 		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
-		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_cache_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
@@ -481,7 +479,7 @@ func run() {
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
-	worker.Config = worker.Options{
+	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
 		Tracing:             Alpha.Conf.GetFloat64("trace"),
@@ -518,7 +516,9 @@ func run() {
 		}
 	}
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler: otrace.ProbabilitySampler(worker.Config.Tracing)})
+		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Tracing),
+		MaxAnnotationEventsPerSpan: 64,
+	})
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

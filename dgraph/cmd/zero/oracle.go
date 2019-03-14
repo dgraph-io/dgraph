@@ -60,7 +60,7 @@ func (o *Oracle) Init() {
 	o.keyCommit = make(map[string]uint64)
 	o.subscribers = make(map[int]chan *pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
-	o.doneUntil.Init()
+	o.doneUntil.Init(nil)
 	go o.sendDeltasToSubscribers()
 }
 
@@ -154,11 +154,15 @@ func (o *Oracle) removeSubscriber(id int) {
 	delete(o.subscribers, id)
 }
 
+// sendDeltasToSubscribers reads updates from the o.updates
+// constructs a delta object containing transactions from one or more updates
+// and sends the delta object to each subscriber's channel
 func (o *Oracle) sendDeltasToSubscribers() {
 	delta := &pb.OracleDelta{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	// waitFor calculates the maximum value of delta.MaxAssigned and all the CommitTs of delta.Txns
 	waitFor := func() uint64 {
 		w := delta.MaxAssigned
 		for _, txn := range delta.Txns {

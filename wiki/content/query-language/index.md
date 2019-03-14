@@ -23,6 +23,7 @@ A GraphQL+- query finds nodes based on search criteria, matches patterns in a gr
 
 A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
 
+{{% notice "note" %}}See more about Queries in [Queries design concept]({{< relref "design-concepts/index.md#queries" >}}) {{% /notice %}}
 
 ### Returning Values
 
@@ -45,13 +46,13 @@ Query Example: In the example dataset, edges that link movies to directors and a
 
 The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique 64 bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
+Every node had a unique 64-bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
 Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x107b2c)) {
+  bladerunner(func: uid(0x579683)) {
     uid
     name@en
     initial_release_date
@@ -80,15 +81,11 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x107b2c, 0x85f961)) {
+  movies(func: uid(0x579683, 0x5af1c7)) {
     uid
     name@en
     initial_release_date
     netflix_id
-    ~director.film {
-      uid
-      name@en
-    }
   }
 }
 {{< /runnable >}}
@@ -185,9 +182,11 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists (including the * notation) are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists (including the `@*` notation) are not allowed. Untagged predicates, Single language tags, and `.` notation work as described above.
 
-{{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified, default (English) Full Text Search tokenizer is used.{{% /notice %}}
+---
+
+In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -236,7 +235,7 @@ Matches strings that have all specified terms in any order; case insensitive.
 
 ##### Usage at root
 
-Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the english name and genre in english.
+Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the English name and genre in English.
 
 {{< runnable >}}
 {
@@ -353,7 +352,40 @@ Keep the following in mind when designing regular expression queries.
 - If the partial result (for subset of trigrams) exceeds 1000000 uids during index scan, the query is stopped to prohibit expensive queries.
 
 
-### Full Text Search
+### Fuzzy matching
+
+
+Syntax: `match(predicate, string, distance)`
+
+Schema Types: `string`
+
+Index Required: `trigram`
+
+Matches predicate values by calculating the [Levenshtein distance](https://en.wikipedia.org/wiki/Levenshtein_distance) to the string,
+also known as _fuzzy matching_. The distance parameter must be greater than zero (0). Using a greater distance value can yield more but less accurate results.
+
+Query Example: At root, fuzzy match nodes similar to `Stephen`, with a distance value of 8.
+
+{{< runnable >}}
+{
+  directors(func: match(name@en, Stephen, 8)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+Same query with a Levenshtein distance of 3.
+
+{{< runnable >}}
+{
+  directors(func: match(name@en, Stephen, 3)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+
+### Full-Text Search
 
 Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
 
@@ -362,9 +394,9 @@ Schema Types: `string`
 Index Required: `fulltext`
 
 
-Apply full text search with stemming and stop words to find strings matching all or any of the given text.
+Apply full-text search with stemming and stop words to find strings matching all or any of the given text.
 
-The following steps are applied during index generation and to process full text search arguments:
+The following steps are applied during index generation and to process full-text search arguments:
 
 1. Tokenization (according to Unicode word boundaries).
 1. Conversion to lowercase.
@@ -372,7 +404,7 @@ The following steps are applied during index generation and to process full text
 1. Stemming using language-specific stemmer (if supported by language).
 1. Stop words removal (if supported by language).
 
-Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full-text search indexing. See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
 Following table contains all supported languages, corresponding country-codes, stemming and stop words filtering support.
 
@@ -432,6 +464,7 @@ Syntax Examples:
 * `eq(predicate, val(varName))`
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
+* `eq(predicate, [$var1, "value", ..., $varN])`
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
@@ -594,7 +627,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x878110)) {
+  films(func: uid(0x7de2ec)) {
     name@hi
     actor.film {
       performance.film {
@@ -658,8 +691,8 @@ Query Example: Taraji Henson films ordered by numer of genres, with genres liste
 
 Syntax Examples:
 
-* `q(func: ...) @filter(uid_in(predicate, <uid>)`
-* `predicate1 @filter(uid_in(predicate2, <uid>)`
+* `q(func: ...) @filter(uid_in(predicate, <uid>))`
+* `predicate1 @filter(uid_in(predicate2, <uid>))`
 
 Schema Types: UID
 
@@ -670,12 +703,12 @@ While the `uid` function filters nodes at the current level based on UID, functi
 `uid_in` cannot be used at root, it accepts one UID constant as its argument (not a variable).
 
 
-Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x6777ba).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 0x679de1).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
   caro(func: eq(name@en, "Marc Caro")) {
     name@en
-    director.film @filter(uid_in(~director.film, 0x6777ba)){
+    director.film @filter(uid_in(~director.film, 0x679de1)){
       name@en
     }
   }
@@ -863,7 +896,7 @@ An alias provides an alternate name in results.  Predicates, variables and aggre
 
 
 
-Query Example: Directors with `name` matching term `Steven`, their UID, english name, average number of actors per movie, total number of films and the name of each film in english and french.
+Query Example: Directors with `name` matching term `Steven`, their UID, English name, average number of actors per movie, total number of films, and the name of each film in English and French.
 {{< runnable >}}
 {
   ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
@@ -910,7 +943,7 @@ For positive `N`, `first: N` retrieves the first `N` results, by sorted or UID o
 For negative `N`, `first: N` retrieves the last `N` results, by sorted or UID order.  Currently, negative is only supported when no order is applied.  To achieve the effect of a negative with a sort, reverse the order of the sort and use a positive `N`.
 
 
-Query Example: Last two films, by UID order, directed by Steven Spielberg and the first 3 genres, sorted alphabetically by English name, of those movies.
+Query Example: Last two films, by UID order, directed by Steven Spielberg and the first three genres of those movies, sorted alphabetically by English name.
 
 {{< runnable >}}
 {
@@ -928,7 +961,7 @@ Query Example: Last two films, by UID order, directed by Steven Spielberg and th
 
 
 
-Query Example: The three directors with name Steven who have directed the most actors of all directors named Steven.
+Query Example: The three directors named Steven who have directed the most actors of all directors named Steven.
 
 {{< runnable >}}
 {
@@ -1005,13 +1038,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x264ce8`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x8116e4`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0x264ce8) {
+    director.film (first:5, after: 0x8116e4) {
       uid
       name@en
     }
@@ -1183,7 +1216,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
 {{< /runnable >}}
 
 
-If queries contain some overlap in answers, the result sets are still independent
+If queries contain some overlap in answers, the result sets are still independent.
 
 Query Example: The movies Mackenzie Crook has acted in and the movies Jack Davenport has acted in.  The results sets overlap because both have acted in the Pirates of the Caribbean movies, but the results are independent and both contain the full answers sets.
 
@@ -1256,7 +1289,7 @@ Syntax Examples:
 
 Types : `uid`
 
-Nodes (UID's) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
+Nodes (UIDs) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
 
 Query variables do not affect the semantics of the query at the point of definition.  Query variables are evaluated to all nodes matched by the defining block.
 
@@ -1318,7 +1351,7 @@ Value variables are used by extracting the values with `val(var-name)`, or by ex
 
 [Facet]({{< relref "#facets-edge-attributes">}}) values can be stored in value variables.
 
-Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
+Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
 
 {{< runnable >}}
 {
@@ -1985,7 +2018,7 @@ index for a predicate it is mandatory to specify the type of the index. For exam
 name: string @index(exact, fulltext) @count .
 multiname: string @lang .
 age: int @index(int) .
-friend: uid @count .
+friend: [uid] @count .
 dob: dateTime .
 location: geo @index(geo) .
 occupations: [string] @index(term) .
@@ -2026,18 +2059,16 @@ Mutation:
 ```
 {
   set {
-    _:a <公司> "Dgraph Labs Inc"@en
-    _:b <公司> "夏新科技有限责任公司"@zh
+    _:a <公司> "Dgraph Labs Inc"@en .
+    _:b <公司> "夏新科技有限责任公司"@zh .
   }
 }
 ```
 Query:
 ```
 {
-  query {
-    q (func: alloftext(<公司>@., <夏新科技有限责任公司>)) {
-      _predicate_
-    }
+  q(func: alloftext(<公司>@zh, "夏新科技有限责任公司")) {
+    _predicate_
   }
 }
 ```
@@ -2088,6 +2119,7 @@ The following types are also accepted.
 #### Password type
 
 A password for an entity is set with setting the schema for the attribute to be of type `password`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
+The passwords are encrypted using [bcrypt](https://en.wikipedia.org/wiki/Bcrypt).
 
 For example: to set a password, first set schema, then the password:
 ```
@@ -2146,7 +2178,7 @@ The indices available for strings are as follows.
 
 | Dgraph function            | Required index / tokenizer             | Notes |
 | :-----------------------   | :------------                          | :---  |
-| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
+| `eq`                       | `hash`, `exact`, `term`, or `fulltext` | The most performant index for `eq` is `hash`. Only use `term` or `fulltext` if you also require term or full-text search. If you're already using `term`, there is no need to use `hash` or `exact` as well. |
 | `le`, `ge`, `lt`, `gt`     | `exact`                                | Allows faster sorting.                                   |
 | `allofterms`, `anyofterms` | `term`                                 | Allows searching by a term in a sentence.                |
 | `alloftext`, `anyoftext`   | `fulltext`                             | Matching with language specific stemming and stopwords.  |
@@ -2294,7 +2326,7 @@ First we add some schema.
 ```sh
 curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact, term) .
-    rated: uid @reverse @count .
+    rated: [uid] @reverse @count .
 ' | python -m json.tool | less
 
 ```
@@ -2907,6 +2939,20 @@ query test($a: int = 2, $b: int!, $name: string) {
 }
 {{< /runnable >}}
 
+You can also use array with GraphQL Variables.
+
+{{< runnable vars="{\"$b\": \"10\", \"$aName\": \"Steven Spielberg\", \"$bName\": \"Quentin Tarantino\"}" >}}
+query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
+  me(func: eq(name@en, [$aName, $bName])) {
+    director.film (first: $a, offset: $b) {
+      genre(first: $a) {
+        name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
 
 {{% notice "note" %}}
 If you want to input a list of uids as a GraphQL variable value, you can have the variable as string type and
@@ -2965,7 +3011,7 @@ type PluginTokenizer interface {
 
     // Type is a string representing the type of data that is to be
     // tokenized. This must match the schema type of the predicate
-    // being indexde. Allowable values are shown in the table below.
+    // being indexed. Allowable values are shown in the table below.
     Type() string
 
     // Tokens should implement the tokenization logic. The input is
@@ -3044,14 +3090,14 @@ more concrete.
 #### Unicode Characters
 
 This example shows the type of tokenization that is similar to term
-tokenization of full text search. Instead of being broken down into terms or
+tokenization of full-text search. Instead of being broken down into terms or
 stem words, the text is instead broken down into its constituent unicode
 codepoints (in Go terminology these are called *runes*).
 
 {{% notice "note" %}}
 This tokenizer would create a very large index that would be expensive to
 manage and store. That's one of the reasons that text indexing usually occurs
-at a higher level; stem words for full text search or terms for term search.
+at a higher level; stem words for full-text search or terms for term search.
 {{% /notice %}}
 
 The implementation of the plugin looks like this:
@@ -3350,7 +3396,7 @@ Since a single token is only ever generated, it doesn't matter if `anyof` or
 
 #### Integer prime factors
 
-All all of the custom tokenizers shown previously have worked with strings.
+All of the custom tokenizers shown previously have worked with strings.
 However, other data types can be used as well. This example is contrived, but
 nonetheless shows some advanced usages of custom tokenizers.
 
@@ -3401,7 +3447,7 @@ Notice that the return of `Type()` is `"int"`, corresponding to the concrete
 type of the input to `Tokens` (which is `int64`).
 {{% /notice %}}
 
-This allows you do do things like search for all numbers that share prime
+This allows you do things like search for all numbers that share prime
 factors with a particular number.
 
 In particular, we search for numbers that contain any of the prime factors of

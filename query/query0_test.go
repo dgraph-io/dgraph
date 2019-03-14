@@ -24,7 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 func TestGetUID(t *testing.T) {
@@ -203,6 +205,46 @@ func TestGetNonListUidPredicate(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x2", "best_friend": {"uid": "0x40"}}]}}`,
+		js)
+}
+
+func TestNonListUidPredicateReverse1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x40)) {
+				uid
+				~best_friend {
+					uid
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x40", "~best_friend": [{"uid":"0x2"},{"uid":"0x3"},{"uid":"0x4"}]}]}}`,
+		js)
+}
+
+func TestNonListUidPredicateReverse2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x40)) {
+				uid
+				~best_friend {
+					pet {
+						name
+					}
+					uid
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"uid":"0x40", "~best_friend": [
+			{"uid":"0x2","pet":[{"name":"Garfield"}]},
+			{"uid":"0x3","pet":[{"name":"Bear"}]},
+			{"uid":"0x4","pet":[{"name":"Nemo"}]}]}]}}`,
 		js)
 }
 
@@ -903,6 +945,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 		}
 	`
 	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
@@ -1687,7 +1730,42 @@ func TestCountUidToVarCombinedWithNormalVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 5}]}}`, js)
 }
 
+func TestDefaultValueVar1(t *testing.T) {
+	query := `
+	{
+		var(func: has(pred)) {
+			n as uid
+			cnt as count(_predicate_)
+		}
+
+		data(func: uid(n)) @filter(gt(val(cnt), 4)) {
+			expand(_all_)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"data":[]}}`, js)
+}
+
+func TestDefaultValueVar2(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x1)) {
+			cnt as _predicate_
+		}
+
+		data(func: uid(0x1)) {
+			val(cnt)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"data":[]}}`, js)
+}
+
+var client *dgo.Dgraph
+
 func TestMain(m *testing.M) {
-	populateCluster(&testing.T{})
+	client = z.DgraphClientWithGroot(":9180")
+
+	populateCluster()
 	os.Exit(m.Run())
 }

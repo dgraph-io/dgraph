@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -33,8 +32,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -77,21 +74,19 @@ const (
 	TlsClientCert = "client.crt"
 	TlsClientKey  = "client.key"
 
-	GrootId = "groot"
+	GrootId       = "groot"
+	AclPredicates = `
+{"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
+{"predicate":"dgraph.password","type":"password"},
+{"predicate":"dgraph.user.group","list":true, "reverse": true, "type": "uid"},
+{"predicate":"dgraph.group.acl","type":"string"}
+`
 )
 
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	InitialPreds   = map[string]struct{}{
-		PredicateListAttr:   {},
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-		"type":              {},
-	}
-	Nilbyte []byte
+	Nilbyte        []byte
 )
 
 func ShouldCrash(err error) bool {
@@ -287,7 +282,7 @@ func ValidateAddress(addr string) bool {
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
 		return false
 	}
-	if err := net.ParseIP(host); err == nil {
+	if ip := net.ParseIP(host); ip != nil {
 		return true
 	}
 	// try to parse as hostname as per hostname RFC
@@ -441,7 +436,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 
-	if tlsConf.CertRequired {
+	if tlsConf != nil && tlsConf.CertRequired {
 		tlsConf.ConfigType = TLSClientConfig
 		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
 		if err != nil {
@@ -487,27 +482,5 @@ func SpanTimer(span *trace.Span, name string) func() {
 	return func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
 		// TODO: We can look into doing a latency record here.
-	}
-}
-
-type CancelFunc func()
-
-const DgraphAlphaPort = 9180
-
-func GetDgraphClient() (*dgo.Dgraph, CancelFunc) {
-	return GetDgraphClientOnPort(DgraphAlphaPort)
-}
-
-func GetDgraphClientOnPort(alphaPort int) (*dgo.Dgraph, CancelFunc) {
-	conn, err := grpc.Dial(fmt.Sprintf("127.0.0.1:%d", alphaPort), grpc.WithInsecure())
-	if err != nil {
-		log.Fatal("While trying to dial gRPC")
-	}
-
-	dc := api.NewDgraphClient(conn)
-	return dgo.NewDgraphClient(dc), func() {
-		if err := conn.Close(); err != nil {
-			log.Printf("Error while closing connection:%v", err)
-		}
 	}
 }

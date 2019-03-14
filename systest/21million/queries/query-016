@@ -1,0 +1,45 @@
+{
+  genre(func: gt(count(~genre), 30000)){
+    name@en
+    ~genre (first:1) {
+      name@en
+    }
+  }
+}
+---
+{
+  "genre": [
+    {
+      "name@en": "Documentary film",
+      "~genre": [
+        {
+          "name@en": "Thaumazein"
+        }
+      ]
+    },
+    {
+      "name@en": "Drama",
+      "~genre": [
+        {
+          "name@en": "L'ennemi naturel"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy",
+      "~genre": [
+        {
+          "name@en": "La Bouillabaisse"
+        }
+      ]
+    },
+    {
+      "name@en": "Short Film",
+      "~genre": [
+        {
+          "name@en": "Checkmate, Keep Your Enemies Closer"
+        }
+      ]
+    }
+  ]
+}

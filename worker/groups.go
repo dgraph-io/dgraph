@@ -19,7 +19,6 @@ package worker
 import (
 	"fmt"
 	"io"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -73,32 +72,32 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
-	if len(Config.MyAddr) == 0 {
-		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
+	if len(x.WorkerConfig.MyAddr) == 0 {
+		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
-		ok := x.ValidateAddress(Config.MyAddr)
-		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
+		ok := x.ValidateAddress(x.WorkerConfig.MyAddr)
+		x.AssertTruef(ok, "%s is not valid address", x.WorkerConfig.MyAddr)
 		if !bindall {
 			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}
 	}
 
-	x.AssertTruef(len(Config.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
-	x.AssertTruef(Config.ZeroAddr != Config.MyAddr,
+	x.AssertTruef(len(x.WorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
+	x.AssertTruef(x.WorkerConfig.ZeroAddr != x.WorkerConfig.MyAddr,
 		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
 
-	if Config.RaftId == 0 {
+	if x.WorkerConfig.RaftId == 0 {
 		id, err := raftwal.RaftId(walStore)
 		x.Check(err)
-		Config.RaftId = id
+		x.WorkerConfig.RaftId = id
 	}
-	glog.Infof("Current Raft Id: %#x\n", Config.RaftId)
+	glog.Infof("Current Raft Id: %#x\n", x.WorkerConfig.RaftId)
 
 	// Successfully connect with dgraphzero, before doing anything else.
 
 	// Connect with Zero leader and figure out what group we should belong to.
-	m := &pb.Member{Id: Config.RaftId, Addr: Config.MyAddr}
+	m := &pb.Member{Id: x.WorkerConfig.RaftId, Addr: x.WorkerConfig.MyAddr}
 	var connState *pb.ConnectionState
 	var err error
 	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
@@ -117,8 +116,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.Fatalf("Unable to join cluster via dgraphzero")
 	}
 	glog.Infof("Connected to group zero. Assigned group: %+v\n", connState.GetMember().GetGroupId())
-	Config.RaftId = connState.GetMember().GetId()
-	glog.Infof("Raft Id after connection to Zero: %#x\n", Config.RaftId)
+	x.WorkerConfig.RaftId = connState.GetMember().GetId()
+	glog.Infof("Raft Id after connection to Zero: %#x\n", x.WorkerConfig.RaftId)
 
 	// This timestamp would be used for reading during snapshot after bulk load.
 	// The stream is async, we need this information before we start or else replica might
@@ -129,8 +128,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	store := raftwal.Init(walStore, Config.RaftId, gid)
-	gr.Node = newNode(store, gid, Config.RaftId, Config.MyAddr)
+	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
+	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
 	raftServer.Node = gr.Node.Node
@@ -138,69 +137,46 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
 
-	gr.closer = y.NewCloser(4) // Match CLOSER:1 in this file.
+	gr.closer = y.NewCloser(3) // Match CLOSER:1 in this file.
 	go gr.sendMembershipUpdates()
 	go gr.receiveMembershipUpdates()
-
-	go gr.cleanupTablets()
 	go gr.processOracleDeltaStream()
 
+	go gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
 }
 
-func (g *groupi) proposeInitialSchema() {
-	// propose the schema for _predicate_
-	if Config.ExpandEdge {
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: x.PredicateListAttr,
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		})
+func (g *groupi) informZeroAboutTablets() {
+	// Before we start this Alpha, let's pick up all the predicates we have in our postings
+	// directory, and ask Zero if we are allowed to serve it. Do this irrespective of whether
+	// this node is the leader or the follower, because this early on, we might not have
+	// figured that out.
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		failed := false
+		preds := schema.State().Predicates()
+		for _, pred := range preds {
+			if tablet := g.Tablet(pred); tablet == nil {
+				failed = true
+			}
+		}
+		if !failed {
+			glog.V(1).Infof("Done informing Zero about the %d tablets I have", len(preds))
+			return
+		}
 	}
+}
 
-	g.upsertSchema(&pb.SchemaUpdate{
-		Predicate: "type",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-	})
-
-	if Config.AclEnabled {
-		// propose the schema update for acl predicates
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.xid",
-			ValueType: pb.Posting_STRING,
-			Directive: pb.SchemaUpdate_INDEX,
-			Upsert:    true,
-			Tokenizer: []string{"exact"},
-		})
-
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.password",
-			ValueType: pb.Posting_PASSWORD,
-		})
-
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.user.group",
-			Directive: pb.SchemaUpdate_REVERSE,
-			ValueType: pb.Posting_UID,
-			List:      true,
-		})
-		g.upsertSchema(&pb.SchemaUpdate{
-			Predicate: "dgraph.group.acl",
-			ValueType: pb.Posting_STRING,
-		})
+func (g *groupi) proposeInitialSchema() {
+	initialSchema := schema.InitialSchema()
+	for _, s := range initialSchema {
+		g.upsertSchema(s)
 	}
 }
 
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
-	g.RLock()
-	_, ok := g.tablets[schema.Predicate]
-	g.RUnlock()
-	if ok {
-		return
-	}
-
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.
@@ -223,51 +199,6 @@ func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 // Don't acquire RW lock during this, otherwise we might deadlock.
 func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
-}
-
-// calculateTabletSizes iterates through badger and gets a size of the space occupied by each
-// predicate (including data and indexes). All data for a predicate forms a Tablet.
-func (g *groupi) calculateTabletSizes() map[string]*pb.Tablet {
-	opt := badger.DefaultIteratorOptions
-	opt.PrefetchValues = false
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
-	defer txn.Discard()
-	itr := txn.NewIterator(opt)
-	defer itr.Close()
-
-	gid := g.groupId()
-	tablets := make(map[string]*pb.Tablet)
-
-	for itr.Rewind(); itr.Valid(); {
-		item := itr.Item()
-
-		pk := x.Parse(item.Key())
-		if pk == nil {
-			itr.Next()
-			continue
-		}
-
-		// We should not be skipping schema keys here, otherwise if there is no data for them, they
-		// won't be added to the tablets map returned by this function and would ultimately be
-		// removed from the membership state.
-		tablet, has := tablets[pk.Attr]
-		if !has {
-			if !g.ServesTablet(pk.Attr) {
-				if pk.IsSchema() {
-					itr.Next()
-				} else {
-					// data key for predicate we don't serve, skip it.
-					itr.Seek(pk.SkipPredicate())
-				}
-				continue
-			}
-			tablet = &pb.Tablet{GroupId: gid, Predicate: pk.Attr}
-			tablets[pk.Attr] = tablet
-		}
-		tablet.Space += item.EstimatedSize()
-		itr.Next()
-	}
-	return tablets
 }
 
 func MaxLeaseId() uint64 {
@@ -313,11 +244,11 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
-			if Config.RaftId == member.Id {
+			if x.WorkerConfig.RaftId == member.Id {
 				foundSelf = true
 				atomic.StoreUint32(&g.gid, gid)
 			}
-			if Config.MyAddr != member.Addr {
+			if x.WorkerConfig.MyAddr != member.Addr {
 				conn.Get().Connect(member.Addr)
 			}
 		}
@@ -325,11 +256,12 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 			g.tablets[tablet.Predicate] = tablet
 		}
 		if gid == g.gid {
+			glog.V(3).Infof("group %d checksum: %d", g.gid, group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
 	for _, member := range g.state.Zeros {
-		if Config.MyAddr != member.Addr {
+		if x.WorkerConfig.MyAddr != member.Addr {
 			conn.Get().Connect(member.Addr)
 		}
 	}
@@ -578,7 +510,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.Get().Connect(Config.ZeroAddr)
+			pl = conn.Get().Connect(x.WorkerConfig.ZeroAddr)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -596,9 +528,9 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	leader := g.Node.AmLeader()
 	member := &pb.Member{
-		Id:         Config.RaftId,
+		Id:         x.WorkerConfig.RaftId,
 		GroupId:    g.groupId(),
-		Addr:       Config.MyAddr,
+		Addr:       x.WorkerConfig.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
 	}
@@ -636,12 +568,8 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 func (g *groupi) sendMembershipUpdates() {
 	defer g.closer.Done() // CLOSER:1
 
-	// Calculating tablet sizes is expensive, hence we do it only every 5 mins.
-	slowTicker := time.NewTicker(time.Minute * 5)
-	defer slowTicker.Stop()
-
-	fastTicker := time.NewTicker(time.Second)
-	defer fastTicker.Stop()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
 	consumeTriggers := func() {
 		for {
@@ -659,7 +587,7 @@ func (g *groupi) sendMembershipUpdates() {
 		select {
 		case <-g.closer.HasBeenClosed():
 			return
-		case <-fastTicker.C:
+		case <-ticker.C:
 			if time.Since(lastSent) > 10*time.Second {
 				// On start of node if it becomes a leader, we would send tablets size for sure.
 				g.triggerMembershipSync()
@@ -671,16 +599,6 @@ func (g *groupi) sendMembershipUpdates() {
 			consumeTriggers()
 			if err := g.doSendMembership(nil); err != nil {
 				glog.Errorf("While sending membership update: %v", err)
-			} else {
-				lastSent = time.Now()
-			}
-		case <-slowTicker.C:
-			if !g.Node.AmLeader() {
-				break // breaks select case, not for loop.
-			}
-			tablets := g.calculateTabletSizes()
-			if err := g.doSendMembership(tablets); err != nil {
-				glog.Errorf("While sending membership update with tablet: %v", err)
 			} else {
 				lastSent = time.Now()
 			}
@@ -775,75 +693,6 @@ OUTER:
 	}
 	cancel()
 	goto START
-}
-
-func (g *groupi) cleanupTablets() {
-	defer g.closer.Done() // CLOSER:1
-	defer func() {
-		glog.Infof("EXITING cleanupTablets.")
-	}()
-
-	// TODO: Do not clean tablets for now. This causes race conditions where we end up deleting
-	// predicate which is being streamed over by another group.
-	return
-
-	cleanup := func() {
-		g.blockDeletes.Lock()
-		defer g.blockDeletes.Unlock()
-		if !g.Node.AmLeader() {
-			return
-		}
-		glog.Infof("Running cleaning at Node: %#x Group: %d", g.Node.Id, g.groupId())
-		defer glog.Info("Cleanup Done")
-
-		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
-		txn := pstore.NewTransactionAt(math.MaxUint64, false)
-		defer txn.Discard()
-		itr := txn.NewIterator(opt)
-		defer itr.Close()
-
-		for itr.Rewind(); itr.Valid(); {
-			item := itr.Item()
-			pk := x.Parse(item.Key())
-			if pk == nil {
-				itr.Next()
-				continue
-			}
-
-			// Delete at most one predicate at a time.
-			// Tablet is not being served by me and is not read only.
-			// Don't use servesTablet function because it can return false even if
-			// request made to group zero fails. We might end up deleting a predicate
-			// on failure of network request even though no one else is serving this
-			// tablet.
-			if tablet := g.Tablet(pk.Attr); tablet != nil && tablet.GroupId != g.groupId() {
-				glog.Warningf("Node: %d Group: %d. Proposing predicate delete: %v. Tablet: %+v",
-					g.Node.Id, g.groupId(), pk.Attr, tablet)
-				// Predicate moves are disabled during deletion, deletePredicate purges everything.
-				p := &pb.Proposal{CleanPredicate: pk.Attr}
-				err := groups().Node.proposeAndWait(context.Background(), p)
-				glog.Errorf("Cleaning up predicate: %+v. Error: %v", p, err)
-				return
-			}
-			if pk.IsSchema() {
-				itr.Seek(pk.SkipSchema())
-				continue
-			}
-			itr.Seek(pk.SkipPredicate())
-		}
-	}
-
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-g.closer.HasBeenClosed():
-			return
-		case <-ticker.C:
-			cleanup()
-		}
-	}
 }
 
 // processOracleDeltaStream is used to process oracle delta stream from Zero.
@@ -960,6 +809,11 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
+			if len(delta.Txns) > 0 {
+				last := delta.Txns[len(delta.Txns)-1]
+				// Update MaxAssigned on commit so best effort queries can get back latest data.
+				delta.MaxAssigned = x.Max(delta.MaxAssigned, last.CommitTs)
+			}
 			if glog.V(3) {
 				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
 					batch, delta.MaxAssigned)

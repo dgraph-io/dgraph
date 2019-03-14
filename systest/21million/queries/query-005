@@ -1,0 +1,253 @@
+{
+  bladerunner(func: anyofterms(name@en, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
+    name@en
+    initial_release_date
+    netflix_id
+  }
+}
+---
+{
+  "bladerunner": [
+    {
+      "name@en": "Return of the Roller Blade Seven",
+      "initial_release_date": "1993-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "Lone Runner",
+      "initial_release_date": "1986-01-01T00:00:00Z",
+      "netflix_id": "70146965"
+    },
+    {
+      "name@en": "Revenge of the Bushido Blade",
+      "initial_release_date": "1980-01-01T00:00:00Z",
+      "netflix_id": "70100967"
+    },
+    {
+      "name@en": "The Golden Blade",
+      "initial_release_date": "1953-08-12T00:00:00Z"
+    },
+    {
+      "name@en": "Balkan Runner",
+      "initial_release_date": "1994-01-01T00:00:00Z",
+      "netflix_id": "60028888"
+    },
+    {
+      "name@en": "Blade",
+      "initial_release_date": "1973-12-01T00:00:00Z"
+    },
+    {
+      "name@en": "Some Folks Call It a Sling Blade",
+      "initial_release_date": "1994-01-24T00:00:00Z",
+      "netflix_id": "60022148"
+    },
+    {
+      "name@en": "Blade Squad",
+      "initial_release_date": "1998-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "Time Runner",
+      "initial_release_date": "1993-03-17T00:00:00Z",
+      "netflix_id": "70064625"
+    },
+    {
+      "name@en": "Blade Runner",
+      "initial_release_date": "1982-06-25T00:00:00Z",
+      "netflix_id": "70083726"
+    },
+    {
+      "name@en": "Bushido Blade",
+      "initial_release_date": "1981-01-01T00:00:00Z",
+      "netflix_id": "60025519"
+    },
+    {
+      "name@en": "A Blade in the Dark",
+      "initial_release_date": "1983-08-06T00:00:00Z",
+      "netflix_id": "70004716"
+    },
+    {
+      "name@en": "The Roller Blade Seven",
+      "initial_release_date": "1991-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "Razor Blade Smile",
+      "initial_release_date": "1998-01-01T00:00:00Z",
+      "netflix_id": "18168689"
+    },
+    {
+      "name@en": "The Loneliest Runner",
+      "initial_release_date": "1976-12-20T00:00:00Z"
+    },
+    {
+      "name@en": "The Runner",
+      "initial_release_date": "1985-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Scarlet Blade",
+      "initial_release_date": "1963-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Magic Blade",
+      "initial_release_date": "1976-01-01T00:00:00Z",
+      "netflix_id": "70087207"
+    },
+    {
+      "name@en": "Dangan Runner",
+      "initial_release_date": "1996-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "A Man Called Blade",
+      "initial_release_date": "1977-08-13T00:00:00Z",
+      "netflix_id": "60026366"
+    },
+    {
+      "name@en": "No Blade of Grass",
+      "initial_release_date": "1970-10-23T00:00:00Z"
+    },
+    {
+      "name@en": "Sling Blade",
+      "initial_release_date": "1996-08-30T00:00:00Z",
+      "netflix_id": "973861"
+    },
+    {
+      "name@en": "Blade",
+      "initial_release_date": "1998-08-19T00:00:00Z",
+      "netflix_id": "5670311"
+    },
+    {
+      "name@en": "Zorro, The Gay Blade",
+      "initial_release_date": "1981-07-17T00:00:00Z",
+      "netflix_id": "60022479"
+    },
+    {
+      "name@en": "Road Runner a Go-Go",
+      "initial_release_date": "1965-02-01T00:00:00Z"
+    },
+    {
+      "name@en": "Blade in Hong Kong",
+      "initial_release_date": "1985-05-15T00:00:00Z"
+    },
+    {
+      "name@en": "The Bugs Bunny/Road Runner Movie",
+      "initial_release_date": "1979-09-28T00:00:00Z",
+      "netflix_id": "70039543"
+    },
+    {
+      "name@en": "The Loneliness of the Long Distance Runner",
+      "initial_release_date": "1962-09-21T00:00:00Z",
+      "netflix_id": "70060240"
+    },
+    {
+      "name@en": "Run, Run, Sweet Road Runner",
+      "initial_release_date": "1965-08-21T00:00:00Z"
+    },
+    {
+      "name@en": "Blade on the Feather",
+      "initial_release_date": "1980-10-19T00:00:00Z",
+      "netflix_id": "70112920"
+    },
+    {
+      "name@en": "The Indian Runner",
+      "initial_release_date": "1991-09-20T00:00:00Z",
+      "netflix_id": "60021490"
+    },
+    {
+      "name@en": "The Ice Runner",
+      "initial_release_date": "1993-01-01T00:00:00Z",
+      "netflix_id": "60025584"
+    },
+    {
+      "name@en": "The Legend of the Roller Blade Seven",
+      "initial_release_date": "1992-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Gallant Blade",
+      "initial_release_date": "1948-10-13T00:00:00Z"
+    },
+    {
+      "name@en": "The Blade",
+      "initial_release_date": "1995-12-21T00:00:00Z"
+    },
+    {
+      "name@en": "Blade of the Ripper",
+      "initial_release_date": "1971-01-15T00:00:00Z",
+      "netflix_id": "70032955"
+    },
+    {
+      "name@en": "Cold Blade",
+      "initial_release_date": "1970-12-30T00:00:00Z"
+    },
+    {
+      "name@en": "The Night Runner",
+      "initial_release_date": "1957-04-02T00:00:00Z"
+    },
+    {
+      "name@en": "Adventures of the Road-Runner",
+      "initial_release_date": "1962-06-02T00:00:00Z"
+    },
+    {
+      "name@en": "Roller Blade",
+      "initial_release_date": "1986-07-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Naked Runner",
+      "initial_release_date": "1967-07-19T00:00:00Z"
+    },
+    {
+      "name@en": "The Runner",
+      "initial_release_date": "1999-09-09T00:00:00Z",
+      "netflix_id": "924513"
+    },
+    {
+      "name@en": "Banzai Runner",
+      "initial_release_date": "1987-01-01T00:00:00Z",
+      "netflix_id": "60003826"
+    },
+    {
+      "name@en": "Fatal Blade",
+      "initial_release_date": "2000-01-01T00:00:00Z",
+      "netflix_id": "60021953"
+    },
+    {
+      "name@en": "Vengeance Is a Golden Blade",
+      "initial_release_date": "1969-01-01T00:00:00Z",
+      "netflix_id": "70062548"
+    },
+    {
+      "name@en": "The Runner Stumbles",
+      "initial_release_date": "1979-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Marathon Runner",
+      "initial_release_date": "1933-02-24T00:00:00Z"
+    },
+    {
+      "name@en": "The Blade and the Silk",
+      "initial_release_date": "1987-05-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Scarlet Runner",
+      "initial_release_date": "1916-10-02T00:00:00Z"
+    },
+    {
+      "name@en": "The Runner",
+      "initial_release_date": "1992-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "The Gun Runner",
+      "initial_release_date": "1969-01-01T00:00:00Z"
+    },
+    {
+      "name@en": "Blade",
+      "initial_release_date": "1998-10-01T00:00:00Z"
+    },
+    {
+      "name@en": "A Sheffield Blade",
+      "initial_release_date": "1918-11-01T00:00:00Z"
+    },
+    {
+      "name@en": "Tokyo Blade: Live in London",
+      "initial_release_date": "1985-01-01T00:00:00Z",
+      "netflix_id": "70032395"
+    }
+  ]
+}

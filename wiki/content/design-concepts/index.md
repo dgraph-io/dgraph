@@ -190,14 +190,18 @@ Posting Lists get stored in Badger, in a key-value format, like so:
 ```
 
 ### Group
-A set of Posting Lists sharing the same `Predicate` constitute a group. Each server can serve
-multiple distinct [groups](/deploy#data-sharding).
 
-A group config file is used to determine which server would serve what groups. In the future
-versions, live Dgraph alpha would be able to move tablets around depending upon heuristics.
+Every Alpha server belongs to a particular group, and each group is responsible for serving a
+particular set of predicates. Multiple servers in a single group replicate the same data to achieve
+high availability and redundancy of data.
 
-If a groups gets too big, it could be split further. In this case, a single `Predicate` essentially
-gets divided across two groups.
+Predicates are automatically assigned to each group based on which group first receives the
+predicate. By default periodically predicates can be moved around to different groups upon
+heuristics to evenly distribute the data across the cluster. Predicates can also be moved manually
+if desired.
+
+In a future version, if a group gets too big, it could be split further. In this case, a single
+`Predicate` essentially gets divided across two groups.
 
 ```
   Original Group:
@@ -252,41 +256,43 @@ the posting list, the first time it's brought back into memory.
 Let's understand how query execution works, by looking at an example.
 
 ```
-me(id: m.abcde) {
-  pred_A
-  pred_B {
-    pred_B1
-    pred_B2
-  }
-  pred_C {
-    pred_C1
-    pred_C2 {
-      pred_C21
-   }
+{
+    me(func: uid(0x1)) {
+      pred_A
+      pred_B {
+        pred_B1
+        pred_B2
+      }
+      pred_C {
+        pred_C1
+        pred_C2 {
+          pred_C21
+      }
+      }
   }
 }
+
 ```
 
-Let's assume we have 3 server instances, and instance id = 2 receives this query. These are the steps:
+Let's assume we have 3 Alpha instances, and instance id=2 receives this query. These are the steps:
 
-* Determine the UID of provided XID, in this case `m.abcde` using fingerprinting. Say the UID = u.
-* Send queries to look up keys = `pred_A, u`, `pred_B, u`, and `pred_C, u`. These predicates could
-belong to 3 different groups, served by potentially different servers. So, this would typically
+* Send queries to look up keys = `pred_A, 0x1`, `pred_B, 0x1`, and `pred_C, 0x1`. These predicates could
+belong to 3 different groups, served by potentially different Alpha servers. So, this would typically
 incur at max 3 network calls (equal to number of predicates at this step).
-* The above queries would return back 3 list of ids or value. The result of `pred_B` and `pred_C`
+* The above queries would return back 3 lists of UIDs or values. The result of `pred_B` and `pred_C`
 would be converted into queries for `pred_Bi` and `pred_Ci`.
 * `pred_Bi` and `pred_Ci` would then cause at max 4 network calls, depending upon where these
-predicates are located. The keys for `pred_Bi` for e.g. would be `pred_Bi, res_pred_Bk`, where
-res_pred_Bk = list of resulting ids from `pred_B, u`.
+predicates are located. The keys for `pred_Bi`, for example, would be `pred_Bi, res_pred_Bk`, where
+res_pred_Bk = list of resulting UIDs from `pred_B, u`.
 * Looking at `res_pred_C2`, you'll notice that this would be a list of lists aka list matrix. We
 merge these list of lists into a sorted list with distinct elements to form the query for `pred_C21`.
 * Another network call depending upon where `pred_C21` lies, and this would again give us a list of
-list ids / value.
+list UIDs / value.
 
 If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for
 replying back to the client. If the query was run via [gRPC](https://www.grpc.io/) interface using
 the language [clients]({{< relref "clients/index.md" >}}), the subgraph gets converted to
-[protocol buffer](https://developers.google.com/protocol-buffers/) format, and returned to client.
+[protocol buffer](https://developers.google.com/protocol-buffers/) format and then returned to client.
 
 ### Network Calls
 Compared to RAM or SSD access, network calls are slow.

@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -185,11 +186,11 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 }
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
-	sid := m.lookupUid(nq.GetSubject())
+	sid := m.uid(nq.GetSubject())
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
-		oid = m.lookupUid(nq.GetObjectId())
+		oid = m.uid(nq.GetObjectId())
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
 		var err error
@@ -216,9 +217,20 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	}
 }
 
+func (m *mapper) uid(xid string) uint64 {
+	if !m.opt.NewUids {
+		if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
+			m.xids.BumpTo(uid)
+			return uid
+		}
+	}
+
+	return m.lookupUid(xid)
+}
+
 func (m *mapper) lookupUid(xid string) uint64 {
-	uid, isNew := m.xids.AssignUid(xid)
-	if !isNew || !m.opt.StoreXids {
+	uid := m.xids.AssignUid(xid)
+	if !m.opt.StoreXids {
 		return uid
 	}
 	if strings.HasPrefix(xid, "_:") {

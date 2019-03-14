@@ -102,48 +102,40 @@ func (s *levelHandler) deleteTables(toDel []*table.Table) error {
 
 // replaceTables will replace tables[left:right] with newTables. Note this EXCLUDES tables[right].
 // You must call decr() to delete the old tables _after_ writing the update to the manifest.
-func (s *levelHandler) replaceTables(newTables []*table.Table) error {
+func (s *levelHandler) replaceTables(toDel, toAdd []*table.Table) error {
 	// Need to re-search the range of tables in this level to be replaced as other goroutines might
 	// be changing it as well.  (They can't touch our tables, but if they add/remove other tables,
 	// the indices get shifted around.)
-	if len(newTables) == 0 {
-		return nil
-	}
-
 	s.Lock() // We s.Unlock() below.
 
+	toDelMap := make(map[uint64]struct{})
+	for _, t := range toDel {
+		toDelMap[t.ID()] = struct{}{}
+	}
+	var newTables []*table.Table
+	for _, t := range s.tables {
+		_, found := toDelMap[t.ID()]
+		if !found {
+			newTables = append(newTables, t)
+			continue
+		}
+		s.totalSize -= t.Size()
+	}
+
 	// Increase totalSize first.
-	for _, tbl := range newTables {
-		s.totalSize += tbl.Size()
-		tbl.IncrRef()
+	for _, t := range toAdd {
+		s.totalSize += t.Size()
+		t.IncrRef()
+		newTables = append(newTables, t)
 	}
 
-	kr := keyRange{
-		left:  newTables[0].Smallest(),
-		right: newTables[len(newTables)-1].Biggest(),
-	}
-	left, right := s.overlappingTables(levelHandlerRLocked{}, kr)
-
-	toDecr := make([]*table.Table, right-left)
-	// Update totalSize and reference counts.
-	for i := left; i < right; i++ {
-		tbl := s.tables[i]
-		s.totalSize -= tbl.Size()
-		toDecr[i-left] = tbl
-	}
-
-	// To be safe, just make a copy. TODO: Be more careful and avoid copying.
-	numDeleted := right - left
-	numAdded := len(newTables)
-	tables := make([]*table.Table, len(s.tables)-numDeleted+numAdded)
-	y.AssertTrue(left == copy(tables, s.tables[:left]))
-	t := tables[left:]
-	y.AssertTrue(numAdded == copy(t, newTables))
-	t = t[numAdded:]
-	y.AssertTrue(len(s.tables[right:]) == copy(t, s.tables[right:]))
-	s.tables = tables
+	// Assign tables.
+	s.tables = newTables
+	sort.Slice(s.tables, func(i, j int) bool {
+		return y.CompareKeys(s.tables[i].Smallest(), s.tables[j].Smallest()) < 0
+	})
 	s.Unlock() // s.Unlock before we DecrRef tables -- that can be slow.
-	return decrRefs(toDecr)
+	return decrRefs(toDel)
 }
 
 func decrRefs(tables []*table.Table) error {
@@ -294,6 +286,9 @@ type levelHandlerRLocked struct{}
 // This function should already have acquired a read lock, and this is so important the caller must
 // pass an empty parameter declaring such.
 func (s *levelHandler) overlappingTables(_ levelHandlerRLocked, kr keyRange) (int, int) {
+	if len(kr.left) == 0 || len(kr.right) == 0 {
+		return 0, 0
+	}
 	left := sort.Search(len(s.tables), func(i int) bool {
 		return y.CompareKeys(kr.left, s.tables[i].Biggest()) <= 0
 	})
