@@ -180,7 +180,7 @@ For example:
 - `name@en:pl:.` => Look for `en`, then `pl`, then untagged, then any language.
 
 
-{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists are not allowed. Single language, `.` notation and attribute name without language tag works as described above.
 
 ---
 
