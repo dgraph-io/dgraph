@@ -8,7 +8,7 @@ readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
-GO_TEST_OPTS=( "-short=true" )
+GO_TEST_OPTS=( )
 TEST_FAILED=0
 TEST_SET="unit"
 BUILD_TAGS=
@@ -35,7 +35,6 @@ notes:
 
     Tests are always run with -short=true."
 }
-
 
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
@@ -141,6 +140,7 @@ if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
     if [[ $TEST_SET == unit ]]; then
         Info "Running only unit tests"
+        GO_TEST_OPTS+=( "-short=true" )
     fi
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
@@ -155,6 +155,9 @@ fi
 # assemble list of tests before executing any
 FindCustomClusterTests
 FindDefaultClusterTests
+
+# abort all tests on Ctrl-C, not just the current one
+trap "echo >&2 SIGINT ; exit 2" SIGINT
 
 START_TIME=$(date +%s)
 
