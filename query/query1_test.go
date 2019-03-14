@@ -1321,12 +1321,12 @@ func TestUidAttr(t *testing.T) {
 			failure: `Argument cannot be "uid`},
 		{in: `{q(func:has(name)) @filter(uid_in(uid, 0x1)) { uid }}`,
 			failure: `Argument cannot be "uid"`},
+		{in: `{q(func:uid(0x1)) { checkpwd(uid, "") }}`,
+			failure: `Argument cannot be "uid"`},
 		{in: `{q(func:uid(0x1)) { uid }}`,
 			out: `{"data":{"q":[{"uid":"0x1"}]}}`},
 		{in: `{q(func:eq(name, "uid")) { uid }}`,
 			out: `{"data":{"q":[]}}`},
-		{in: `{q(func:uid(0x1)) { checkpwd(uid, "") }}`,
-			out: `{"data":{"q":[{"checkpwd(uid)":false}]}}`},
 	}
 	for _, tc := range tests {
 		js, err := processQuery(t, context.Background(), tc.in)

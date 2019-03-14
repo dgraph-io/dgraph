@@ -784,6 +784,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 					"Node with %q cant have filter, please place the filter on the upper level",
 					gchild.Func.Name)
 			}
+			if gchild.Func.Attr == "uid" {
+				return x.Errorf(`Argument cannot be "uid"`)
+			}
 			dst.createSrcFunction(gchild.Func)
 		}
 
