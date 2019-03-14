@@ -407,7 +407,31 @@ func TestParseSingleType(t *testing.T) {
 			},
 		},
 	}, result.Types[0])
+}
 
+func TestParseBaseTypesCaseInsensitive(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+			Name: string
+			LastName: String
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+		Fields: []*pb.SchemaUpdate{
+			&pb.SchemaUpdate{
+				Predicate: "Name",
+				ValueType: pb.Posting_STRING,
+			},
+			&pb.SchemaUpdate{
+				Predicate: "LastName",
+				ValueType: pb.Posting_STRING,
+			},
+		},
+	}, result.Types[0])
 }
 
 func TestParseCombinedSchemasAndTypes(t *testing.T) {

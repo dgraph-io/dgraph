@@ -709,6 +709,11 @@ func (qs *queryState) handleUidPostings(
 	return nil
 }
 
+const (
+	UseTxnCache = iota
+	NoTxnCache
+)
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
 	span := otrace.FromContext(ctx)
@@ -740,8 +745,10 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	} else if !servesTablet {
 		return &emptyResult, errUnservedTablet
 	}
-
-	qs := queryState{cache: posting.Oracle().CacheAt(q.ReadTs)}
+	var qs queryState
+	if q.Cache == UseTxnCache {
+		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
+	}
 	if qs.cache == nil {
 		qs.cache = posting.NewLocalCache()
 	}

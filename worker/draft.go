@@ -197,8 +197,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 	startTs := proposal.Mutations.StartTs
 
-	if len(proposal.Mutations.Schema) > 0 {
-		span.Annotatef(nil, "Applying schema")
+	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
@@ -208,6 +208,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 		}
+
+		for _, tupdate := range proposal.Mutations.Types {
+			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 

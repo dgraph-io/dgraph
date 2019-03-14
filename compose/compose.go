@@ -40,18 +40,18 @@ type Volume struct {
 type Service struct {
 	name          string // not exported
 	Image         string
-	ContainerName string   `yaml:"container_name"`
-	Hostname      string   `yaml:",omitempty"`
-	Pid           string   `yaml:",omitempty"`
-	WorkingDir    string   `yaml:"working_dir"`
-	DependsOn     []string `yaml:"depends_on,omitempty"`
-	Labels        StringMap
-	Environment   []string
-	Ports         []string
-	Volumes       []Volume
-	TempFS        []string `yaml:",omitempty"`
-	User          string   `yaml:",omitempty"`
-	Command       string
+	ContainerName string    `yaml:"container_name"`
+	Hostname      string    `yaml:",omitempty"`
+	Pid           string    `yaml:",omitempty"`
+	WorkingDir    string    `yaml:"working_dir,omitempty"`
+	DependsOn     []string  `yaml:"depends_on,omitempty"`
+	Labels        StringMap `yaml:",omitempty"`
+	Environment   []string  `yaml:",omitempty"`
+	Ports         []string  `yaml:",omitempty"`
+	Volumes       []Volume  `yaml:",omitempty"`
+	TempFS        []string  `yaml:",omitempty"`
+	User          string    `yaml:",omitempty"`
+	Command       string    `yaml:",omitempty"`
 }
 
 type ComposeConfig struct {
@@ -76,6 +76,8 @@ type Options struct {
 	TestPortRange  bool
 	Verbosity      int
 	OutFile        string
+	LocalBin       bool
+	WhiteList      bool
 }
 
 var opts Options
@@ -120,23 +122,24 @@ func initService(basename string, idx, grpcPort int) Service {
 	switch {
 	case opts.DataVol == true:
 		svc.Volumes = append(svc.Volumes, Volume{
-			Type:     "volume",
-			Source:   "data",
-			Target:   "/data",
-			ReadOnly: false,
+			Type:   "volume",
+			Source: "data",
+			Target: "/data",
 		})
 	case opts.DataDir != "":
 		svc.Volumes = append(svc.Volumes, Volume{
-			Type:     "bind",
-			Source:   opts.DataDir,
-			Target:   "/data",
-			ReadOnly: false,
+			Type:   "bind",
+			Source: opts.DataDir,
+			Target: "/data",
 		})
 	default:
 		// no data volume
 	}
 
-	svc.Command = "/gobin/dgraph"
+	svc.Command = "dgraph"
+	if opts.LocalBin {
+		svc.Command = "/gobin/dgraph"
+	}
 	if opts.UserOwnership {
 		user, err := user.Current()
 		if err != nil {
@@ -146,6 +149,7 @@ func initService(basename string, idx, grpcPort int) Service {
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
+	svc.Command += " " + basename
 	if opts.Jaeger {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
@@ -170,7 +174,7 @@ func getZero(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" zero -o %d --idx=%d", getOffset(idx), idx)
+	svc.Command += fmt.Sprintf(" -o %d --idx=%d", getOffset(idx), idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
@@ -198,12 +202,14 @@ func getAlpha(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" alpha -o %d", baseOffset+getOffset(idx))
+	svc.Command += fmt.Sprintf(" -o %d", baseOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
-	svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	if opts.WhiteList {
+		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	}
 	if opts.EnterpriseMode {
 		svc.Command += " --enterprise_features"
 		if opts.AclSecret != "" {
@@ -286,10 +292,9 @@ func addMetrics(cfg *ComposeConfig) {
 			"GF_AUTH_ANONYMOUS_ORG_ROLE=Admin",
 		},
 		Volumes: []Volume{{
-			Type:     "volume",
-			Source:   "grafana-volume",
-			Target:   "/var/lib/grafana",
-			ReadOnly: false,
+			Type:   "volume",
+			Source: "grafana-volume",
+			Target: "/var/lib/grafana",
 		}},
 	}
 
@@ -321,7 +326,7 @@ func main() {
 	cmd.PersistentFlags().IntVarP(&opts.NumAlphas, "num_alphas", "a", 3,
 		"number of alphas in dgraph cluster")
 	cmd.PersistentFlags().IntVarP(&opts.NumReplicas, "num_replicas", "r", 3,
-		"number of Alpha replicas in dgraph cluster")
+		"number of alpha replicas in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
 	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "o", false,
@@ -346,6 +351,10 @@ func main() {
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O", "./docker-compose.yml",
 		"name of output file")
+	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
+		"Use locally compiled binary. Set to false to pick binary from docker container.")
+	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
+		"If true, include a whitelist.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {

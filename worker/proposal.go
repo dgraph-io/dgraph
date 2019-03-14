@@ -166,6 +166,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			}
 			noTimeout = true
 		}
+		for _, typ := range proposal.Mutations.Types {
+			if err := checkType(typ); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Let's keep the same key, so multiple retries of the same proposal would

@@ -369,18 +369,7 @@ func ResetAcl() {
 		}
 
 		// Insert Groot.
-		createUserNQuads := []*api.NQuad{
-			{
-				Subject:     "_:newuser",
-				Predicate:   "dgraph.xid",
-				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.GrootId}},
-			},
-			{
-				Subject:     "_:newuser",
-				Predicate:   "dgraph.password",
-				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "password"}},
-			}}
-
+		createUserNQuads := acl.CreateUserNQuads(x.GrootId, "password")
 		mu := &api.Mutation{
 			StartTs:   startTs,
 			CommitNow: true,
