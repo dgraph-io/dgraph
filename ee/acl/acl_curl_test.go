@@ -29,7 +29,7 @@ const loginEndpoint = "http://localhost:8180/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	if testing.Short() {
-		t.Skip()
+		t.Skip("skipping because -short=true")
 	}
 
 	glog.Infof("testing with port 9180")

@@ -63,7 +63,7 @@ func TestXidmap(t *testing.T) {
 
 func TestXidmapMemory(t *testing.T) {
 	if testing.Short() {
-		t.Skip()
+		t.Skip("skipping because -short=true")
 	}
 
 	var loop uint32

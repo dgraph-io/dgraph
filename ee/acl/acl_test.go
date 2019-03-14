@@ -103,7 +103,7 @@ func TestReservedPredicates(t *testing.T) {
 
 func TestAuthorization(t *testing.T) {
 	if testing.Short() {
-		t.Skip()
+		t.Skip("skipping because -short=true")
 	}
 
 	glog.Infof("testing with port 9180")
@@ -332,7 +332,7 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 
 func TestPredicateRegex(t *testing.T) {
 	if testing.Short() {
-		t.Skip()
+		t.Skip("skipping because -short=true")
 	}
 
 	glog.Infof("testing with port 9180")
