@@ -17,8 +17,15 @@ jobs:
           command: go get -v -t -d ./...
 
       - run:
-          name: Run the tests
-          command: go test -v ./...
+          name: Setup coverage reporting
+          command: |
+            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+            chmod +x ./cc-test-reporter
+            ./cc-test-reporter before-build
+
+      - run:
+          name: Run the tests and report results
+          command: go test -v -coverprofile c.out ./... && ./cc-test-reporter after-build --exit-code $?
 
       - run:
           name: Code Formatting
