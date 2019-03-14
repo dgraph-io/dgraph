@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -41,9 +42,16 @@ func checkForbiddenOpts(conf *viper.Viper, forbiddenOpts []string) error {
 		var isSet bool
 		switch conf.Get(opt).(type) {
 		case string:
-			isSet = len(conf.GetString(opt)) > 0
+			if opt == "group_list" {
+				// handle group_list specially since the default value is not an empty string
+				isSet = conf.GetString(opt) != defaultGroupList
+			} else {
+				isSet = len(conf.GetString(opt)) > 0
+			}
 		case int:
 			isSet = conf.GetInt(opt) > 0
+		case bool:
+			isSet = conf.GetBool(opt)
 		default:
 			return fmt.Errorf("unexpected option type for %s", opt)
 		}
@@ -87,7 +95,8 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 		}
 	}
 
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -103,17 +112,7 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 		return fmt.Errorf("unable to create user because of conflict: %v", userid)
 	}
 
-	createUserNQuads := []*api.NQuad{
-		{
-			Subject:     "_:newuser",
-			Predicate:   "dgraph.xid",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userid}},
-		},
-		{
-			Subject:     "_:newuser",
-			Predicate:   "dgraph.password",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
-		}}
+	createUserNQuads := CreateUserNQuads(userid, password)
 
 	mu := &api.Mutation{
 		CommitNow: true,
@@ -135,7 +134,8 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 	}
 	defer cancel()
 
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -156,6 +156,11 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 			Subject:     "_:newgroup",
 			Predicate:   "dgraph.xid",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: groupId}},
+		},
+		{
+			Subject:     "_:newgroup",
+			Predicate:   "type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
 		},
 	}
 
@@ -202,7 +207,8 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	}
 	defer cancel()
 
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -244,17 +250,25 @@ func mod(conf *viper.Viper) error {
 	if err != nil {
 		return err
 	}
-	groupList := conf.GetString("group_list")
+
 	if len(userId) != 0 {
 		// when modifying the user, some group options are forbidden
 		if err := checkForbiddenOpts(conf, []string{"pred", "pred_regex", "perm"}); err != nil {
 			return err
 		}
 
-		if len(groupList) != 0 {
-			return userMod(conf, userId, groupList)
+		newPassword := conf.GetBool("new_password")
+		groupList := conf.GetString("group_list")
+		if (newPassword && groupList != defaultGroupList) ||
+			(!newPassword && groupList == defaultGroupList) {
+			return fmt.Errorf("one of --new_password or --group_list must be provided, but not both")
 		}
-		return changePassword(conf, userId)
+
+		if newPassword {
+			return changePassword(conf, userId)
+		}
+
+		return userMod(conf, userId, groupList)
 	}
 
 	// when modifying the group, some user options are forbidden
@@ -274,16 +288,13 @@ func changePassword(conf *viper.Viper, userId string) error {
 	defer cancel()
 
 	// 2. get the new password
-	newPassword := conf.GetString("new_password")
-	if len(newPassword) == 0 {
-		var err error
-		newPassword, err = askUserPassword(userId, "New", 2)
-		if err != nil {
-			return err
-		}
+	newPassword, err := askUserPassword(userId, "New", 2)
+	if err != nil {
+		return err
 	}
 
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -325,7 +336,8 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 	}
 	defer cancel()
 
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -385,8 +397,9 @@ func userMod(conf *viper.Viper, userId string, groups string) error {
 	if _, err := txn.Mutate(ctx, mu); err != nil {
 		return fmt.Errorf("error while mutating the group: %+v", err)
 	}
-	fmt.Printf("Successfully modified groups for user %v\n", userId)
-	return nil
+	fmt.Printf("Successfully modified groups for user %v.\n", userId)
+	fmt.Println("The latest info is:")
+	return queryAndPrintUser(ctx, dc.NewReadOnlyTxn(), userId)
 }
 
 func chMod(conf *viper.Viper) error {
@@ -401,6 +414,9 @@ func chMod(conf *viper.Viper) error {
 		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
 	case len(predicate) == 0 && len(predRegex) == 0:
 		return fmt.Errorf("one of --pred or --pred_regex must be specified, but not both")
+	case perm > 7:
+		return fmt.Errorf("the perm value must be less than or equal to 7, "+
+			"the provided value is %d", perm)
 	case len(predRegex) > 0:
 		// make sure the predRegex can be compiled as a regex
 		if _, err := regexp.Compile(predRegex); err != nil {
@@ -415,7 +431,8 @@ func chMod(conf *viper.Viper) error {
 	}
 	defer cancel()
 
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
 	txn := dc.NewTxn()
 	defer func() {
 		if err := txn.Discard(ctx); err != nil {
@@ -479,13 +496,14 @@ func chMod(conf *viper.Viper) error {
 	}
 	fmt.Printf("Successfully changed permission for group %v on predicate %v to %v\n",
 		groupId, predicate, perm)
-	return nil
+	fmt.Println("The latest info is:")
+	return queryAndPrintGroup(ctx, dc.NewReadOnlyTxn(), groupId)
 }
 
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
 	query := `
     query search($userid: string){
-      user(func: eq(dgraph.xid, $userid)) {
+      user(func: eq(dgraph.xid, $userid)) @filter(type(User)) {
 	    uid
         dgraph.xid
         dgraph.user.group {
@@ -533,7 +551,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 
 	// write query header
 	query := fmt.Sprintf(`query search($groupid: string){
-        group(func: eq(dgraph.xid, $groupid)) {
+        group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
 			uid
 		    %s }}`, strings.Join(fields, ", "))
 
@@ -579,4 +597,82 @@ func updateAcl(acls []Acl, newAcl Acl) ([]Acl, bool) {
 
 	// we do not find any existing aclEntry matching the newAcl predicate
 	return append(acls, newAcl), true
+}
+
+func queryAndPrintUser(ctx context.Context, txn *dgo.Txn, userId string) error {
+	user, err := queryUser(ctx, txn, userId)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("The user %q does not exist.\n", userId)
+	}
+
+	fmt.Printf("User  : %s\n", userId)
+	fmt.Printf("UID   : %s\n", user.Uid)
+	for _, group := range user.Groups {
+		fmt.Printf("Group : %-5s\n", group.GroupID)
+	}
+	return nil
+}
+
+func queryAndPrintGroup(ctx context.Context, txn *dgo.Txn, groupId string) error {
+	group, err := queryGroup(ctx, txn, groupId, "dgraph.xid", "~dgraph.user.group{dgraph.xid}",
+		"dgraph.group.acl")
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return fmt.Errorf("The group %q does not exist.\n", groupId)
+	}
+	fmt.Printf("Group: %s\n", groupId)
+	fmt.Printf("UID  : %s\n", group.Uid)
+	fmt.Printf("ID   : %s\n", group.GroupID)
+
+	var userNames []string
+	for _, user := range group.Users {
+		userNames = append(userNames, user.UserID)
+	}
+	fmt.Printf("Users: %s\n", strings.Join(userNames, " "))
+
+	var acls []Acl
+	if len(group.Acls) != 0 {
+		if err := json.Unmarshal([]byte(group.Acls), &acls); err != nil {
+			return fmt.Errorf("unable to unmarshal the acls associated with the group %v: %v",
+				groupId, err)
+		}
+
+		for _, acl := range acls {
+			fmt.Printf("ACL  : %v\n", acl)
+		}
+	}
+	return nil
+}
+
+func info(conf *viper.Viper) error {
+	userId, groupId, err := getUserAndGroup(conf)
+	if err != nil {
+		return err
+	}
+
+	dc, cancel, err := getClientWithAdminCtx(conf)
+	defer cancel()
+	if err != nil {
+		return fmt.Errorf("unable to get admin context: %v\n", err)
+	}
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer ctxCancel()
+	txn := dc.NewTxn()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Unable to discard transaction: %v\n", err)
+		}
+	}()
+
+	if len(userId) != 0 {
+		return queryAndPrintUser(ctx, txn, userId)
+	}
+
+	return queryAndPrintGroup(ctx, txn, groupId)
 }
