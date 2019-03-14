@@ -221,24 +221,22 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 		return
 	}
 
-	// type function is just an alias for eq("type", type).
-	if gf.Name == "type" {
-		sg.Attr = "type"
-		sg.SrcFunc = &Function{
-			Name:       "eq",
-			Args:       append(gf.Args[:0:0], gf.Args...),
-			IsCount:    false,
-			IsValueVar: false,
-		}
-		return
-	}
-
 	sg.SrcFunc = &Function{
 		Name:       gf.Name,
 		Args:       append(gf.Args[:0:0], gf.Args...),
 		IsCount:    gf.IsCount,
 		IsValueVar: gf.IsValueVar,
 	}
+
+	// type function is just an alias for eq(type, "type").
+	if gf.Name == "type" {
+		sg.Attr = "type"
+		sg.SrcFunc.Name = "eq"
+		sg.SrcFunc.IsCount = false
+		sg.SrcFunc.IsValueVar = false
+		return
+	}
+
 	if gf.Lang != "" {
 		sg.Params.Langs = append(sg.Params.Langs, gf.Lang)
 	}
@@ -631,7 +629,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	} else {
 		sg.Attr = ft.Func.Attr
 		if !isValidFuncName(ft.Func.Name) {
-			return x.Errorf("Invalid function name : %s", ft.Func.Name)
+			return x.Errorf("Invalid function name: %s", ft.Func.Name)
 		}
 
 		if isUidFnWithoutVar(ft.Func) {
@@ -640,6 +638,9 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 				return err
 			}
 		} else {
+			if ft.Func.Attr == "uid" {
+				return x.Errorf(`Argument cannot be "uid"`)
+			}
 			sg.createSrcFunction(ft.Func)
 			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 		}
@@ -746,7 +747,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		for argk := range gchild.Args {
 			if !isValidArg(argk) {
-				return x.Errorf("Invalid argument : %s", argk)
+				return x.Errorf("Invalid argument: %s", argk)
 			}
 		}
 		if err := args.fill(gchild); err != nil {
@@ -960,7 +961,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
-			return nil, x.Errorf("Invalid argument : %s", argk)
+			return nil, x.Errorf("Invalid argument: %s", argk)
 		}
 	}
 	if err := args.fill(gq); err != nil {
@@ -1093,7 +1094,9 @@ type varValue struct {
 	strList []*pb.ValueList
 }
 
-func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (map[uint64]types.Val, error) {
+func evalLevelAgg(
+	doneVars map[string]varValue,
+	sg, parent *SubGraph) (map[uint64]types.Val, error) {
 	var mp map[uint64]types.Val
 
 	if parent == nil {
@@ -1994,7 +1997,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// Populated variable.
 			o := append(sg.DestUIDs.Uids[:0:0], sg.DestUIDs.Uids...)
 			sg.uidMatrix = []*pb.List{{Uids: o}}
-			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
+			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
+				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
+			})
 		}
 	} else if len(sg.Attr) == 0 {
 		// This is when we have uid function in children.
