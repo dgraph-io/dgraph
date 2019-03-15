@@ -828,7 +828,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		if err != nil {
 			return err
 		}
-		args.AfterUID = uint64(after)
+		args.AfterUID = after
 	}
 
 	if args.Alias == "shortest" {
