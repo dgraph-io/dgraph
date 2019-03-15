@@ -31,10 +31,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	client = getNewClient()
-)
-
 func assignUids(num uint64) {
 	_, err := http.Get(fmt.Sprintf("http://localhost:6080/assign?what=uids&num=%d", num))
 	if err != nil {
@@ -54,6 +50,15 @@ func setSchema(schema string) {
 	})
 	if err != nil {
 		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+	}
+}
+
+func dropPredicate(pred string) {
+	err := client.Alter(context.Background(), &api.Operation{
+		DropAttr: pred,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
 	}
 }
 
@@ -193,6 +198,15 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) {
 }
 
 const testSchema = `
+type Person {
+	name: string
+	pet: Animal
+}
+
+type Animal {
+	name: string
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .

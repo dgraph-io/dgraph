@@ -3,9 +3,8 @@
 # uses configuration in dgraph/docker-compose.yml
 
 readonly ME=${0##*/}
-readonly SRCROOT=$(readlink -f ${BASH_SOURCE[0]%/*}/../../../..)
+readonly SRCROOT=$(git rev-parse --show-toplevel)
 readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
-readonly WAIT_FOR_IT=$SRCROOT/contrib/wait-for-it.sh
 
 declare -ri ZERO_PORT=5080 HTTP_PORT=8180
 
@@ -15,23 +14,33 @@ FATAL() { ERROR "$@"; exit 1; }
 
 set -e
 
+INFO "rebuilding dgraph"
+
+cd $SRCROOT
+make install >/dev/null
+
 INFO "running bulk load schema test"
 
 WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
 cd $WORKDIR
 
-trap ErrorExit EXIT
+LOGFILE=$WORKDIR/output.log
 
+trap ErrorExit EXIT
 function ErrorExit
 {
     local ev=$?
+    if [[ $ev -ne 0 ]]; then
+        ERROR "*** unexpected error ***"
+        if [[ -e $LOGFILE ]]; then
+            tail -40 $LOGFILE
+        fi
+    fi
     if [[ ! $DEBUG ]]; then
         rm -rf $WORKDIR
     fi
-    if [[ $ev -ne 0 ]]; then
-        FATAL "*** unexpected error ***"
-    fi
+    exit $ev
 }
 
 function StartZero
@@ -110,7 +119,7 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec -it bank-dg1 curl localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec bank-dg1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
   docker cp bank-dg1:/data/dg1/export .
   sleep 1
@@ -122,7 +131,8 @@ function BulkLoadExportedData
   dgraph bulk -z localhost:$ZERO_PORT \
               -s ../dir1/export/*/g01.schema.gz \
               -f ../dir1/export/*/g01.rdf.gz \
-     >bulk.log 2>&1 </dev/null
+     >$LOGFILE 2>&1 </dev/null
+  mv $LOGFILE $LOGFILE.export
 }
 
 function BulkLoadFixtureData
@@ -150,7 +160,42 @@ _:et <revenue> "792.9" .
 EOF
 
   dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -f fixture.rdf \
-     >bulk.log 2>&1 </dev/null
+     >$LOGFILE 2>&1 </dev/null
+  mv $LOGFILE $LOGFILE.fixture
+}
+
+function TestBulkLoadMultiShard
+{
+  INFO "bulk loading into multiple shards"
+
+  cat >fixture.schema <<EOF
+name:string @index(term) .
+genre:default .
+language:string .
+EOF
+
+  cat >fixture.rdf <<EOF
+_:et <name> "E.T. the Extra-Terrestrial" .
+_:et <genre> "Science Fiction" .
+_:et <revenue> "792.9" .
+EOF
+
+  dgraph bulk -z localhost:$ZERO_PORT -s fixture.schema -f fixture.rdf \
+              --map_shards 2 --reduce_shards 2 \
+     >$LOGFILE 2>&1 </dev/null
+  mv $LOGFILE $LOGFILE.multi
+
+  INFO "checking that each predicate appears in only one shard"
+
+  dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
+  dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
+  diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
+      1 _predicate_
+      1 genre
+      1 language
+      1 name
+      1 revenue
+EOF
 }
 
 function StopServers
@@ -231,6 +276,10 @@ diff -b - dir3/schema.out <<EOF || FATAL "schema incorrect"
   ]
 }
 EOF
+
+StartZero
+TestBulkLoadMultiShard
+StopServers
 
 INFO "schema is correct"
 

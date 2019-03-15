@@ -45,7 +45,13 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
-	gid := groups().BelongsTo(q.Order[0].Attr)
+	gid, err := groups().BelongsToReadOnly(q.Order[0].Attr)
+	if err != nil {
+		return &emptySortResult, err
+	} else if gid == 0 {
+		return &emptySortResult, fmt.Errorf("Cannot sort by unknown attribute %s", q.Order[0].Attr)
+	}
+
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, "worker.SortOverNetwork. Attr: %s. Group: %d", q.Order[0].Attr, gid)
 	}
@@ -59,7 +65,7 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return c.Sort(ctx, q)
 	})
 	if err != nil {
-		return nil, err
+		return &emptySortResult, err
 	}
 	return result.(*pb.SortResult), nil
 }
@@ -72,7 +78,11 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	ctx, span := otrace.StartSpan(ctx, "worker.Sort")
 	defer span.End()
 
-	gid := groups().BelongsTo(s.Order[0].Attr)
+	gid, err := groups().BelongsToReadOnly(s.Order[0].Attr)
+	if err != nil {
+		return &emptySortResult, err
+	}
+
 	span.Annotatef(nil, "Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
 	if gid != groups().groupId() {
 		return nil, x.Errorf("attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
@@ -380,6 +390,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
 		return nil, err
 	}
+	span.Annotatef(nil, "Waiting for checksum match")
 	if err := groups().ChecksumsMatch(ctx); err != nil {
 		return nil, err
 	}
@@ -393,6 +404,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
 	}
 
+	// We're not using any txn local cache here. So, no need to deal with that yet.
 	cctx, cancel := context.WithCancel(ctx)
 	resCh := make(chan *sortresult, 2)
 	go func() {

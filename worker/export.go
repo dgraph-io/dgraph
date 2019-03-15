@@ -251,7 +251,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
 	uts := time.Unix(in.UnixTs, 0)
-	bdir := path.Join(Config.ExportPath, fmt.Sprintf(
+	bdir := path.Join(x.WorkerConfig.ExportPath, fmt.Sprintf(
 		"dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 
 	if err := os.MkdirAll(bdir, 0700); err != nil {
@@ -290,7 +290,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		if pk.Attr == "_predicate_" {
 			return false
 		}
-		if !groups().ServesTablet(pk.Attr) {
+		if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 			return false
 		}
 		// We need to ensure that schema keys are separately identifiable, so they can be

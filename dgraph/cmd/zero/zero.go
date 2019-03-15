@@ -60,6 +60,7 @@ type Server struct {
 	closer         *y.Closer  // Used to tell stream to close.
 	connectLock    sync.Mutex // Used to serialize connect requests from servers.
 
+	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
 }
 
@@ -79,6 +80,7 @@ func (s *Server) Init() {
 	s.leaderChangeCh = make(chan struct{}, 1)
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
+	s.moveOngoing = make(chan struct{}, 1)
 	go s.rebalanceTablets()
 }
 
@@ -533,7 +535,7 @@ func (s *Server) ShouldServe(
 	if len(tablet.Predicate) == 0 {
 		return resp, x.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
-	if tablet.GroupId == 0 {
+	if tablet.GroupId == 0 && !tablet.ReadOnly {
 		return resp, x.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
@@ -546,15 +548,23 @@ func (s *Server) ShouldServe(
 		// serving.
 		return tab, nil
 	}
+	if tab == nil && tablet.ReadOnly {
+		// Read-only requests should return an empty tablet instead of asking zero to serve
+		// the predicate.
+		return &pb.Tablet{}, nil
+	}
 
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
-	if x.IsAclPredicate(tablet.Predicate) {
-		// force all the acl predicates to be allocated to group 1
-		// this is to make it eaiser to stream ACL updates to all alpha servers
-		// since they only need to open one pipeline to receive updates for all ACL predicates
+	if x.IsReservedPredicate(tablet.Predicate) {
+		// Force all the reserved predicates to be allocated to group 1.
+		// This is to make it eaiser to stream ACL updates to all alpha servers
+		// since they only need to open one pipeline to receive updates for all
+		// ACL predicates.
+		// This will also make it easier to restore the reserved predicates after
+		// a DropAll operation.
 		tablet.GroupId = 1
 	}
 	proposal.Tablet = tablet
@@ -581,7 +591,7 @@ func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Pa
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error)
+	errCh := make(chan error, len(proposals))
 	for _, pr := range proposals {
 		go func(pr *pb.ZeroProposal) {
 			errCh <- s.Node.proposeAndWait(ctx, pr)
@@ -596,7 +606,69 @@ func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Pa
 			return nil, err
 		}
 	}
+
+	if len(group.Members) == 0 {
+		return &api.Payload{Data: []byte("OK")}, nil
+	}
+	select {
+	case s.moveOngoing <- struct{}{}:
+	default:
+		// If a move is going on, don't do the next steps of deleting predicates.
+		return &api.Payload{Data: []byte("OK")}, nil
+	}
+	defer func() {
+		<-s.moveOngoing
+	}()
+
+	if err := s.deletePredicates(ctx, group); err != nil {
+		glog.Warningf("While deleting predicates: %v", err)
+	}
 	return &api.Payload{Data: []byte("OK")}, nil
+}
+
+func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
+	if group == nil || group.Tablets == nil {
+		return nil
+	}
+	var gid uint32
+	for _, tablet := range group.Tablets {
+		gid = tablet.GroupId
+		break
+	}
+	if gid == 0 {
+		return x.Errorf("Unable to find group")
+	}
+	state, err := s.latestMembershipState(ctx)
+	if err != nil {
+		return err
+	}
+	sg, ok := state.Groups[gid]
+	if !ok {
+		return x.Errorf("Unable to find group: %d", gid)
+	}
+
+	pl := s.Leader(gid)
+	if pl == nil {
+		return x.Errorf("Unable to reach leader of group: %d", gid)
+	}
+	wc := pb.NewWorkerClient(pl.Get())
+
+	for pred := range group.Tablets {
+		if _, found := sg.Tablets[pred]; found {
+			continue
+		}
+		glog.Infof("Tablet: %v does not belong to group: %d. Sending delete instruction.",
+			pred, gid)
+		in := &pb.MovePredicatePayload{
+			Predicate: pred,
+			SourceGid: gid,
+			DestGid:   0,
+		}
+		if _, err := wc.MovePredicate(ctx, in); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershipServer) error {

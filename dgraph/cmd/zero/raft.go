@@ -17,18 +17,17 @@
 package zero
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -36,6 +35,8 @@ import (
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/context"
 )
 
@@ -245,11 +246,19 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 		// served by the group. If the tablets that a group is serving changes, and the Alpha does
 		// not know about these changes, then the read request must fail.
 		for _, g := range state.GetGroups() {
-			var buf bytes.Buffer
-			for name := range g.GetTablets() {
-				x.Check2(buf.WriteString(name))
+			preds := make([]string, 0, len(g.GetTablets()))
+			for pred := range g.GetTablets() {
+				preds = append(preds, pred)
 			}
-			g.Checksum = farm.Fingerprint64(buf.Bytes())
+			sort.Strings(preds)
+			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
+		}
+		if n.AmLeader() {
+			// It is important to push something to Oracle updates channel, so the subscribers would
+			// get the latest checksum that we calculated above. Otherwise, if all the queries are
+			// best effort queries which don't create any transaction, then the OracleDelta never
+			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
+			n.server.orc.updates <- &pb.OracleDelta{}
 		}
 	}()
 

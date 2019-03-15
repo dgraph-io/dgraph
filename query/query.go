@@ -169,7 +169,9 @@ type Function struct {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	ReadTs       uint64
+	Cache        int
 	Attr         string
+	UnknownAttr  bool
 	Params       params
 	counts       []uint32
 	valueMatrix  []*pb.ValueList
@@ -1061,6 +1063,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
+		Cache:        int32(sg.Cache),
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
@@ -1339,7 +1342,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			doneVars[sg.Params.Var] = it
 			sg.Params.uidToVal = mp
 		} else {
-			glog.Errorf("Missing values/constant in math expression")
+			glog.V(3).Info("Warning: Math expression is using unassigned values or constants")
 		}
 		// Put it in this node.
 	} else if len(sg.Params.NeedsVar) > 0 {
@@ -1852,7 +1855,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+		if !x.WorkerConfig.ExpandEdge && child.Attr == "_predicate_" {
 			return out,
 				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
 		}
@@ -1862,7 +1865,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			continue
 		}
 
-		if !worker.Config.ExpandEdge {
+		if !x.WorkerConfig.ExpandEdge {
 			return out,
 				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}
@@ -2003,7 +2006,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
+		if sg.SrcUIDs == nil {
+			glog.Errorf("SrcUIDs is unexpectedly nil. Subgraph: %+v", sg)
+			rch <- x.Errorf("SrcUIDs shouldn't be nil.")
+			return
+		}
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
@@ -2025,7 +2032,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil {
+			if err != nil && strings.Contains(err.Error(), worker.ErrUnservedTabletMessage) {
+				sg.UnknownAttr = true
+			} else if err != nil {
 				rch <- err
 				return
 			}
@@ -2533,6 +2542,7 @@ func ConvertUidsToHex(m map[string]uint64) map[string]string {
 // and schemaUpdate are filled when processing query.
 type QueryRequest struct {
 	ReadTs   uint64
+	Cache    int
 	Latency  *Latency
 	GqlQuery *gql.Result
 
@@ -2567,6 +2577,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
+			sg.Cache = req.Cache
 		})
 		span.Annotate(nil, "Query parsed")
 		req.Subgraphs = append(req.Subgraphs, sg)
@@ -2702,13 +2713,13 @@ func (e *InternalError) Error() string {
 	return "pb.error: " + e.err.Error()
 }
 
-// TODO: This looks unnecessary.
-type ExecuteResult struct {
+type ExecutionResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*api.SchemaNode
+	Types      []*pb.TypeUpdate
 }
 
-func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err error) {
+func (req *QueryRequest) Process(ctx context.Context) (er ExecutionResult, err error) {
 	err = req.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
@@ -2718,6 +2729,9 @@ func (req *QueryRequest) Process(ctx context.Context) (er ExecuteResult, err err
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
+		}
+		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching types")
 		}
 	}
 	return er, nil

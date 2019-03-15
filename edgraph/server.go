@@ -36,9 +36,11 @@ import (
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -348,11 +350,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	// Reserved predicates cannot be altered.
 	for _, update := range result.Schemas {
+		// Reserved predicates cannot be altered.
 		if x.IsReservedPredicate(update.Predicate) {
 			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
+			return nil, err
+		}
+
+		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
 	}
@@ -360,6 +366,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Got schema: %+v\n", result.Schemas)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Schemas
+	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
 }
@@ -504,6 +511,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
+	if glog.V(3) {
+		glog.Infof("Got a query: %+v", req)
+	}
 
 	return s.doQuery(ctx, req)
 }
@@ -513,9 +523,6 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
-	}
-	if glog.V(3) {
-		glog.Infof("Got a query: %+v", req)
 	}
 	startTime := time.Now()
 
@@ -560,33 +567,63 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if err != nil {
 		return resp, err
 	}
-	if req.StartTs == 0 {
-		req.StartTs = State.getTimestamp(req.ReadOnly)
+
+	if err = validateQuery(parsedReq.Query); err != nil {
+		return resp, err
 	}
-	resp.Txn = &api.TxnContext{
-		StartTs: req.StartTs,
-	}
-	annotateStartTs(span, req.StartTs)
 
 	var queryRequest = query.QueryRequest{
 		Latency:  &l,
 		GqlQuery: &parsedReq,
-		ReadTs:   req.StartTs,
 	}
+	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
+	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
+	// If we haven't processed any updates yet then fall back to getting TS from Zero.
+	switch {
+	case req.BestEffort:
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("be", true)}, "")
+	case req.ReadOnly:
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("ro", true)}, "")
+	default:
+		span.Annotate([]otrace.Attribute{otrace.BoolAttribute("no", true)}, "")
+	}
+	if req.BestEffort {
+		// Sanity: check that request is read-only too.
+		if !req.ReadOnly {
+			return resp, x.Errorf("A best effort query must be read-only.")
+		}
+		req.StartTs = posting.Oracle().MaxAssigned()
+		queryRequest.Cache = worker.NoTxnCache
+	}
+	if req.StartTs == 0 {
+		req.StartTs = State.getTimestamp(req.ReadOnly)
+	}
+	queryRequest.ReadTs = req.StartTs
+	resp.Txn = &api.TxnContext{StartTs: req.StartTs}
+	annotateStartTs(span, req.StartTs)
 
 	// Core processing happens here.
-	var er query.ExecuteResult
+	var er query.ExecutionResult
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, x.Wrap(err)
 	}
-	resp.Schema = er.SchemaNode
-
 	var js []byte
-	if len(resp.Schema) > 0 {
-		sort.Slice(resp.Schema, func(i, j int) bool {
-			return resp.Schema[i].Predicate < resp.Schema[j].Predicate
+	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		sort.Slice(er.SchemaNode, func(i, j int) bool {
+			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
-		js, err = json.Marshal(map[string]interface{}{"schema": resp.Schema})
+		sort.Slice(er.Types, func(i, j int) bool {
+			return er.Types[i].TypeName < er.Types[j].TypeName
+		})
+
+		respMap := make(map[string]interface{})
+		if len(er.SchemaNode) > 0 {
+			respMap["schema"] = er.SchemaNode
+		}
+		if len(er.Types) > 0 {
+			respMap["types"] = formatTypes(er.Types)
+		}
+		js, err = json.Marshal(respMap)
 	} else {
 		js, err = query.ToJson(&l, er.Subgraphs)
 	}
@@ -769,6 +806,9 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 
 func validateNQuads(set, del []*api.NQuad) error {
 	for _, nq := range set {
+		if err := validatePredName(nq.Predicate); err != nil {
+			return err
+		}
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
@@ -781,6 +821,9 @@ func validateNQuads(set, del []*api.NQuad) error {
 		}
 	}
 	for _, nq := range del {
+		if err := validatePredName(nq.Predicate); err != nil {
+			return err
+		}
 		var ostar bool
 		if o, ok := nq.ObjectValue.GetVal().(*api.Value_DefaultVal); ok {
 			ostar = o.DefaultVal == x.Star
@@ -820,4 +863,78 @@ func validateKeys(nq *api.NQuad) error {
 		}
 	}
 	return nil
+}
+
+// validateQuery verifies that the query does not contain any preds that
+// are longer than the limit (2^16).
+func validateQuery(queries []*gql.GraphQuery) error {
+	for _, q := range queries {
+		if err := validatePredName(q.Attr); err != nil {
+			return err
+		}
+
+		if err := validateQuery(q.Children); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validatePredName(name string) error {
+	if len(name) > math.MaxUint16 {
+		return fmt.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
+			name[:80])
+	}
+	return nil
+}
+
+// formatField takes a SchemaUpdate representing a field in a type and converts
+// it into a map containing keys for the type name and the type.
+func formatField(field *pb.SchemaUpdate) map[string]string {
+	fieldMap := make(map[string]string)
+	fieldMap["name"] = field.Predicate
+	typ := ""
+	if field.List {
+		typ += "["
+	}
+
+	if field.ValueType == pb.Posting_OBJECT {
+		typ += field.ObjectTypeName
+	} else {
+		typeId := types.TypeID(field.ValueType)
+		typ += typeId.Name()
+	}
+
+	if field.NonNullable {
+		typ += "!"
+	}
+	if field.List {
+		typ += "]"
+	}
+	if field.NonNullableList {
+		typ += "!"
+	}
+	fieldMap["type"] = typ
+
+	return fieldMap
+}
+
+// formatTypes takes a list of TypeUpdates and converts them in to a list of
+// maps in a format that is human-readable to be marshaled into JSON.
+func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
+	var res []map[string]interface{}
+	for _, typ := range types {
+		typeMap := make(map[string]interface{})
+		typeMap["name"] = typ.TypeName
+		typeMap["fields"] = make([]map[string]string, 0)
+
+		for _, field := range typ.Fields {
+			fieldMap := formatField(field)
+			typeMap["fields"] = append(typeMap["fields"].([]map[string]string), fieldMap)
+		}
+
+		res = append(res, typeMap)
+	}
+	return res
 }

@@ -93,9 +93,9 @@ func TestFacets(t *testing.T) {
 		}}
 	`, `
 		{"q": [ {
-			"boss": [ {
+			"boss": {
 				"boss|since": "2017-04-26T00:00:00Z"
-			} ]
+			}
 		} ]}
 	`))
 
@@ -115,7 +115,7 @@ func TestFacets(t *testing.T) {
 func TestCountIndex(t *testing.T) {
 	s := newSuite(t, `
 		name: string @index(exact) .
-		friend: uid @count @reverse .
+		friend: [uid] @count @reverse .
 	`, `
 		_:alice <friend> _:bob   .
 		_:alice <friend> _:carol .

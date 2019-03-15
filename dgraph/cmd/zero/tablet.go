@@ -78,11 +78,21 @@ func (s *Server) rebalanceTablets() {
 // for the entire duration of predicate move. If this Zero stops being the leader, the final
 // proposal of reassigning the tablet to the destination would fail automatically.
 func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+	s.moveOngoing <- struct{}{}
+	defer func() {
+		<-s.moveOngoing
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
 	defer cancel()
 
 	ctx, span := otrace.StartSpan(ctx, "Zero.MovePredicate")
 	defer span.End()
+
+	// Ensure that reserved predicates cannot be moved.
+	if x.IsReservedPredicate(predicate) {
+		return x.Errorf("Unable to move reserved predicate %s", predicate)
+	}
 
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {
@@ -146,6 +156,19 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		predicate, srcGroup, dstGroup)
 	glog.Info(msg)
 	span.Annotate(nil, msg)
+
+	// Now that the move has happened, we can delete the predicate from the source group.
+	in.DestGid = 0 // Indicates deletion of predicate in the source group.
+	if _, err := wc.MovePredicate(ctx, in); err != nil {
+		msg = fmt.Sprintf("While deleting predicate [%v] in group %d. Error: %v",
+			in.Predicate, in.SourceGid, err)
+		span.Annotate(nil, msg)
+		glog.Warningf(msg)
+	} else {
+		msg = fmt.Sprintf("Deleted predicate %v in group %d", in.Predicate, in.SourceGid)
+		span.Annotate(nil, msg)
+		glog.V(1).Infof(msg)
+	}
 	return nil
 }
 
@@ -198,6 +221,11 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		size := int64(0)
 		group := s.state.Groups[srcGroup]
 		for _, tab := range group.Tablets {
+			// Reserved predicates should always be in group 1 so do not re-balance them.
+			if x.IsReservedPredicate(tab.Predicate) {
+				continue
+			}
+
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
 			if tab.Space <= sizeDiff/2 && tab.Space > size {

@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -173,7 +174,9 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = z.DgraphClient(alphaService)
+	dg = z.DgraphClientWithGroot(":9180")
+	x.Check(dg.Alter(
+		context.Background(), &api.Operation{DropAll: true}))
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.

@@ -137,8 +137,6 @@ they form a Raft group and provide synchronous replication.
 		"Enterprise feature.")
 	flag.Duration("acl_refresh_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
 		"Enterprise feature.")
-	flag.Duration("acl_cache_ttl", 30*time.Second, "The interval to refresh the acl cache. "+
-		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -182,12 +180,12 @@ func setupCustomTokenizers() {
 // and returns a slice of []IPRange.
 //
 // e.g. "144.142.126.222:144.142.126.244,144.142.126.254,192.168.0.0/16,host.docker.internal"
-func getIPsFromString(str string) ([]worker.IPRange, error) {
+func getIPsFromString(str string) ([]x.IPRange, error) {
 	if str == "" {
-		return []worker.IPRange{}, nil
+		return []x.IPRange{}, nil
 	}
 
-	var ipRanges []worker.IPRange
+	var ipRanges []x.IPRange
 	rangeStrings := strings.Split(str, ",")
 
 	for _, s := range rangeStrings {
@@ -201,7 +199,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
 				ipAddr := net.ParseIP(s)
 				if ipAddr != nil {
-					ipRanges = append(ipRanges, worker.IPRange{Lower: ipAddr, Upper: ipAddr})
+					ipRanges = append(ipRanges, x.IPRange{Lower: ipAddr, Upper: ipAddr})
 				} else {
 					ipAddrs, err := net.LookupIP(s)
 					if err != nil {
@@ -209,7 +207,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 					}
 
 					for _, addr := range ipAddrs {
-						ipRanges = append(ipRanges, worker.IPRange{Lower: addr, Upper: addr})
+						ipRanges = append(ipRanges, x.IPRange{Lower: addr, Upper: addr})
 					}
 				}
 			} else {
@@ -226,7 +224,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 					rangeHi[addrLen-i] |= ^network.Mask[maskLen-i]
 				}
 
-				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+				ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
 		case len(tuple) == 2:
 			// string is range like a.b.c.d:w.x.y.z
@@ -239,7 +237,7 @@ func getIPsFromString(str string) ([]worker.IPRange, error) {
 			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
 				return nil, fmt.Errorf("inverted IP address range: %s", s)
 			} else {
-				ipRanges = append(ipRanges, worker.IPRange{Lower: rangeLo, Upper: rangeHi})
+				ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
 		default:
 			return nil, fmt.Errorf("invalid IP address range: %s", s)
@@ -461,7 +459,6 @@ func run() {
 		opts.HmacSecret = hmacSecret
 		opts.AccessJwtTtl = Alpha.Conf.GetDuration("acl_access_ttl")
 		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("acl_refresh_ttl")
-		opts.AclRefreshInterval = Alpha.Conf.GetDuration("acl_cache_ttl")
 
 		glog.Info("HMAC secret loaded successfully.")
 	}
@@ -482,7 +479,7 @@ func run() {
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
-	worker.Config = worker.Options{
+	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
 		Tracing:             Alpha.Conf.GetFloat64("trace"),
@@ -519,7 +516,9 @@ func run() {
 		}
 	}
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler: otrace.ProbabilitySampler(worker.Config.Tracing)})
+		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Tracing),
+		MaxAnnotationEventsPerSpan: 64,
+	})
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

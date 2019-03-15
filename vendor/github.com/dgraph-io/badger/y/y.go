@@ -48,6 +48,9 @@ var (
 
 	// CastagnoliCrcTable is a CRC32 polynomial table
 	CastagnoliCrcTable = crc32.MakeTable(crc32.Castagnoli)
+
+	// Dummy channel for nil closers.
+	dummyCloserChan = make(chan struct{})
 )
 
 // OpenExistingFile opens an existing file, errors if it doesn't exist.
@@ -203,11 +206,17 @@ func (lc *Closer) Signal() {
 
 // HasBeenClosed gets signaled when Signal() is called.
 func (lc *Closer) HasBeenClosed() <-chan struct{} {
+	if lc == nil {
+		return dummyCloserChan
+	}
 	return lc.closed
 }
 
 // Done calls Done() on the WaitGroup.
 func (lc *Closer) Done() {
+	if lc == nil {
+		return
+	}
 	lc.waiting.Done()
 }
 

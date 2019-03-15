@@ -163,7 +163,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		return out, err
 	}
 	if ch != '{' {
-		return nil, fmt.Errorf("Expected JSON map start. Found: %v", ch)
+		return nil, fmt.Errorf("Expected JSON map start. Found: %v", string(ch))
 	}
 	x.Check2(out.WriteRune(ch))
 

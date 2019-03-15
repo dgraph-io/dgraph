@@ -35,6 +35,7 @@ const (
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
+	byteType      = byte(0x02)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -47,15 +48,25 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
-// SchemaKey returns schema key for given attribute,
-// schema keys are stored separately with unique prefix,
-// since we need to iterate over all schema keys
+// SchemaKey returns schema key for given attribute. Schema keys are stored
+// separately with unique prefix, since we need to iterate over all schema keys.
 func SchemaKey(attr string) []byte {
 	buf := make([]byte, 1+2+len(attr))
 	buf[0] = byteSchema
 	rest := buf[1:]
 
 	writeAttr(rest, attr)
+	return buf
+}
+
+// TypeKey returns type key for given type name. Type keys are stored separately
+// with unique prefix, since we need to iterate over all type keys.
+func TypeKey(typeName string) []byte {
+	buf := make([]byte, 1+2+len(typeName))
+	buf[0] = byteType
+	rest := buf[1:]
+
+	writeAttr(rest, typeName)
 	return buf
 }
 
@@ -125,27 +136,31 @@ type ParsedKey struct {
 }
 
 func (p ParsedKey) IsData() bool {
-	return p.byteType == ByteData
+	return p.bytePrefix == defaultPrefix && p.byteType == ByteData
 }
 
 func (p ParsedKey) IsReverse() bool {
-	return p.byteType == ByteReverse
+	return p.bytePrefix == defaultPrefix && p.byteType == ByteReverse
 }
 
 func (p ParsedKey) IsCount() bool {
-	return p.byteType == ByteCount ||
-		p.byteType == ByteCountRev
+	return p.bytePrefix == defaultPrefix && (p.byteType == ByteCount ||
+		p.byteType == ByteCountRev)
 }
 
 func (p ParsedKey) IsIndex() bool {
-	return p.byteType == ByteIndex
+	return p.bytePrefix == defaultPrefix && p.byteType == ByteIndex
 }
 
 func (p ParsedKey) IsSchema() bool {
 	return p.bytePrefix == byteSchema
 }
 
-func (p ParsedKey) IsType(typ byte) bool {
+func (p ParsedKey) IsType() bool {
+	return p.bytePrefix == byteType
+}
+
+func (p ParsedKey) IsOfType(typ byte) bool {
 	switch typ {
 	case ByteCount, ByteCountRev:
 		return p.IsCount()
@@ -183,6 +198,12 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
 	buf[0] = byteSchema + 1
+	return buf[:]
+}
+
+func (p ParsedKey) SkipType() []byte {
+	var buf [1]byte
+	buf[0] = byteType + 1
 	return buf[:]
 }
 
@@ -241,6 +262,13 @@ func SchemaPrefix() []byte {
 	return buf[:]
 }
 
+// TypePrefix returns the prefix for Schema keys.
+func TypePrefix() []byte {
+	var buf [1]byte
+	buf[0] = byteType
+	return buf[:]
+}
+
 // PredicatePrefix returns the prefix for all keys belonging
 // to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
@@ -264,7 +292,7 @@ func Parse(key []byte) *ParsedKey {
 	k = k[sz:]
 
 	switch p.bytePrefix {
-	case byteSchema:
+	case byteSchema, byteType:
 		return p
 	default:
 	}
@@ -301,15 +329,11 @@ func Parse(key []byte) *ParsedKey {
 // IsReservedPredicate returns true if 'pred' is in the reserved predicate list.
 func IsReservedPredicate(pred string) bool {
 	var m = map[string]struct{}{
-		PredicateListAttr:   {},
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-		"type":              {},
+		PredicateListAttr: {},
+		"type":            {},
 	}
 	_, ok := m[strings.ToLower(pred)]
-	return ok
+	return ok || IsAclPredicate(pred)
 }
 
 func IsAclPredicate(pred string) bool {
@@ -319,6 +343,6 @@ func IsAclPredicate(pred string) bool {
 		"dgraph.user.group": {},
 		"dgraph.group.acl":  {},
 	}
-	_, ok := m[pred]
+	_, ok := m[strings.ToLower(pred)]
 	return ok
 }

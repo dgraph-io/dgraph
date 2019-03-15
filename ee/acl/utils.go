@@ -69,6 +69,10 @@ type User struct {
 	Groups        []Group `json:"dgraph.user.group"`
 }
 
+func (u *User) GetUid() string {
+	return u.Uid
+}
+
 // Extract the first User pointed by the userKey in the query response
 func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 	m := make(map[string][]User)
@@ -102,6 +106,10 @@ type Group struct {
 	GroupID string `json:"dgraph.xid"`
 	Users   []User `json:"~dgraph.user.group"`
 	Acls    string `json:"dgraph.group.acl"`
+}
+
+func (g *Group) GetUid() string {
+	return g.Uid
 }
 
 // Extract the first User pointed by the userKey in the query response
@@ -168,6 +176,32 @@ func askUserPassword(userid string, pwdType string, times int) (string, error) {
 	return password, nil
 }
 
+type CloseFunc func()
+
+func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
+	opt = options{
+		dgraph: conf.GetString("dgraph"),
+	}
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.dgraph)
+
+	if len(opt.dgraph) == 0 {
+		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
+	}
+
+	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
+	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
+
+	conn, err := x.SetupConnection(opt.dgraph, &tlsConf, false)
+	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
+
+	dc := api.NewDgraphClient(conn)
+	return dgo.NewDgraphClient(dc), func() {
+		if err := conn.Close(); err != nil {
+			fmt.Printf("Error while closing connection: %v\n", err)
+		}
+	}
+}
+
 func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) (*dgo.Dgraph,
 	CloseFunc, error) {
 	password := conf.GetString(passwordOpt)
@@ -180,7 +214,7 @@ func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) 
 	}
 
 	dc, closeClient := getDgraphClient(conf)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	cleanFunc := func() {
 		cancel()
@@ -197,4 +231,24 @@ func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) 
 
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
 	return getClientWithUserCtx(x.GrootId, gPassword, conf)
+}
+
+func CreateUserNQuads(userId string, password string) []*api.NQuad {
+	return []*api.NQuad{
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.xid",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: userId}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "dgraph.password",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: password}},
+		},
+		{
+			Subject:     "_:newuser",
+			Predicate:   "type",
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
+		},
+	}
 }

@@ -134,8 +134,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	var noTimeout bool
 
 	checkTablet := func(pred string) error {
-		if tablet := groups().Tablet(pred); tablet == nil ||
-			tablet.GroupId != groups().groupId() {
+		if tablet, err := groups().Tablet(pred); err != nil {
+			return err
+		} else if tablet == nil || tablet.GroupId != groups().groupId() {
 			return errUnservedTablet
 		}
 		return nil
@@ -164,6 +165,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 				return err
 			}
 			noTimeout = true
+		}
+		for _, typ := range proposal.Mutations.Types {
+			if err := checkType(typ); err != nil {
+				return err
+			}
 		}
 	}
 
