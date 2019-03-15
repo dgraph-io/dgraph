@@ -173,7 +173,15 @@ var query = fmt.Sprintf(`
 
 func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
+
+	// Test that alter requests are allowed if the new update is the same as
+	// the initial update for a reserved predicate.
 	err := dg.Alter(ctx, &api.Operation{
+		Schema: "dgraph.xid: string @index(exact) @upsert .",
+	})
+	require.NoError(t, err)
+
+	err = dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.xid: int .",
 	})
 	require.Error(t, err)
