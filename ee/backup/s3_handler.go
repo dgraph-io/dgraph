@@ -84,10 +84,6 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	}
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
-	if len(uri.Path) < 1 {
-		return nil, x.Errorf("The S3 bucket %q is invalid", uri.Path)
-	}
-
 	creds, _ := provider.Retrieve() // error is always nil
 	if creds.SignerType == credentials.SignatureAnonymous {
 		return nil, x.Errorf("Environment variable credentials were not found. " +
