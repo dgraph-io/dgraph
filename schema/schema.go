@@ -432,24 +432,24 @@ func InitialSchema() []*pb.SchemaUpdate {
 	if x.WorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "dgraph.xid",
 				ValueType: pb.Posting_STRING,
 				Directive: pb.SchemaUpdate_INDEX,
 				Upsert:    true,
 				Tokenizer: []string{"exact"},
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "dgraph.password",
 				ValueType: pb.Posting_PASSWORD,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "dgraph.user.group",
 				Directive: pb.SchemaUpdate_REVERSE,
 				ValueType: pb.Posting_UID,
 				List:      true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "dgraph.group.acl",
 				ValueType: pb.Posting_STRING,
 			}}...)

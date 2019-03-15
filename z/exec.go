@@ -76,7 +76,7 @@ func Pipeline(cmds [][]string) error {
 	// Make sure to properly reap all spawned processes, but only save the error from the
 	// earliest stage of the pipeline.
 	var err error
-	for i, _ := range cmds {
+	for i := range cmds {
 		e := cmd[i].Wait()
 		if e != nil && err == nil {
 			err = e

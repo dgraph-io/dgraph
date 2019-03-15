@@ -33,14 +33,14 @@ func TestAclCache(t *testing.T) {
 		"the anonymous user should have access when the acl cache is empty")
 
 	acls := []acl.Acl{
-		acl.Acl{
+		{
 			Predicate: predicate,
 			Perm:      4,
 		},
 	}
 	aclBytes, _ := json.Marshal(acls)
 	groups := []acl.Group{
-		acl.Group{
+		{
 			GroupID: group,
 			Acls:    string(aclBytes),
 		},
@@ -60,14 +60,14 @@ func TestAclCache(t *testing.T) {
 
 	// define acls using regex
 	acls1 := []acl.Acl{
-		acl.Acl{
+		{
 			Regex: "^fri",
 			Perm:  4,
 		},
 	}
 	aclBytes1, _ := json.Marshal(acls1)
 	groups1 := []acl.Group{
-		acl.Group{
+		{
 			GroupID: group,
 			Acls:    string(aclBytes1),
 		},
