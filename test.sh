@@ -22,18 +22,16 @@ function Usage {
 
 options:
 
-    -h --help       output this help message
-    -u --unit       run unit tests only
-    -c --cluster    run unit tests and custom cluster test
-    -f --full       run all tests
-    -v --verbose    run tests in verbose mode
-    -n --no-cache   re-run test even if previous result is in cache
+    -h  output this help message
+    -u  run unit tests only
+    -c  run unit tests and custom cluster test
+    -f  run all tests
+    -v  run tests in verbose mode
+    -n  re-run test even if previous result is in cache
 
 notes:
 
-    Specifying pkg_regex implies -c.
-
-    Tests are always run with -short=true."
+    Specifying pkg_regex implies -c."
 }
 
 function Info {
@@ -110,21 +108,20 @@ function RunCustomClusterTests {
 # MAIN
 #
 
-ARGS=$(/usr/bin/getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,verbose,no-cache" -- "$@") \
-    || exit 1
-eval set -- "$ARGS"
-while true; do
-    case "$1" in
-        -h|--help)      Usage; exit 0                 ;;
-        -u|--unit)      TEST_SET="unit"               ;;
-        -c|--cluster)   TEST_SET="unit:cluster"       ;;
-        -f|--full)      TEST_SET="unit:cluster:full"  ;;
-        -v|--verbose)   GO_TEST_OPTS+=( "-v" )        ;;
-        -n|--no-cache)  GO_TEST_OPTS+=( "-count=1" )  ;;
-        --)             shift; break                  ;;
+# use bash's getopts instead of external getopt
+# because getopt on macs is bsd's, not gnu's
+while getopts ":hucfvn" ARG; do
+    case "$ARG" in
+        h)  Usage; exit 0                                    ;;
+        u)  TEST_SET="unit"                                  ;;
+        c)  TEST_SET="unit:cluster"                          ;;
+        f)  TEST_SET="unit:cluster:full"                     ;;
+        v)  GO_TEST_OPTS+=( "-v" )                           ;;
+        n)  GO_TEST_OPTS+=( "-count=1" )                     ;;
+        ?)  echo >&2 "$ME: invalid option -- $OPTARG"; exit 1;;
     esac
-    shift
 done
+shift $OPTINT
 
 cd $DGRAPH_ROOT
 
