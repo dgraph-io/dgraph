@@ -93,7 +93,7 @@ DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
-    DockerCompose run --name bulk_load --rm $LOCAL_VOL dg1 \
+    DockerCompose run --rm --name bulk_load $LOCAL_VOL dg1 \
         bash -s <<EOF
             /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
                                --format=rdf --zero=zero1:5080 --out=/data/dg1/bulk
