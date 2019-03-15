@@ -137,10 +137,13 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
-	gid := groups().BelongsTo(attr)
-	if gid == 0 {
-		return &pb.Result{}, errUnservedTablet
+	gid, err := groups().BelongsToReadOnly(attr)
+	if err != nil {
+		return &emptyResult, err
+	} else if gid == 0 {
+		return &emptyResult, errUnservedTablet
 	}
+
 	span := otrace.FromContext(ctx)
 	if span != nil {
 		span.Annotatef(nil, "ProcessTaskOverNetwork. attr: %v gid: %v, readTs: %d, node id: %d",
@@ -157,6 +160,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 
+	if err == errUnservedTablet {
+		return &emptyResult, errUnservedTablet
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +722,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
@@ -724,15 +730,19 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
 	span.Annotatef(nil, "Done waiting for checksum match")
 
-	// If a group stops serving tablet and it gets partitioned away from group zero, then it
-	// wouldn't know that this group is no longer serving this predicate.
-	// There's no issue if a we are serving a particular tablet and we get partitioned away from
-	// group zero as long as it's not removed.
-	if !groups().ServesTablet(q.Attr) {
+	// If a group stops serving tablet and it gets partitioned away from group
+	// zero, then it wouldn't know that this group is no longer serving this
+	// predicate. There's no issue if a we are serving a particular tablet and
+	// we get partitioned away from group zero as long as it's not removed.
+	// ServesTabletReadOnly is called instead of ServesTablet to prevent this
+	// alpha from requesting to serve this tablet.
+	if servesTablet, err := groups().ServesTabletReadOnly(q.Attr); err != nil {
+		return &emptyResult, err
+	} else if !servesTablet {
 		return &emptyResult, errUnservedTablet
 	}
 	var qs queryState
@@ -1615,7 +1625,13 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 		return &emptyResult, ctx.Err()
 	}
 
-	gid := groups().BelongsTo(q.Attr)
+	gid, err := groups().BelongsToReadOnly(q.Attr)
+	if err != nil {
+		return &emptyResult, err
+	} else if gid == 0 {
+		return &emptyResult, errUnservedTablet
+	}
+
 	var numUids int
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
@@ -1623,8 +1639,8 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return nil, fmt.Errorf("Temporary error, attr: %q groupId: %v Request sent to wrong server",
-			q.Attr, gid)
+		return &emptyResult, fmt.Errorf(
+			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 
 	type reply struct {
@@ -1639,7 +1655,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return &emptyResult, ctx.Err()
 	case reply := <-c:
 		return reply.result, reply.err
 	}
