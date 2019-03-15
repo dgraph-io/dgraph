@@ -1332,7 +1332,7 @@ func TestUidAttr(t *testing.T) {
 		js, err := processQuery(t, context.Background(), tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
-			require.Contains(t, err.Error(), `Argument cannot be "uid"`)
+			require.Contains(t, err.Error(), tc.failure)
 		} else {
 			require.NoError(t, err)
 			require.JSONEq(t, tc.out, js)
