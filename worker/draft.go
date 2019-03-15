@@ -182,8 +182,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 					return err
 				}
 
-				if !groups().ServesTablet(s.Predicate) {
-					return fmt.Errorf("Group 1 should always serve reserved predicate %s",
+				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
+					return err
+				} else if !servesTablet {
+					return fmt.Errorf("group 1 should always serve reserved predicate %s",
 						s.Predicate)
 				}
 			}

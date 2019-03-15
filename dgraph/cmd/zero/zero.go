@@ -535,7 +535,7 @@ func (s *Server) ShouldServe(
 	if len(tablet.Predicate) == 0 {
 		return resp, x.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
-	if tablet.GroupId == 0 {
+	if tablet.GroupId == 0 && !tablet.ReadOnly {
 		return resp, x.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
@@ -547,6 +547,11 @@ func (s *Server) ShouldServe(
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
 		return tab, nil
+	}
+	if tab == nil && tablet.ReadOnly {
+		// Read-only requests should return an empty tablet instead of asking zero to serve
+		// the predicate.
+		return &pb.Tablet{}, nil
 	}
 
 	// Set the tablet to be served by this server's group.
