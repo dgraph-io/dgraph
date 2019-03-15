@@ -472,10 +472,7 @@ func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
 		if original.Predicate != pred {
 			continue
 		}
-		if proto.Equal(original, update) {
-			return false
-		}
-		return true
+		return !proto.Equal(original, update)
 	}
 	return true
 }
