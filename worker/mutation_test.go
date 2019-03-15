@@ -126,7 +126,8 @@ func TestPopulateMutationMap(t *testing.T) {
 	}}
 	m := &pb.Mutations{Edges: edges, Schema: schema}
 
-	mutationsMap := populateMutationMap(m)
+	mutationsMap, err := populateMutationMap(m)
+	require.NoError(t, err)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)
