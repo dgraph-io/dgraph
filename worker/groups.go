@@ -160,7 +160,7 @@ func (g *groupi) informZeroAboutTablets() {
 		for _, pred := range preds {
 			if tablet, err := g.Tablet(pred); err != nil {
 				failed = true
-				glog.Errorf("Error while getting tablet for pred %s: %v", pred, err)
+				glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
 			} else if tablet == nil {
 				failed = true
 			}
