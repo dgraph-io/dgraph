@@ -849,7 +849,7 @@ func validateKey(key string) error {
 	return nil
 }
 
-// validateKeys checks predicate and facet keys in Nquad for syntax errors.
+// validateKeys checks predicate and facet keys in N-Quad for syntax errors.
 func validateKeys(nq *api.NQuad) error {
 	if err := validateKey(nq.Predicate); err != nil {
 		return x.Errorf("predicate %q %s", nq.Predicate, err)
