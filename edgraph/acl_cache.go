@@ -35,7 +35,10 @@ type AclCache struct {
 	predRegexRules []*PredRegexRule
 }
 
-var aclCache *AclCache
+var aclCache *AclCache = &AclCache{
+	predPerms:      make(map[string]map[string]int32),
+	predRegexRules: make([]*PredRegexRule, 0),
+}
 
 func (cache *AclCache) update(groups []acl.Group) {
 	// In dgraph, acl rules are divided by groups, e.g.
