@@ -1595,7 +1595,8 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		fc.uidPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64)
 		if err != nil {
 			if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
-				return nil, x.Errorf("Value in %s is not a number", q.SrcFunc.Name)
+				return nil, x.Errorf("Value %q in %s is not a number",
+					q.SrcFunc.Args[0], q.SrcFunc.Name)
 			}
 			return nil, err
 		}

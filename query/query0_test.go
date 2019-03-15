@@ -167,7 +167,7 @@ func TestQueryCountEmptyNames(t *testing.T) {
 		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":26}]}}`},
 		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
-			failure: `Value in uid_in is not a number`},
+			failure: `Value "" in uid_in is not a number`},
 	}
 	for _, tc := range tests {
 		js, err := processQuery(t, context.Background(), tc.in)
