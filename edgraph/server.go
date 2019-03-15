@@ -353,8 +353,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	for _, update := range result.Schemas {
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if x.IsReservedPredicate(update.Predicate) &&
-			schema.IsReservedPredicateChanged(update.Predicate, update) {
+		if schema.IsReservedPredicateChanged(update.Predicate, update) {
 			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err

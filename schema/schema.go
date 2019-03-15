@@ -462,6 +462,11 @@ func InitialSchema() []*pb.SchemaUpdate {
 // IsReservedPredicateChanged returns true if the initial update for the reserved
 // predicate pred is different than the passed update.
 func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
+	// Return false for non-reserved predicates.
+	if !x.IsReservedPredicate(pred) {
+		return false
+	}
+
 	initialSchema := InitialSchema()
 	for _, original := range initialSchema {
 		if original.Predicate != pred {
