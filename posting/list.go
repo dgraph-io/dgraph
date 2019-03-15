@@ -102,6 +102,11 @@ func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.uids = it.dec.Seek(afterUid)
 	it.uidx = 0
 
+	// The decoder Seek includes afterUid in uids, we must skip it to iterate correctly.
+	if len(it.uids) > 0 && it.uids[0] == afterUid {
+		it.uidx++
+	}
+
 	it.plen = len(pl.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := pl.Postings[idx]
@@ -526,11 +531,13 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
-	var mp, pp *pb.Posting
-	var pitr PIterator
+	var (
+		mp, pp  *pb.Posting
+		pitr    PIterator
+		prevUid uint64
+		err     error
+	)
 	pitr.Init(plist, afterUid)
-	prevUid := uint64(0)
-	var err error
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
