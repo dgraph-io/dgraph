@@ -27,14 +27,23 @@ import (
 
 	"github.com/golang/glog"
 	minio "github.com/minio/minio-go"
+	"github.com/minio/minio-go/pkg/credentials"
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 const (
-	s3DefaultEndpoint = "s3.amazonaws.com"
-	s3AccelerateHost  = "s3-accelerate"
+	// Shown in transfer logs
+	appName = "Dgraph"
+
+	// defaultEndpointS3 is used with s3 scheme when no host is provided
+	defaultEndpointS3 = "s3.amazonaws.com"
+
+	// s3AccelerateSubstr S3 acceleration is enabled if the S3 host is contains this substring.
+	// See http://docs.aws.amazon.com/AmazonS3/latest/dev/transfer-acceleration.html
+	s3AccelerateSubstr = "s3-accelerate"
 )
 
-// s3Handler is used for 's3:' URI scheme.
+// s3Handler is used for 's3:' and 'minio:' URI schemes.
 type s3Handler struct {
 	bucketName, objectPrefix string
 	pwriter                  *io.PipeWriter
@@ -42,43 +51,65 @@ type s3Handler struct {
 	cerr                     chan error
 }
 
-// setup creates an AWS session, checks valid bucket at uri.Path, and configures a minio client.
+// setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
 func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
-	accessKeyID := os.Getenv("AWS_ACCESS_KEY_ID")
-	secretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	if accessKeyID == "" || secretAccessKey == "" {
-		return nil, x.Errorf("Env vars AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set.")
+	if len(uri.Path) < 1 {
+		return nil, x.Errorf("Invalid bucket: %q", uri.Path)
 	}
 
-	// s3:///bucket/folder
-	if !strings.Contains(uri.Host, ".") {
-		uri.Host = s3DefaultEndpoint
+	var provider credentials.Provider
+	switch uri.Scheme {
+	case "s3":
+		// s3:///bucket/folder
+		if !strings.Contains(uri.Host, ".") {
+			uri.Host = defaultEndpointS3
+		}
+		if !s3utils.IsAmazonEndpoint(*uri) {
+			return nil, x.Errorf("Invalid S3 endpoint %q", uri.Host)
+		}
+		// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
+		// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
+		// Secret Token:      AWS_SESSION_TOKEN.
+		provider = &credentials.EnvAWS{}
+
+	default: // minio
+		if uri.Host == "" {
+			return nil, x.Errorf("Minio handler requires a host")
+		}
+		// Access Key ID:     MINIO_ACCESS_KEY.
+		// Secret Access Key: MINIO_SECRET_KEY.
+		provider = &credentials.EnvMinio{}
 	}
-	if !strings.HasSuffix(uri.Host, s3DefaultEndpoint[2:]) {
-		return nil, x.Errorf("Not an S3 endpoint: %s", uri.Host)
-	}
-	glog.V(2).Infof("Backup using S3 host: %s, path: %s", uri.Host, uri.Path)
+	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
 	if len(uri.Path) < 1 {
 		return nil, x.Errorf("The S3 bucket %q is invalid", uri.Path)
 	}
 
-	// secure by default
-	secure := uri.Query().Get("secure") != "false"
-	// enable HTTP tracing
-	traceon := uri.Query().Get("trace") == "true"
+	creds, _ := provider.Retrieve() // error is always nil
+	if creds.SignerType == credentials.SignatureAnonymous {
+		return nil, x.Errorf("Environment variable credentials were not found. " +
+			"If you need assistance please contact our support team.")
+	}
 
-	mc, err := minio.New(uri.Host, accessKeyID, secretAccessKey, secure)
+	secure := uri.Query().Get("secure") != "false" // secure by default
+	mc, err := minio.New(uri.Host, creds.AccessKeyID, creds.SecretAccessKey, secure)
 	if err != nil {
 		return nil, err
 	}
+
+	// Set client app name "Dgraph/v1.0.x"
+	mc.SetAppInfo(appName, x.Version())
+
 	// S3 transfer acceleration support.
-	if strings.Contains(uri.Host, s3AccelerateHost) {
+	if uri.Scheme == "s3" && strings.Contains(uri.Host, s3AccelerateSubstr) {
 		mc.SetS3TransferAccelerate(uri.Host)
 	}
-	if traceon {
+
+	// enable HTTP tracing
+	if uri.Query().Get("trace") == "true" {
 		mc.TraceOn(os.Stderr)
 	}
 
@@ -93,7 +124,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 			h.bucketName, uri.Host, err)
 	}
 	if !found {
-		return nil, x.Errorf("S3 bucket %s not found.", h.bucketName)
+		return nil, x.Errorf("Bucket was not found: %s", h.bucketName)
 	}
 	if len(parts) > 1 {
 		h.objectPrefix = filepath.Join(parts[1:]...)
@@ -102,8 +133,10 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	return mc, err
 }
 
-// Create creates an AWS session and sends our data stream to an S3 blob.
+// Create creates a new session and sends our data stream to an object.
 // URI formats:
+//   minio://<host>/bucket/folder1.../folderN?secure=true|false
+//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
 //   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
 //   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
 func (h *s3Handler) Create(uri *url.URL, req *Request) error {
@@ -167,7 +200,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 	return nil
 }
 
-// Load creates an AWS session, scans for backup objects in a bucket, then tries to
+// Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil on success, error otherwise.
 func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
@@ -189,8 +222,8 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
 		return x.Errorf("No backup files found in %q", uri.String())
 	}
 	sort.Strings(objects)
-	if glog.V(3) {
-		fmt.Printf("Loading from S3: %v\n", objects)
+	if glog.V(2) {
+		fmt.Printf("Loading from %s: %v\n", uri.Scheme, objects)
 	}
 
 	for _, object := range objects {
