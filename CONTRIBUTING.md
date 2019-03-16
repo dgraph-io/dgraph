@@ -31,7 +31,7 @@ $ git remote -v (you should see myrepo and go-pre in the list of remotes)
 
 **6. Find an issue to work on.**
 
-Check out open issues at [https://github.com/ChainSafeSystems/go-pre/issues](https://github.com/ChainSafeSystems/go-pre/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave a comment to the development team to ask if they would like you to work on it.
+Check out [open issues](https://github.com/ChainSafeSystems/go-pre/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave an issue to state that you would like to work on it.
 
 **7. Make improvements to the code.**
 
@@ -67,9 +67,9 @@ We consider two types of contributions to our repo and categorize them as follow
 
 ### Part-Time Contributors
 
-Anyone can become a part-time contributor and help out on implementing polkadot client. Contributions can be made in the following ways:
+Anyone can become a part-time contributor and help out on implementing Go-pre. Contributions can be made in the following ways:
 
--   Engaging in Gitter conversations, asking the questions on how to begin contributing to the project
+-   Engaging in Gitter conversations, asking questions on how to begin contributing to the project
 -   Opening up github issues to express interest in code to implement
 -   Opening up PRs referencing any open issue in the repo. PRs should include:
     -   Detailed context of what would be required for merge
@@ -88,4 +88,4 @@ Core contributors are currently comprised of members of the ChainSafe Systems te
 - 	Commit high quality code on core functionality
 -   Monitor github issues and PR’s to make sure owner, labels, descriptions are correct
 -   Formulate independent ideas, suggest new work to do, point out improvements to existing approaches
--   Participate in code review, ensure code quality is excellent, and have ensure high code coverage
+-   Participate in code review, ensure code quality is excellent, and ensure high code coverage
