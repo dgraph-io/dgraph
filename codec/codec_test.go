@@ -88,6 +88,8 @@ func TestSeek(t *testing.T) {
 		{in: 99, out: 100, whence: SeekCurrent},
 		{in: 101, out: 110, whence: SeekStart},
 		{in: 101, out: 110, whence: SeekCurrent},
+		{in: 10000, out: 10000, whence: SeekStart},
+		{in: 9999, out: 10000, whence: SeekCurrent},
 	}
 
 	for _, tc := range tests {
