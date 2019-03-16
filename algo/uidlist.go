@@ -44,7 +44,7 @@ func IntersectCompressedWith(pack *pb.UidPack, afterUID uint64, v, o *pb.List) {
 		return
 	}
 	dec := codec.Decoder{Pack: pack}
-	dec.Seek(afterUID)
+	dec.Seek(afterUID, codec.SeekStart)
 	n := dec.ApproxLen()
 	m := len(v.Uids)
 
@@ -118,7 +118,7 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	}
 
 	for _, u := range q {
-		uids := dec.Seek(u)
+		uids := dec.Seek(u, codec.SeekStart)
 		if len(uids) == 0 {
 			return
 		}

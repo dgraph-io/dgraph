@@ -99,13 +99,9 @@ func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.uidPosting = &pb.Posting{}
 
 	it.dec = &codec.Decoder{Pack: pl.Pack}
-	it.uids = it.dec.Seek(afterUid)
+	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
+	it.uids = it.dec.Seek(afterUid, codec.SeekCurrent)
 	it.uidx = 0
-
-	// The decoder Seek includes afterUid in uids, we must skip it to iterate correctly.
-	if it.Valid() && it.uids[0] == afterUid {
-		it.uidx++
-	}
 
 	it.plen = len(pl.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
