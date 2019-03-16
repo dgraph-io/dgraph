@@ -26,6 +26,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	SeekStart   = 0 // seek relative to the origin of the file
+	SeekCurrent = 1 // seek relative to the current offset
+	// SeekEnd     = 2 // seek relative to the end
+)
+
 type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
@@ -106,7 +112,7 @@ func (d *Decoder) ApproxLen() int {
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
 
-func (d *Decoder) Seek(uid uint64) []uint64 {
+func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
 	}
@@ -117,7 +123,8 @@ func (d *Decoder) Seek(uid uint64) []uint64 {
 
 	pack := d.Pack
 	idx := sort.Search(len(pack.Blocks), func(i int) bool {
-		return pack.Blocks[i].Base >= uid
+		return (whence == SeekStart && pack.Blocks[i].Base >= uid) ||
+			(whence == SeekCurrent && pack.Blocks[i].Base > uid)
 	})
 	// The first block.Base >= uid.
 	if idx == 0 {
@@ -137,7 +144,8 @@ func (d *Decoder) Seek(uid uint64) []uint64 {
 
 	// uidx points to the first uid in the uid list, which is >= uid.
 	uidx := sort.Search(len(d.uids), func(i int) bool {
-		return d.uids[i] >= uid
+		return (whence == SeekStart && d.uids[i] >= uid) ||
+			(whence == SeekCurrent && d.uids[i] > uid)
 	})
 	if uidx < len(d.uids) { // Found an entry in uids, which >= uid.
 		d.uids = d.uids[uidx:]
@@ -241,7 +249,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 	uids := make([]uint64, 0, ApproxLen(pack))
 	dec := Decoder{Pack: pack}
 
-	for block := dec.Seek(seek); len(block) > 0; block = dec.Next() {
+	for block := dec.Seek(seek, SeekStart); len(block) > 0; block = dec.Next() {
 		uids = append(uids, block...)
 	}
 	return uids
