@@ -103,7 +103,7 @@ func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.uidx = 0
 
 	// The decoder Seek includes afterUid in uids, we must skip it to iterate correctly.
-	if len(it.uids) > 0 && it.uids[0] == afterUid {
+	if it.Valid() && it.uids[0] == afterUid {
 		it.uidx++
 	}
 
