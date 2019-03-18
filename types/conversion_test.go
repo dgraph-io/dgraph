@@ -79,6 +79,36 @@ func TestSameConversionDateTime(t *testing.T) {
 	}
 }
 
+func TestConversionEmpty(t *testing.T) {
+	tests := []struct {
+		in, out Val
+	}{
+		{in: Val{Tid: BinaryID, Value: []byte{}},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: BinaryID, Value: bs("")},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: BinaryID, Value: []byte{}}},
+		{in: Val{Tid: StringID, Value: bs("")},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: StringID, Value: ""}},
+		{in: Val{Tid: DefaultID, Value: bs("")},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: DefaultID, Value: ""}},
+		{in: Val{Tid: DateTimeID, Value: bs("")},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: DateTimeID, Value: []byte{}},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+	}
+	for _, tc := range tests {
+		out, err := Convert(tc.in, tc.out.Tid)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
+	}
+}
+
 func TestConvertToDefault(t *testing.T) {
 	tests := []struct {
 		in  Val
