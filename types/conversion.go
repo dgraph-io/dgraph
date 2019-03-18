@@ -252,8 +252,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case DateTimeID:
 		{
 			var t time.Time
-			if err := t.UnmarshalBinary(data); err != nil {
-				return to, err
+			// We must inverse the binary->datetime for zero-time values.
+			if !bytes.Equal(data, []byte("")) {
+				if err := t.UnmarshalBinary(data); err != nil {
+					return to, err
+				}
 			}
 			// NOTE: when converting datetime values to anything else, we must
 			// check for zero-time value and return the zero value of the new type.
