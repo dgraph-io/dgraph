@@ -81,6 +81,9 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 		sch, ok = s.m[de.Attr]
 		if !ok {
 			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
+			if objectIsUID {
+				sch.List = true
+			}
 			s.m[de.Attr] = sch
 		}
 		s.Unlock()
