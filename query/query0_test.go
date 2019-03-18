@@ -1803,6 +1803,27 @@ func TestDefaultValueVar2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"data":[]}}`, js)
 }
 
+func TestNonFlattenedResponse(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name@en, "Baz Luhrmann")) {
+			uid
+			director.film {
+				name@en	
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[
+		{"uid":"0x2af8", "director.film": [
+			{"name@en": "Strictly Ballroom"},
+			{"name@en": "Puccini: La boheme (Sydney Opera)"},
+			{"name@en": "No. 5 the film"}
+		]}
+	]}}`, js)
+
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {

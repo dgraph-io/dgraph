@@ -682,7 +682,10 @@ func TestHasFuncAtRoot2(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name@en":"Alex"},{"name@en":"Amit"},{"name@en":"Andrew"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name@en":"Alex"},{"name@en":"Amit"},{"name@en":"Andrew"},
+		{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},
+		{"name@en":"Artem Tkachenko"},{"name@en":"Baz Luhrmann"},{"name@en":"Strictly Ballroom"},
+		{"name@en":"Puccini: La boheme (Sydney Opera)"}, {"name@en":"No. 5 the film"}]}}`, js)
 }
 
 func TestMathVarCrash(t *testing.T) {
