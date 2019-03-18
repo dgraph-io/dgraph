@@ -1869,6 +1869,19 @@ func TestFilterRegex16(t *testing.T) {
 		js)
 }
 
+func TestFilterRegex17(t *testing.T) {
+	query := `
+		{
+			me(func:regexp(name, "")) {
+				name
+			}
+		}
+	`
+	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function 'regexp' requires 2 arguments,")
+}
+
 func TestTypeFunction(t *testing.T) {
 	query := `
 		{

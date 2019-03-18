@@ -383,10 +383,6 @@ func ResetAcl() {
 		return nil
 	}
 
-	aclCache = &AclCache{
-		predPerms:      make(map[string]map[string]int32),
-		predRegexRules: make([]*PredRegexRule, 0),
-	}
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
