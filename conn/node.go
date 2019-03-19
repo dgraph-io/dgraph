@@ -36,6 +36,7 @@ import (
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
@@ -144,7 +145,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		confChanges: make(map[uint64]chan error),
 		messages:    make(chan sendmsg, 100),
 		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq),
+		requestCh:   make(chan linReadReq, 100),
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -548,21 +549,29 @@ type linReadReq struct {
 var errReadIndex = x.Errorf("Cannot get linearized read (time expired or no configured leader)")
 
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
-	indexCh := make(chan uint64, 1)
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "WaitLinearizableRead")
 
+	indexCh := make(chan uint64, 1)
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
+		span.Annotate(nil, "Pushed to requestCh")
 	case <-ctx.Done():
+		span.Annotate(nil, "Context expired")
 		return ctx.Err()
 	}
 
 	select {
 	case index := <-indexCh:
+		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
 		}
-		return n.Applied.WaitForMark(ctx, index)
+		err := n.Applied.WaitForMark(ctx, index)
+		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
+		return err
 	case <-ctx.Done():
+		span.Annotate(nil, "Context expired")
 		return ctx.Err()
 	}
 }
@@ -588,6 +597,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
+				glog.V(1).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
 				goto again
 			}
 			return rs.Index, nil
