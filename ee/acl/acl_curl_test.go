@@ -75,8 +75,8 @@ func TestCurlAuthorization(t *testing.T) {
 	// sleep long enough (longer than 10s, the access JWT TTL defined in the docker-compose.yml
 	// in this directory) for the accessJwt to expire, in order to test auto login through refresh
 	// JWT
-	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
-	time.Sleep(12 * time.Second)
+	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
+	time.Sleep(4 * time.Second)
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
 		failMsg:    "Token is expired",
@@ -101,9 +101,9 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	createGroupAndAcls(t, unusedGroup, false)
-	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
-	time.Sleep(35 * time.Second)
+	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 	verifyCurlCmd(t, queryArgs(), &FailureConfig{
 		shouldFail: true,
 		failMsg:    "Token is expired",
@@ -130,8 +130,8 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 
 	createGroupAndAcls(t, devGroup, true)
-	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
-	time.Sleep(35 * time.Second)
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 	// refresh the jwts again
 	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,

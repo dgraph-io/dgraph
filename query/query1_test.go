@@ -682,7 +682,10 @@ func TestHasFuncAtRoot2(t *testing.T) {
 	`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name@en":"Alex"},{"name@en":"Amit"},{"name@en":"Andrew"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name@en":"Alex"},{"name@en":"Amit"},{"name@en":"Andrew"},
+		{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},
+		{"name@en":"Artem Tkachenko"},{"name@en":"Baz Luhrmann"},{"name@en":"Strictly Ballroom"},
+		{"name@en":"Puccini: La boheme (Sydney Opera)"}, {"name@en":"No. 5 the film"}]}}`, js)
 }
 
 func TestMathVarCrash(t *testing.T) {
@@ -1299,18 +1302,45 @@ func TestMathCeil2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }
 
-func TestAppendDummyValuesPanic(t *testing.T) {
-	// This is a fix for #1359. We should check that SrcUIDs is not nil before accessing Uids.
-
-	query := `
-	{
-		n(func:ge(uid, 0)) {
-			count(uid)
+func TestUidAttr(t *testing.T) {
+	tests := []struct {
+		in, out, failure string
+	}{
+		{in: `{q(func:ge(uid, 1)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:eq(uid, 2)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:lt(uid, 3)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:has(uid)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:anyoftext(uid, "")) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:alloftext(uid, "")) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:regexp(uid)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:match(uid, "", 8)) { uid }}`,
+			failure: `Argument cannot be "uid`},
+		{in: `{q(func:has(name)) @filter(uid_in(uid, 0x1)) { uid }}`,
+			failure: `Argument cannot be "uid"`},
+		{in: `{q(func:uid(0x1)) { checkpwd(uid, "") }}`,
+			failure: `Argument cannot be "uid"`},
+		{in: `{q(func:uid(0x1)) { uid }}`,
+			out: `{"data":{"q":[{"uid":"0x1"}]}}`},
+		{in: `{q(func:eq(name, "uid")) { uid }}`,
+			out: `{"data":{"q":[]}}`},
+	}
+	for _, tc := range tests {
+		js, err := processQuery(t, context.Background(), tc.in)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.failure)
+		} else {
+			require.NoError(t, err)
+			require.JSONEq(t, tc.out, js)
 		}
-	}`
-	_, err := processQuery(t, context.Background(), query)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), `Argument cannot be "uid"`)
+	}
 }
 
 func TestMultipleValueFilter(t *testing.T) {

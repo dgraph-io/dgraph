@@ -311,6 +311,10 @@ func populateCluster() {
 		<10005> <name> "Bob" .
 		<10006> <name> "Colin" .
 		<10007> <name> "Elizabeth" .
+		<11000> <name@en> "Baz Luhrmann" .
+		<11001> <name@en> "Strictly Ballroom" .
+		<11002> <name@en> "Puccini: La boheme (Sydney Opera)" .
+		<11003> <name@en> "No. 5 the film" .
 
 		<1> <full_name> "Michonne's large name for hashing" .
 
@@ -481,6 +485,10 @@ func populateCluster() {
 
 		<2> <enemy> <3> .
 		<2> <enemy> <4> .
+
+		<11000> <director.film> <11001> .
+		<11000> <director.film> <11002> .
+		<11000> <director.film> <11003> .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

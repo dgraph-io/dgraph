@@ -48,6 +48,10 @@ function FmtTime {
                                       printf "%ds" $secs
 }
 
+function IsCi {
+    [[ ! -z "$TEAMCITY_VERSION" ]]
+}
+
 function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
     touch $CUSTOM_CLUSTER_TESTS
@@ -69,6 +73,10 @@ function FindDefaultClusterTests {
 function Run {
     set -o pipefail
     echo -en "...\r"
+    if IsCi; then
+        go test -v ${GO_TEST_OPTS[*]} $@ | go-test-teamcity
+        return
+    fi
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='ne:mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='ne:mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
@@ -76,11 +84,14 @@ function Run {
 }
 
 function RunCmd {
+    IsCi && echo "##teamcity[testStarted name='$1' captureStandardOutput='true']"
     if eval "$@"; then
         echo -e "\e[1;32mok $1\e[0m"
+         IsCi && echo "##teamcity[testFinished name='$1']"
         return 0
     else
         echo -e "\e[1;31mfail $1\e[0m"
+        IsCi && echo "##teamcity[testFailed name='$1']"
         return 1
     fi
 }

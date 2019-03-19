@@ -78,7 +78,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16  --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
 
   dg2:
     image: dgraph/dgraph:latest
@@ -101,7 +101,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
 
   dg3:
     image: dgraph/dgraph:latest
@@ -124,7 +124,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
   dg4:
     image: dgraph/dgraph:latest
     container_name: bank-dg4
@@ -146,7 +146,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
+    command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5080 -o 104 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
   dg5:
     image: dgraph/dgraph:latest
     container_name: bank-dg5
@@ -168,7 +168,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
+    command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5080 -o 105 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
   dg6:
     image: dgraph/dgraph:latest
     container_name: bank-dg6
@@ -190,4 +190,4 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=dg6:7186 --lru_mb=1024 --zero=zero1:5080 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 10s
+    command: /gobin/dgraph alpha --my=dg6:7186 --lru_mb=1024 --zero=zero1:5080 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
