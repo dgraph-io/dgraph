@@ -102,6 +102,10 @@ func TestReservedPredicates(t *testing.T) {
 }
 
 func TestAuthorization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping because -short=true")
+	}
+
 	glog.Infof("testing with port 9180")
 	dg1 := z.DgraphClientWithGroot(":9180")
 	testAuthorization(t, dg1)
@@ -126,9 +130,9 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
 	createGroupAndAcls(t, unusedGroup, false)
-	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
-	time.Sleep(35 * time.Second)
+	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 
 	// now all these operations should fail since there are rules defined on the unusedGroup
 	queryPredicateWithUserAccount(t, dg, true)
@@ -137,19 +141,19 @@ func testAuthorization(t *testing.T, dg *dgo.Dgraph) {
 	// create the dev group and add the user to it
 	createGroupAndAcls(t, devGroup, true)
 
-	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
-	time.Sleep(35 * time.Second)
+	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 
 	// now the operations should succeed again through the devGroup
 	queryPredicateWithUserAccount(t, dg, false)
 	// sleep long enough (10s per the docker-compose.yml)
 	// for the accessJwt to expire in order to test auto login through refresh jwt
-	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
-	time.Sleep(12 * time.Second)
+	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
+	time.Sleep(4 * time.Second)
 	mutatePredicateWithUserAccount(t, dg, false)
-	glog.Infof("Sleeping for 12 seconds for accessJwt to expire")
-	time.Sleep(12 * time.Second)
+	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
+	time.Sleep(4 * time.Second)
 	alterPredicateWithUserAccount(t, dg, false)
 }
 
@@ -169,7 +173,15 @@ var query = fmt.Sprintf(`
 
 func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
+
+	// Test that alter requests are allowed if the new update is the same as
+	// the initial update for a reserved predicate.
 	err := dg.Alter(ctx, &api.Operation{
+		Schema: "dgraph.xid: string @index(exact) @upsert .",
+	})
+	require.NoError(t, err)
+
+	err = dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.xid: int .",
 	})
 	require.Error(t, err)
@@ -196,7 +208,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 	// login with alice's account
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	txn = dg.NewTxn()
 	_, err := txn.Query(ctx, query)
 
 	if shouldFail {
@@ -248,6 +259,9 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
+	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 
 	// create some data, e.g. user with name alice
 	resetUser(t)
@@ -327,6 +341,10 @@ func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool) {
 }
 
 func TestPredicateRegex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping because -short=true")
+	}
+
 	glog.Infof("testing with port 9180")
 	dg := z.DgraphClientWithGroot(":9180")
 	createAccountAndData(t, dg)
@@ -340,9 +358,9 @@ func TestPredicateRegex(t *testing.T) {
 	alterPredicateWithUserAccount(t, dg, false)
 	createGroupAndAcls(t, unusedGroup, false)
 
-	// wait for 35 seconds to ensure the new acl have reached all acl caches
-	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
-	time.Sleep(35 * time.Second)
+	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 	// the operations should all fail when there is a rule defined, but the current user is not
 	// allowed
 	queryPredicateWithUserAccount(t, dg, true)
@@ -390,8 +408,8 @@ func TestPredicateRegex(t *testing.T) {
 			predRegex, devGroup, string(errOutput))
 	}
 
-	glog.Infof("Sleeping for 35 seconds for acl caches to be refreshed")
-	time.Sleep(35 * time.Second)
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	// the alter operation should still fail since the regex pred does not have the Modify

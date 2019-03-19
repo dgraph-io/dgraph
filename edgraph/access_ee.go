@@ -288,7 +288,7 @@ func RefreshAcls(closer *y.Closer) {
 		return
 	}
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(Config.AclRefreshInterval)
 	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
@@ -383,10 +383,6 @@ func ResetAcl() {
 		return nil
 	}
 
-	aclCache = &AclCache{
-		predPerms:      make(map[string]map[string]int32),
-		predRegexRules: make([]*PredRegexRule, 0),
-	}
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

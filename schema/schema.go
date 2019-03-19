@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -456,6 +457,24 @@ func InitialSchema() []*pb.SchemaUpdate {
 	}
 
 	return initialSchema
+}
+
+// IsReservedPredicateChanged returns true if the initial update for the reserved
+// predicate pred is different than the passed update.
+func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
+	// Return false for non-reserved predicates.
+	if !x.IsReservedPredicate(pred) {
+		return false
+	}
+
+	initialSchema := InitialSchema()
+	for _, original := range initialSchema {
+		if original.Predicate != pred {
+			continue
+		}
+		return !proto.Equal(original, update)
+	}
+	return true
 }
 
 func reset() {

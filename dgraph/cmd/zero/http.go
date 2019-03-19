@@ -155,6 +155,9 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 
 	groupId, ok := intFromQueryParam(w, r, "group")
 	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, fmt.Sprintf(
+			"Query parameter 'group' should contain a valid integer."))
 		return
 	}
 	dstGroup := uint32(groupId)

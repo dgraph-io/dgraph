@@ -51,6 +51,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		return ctx.Err()
 	}
 
+	if start.UnknownAttr {
+		return nil
+	}
+
 	// Add children back and expand if necessary
 	if exec, err = expandChildren(ctx, start, startChildren); err != nil {
 		return err
@@ -90,6 +94,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 
 		for _, sg := range exec {
+			if sg.UnknownAttr {
+				continue
+			}
+
 			if len(sg.Filters) > 0 {
 				// We need to do this in case we had some filters.
 				sg.updateUidMatrix()
@@ -126,6 +134,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		var out []*SubGraph
 		var exp []*SubGraph
 		for _, sg := range exec {
+			if sg.UnknownAttr == true {
+				continue
+			}
 			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}

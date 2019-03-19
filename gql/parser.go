@@ -948,7 +948,7 @@ func parseSchemaFields(it *lex.ItemIterator, s *pb.SchemaRequest) error {
 			return item.Errorf("Invalid schema block.")
 		}
 	}
-	return it.Errorf("Expecting }  to end fields list, but none was found")
+	return it.Errorf("Expecting } to end fields list, but none was found")
 }
 
 func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
@@ -1596,18 +1596,6 @@ L:
 				return nil, err
 			}
 			val += v
-
-			if function.Name != "eq" {
-				switch {
-				// allow eq(attr, "")
-				case val == "":
-					return nil, itemInFunc.Errorf("Empty argument received")
-
-				// allow value of "uid" - issue#2827
-				case val == "uid":
-					return nil, itemInFunc.Errorf("Argument cannot be %q", val)
-				}
-			}
 
 			if isDollar {
 				val = "$" + val

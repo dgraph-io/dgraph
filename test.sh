@@ -8,7 +8,7 @@ readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
-GO_TEST_OPTS=( "-short=true" )
+GO_TEST_OPTS=( )
 TEST_FAILED=0
 TEST_SET="unit"
 BUILD_TAGS=
@@ -36,7 +36,6 @@ notes:
     Tests are always run with -short=true."
 }
 
-
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
 }
@@ -47,6 +46,10 @@ function FmtTime {
     [[ $hrs -gt 0 ]]               && printf "%dh " $hrs
     [[ $hrs -gt 0 || $min -gt 0 ]] && printf "%dm " $min
                                       printf "%ds" $secs
+}
+
+function IsCi {
+    [[ ! -z "$TEAMCITY_VERSION" ]]
 }
 
 function FindCustomClusterTests {
@@ -70,6 +73,10 @@ function FindDefaultClusterTests {
 function Run {
     set -o pipefail
     echo -en "...\r"
+    if IsCi; then
+        go test -v ${GO_TEST_OPTS[*]} $@ | go-test-teamcity
+        return
+    fi
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='ne:mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='ne:mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
@@ -77,11 +84,14 @@ function Run {
 }
 
 function RunCmd {
+    IsCi && echo "##teamcity[testStarted name='$1' captureStandardOutput='true']"
     if eval "$@"; then
         echo -e "\e[1;32mok $1\e[0m"
+         IsCi && echo "##teamcity[testFinished name='$1']"
         return 0
     else
         echo -e "\e[1;31mfail $1\e[0m"
+        IsCi && echo "##teamcity[testFailed name='$1']"
         return 1
     fi
 }
@@ -141,6 +151,7 @@ if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
     if [[ $TEST_SET == unit ]]; then
         Info "Running only unit tests"
+        GO_TEST_OPTS+=( "-short=true" )
     fi
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
@@ -155,6 +166,9 @@ fi
 # assemble list of tests before executing any
 FindCustomClusterTests
 FindDefaultClusterTests
+
+# abort all tests on Ctrl-C, not just the current one
+trap "echo >&2 SIGINT ; exit 2" SIGINT
 
 START_TIME=$(date +%s)
 

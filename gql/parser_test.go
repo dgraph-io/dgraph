@@ -4302,33 +4302,6 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 	require.Contains(t, err.Error(), "Invalid usage of '@' in function argument")
 }
 
-func TestParseUidAsArgument(t *testing.T) {
-	// This is a fix for #1655 and #1656
-	query := `
-		{
-			q(func: gt(uid, 0)) {
-				uid
-			}
-		}
-	`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Argument cannot be \"uid\"")
-}
-
-func TestParseUidAsValue(t *testing.T) {
-	// issue #2827
-	query := `
-		{
-			q(func: eq(name, "uid")) {
-				uid
-			}
-		}
-	`
-	_, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-}
-
 func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
