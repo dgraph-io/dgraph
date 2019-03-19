@@ -208,7 +208,6 @@ func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool
 	// login with alice's account
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	txn = dg.NewTxn()
 	_, err := txn.Query(ctx, query)
 
 	if shouldFail {
@@ -260,6 +259,9 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{
 		Schema: fmt.Sprintf(`%s: string @index(exact) .`, predicateToRead),
 	}))
+	// wait for 6 seconds to ensure the new acl have reached all acl caches
+	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
+	time.Sleep(6 * time.Second)
 
 	// create some data, e.g. user with name alice
 	resetUser(t)
