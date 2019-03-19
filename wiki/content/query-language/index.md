@@ -2093,7 +2093,7 @@ pass: password .
 ```
 {
   set {
-    <0x123> <name> "Password Example"
+    <0x123> <name> "Password Example" .
     <0x123> <pass> "ThePassword" .
   }
 }
@@ -2112,16 +2112,39 @@ to check a password:
 output:
 ```
 {
-  "check": [
-    {
-      "name": "Password Example",
-      "pass": [
-        {
-          "checkpwd": true
-        }
-      ]
-    }
-  ]
+  "data": {
+    "check": [
+      {
+        "name": "Password Example",
+        "checkpwd(pass)": true
+      }
+    ]
+  }
+}
+```
+
+You can also use alias with password type.
+
+```
+{
+  check(func: uid(0x123)) {
+    name
+    secret: checkpwd(pass, "ThePassword")
+  }
+}
+```
+
+output:
+```
+{
+  "data": {
+    "check": [
+      {
+        "name": "Password Example",
+        "secret": true
+      }
+    ]
+  }
 }
 ```
 
