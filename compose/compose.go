@@ -213,7 +213,7 @@ func getAlpha(idx int) Service {
 	if opts.EnterpriseMode {
 		svc.Command += " --enterprise_features"
 		if opts.AclSecret != "" {
-			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 10s"
+			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
 			svc.Volumes = append(svc.Volumes, Volume{
 				Type:     "bind",
 				Source:   opts.AclSecret,

@@ -2129,7 +2129,7 @@ pass: password .
 ```
 {
   set {
-    <0x123> <name> "Password Example"
+    <0x123> <name> "Password Example" .
     <0x123> <pass> "ThePassword" .
   }
 }
@@ -2148,16 +2148,39 @@ to check a password:
 output:
 ```
 {
-  "check": [
-    {
-      "name": "Password Example",
-      "pass": [
-        {
-          "checkpwd": true
-        }
-      ]
-    }
-  ]
+  "data": {
+    "check": [
+      {
+        "name": "Password Example",
+        "checkpwd(pass)": true
+      }
+    ]
+  }
+}
+```
+
+You can also use alias with password type.
+
+```
+{
+  check(func: uid(0x123)) {
+    name
+    secret: checkpwd(pass, "ThePassword")
+  }
+}
+```
+
+output:
+```
+{
+  "data": {
+    "check": [
+      {
+        "name": "Password Example",
+        "secret": true
+      }
+    ]
+  }
 }
 ```
 
@@ -2878,8 +2901,9 @@ Some points to keep in mind while using recurse queries are:
 - You can specify only one level of predicates after root. These would be traversed recursively. Both scalar and entity-nodes are treated similarly.
 - Only one recurse block is advised per query.
 - Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filters, limit results using pagination, or provide a depth parameter at root as shown in the example above.
-- Loop parameter can be set to false, in which case paths which lead to a loops would be ignored
+- The `loop` parameter can be set to false, in which case paths which lead to a loop would be ignored
   while traversing.
+- If not specified, the value of the `loop` parameter defaults to false.
 
 
 ## Fragments

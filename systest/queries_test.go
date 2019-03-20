@@ -671,10 +671,6 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			out: `{"q":[]}`,
 		},
 		{
-			in:      `{q(func:match(term, "", 8)) {term}}`,
-			failure: `Empty argument received`,
-		},
-		{
 			in:      `{q(func:match(name, "someone", 8)) {name}}`,
 			failure: `Attribute name is not indexed with type trigram`,
 		},

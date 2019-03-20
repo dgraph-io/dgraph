@@ -187,48 +187,58 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	return &api.Payload{}, err
 }
 
-func (w *RaftServer) RaftMessage(ctx context.Context,
-	batch *pb.RaftBatch) (*api.Payload, error) {
+func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
+	ctx := server.Context()
 	if ctx.Err() != nil {
-		return &api.Payload{}, ctx.Err()
+		return ctx.Err()
 	}
 
-	rc := batch.GetContext()
-	if rc != nil {
-		n := w.GetNode()
-		if n == nil || n.Raft() == nil {
-			return &api.Payload{}, ErrNoNode
-		}
-		n.Connect(rc.Id, rc.Addr)
+	n := w.GetNode()
+	if n == nil || n.Raft() == nil {
+		return ErrNoNode
 	}
-	if batch.GetPayload() == nil {
-		return &api.Payload{}, nil
-	}
-	data := batch.Payload.Data
 	raft := w.GetNode().Raft()
+	for loop := 1; ; loop++ {
+		batch, err := server.Recv()
+		if err != nil {
+			return err
+		}
+		if loop%1e6 == 0 {
+			glog.V(2).Infof("%d messages received by %#x", loop, n.Id)
+		}
+		if loop == 1 {
+			rc := batch.GetContext()
+			if rc != nil {
+				n.Connect(rc.Id, rc.Addr)
+			}
+		}
+		if batch.Payload == nil {
+			continue
+		}
+		data := batch.Payload.Data
 
-	for idx := 0; idx < len(data); {
-		x.AssertTruef(len(data[idx:]) >= 4,
-			"Slice left of size: %v. Expected at least 4.", len(data[idx:]))
+		for idx := 0; idx < len(data); {
+			x.AssertTruef(len(data[idx:]) >= 4,
+				"Slice left of size: %v. Expected at least 4.", len(data[idx:]))
 
-		sz := int(binary.LittleEndian.Uint32(data[idx : idx+4]))
-		idx += 4
-		msg := raftpb.Message{}
-		if idx+sz > len(data) {
-			return &api.Payload{}, x.Errorf(
-				"Invalid query. Specified size %v overflows slice [%v,%v)\n",
-				sz, idx, len(data))
+			sz := int(binary.LittleEndian.Uint32(data[idx : idx+4]))
+			idx += 4
+			msg := raftpb.Message{}
+			if idx+sz > len(data) {
+				return x.Errorf(
+					"Invalid query. Specified size %v overflows slice [%v,%v)\n",
+					sz, idx, len(data))
+			}
+			if err := msg.Unmarshal(data[idx : idx+sz]); err != nil {
+				x.Check(err)
+			}
+			// This should be done in order, and not via a goroutine.
+			if err := raft.Step(ctx, msg); err != nil {
+				return err
+			}
+			idx += sz
 		}
-		if err := msg.Unmarshal(data[idx : idx+sz]); err != nil {
-			x.Check(err)
-		}
-		// This should be done in order, and not via a goroutine.
-		if err := raft.Step(ctx, msg); err != nil {
-			return &api.Payload{}, err
-		}
-		idx += sz
 	}
-	return &api.Payload{}, nil
 }
 
 // Hello rpc call is used to check connection with other workers after worker
