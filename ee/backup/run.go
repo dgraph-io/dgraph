@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -22,14 +23,16 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 var Restore x.SubCommand
 
 var opt struct {
-	location, pdir string
+	location, pdir, zero string
 }
 
 func init() {
@@ -57,6 +60,9 @@ Source URI parts:
     args - specific arguments that are ok to appear in logs.
 
 The --posting flag sets the posting list parent dir to store the loaded backup files.
+
+Using the --zero flag will update the next timestamp to the version restored. Otherwise, the
+timestamp must be manually updated through Zero's HTTP 'assign' command.
 
 Dgraph backup creates a unique backup object for each node group, and restore will create
 a posting directory 'p' matching the backup group ID. Such that a backup file
@@ -86,25 +92,56 @@ $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgr
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
+	flag.StringVarP(&opt.zero, "zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
 
 func run() error {
+	var (
+		start time.Time
+		zc    pb.ZeroClient
+	)
+
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
+	if opt.zero != "" {
+		zero, err := grpc.Dial(opt.zero,
+			grpc.WithBlock(),
+			grpc.WithInsecure(),
+			grpc.WithTimeout(time.Minute))
+		if err != nil {
+			return x.Errorf("Unable to connect to zero: %s", opt.zero)
+		}
+		zc = pb.NewZeroClient(zero)
+		fmt.Println("Updating Zero timestamp at:", opt.zero)
+	}
 
-	start := time.Now()
-	err := runRestore(opt.pdir, opt.location)
+	start = time.Now()
+	version, err := runRestore(opt.pdir, opt.location)
 	if err != nil {
 		return err
 	}
+	if version == 0 {
+		return x.Errorf("Failed to obtain a restore version")
+	}
+
+	if zc != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+
+		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
+		if err != nil {
+			return err
+		}
+	}
+
 	fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
 	return nil
 }
 
 // runRestore calls badger.Load and tries to load data into a new DB.
-func runRestore(pdir, location string) error {
+func runRestore(pdir, location string) (uint64, error) {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return Load(location, func(r io.Reader, groupId int) error {
