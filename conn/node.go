@@ -582,7 +582,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 	readIndex := func() (uint64, error) {
 		// Read Request can get rejected then we would wait idefinitely on the channel
 		// so have a timeout.
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
 		var activeRctx [8]byte

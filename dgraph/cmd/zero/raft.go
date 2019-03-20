@@ -531,7 +531,8 @@ func (n *node) checkQuorum(closer *y.Closer) {
 	defer ticker.Stop()
 
 	quorum := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Make this timeout 3x the timeout on RunReadIndexLoop.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		ctx, span := otrace.StartSpan(ctx, "Zero.checkQuorum", startOption)
