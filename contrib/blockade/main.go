@@ -41,7 +41,7 @@ func increment(atLeast int, args string) error {
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 	for _, addr := range addrs {
 		go func(addr string) {
-			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s %s", addr, args))
+			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s", addr))
 		}(addr)
 	}
 	start := time.Now()
@@ -82,14 +82,7 @@ func getStatus(zero string) error {
 	return nil
 }
 
-func testCommon(remove, join, incrementArgs string, minAlphasUp int) error {
-	var nodes []string
-	for i := 1; i <= 3; i++ {
-		for j := 1; j <= 3; j++ {
-			nodes = append(nodes, fmt.Sprintf("zero%d dg%d", i, j))
-		}
-	}
-
+func testCommon(remove, join, incrementArgs string, nodes []string, minAlphasUp int) error {
 	fmt.Printf("Nodes: %+v\n", nodes)
 	for _, node := range nodes {
 		if err := getStatus("localhost:6080"); err != nil {
@@ -144,6 +137,13 @@ func runTests() error {
 		}
 	}
 
+	var nodes []string
+	for i := 1; i <= 3; i++ {
+		for j := 1; j <= 3; j++ {
+			nodes = append(nodes, fmt.Sprintf("zero%d dg%d", i, j))
+		}
+	}
+
 	// Setting flaky --all just does not converge. Too many network interruptions.
 	// if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
 	// 	fmt.Printf("Error testFlaky: %v\n", err)
@@ -157,19 +157,19 @@ func runTests() error {
 	// }
 	// fmt.Println("===> Slow TEST: OK")
 
-	if err := testCommon("blockade stop", "blockade start --all", "", 2); err != nil {
+	if err := testCommon("blockade stop", "blockade start --all", "", nodes, 2); err != nil {
 		fmt.Printf("Error testRestart with stop: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST1: OK")
 
-	if err := testCommon("blockade restart", "", "", 3); err != nil {
+	if err := testCommon("blockade restart", "", "", nodes, 3); err != nil {
 		fmt.Printf("Error testRestart with restart: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST2: OK")
 
-	if err := testCommon("blockade partition", "blockade join", "", 2); err != nil {
+	if err := testCommon("blockade partition", "blockade join", "", nodes, 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
 		return err
 	}
