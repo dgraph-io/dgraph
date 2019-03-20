@@ -523,14 +523,21 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 	}
 }
 
+var startOption = otrace.WithSampler(otrace.ProbabilitySampler(0.01))
+
 func (n *node) checkQuorum(closer *y.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	quorum := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Make this timeout 3x the timeout on RunReadIndexLoop.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
+
+		ctx, span := otrace.StartSpan(ctx, "Zero.checkQuorum", startOption)
+		defer span.End()
+		span.Annotatef(nil, "Node id: %d", n.Id)
 
 		if state, err := n.server.latestMembershipState(ctx); err == nil {
 			n.mu.Lock()
@@ -538,9 +545,11 @@ func (n *node) checkQuorum(closer *y.Closer) {
 			n.mu.Unlock()
 			// Also do some connection cleanup.
 			conn.Get().RemoveInvalid(state)
+			span.Annotate(nil, "Updated lastQuorum")
 
 		} else if glog.V(1) {
-			glog.Warningf("Zero node: %#x unable to reach quorum.", n.Id)
+			span.Annotatef(nil, "Got error: %v", err)
+			glog.Warningf("Zero node: %#x unable to reach quorum. Error: %v", n.Id, err)
 		}
 	}
 

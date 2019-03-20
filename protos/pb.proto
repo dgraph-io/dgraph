@@ -403,10 +403,10 @@ message RaftBatch {
 }
 
 service Raft {
-	rpc Heartbeat (api.Payload)   returns (stream api.Payload) {}
-	rpc RaftMessage (RaftBatch)   returns (api.Payload) {}
-	rpc JoinCluster (RaftContext) returns (api.Payload) {}
-	rpc IsPeer (RaftContext)      returns (PeerResponse) {}
+	rpc Heartbeat (api.Payload)        returns (stream api.Payload) {}
+	rpc RaftMessage (stream RaftBatch) returns (api.Payload) {}
+	rpc JoinCluster (RaftContext)      returns (api.Payload) {}
+	rpc IsPeer (RaftContext)           returns (PeerResponse) {}
 }
 
 service Zero {
