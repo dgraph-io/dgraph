@@ -377,15 +377,16 @@ func (n *Node) streamMessages(to uint64, stream *Stream) {
 	const dur = 10 * time.Second
 	deadline := time.Now().Add(dur)
 	var lastLog time.Time
-	// Exit after a thousand tries and let BatchAndSendMessages create another goroutine, if
-	// needed.
+	// Exit after a thousand tries or at least 10s. Let BatchAndSendMessages create another
+	// goroutine, if needed.
 	for i := 0; ; i++ {
 		if err := n.doSendMessage(to, stream.msgCh); err != nil {
 			if time.Since(lastLog) > dur {
-				glog.Warningf("Unable to send message to peer: %#x. Error: %v", to, err)
+				glog.Warningf("Unable to send message to peer: %#x since %v. Error: %v",
+					to, lastLog, err)
 			}
-			// So that we print error only a few times if we are not able to connect.
-			// Otherwise, the log is polluted with multiple errors.
+			// Update lastLog so we print error only a few times if we are not able to connect.
+			// Otherwise, the log is polluted with repeated errors.
 			lastLog = time.Now()
 		}
 		if i >= 1e3 {
