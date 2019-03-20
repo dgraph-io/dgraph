@@ -406,8 +406,12 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	if err != nil {
 		return err
 	}
+
 	c := pb.NewRaftClient(pool.Get())
-	mc, err := c.RaftMessage(context.Background())
+	ctx, span := otrace.StartSpan(context.Background(), fmt.Sprintf("Stream-%d-to-%d", n.Id, to))
+	defer span.End()
+
+	mc, err := c.RaftMessage(ctx)
 	if err != nil {
 		return err
 	}
@@ -425,7 +429,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 			}
 		}
 	}
-	ctx := mc.Context()
+	ctx = mc.Context()
 	for {
 		select {
 		case data := <-msgCh:
@@ -434,7 +438,9 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				Payload: &api.Payload{Data: data},
 			}
 			slurp(batch) // Pick up more entries from msgCh, if present.
+			span.Annotatef(nil, "Sending data. Length: %d", len(batch.Payload.Data))
 			if err := mc.Send(batch); err != nil {
+				span.Annotatef(nil, "Error while mc.Send: %v", err)
 				switch {
 				case strings.Contains(err.Error(), "TransientFailure"):
 					glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
