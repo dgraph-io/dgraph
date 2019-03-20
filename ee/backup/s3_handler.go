@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -161,12 +162,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 		}
 		if lastManifest != "" {
 			var m Manifest
-			reader, err := mc.GetObject(h.bucketName, lastManifest, minio.GetObjectOptions{})
-			if err != nil {
-				return err
-			}
-			defer reader.Close()
-			if err = json.NewDecoder(reader).Decode(&m); err != nil {
+			if err := h.readManifest(mc, lastManifest, &m); err != nil {
 				return err
 			}
 			// No new changes since last check
@@ -196,56 +192,130 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 	return nil
 }
 
-// Load creates a new session, scans for backup objects in a bucket, then tries to
-// load any backup objects found.
-// Returns nil on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, fn loadFn) error {
-	var objects []string
-
-	mc, err := h.setup(uri)
+// readManifest reads a manifest file at path using the handler.
+// Returns nil on success, otherwise an error.
+func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) error {
+	reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
+	m.Lock()
+	defer m.Unlock()
+	return json.NewDecoder(reader).Decode(m)
+}
 
-	done := make(chan struct{})
-	defer close(done)
-	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-		if strings.HasSuffix(object.Key, ".backup") {
+type result struct {
+	object string
+	m      *Manifest
+	err    error
+}
+
+// Load creates a new session, scans for backup objects in a bucket, then tries to
+// load any backup objects found.
+// Returns nil and the maximum Ts version on success, error otherwise.
+func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
+	mc, err := h.setup(uri)
+	if err != nil {
+		return 0, err
+	}
+
+	const N = 10
+	batchReadManifests := func(objects []string) (map[string]*Manifest, error) {
+		rc := make(chan result)
+		var wg sync.WaitGroup
+		for i, o := range objects {
+			go func() {
+				defer wg.Done()
+				var m Manifest
+				err := h.readManifest(mc, o, &m)
+				rc <- result{o, &m, err}
+			}()
+			if i%N == 0 {
+				wg.Wait()
+			}
+		}
+		go func() {
+			wg.Wait()
+			close(rc)
+		}()
+
+		m := make(map[string]*Manifest)
+		for r := range rc {
+			if r.err != nil {
+				return nil, r.err
+			}
+			m[r.object] = r.m
+		}
+		return m, nil
+	}
+
+	var objects []string
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	suffix := "/" + backupManifest
+	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+		if strings.HasSuffix(object.Key, suffix) {
 			objects = append(objects, object.Key)
 		}
 	}
 	if len(objects) == 0 {
-		return x.Errorf("No backup files found in %q", uri.String())
+		return 0, x.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(objects)
-	if glog.V(2) {
-		fmt.Printf("Loading from %s: %v\n", uri.Scheme, objects)
+	if glog.V(3) {
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, objects)
 	}
 
-	for _, object := range objects {
-		_, groupId, err := getInfo(object)
-		if err != nil {
-			fmt.Printf("Restore: skip invalid backup name format: %q\n", object)
+	manifests, err := batchReadManifests(objects)
+	if err != nil {
+		return 0, err
+	}
+
+	// version is returned with the max manifest version found.
+	var version uint64
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file,
+	// otherwise this is a failure and the user must remedy.
+	for _, manifest := range objects {
+		m, ok := manifests[manifest]
+		if !ok {
+			return 0, x.Errorf("Manifest not found: %s", manifest)
+		}
+		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
+			if glog.V(2) {
+				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, m)
+			}
 			continue
 		}
-		reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
-		if err != nil {
-			return x.Errorf("Restore closing due to error: %s", err)
+
+		// Load the backup for each group in manifest.
+		path := filepath.Dir(manifest)
+		for _, groupId := range m.Groups {
+			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
+			if err != nil {
+				return 0, x.Errorf("Restore closing due to error: %s", err)
+			}
+			defer reader.Close()
+			st, err := reader.Stat()
+			if err != nil {
+				return 0, x.Errorf("Restore got an unexpected error: %s", err)
+			}
+			if st.Size <= 0 {
+				return 0, x.Errorf("Restore remote object is empty or inaccessible: %s", object)
+			}
+			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
+			if err = fn(reader, int(groupId)); err != nil {
+				return 0, err
+			}
 		}
-		defer reader.Close()
-		st, err := reader.Stat()
-		if err != nil {
-			return x.Errorf("Restore got an unexpected error: %s", err)
-		}
-		if st.Size <= 0 {
-			return x.Errorf("Restore remote object is empty or inaccessible: %s", object)
-		}
-		fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
-		if err = fn(reader, groupId); err != nil {
-			return err
-		}
+		version = m.Version
 	}
-	return nil
+	return version, nil
 }
 
 // upload will block until it's done or an error occurs.
