@@ -33,15 +33,15 @@ func partition(instance string) error {
 	return run(ctxb, fmt.Sprintf("blockade partition %s", instance))
 }
 
-func increment(atLeast int) error {
+func increment(atLeast int, args string) error {
 	errCh := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(ctxb, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctxb, 1*time.Minute)
 	defer cancel()
 
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 	for _, addr := range addrs {
 		go func(addr string) {
-			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s", addr))
+			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s %s", addr, args))
 		}(addr)
 	}
 	start := time.Now()
@@ -82,7 +82,7 @@ func getStatus(zero string) error {
 	return nil
 }
 
-func testCommon(remove, join string, minAlphasUp int) error {
+func testCommon(remove, join, incrementArgs string, minAlphasUp int) error {
 	var nodes []string
 	for i := 1; i <= 3; i++ {
 		for j := 1; j <= 3; j++ {
@@ -102,7 +102,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 		if err := run(ctxb, "blockade status"); err != nil {
 			return err
 		}
-		if err := increment(minAlphasUp); err != nil {
+		if err := increment(minAlphasUp, incrementArgs); err != nil {
 			return err
 		}
 		// Then join, if available.
@@ -112,7 +112,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 		if err := run(ctxb, join); err != nil {
 			return err
 		}
-		if err := increment(3); err != nil {
+		if err := increment(3, incrementArgs); err != nil {
 			return err
 		}
 	}
@@ -157,19 +157,19 @@ func runTests() error {
 	// }
 	// fmt.Println("===> Slow TEST: OK")
 
-	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
+	if err := testCommon("blockade stop", "blockade start --all", "", 2); err != nil {
 		fmt.Printf("Error testRestart with stop: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST1: OK")
 
-	if err := testCommon("blockade restart", "", 3); err != nil {
+	if err := testCommon("blockade restart", "", "", 3); err != nil {
 		fmt.Printf("Error testRestart with restart: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST2: OK")
 
-	if err := testCommon("blockade partition", "blockade join", 2); err != nil {
+	if err := testCommon("blockade partition", "blockade join", "", 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
 		return err
 	}
