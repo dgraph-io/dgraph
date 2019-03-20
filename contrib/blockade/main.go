@@ -17,7 +17,13 @@ var ctxb = context.Background()
 
 func run(ctx context.Context, command string) error {
 	args := strings.Split(command, " ")
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	var checkedArgs  []string
+	for _, arg := range args {
+		if len(arg) > 0 {
+			checkedArgs = append(checkedArgs, arg)
+		}
+	}
+	cmd := exec.CommandContext(ctx, checkedArgs[0], checkedArgs[1:]...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -41,7 +47,7 @@ func increment(atLeast int, args string) error {
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 	for _, addr := range addrs {
 		go func(addr string) {
-			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s", addr))
+			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s %s", addr, args))
 		}(addr)
 	}
 	start := time.Now()
