@@ -303,7 +303,7 @@ func (n *Node) PastLife() (uint64, bool, error) {
 }
 
 const (
-	messageBatchSoftLimit = 10000000
+	messageBatchSoftLimit = 10e6
 )
 
 type Stream struct {
@@ -412,6 +412,19 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 		return err
 	}
 
+	slurp := func(batch *pb.RaftBatch) {
+		for {
+			if len(batch.Payload.Data) > messageBatchSoftLimit {
+				return
+			}
+			select {
+			case data := <-msgCh:
+				batch.Payload.Data = append(batch.Payload.Data, data...)
+			default:
+				return
+			}
+		}
+	}
 	ctx := mc.Context()
 	for {
 		select {
@@ -420,6 +433,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				Context: n.RaftContext,
 				Payload: &api.Payload{Data: data},
 			}
+			slurp(batch) // Pick up more entries from msgCh, if present.
 			if err := mc.Send(batch); err != nil {
 				switch {
 				case strings.Contains(err.Error(), "TransientFailure"):
