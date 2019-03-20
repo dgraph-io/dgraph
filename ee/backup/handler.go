@@ -114,18 +114,20 @@ func getHandler(scheme string) handler {
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
 func (r *Request) newHandler() (handler, error) {
+	var h handler
+
 	uri, err := url.Parse(r.Backup.Location)
 	if err != nil {
 		return nil, err
 	}
 
 	// find handler for this URI scheme
-	h := getHandler(uri.Scheme)
+	h = getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unable to handle url: %v", uri)
+		return nil, x.Errorf("Unable to handle url: %s", uri)
 	}
 
-	if err := h.Create(uri, r); err != nil {
+	if err = h.Create(uri, r); err != nil {
 		return nil, err
 	}
 	return h, nil
