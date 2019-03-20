@@ -92,7 +92,7 @@ $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgr
 		"Sets the source location URI (required).")
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
-	flag.StringVarP(&opt.zero, "zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
+	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }

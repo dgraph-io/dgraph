@@ -200,8 +200,6 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 		return err
 	}
 	defer reader.Close()
-	m.Lock()
-	defer m.Unlock()
 	return json.NewDecoder(reader).Decode(m)
 }
 

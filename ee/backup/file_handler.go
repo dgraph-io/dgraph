@@ -39,8 +39,6 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 	if err != nil {
 		return err
 	}
-	m.Lock()
-	defer m.Unlock()
 	return json.Unmarshal(b, m)
 }
 
