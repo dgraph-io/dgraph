@@ -55,7 +55,8 @@ func TestRecurseNestedError1(t *testing.T) {
 
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "@recurse queries do not support nested predicates")
+	require.Contains(t, err.Error(),
+		"recurse queries require that all predicates are specified in one level")
 }
 
 func TestRecurseNestedError2(t *testing.T) {
@@ -72,7 +73,8 @@ func TestRecurseNestedError2(t *testing.T) {
 
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "@recurse queries do not support nested predicates")
+	require.Contains(t, err.Error(),
+		"recurse queries require that all predicates are specified in one level")
 }
 
 func TestRecurseQuery(t *testing.T) {

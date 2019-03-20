@@ -201,7 +201,8 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 
 	for _, child := range sg.Children {
 		if len(child.Children) > 0 {
-			return x.Errorf("@recurse queries do not support nested predicates")
+			return x.Errorf(
+				"recurse queries require that all predicates are specified in one level")
 		}
 	}
 
