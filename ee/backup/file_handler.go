@@ -48,7 +48,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 	var dir, path, fileName string
 
 	// check that the path exists and we can access it.
-	if !h.exists(uri.Path) {
+	if !pathExist(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
@@ -102,7 +102,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 // Load uses tries to load any backup files found.
 // Returns nil and the maximum Ts version on success, error otherwise.
 func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
-	if !h.exists(uri.Path) {
+	if !pathExist(uri.Path) {
 		return 0, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
@@ -171,9 +171,9 @@ func (h *fileHandler) Write(b []byte) (int, error) {
 	return h.fp.Write(b)
 }
 
-// Exists checks if a path (file or dir) is found at target.
+// pathExist checks if a path (file or dir) is found at target.
 // Returns true if found, false otherwise.
-func (h *fileHandler) exists(path string) bool {
+func pathExist(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true

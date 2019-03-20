@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -61,8 +62,9 @@ Source URI parts:
 
 The --posting flag sets the posting list parent dir to store the loaded backup files.
 
-Using the --zero flag will update the next timestamp to the version restored. Otherwise, the
-timestamp must be manually updated through Zero's HTTP 'assign' command.
+Using the --zero flag will use a Dgraph Zero address to update the start timestamp using
+the restored version. Otherwise, the timestamp must be manually updated through Zero's HTTP
+'assign' command.
 
 Dgraph backup creates a unique backup object for each node group, and restore will create
 a posting directory 'p' matching the backup group ID. Such that a backup file
@@ -75,6 +77,9 @@ $ dgraph restore -p . -l /var/backups/dgraph
 
 # Restore from S3:
 $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
+
+# Restore from dir and update Ts:
+$ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 
 		`,
 		Args: cobra.NoArgs,
@@ -105,7 +110,9 @@ func run() error {
 
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
+
 	if opt.zero != "" {
+		fmt.Println("Updating Zero timestamp at:", opt.zero)
 		zero, err := grpc.Dial(opt.zero,
 			grpc.WithBlock(),
 			grpc.WithInsecure(),
@@ -114,7 +121,6 @@ func run() error {
 			return x.Errorf("Unable to connect to zero: %s", opt.zero)
 		}
 		zc = pb.NewZeroClient(zero)
-		fmt.Println("Updating Zero timestamp at:", opt.zero)
 	}
 
 	start = time.Now()
@@ -124,6 +130,9 @@ func run() error {
 	}
 	if version == 0 {
 		return x.Errorf("Failed to obtain a restore version")
+	}
+	if glog.V(2) {
+		fmt.Printf("Restore version: %d\n", version)
 	}
 
 	if zc != nil {
@@ -158,7 +167,9 @@ func runRestore(pdir, location string) (uint64, error) {
 			return err
 		}
 		defer db.Close()
-		fmt.Println("Creating new db:", bo.Dir)
+		if !pathExist(bo.Dir) {
+			fmt.Println("Creating new db:", bo.Dir)
+		}
 		return db.Load(r)
 	})
 }
