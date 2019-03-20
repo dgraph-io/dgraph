@@ -90,6 +90,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 
 		for _, sg := range exec {
+			// sg.uidMatrix can be empty. Continue if that is the case.
+			if len(sg.uidMatrix) == 0 {
+				continue
+			}
+
 			if len(sg.Filters) > 0 {
 				// We need to do this in case we had some filters.
 				sg.updateUidMatrix()
