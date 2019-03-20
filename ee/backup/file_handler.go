@@ -32,6 +32,18 @@ type fileHandler struct {
 	fp *os.File
 }
 
+// readManifest reads a manifest file at path using the handler.
+// Returns nil on success, otherwise an error.
+func (h *fileHandler) readManifest(path string, m *Manifest) error {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	m.Lock()
+	defer m.Unlock()
+	return json.Unmarshal(b, m)
+}
+
 // Create prepares the a path to save backup files.
 // Returns error on failure, nil on success.
 func (h *fileHandler) Create(uri *url.URL, req *Request) error {
@@ -48,7 +60,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 		// Walk the path and find the most recent backup.
 		// If we can't find a manifest file, this is a full backup.
 		var lastManifest string
-		suffix := "/" + backupManifest
+		suffix := filepath.Join(string(filepath.Separator), backupManifest)
 		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 			if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
 				lastManifest = path
@@ -58,11 +70,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 		// Found a manifest now we extract the version to use in Backup().
 		if lastManifest != "" {
 			var m Manifest
-			b, err := ioutil.ReadFile(lastManifest)
-			if err != nil {
-				return err
-			}
-			if err = json.Unmarshal(b, &m); err != nil {
+			if err := h.readManifest(lastManifest, &m); err != nil {
 				return err
 			}
 			// No new changes since last check
@@ -94,42 +102,59 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 }
 
 // Load uses tries to load any backup files found.
-// Returns nil on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
+// Returns nil and the maximum Ts version on success, error otherwise.
+func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	if !h.exists(uri.Path) {
-		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return 0, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// find files and sort.
-	files := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup")
+	// Get a lisst of all the manifest files at the location.
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, suffix)
 	})
-	if len(files) == 0 {
-		return x.Errorf("No backup files found in %q", uri.Path)
+	if len(manifests) == 0 {
+		return 0, x.Errorf("No manifests found at path: %s", uri.Path)
 	}
-	sort.Strings(files)
+	sort.Strings(manifests)
 	if glog.V(3) {
-		fmt.Printf("Loading backup file(s): %v\n", files)
+		fmt.Printf("Found backup manifest(s): %v\n", manifests)
 	}
 
-	for _, file := range files {
-		_, groupId, err := getInfo(file)
-		if err != nil {
+	// version is returned with the max manifest version found.
+	var version uint64
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file,
+	// otherwise this is a failure and the user must remedy.
+	for _, manifest := range manifests {
+		var m Manifest
+		if err := h.readManifest(manifest, &m); err != nil {
+			return 0, err
+		}
+		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip invalid backup name format: %q\n", file)
+				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
 			continue
 		}
-		fp, err := os.Open(file)
-		if err != nil {
-			return x.Errorf("Error opening %q: %s", file, err)
+
+		// Load the backup for each group in manifest.
+		path := filepath.Dir(manifest)
+		for _, groupId := range m.Groups {
+			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			fp, err := os.Open(file)
+			if err != nil {
+				return 0, x.Errorf("Error opening %q: %s", file, err)
+			}
+			defer fp.Close()
+			if err = fn(fp, int(groupId)); err != nil {
+				return 0, err
+			}
 		}
-		defer fp.Close()
-		if err = fn(fp, groupId); err != nil {
-			return err
-		}
+		version = m.Version
 	}
-	return nil
+	return version, nil
 }
 
 func (h *fileHandler) Close() error {
