@@ -603,7 +603,7 @@ func (n *node) Run() {
 
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
-	readStateCh := make(chan raft.ReadState, 10)
+	readStateCh := make(chan raft.ReadState, 100)
 	closer := y.NewCloser(4)
 	defer func() {
 		closer.SignalAndWait()
@@ -626,11 +626,20 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
+			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
+				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
-				readStateCh <- rs
+				select {
+				case readStateCh <- rs:
+				default:
+					// Don't block here.
+				}
 			}
+			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
 
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			span.Annotatef(nil, "Saved to storage")
+
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
@@ -655,6 +664,7 @@ func (n *node) Run() {
 				}
 				n.Applied.Done(entry.Index)
 			}
+			span.Annotatef(nil, "Applied %d CommittedEntries", len(rd.CommittedEntries))
 
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateLeader && !leader {
@@ -670,7 +680,11 @@ func (n *node) Run() {
 			for _, msg := range rd.Messages {
 				n.Send(msg)
 			}
+			span.Annotate(nil, "Sent messages")
+
 			n.Raft().Advance()
+			span.Annotate(nil, "Advanced Raft")
+			span.End()
 		}
 	}
 }
