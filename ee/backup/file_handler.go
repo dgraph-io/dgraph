@@ -130,7 +130,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	for _, manifest := range manifests {
 		var m Manifest
 		if err := h.readManifest(manifest, &m); err != nil {
-			return 0, err
+			return 0, x.Errorf("Error while reading manifests: %v", err)
 		}
 		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {

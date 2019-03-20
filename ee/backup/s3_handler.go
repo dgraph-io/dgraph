@@ -271,7 +271,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 	manifests, err := batchReadManifests(objects)
 	if err != nil {
-		return 0, err
+		return 0, x.Errorf("Error while reading manifests: %v", err)
 	}
 
 	// version is returned with the max manifest version found.
