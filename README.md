@@ -1,6 +1,6 @@
  # gossamer
  
- ## Golang Implementation of Polkadot Runtime Environment  
+ ## Golang Polkadot Runtime Environment Implementation  
 
 [![GoDoc](https://godoc.org/github.com/ChainSafeSystems/gossamer?status.svg)](https://godoc.org/github.com/ChainSafeSystems/gossamer)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ChainSafeSystems/gossamer)](https://goreportcard.com/report/github.com/ChainSafeSystems/gossamer)
