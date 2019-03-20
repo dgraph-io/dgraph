@@ -252,7 +252,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case DateTimeID:
 		{
 			var t time.Time
-			// We must inverse the binary->datetime for zero-time values.
+			// When we use Convert(BinaryID, DateTimeID) to store values if the value is empty,
+			// the conversion yields a zero time value. Here we check if that's the case and skip
+			// marshaling and return the ztv. Then we can handle it better if we need to return it
+			// in a result.
 			if !bytes.Equal(data, []byte("")) {
 				if err := t.UnmarshalBinary(data); err != nil {
 					return to, err
