@@ -13,10 +13,8 @@
 package backup
 
 import (
-	"fmt"
 	"io"
 	"net/url"
-	"path"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -77,7 +75,7 @@ type handler interface {
 	// The URL object is parsed as described in `newHandler`.
 	// The loadFn receives the files as they are processed by a handler, to do the actual
 	// load to DB.
-	Load(*url.URL, loadFn) error
+	Load(*url.URL, loadFn) (uint64, error)
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -133,31 +131,21 @@ func (r *Request) newHandler() (handler, error) {
 	return h, nil
 }
 
-// getInfo scans the file name and returns its the read timestamp and group ID.
-// If the file is not scannable, returns an error.
-// Returns read timestamp and group ID, or an error otherwise.
-func getInfo(file string) (uint64, int, error) {
-	var readTs uint64
-	var groupId int
-	_, err := fmt.Sscanf(path.Base(file), backupNameFmt, &readTs, &groupId)
-	return readTs, groupId, err
-}
-
 // loadFn is a function that will receive the current file being read.
 // A reader and the backup readTs are passed as arguments.
 type loadFn func(io.Reader, int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
-// Returns nil on success, error otherwise.
-func Load(l string, fn loadFn) error {
+// Returns nil and the maximum Ts version on success, error otherwise.
+func Load(l string, fn loadFn) (uint64, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return x.Errorf("Unsupported URI: %v", uri)
+		return 0, x.Errorf("Unsupported URI: %v", uri)
 	}
 
 	return h.Load(uri, fn)
