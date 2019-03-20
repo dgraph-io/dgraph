@@ -17,7 +17,7 @@ var ctxb = context.Background()
 
 func run(ctx context.Context, command string) error {
 	args := strings.Split(command, " ")
-	var checkedArgs  []string
+	var checkedArgs []string
 	for _, arg := range args {
 		if len(arg) > 0 {
 			checkedArgs = append(checkedArgs, arg)
@@ -150,6 +150,11 @@ func runTests() error {
 		}
 	}
 
+	var alphaNodes []string
+	for i := 1; i <= 3; i++ {
+		alphaNodes = append(alphaNodes, fmt.Sprintf("dg%d", i))
+	}
+
 	// Setting flaky --all just does not converge. Too many network interruptions.
 	// if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
 	// 	fmt.Printf("Error testFlaky: %v\n", err)
@@ -180,6 +185,12 @@ func runTests() error {
 		return err
 	}
 	fmt.Println("===> Partition TEST: OK")
+
+	if err := testCommon("blockade partition", "blockade join", "--be", alphaNodes, 3); err != nil {
+		fmt.Printf("Error testPartitionsBestEffort: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Partition best-effort TEST: OK")
 
 	return nil
 }
