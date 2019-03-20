@@ -15,6 +15,7 @@ package backup
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/badger"
@@ -79,7 +80,14 @@ func (r *Request) Process(ctx context.Context) error {
 type Manifest struct {
 	sync.Mutex
 	Version uint64   `json:"version"`
+	ReadTs  uint64   `json:"read_ts"`
 	Groups  []uint32 `json:"groups"`
+}
+
+// GoString implements the GoStringer interface for Manifest.
+func (m *Manifest) GoString() string {
+	return fmt.Sprintf(`Manifest{Version: %d, ReadTs: %d, Groups: %v}`,
+		m.Version, m.ReadTs, m.Groups)
 }
 
 // Complete will finalize a backup by writing the manifest at the backup destination.
@@ -87,15 +95,13 @@ func (r *Request) Complete(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	// handler, err := create(&object{
-	// 	uri:     m.Request.Location,
-	// 	path:    fmt.Sprintf(backupPathFmt, m.Request.UnixTs),
-	// 	name:    backupManifest,
-	// 	version: m.Version,
-	// })
 	handler, err := r.newHandler()
 	if err != nil {
 		return err
+	}
+	// Record the ReadTs from the request.
+	if r.Manifest.ReadTs == 0 {
+		r.Manifest.ReadTs = r.Backup.ReadTs
 	}
 	if err = json.NewEncoder(handler).Encode(r.Manifest); err != nil {
 		return err
