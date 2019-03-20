@@ -218,17 +218,18 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	const N = 10
+	const N = 100
 	batchReadManifests := func(objects []string) (map[string]*Manifest, error) {
-		rc := make(chan result)
+		rc := make(chan result, 1)
 		var wg sync.WaitGroup
 		for i, o := range objects {
-			go func() {
+			wg.Add(1)
+			go func(o string) {
 				defer wg.Done()
 				var m Manifest
 				err := h.readManifest(mc, o, &m)
 				rc <- result{o, &m, err}
-			}()
+			}(o)
 			if i%N == 0 {
 				wg.Wait()
 			}
