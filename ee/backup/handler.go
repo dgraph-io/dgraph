@@ -131,11 +131,11 @@ func (r *Request) newHandler() (handler, error) {
 
 // loadFn is a function that will receive the current file being read.
 // A reader and the backup groupId are passed as arguments.
-type loadFn func(io.Reader, int) error
+type loadFn func(reader io.Reader, groupId int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
 // Returns the maximum Ts version on success, otherwise an error.
-func Load(l string, fn loadFn) (uint64, error) {
+func Load(l string, fn loadFn) (version uint64, err error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return 0, err

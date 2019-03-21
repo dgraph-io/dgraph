@@ -76,7 +76,7 @@ func (r *Request) Process(ctx context.Context) error {
 // Manifest records backup details, these are values used during restore.
 // Version is the maximum version seen.
 // Groups are the IDs of the groups involved.
-// Request is the original backup request.
+// ReadTs is the original backup request timestamp.
 type Manifest struct {
 	sync.Mutex
 	Version uint64   `json:"version"`
