@@ -81,13 +81,10 @@ type List struct {
 	partCache map[uint64]*pb.PostingList
 }
 
-func getNextPartKey(baseKey []byte, nextPartStart uint64) []byte {
-	keyCopy := make([]byte, len(baseKey))
+func getSplitKey(baseKey []byte, startUid uint64) []byte {
+	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
-
-	encNexStart := make([]byte, 8)
-	binary.BigEndian.PutUint64(encNexStart, nextPartStart)
-	keyCopy = append(keyCopy, encNexStart...)
+	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
 	return keyCopy
 }
 
@@ -716,7 +713,8 @@ func (l *List) plsAreEmpty() (bool, error) {
 	for _, startUid := range l.plist.Splits {
 		kv := &bpb.KV{}
 		kv.Version = l.minTs
-		kv.Key = getNextPartKey(l.key, startUid)
+		kv.Key = getSplitKey(l.key, startUid)
+		// TODO: Can be done purely from the cache?
 		plist, err := l.readListPart(startUid)
 		if err != nil {
 			return false, err
@@ -757,7 +755,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	for _, startUid := range l.plist.Splits {
 		kv := &bpb.KV{}
 		kv.Version = l.minTs
-		kv.Key = getNextPartKey(l.key, startUid)
+		kv.Key = getSplitKey(l.key, startUid)
 		plist, err := l.readListPart(startUid)
 		if err != nil {
 			return nil, err
@@ -886,7 +884,7 @@ func (l *List) rollup(readTs uint64) error {
 
 	// Check if the list (or any of it's parts if it's been previously split) have
 	// become too big. Split the list if that is the case.
-	if err := l.splitList(); err != nil {
+	if err := l.splitUpList(); err != nil {
 		return nil
 	}
 
@@ -1146,14 +1144,11 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 	return facets.CopyFacets(p.Facets, param), nil
 }
 
+// readListPart does not use any cache. It directly reads from Badger.
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	if part, ok := l.partCache[startUid]; ok {
-		return part, nil
-	}
-
-	nextKey := getNextPartKey(l.key, startUid)
+	key := getSplitKey(l.key, startUid)
 	txn := pstore.NewTransactionAt(l.minTs, false)
-	item, err := txn.Get(nextKey)
+	item, err := txn.Get(key)
 	if err != nil {
 		return nil, err
 	}
@@ -1164,11 +1159,12 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	return &part, nil
 }
 
-func needsSplit(plist *pb.PostingList) bool {
+func tooBig(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
-func (l *List) splitList() error {
+// TODO: This can accept the generated map of start uid -> postinglist.
+func (l *List) splitUpList() error {
 	l.AssertLock()
 
 	var lists []*pb.PostingList
@@ -1186,7 +1182,7 @@ func (l *List) splitList() error {
 
 	var newLists []*pb.PostingList
 	for _, list := range lists {
-		if needsSplit(list) {
+		if tooBig(list) {
 			splitList := splitPostingList(list)
 			for _, part := range splitList {
 				l.partCache[part.StartUid] = part
