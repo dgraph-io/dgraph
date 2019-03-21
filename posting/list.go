@@ -97,12 +97,19 @@ type PIterator struct {
 	uids []uint64
 	uidx int // Offset into the uids slice
 
-	afterUid    uint64
-	deleteBelow uint64
-	splitIdx    int
+	afterUid uint64
+	splitIdx int
+	// The timestamp of a delete marker in the mutable layer. If this value is greater
+	// than zero, then the immutable posting list should not be traversed.
+	deleteBelowTs uint64
 }
 
-func (it *PIterator) Init(l *List, afterUid, deleteBelow uint64) error {
+func (it *PIterator) Init(l *List, afterUid, deleteBelowTs uint64) error {
+	if deleteBelowTs > 0 && deleteBelowTs <= l.minTs {
+		return fmt.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
+			deleteBelowTs, l.minTs)
+	}
+
 	it.l = l
 	it.splitIdx = it.selectInitialSplit(afterUid)
 	if len(it.l.plist.Splits) > 0 {
@@ -116,7 +123,7 @@ func (it *PIterator) Init(l *List, afterUid, deleteBelow uint64) error {
 	}
 
 	it.afterUid = afterUid
-	it.deleteBelow = deleteBelow
+	it.deleteBelowTs = deleteBelowTs
 
 	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
@@ -163,7 +170,7 @@ func (it *PIterator) moveToNextSplit() error {
 }
 
 func (it *PIterator) Next() error {
-	if it.deleteBelow > 0 {
+	if it.deleteBelowTs > 0 {
 		return nil
 	}
 
@@ -177,7 +184,7 @@ func (it *PIterator) Next() error {
 }
 
 func (it *PIterator) Valid() bool {
-	if it.deleteBelow > 0 {
+	if it.deleteBelowTs > 0 {
 		return false
 	}
 
@@ -539,16 +546,16 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	}
 
 	// First pick up the postings.
-	var deleteBelow uint64
+	var deleteBelowTs uint64
 	var posts []*pb.Posting
 	for startTs, plist := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
 		effectiveTs := effective(startTs, plist.CommitTs)
-		if effectiveTs > deleteBelow {
-			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
+		if effectiveTs > deleteBelowTs {
+			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
 			for _, mpost := range plist.Postings {
 				if hasDeleteAll(mpost) {
-					deleteBelow = effectiveTs
+					deleteBelowTs = effectiveTs
 					continue
 				}
 				posts = append(posts, mpost)
@@ -556,12 +563,12 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 		}
 	}
 
-	if deleteBelow > 0 {
+	if deleteBelowTs > 0 {
 		// There was a delete all marker. So, trim down the list of postings.
 		result := posts[:0]
 		for _, post := range posts {
 			effectiveTs := effective(post.StartTs, post.CommitTs)
-			if effectiveTs < deleteBelow { // Do pick the posts at effectiveTs == deleteBelow.
+			if effectiveTs < deleteBelowTs { // Do pick the posts at effectiveTs == deleteBelowTs.
 				continue
 			}
 			result = append(result, post)
@@ -580,13 +587,13 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 		}
 		return pi.Uid < pj.Uid
 	})
-	return deleteBelow, posts
+	return deleteBelowTs, posts
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
-	deleteBelow, mposts := l.pickPostings(readTs)
+	deleteBelowTs, mposts := l.pickPostings(readTs)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -601,7 +608,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 
 	var mp, pp *pb.Posting
 	var pitr PIterator
-	err := pitr.Init(l, afterUid, deleteBelow)
+	err := pitr.Init(l, afterUid, deleteBelowTs)
 	if err != nil {
 		return err
 	}

@@ -891,12 +891,6 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		commits++
 	}
 
-	kvs, err := ol.Rollup()
-	require.NoError(t, err)
-	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps)
-	require.NoError(t, err)
-
 	return ol, commits
 }
 
