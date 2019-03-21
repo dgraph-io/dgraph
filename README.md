@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/ChainSafeSystems/gossamer)](https://goreportcard.com/report/github.com/ChainSafeSystems/gossamer)
 [![CircleCI](https://circleci.com/gh/ChainSafeSystems/gossamer.svg?style=svg)](https://circleci.com/gh/ChainSafeSystems/gossamer)
 [![Maintainability](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/maintainability)](https://codeclimate.com/github/ChainSafeSystems/gossamer/badges)
-[![Test Coverage](https://api.codeclimate.com/v1/badges/ca3f8ff03a0a9e1cac20/test_coverage)](https://codeclimate.com/github/ChainSafeSystems/gossamer/test_coverage)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/test_coverage)](https://codeclimate.com/github/ChainSafeSystems/gossamer/test_coverage)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 [![](https://img.shields.io/twitter/follow/espadrine.svg?label=Follow&style=social)](https://twitter.com/chainsafeth)
