@@ -527,6 +527,10 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
+// pickPostings goes through the mutable layer and returns the appropriate postings,
+// along with the timestamp of the delete marker, if any. If this timestamp is greater
+// than zero, it indicates that the immutable layer should be ignored during traversals.
+// If greater than zero, this timestamp must thus be greater than l.minTs.
 func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// This function would return zero ts for entries above readTs.
 	effective := func(start, commit uint64) uint64 {
