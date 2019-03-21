@@ -128,7 +128,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	for _, manifest := range manifests {
 		var m Manifest
 		if err := h.readManifest(manifest, &m); err != nil {
-			return 0, x.Errorf("Error while reading manifests: %v", err)
+			return 0, x.Wrapf(err, "While reading %q", manifest)
 		}
 		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
@@ -143,7 +143,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
 			fp, err := os.Open(file)
 			if err != nil {
-				return 0, x.Errorf("Error opening %q: %s", file, err)
+				return 0, x.Wrapf(err, "Failed to open %q", file)
 			}
 			defer fp.Close()
 			if err = fn(fp, int(groupId)); err != nil {

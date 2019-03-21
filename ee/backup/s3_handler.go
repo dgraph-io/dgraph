@@ -204,9 +204,9 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 }
 
 type result struct {
-	object string
-	m      *Manifest
-	err    error
+	idx int
+	m   *Manifest
+	err error
 }
 
 // Load creates a new session, scans for backup objects in a bucket, then tries to
@@ -219,17 +219,17 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	}
 
 	const N = 100
-	batchReadManifests := func(objects []string) (map[string]*Manifest, error) {
+	batchReadManifests := func(objects []string) (map[int]*Manifest, error) {
 		rc := make(chan result, 1)
 		var wg sync.WaitGroup
 		for i, o := range objects {
 			wg.Add(1)
-			go func(o string) {
+			go func(i int, o string) {
 				defer wg.Done()
 				var m Manifest
 				err := h.readManifest(mc, o, &m)
-				rc <- result{o, &m, err}
-			}(o)
+				rc <- result{i, &m, err}
+			}(i, o)
 			if i%N == 0 {
 				wg.Wait()
 			}
@@ -239,12 +239,12 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 			close(rc)
 		}()
 
-		m := make(map[string]*Manifest)
+		m := make(map[int]*Manifest)
 		for r := range rc {
 			if r.err != nil {
-				return nil, r.err
+				return nil, x.Wrapf(r.err, "While reading %q", objects[r.idx])
 			}
-			m[r.object] = r.m
+			m[r.idx] = r.m
 		}
 		return m, nil
 	}
@@ -270,7 +270,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 	manifests, err := batchReadManifests(objects)
 	if err != nil {
-		return 0, x.Errorf("Error while reading manifests: %v", err)
+		return 0, err
 	}
 
 	// version is returned with the max manifest version found.
@@ -279,8 +279,8 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for _, manifest := range objects {
-		m, ok := manifests[manifest]
+	for i, manifest := range objects {
+		m, ok := manifests[i]
 		if !ok {
 			return 0, x.Errorf("Manifest not found: %s", manifest)
 		}
@@ -297,15 +297,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return 0, x.Errorf("Restore closing due to error: %s", err)
+				return 0, x.Wrapf(err, "Failed to get %q", object)
 			}
 			defer reader.Close()
 			st, err := reader.Stat()
 			if err != nil {
-				return 0, x.Errorf("Restore got an unexpected error: %s", err)
+				return 0, x.Wrapf(err, "Stat failed %q", object)
 			}
 			if st.Size <= 0 {
-				return 0, x.Errorf("Restore remote object is empty or inaccessible: %s", object)
+				return 0, x.Errorf("Remote object is empty or inaccessible: %s", object)
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 			if err = fn(reader, int(groupId)); err != nil {

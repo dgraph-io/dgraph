@@ -116,9 +116,9 @@ func run() error {
 		zero, err := grpc.Dial(opt.zero,
 			grpc.WithBlock(),
 			grpc.WithInsecure(),
-			grpc.WithTimeout(time.Minute))
+			grpc.WithTimeout(10*time.Second))
 		if err != nil {
-			return x.Errorf("Unable to connect to zero: %s", opt.zero)
+			return x.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}
 		zc = pb.NewZeroClient(zero)
 	}
@@ -141,7 +141,8 @@ func run() error {
 
 		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
 		if err != nil {
-			return err
+			// Let the user know so they can do this manually.
+			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
 		}
 	}
 
@@ -151,15 +152,19 @@ func run() error {
 
 // runRestore calls badger.Load and tries to load data into a new DB.
 func runRestore(pdir, location string) (uint64, error) {
+	bo := badger.DefaultOptions
+	bo.SyncWrites = true
+	bo.TableLoadingMode = options.MemoryMap
+	bo.ValueThreshold = 1 << 10
+	bo.NumVersionsToKeep = math.MaxInt32
+	if !glog.V(2) {
+		bo.Logger = nil
+	}
+
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return Load(location, func(r io.Reader, groupId int) error {
-		fmt.Printf("Restoring groupId: %d\n", groupId)
-		bo := badger.DefaultOptions
-		bo.SyncWrites = true
-		bo.TableLoadingMode = options.MemoryMap
-		bo.ValueThreshold = 1 << 10
-		bo.NumVersionsToKeep = math.MaxInt32
+		bo := bo
 		bo.Dir = filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 		bo.ValueDir = bo.Dir
 		db, err := badger.OpenManaged(bo)
@@ -167,8 +172,11 @@ func runRestore(pdir, location string) (uint64, error) {
 			return err
 		}
 		defer db.Close()
-		if !pathExist(bo.Dir) {
-			fmt.Println("Creating new db:", bo.Dir)
+		if glog.V(2) {
+			fmt.Printf("Restoring groupId: %d\n", groupId)
+			if !pathExist(bo.Dir) {
+				fmt.Println("Creating new db:", bo.Dir)
+			}
 		}
 		return db.Load(r)
 	})
