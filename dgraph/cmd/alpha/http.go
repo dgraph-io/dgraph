@@ -198,12 +198,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
-	out.WriteRune('{')
-	writeEntry("extensions", js)
-	out.WriteRune(',')
 
-	// User can either ask for schema or have a query.
+	out.WriteRune('{')
 	writeEntry("data", resp.Json)
+	out.WriteRune(',')
+	writeEntry("extensions", js)
 	out.WriteRune('}')
 
 	writeResponse(w, r, out.Bytes())
