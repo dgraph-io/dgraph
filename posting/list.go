@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -79,13 +78,6 @@ type List struct {
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 
 	partCache map[uint64]*pb.PostingList
-}
-
-func getSplitKey(baseKey []byte, startUid uint64) []byte {
-	keyCopy := make([]byte, len(baseKey)+8)
-	copy(keyCopy, baseKey)
-	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
-	return keyCopy
 }
 
 func (l *List) maxVersion() uint64 {
@@ -713,7 +705,7 @@ func (l *List) plsAreEmpty() (bool, error) {
 	for _, startUid := range l.plist.Splits {
 		kv := &bpb.KV{}
 		kv.Version = l.minTs
-		kv.Key = getSplitKey(l.key, startUid)
+		kv.Key = x.GetSplitKey(l.key, startUid)
 		// TODO: Can be done purely from the cache?
 		plist, err := l.readListPart(startUid)
 		if err != nil {
@@ -755,7 +747,7 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	for _, startUid := range l.plist.Splits {
 		kv := &bpb.KV{}
 		kv.Version = l.minTs
-		kv.Key = getSplitKey(l.key, startUid)
+		kv.Key = x.GetSplitKey(l.key, startUid)
 		plist, err := l.readListPart(startUid)
 		if err != nil {
 			return nil, err
@@ -1146,7 +1138,11 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 
 // readListPart does not use any cache. It directly reads from Badger.
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	key := getSplitKey(l.key, startUid)
+	if part, ok := l.partCache[startUid]; ok {
+		return part, nil
+	}
+
+	key := x.GetSplitKey(l.key, startUid)
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
 	if err != nil {

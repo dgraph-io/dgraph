@@ -891,6 +891,12 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		commits++
 	}
 
+	kvs, err := ol.Rollup()
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = getNew(key, ps)
+	require.NoError(t, err)
+
 	return ol, commits
 }
 
@@ -1017,7 +1023,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 	require.Equal(t, key, kvs[0].Key)
 
 	for i, startUid := range ol.plist.Splits {
-		partKey := getSplitKey(key, startUid)
+		partKey := x.GetSplitKey(key, startUid)
 		require.Equal(t, partKey, kvs[i+1].Key)
 		part, err := ol.readListPart(startUid)
 		require.NoError(t, err)
@@ -1027,7 +1033,6 @@ func TestMultiPartListMarshal(t *testing.T) {
 		require.Equal(t, []byte{BitCompletePosting}, kvs[i+1].UserMeta)
 		require.Equal(t, ol.minTs, kvs[i+1].Version)
 	}
-
 }
 
 func TestMultiPartListWrite(t *testing.T) {

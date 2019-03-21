@@ -83,24 +83,6 @@ func DataKey(attr string, uid uint64) []byte {
 	return buf
 }
 
-func DataKeyWithStartUid(attr string, uid, startUid uint64) []byte {
-	buf := make([]byte, 2+len(attr)+2+8+8)
-	buf[0] = defaultPrefix
-	rest := buf[1:]
-
-	rest = writeAttr(rest, attr)
-	rest[0] = ByteData
-
-	rest = rest[1:]
-	binary.BigEndian.PutUint64(rest, uid)
-
-	// This list is split in multiple parts. startUid represents the first UID
-	// in the range of UIDs stored by this part of the list.
-	rest = rest[8:]
-	binary.BigEndian.PutUint64(rest, startUid)
-	return buf
-}
-
 func ReverseKey(attr string, uid uint64) []byte {
 	buf := make([]byte, 2+len(attr)+2+8)
 	buf[0] = defaultPrefix
@@ -297,6 +279,15 @@ func PredicatePrefix(predicate string) []byte {
 	k := writeAttr(buf[1:], predicate)
 	AssertTrue(len(k) == 0)
 	return buf
+}
+
+// GetSplitKey takes a data key baseKey and generates the key of the list split
+// that starts at startUid.
+func GetSplitKey(baseKey []byte, startUid uint64) []byte {
+	keyCopy := make([]byte, len(baseKey)+8)
+	copy(keyCopy, baseKey)
+	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
+	return keyCopy
 }
 
 // Parse would parse the key. ParsedKey does not reuse the key slice, so the key slice can change
