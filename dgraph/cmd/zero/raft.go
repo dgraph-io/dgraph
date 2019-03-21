@@ -629,8 +629,12 @@ func (n *node) Run() {
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
+				rsCopy := raft.ReadState{
+					Index:      rs.Index,
+					RequestCtx: y.Copy(rs.RequestCtx),
+				}
 				select {
-				case readStateCh <- rs:
+				case readStateCh <- rsCopy:
 				default:
 					// Don't block here.
 				}
