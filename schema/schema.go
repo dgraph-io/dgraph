@@ -337,10 +337,7 @@ func LoadFromDb() error {
 	if err := LoadSchemaFromDb(); err != nil {
 		return err
 	}
-	if err := LoadTypesFromDb(); err != nil {
-		return err
-	}
-	return nil
+	return LoadTypesFromDb()
 }
 
 func LoadSchemaFromDb() error {

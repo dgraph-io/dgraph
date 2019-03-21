@@ -212,9 +212,8 @@ func (m *XidMap) BumpTo(uid uint64) {
 			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
 			m.updateMaxSeen(assigned.EndId)
 			return
-		} else {
-			glog.Errorf("While requesting AssignUids(%d): %v", num, err)
 		}
+		glog.Errorf("While requesting AssignUids(%d): %v", num, err)
 	}
 }
 
