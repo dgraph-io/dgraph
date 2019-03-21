@@ -171,6 +171,7 @@ func (it *PIterator) moveToNextSplit() error {
 
 func (it *PIterator) Next() error {
 	if it.deleteBelowTs > 0 {
+		it.uids = nil
 		return nil
 	}
 
@@ -180,33 +181,28 @@ func (it *PIterator) Next() error {
 	}
 	it.uidx = 0
 	it.uids = it.dec.Next()
+
+	if len(it.uids) == 0 {
+		if len(it.l.plist.Splits) == 0 {
+			return nil
+		}
+
+		for it.splitIdx+1 < len(it.l.plist.Splits) {
+			if err := it.moveToNextSplit(); err != nil {
+				return err
+			}
+
+			if len(it.uids) > 0 {
+				return nil
+			}
+		}
+	}
+
 	return nil
 }
 
 func (it *PIterator) Valid() bool {
-	if it.deleteBelowTs > 0 {
-		return false
-	}
-
-	if len(it.uids) > 0 {
-		return true
-	}
-
-	if len(it.l.plist.Splits) == 0 {
-		return false
-	}
-
-	for it.splitIdx+1 < len(it.l.plist.Splits) {
-		if err := it.moveToNextSplit(); err != nil {
-			return false
-		}
-
-		if len(it.uids) > 0 {
-			return true
-		}
-	}
-
-	return false
+	return len(it.uids) > 0
 }
 
 func (it *PIterator) Posting() *pb.Posting {
