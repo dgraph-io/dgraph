@@ -1959,7 +1959,7 @@ func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
 		Func: &Function{
 			Name: "type",
 			Args: []Arg{
-				Arg{
+				{
 					Value: typeName,
 				},
 			},
