@@ -134,6 +134,12 @@ func runTxn(c *dgo.Dgraph) {
 }
 ```
 
+Read-only transactions can be created by calling `c.NewReadOnlyTxn()`. Read-only
+transactions are useful to increase read speed because they can circumvent the
+usual consensus protocol. Read-only transactions cannot contain mutations and
+trying to call `txn.Commit()` will result in an error. Calling `txn.Discard()`
+will be a no-op.
+
 ### Run a query
 
 You can run a query by calling `txn.Query`. The response would contain a `JSON`
