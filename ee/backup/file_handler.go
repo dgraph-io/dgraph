@@ -84,17 +84,17 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 	}
 
 	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
-	if err := os.Mkdir(dir, 0700); err != nil && !os.IsExist(err) {
+	err := os.Mkdir(dir, 0700)
+	if err != nil && !os.IsExist(err) {
 		return err
 	}
 
 	path = filepath.Join(dir, fileName)
-	fp, err := os.Create(path)
+	h.fp, err = os.Create(path)
 	if err != nil {
 		return err
 	}
 	glog.V(2).Infof("Using file path: %q", path)
-	h.fp = fp
 
 	return nil
 }

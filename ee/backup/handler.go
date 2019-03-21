@@ -38,17 +38,13 @@ const (
 	// {
 	//   "version": 2280,
 	//   "groups": [ 1, 2, 3 ],
-	//   "request": {
-	//     "read_ts": 110001,
-	//     "unix_ts": "20190220.222326",
-	//     "location": "/tmp/dgraph"
-	//   }
+	//   "read_ts": 110001
 	// }
 	//
 	// "version" is the maximum data version, obtained from Backup() after it runs. This value
 	// is used for subsequent incremental backups.
 	// "groups" are the group IDs that participated.
-	// "request" is the original backup request.
+	// "read_ts" is the read timestamp used at the backup request.
 	backupManifest = `manifest.json`
 )
 
@@ -90,7 +86,7 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
-// create parses the requested target URI, finds a handler and then tries to create a session.
+// newHandler parses the requested URI, finds a handler and then tries to create a session.
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -134,11 +130,11 @@ func (r *Request) newHandler() (handler, error) {
 }
 
 // loadFn is a function that will receive the current file being read.
-// A reader and the backup readTs are passed as arguments.
+// A reader and the backup groupId are passed as arguments.
 type loadFn func(io.Reader, int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
-// Returns nil and the maximum Ts version on success, error otherwise.
+// Returns the maximum Ts version on success, otherwise an error.
 func Load(l string, fn loadFn) (uint64, error) {
 	uri, err := url.Parse(l)
 	if err != nil {

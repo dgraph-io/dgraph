@@ -92,6 +92,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	}
 
 	secure := uri.Query().Get("secure") != "false" // secure by default
+
 	mc, err := minio.New(uri.Host, creds.AccessKeyID, creds.SecretAccessKey, secure)
 	if err != nil {
 		return nil, err
@@ -181,7 +182,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 	object := filepath.Join(h.objectPrefix,
 		fmt.Sprintf(backupPathFmt, req.Backup.UnixTs),
 		objectName)
-	glog.V(2).Infof("Sending data to S3 blob %q ...", object)
+	glog.V(2).Infof("Sending data to %s blob %q ...", uri.Scheme, object)
 
 	h.cerr = make(chan error, 1)
 	h.preader, h.pwriter = io.Pipe()
