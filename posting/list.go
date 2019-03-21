@@ -794,6 +794,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	var enc codec.Encoder
 	var endUid uint64
 	var splitIdx int
+	var startUid uint64
 
 	// Method to properly initialize all the variables described above.
 	init := func() {
@@ -809,16 +810,14 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 
 		// Otherwise, load the corresponding part and set endUid  to correctly
 		// detect the end of the list.
-		startUid := l.plist.Splits[splitIdx]
+		startUid = l.plist.Splits[splitIdx]
 		if splitIdx+1 == len(l.plist.Splits) {
 			endUid = math.MaxUint64
 		} else {
 			endUid = l.plist.Splits[splitIdx+1] - 1
 		}
 
-		plist = &pb.PostingList{
-			StartUid: startUid,
-		}
+		plist = &pb.PostingList{}
 	}
 
 	init()
@@ -827,7 +826,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 			final.Pack = enc.Done()
 			plist.Pack = final.Pack
 			plist.Postings = final.Postings
-			newSplits[plist.StartUid] = plist
+			newSplits[startUid] = plist
 
 			splitIdx++
 			init()
@@ -845,7 +844,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	plist.Pack = final.Pack
 	plist.Postings = final.Postings
 	if len(l.plist.Splits) > 0 {
-		newSplits[plist.StartUid] = plist
+		newSplits[startUid] = plist
 	}
 
 	maxCommitTs := l.minTs
@@ -1149,44 +1148,52 @@ func isPlistTooBig(plist *pb.PostingList) bool {
 func (out *rollupOutput) splitUpList() {
 	var lists []*pb.PostingList
 
+	existingSplits := false
 	if len(out.newPlist.Splits) == 0 {
 		lists = append(lists, out.newPlist)
 	} else {
+		existingSplits = true
 		for _, startUid := range out.newPlist.Splits {
 			part := out.newSplits[startUid]
 			lists = append(lists, part)
 		}
 	}
 
-	var newLists []*pb.PostingList
-	for _, list := range lists {
+	var newSplits []uint64
+	var newPls []*pb.PostingList
+	for i, list := range lists {
+		var startUid uint64
+		if existingSplits {
+			startUid = out.newPlist.Splits[i]
+		}
+
 		if isPlistTooBig(list) {
-			splitList := splitPostingList(list)
-			for _, part := range splitList {
-				out.newSplits[part.StartUid] = part
-				newLists = append(newLists, part)
+			startUids, pls := splitPostingList(startUid, list)
+			for i, startUid := range startUids {
+				pl := pls[i]
+				out.newSplits[startUid] = pl
+				newPls = append(newPls, pl)
+				newSplits = append(newSplits, startUid)
 			}
 		} else {
-			newLists = append(newLists, list)
+			newPls = append(newPls, list)
+			newSplits = append(newSplits, startUid)
 		}
 	}
 
-	if len(newLists) == 1 || len(newLists) == len(out.newPlist.Splits) {
+	if len(newPls) == 1 || len(newPls) == len(out.newPlist.Splits) {
 		return
 	}
 
-	var splits []uint64
-	for _, list := range newLists {
-		splits = append(splits, list.StartUid)
-	}
 	out.newPlist = &pb.PostingList{
-		Splits: splits,
+		Splits: newSplits,
 	}
 }
 
 // splitPostingList takes the given plist and returns two new plists, each with
-// half of the blocks and postings of the original.
-func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
+// half of the blocks and postings of the original as well as the new startUids
+// for each of the new parts.
+func splitPostingList(startUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList) {
 	midBlock := len(plist.Pack.Blocks) / 2
 	midUid := plist.Pack.Blocks[midBlock].GetBase()
 
@@ -1196,7 +1203,6 @@ func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[:midBlock],
 	}
-	lowPl.StartUid = plist.StartUid
 
 	// Generate posting list holding the second half of the current list's postings.
 	highPl := new(pb.PostingList)
@@ -1204,7 +1210,6 @@ func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[midBlock:],
 	}
-	highPl.StartUid = midUid
 
 	// Add elements in plist.Postings to the corresponding list.
 	for _, posting := range plist.Postings {
@@ -1215,7 +1220,7 @@ func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 		}
 	}
 
-	return []*pb.PostingList{lowPl, highPl}
+	return []uint64{startUid, midUid}, []*pb.PostingList{lowPl, highPl}
 }
 
 // cleanUpList marks empty splits for removal and update the split list accordingly.
