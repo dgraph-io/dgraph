@@ -1078,7 +1078,7 @@ func TestMultiPartListDelete(t *testing.T) {
 
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
-	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
+	require.Equal(t, len(kvs), 1)
 
 	for _, kv := range kvs {
 		require.Equal(t, []byte{BitEmptyPosting}, kv.UserMeta)

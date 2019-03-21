@@ -200,7 +200,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 
 		switch item.UserMeta() {
-		case BitEmptyPosting, BitCompletePosting:
+		case BitEmptyPosting:
+			l.minTs = item.Version()
+			return l, nil
+		case BitCompletePosting:
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
 			}

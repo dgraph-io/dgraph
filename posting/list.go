@@ -698,27 +698,6 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
-func (out *rollupOutput) plsAreEmpty() bool {
-	if len(out.newPlist.Splits) == 0 {
-		if out.newPlist.Pack == nil || len(out.newPlist.Pack.Blocks) == 0 {
-			return true
-		}
-		return false
-	}
-
-	for _, startUid := range out.newPlist.Splits {
-		// TODO: Can be done purely from the cache?
-		plist := out.newSplits[startUid]
-
-		if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
-			continue
-		} else {
-			return false
-		}
-	}
-	return true
-}
-
 func (l *List) Rollup() ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
@@ -730,52 +709,67 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		return nil, nil
 	}
 
-	var setEmptyBit bool
-	if empty, err := out.plsAreEmpty(); err != nil {
-		return nil, err
-	} else if empty {
-		setEmptyBit = true
-	}
-
 	var kvs []*bpb.KV
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.newPlist, setEmptyBit)
+	val, meta := marshalPostingList(out.newPlist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
 
 	for _, startUid := range out.newPlist.Splits {
-		kv := &bpb.KV{}
-		kv.Version = out.newMinTs
-		kv.Key = x.GetSplitKey(l.key, startUid)
 		plist := out.newSplits[startUid]
-		val, meta := marshalPostingList(plist, setEmptyBit)
-		kv.UserMeta = []byte{meta}
-		kv.Value = val
+		kv := out.marshalPostingListPart(l.key, startUid, plist)
+		kvs = append(kvs, kv)
+	}
+
+	// Sort the startUids in out.splitsToDelete to make the output deterministic.
+	var sortedSplits []uint64
+	for startUid, _ := range out.splitsToDelete {
+		sortedSplits = append(sortedSplits, startUid)
+	}
+	sort.Slice(sortedSplits, func(i, j int) bool {
+		return sortedSplits[i] < sortedSplits[j]
+	})
+	for _, startUid := range sortedSplits {
+		plist := out.splitsToDelete[startUid]
+		kv := out.marshalPostingListPart(l.key, startUid, plist)
 		kvs = append(kvs, kv)
 	}
 
 	return kvs, nil
 }
 
-func marshalPostingList(plist *pb.PostingList, setEmptyBit bool) ([]byte, byte) {
+func (out *rollupOutput) marshalPostingListPart(
+	baseKey []byte, startUid uint64, plist *pb.PostingList) *bpb.KV {
+	kv := &bpb.KV{}
+	kv.Version = out.newMinTs
+	kv.Key = x.GetSplitKey(baseKey, startUid)
+	val, meta := marshalPostingList(plist)
+	kv.UserMeta = []byte{meta}
+	kv.Value = val
+
+	return kv
+}
+
+func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
+	if isPlistEmpty(plist) {
+		return nil, BitEmptyPosting
+	}
+
 	data, err := plist.Marshal()
 	x.Check(err)
-
-	if setEmptyBit {
-		return data, BitEmptyPosting
-	}
 	return data, BitCompletePosting
 }
 
 const blockSize int = 256
 
 type rollupOutput struct {
-	newPlist  *pb.PostingList
-	newSplits map[uint64]*pb.PostingList
-	newMinTs  uint64
+	newPlist       *pb.PostingList
+	newSplits      map[uint64]*pb.PostingList
+	splitsToDelete map[uint64]*pb.PostingList
+	newMinTs       uint64
 }
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
@@ -1146,10 +1140,12 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	return &part, nil
 }
 
-func tooBig(plist *pb.PostingList) bool {
+// isPlistTooBig returns true if the given plist should be split in two.
+func isPlistTooBig(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
+// splitUpList checks the list and splits it in smaller parts if needed.
 func (out *rollupOutput) splitUpList() {
 	var lists []*pb.PostingList
 
@@ -1164,7 +1160,7 @@ func (out *rollupOutput) splitUpList() {
 
 	var newLists []*pb.PostingList
 	for _, list := range lists {
-		if tooBig(list) {
+		if isPlistTooBig(list) {
 			splitList := splitPostingList(list)
 			for _, part := range splitList {
 				out.newSplits[part.StartUid] = part
@@ -1188,6 +1184,8 @@ func (out *rollupOutput) splitUpList() {
 	}
 }
 
+// splitPostingList takes the given plist and returns two new plists, each with
+// half of the blocks and postings of the original.
 func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 	midBlock := len(plist.Pack.Blocks) / 2
 	midUid := plist.Pack.Blocks[midBlock].GetBase()
@@ -1198,7 +1196,6 @@ func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[:midBlock],
 	}
-	lowPl.CommitTs = plist.CommitTs
 	lowPl.StartUid = plist.StartUid
 
 	// Generate posting list holding the second half of the current list's postings.
@@ -1207,7 +1204,6 @@ func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 		BlockSize: plist.Pack.BlockSize,
 		Blocks:    plist.Pack.Blocks[midBlock:],
 	}
-	highPl.CommitTs = plist.CommitTs
 	highPl.StartUid = midUid
 
 	// Add elements in plist.Postings to the corresponding list.
@@ -1222,6 +1218,29 @@ func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
 	return []*pb.PostingList{lowPl, highPl}
 }
 
+// cleanUpList marks empty splits for removal and update the split list accordingly.
 func (out *rollupOutput) cleanUpList() {
+	var splits []uint64
+	for _, startUid := range out.newPlist.Splits {
+		plist := out.newSplits[startUid]
+		if isPlistEmpty(plist) {
+			out.splitsToDelete[startUid] = plist
+			delete(out.newSplits, startUid)
+		} else {
+			splits = append(splits, startUid)
+		}
+	}
+	out.newPlist.Splits = splits
+}
 
+// isPlistEmpty returns true if the given plist is empty. Plists with splits are
+// considered non-empty.
+func isPlistEmpty(plist *pb.PostingList) bool {
+	if len(plist.Splits) > 0 {
+		return false
+	}
+	if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
+		return true
+	}
+	return false
 }
