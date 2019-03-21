@@ -24,7 +24,8 @@ go test -v ./...
 ```
 
 ## Contributing
-Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)  
+- Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)  
+- Have questions? Say hi on [Gitter](https://gitter.im/chainsafe/gossamer)!
 
 ## License
 _GNU General Public License v3.0_
