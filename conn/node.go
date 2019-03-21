@@ -599,9 +599,9 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
 	readIndex := func() (uint64, error) {
-		// Read Request can get rejected then we would wait idefinitely on the channel
+		// Read Request can get rejected then we would wait indefinitely on the channel
 		// so have a timeout.
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
 		var activeRctx [8]byte
