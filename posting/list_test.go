@@ -437,11 +437,15 @@ func TestMillion(t *testing.T) {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
 			t.Logf("Start Ts: %d. Rolling up posting list.\n", txn.StartTs)
-			_, err := ol.Rollup()
+			kvs, err := ol.Rollup()
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps)
 			require.NoError(t, err)
 		}
 		commits++
 	}
+
 	t.Logf("Completed a million writes.\n")
 	opt := ListOptions{ReadTs: uint64(N) + 1}
 	l, err := ol.Uids(opt)
@@ -866,7 +870,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		maxListSize = math.MaxInt32
 	}()
 
-	key := x.DataKey("bal", 1331)
+	key := x.DataKey("multi-bal", 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	commits := 0
@@ -890,6 +894,12 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		}
 		commits++
 	}
+
+	kvs, err := ol.Rollup()
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = getNew(key, ps)
+	require.NoError(t, err)
 
 	return ol, commits
 }
@@ -1013,7 +1023,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
 	require.NoError(t, writePostingListToDisk(kvs))
 
-	key := x.DataKey("bal", 1331)
+	key := x.DataKey("multi-bal", 1331)
 	require.Equal(t, key, kvs[0].Key)
 
 	for i, startUid := range ol.plist.Splits {

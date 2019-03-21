@@ -76,8 +76,6 @@ type List struct {
 
 	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
-
-	partCache map[uint64]*pb.PostingList
 }
 
 func (l *List) maxVersion() uint64 {
@@ -700,24 +698,17 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
-func (l *List) plsAreEmpty() (bool, error) {
-	if len(l.plist.Splits) == 0 {
-		if l.plist.Pack == nil || len(l.plist.Pack.Blocks) == 0 {
+func (out *rollupOutput) plsAreEmpty() (bool, error) {
+	if len(out.newPlist.Splits) == 0 {
+		if out.newPlist.Pack == nil || len(out.newPlist.Pack.Blocks) == 0 {
 			return true, nil
-		} else {
-			return false, nil
 		}
+		return false, nil
 	}
 
-	for _, startUid := range l.plist.Splits {
-		kv := &bpb.KV{}
-		kv.Version = l.minTs
-		kv.Key = x.GetSplitKey(l.key, startUid)
+	for _, startUid := range out.newPlist.Splits {
 		// TODO: Can be done purely from the cache?
-		plist, err := l.readListPart(startUid)
-		if err != nil {
-			return false, err
-		}
+		plist := out.newSplits[startUid]
 
 		if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
 			continue
@@ -729,14 +720,18 @@ func (l *List) plsAreEmpty() (bool, error) {
 }
 
 func (l *List) Rollup() ([]*bpb.KV, error) {
-	l.Lock()
-	defer l.Unlock()
-	if err := l.rollup(math.MaxUint64); err != nil {
+	l.RLock()
+	defer l.RUnlock()
+	out, err := l.rollup(math.MaxUint64)
+	if err != nil {
 		return nil, err
+	}
+	if out == nil {
+		return nil, nil
 	}
 
 	var setEmptyBit bool
-	if empty, err := l.plsAreEmpty(); err != nil {
+	if empty, err := out.plsAreEmpty(); err != nil {
 		return nil, err
 	} else if empty {
 		setEmptyBit = true
@@ -744,21 +739,18 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 
 	var kvs []*bpb.KV
 	kv := &bpb.KV{}
-	kv.Version = l.minTs
+	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(l.plist, setEmptyBit)
+	val, meta := marshalPostingList(out.newPlist, setEmptyBit)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
 
-	for _, startUid := range l.plist.Splits {
+	for _, startUid := range out.newPlist.Splits {
 		kv := &bpb.KV{}
-		kv.Version = l.minTs
+		kv.Version = out.newMinTs
 		kv.Key = x.GetSplitKey(l.key, startUid)
-		plist, err := l.readListPart(startUid)
-		if err != nil {
-			return nil, err
-		}
+		plist := out.newSplits[startUid]
 		val, meta := marshalPostingList(plist, setEmptyBit)
 		kv.UserMeta = []byte{meta}
 		kv.Value = val
@@ -780,17 +772,28 @@ func marshalPostingList(plist *pb.PostingList, setEmptyBit bool) ([]byte, byte) 
 
 const blockSize int = 256
 
+type rollupOutput struct {
+	newPlist  *pb.PostingList
+	newSplits map[uint64]*pb.PostingList
+	newMinTs  uint64
+}
+
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
 // directly. It should only serve as the read timestamp for iteration.
-func (l *List) rollup(readTs uint64) error {
-	l.AssertLock()
+func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
+	l.AssertRLock()
 
 	// Pick all committed entries
 	if l.minTs > readTs {
 		// If we are already past the readTs, then skip the rollup.
-		return nil
+		return nil, nil
 	}
+
+	newPlist := &pb.PostingList{
+		Splits: l.plist.Splits,
+	}
+	newSplits := make(map[uint64]*pb.PostingList)
 
 	var plist *pb.PostingList
 	var final *pb.PostingList
@@ -799,15 +802,15 @@ func (l *List) rollup(readTs uint64) error {
 	var splitIdx int
 
 	// Method to properly initialize all the variables described above.
-	init := func() error {
+	init := func() {
 		final = new(pb.PostingList)
 		enc = codec.Encoder{BlockSize: blockSize}
 
 		// If not a multi-part list, all uids go to the same encoder.
 		if len(l.plist.Splits) == 0 {
-			plist = l.plist
+			plist = newPlist
 			endUid = math.MaxUint64
-			return nil
+			return
 		}
 
 		// Otherwise, load the corresponding part and set endUid  to correctly
@@ -819,26 +822,21 @@ func (l *List) rollup(readTs uint64) error {
 			endUid = l.plist.Splits[splitIdx+1] - 1
 		}
 
-		var err error
-		plist, err = l.readListPart(startUid)
-		return err
+		plist = &pb.PostingList{
+			StartUid: startUid,
+		}
 	}
 
-	if err := init(); err != nil {
-		return err
-	}
-
+	init()
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
 			final.Pack = enc.Done()
 			plist.Pack = final.Pack
 			plist.Postings = final.Postings
-			l.partCache[plist.StartUid] = plist
+			newSplits[plist.StartUid] = plist
 
 			splitIdx++
-			if err := init(); err != nil {
-				return err
-			}
+			init()
 		}
 
 		enc.Add(p.Uid)
@@ -852,7 +850,9 @@ func (l *List) rollup(readTs uint64) error {
 	final.Pack = enc.Done()
 	plist.Pack = final.Pack
 	plist.Postings = final.Postings
-	l.partCache[plist.StartUid] = plist
+	if len(l.plist.Splits) > 0 {
+		newSplits[plist.StartUid] = plist
+	}
 
 	maxCommitTs := l.minTs
 	{
@@ -867,27 +867,15 @@ func (l *List) rollup(readTs uint64) error {
 		}
 	}
 
-	// Keep all uncommitted Entries or postings with commitTs > l.commitTs
-	// in mutation map. Discard all else.
-	// TODO: This could be removed after LRU cache is removed.
-	for startTs, plist := range l.mutationMap {
-		cl := plist.CommitTs
-		if cl == 0 || cl > maxCommitTs {
-			// Keep this.
-		} else {
-			delete(l.mutationMap, startTs)
-		}
-	}
-
-	l.minTs = maxCommitTs
-
 	// Check if the list (or any of it's parts if it's been previously split) have
 	// become too big. Split the list if that is the case.
-	if err := l.splitUpList(); err != nil {
-		return nil
+	out := &rollupOutput{
+		newPlist:  newPlist,
+		newSplits: newSplits,
+		newMinTs:  maxCommitTs,
 	}
-
-	return nil
+	out.splitUpList()
+	return out, nil
 }
 
 func (l *List) ApproxLen() int {
@@ -1143,12 +1131,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 	return facets.CopyFacets(p.Facets, param), nil
 }
 
-// readListPart does not use any cache. It directly reads from Badger.
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	if part, ok := l.partCache[startUid]; ok {
-		return part, nil
-	}
-
 	key := x.GetSplitKey(l.key, startUid)
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
@@ -1166,19 +1149,14 @@ func tooBig(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
-// TODO: This can accept the generated map of start uid -> postinglist.
-func (l *List) splitUpList() error {
-	l.AssertLock()
-
+func (out *rollupOutput) splitUpList() {
 	var lists []*pb.PostingList
-	if len(l.plist.Splits) == 0 {
-		lists = append(lists, l.plist)
+
+	if len(out.newPlist.Splits) == 0 {
+		lists = append(lists, out.newPlist)
 	} else {
-		for _, startUid := range l.plist.Splits {
-			part, err := l.readListPart(startUid)
-			if err != nil {
-				return err
-			}
+		for _, startUid := range out.newPlist.Splits {
+			part := out.newSplits[startUid]
 			lists = append(lists, part)
 		}
 	}
@@ -1188,7 +1166,7 @@ func (l *List) splitUpList() error {
 		if tooBig(list) {
 			splitList := splitPostingList(list)
 			for _, part := range splitList {
-				l.partCache[part.StartUid] = part
+				out.newSplits[part.StartUid] = part
 				newLists = append(newLists, part)
 			}
 		} else {
@@ -1196,19 +1174,17 @@ func (l *List) splitUpList() error {
 		}
 	}
 
-	if len(newLists) == 1 || len(newLists) == len(l.plist.Splits) {
-		return nil
-	} else {
-		var splits []uint64
-		for _, list := range newLists {
-			splits = append(splits, list.StartUid)
-		}
-		l.plist = &pb.PostingList{
-			CommitTs: l.plist.CommitTs,
-			Splits:   splits,
-		}
+	if len(newLists) == 1 || len(newLists) == len(out.newPlist.Splits) {
+		return
 	}
-	return nil
+
+	var splits []uint64
+	for _, list := range newLists {
+		splits = append(splits, list.StartUid)
+	}
+	out.newPlist = &pb.PostingList{
+		Splits: splits,
+	}
 }
 
 func splitPostingList(plist *pb.PostingList) []*pb.PostingList {
