@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -204,12 +203,6 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-type result struct {
-	idx int
-	m   *Manifest
-	err error
-}
-
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Ts version on success, error otherwise.
@@ -219,33 +212,49 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	const N = 100
 	batchReadManifests := func(objects []string) (map[int]*Manifest, error) {
-		rc := make(chan result, 1)
-		var wg sync.WaitGroup
-		for i, o := range objects {
-			wg.Add(1)
-			go func(i int, o string) {
-				defer wg.Done()
-				var m Manifest
-				err := h.readManifest(mc, o, &m)
-				rc <- result{i, &m, err}
-			}(i, o)
-			if i%N == 0 {
-				wg.Wait()
-			}
+		const numReqs = 1000
+
+		type result struct {
+			idx int
+			m   *Manifest
+			err error
 		}
-		go func() {
-			wg.Wait()
-			close(rc)
+
+		rc := func() <-chan result {
+			c := make(chan result)
+			go func() {
+				defer close(c)
+				for idx, object := range objects {
+					var m Manifest
+					err := h.readManifest(mc, object, &m)
+					c <- result{idx, &m, err}
+				}
+			}()
+			return c
 		}()
+
+		// Track rate to minimize rps rate.
+		var n, rps uint64
+		start := time.Now()
 
 		m := make(map[int]*Manifest)
 		for r := range rc {
+			// Throttle requests a bit to stay under 1000 rps.
+			glog.Infof("RPS: %d/s", rps)
+			if rps > numReqs {
+				time.Sleep(time.Second)
+			}
 			if r.err != nil {
 				return nil, x.Wrapf(r.err, "While reading %q", objects[r.idx])
 			}
 			m[r.idx] = r.m
+
+			rps = n
+			if secs := time.Since(start).Seconds(); secs > 1 {
+				rps = n / uint64(secs)
+			}
+			n++
 		}
 		return m, nil
 	}
@@ -257,6 +266,9 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+		if object.Err != nil {
+			return 0, x.Wrapf(object.Err, "Failed to get manifest list")
+		}
 		if strings.HasSuffix(object.Key, suffix) {
 			objects = append(objects, object.Key)
 		}
