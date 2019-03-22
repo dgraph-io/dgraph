@@ -94,6 +94,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 
 		for _, sg := range exec {
+			// sg.uidMatrix can be empty. Continue if that is the case.
+			if len(sg.uidMatrix) == 0 {
+				continue
+			}
+
 			if sg.UnknownAttr {
 				continue
 			}
@@ -192,11 +197,19 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 	depth := sg.Params.RecurseArgs.Depth
 	if depth == 0 {
 		if sg.Params.RecurseArgs.AllowLoop {
-			return x.Errorf("Depth must be > 0 when loop is true for recurse query.")
+			return x.Errorf("Depth must be > 0 when loop is true for recurse query")
 		}
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.
 		depth = math.MaxUint64
 	}
+
+	for _, child := range sg.Children {
+		if len(child.Children) > 0 {
+			return x.Errorf(
+				"recurse queries require that all predicates are specified in one level")
+		}
+	}
+
 	return sg.expandRecurse(ctx, depth)
 }

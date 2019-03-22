@@ -110,9 +110,8 @@ func IsMissingOrEmptyDir(path string) (bool, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil
-		} else {
-			return false, err
 		}
+		return false, err
 	}
 
 	if !fi.IsDir() {
