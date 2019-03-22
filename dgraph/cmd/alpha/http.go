@@ -199,11 +199,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.WriteRune('{')
-	writeEntry("extensions", js)
-	out.WriteRune(',')
-
-	// User can either ask for schema or have a query.
 	writeEntry("data", resp.Json)
+	out.WriteRune(',')
+	writeEntry("extensions", js)
 	out.WriteRune('}')
 
 	writeResponse(w, r, out.Bytes())
