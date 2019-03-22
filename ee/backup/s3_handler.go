@@ -167,7 +167,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 				return err
 			}
 			// No new changes since last check
-			if m.Version == req.Backup.SnapshotTs {
+			if m.Version >= req.Backup.SnapshotTs {
 				return ErrBackupNoChanges
 			}
 			// Return the version of last backup
@@ -220,6 +220,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	}
 
 	const N = 100
+	// TODO: Simplify this batch read manifest. Can be executed serially.
 	batchReadManifests := func(objects []string) (map[int]*Manifest, error) {
 		rc := make(chan result, 1)
 		var wg sync.WaitGroup
