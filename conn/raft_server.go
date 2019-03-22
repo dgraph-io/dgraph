@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 )
 
 type sendmsg struct {
@@ -192,22 +193,27 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	span := otrace.FromContext(ctx)
 
 	n := w.GetNode()
 	if n == nil || n.Raft() == nil {
 		return ErrNoNode
 	}
+	span.Annotatef(nil, "Stream server is node %#x", n.Id)
+
 	raft := w.GetNode().Raft()
+	var rc *pb.RaftContext
 	for loop := 1; ; loop++ {
 		batch, err := server.Recv()
 		if err != nil {
 			return err
 		}
 		if loop%1e6 == 0 {
-			glog.V(2).Infof("%d messages received by %#x", loop, n.Id)
+			glog.V(2).Infof("%d messages received by %#x from %#x", loop, n.Id, rc.GetId())
 		}
 		if loop == 1 {
-			rc := batch.GetContext()
+			rc = batch.GetContext()
+			span.Annotatef(nil, "Stream from %#x", rc.Id)
 			if rc != nil {
 				n.Connect(rc.Id, rc.Addr)
 			}
