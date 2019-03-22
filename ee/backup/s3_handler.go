@@ -229,6 +229,9 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 					var m Manifest
 					err := h.readManifest(mc, object, &m)
 					c <- result{idx, &m, err}
+					if err != nil {
+						break
+					}
 				}
 			}()
 			return c
