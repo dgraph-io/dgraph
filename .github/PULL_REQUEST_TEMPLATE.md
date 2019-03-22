@@ -16,4 +16,9 @@
 ```
 
 <!-- Issues that this PR will close -->
-### Fixes: #
+<!-- 
+    NOTE: you must say 'closes #xx' or 'fixes #xx' for EACH issue this closes. 
+    eg: 'closes #1 and closes #2'
+    See: https://help.github.com/en/articles/closing-issues-using-keywords
+-->
+### Fixes:
