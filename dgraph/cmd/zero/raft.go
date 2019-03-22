@@ -626,23 +626,51 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
+			// start := time.Now()
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
-				rsCopy := raft.ReadState{
-					Index:      rs.Index,
-					RequestCtx: y.Copy(rs.RequestCtx),
-				}
+				// rsCopy := raft.ReadState{
+				// 	Index:      rs.Index,
+				// 	RequestCtx: y.Copy(rs.RequestCtx),
+				// }
+				glog.V(1).Infof("Got read state: %#x", rs.RequestCtx)
 				select {
-				case readStateCh <- rsCopy:
+				case readStateCh <- rs:
 				default:
 					// Don't block here.
 				}
 			}
 			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
 
+			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateLeader && !leader {
+					glog.Infoln("I've become the leader, updating leases.")
+					n.server.updateLeases()
+				}
+				leader = rd.RaftState == raft.StateLeader
+				// Oracle stream would close the stream once it steps down as leader
+				// predicate move would cancel any in progress move on stepping down.
+				n.triggerLeaderChange()
+			}
+			if leader {
+				// Leader can send messages in parallel with writing to disk.
+				for _, msg := range rd.Messages {
+					n.Send(msg)
+				}
+			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			span.Annotatef(nil, "Saved to storage")
+
+			// if rand.Float64() < 0.1 {
+			// 	// l0% chance.
+			// 	dur := 100*time.Millisecond - time.Since(start)
+			// 	if dur > 0 {
+			// 		// Add artificial delays.
+			// 		glog.V(1).Infof("Sleeping for %v", dur)
+			// 		time.Sleep(dur)
+			// 	}
+			// }
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -670,19 +698,11 @@ func (n *node) Run() {
 			}
 			span.Annotatef(nil, "Applied %d CommittedEntries", len(rd.CommittedEntries))
 
-			if rd.SoftState != nil {
-				if rd.RaftState == raft.StateLeader && !leader {
-					glog.Infoln("I've become the leader, updating leases.")
-					n.server.updateLeases()
+			if !leader {
+				// Followers should send messages later.
+				for _, msg := range rd.Messages {
+					n.Send(msg)
 				}
-				leader = rd.RaftState == raft.StateLeader
-				// Oracle stream would close the stream once it steps down as leader
-				// predicate move would cancel any in progress move on stepping down.
-				n.triggerLeaderChange()
-			}
-
-			for _, msg := range rd.Messages {
-				n.Send(msg)
 			}
 			span.Annotate(nil, "Sent messages")
 

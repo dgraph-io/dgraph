@@ -175,7 +175,7 @@ func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		// I'm not the leader and this request was forwarded to me by a peer, who thought I'm the
 		// leader.
 		if num.Forward {
-			return x.Errorf("Invalid Zero leader received AssignUids request. Please retry")
+			return x.Errorf("Invalid Zero received AssignUids request forward. Please retry")
 		}
 		// This is an original request. Forward it to the leader.
 		pl := s.Leader(0)

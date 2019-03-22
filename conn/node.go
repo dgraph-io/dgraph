@@ -598,15 +598,13 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 
 func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
-	readIndex := func() (uint64, error) {
+	readIndex := func(activeRctx []byte) (uint64, error) {
 		// Read Request can get rejected then we would wait indefinitely on the channel
 		// so have a timeout.
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		var activeRctx [8]byte
-		x.Check2(n.Rand.Read(activeRctx[:]))
-		if err := n.Raft().ReadIndex(ctx, activeRctx[:]); err != nil {
+		if err := n.Raft().ReadIndex(ctx, activeRctx); err != nil {
 			glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
 			return 0, err
 		}
@@ -616,7 +614,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		case <-closer.HasBeenClosed():
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
-			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
+			if !bytes.Equal(activeRctx, rs.RequestCtx) {
 				glog.V(1).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
 				goto again
 			}
@@ -647,8 +645,15 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 					break slurpLoop
 				}
 			}
+			// Create one activeRctx slice for the read index, even if we have to call readIndex
+			// repeatedly. That way, we can process the requests as soon as we encounter the first
+			// activeRctx. This is better than flooding readIndex with a new activeRctx on each
+			// call, causing more unique traffic and further delays in request processing.
+			activeRctx := make([]byte, 8)
+			x.Check2(n.Rand.Read(activeRctx))
+			glog.V(1).Infof("Request readctx: %#x", activeRctx)
 			for {
-				index, err := readIndex()
+				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {
 					continue
 				}
