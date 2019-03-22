@@ -41,6 +41,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type ExportFormat int
+
+const (
+       ExportFormatRdf ExportFormat = iota
+       ExportFormatJson
+)
+
+// XXX Other options?
+type ExportOpts struct {
+       Format ExportFormat
+}
+
 // Map from our types to RDF type. Useful when writing storage types
 // for RDF's in export. This is the dgraph type name and rdf storage type
 // might not be the same always (e.g. - datetime and bool).

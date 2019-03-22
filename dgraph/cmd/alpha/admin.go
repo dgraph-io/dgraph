@@ -57,10 +57,36 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
 	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
-	// Export logic can be moved to dgraphzero.
+	if err = r.ParseForm(); err != nil {
+		x.SetStatus(w, err.Error(), "Parse of export request failed.")
+		return
+	}
+	exportOpts := worker.ExportOpts{Format: worker.ExportFormatRdf}
+	for key, vals := range r.Form {
+		switch key {
+		case "format":
+			if len(vals) > 1 {
+				x.SetStatus(w, "Invalid", "Only one export format may be specified.")
+				return
+			}
+			switch vals[0] {
+			case "rdf":
+				exportOpts.Format = worker.ExportFormatRdf
+			case "json":
+				exportOpts.Format = worker.ExportFormatJson
+			default:
+				x.SetStatus(w, "Invalid", "Invalid export format.")
+				return
+			}
+		default:
+			x.SetStatus(w, "Invalid", "Invalid export argument.")
+			return
+		}
+	}
 	if err := worker.ExportOverNetwork(context.Background()); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
