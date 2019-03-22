@@ -13,8 +13,9 @@
 package backup
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -28,84 +29,133 @@ import (
 
 // fileHandler is used for 'file:' URI scheme.
 type fileHandler struct {
-	fp      *os.File
-	readers multiReader
+	fp *os.File
 }
 
-type multiReader []io.Reader
-
-func (mr multiReader) Close() error {
-	var err error
-	for i := range mr {
-		if mr[i] == nil {
-			continue
-		}
-		if fp, ok := mr[i].(*os.File); ok {
-			err = fp.Close()
-		}
+// readManifest reads a manifest file at path using the handler.
+// Returns nil on success, otherwise an error.
+func (h *fileHandler) readManifest(path string, m *Manifest) error {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
 	}
-	return err
+	return json.Unmarshal(b, m)
 }
 
 // Create prepares the a path to save backup files.
 // Returns error on failure, nil on success.
 func (h *fileHandler) Create(uri *url.URL, req *Request) error {
+	var dir, path, fileName string
+
 	// check that the path exists and we can access it.
-	if !h.exists(uri.Path) {
+	if !pathExist(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	dir := filepath.Join(uri.Path, fmt.Sprintf("dgraph.%s", req.Backup.UnixTs))
-	if err := os.Mkdir(dir, 0700); err != nil {
-		if !os.IsExist(err) {
-			return err
+	// Find the max version from the latest backup. This is done only when starting a new
+	// backup, not when creating a manifest.
+	if req.Manifest == nil {
+		// Walk the path and find the most recent backup.
+		// If we can't find a manifest file, this is a full backup.
+		var lastManifest string
+		suffix := filepath.Join(string(filepath.Separator), backupManifest)
+		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+			if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
+				lastManifest = path
+			}
+			return false
+		})
+		// Found a manifest now we extract the version to use in Backup().
+		if lastManifest != "" {
+			var m Manifest
+			if err := h.readManifest(lastManifest, &m); err != nil {
+				return err
+			}
+			// No new changes since last check
+			if m.Version == req.Backup.SnapshotTs {
+				return ErrBackupNoChanges
+			}
+			// Return the version of last backup
+			req.Version = m.Version
 		}
+		fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
+	} else {
+		fileName = backupManifest
 	}
 
-	path := filepath.Join(dir,
-		fmt.Sprintf(backupFmt, req.Backup.ReadTs, req.Backup.GroupId))
-	fp, err := os.Create(path)
+	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
+	err := os.Mkdir(dir, 0700)
+	if err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	path = filepath.Join(dir, fileName)
+	h.fp, err = os.Create(path)
 	if err != nil {
 		return err
 	}
 	glog.V(2).Infof("Using file path: %q", path)
-	h.fp = fp
 
 	return nil
 }
 
 // Load uses tries to load any backup files found.
-// Returns nil on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, fn loadFn) error {
-	if !h.exists(uri.Path) {
-		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+// Returns nil and the maximum Ts version on success, error otherwise.
+func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
+	if !pathExist(uri.Path) {
+		return 0, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// find files and sort.
-	files := x.FindFilesFunc(uri.Path, func(path string) bool {
-		return strings.HasSuffix(path, ".backup")
+	// Get a lisst of all the manifest files at the location.
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, suffix)
 	})
-	if len(files) == 0 {
-		return x.Errorf("No backup files found in %q", uri.Path)
+	if len(manifests) == 0 {
+		return 0, x.Errorf("No manifests found at path: %s", uri.Path)
 	}
-	sort.Strings(files)
-	glog.V(2).Infof("Loading backup file(s): %v", files)
+	sort.Strings(manifests)
+	if glog.V(3) {
+		fmt.Printf("Found backup manifest(s): %v\n", manifests)
+	}
 
-	for _, file := range files {
-		fp, err := os.Open(file)
-		if err != nil {
-			return x.Errorf("Error opening %q: %s", file, err)
+	// version is returned with the max manifest version found.
+	var version uint64
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file,
+	// otherwise this is a failure and the user must remedy.
+	for _, manifest := range manifests {
+		var m Manifest
+		if err := h.readManifest(manifest, &m); err != nil {
+			return 0, x.Wrapf(err, "While reading %q", manifest)
 		}
-		defer fp.Close()
-		if err = fn(fp, file); err != nil {
-			return err
+		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
+			if glog.V(2) {
+				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
+			}
+			continue
 		}
+
+		// Load the backup for each group in manifest.
+		path := filepath.Dir(manifest)
+		for _, groupId := range m.Groups {
+			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			fp, err := os.Open(file)
+			if err != nil {
+				return 0, x.Wrapf(err, "Failed to open %q", file)
+			}
+			defer fp.Close()
+			if err = fn(fp, int(groupId)); err != nil {
+				return 0, err
+			}
+		}
+		version = m.Version
 	}
-	return nil
+	return version, nil
 }
 
 func (h *fileHandler) Close() error {
-	h.readers.Close()
 	if h.fp == nil {
 		return nil
 	}
@@ -121,9 +171,9 @@ func (h *fileHandler) Write(b []byte) (int, error) {
 	return h.fp.Write(b)
 }
 
-// Exists checks if a path (file or dir) is found at target.
+// pathExist checks if a path (file or dir) is found at target.
 // Returns true if found, false otherwise.
-func (h *fileHandler) exists(path string) bool {
+func pathExist(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true

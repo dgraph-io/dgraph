@@ -13,15 +13,15 @@ services:
     ports:
       - 5080:5080
       - 6080:6080
-    command: /gobin/dgraph zero --my=zero1:5080 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
+    command: /gobin/dgraph zero --my=zero1:5080 --bindall --logtostderr -v=0
     volumes:
       - type: bind
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
+      - type: bind
+        source: $PWD/data
+        target: /data
 
   dg1:
     image: dgraph/dgraph:latest
@@ -34,13 +34,13 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
+      - type: bind
+        source: $PWD/data
+        target: /data
     ports:
       - 8180:8180
       - 9180:9180
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   dg2:
     image: dgraph/dgraph:latest
@@ -55,13 +55,13 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
+      - type: bind
+        source: $PWD/data
+        target: /data
     ports:
       - 8182:8182
       - 9182:9182
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   dg3:
     image: dgraph/dgraph:latest
@@ -76,10 +76,10 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-      # - type: bind
-      #   source: "${DATA}"
-      #   target: /data
+      - type: bind
+        source: $PWD/data
+        target: /data
     ports:
       - 8183:8183
       - 9183:9183
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16

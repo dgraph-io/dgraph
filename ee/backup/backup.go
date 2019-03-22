@@ -14,7 +14,9 @@ package backup
 
 import (
 	"context"
-	"net/url"
+	"encoding/json"
+	"fmt"
+	"sync"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -23,11 +25,16 @@ import (
 	"github.com/golang/glog"
 )
 
+// ErrBackupNoChanges is returned when the manifest version is equal to the snapshot version.
+// This means that no data updates happened since the last backup.
+var ErrBackupNoChanges = x.Errorf("No changes since last backup, OK.")
+
 // Request has all the information needed to perform a backup.
 type Request struct {
-	DB     *badger.DB // Badger pstore managed by this node.
-	Sizex  uint64     // approximate upload size
-	Backup *pb.BackupRequest
+	DB       *badger.DB // Badger pstore managed by this node.
+	Backup   *pb.BackupRequest
+	Manifest *Manifest
+	Version  uint64
 }
 
 // Process uses the request values to create a stream writer then hand off the data
@@ -35,63 +42,73 @@ type Request struct {
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
 func (r *Request) Process(ctx context.Context) error {
-	h, err := r.newHandler()
-	if err != nil {
-		glog.Errorf("Unable to get handler for request: %+v. Error: %v", r, err)
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
+	handler, err := r.newHandler()
+	if err != nil {
+		if err != ErrBackupNoChanges {
+			glog.Errorf("Unable to get handler for request: %+v. Error: %v", r.Backup, err)
+		}
+		return err
+	}
+	glog.V(3).Infof("Backup manifest version: %d", r.Version)
+
 	stream := r.DB.NewStreamAt(r.Backup.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	// Take full backups for now.
-	if _, err := stream.Backup(h, 0); err != nil {
+	// Here we return the max version in the original request obejct. We will use this
+	// to create our manifest to complete the backup.
+	r.Backup.Since, err = stream.Backup(handler, r.Version)
+	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return err
 	}
-	if err := h.Close(); err != nil {
+	glog.V(2).Infof("Backup group %d version: %d", r.Backup.GroupId, r.Backup.Since)
+	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return err
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
-	return err
+	return nil
 }
 
-// newHandler parses the requested target URI, finds a handler and then tries to create a session.
-// Target URI formats:
-//   [scheme]://[host]/[path]?[args]
-//   [scheme]:///[path]?[args]
-//   /[path]?[args] (only for local or NFS)
-//
-// Target URI parts:
-//   scheme - service handler, one of: "s3", "gs", "az", "http", "file"
-//     host - remote address. ex: "dgraph.s3.amazonaws.com"
-//     path - directory, bucket or container at target. ex: "/dgraph/backups/"
-//     args - specific arguments that are ok to appear in logs.
-//
-// Global args (might not be support by all handlers):
-//     secure - true|false turn on/off TLS.
-//   compress - true|false turn on/off data compression.
-//
-// Examples:
-//   s3://dgraph.s3.amazonaws.com/dgraph/backups?secure=true
-//   gs://dgraph/backups/
-//   as://dgraph-container/backups/
-//   http://backups.dgraph.io/upload
-//   file:///tmp/dgraph/backups or /tmp/dgraph/backups?compress=gzip
-func (r *Request) newHandler() (handler, error) {
-	uri, err := url.Parse(r.Backup.Location)
+// Manifest records backup details, these are values used during restore.
+// Version is the maximum version seen.
+// Groups are the IDs of the groups involved.
+// ReadTs is the original backup request timestamp.
+type Manifest struct {
+	sync.Mutex
+	Version uint64   `json:"version"`
+	ReadTs  uint64   `json:"read_ts"`
+	Groups  []uint32 `json:"groups"`
+}
+
+// GoString implements the GoStringer interface for Manifest.
+func (m *Manifest) GoString() string {
+	return fmt.Sprintf(`Manifest{Version: %d, ReadTs: %d, Groups: %v}`,
+		m.Version, m.ReadTs, m.Groups)
+}
+
+// Complete will finalize a backup by writing the manifest at the backup destination.
+func (r *Request) Complete(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	handler, err := r.newHandler()
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	// find handler for this URI scheme
-	h := getHandler(uri.Scheme)
-	if h == nil {
-		return nil, x.Errorf("Unable to handle url: %v", uri)
+	// Record the ReadTs from the request.
+	if r.Manifest.ReadTs == 0 {
+		r.Manifest.ReadTs = r.Backup.ReadTs
 	}
-
-	if err := h.Create(uri, r); err != nil {
-		return nil, err
+	if err = json.NewEncoder(handler).Encode(r.Manifest); err != nil {
+		return err
 	}
-	return h, nil
+	if err = handler.Close(); err != nil {
+		return err
+	}
+	glog.Infof("Backup completed OK.")
+	return nil
 }

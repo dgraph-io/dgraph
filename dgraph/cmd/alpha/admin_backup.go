@@ -31,23 +31,24 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !Alpha.Conf.GetBool("enterprise_features") {
-		err := x.Errorf("You must enable Dgraph enterprise features.")
-		x.SetStatus(w, err.Error(), "Backup failed.")
+		x.SetStatus(w,
+			"You must enable Dgraph enterprise features first. "+
+				"Restart Dgraph Alpha with --enterprise_features",
+			"Backup failed.")
 		return
 	}
-	dst := r.FormValue("destination")
-	if dst == "" {
-		err := x.Errorf("You must specify a 'destination' value")
-		x.SetStatus(w, err.Error(), "Backup failed.")
+
+	destination := r.FormValue("destination")
+	if destination == "" {
+		x.SetStatus(w, "You must specify a 'destination' value", "Backup failed.")
 		return
 	}
-	if err := worker.BackupOverNetwork(context.Background(), dst); err != nil {
+	if err := worker.BackupOverNetwork(context.Background(), destination); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`)))
-
 }
 
 func init() {

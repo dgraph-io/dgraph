@@ -430,7 +430,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Backup (BackupRequest)              returns (Num) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -462,10 +462,12 @@ message Status {
 }
 
 message BackupRequest {
-	uint64 read_ts  = 1;
-	uint32 group_id = 2;
-	string unix_ts  = 3;
-	string location = 4;
+	uint64 read_ts      = 1;
+	uint32 group_id     = 2;
+	string unix_ts      = 3;
+	string location     = 4;
+	uint64 since        = 5;
+	uint64 snapshot_ts  = 6;
 }
 
 message ExportRequest {
