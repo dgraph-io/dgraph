@@ -10,28 +10,28 @@ Feel free to fork our repo and start creating PR’s after assigning yourself to
 
 ## Contribution Steps
 
-**1. Set up Go-pre following the instructions in README.md.**
+**1. Set up gossamer following the instructions in README.md.**
 
-**2. Fork the Go-pre repo.**
+**2. Fork the gossamer repo.**
 
-**3. Create a local clone of Go-pre.**
+**3. Create a local clone of gossamer.**
 
 **4. Link your local clone to the fork on your Github repo.**
 
 ```
-$ git remote add your-go-pre-repo https://github.com/<your_github_user_name>/go-pre.git
+$ git remote add your-gossamer-repo https://github.com/<your_github_user_name>/gossamer.git
 ```
 
 **5. Link your local clone to the ChainSafe Systems repo so that you can easily fetch future changes to the ChainSafe Systems repo.**
 
 ```
-$ git remote add go-pre https://github.com/ChainSafeSystems/go-pre.git
-$ git remote -v (you should see myrepo and go-pre in the list of remotes)
+$ git remote add gossamer https://github.com/ChainSafeSystems/gossamer.git
+$ git remote -v (you should see myrepo and gossamer in the list of remotes)
 ```
 
 **6. Find an issue to work on.**
 
-Check out [open issues](https://github.com/ChainSafeSystems/go-pre/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave an issue to state that you would like to work on it.
+Check out [open issues](https://github.com/ChainSafeSystems/gossamer/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave an issue to state that you would like to work on it.
 
 **7. Make improvements to the code.**
 
@@ -59,7 +59,7 @@ $ gometallinter ./...
 
 **10. Create a pull request.**
 
-Navigate your browser to [https://github.com/ChainSafeSystems/go-pre](https://github.com/ChainSafeSystems/go-pre) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafeSystems/go-pre/pulls](https://github.com/ChainSafeSystems/go-pre/pulls).
+Navigate your browser to [https://github.com/ChainSafeSystems/gossamer](https://github.com/ChainSafeSystems/gossamer) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafeSystems/gossamer/pulls](https://github.com/ChainSafeSystems/gossamer/pulls).
 
 ## Contributor Responsibilities
 
@@ -67,7 +67,7 @@ We consider two types of contributions to our repo and categorize them as follow
 
 ### Part-Time Contributors
 
-Anyone can become a part-time contributor and help out on implementing Go-pre. Contributions can be made in the following ways:
+Anyone can become a part-time contributor and help out on implementing gossamer. Contributions can be made in the following ways:
 
 -   Engaging in Gitter conversations, asking questions on how to begin contributing to the project
 -   Opening up github issues to express interest in code to implement
