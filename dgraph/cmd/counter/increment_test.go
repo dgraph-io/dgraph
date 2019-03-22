@@ -218,3 +218,17 @@ func TestBestEffortOnly(t *testing.T) {
 	}
 	t.Logf("Best-Effort only reads with multiple preds OK.")
 }
+
+func TestBestEffortTs(t *testing.T) {
+	dg := setup(t)
+	pred := "counter.val"
+	incrementInLoop(t, dg, 1)
+	readBestEffort(t, dg, pred, 1)
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	_, err := queryCounter(txn, pred)
+	require.NoError(t, err)
+
+	incrementInLoop(t, dg, 1)        // Increment the MaxAssigned ts at Alpha.
+	_, err = queryCounter(txn, pred) // The timestamp here shouldn't change.
+	require.NoError(t, err)
+}

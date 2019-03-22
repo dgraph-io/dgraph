@@ -468,6 +468,7 @@ func populateCluster() {
 		<36> <abbr> "CA" .
 
 		<1> <password> "123456" .
+		<32> <password> "123456" .
 		<23> <pass> "654321" .
 
 		<23> <shadow_deep> "4" .

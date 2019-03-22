@@ -90,7 +90,7 @@ func TestCurlAuthorization(t *testing.T) {
 		failMsg:    "Token is expired",
 	})
 	// login again using the refreshJwt
-	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	_, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
@@ -109,7 +109,7 @@ func TestCurlAuthorization(t *testing.T) {
 		failMsg:    "Token is expired",
 	})
 	// refresh the jwts again
-	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	_, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
@@ -133,7 +133,7 @@ func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
 	// refresh the jwts again
-	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	_, _, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})

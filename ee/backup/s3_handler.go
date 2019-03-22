@@ -166,7 +166,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 				return err
 			}
 			// No new changes since last check
-			if m.Version == req.Backup.SnapshotTs {
+			if m.Version >= req.Backup.SnapshotTs {
 				return ErrBackupNoChanges
 			}
 			// Return the version of last backup
@@ -241,7 +241,6 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		m := make(map[int]*Manifest)
 		for r := range rc {
 			// Throttle requests a bit to stay under 1000 rps.
-			glog.Infof("RPS: %d/s", rps)
 			if rps > numReqs {
 				time.Sleep(time.Second)
 			}

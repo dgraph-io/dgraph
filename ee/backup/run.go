@@ -111,6 +111,8 @@ func run() error {
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
+	// TODO: Remove this dependency on Zero. It complicates restore for the end
+	// user.
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
 		zero, err := grpc.Dial(opt.zero,
