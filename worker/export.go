@@ -411,7 +411,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	return err
 }
 
-func ExportOverNetwork(ctx context.Context) error {
+func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Rejecting export request due to health check error: %v\n", err)

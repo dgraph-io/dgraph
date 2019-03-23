@@ -87,7 +87,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := worker.ExportOverNetwork(context.Background()); err != nil {
+	if err := worker.ExportOverNetwork(context.Background(), exportOpts); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
