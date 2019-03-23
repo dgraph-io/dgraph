@@ -136,7 +136,8 @@ func verifyUid(ctx context.Context, uid uint64) error {
 // AssignUids tries to assign unique ids to each identity in the subjects and objects in the
 // format of _:xxx. An identity, e.g. _:a, will only be assigned one uid regardless how many times
 // it shows up in the subjects or objects
-func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, nquads []*api.NQuad, vars map[string][]string,
+) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	num := &pb.Num{}
 	var err error
@@ -146,6 +147,12 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 			return newUids, errors.New("Predicate deletion should be called via alter")
 		}
 
+		if nq.VarName != nil {
+			// TODO: check Typ
+			if s, ok := vars[nq.VarName.GetDefaultVal()]; ok {
+				nq.Subject = s[0]
+			}
+		}
 		if len(nq.Subject) == 0 {
 			return nil, x.Errorf("Subject must not be empty for nquad: %+v", nq)
 		}
