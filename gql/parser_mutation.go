@@ -18,12 +18,10 @@ package gql
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 // ParseMutation parses a block of text into a mutation.
@@ -45,23 +43,12 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	// Here we switch into txn mode and try to fetch any query inside a txn block.
 	// If no query text is found, this txn is a no-op.
 	if item.Typ == itemMutationTxn {
-		var req Request
+		var err error
 		// Get the query text: txn{ query { ... }}
-		str, err := parseMutationTxnQuery(it)
+		mu.TxnQuery, err = parseMutationTxnQuery(it)
 		if err != nil {
 			return nil, err
 		}
-		// Parse query
-		req.Str = str
-		req.Variables = make(map[string]string)
-		res, err := Parse(req)
-		if err != nil {
-			// TODO: Use contextual errors - issue#2646
-			if !strings.HasPrefix(err.Error(), `Some variables are defined but not used`) {
-				return nil, err
-			}
-		}
-		glog.V(2).Infof("Mutation txn query: %+v", res.Query)
 		inTxn = true
 		item = it.Item()
 		// fallthrough to regular mutation parsing.
