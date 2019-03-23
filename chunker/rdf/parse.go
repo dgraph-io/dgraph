@@ -86,6 +86,8 @@ L:
 			if item = it.Item(); item.Typ != itemVarName {
 				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
 			}
+			// Only supported keywords is 'uid' atm.
+			rnq.VarName = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: item.Val}}
 
 			it.Next() // parse ')'
 
@@ -188,13 +190,13 @@ L:
 	if seenOval && rnq.ObjectValue == nil {
 		rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: oval}}
 	}
-	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
+	if (len(rnq.Subject) == 0 && rnq.VarName == nil) || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, x.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
-	if !sane(rnq.Subject) || !sane(rnq.Predicate) ||
+	if (!sane(rnq.Subject) && rnq.VarName == nil) || !sane(rnq.Predicate) ||
 		!sane(rnq.ObjectId) || !sane(rnq.Label) {
 		return rnq, x.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
