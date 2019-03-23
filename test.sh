@@ -2,6 +2,19 @@
 #
 # usage: test.sh [pkg_regex]
 
+# Notes for testing under macOS (Sierra and up)
+# Required Homebrew (https://brew.sh/) packages:
+#   - curl
+#   - coreutils
+#   - gnu-getop
+#   - findutils
+#
+# Your $PATH must have all required packages in .bashrc:
+#   PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
+#   PATH="/usr/local/opt/curl/bin:$PATH"
+#   PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+#   PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
+
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 
