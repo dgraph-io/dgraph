@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package main
 
 import (
@@ -61,23 +62,25 @@ type ComposeConfig struct {
 }
 
 type Options struct {
-	NumZeros       int
-	NumAlphas      int
-	NumReplicas    int
-	LruSizeMB      int
-	EnterpriseMode bool
-	AclSecret      string
-	DataDir        string
+	BaseOffset  int
+	LruSizeMB   int
+	NumAlphas   int
+	NumReplicas int
+	NumZeros    int
+	Verbosity   int
+
 	DataVol        bool
+	EnterpriseMode bool
+	Jaeger         bool
+	LocalBin       bool
+	Metrics        bool
 	TempFS         bool
 	UserOwnership  bool
-	Jaeger         bool
-	Metrics        bool
-	TestPortRange  bool
-	Verbosity      int
-	OutFile        string
-	LocalBin       bool
 	WhiteList      bool
+
+	AclSecret string
+	DataDir   string
+	OutFile   string
 }
 
 var opts Options
@@ -159,9 +162,9 @@ func initService(basename string, idx, grpcPort int) Service {
 
 func getOffset(idx int) int {
 	if idx == 1 {
-		return 0
+		return opts.BaseOffset
 	}
-	return idx
+	return opts.BaseOffset + idx
 }
 
 func getZero(idx int) Service {
@@ -181,19 +184,15 @@ func getZero(idx int) Service {
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), zeroBasePort)
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), zeroBasePort+opts.BaseOffset)
 	}
 
 	return svc
 }
 
 func getAlpha(idx int) Service {
-	baseOffset := 0
-	if opts.TestPortRange {
-		baseOffset += 100
-	}
 	basename := "alpha"
-	internalPort := alphaBasePort + baseOffset + getOffset(idx)
+	internalPort := alphaBasePort + getOffset(idx)
 	grpcPort := internalPort + 1000
 
 	svc := initService(basename, idx, grpcPort)
@@ -202,10 +201,10 @@ func getAlpha(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d", baseOffset+getOffset(idx))
+	svc.Command += fmt.Sprintf(" -o %d", getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
-	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
+	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort+opts.BaseOffset)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -329,7 +328,7 @@ func main() {
 		"number of alpha replicas in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "o", false,
+	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
@@ -345,8 +344,6 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
-	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
-		"use alpha ports expected by regression tests")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O", "./docker-compose.yml",
@@ -355,6 +352,8 @@ func main() {
 		"Use locally compiled binary. Set to false to pick binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"If true, include a whitelist.")
+	cmd.PersistentFlags().IntVarP(&opts.BaseOffset, "offset", "o", 100,
+		"Base offset for all instances.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
