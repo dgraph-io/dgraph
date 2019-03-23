@@ -15,7 +15,7 @@ function restartCluster {
   pushd $basedir/dgraph >/dev/null
   echo "Rebuilding dgraph ..."
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    xgo --targets=linux/amd64 . && mv -f dgraph-linux-amd64 $GOPATH/bin/dgraph
+    (env GOOS=linux GOARCH=amd64 go build) && mv -f dgraph $GOPATH/bin/dgraph
   else
     make install
   fi

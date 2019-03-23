@@ -4,6 +4,7 @@
 
 # Notes for testing under macOS (Sierra and up)
 # Required Homebrew (https://brew.sh/) packages:
+#   - bash
 #   - curl
 #   - coreutils
 #   - gnu-getop
@@ -14,9 +15,10 @@
 #   PATH="/usr/local/opt/curl/bin:$PATH"
 #   PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
 #   PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
+#   export PATH
 #
-# xgo cross-compiler (to build binary for Docker):
-#   go get github.com/karalabe/xgo
+# After brew packages and PATHs are set, run tests with:
+#   /usr/local/bin/bash test.sh
 #
 # Keep in mind that the test build will overwrite the "dgraph"
 # binary in your $GOPATH/bin with the Linux-ELF binary for Docker.
