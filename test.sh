@@ -14,6 +14,12 @@
 #   PATH="/usr/local/opt/curl/bin:$PATH"
 #   PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
 #   PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
+#
+# xgo cross-compiler (to build binary for Docker):
+#   go get github.com/karalabe/xgo
+#
+# Keep in mind that the test build will overwrite the "dgraph"
+# binary in your $GOPATH/bin with the Linux-ELF binary for Docker.
 
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
