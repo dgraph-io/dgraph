@@ -427,6 +427,36 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return s.doMutate(ctx, mu)
 }
 
+func txnQuery(ctx context.Context, req *api.Request) (*query.QueryRequest, error) {
+	parsedReq, err := gql.Parse(gql.Request{
+		Str:       req.Query,
+		Variables: req.Vars,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err = validateQuery(parsedReq.Query); err != nil {
+		return nil, err
+	}
+	if req.StartTs == 0 {
+		return nil, x.Errorf("No startTs")
+	}
+
+	var l query.Latency
+	l.Start = time.Now()
+
+	var qr = query.QueryRequest{
+		Latency:  &l,
+		GqlQuery: &parsedReq,
+		ReadTs:   req.StartTs,
+	}
+
+	if err = qr.ProcessQuery(ctx); err != nil {
+		return nil, x.Wrap(err)
+	}
+	return &qr, nil
+}
+
 func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -476,6 +506,24 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 	var l query.Latency
 	l.Start = time.Now()
+
+	// Parse query and process
+	var queryVars map[string][]string
+	if mu.TxnQuery != "" {
+		qr, err := txnQuery(ctx, &api.Request{
+			StartTs: mu.StartTs,
+			Query:   mu.TxnQuery,
+			Vars:    make(map[string]string),
+		})
+		if err != nil {
+			return resp, err
+		}
+		queryVars = qr.GetUids()
+		glog.V(3).Infof("TxnQuery: qr=%+v vars=%v", qr, queryVars)
+		l.Parsing += qr.Latency.Parsing
+		l.Processing += qr.Latency.Processing
+	}
+
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
@@ -492,7 +540,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		}
 	}()
 
-	newUids, err := query.AssignUids(ctx, gmu.Set)
+	newUids, err := query.AssignUids(ctx, gmu.Set, queryVars)
 	if err != nil {
 		return resp, err
 	}
