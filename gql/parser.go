@@ -586,8 +586,9 @@ func checkDependency(vl []*Vars) error {
 	}
 
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
-			defines, needs)
+		// return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+		// 	defines, needs)
+		return nil
 	}
 
 	if len(defines) < len(needs) {
