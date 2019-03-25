@@ -247,7 +247,7 @@ func CreateUserNQuads(userId string, password string) []*api.NQuad {
 		},
 		{
 			Subject:     "_:newuser",
-			Predicate:   "type",
+			Predicate:   "dgraph.type",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
 		},
 	}
