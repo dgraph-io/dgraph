@@ -188,10 +188,10 @@ func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
 	}
 
-	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
-	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
+	tlsCfg, err := x.LoadClientTLSConfig(conf, x.TlsClientCert, x.TlsClientKey)
+	x.Checkf(err, "While loading TLS configuration")
 
-	conn, err := x.SetupConnection(opt.dgraph, &tlsConf, false)
+	conn, err := x.SetupConnection(opt.dgraph, tlsCfg, false)
 	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 
 	dc := api.NewDgraphClient(conn)

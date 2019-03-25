@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -64,9 +65,9 @@ type options struct {
 }
 
 var (
-	opt     options
-	tlsConf x.TLSHelperConfig
-	Live    x.SubCommand
+	opt    options
+	tlsCfg *tls.Config
+	Live   x.SubCommand
 )
 
 func init() {
@@ -260,7 +261,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	}
 
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
+	connzero, err := x.SetupConnection(opt.zero, tlsCfg, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)
@@ -299,8 +300,10 @@ func run() error {
 		useCompression:      Live.Conf.GetBool("use_compression"),
 		newUids:             Live.Conf.GetBool("new_uids"),
 	}
-	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
-	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
+	tlsCfg, err := x.LoadClientTLSConfig(Live.Conf, x.TlsClientCert, x.TlsClientKey)
+	if err != nil {
+		return err
+	}
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
@@ -315,7 +318,7 @@ func run() error {
 	ds := strings.Split(opt.dgraph, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, &tlsConf, opt.useCompression)
+		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
 		defer conn.Close()
 
