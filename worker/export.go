@@ -44,13 +44,13 @@ import (
 type ExportFormat int
 
 const (
-       ExportFormatRdf ExportFormat = iota
-       ExportFormatJson
+	ExportFormatRdf ExportFormat = iota
+	ExportFormatJson
 )
 
 // XXX Other options?
 type ExportOpts struct {
-       Format ExportFormat
+	Format ExportFormat
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -82,15 +82,79 @@ var predNonSpecialChars = unicode.RangeTable{
 }
 
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
-var uidFmtStr = "<0x%x>"
+var uidFmtStrRdf = "<0x%x>"
+var uidFmtStrJson = "\"0x%x\""
 
-func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) {
+func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (*bpb.KVList, error) {
+	var err error
 	var buf bytes.Buffer
 
+	if idx != 1 {
+		buf.WriteString(",\n")
+	}
+
+	l := pl.Length(readTs, 0)
+	n := 0
+
+	buf.WriteString(fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+",\"%s\":", uid, attr))
+	if l > 1 {
+		buf.WriteString("[")
+	}
+	err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
+		n += 1
+		if n != 1 {
+			buf.WriteString(",")
+		}
+
+		if p.PostingType == pb.Posting_REF {
+			buf.WriteString(fmt.Sprintf(uidFmtStrJson, p.Uid))
+		} else {
+			// Value posting
+			// Convert to appropriate type
+			vID := types.TypeID(p.ValType)
+			src := types.ValueForType(vID)
+			src.Value = p.Value
+			str, err := types.Convert(src, types.StringID)
+			if err != nil {
+				glog.Errorf("While converting %v to string. Err=%v. Ignoring.\n", src, err)
+				return nil
+			}
+
+			// trim null character at end
+			val := strings.TrimRight(str.Value.(string), "\x00")
+			if vID != types.IntID && vID != types.FloatID {
+				val = strconv.Quote(val)
+			}
+			buf.WriteString(val)
+			// TODO how to handle language tags?
+			if p.PostingType == pb.Posting_VALUE_LANG {
+				buf.WriteByte('@')
+				buf.WriteString(string(p.LangTag))
+			}
+		}
+
+		return nil
+	})
+	if l > 1 {
+		buf.WriteString("]")
+	}
+	buf.WriteString("}")
+
+	kv := &bpb.KV{
+		Value:   buf.Bytes(),
+		Version: 1,
+	}
+	return listWrap(kv), err
+}
+
+func toRDF(pl *posting.List, uid uint64, attr string, readTs uint64) (*bpb.KVList, error) {
+	var buf bytes.Buffer
+
+	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", uid, attr)
 	err := pl.Iterate(readTs, 0, func(p *pb.Posting) error {
 		buf.WriteString(prefix)
 		if p.PostingType == pb.Posting_REF {
-			buf.WriteString(fmt.Sprintf(uidFmtStr, p.Uid))
+			buf.WriteString(fmt.Sprintf(uidFmtStrRdf, p.Uid))
 
 		} else {
 			// Value posting
@@ -250,6 +314,11 @@ func (writer *fileWriter) Close() error {
 
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) error {
+	ext := "rdf"
+	if in.JsonFmt {
+		ext = "json"
+	}
+
 	if in.GroupId != groups().groupId() {
 		return x.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
 			groups().groupId(), in.GroupId)
@@ -274,10 +343,11 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	// Open data file now.
-	dataPath, err := path("rdf.gz")
+	dataPath, err := path(ext+".gz")
 	if err != nil {
 		return err
 	}
+
 	glog.Infof("Exporting data for group: %d at %s\n", in.GroupId, dataPath)
 	dataWriter := &fileWriter{}
 	if err := dataWriter.open(dataPath); err != nil {
@@ -295,6 +365,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
+	idx := 0
+
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -310,6 +382,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return pk.IsData() || pk.IsSchema()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+		idx += 1
 		item := itr.Item()
 		pk := x.Parse(item.Key())
 
@@ -328,12 +401,14 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return toSchema(pk.Attr, update)
 
 		case pk.IsData():
-			prefix := fmt.Sprintf(uidFmtStr+" <%s> ", pk.Uid, pk.Attr)
 			pl, err := posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
 			}
-			return toRDF(pl, prefix, in.ReadTs)
+			if in.JsonFmt {
+				return toJSON(pl, pk.Uid, pk.Attr, in.ReadTs, idx)
+			}
+			return toRDF(pl, pk.Uid, pk.Attr, in.ReadTs)
 
 		default:
 			glog.Fatalf("Invalid key found: %+v\n", pk)
@@ -360,8 +435,18 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil
 	}
 	// All prepwork done. Time to roll.
+	if in.JsonFmt {
+		if _, err = dataWriter.gw.Write([]byte("[\n")); err != nil {
+			return err
+		}
+	}
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
+	}
+	if in.JsonFmt {
+		if _, err = dataWriter.gw.Write([]byte("\n]\n")); err != nil {
+			return err
+		}
 	}
 	if err := dataWriter.Close(); err != nil {
 		return err
@@ -430,6 +515,11 @@ func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
 	gids := groups().KnownGroups()
 	glog.Infof("Requesting export for groups: %v\n", gids)
 
+	jsonFmt := false
+	if opts.Format == ExportFormatJson {
+		jsonFmt = true
+	}
+
 	ch := make(chan error, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
@@ -437,6 +527,7 @@ func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
 				GroupId: group,
 				ReadTs:  readTs,
 				UnixTs:  time.Now().Unix(),
+				JsonFmt: jsonFmt,
 			}
 			ch <- handleExportOverNetwork(ctx, req)
 		}(gid)
