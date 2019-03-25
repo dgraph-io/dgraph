@@ -29,10 +29,11 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc/credentials"
 )
 
 // DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
@@ -81,6 +82,26 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	x.CheckfNoTrace(err)
 
 	return dg
+}
+
+func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, error) {
+	tlsCfg, err := x.LoadClientTLSConfig(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	dialOpts := []grpc.DialOption{}
+	if tlsCfg != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	conn, err := grpc.Dial(serviceAddr, dialOpts...)
+	if err != nil {
+		return nil, err
+	}
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	return dg, nil
 }
 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
