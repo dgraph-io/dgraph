@@ -28,8 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/z"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -429,34 +427,4 @@ func TestAccessWithoutLoggingIn(t *testing.T) {
 	queryPredicateWithUserAccount(t, dg, false)
 	mutatePredicateWithUserAccount(t, dg, false)
 	alterPredicateWithUserAccount(t, dg, false)
-}
-
-func accessOverTLS() error {
-	serverCert := os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/tls/node.cert"
-	// Create the client TLS credentials
-	creds, err := credentials.NewClientTLSFromFile(serverCert, "")
-	if err != nil {
-		return fmt.Errorf("could not load tls cert: %s", err)
-	}
-
-	addr := ":9180"
-	// Create a connection with the TLS credentials
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds))
-	if err != nil {
-		return fmt.Errorf("could not dial %s: %s", addr, err)
-	}
-
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	userid := "tlsUser"
-	password := "password123"
-	if err := dg.Login(context.Background(), userid, password); err != nil {
-		return fmt.Errorf("error while logging in with %s: %v", userid, err)
-	}
-	return nil
-}
-
-func TestAclOverTLS(t *testing.T) {
-	if err := accessOverTLS(); err != nil {
-		t.Fatalf("Encountered error while access data over TLS:%v", err)
-	}
 }

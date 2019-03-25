@@ -153,9 +153,8 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 	return tls.NoClientCert, nil
 }
 
-// GenerateTLSConfig creates and returns a new *tls.Config with the
-// configuration provided. It returns a reload function if no problem is found.
-// Otherwise an error is returned
+// GenerateServerTLSConfig creates and returns a new *tls.Config with the
+// configuration provided.
 func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
 	if config.CertRequired {
 		tlsCfg = new(tls.Config)
@@ -185,10 +184,8 @@ func GenerateServerTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err e
 	return nil, nil
 }
 
-// GenerateTLSConfig creates and returns a new client side *tls.Config with the
-// configuration provided. If the ConfigType provided in TLSHelperConfig is
-// TLSServerConfig, it's return a reload function. If any problem is found, an
-// error is returned
+// GenerateClientTLSConfig creates and returns a new client side *tls.Config with the
+// configuration provided.
 func GenerateClientTLSConfig(config *TLSHelperConfig) (tlsCfg *tls.Config, err error) {
 	pool, err := generateCertPool(config.RootCACert, config.UseSystemCACerts)
 	if err != nil {
