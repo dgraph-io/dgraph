@@ -93,24 +93,18 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 		buf.WriteString(",\n")
 	}
 
-	l := pl.Length(readTs, 0)
-	n := 0
-
+	startedArray := false
 	buf.WriteString(fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+",\"%s\":", uid, attr))
-	if l > 1 {
-		buf.WriteString("[")
-	}
 	err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
-		n += 1
-		if n != 1 {
-			buf.WriteString(",")
-		}
-
 		if p.PostingType == pb.Posting_REF {
-			buf.WriteString(fmt.Sprintf(uidFmtStrJson, p.Uid))
+			if !startedArray {
+				buf.WriteString("[")
+				startedArray = true
+			} else {
+				buf.WriteString(",")
+			}
+			buf.WriteString(fmt.Sprintf("{\"uid\":"+uidFmtStrJson+"}", p.Uid))
 		} else {
-			// Value posting
-			// Convert to appropriate type
 			vID := types.TypeID(p.ValType)
 			src := types.ValueForType(vID)
 			src.Value = p.Value
@@ -120,12 +114,12 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 				return nil
 			}
 
-			// trim null character at end
 			val := strings.TrimRight(str.Value.(string), "\x00")
 			if vID != types.IntID && vID != types.FloatID {
 				val = strconv.Quote(val)
 			}
 			buf.WriteString(val)
+
 			// TODO how to handle language tags?
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				buf.WriteByte('@')
@@ -135,7 +129,7 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 
 		return nil
 	})
-	if l > 1 {
+	if startedArray {
 		buf.WriteString("]")
 	}
 	buf.WriteString("}")
@@ -343,7 +337,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	// Open data file now.
-	dataPath, err := path(ext+".gz")
+	dataPath, err := path(ext + ".gz")
 	if err != nil {
 		return err
 	}
