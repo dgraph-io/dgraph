@@ -104,8 +104,7 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// TLS configuration
-	x.RegisterTLSFlags(flag)
-	flag.String("tls_server_name", "", "Used to verify the server hostname.")
+	x.RegisterClientTLSFlags(flag)
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -300,7 +299,7 @@ func run() error {
 		useCompression:      Live.Conf.GetBool("use_compression"),
 		newUids:             Live.Conf.GetBool("new_uids"),
 	}
-	tlsCfg, err := x.LoadClientTLSConfig(Live.Conf, x.TlsClientCert, x.TlsClientKey)
+	tlsCfg, err := x.LoadClientTLSConfig(Live.Conf)
 	if err != nil {
 		return err
 	}

@@ -72,9 +72,6 @@ const (
 	// start aborting old transactions.
 	ForceAbortDifference = 5000
 
-	TlsClientCert = "client.crt"
-	TlsClientKey  = "client.key"
-
 	GrootId       = "groot"
 	AclPredicates = `
 {"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},

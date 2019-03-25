@@ -52,9 +52,13 @@ type TLSHelperConfig struct {
 	UseSystemCACerts bool
 }
 
-func RegisterTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+func RegisterClientTLSFlags(flag *pflag.FlagSet) {
+	flag.String("tls_cacert", "", "The CA Cert file used to verify server certificates.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
+	flag.String("tls_server_name", "", "Used to verify the server hostname.")
+	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
+	flag.String("tls_key", "", "(optional) The private key file "+
+		"provided by the client to the server.")
 }
 
 func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
@@ -73,24 +77,36 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 	return GenerateServerTLSConfig(&conf)
 }
 
-func LoadClientTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
-	error) {
-	conf := TLSHelperConfig{}
-	conf.CertDir = v.GetString("tls_dir")
-	// When the --tls_dir option is pecified, the connection will be set up using TLS instead of
-	// plaintext, and hence there must be a ca.cert file under the directory for the client to
-	// verify server's signature.
-	// However the client cert files are optional, depending on whether the server is run
-	// with the
-	if conf.CertDir != "" {
-		conf.CertRequired = true
-		conf.RootCACert = path.Join(conf.CertDir, tlsRootCert)
-		conf.Cert = path.Join(conf.CertDir, tlsCertFile)
-		conf.Key = path.Join(conf.CertDir, tlsKeyFile)
-		conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
-		conf.ServerName = v.GetString("tls_server_name")
+func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
+	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
+	// plaintext. However the client cert files are optional, depending on whether the server is
+	// requiring a client certificate.
+	caCert := v.GetString("tls_cacert")
+	if caCert != "" {
+		tlsCfg := tls.Config{}
 
-		return GenerateClientTLSConfig(&conf)
+		// 1. set up the root CA
+		pool, err := generateCertPool(caCert, v.GetBool("tls_use_system_ca"))
+		if err != nil {
+			return nil, err
+		}
+		tlsCfg.RootCAs = pool
+
+		// 2. set up the server name for verification
+		tlsCfg.ServerName = v.GetString("tls_server_name")
+
+		// 3. optionally load the client cert files
+		certFile := v.GetString("tls_cert")
+		keyFile := v.GetString("tls_key")
+		if certFile != "" && keyFile != "" {
+			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+			if err != nil {
+				return nil, err
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
+		}
+
+		return &tlsCfg, nil
 	}
 	return nil, nil
 }
