@@ -199,3 +199,37 @@ func TestDropPredicate(t *testing.T) {
 	// Finally, restore the schema.
 	setSchema(testSchema)
 }
+
+func TestNestedExpandAll(t *testing.T) {
+	query := `{
+		q(func: has(node)) {
+			uid
+			expand(_all_) {
+				uid
+				node {
+					uid
+					expand(_all_)
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {
+    "q": [
+      {
+        "uid": "0x2b5c",
+        "name": "expand",
+        "node": [
+          {
+            "uid": "0x2b5c",
+            "node": [
+              {
+                "uid": "0x2b5c",
+                "name": "expand"
+              }
+            ]
+          }
+        ]
+      }
+    ]}}`, js)
+}
