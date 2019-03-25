@@ -388,11 +388,8 @@ func (n *Node) streamMessages(to uint64, stream *Stream) {
 			}
 			lastLog = time.Now()
 		}
-		if i >= 1e3 {
-			if time.Now().After(deadline) {
-				return
-			}
-			i = 0
+		if i >= 1e3 || time.Now().After(deadline) {
+			return
 		}
 	}
 }
@@ -408,7 +405,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	}
 
 	c := pb.NewRaftClient(pool.Get())
-	ctx, span := otrace.StartSpan(context.Background(), fmt.Sprintf("Stream-%d-to-%d", n.Id, to))
+	ctx, span := otrace.StartSpan(context.Background(), fmt.Sprintf("RaftMessage-%d-to-%d", n.Id, to))
 	defer span.End()
 
 	mc, err := c.RaftMessage(ctx)
@@ -416,6 +413,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 		return err
 	}
 
+	var packets, lastPackets uint64
 	slurp := func(batch *pb.RaftBatch) {
 		for {
 			if len(batch.Payload.Data) > messageBatchSoftLimit {
@@ -424,12 +422,17 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 			select {
 			case data := <-msgCh:
 				batch.Payload.Data = append(batch.Payload.Data, data...)
+				packets++
 			default:
 				return
 			}
 		}
 	}
+
 	ctx = mc.Context()
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case data := <-msgCh:
@@ -437,8 +440,10 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				Context: n.RaftContext,
 				Payload: &api.Payload{Data: data},
 			}
+			packets++
 			slurp(batch) // Pick up more entries from msgCh, if present.
-			span.Annotatef(nil, "Sending data. Length: %d", len(batch.Payload.Data))
+			span.Annotatef(nil, "Sending data. Length: %d. Packets so far: %d",
+				packets, len(batch.Payload.Data), packets)
 			if err := mc.Send(batch); err != nil {
 				span.Annotatef(nil, "Error while mc.Send: %v", err)
 				switch {
@@ -452,6 +457,13 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				// RAFT would automatically retry.
 				return err
 			}
+		case <-ticker.C:
+			if lastPackets == packets {
+				span.Annotatef(nil,
+					"No activity for a while [Packets = %d]. Closing connection", packets)
+				return mc.CloseSend()
+			}
+			lastPackets = packets
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -615,7 +627,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
 			if !bytes.Equal(activeRctx, rs.RequestCtx) {
-				glog.V(1).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
+				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
 				goto again
 			}
 			return rs.Index, nil
@@ -651,7 +663,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			// call, causing more unique traffic and further delays in request processing.
 			activeRctx := make([]byte, 8)
 			x.Check2(n.Rand.Read(activeRctx))
-			glog.V(1).Infof("Request readctx: %#x", activeRctx)
+			glog.V(3).Infof("Request readctx: %#x", activeRctx)
 			for {
 				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {
