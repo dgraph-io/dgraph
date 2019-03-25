@@ -18,7 +18,7 @@ func TestAccessOverPlaintext(t *testing.T) {
 
 func TestAccessWithCaCert(t *testing.T) {
 	conf := viper.New()
-	conf.Set("tls_cacert", "./tls/ca.crt")
+	conf.Set("tls_cacert", "../tls/ca.crt")
 	conf.Set("tls_server_name", "node")
 
 	dg, err := z.DgraphClientWithCerts(":9180", conf)
