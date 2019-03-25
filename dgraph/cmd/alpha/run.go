@@ -64,7 +64,6 @@ const (
 
 var (
 	bindall bool
-	tlsCfg  *tls.Config
 )
 
 var Alpha x.SubCommand
