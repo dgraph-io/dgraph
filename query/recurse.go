@@ -68,6 +68,16 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 		depth++
 
+		// When the maximum depth has been reached, avoid retrieving any facets as
+		// the nodes at the other end of the edge will not be a part of this query.
+		// Otherwise, the facets will be included in the query without any other
+		// information about the node, which is quite counter-intuitive.
+		if depth == maxDepth {
+			for _, sg := range exec {
+				sg.Params.Facet = nil
+			}
+		}
+
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
 			go ProcessGraph(ctx, sg, dummy, rrch)
