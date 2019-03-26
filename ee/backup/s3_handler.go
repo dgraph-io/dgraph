@@ -212,20 +212,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	readManifests := func(objects []string) (map[int]*Manifest, error) {
-		res := make(map[int]*Manifest)
-		for i, object := range objects {
-			var m Manifest
-			err := h.readManifest(mc, object, &m)
-			if err != nil {
-				return nil, x.Wrapf(err, "While reading %q", object)
-			}
-			res[i] = &m
-		}
-		return res, nil
-	}
-
-	var objects []string
+	var manifests []string
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -233,20 +220,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
-			objects = append(objects, object.Key)
+			manifests = append(manifests, object.Key)
 		}
 	}
-	if len(objects) == 0 {
+	if len(manifests) == 0 {
 		return 0, x.Errorf("No manifests found at: %s", uri.String())
 	}
-	sort.Strings(objects)
+	sort.Strings(manifests)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, objects)
-	}
-
-	manifests, err := readManifests(objects)
-	if err != nil {
-		return 0, err
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
 	}
 
 	// version is returned with the max manifest version found.
@@ -255,14 +237,14 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for i, manifest := range objects {
-		m, ok := manifests[i]
-		if !ok {
-			return 0, x.Errorf("Manifest not found: %s", manifest)
+	for _, manifest := range manifests {
+		var m Manifest
+		if err := h.readManifest(mc, manifest, &m); err != nil {
+			return 0, x.Wrapf(err, "While reading %q", manifest)
 		}
 		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, m)
+				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
 			continue
 		}
