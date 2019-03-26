@@ -68,7 +68,7 @@ func TestBackup(t *testing.T) {
 	}
 	for _, tc := range tests {
 		if !t.Run(tc.name, wrap(tc.f)) {
-			break
+			t.Fatal("test failed")
 		}
 	}
 
