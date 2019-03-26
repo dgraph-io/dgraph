@@ -14,6 +14,7 @@ services:
       - 5080:5080
       - 6080:6080
     command: /gobin/dgraph zero --my=zero1:5080 --bindall --logtostderr -v=0
+    user: ${UID:-0}
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -29,6 +30,7 @@ services:
     working_dir: /data/dg1
     labels:
       cluster: test
+    user: ${UID:-0}
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -50,6 +52,7 @@ services:
       cluster: test
     depends_on:
       - dg1
+    user: ${UID:-0}
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -71,6 +74,7 @@ services:
       cluster: test
     depends_on:
       - dg2
+    user: ${UID:-0}
     volumes:
       - type: bind
         source: $GOPATH/bin
