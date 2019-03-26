@@ -461,7 +461,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 		case <-ticker.C:
 			if lastPackets == packets {
 				span.Annotatef(nil,
-					"No activity for a while [Packets = %d]. Closing connection", packets)
+					"No activity for a while [Packets == %d]. Closing connection.", packets)
 				return mc.CloseSend()
 			}
 			lastPackets = packets
