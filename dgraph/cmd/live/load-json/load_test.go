@@ -48,18 +48,20 @@ func checkLoadedData(t *testing.T) {
 				name
 				age
 				role
+				role@es
 			}
 		}
 	`)
 	require.NoError(t, err)
 	z.CompareJSON(t, `
 		{
-		    "q": [
+			"q": [
 					{
 					"name": "Homer",
 					"age": 38,
-					"role": "father"
-			    }
+					"role": "father",
+					"role@es": "padre"
+				}
 			]
 		}
 	`, string(resp.GetJson()))
@@ -69,6 +71,7 @@ func checkLoadedData(t *testing.T) {
 			q(func: anyofterms(name, "Maggie")) {
 				name
 				role
+				role@es
 				carries
 			}
 		}
@@ -76,12 +79,13 @@ func checkLoadedData(t *testing.T) {
 	require.NoError(t, err)
 	z.CompareJSON(t, `
 		{
-		    "q": [
+			"q": [
 				{
 					"name": "Maggie",
 					"role": "daughter",
+					"role@es": "hija",
 					"carries": "pacifier"
-			    }
+				}
 			]
 		}
 	`, string(resp.GetJson()))

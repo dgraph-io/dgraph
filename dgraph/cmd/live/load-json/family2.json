@@ -27,6 +27,7 @@
     "name":"Maggie",
     "age":"1",
     "role":"daughter",
+    "role@es":"hija",
     "carries":"pacifier",
     "sibling_of": [
       { "uid":"_:b" },

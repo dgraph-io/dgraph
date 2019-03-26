@@ -4,6 +4,7 @@
     "name":"Homer",
     "age":"38",
     "role":"father",
+    "role@es":"padre",
     "parent_to": [
       { "uid":"_:b" },
       { "uid":"_:l" },

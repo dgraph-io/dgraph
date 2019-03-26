@@ -4,7 +4,10 @@
     "name":"Homer",
     "age":"38",
     "role":"father",
-    "parent_to": [
+    "role@es":"padre",
+    "role@fr":"père",
+    "role@hi":"पिता",
+    "parent_to":[
       { "uid":"_:b" },
       { "uid":"_:l" },
       { "uid":"_:m2" }
@@ -15,8 +18,11 @@
     "name":"Marge",
     "age":"34",
     "role":"mother",
+    "role@es":"madre",
+    "role@fr":"mère",
+    "role@hi":"मां",
     "aka":"Midge",
-    "parent_to": [
+    "parent_to":[
       { "uid":"_:b" },
       { "uid":"_:l" },
       { "uid":"_:m2" }
@@ -27,9 +33,12 @@
     "name":"Bart",
     "age":"10",
     "role":"son",
+    "role@es":"hijo",
+    "role@fr":"fils",
+    "role@hi":"बेटा",
     "aka":"El Barto",
     "carries":"slingshot",
-    "sibling_of": [
+    "sibling_of":[
       { "uid":"_:l" },
       { "uid":"_:m2" }
     ]
@@ -39,8 +48,11 @@
     "name":"Lisa",
     "age":"8",
     "role":"daughter",
+    "role@es":"hija",
+    "role@fr":"fille",
+    "role@hi":"बेटी",
     "carries":"saxomophone",
-    "sibling_of": [
+    "sibling_of":[
       { "uid":"_:b" },
       { "uid":"_:m2" }
     ]
@@ -50,8 +62,11 @@
     "name":"Maggie",
     "age":"1",
     "role":"daughter",
+    "role@es":"hija",
+    "role@fr":"fille",
+    "role@hi":"बेटी",
     "carries":"pacifier",
-    "sibling_of": [
+    "sibling_of":[
       { "uid":"_:b" },
       { "uid":"_:l" }
     ]
@@ -60,9 +75,12 @@
     "uid":"_:a",
     "name":"Abraham",
     "age":"83",
-    "role":"father",
+    "role":"grandfather",
+    "role@es":"abuelo",
+    "role@fr":"grand-père",
+    "role@hi":"दादा",
     "aka":"Grampa",
-    "parent_to": [
+    "parent_to":[
       { "uid":"_:h" }
     ]
   }
