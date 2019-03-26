@@ -213,7 +213,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 		}
 		if loop == 1 {
 			rc = batch.GetContext()
-			span.Annotatef(nil, "Stream from %#x", rc.Id)
+			span.Annotatef(nil, "Stream from %#x", rc.GetId())
 			if rc != nil {
 				n.Connect(rc.Id, rc.Addr)
 			}
@@ -243,7 +243,9 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			// Step can block forever. See: https://github.com/etcd-io/etcd/issues/10585
 			// So, add a context with timeout to allow it to get out of the blockage.
 			if err := raft.Step(ctx, msg); err != nil {
-				return err
+				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
+					rc.GetId(), err)
+				return x.Errorf("Error while raft.Step from %#x: %v", rc.GetId(), err)
 			}
 			idx += sz
 		}

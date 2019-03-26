@@ -700,12 +700,11 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			var start time.Time
+			start := time.Now()
 			var span *otrace.Span
 			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
 				// Optionally, trace this run.
 				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop", traceOpt)
-				start = time.Now()
 			}
 
 			if rd.SoftState != nil {
@@ -842,11 +841,14 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
-			}
-			if !start.IsZero() {
 				ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
 					x.LatencyMs.M(x.SinceMs(start)))
+			}
+			if time.Since(start) > 100*time.Millisecond {
+				glog.Warningf(
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk.",
+					time.Since(start).Round(time.Millisecond))
 			}
 		}
 	}
