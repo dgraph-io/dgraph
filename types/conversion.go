@@ -36,10 +36,17 @@ import (
 
 // Convert converts the value to given scalar type.
 func Convert(from Val, toID TypeID) (Val, error) {
-	to := ValueForType(toID)
+	var to Val
+
+	// sanity: we expect a value
+	data, ok := from.Value.([]byte)
+	if !ok {
+		return to, x.Errorf("Invalid data to convert to %s", toID.Name())
+	}
+	to = ValueForType(toID)
 	fromID := from.Tid
-	data := from.Value.([]byte)
 	res := &to.Value
+
 	// Convert from-type to to-type and store in the result interface.
 	switch fromID {
 	case BinaryID:
