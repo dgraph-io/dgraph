@@ -127,6 +127,8 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 			}
 		}
 
+		// TODO facets!
+
 		return nil
 	})
 	if startedArray {
