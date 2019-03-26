@@ -1362,8 +1362,6 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		srcMap := doneVars[srcVar.Name]
 		// The value var can be empty. No need to check for nil.
 		sg.Params.uidToVal = srcMap.Vals
-	} else if len(sg.Params.Expand) > 0 {
-		// Nothing to do here.
 	} else {
 		return x.Errorf("Unhandled pb.node %v with parent %v", sg.Attr, parent.Attr)
 	}
@@ -2084,23 +2082,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
-		// Looks like we're done here. Be careful with nil srcUIDs!
-		if span != nil {
-			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
-		}
-		out := sg.Children[:0]
-		for _, child := range sg.Children {
-			if child.IsInternal() && child.Attr == "expand" {
-				continue
-			}
-			out = append(out, child)
-		}
-		sg.Children = out // Remove any expand nodes we might have added.
-		rch <- nil
-		return
-	}
-
 	// Run filters if any.
 	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
@@ -2250,6 +2231,24 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			childErr = err
 		}
 	}
+
+	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+		// Looks like we're done here. Be careful with nil srcUIDs!
+		if span != nil {
+			span.Annotatef(nil, "Zero uids for %q", sg.Attr)
+		}
+		out := sg.Children[:0]
+		for _, child := range sg.Children {
+			if child.IsInternal() && child.Attr == "expand" {
+				continue
+			}
+			out = append(out, child)
+		}
+		sg.Children = out // Remove any expand nodes we might have added.
+		rch <- nil
+		return
+	}
+
 	rch <- childErr
 }
 
