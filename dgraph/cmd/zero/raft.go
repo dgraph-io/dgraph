@@ -630,7 +630,6 @@ func (n *node) Run() {
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
-				glog.V(1).Infof("Got read state: %#x", rs.RequestCtx)
 				select {
 				case readStateCh <- rs:
 				default:
