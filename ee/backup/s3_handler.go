@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -204,12 +203,6 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-type result struct {
-	idx int
-	m   *Manifest
-	err error
-}
-
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Ts version on success, error otherwise.
@@ -219,36 +212,17 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	const N = 100
-	// TODO: Simplify this batch read manifest. Can be executed serially.
-	batchReadManifests := func(objects []string) (map[int]*Manifest, error) {
-		rc := make(chan result, 1)
-		var wg sync.WaitGroup
-		for i, o := range objects {
-			wg.Add(1)
-			go func(i int, o string) {
-				defer wg.Done()
-				var m Manifest
-				err := h.readManifest(mc, o, &m)
-				rc <- result{i, &m, err}
-			}(i, o)
-			if i%N == 0 {
-				wg.Wait()
+	readManifests := func(objects []string) (map[int]*Manifest, error) {
+		res := make(map[int]*Manifest)
+		for i, object := range objects {
+			var m Manifest
+			err := h.readManifest(mc, object, &m)
+			if err != nil {
+				return nil, x.Wrapf(err, "While reading %q", object)
 			}
+			res[i] = &m
 		}
-		go func() {
-			wg.Wait()
-			close(rc)
-		}()
-
-		m := make(map[int]*Manifest)
-		for r := range rc {
-			if r.err != nil {
-				return nil, x.Wrapf(r.err, "While reading %q", objects[r.idx])
-			}
-			m[r.idx] = r.m
-		}
-		return m, nil
+		return res, nil
 	}
 
 	var objects []string
@@ -270,7 +244,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, objects)
 	}
 
-	manifests, err := batchReadManifests(objects)
+	manifests, err := readManifests(objects)
 	if err != nil {
 		return 0, err
 	}
