@@ -13,7 +13,7 @@ services:
       - 5080:5080
       - 6080:6080
     user: ${UID:-1000}
-    command: /gobin/dgraph zero --cwd=/data/zero1 --my=zero1:5080 --bindall --logtostderr -v=0
+    command: /gobin/dgraph zero --cwd=/data/dg0.1 --my=zero1:5080 --bindall --logtostderr -v=0
     volumes:
       - type: bind
         source: $GOPATH/bin
