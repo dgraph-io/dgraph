@@ -405,7 +405,8 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	}
 
 	c := pb.NewRaftClient(pool.Get())
-	ctx, span := otrace.StartSpan(context.Background(), fmt.Sprintf("RaftMessage-%d-to-%d", n.Id, to))
+	ctx, span := otrace.StartSpan(context.Background(),
+		fmt.Sprintf("RaftMessage-%d-to-%d", n.Id, to))
 	defer span.End()
 
 	mc, err := c.RaftMessage(ctx)

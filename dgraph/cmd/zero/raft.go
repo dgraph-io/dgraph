@@ -626,14 +626,10 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			// start := time.Now()
+			start := time.Now()
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
-				// rsCopy := raft.ReadState{
-				// 	Index:      rs.Index,
-				// 	RequestCtx: y.Copy(rs.RequestCtx),
-				// }
 				glog.V(1).Infof("Got read state: %#x", rs.RequestCtx)
 				select {
 				case readStateCh <- rs:
@@ -661,16 +657,6 @@ func (n *node) Run() {
 			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			span.Annotatef(nil, "Saved to storage")
-
-			// if rand.Float64() < 0.1 {
-			// 	// l0% chance.
-			// 	dur := 100*time.Millisecond - time.Since(start)
-			// 	if dur > 0 {
-			// 		// Add artificial delays.
-			// 		glog.V(1).Infof("Sleeping for %v", dur)
-			// 		time.Sleep(dur)
-			// 	}
-			// }
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -709,6 +695,11 @@ func (n *node) Run() {
 			n.Raft().Advance()
 			span.Annotate(nil, "Advanced Raft")
 			span.End()
+			if time.Since(start) > 100*time.Millisecond {
+				glog.Warningf(
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk.",
+					time.Since(start).Round(time.Millisecond))
+			}
 		}
 	}
 }
