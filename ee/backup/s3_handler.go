@@ -212,53 +212,16 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	batchReadManifests := func(objects []string) (map[int]*Manifest, error) {
-		const numReqs = 1000
-
-		type result struct {
-			idx int
-			m   *Manifest
-			err error
+	readManifests := func(objects []string) (map[int]*Manifest, error) {
+		res := make(map[int]*Manifest)
+		for i, object := range objects {
+			var m Manifest
+			if err := h.readManifest(mc, object, &m); err != nil {
+				return nil, err
+			}
+			res[i] = &m
 		}
-
-		rc := func() <-chan result {
-			c := make(chan result)
-			go func() {
-				defer close(c)
-				for idx, object := range objects {
-					var m Manifest
-					err := h.readManifest(mc, object, &m)
-					c <- result{idx, &m, err}
-					if err != nil {
-						break
-					}
-				}
-			}()
-			return c
-		}()
-
-		// Track rate to minimize rps rate.
-		var n, rps uint64
-		start := time.Now()
-
-		m := make(map[int]*Manifest)
-		for r := range rc {
-			// Throttle requests a bit to stay under 1000 rps.
-			if rps > numReqs {
-				time.Sleep(time.Second)
-			}
-			if r.err != nil {
-				return nil, x.Wrapf(r.err, "While reading %q", objects[r.idx])
-			}
-			m[r.idx] = r.m
-
-			rps = n
-			if secs := time.Since(start).Seconds(); secs > 1 {
-				rps = n / uint64(secs)
-			}
-			n++
-		}
-		return m, nil
+		return res, nil
 	}
 
 	var objects []string
@@ -283,7 +246,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, objects)
 	}
 
-	manifests, err := batchReadManifests(objects)
+	manifests, err := readManifests(objects)
 	if err != nil {
 		return 0, err
 	}
