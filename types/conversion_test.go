@@ -79,33 +79,93 @@ func TestSameConversionDateTime(t *testing.T) {
 	}
 }
 
-func TestConversionEmpty(t *testing.T) {
+func TestConversionEdgeCases(t *testing.T) {
 	tests := []struct {
 		in, out Val
+		failure string
 	}{
+		// From BinaryID to X
+		{in: Val{Tid: BinaryID, Value: []byte{}},
+			out:     Val{Tid: IntID, Value: int64(0)},
+			failure: "Invalid data for int64"},
+		{in: Val{Tid: BinaryID, Value: []byte{}},
+			out:     Val{Tid: FloatID, Value: int64(0)},
+			failure: "Invalid data for float"},
+		{in: Val{Tid: BinaryID, Value: []byte{}},
+			out: Val{Tid: BoolID, Value: false}},
+		{in: Val{Tid: BinaryID, Value: []byte{2}},
+			out:     Val{Tid: BoolID, Value: false},
+			failure: "Invalid value for bool"},
+		{in: Val{Tid: BinaryID, Value: []byte{8}},
+			out:     Val{Tid: DateTimeID, Value: time.Time{}},
+			failure: "Time.UnmarshalBinary:"},
 		{in: Val{Tid: BinaryID, Value: []byte{}},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
-		{in: Val{Tid: BinaryID, Value: bs("")},
+
+		// From StringID|DefaultID to X
+		{in: Val{Tid: StringID, Value: []byte{}},
+			out: Val{Tid: IntID, Value: int64(0)}},
+		{in: Val{Tid: StringID, Value: []byte{}},
+			out: Val{Tid: FloatID, Value: float64(0)}},
+		{in: Val{Tid: StringID, Value: []byte{}},
+			out: Val{Tid: BoolID, Value: false}},
+		{in: Val{Tid: StringID, Value: []byte{}},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
-		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: BinaryID, Value: []byte{}}},
-		{in: Val{Tid: StringID, Value: bs("")},
+
+		// From IntID to X
+		{in: Val{Tid: IntID, Value: []byte{}},
+			failure: "Invalid data for int64"},
+		{in: Val{Tid: IntID, Value: bs(int64(0))},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
-		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: StringID, Value: ""}},
-		{in: Val{Tid: DefaultID, Value: bs("")},
+
+		// From FloatID to X
+		{in: Val{Tid: FloatID, Value: []byte{}},
+			failure: "Invalid data for float"},
+		{in: Val{Tid: FloatID, Value: bs(float64(0))},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
-		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: DefaultID, Value: ""}},
-		{in: Val{Tid: DateTimeID, Value: bs("")},
-			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+
+		// From BoolID to X
+		{in: Val{Tid: BoolID, Value: []byte{}},
+			failure: "Invalid value for bool"},
+		{in: Val{Tid: BoolID, Value: []byte{8}},
+			failure: "Invalid value for bool"},
+
+		// From DateTimeID to X
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+		{in: Val{Tid: DateTimeID, Value: []byte{}},
+			out: Val{Tid: BinaryID, Value: []byte{}}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: BinaryID, Value: []byte{}}},
+		{in: Val{Tid: DateTimeID, Value: []byte{}},
+			out: Val{Tid: StringID, Value: ""}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: StringID, Value: ""}},
+		{in: Val{Tid: DateTimeID, Value: []byte{}},
+			out: Val{Tid: DefaultID, Value: ""}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: DefaultID, Value: ""}},
+		{in: Val{Tid: DateTimeID, Value: []byte{}},
+			out: Val{Tid: IntID, Value: int64(0)}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: IntID, Value: int64(0)}},
+		{in: Val{Tid: DateTimeID, Value: []byte{}},
+			out: Val{Tid: FloatID, Value: float64(0)}},
+		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
+			out: Val{Tid: FloatID, Value: float64(0)}},
 	}
 	for _, tc := range tests {
+		// t.Logf("%s to %s != %v", tc.in.Tid.Name(), tc.out.Tid.Name(), tc.out.Value)
 		out, err := Convert(tc.in, tc.out.Tid)
-		require.NoError(t, err)
-		require.EqualValues(t, tc.out, out)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.failure)
+		} else {
+			require.NoError(t, err)
+			require.EqualValues(t, tc.out, out)
+		}
 	}
 }
 
@@ -608,6 +668,7 @@ func TestConvertStringToInt(t *testing.T) {
 		failure string
 	}{
 		{in: "1", out: int64(1)},
+		{in: "", out: int64(0)},
 		{in: "13816", out: int64(13816)},
 		{in: "-1221", out: int64(-1221)},
 		{in: "0", out: int64(0)},
@@ -615,10 +676,6 @@ func TestConvertStringToInt(t *testing.T) {
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseInt: parsing "srfrog": invalid syntax`,
-		},
-		{
-			in:      "",
-			failure: `strconv.ParseInt: parsing "": invalid syntax`,
 		},
 		{
 			in:      "3.0",
@@ -649,6 +706,7 @@ func TestConvertStringToFloat(t *testing.T) {
 		failure string
 	}{
 		{in: "1", out: float64(1)},
+		{in: "", out: float64(0)},
 		{in: "13816.251", out: float64(13816.251)},
 		{in: "-1221.12", out: float64(-1221.12)},
 		{in: "-0.0", out: float64(-0.0)},
@@ -657,10 +715,6 @@ func TestConvertStringToFloat(t *testing.T) {
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseFloat: parsing "srfrog": invalid syntax`,
-		},
-		{
-			in:      "",
-			failure: `strconv.ParseFloat: parsing "": invalid syntax`,
 		},
 		{
 			in:      "-3a.5",
