@@ -72,7 +72,9 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, x.Errorf("Invalid value for bool %v", data[0])
 			case DateTimeID:
 				var t time.Time
-				if !bytes.Equal(data, []byte("")) {
+				// Only try to convert binary data with length > 0. If the value is null,
+				// convert to zero-time value.
+				if len(data) != 0 {
 					if err := t.UnmarshalBinary(data); err != nil {
 						return to, err
 					}
@@ -97,20 +99,26 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				*res = []byte(vc)
 			case IntID:
-				val, err := strconv.ParseInt(vc, 10, 64)
-				if err != nil {
-					return to, err
+				*res = int64(0)
+				if vc != "" {
+					val, err := strconv.ParseInt(vc, 10, 64)
+					if err != nil {
+						return to, err
+					}
+					*res = val
 				}
-				*res = val
 			case FloatID:
-				val, err := strconv.ParseFloat(vc, 64)
-				if err != nil {
-					return to, err
+				*res = float64(0)
+				if vc != "" {
+					val, err := strconv.ParseFloat(vc, 64)
+					if err != nil {
+						return to, err
+					}
+					if math.IsNaN(val) {
+						return to, fmt.Errorf("Got invalid value: NaN")
+					}
+					*res = val
 				}
-				if math.IsNaN(val) {
-					return to, fmt.Errorf("Got invalid value: NaN")
-				}
-				*res = val
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
@@ -216,14 +224,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case BoolID:
 		{
 			var vc bool
-			switch {
-			case data[0] == 0:
-				vc = false
-			case data[0] == 1:
-				vc = true
-			default:
-				return to, x.Errorf("Invalid value for bool %v", data[0])
+			if len(data) == 0 || data[0] > 1 {
+				return to, x.Errorf("Invalid value for bool %v", data)
 			}
+			vc = data[0] == 1
 
 			switch toID {
 			case BoolID:
@@ -256,7 +260,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			// the conversion yields a zero time value. Here we check if that's the case and skip
 			// marshaling and return the ztv. Then we can handle it better if we need to return it
 			// in a result.
-			if !bytes.Equal(data, []byte("")) {
+			if len(data) == 15 {
 				if err := t.UnmarshalBinary(data); err != nil {
 					return to, err
 				}
