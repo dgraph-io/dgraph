@@ -401,7 +401,7 @@ func TestParseSingleType(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
@@ -422,11 +422,11 @@ func TestParseBaseTypesCaseInsensitive(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "LastName",
 				ValueType: pb.Posting_STRING,
 			},
@@ -469,7 +469,7 @@ func TestParseMultipleTypes(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
@@ -478,7 +478,7 @@ func TestParseMultipleTypes(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Animal",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
@@ -500,17 +500,17 @@ func TestParseObjectType(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Father",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Mother",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Children",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
@@ -534,16 +534,16 @@ func TestParseScalarType(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Nickname",
 				ValueType: pb.Posting_STRING,
 				List:      true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Alive",
 				ValueType: pb.Posting_BOOL,
 			},
@@ -565,16 +565,16 @@ func TestParseCombinedTypes(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Nickname",
 				ValueType: pb.Posting_STRING,
 				List:      true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Parents",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
@@ -597,12 +597,12 @@ func TestParseNonNullableScalar(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate:   "Name",
 				ValueType:   pb.Posting_STRING,
 				NonNullable: true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Nickname",
 				ValueType: pb.Posting_STRING,
 				List:      true,
@@ -624,11 +624,11 @@ func TestParseNonNullableList(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:       "Nickname",
 				ValueType:       pb.Posting_STRING,
 				List:            true,
@@ -651,12 +651,12 @@ func TestParseNonNullableScalarAndList(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate:   "Name",
 				ValueType:   pb.Posting_STRING,
 				NonNullable: true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:       "Nickname",
 				ValueType:       pb.Posting_STRING,
 				List:            true,

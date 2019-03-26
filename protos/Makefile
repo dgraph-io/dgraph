@@ -29,9 +29,10 @@ clean:
 
 .PHONY: check
 check:
-	@./depcheck.sh || \
-		(echo "Upgrading protoc before regenerating." ; \
-		go get -u github.com/golang/protobuf/protoc-gen-go)
+	@./depcheck.sh && \
+		(echo "Upgrading proto libraries before regenerating." ; \
+		go get -u github.com/golang/protobuf/protoc-gen-go ; \
+		go get -u github.com/gogo/protobuf/protoc-gen-gofast)
 
 .PHONY: regenerate
 regenerate: check clean

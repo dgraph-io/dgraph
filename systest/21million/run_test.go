@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
+	"github.com/stretchr/testify/require"
 )
 
 func TestQueries(t *testing.T) {
@@ -53,6 +54,7 @@ func TestQueries(t *testing.T) {
 		// The test query and expected result are separated by a delimiter.
 		bodies := strings.SplitN(contents, "\n---\n", 2)
 		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
+		require.NoError(err)
 
 		t.Logf("running %s", file.Name())
 		if len(resp.GetJson()) > 0 {

@@ -10,6 +10,8 @@
 GOPATH="/tmp/go"
 rm -Rf $GOPATH
 mkdir $GOPATH
+# Necessary to pick up Gobin binaries like protoc-gen-gofast
+PATH="$GOPATH/bin:$PATH"
 
 GOVERSION="1.11.5"
 

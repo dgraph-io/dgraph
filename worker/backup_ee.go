@@ -32,43 +32,47 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 		glog.Errorf("Context error during backup: %v\n", err)
 		return err
 	}
+	g := groups()
 	// sanity, make sure this is our group.
-	if groups().groupId() != req.GroupId {
+	if g.groupId() != req.GroupId {
 		return x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
-			groups().groupId(), req.GroupId)
+			g.groupId(), req.GroupId)
 	}
 	// wait for this node to catch-up.
 	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
 		return err
 	}
+	// Get snapshot to fill any gaps.
+	snap, err := g.Node.Snapshot()
+	if err != nil {
+		return err
+	}
+	glog.V(3).Infof("Backup group %d snapshot: %+v", req.GroupId, snap)
+	// Attach snapshot readTs to request to compare with any previous version.
+	req.SnapshotTs = snap.ReadTs
 	// create backup request and process it.
 	br := &backup.Request{DB: pstore, Backup: req}
-	// calculate estimated upload size
-	for _, t := range groups().tablets {
-		if t.GroupId == req.GroupId {
-			br.Sizex += uint64(float64(t.Space) * 1.2)
-		}
-	}
 	return br.Process(ctx)
 }
 
 // Backup handles a request coming from another node.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	var resp pb.Status
+func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Num, error) {
+	var num pb.Num
 	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
 	if err := backupProcess(ctx, req); err != nil {
-		resp.Code = -1
-		resp.Msg = err.Error()
-		return &resp, err
+		return nil, err
 	}
-	return &resp, nil
+	// num.Val is the max version value from `Backup()`
+	num.Val = req.Since
+	num.ReadOnly = true
+	return &num, nil
 }
 
-func backupGroup(ctx context.Context, in pb.BackupRequest) error {
+func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 	glog.V(2).Infof("Sending backup request: %+v\n", in)
 	// this node is part of the group, process backup.
 	if groups().groupId() == in.GroupId {
-		return backupProcess(ctx, &in)
+		return backupProcess(ctx, in)
 	}
 
 	// send request to any node in the group.
@@ -76,25 +80,19 @@ func backupGroup(ctx context.Context, in pb.BackupRequest) error {
 	if pl == nil {
 		return x.Errorf("Couldn't find a server in group %d", in.GroupId)
 	}
-	status, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, &in)
+	res, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {
 		glog.Errorf("Backup error group %d: %s", in.GroupId, err)
 		return err
 	}
-	if status.Code != 0 {
-		err := x.Errorf("Backup error group %d: %s", in.GroupId, status.Msg)
-		glog.Errorln(err)
-		return err
-	}
-	glog.V(2).Infof("Backup request to gid=%d. OK\n", in.GroupId)
+	// Attach distributed max version value
+	in.Since = res.Val
+	glog.V(2).Infof("Backup request to gid=%d, since=%d. OK\n", in.GroupId, in.Since)
 	return nil
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(pctx context.Context, dst string) error {
-	ctx, cancel := context.WithCancel(pctx)
-	defer cancel()
-
+func BackupOverNetwork(ctx context.Context, destination string) error {
 	// Check that this node can accept requests.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
@@ -108,32 +106,46 @@ func BackupOverNetwork(pctx context.Context, dst string) error {
 		return err
 	}
 
-	gids := groups().KnownGroups()
 	req := pb.BackupRequest{
 		ReadTs:   ts.ReadOnly,
-		Location: dst,
+		Location: destination,
 		UnixTs:   time.Now().UTC().Format("20060102.1504"),
 	}
-	glog.Infof("Created backup request: %+v. Groups=%v\n", req, gids)
+	m := backup.Manifest{Groups: groups().KnownGroups()}
+	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// This will dispatch the request to all groups and wait for their response.
 	// If we receive any failures, we cancel the process.
-	errCh := make(chan error, len(gids))
-	for _, gid := range gids {
-		go func(gid uint32) {
-			req.GroupId = gid
+	errCh := make(chan error, len(m.Groups))
+	for _, gid := range m.Groups {
+		req := req
+		req.GroupId = gid
+		go func(req *pb.BackupRequest) {
 			errCh <- backupGroup(ctx, req)
-		}(gid)
+			// req.Since is the max version result from Backup().
+			m.Lock()
+			if req.Since > m.Version {
+				m.Version = req.Since
+			}
+			m.Unlock()
+		}(&req)
 	}
 
-	for i := 0; i < len(gids); i++ {
-		err := <-errCh
-		if err != nil {
+	for range m.Groups {
+		if err := <-errCh; err != nil {
+			// No changes, nothing was done.
+			if err == backup.ErrBackupNoChanges {
+				return nil
+			}
 			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
 	}
-	req.GroupId = 0
-	glog.Infof("Backup completed OK.")
-	return nil
+
+	// The manifest completes the backup.
+	br := &backup.Request{Backup: &req, Manifest: &m}
+	return br.Complete(ctx)
 }

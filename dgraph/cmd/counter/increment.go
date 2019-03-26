@@ -50,7 +50,7 @@ func init() {
 	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
 	flag.Int("num", 1, "How many times to run.")
 	flag.Bool("ro", false, "Only read the counter value, don't update it.")
-	flag.Bool("bo", false, "Read counter value without retrieving timestamp from Zero.")
+	flag.Bool("be", false, "Read counter value without retrieving timestamp from Zero.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 	flag.String("user", "", "Username if login is required.")

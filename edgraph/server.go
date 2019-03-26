@@ -593,7 +593,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		if !req.ReadOnly {
 			return resp, x.Errorf("A best effort query must be read-only.")
 		}
-		req.StartTs = posting.Oracle().MaxAssigned()
+		if req.StartTs == 0 {
+			req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		queryRequest.Cache = worker.NoTxnCache
 	}
 	if req.StartTs == 0 {
