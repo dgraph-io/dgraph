@@ -443,8 +443,8 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 			}
 			packets++
 			slurp(batch) // Pick up more entries from msgCh, if present.
-			span.Annotatef(nil, "Sending data. Length: %d. Packets so far: %d",
-				len(batch.Payload.Data), packets)
+			span.Annotatef(nil, "[Packets: %d] Sending data of length: %d.",
+				packets, len(batch.Payload.Data))
 			if err := mc.Send(batch); err != nil {
 				span.Annotatef(nil, "Error while mc.Send: %v", err)
 				switch {
