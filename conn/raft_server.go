@@ -223,6 +223,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 		}
 		data := batch.Payload.Data
 
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		for idx := 0; idx < len(data); {
 			x.AssertTruef(len(data[idx:]) >= 4,
 				"Slice left of size: %v. Expected at least 4.", len(data[idx:]))
@@ -239,11 +240,14 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 				x.Check(err)
 			}
 			// This should be done in order, and not via a goroutine.
+			// Step can block forever. See: https://github.com/etcd-io/etcd/issues/10585
+			// So, add a context with timeout to allow it to get out of the blockage.
 			if err := raft.Step(ctx, msg); err != nil {
 				return err
 			}
 			idx += sz
 		}
+		cancel()
 	}
 }
 
