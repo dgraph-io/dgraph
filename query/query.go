@@ -229,9 +229,9 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 		IsValueVar: gf.IsValueVar,
 	}
 
-	// type function is just an alias for eq(type, "type").
+	// type function is just an alias for eq(type, "dgraph.type").
 	if gf.Name == "type" {
-		sg.Attr = "type"
+		sg.Attr = "dgraph.type"
 		sg.SrcFunc.Name = "eq"
 		sg.SrcFunc.IsCount = false
 		sg.SrcFunc.IsValueVar = false

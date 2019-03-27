@@ -159,7 +159,7 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 		},
 		{
 			Subject:     "_:newgroup",
-			Predicate:   "type",
+			Predicate:   "dgraph.type",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
 		},
 	}
