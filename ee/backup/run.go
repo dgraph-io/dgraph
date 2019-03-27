@@ -31,12 +31,18 @@ import (
 )
 
 var Restore x.SubCommand
+var LsBackup x.SubCommand
 
 var opt struct {
 	location, pdir, zero string
 }
 
 func init() {
+	initRestore()
+	initBackupLs()
+}
+
+func initRestore() {
 	Restore.Cmd = &cobra.Command{
 		Use:   "restore",
 		Short: "Run Dgraph (EE) Restore backup",
@@ -85,7 +91,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Restore.Conf).Stop()
-			if err := run(); err != nil {
+			if err := runRestoreCmd(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
@@ -102,7 +108,56 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
 
-func run() error {
+func initBackupLs() {
+	LsBackup.Cmd = &cobra.Command{
+		Use:   "lsbackup",
+		Short: "List info on backups in given location",
+		Long: `
+lsbackup looks at a location where backups are stored and prints information about them.
+
+Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
+command. Restore is intended to be used with new Dgraph clusters in offline state.
+
+The --location flag indicates a source URI with Dgraph backup objects. This URI supports all
+the schemes used for backup.
+
+Source URI formats:
+  [scheme]://[host]/[path]?[args]
+  [scheme]:///[path]?[args]
+  /[path]?[args] (only for local or NFS)
+
+Source URI parts:
+  scheme - service handler, one of: "s3", "minio", "file"
+    host - remote address. ex: "dgraph.s3.amazonaws.com"
+    path - directory, bucket or container at target. ex: "/dgraph/backups/"
+    args - specific arguments that are ok to appear in logs.
+
+Dgraph backup creates a unique backup object for each node group, and restore will create
+a posting directory 'p' matching the backup group ID. Such that a backup file
+named '.../r32-g2.backup' will be loaded to posting dir 'p2'.
+
+Usage examples:
+
+# Run using location in S3:
+$ dgraph lsbackup -l s3://s3.us-west-2.amazonaws.com/srfrog/dgraph
+		`,
+		Args: cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			defer x.StartProfile(Restore.Conf).Stop()
+			if err := runLsbackupCmd(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	flag := LsBackup.Cmd.Flags()
+	flag.StringVarP(&opt.location, "location", "l", "",
+		"Sets the source location URI (required).")
+	_ = LsBackup.Cmd.MarkFlagRequired("location")
+}
+
+func runRestoreCmd() error {
 	var (
 		start time.Time
 		zc    pb.ZeroClient
@@ -182,4 +237,24 @@ func runRestore(pdir, location string) (uint64, error) {
 		}
 		return db.Load(r)
 	})
+}
+
+func runLsbackupCmd() error {
+	fmt.Println("Listing backups from:", opt.location)
+	manifests, err := ListManifests(opt.location)
+	if err != nil {
+		return x.Errorf("Error while listing manifests: %v", err.Error())
+	}
+
+	fmt.Printf("Name\tVersion\tReadTs\tGroups\tValid\n")
+	for _, manifest := range manifests {
+		fmt.Printf("%v\t%v\t%v\t%v\t%v\n",
+			manifest.FileName,
+			manifest.Manifest.Version,
+			manifest.Manifest.ReadTs,
+			manifest.Manifest.Groups,
+			manifest.Valid)
+	}
+
+	return nil
 }

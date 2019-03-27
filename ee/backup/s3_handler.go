@@ -275,6 +275,75 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	return version, nil
 }
 
+// ListManifests loads the manifests in the locations and returns them.
+func (h *s3Handler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
+	mc, err := h.setup(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	var manifests []string
+	var listedManifests []*ManifestStatus
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	suffix := "/" + backupManifest
+	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+		if strings.HasSuffix(object.Key, suffix) {
+			manifests = append(manifests, object.Key)
+		}
+	}
+	if len(manifests) == 0 {
+		return nil, x.Errorf("No manifests found at: %s", uri.String())
+	}
+	sort.Strings(manifests)
+	if glog.V(3) {
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
+	}
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file.
+	for _, manifest := range manifests {
+		var m Manifest
+		var ms ManifestStatus
+		allFilesValid := true
+
+		if err := h.readManifest(mc, manifest, &m); err != nil {
+			return nil, x.Wrapf(err, "While reading %q", manifest)
+		}
+		ms.Manifest = &m
+		ms.FileName = manifest
+
+		// Check the files for each group in the manifest exist.
+		path := filepath.Dir(manifest)
+		for _, groupId := range m.Groups {
+			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
+			if err != nil {
+				allFilesValid = false
+				break
+			}
+			defer reader.Close()
+
+			st, err := reader.Stat()
+			if err != nil {
+				allFilesValid = false
+				break
+			}
+
+			if st.Size <= 0 {
+				allFilesValid = false
+				break
+			}
+		}
+
+		ms.Valid = allFilesValid
+		listedManifests = append(listedManifests, &ms)
+	}
+	return listedManifests, nil
+}
+
 // upload will block until it's done or an error occurs.
 func (h *s3Handler) upload(mc *minio.Client, object string) error {
 	start := time.Now()

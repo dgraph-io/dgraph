@@ -214,7 +214,7 @@ func RestoreFull(t *testing.T, c *dgo.Dgraph) {
 
 	// restore this backup dir (3 files total)
 	t.Logf("--- Restoring from: %q", dirs[0])
-	_, err := runRestore("./data/restore", dirs[0])
+	_, err := runRestoreInternal("./data/restore", dirs[0])
 	require.NoError(t, err)
 
 	// just check p1 which should have the 'movie' predicate (moved during setup)
@@ -277,7 +277,7 @@ func RestoreIncr1(t *testing.T, c *dgo.Dgraph) {
 
 	// restore this backup dir (3 files total)
 	t.Logf("--- Restoring from: %q", dirs[1])
-	_, err := runRestore("./data/restore", dirs[1])
+	_, err := runRestoreInternal("./data/restore", dirs[1])
 	require.NoError(t, err)
 
 	// just check p1 which should have the 'movie' predicate (moved during setup)
@@ -335,7 +335,7 @@ func RestoreIncr2(t *testing.T, c *dgo.Dgraph) {
 
 	// restore this backup dir (3 files total)
 	t.Logf("--- Restoring from: %q", dirs[2])
-	_, err := runRestore("./data/restore", dirs[2])
+	_, err := runRestoreInternal("./data/restore", dirs[2])
 	require.NoError(t, err)
 
 	// just check p1 which should have the 'movie' predicate (moved during setup)

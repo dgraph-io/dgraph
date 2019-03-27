@@ -137,7 +137,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 			continue
 		}
 
-		// Load the backup for each group in manifest.
+		// Check the files for each group in the manifest exist.
 		path := filepath.Dir(manifest)
 		for _, groupId := range m.Groups {
 			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
@@ -153,6 +153,58 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		version = m.Version
 	}
 	return version, nil
+}
+
+// ListManifests loads the manifests in the locations and returns them.
+func (h *fileHandler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
+	var listedManifests []*ManifestStatus
+
+	if !pathExist(uri.Path) {
+		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	// Get a list of all the manifest files at the location.
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, suffix)
+	})
+	if len(manifests) == 0 {
+		return nil, x.Errorf("No manifests found at path: %s", uri.Path)
+	}
+	sort.Strings(manifests)
+	if glog.V(3) {
+		fmt.Printf("Found backup manifest(s): %v\n", manifests)
+	}
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file.
+	for _, manifest := range manifests {
+		var m Manifest
+		var ms ManifestStatus
+		allFilesValid := true
+
+		if err := h.readManifest(manifest, &m); err != nil {
+			return nil, x.Wrapf(err, "While reading %q", manifest)
+		}
+		ms.Manifest = &m
+		ms.FileName = manifest
+
+		// Load the backup for each group in manifest.
+		path := filepath.Dir(manifest)
+		for _, groupId := range m.Groups {
+			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			fp, err := os.Open(file)
+			if err != nil {
+				allFilesValid = false
+				break
+			}
+			fp.Close()
+		}
+
+		ms.Valid = allFilesValid
+		listedManifests = append(listedManifests, &ms)
+	}
+	return listedManifests, nil
 }
 
 func (h *fileHandler) Close() error {

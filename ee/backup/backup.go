@@ -84,6 +84,16 @@ type Manifest struct {
 	Groups  []uint32 `json:"groups"`
 }
 
+// ManifestStatus combines a manifest along with other information about it
+// that should not be inside the Manifest struct since it should not be
+// recorded in manifest files.
+type ManifestStatus struct {
+	Manifest *Manifest
+	FileName string
+	// Valid is true if all the group files listed by the manifest exist.
+	Valid bool
+}
+
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
 	return fmt.Sprintf(`Manifest{Version: %d, ReadTs: %d, Groups: %v}`,

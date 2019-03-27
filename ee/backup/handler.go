@@ -72,6 +72,12 @@ type handler interface {
 	// The loadFn receives the files as they are processed by a handler, to do the actual
 	// load to DB.
 	Load(*url.URL, loadFn) (uint64, error)
+
+	// ListManifests will scan the provided URI for backup manifests. This operation
+	// should be read-only.
+	//
+	// The URL object is parsed as described in `newHandler`.
+	ListManifests(*url.URL) ([]*ManifestStatus, error)
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -147,4 +153,19 @@ func Load(l string, fn loadFn) (version uint64, err error) {
 	}
 
 	return h.Load(uri, fn)
+}
+
+// ListManifests scans location l for backup files and returns the list of manifests.
+func ListManifests(l string) ([]*ManifestStatus, error) {
+	uri, err := url.Parse(l)
+	if err != nil {
+		return nil, err
+	}
+
+	h := getHandler(uri.Scheme)
+	if h == nil {
+		return nil, x.Errorf("Unsupported URI: %v", uri)
+	}
+
+	return h.ListManifests(uri)
 }
