@@ -647,7 +647,6 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			return
 		case rs := <-readStateCh:
 			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
-			glog.Warningf("Received a read state unexpectedly: %+v\n", rs)
 		case req := <-n.requestCh:
 		slurpLoop:
 			for {
