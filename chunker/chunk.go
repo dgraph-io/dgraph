@@ -163,6 +163,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		return out, err
 	}
 	if ch == ']' {
+		// Handle loading an empty JSON array ("[]") without error.
 		return nil, io.EOF
 	} else if ch != '{' {
 		return nil, fmt.Errorf("Expected JSON map start. Found: %v", string(ch))
