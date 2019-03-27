@@ -96,11 +96,14 @@ func parseMutationTxnQuery(it *lex.ItemIterator) (string, error) {
 			query = item.Val
 		case itemMutationTxnOp:
 			if item.Val == "query" {
+				if parse {
+					return "", x.Errorf("Too many query blocks in txn")
+				}
 				parse = true
 				continue
 			}
 			if item.Val != "mutation" {
-				return "", x.Errorf("Unexpected %q inside of txn block.", item.Val)
+				return "", x.Errorf("Invalid txn operator %q.", item.Val)
 			}
 			if !it.Next() {
 				return "", errors.New("Invalid mutation block")
