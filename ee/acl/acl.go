@@ -16,7 +16,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -186,12 +185,23 @@ func del(conf *viper.Viper) error {
 		return userOrGroupDel(conf, userId,
 			func(ctx context.Context, txn *dgo.Txn, userId string) (AclEntity, error) {
 				user, err := queryUser(ctx, txn, userId)
+				if user == nil {
+					// here we explicitly check if the concrete type is nil, in order to
+					// return a interface type that has both the type and value being nil.
+					// without this check, we would return an interface with only the value
+					// being nil, and such an interface won't be equal to nil per
+					// https://golang.org/doc/faq#nil_error
+					return nil, err
+				}
 				return user, err
 			})
 	}
 	return userOrGroupDel(conf, groupId,
 		func(ctx context.Context, txn *dgo.Txn, groupId string) (AclEntity, error) {
 			group, err := queryGroup(ctx, txn, groupId)
+			if group == nil {
+				return nil, err
+			}
 			return group, err
 		})
 }
@@ -221,7 +231,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	if err != nil {
 		return err
 	}
-	if reflect.ValueOf(entity).IsNil() || len(entity.GetUid()) == 0 {
+	if entity == nil || len(entity.GetUid()) == 0 {
 		return fmt.Errorf("unable to delete %q since it does not exist",
 			userOrGroupId)
 	}
