@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -220,7 +221,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	if err != nil {
 		return err
 	}
-	if entity == nil || len(entity.GetUid()) == 0 {
+	if reflect.ValueOf(entity).IsNil() || len(entity.GetUid()) == 0 {
 		return fmt.Errorf("unable to delete %q since it does not exist",
 			userOrGroupId)
 	}
