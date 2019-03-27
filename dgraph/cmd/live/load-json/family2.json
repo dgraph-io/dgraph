@@ -27,6 +27,8 @@
     "name":"Maggie",
     "age":"1",
     "role":"daughter",
+    "role|gender":"female",
+    "role|stage":"baby",
     "role@es":"hija",
     "carries":"pacifier",
     "sibling_of": [
