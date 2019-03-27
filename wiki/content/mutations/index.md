@@ -345,6 +345,31 @@ to the key `blank-0`. You could specify your own key like
 In this case, the assigned uids map would have a key called `diggy` with the value being the uid
 assigned to it.
 
+### Language support
+
+An important difference between RDF and JSON mutations is in regards to specifying a string value's
+language. In JSON, the language tag is appended to the edge _name_, not the value like in RDF.
+
+For example, the JSON mutation
+```json
+{
+  "food": "taco",
+  "rating@en": "tastes good",
+  "rating@es": "sabe bien",
+  "rating@fr": "c'est bon",
+  "rating@it": "è buono"
+}
+```
+
+is equivalent to the following RDF:
+```
+_:blank-0 <food> "taco" .
+_:blank-0 <rating> "tastes good"@en .
+_:blank-0 <rating> "sabe bien"@es .
+_:blank-0 <rating> "c'est bon"@fr .
+_:blank-0 <rating> "è buono"@it .
+```
+
 ### Referencing existing nodes
 
 If a JSON object contains a field named `"uid"`, then that field is interpreted
