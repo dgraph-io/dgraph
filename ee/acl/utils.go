@@ -70,6 +70,9 @@ type User struct {
 }
 
 func (u *User) GetUid() string {
+	if u == nil {
+		return ""
+	}
 	return u.Uid
 }
 
@@ -109,6 +112,9 @@ type Group struct {
 }
 
 func (g *Group) GetUid() string {
+	if g == nil {
+		return ""
+	}
 	return g.Uid
 }
 
