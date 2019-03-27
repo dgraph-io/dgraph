@@ -209,7 +209,7 @@ type Animal {
 
 type CarModel {
 	make: string
-	automaker: string
+	model: string
 	year: int
 	previous_model: CarModel
 }
@@ -244,8 +244,8 @@ room                           : string @index(term) .
 office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
+model                          : string @index(term) .
 make                           : string @index(term) .
-automaker                      : string @index(term) .
 year                           : int .
 previous_model                 : uid @reverse .
 `
@@ -502,13 +502,13 @@ func populateCluster() {
 		<11000> <director.film> <11002> .
 		<11000> <director.film> <11003> .
 
-		<200> <automaker> "Ford" .
-		<200> <make> "Focus" .
+		<200> <make> "Ford" .
+		<200> <model> "Focus" .
 		<200> <year> "2008" .
 		<200> <dgraph.type> "CarModel" .
 
-		<201> <automaker> "Ford" .
-		<201> <make> "Focus" .
+		<201> <make> "Ford" .
+		<201> <model> "Focus" .
 		<201> <year> "2009" .
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
