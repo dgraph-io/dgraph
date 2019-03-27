@@ -201,29 +201,12 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	}
 	span.Annotatef(nil, "Stream server is node %#x", n.Id)
 
-	raft := w.GetNode().Raft()
 	var rc *pb.RaftContext
-	for loop := 1; ; loop++ {
-		batch, err := server.Recv()
-		if err != nil {
-			return err
-		}
-		if loop%1e6 == 0 {
-			glog.V(2).Infof("%d messages received by %#x from %#x", loop, n.Id, rc.GetId())
-		}
-		if loop == 1 {
-			rc = batch.GetContext()
-			span.Annotatef(nil, "Stream from %#x", rc.GetId())
-			if rc != nil {
-				n.Connect(rc.Id, rc.Addr)
-			}
-		}
-		if batch.Payload == nil {
-			continue
-		}
-		data := batch.Payload.Data
-
+	raft := w.GetNode().Raft()
+	step := func(data []byte) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+
 		for idx := 0; idx < len(data); {
 			x.AssertTruef(len(data[idx:]) >= 4,
 				"Slice left of size: %v. Expected at least 4.", len(data[idx:]))
@@ -249,7 +232,31 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			}
 			idx += sz
 		}
-		cancel()
+		return nil
+	}
+
+	for loop := 1; ; loop++ {
+		batch, err := server.Recv()
+		if err != nil {
+			return err
+		}
+		if loop%1e6 == 0 {
+			glog.V(2).Infof("%d messages received by %#x from %#x", loop, n.Id, rc.GetId())
+		}
+		if loop == 1 {
+			rc = batch.GetContext()
+			span.Annotatef(nil, "Stream from %#x", rc.GetId())
+			if rc != nil {
+				n.Connect(rc.Id, rc.Addr)
+			}
+		}
+		if batch.Payload == nil {
+			continue
+		}
+		data := batch.Payload.Data
+		if err := step(data); err != nil {
+			return err
+		}
 	}
 }
 

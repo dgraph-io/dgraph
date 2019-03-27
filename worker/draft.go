@@ -660,7 +660,6 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	traceOpt := otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 	var snapshotLoops uint64
 	for {
 		select {
@@ -701,11 +700,8 @@ func (n *node) Run() {
 
 		case rd := <-n.Raft().Ready():
 			start := time.Now()
-			var span *otrace.Span
-			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
-				// Optionally, trace this run.
-				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop", traceOpt)
-			}
+			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
+				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
