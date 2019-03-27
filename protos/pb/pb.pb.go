@@ -5077,9 +5077,9 @@ func (m *Query) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x2a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.UidList.Size()))
-		n1, err := m.UidList.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n1, err1 := m.UidList.MarshalTo(dAtA[i:])
+		if err1 != nil {
+			return 0, err1
 		}
 		i += n1
 	}
@@ -5087,9 +5087,9 @@ func (m *Query) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x32
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.SrcFunc.Size()))
-		n2, err := m.SrcFunc.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n2, err2 := m.SrcFunc.MarshalTo(dAtA[i:])
+		if err2 != nil {
+			return 0, err2
 		}
 		i += n2
 	}
@@ -5107,9 +5107,9 @@ func (m *Query) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x42
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.FacetParam.Size()))
-		n3, err := m.FacetParam.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n3, err3 := m.FacetParam.MarshalTo(dAtA[i:])
+		if err3 != nil {
+			return 0, err3
 		}
 		i += n3
 	}
@@ -5117,9 +5117,9 @@ func (m *Query) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x4a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.FacetsFilter.Size()))
-		n4, err := m.FacetsFilter.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n4, err4 := m.FacetsFilter.MarshalTo(dAtA[i:])
+		if err4 != nil {
+			return 0, err4
 		}
 		i += n4
 	}
@@ -5619,9 +5619,9 @@ func (m *Group) MarshalTo(dAtA []byte) (int, error) {
 				dAtA[i] = 0x12
 				i++
 				i = encodeVarintPb(dAtA, i, uint64(v.Size()))
-				n7, err := v.MarshalTo(dAtA[i:])
-				if err != nil {
-					return 0, err
+				n7, err7 := v.MarshalTo(dAtA[i:])
+				if err7 != nil {
+					return 0, err7
 				}
 				i += n7
 			}
@@ -5647,9 +5647,9 @@ func (m *Group) MarshalTo(dAtA []byte) (int, error) {
 				dAtA[i] = 0x12
 				i++
 				i = encodeVarintPb(dAtA, i, uint64(v.Size()))
-				n8, err := v.MarshalTo(dAtA[i:])
-				if err != nil {
-					return 0, err
+				n8, err8 := v.MarshalTo(dAtA[i:])
+				if err8 != nil {
+					return 0, err8
 				}
 				i += n8
 			}
@@ -5705,9 +5705,9 @@ func (m *ZeroProposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Member.Size()))
-		n9, err := m.Member.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n9, err9 := m.Member.MarshalTo(dAtA[i:])
+		if err9 != nil {
+			return 0, err9
 		}
 		i += n9
 	}
@@ -5715,9 +5715,9 @@ func (m *ZeroProposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Tablet.Size()))
-		n10, err := m.Tablet.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n10, err10 := m.Tablet.MarshalTo(dAtA[i:])
+		if err10 != nil {
+			return 0, err10
 		}
 		i += n10
 	}
@@ -5740,9 +5740,9 @@ func (m *ZeroProposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x3a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Txn.Size()))
-		n11, err := m.Txn.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n11, err11 := m.Txn.MarshalTo(dAtA[i:])
+		if err11 != nil {
+			return 0, err11
 		}
 		i += n11
 	}
@@ -5803,9 +5803,9 @@ func (m *MembershipState) MarshalTo(dAtA []byte) (int, error) {
 				dAtA[i] = 0x12
 				i++
 				i = encodeVarintPb(dAtA, i, uint64(v.Size()))
-				n12, err := v.MarshalTo(dAtA[i:])
-				if err != nil {
-					return 0, err
+				n12, err12 := v.MarshalTo(dAtA[i:])
+				if err12 != nil {
+					return 0, err12
 				}
 				i += n12
 			}
@@ -5830,9 +5830,9 @@ func (m *MembershipState) MarshalTo(dAtA []byte) (int, error) {
 				dAtA[i] = 0x12
 				i++
 				i = encodeVarintPb(dAtA, i, uint64(v.Size()))
-				n13, err := v.MarshalTo(dAtA[i:])
-				if err != nil {
-					return 0, err
+				n13, err13 := v.MarshalTo(dAtA[i:])
+				if err13 != nil {
+					return 0, err13
 				}
 				i += n13
 			}
@@ -5896,9 +5896,9 @@ func (m *ConnectionState) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Member.Size()))
-		n14, err := m.Member.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n14, err14 := m.Member.MarshalTo(dAtA[i:])
+		if err14 != nil {
+			return 0, err14
 		}
 		i += n14
 	}
@@ -5906,9 +5906,9 @@ func (m *ConnectionState) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.State.Size()))
-		n15, err := m.State.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n15, err15 := m.State.MarshalTo(dAtA[i:])
+		if err15 != nil {
+			return 0, err15
 		}
 		i += n15
 	}
@@ -6175,9 +6175,9 @@ func (m *Snapshot) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Context.Size()))
-		n16, err := m.Context.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n16, err16 := m.Context.MarshalTo(dAtA[i:])
+		if err16 != nil {
+			return 0, err16
 		}
 		i += n16
 	}
@@ -6226,9 +6226,9 @@ func (m *Proposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Mutations.Size()))
-		n17, err := m.Mutations.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n17, err17 := m.Mutations.MarshalTo(dAtA[i:])
+		if err17 != nil {
+			return 0, err17
 		}
 		i += n17
 	}
@@ -6248,9 +6248,9 @@ func (m *Proposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x2a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.State.Size()))
-		n18, err := m.State.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n18, err18 := m.State.MarshalTo(dAtA[i:])
+		if err18 != nil {
+			return 0, err18
 		}
 		i += n18
 	}
@@ -6270,9 +6270,9 @@ func (m *Proposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x42
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Delta.Size()))
-		n19, err := m.Delta.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n19, err19 := m.Delta.MarshalTo(dAtA[i:])
+		if err19 != nil {
+			return 0, err19
 		}
 		i += n19
 	}
@@ -6280,9 +6280,9 @@ func (m *Proposal) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x4a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Snapshot.Size()))
-		n20, err := m.Snapshot.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n20, err20 := m.Snapshot.MarshalTo(dAtA[i:])
+		if err20 != nil {
+			return 0, err20
 		}
 		i += n20
 	}
@@ -6511,9 +6511,9 @@ func (m *PostingList) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Pack.Size()))
-		n21, err := m.Pack.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n21, err21 := m.Pack.MarshalTo(dAtA[i:])
+		if err21 != nil {
+			return 0, err21
 		}
 		i += n21
 	}
@@ -6767,9 +6767,9 @@ func (m *FilterTree) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Func.Size()))
-		n22, err := m.Func.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n22, err22 := m.Func.MarshalTo(dAtA[i:])
+		if err22 != nil {
+			return 0, err22
 		}
 		i += n22
 	}
@@ -7071,9 +7071,9 @@ func (m *MapEntry) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1a
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Posting.Size()))
-		n23, err := m.Posting.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n23, err23 := m.Posting.MarshalTo(dAtA[i:])
+		if err23 != nil {
+			return 0, err23
 		}
 		i += n23
 	}
@@ -7297,9 +7297,9 @@ func (m *RaftBatch) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Context.Size()))
-		n26, err := m.Context.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n26, err26 := m.Context.MarshalTo(dAtA[i:])
+		if err26 != nil {
+			return 0, err26
 		}
 		i += n26
 	}
@@ -7307,9 +7307,9 @@ func (m *RaftBatch) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintPb(dAtA, i, uint64(m.Payload.Size()))
-		n27, err := m.Payload.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		n27, err27 := m.Payload.MarshalTo(dAtA[i:])
+		if err27 != nil {
+			return 0, err27
 		}
 		i += n27
 	}
