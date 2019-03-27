@@ -94,17 +94,23 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 	}
 
 	startedArray := false
-	buf.WriteString(fmt.Sprintf("  {\"uid\":"+uidFmtStrJson+",\"%s\":", uid, attr))
+	buf.WriteString(fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, uid))
 	err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			if !startedArray {
-				buf.WriteString("[")
+				buf.WriteString(fmt.Sprintf(`,"%s":[`, attr))
 				startedArray = true
 			} else {
 				buf.WriteString(",")
 			}
 			buf.WriteString(fmt.Sprintf("{\"uid\":"+uidFmtStrJson+"}", p.Uid))
 		} else {
+			if p.PostingType != pb.Posting_VALUE_LANG {
+				buf.WriteString(fmt.Sprintf(`,"%s":`, attr))
+			} else {
+				buf.WriteString(fmt.Sprintf(`,"%s@%s":`, attr, string(p.LangTag)))
+			}
+
 			vID := types.TypeID(p.ValType)
 			src := types.ValueForType(vID)
 			src.Value = p.Value
@@ -119,12 +125,6 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 				val = strconv.Quote(val)
 			}
 			buf.WriteString(val)
-
-			// TODO how to handle language tags?
-			if p.PostingType == pb.Posting_VALUE_LANG {
-				buf.WriteByte('@')
-				buf.WriteString(string(p.LangTag))
-			}
 		}
 
 		// TODO facets!
