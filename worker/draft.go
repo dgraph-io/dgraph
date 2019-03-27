@@ -620,11 +620,9 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			var span *otrace.Span
-			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
-				// Optionally, trace this run.
-				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop")
-			}
+			start := time.Now()
+			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
+				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
@@ -689,6 +687,7 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			diskDur := time.Since(start)
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
@@ -760,6 +759,13 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
+			}
+			if time.Since(start) > 100*time.Millisecond {
+				glog.Warningf(
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+						" Num entries: %d. MustSync: %v",
+					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
+					len(rd.Entries), rd.MustSync)
 			}
 		}
 	}

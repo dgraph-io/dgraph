@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 )
 
 type sendmsg struct {
@@ -192,30 +193,19 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	span := otrace.FromContext(ctx)
 
 	n := w.GetNode()
 	if n == nil || n.Raft() == nil {
 		return ErrNoNode
 	}
+	span.Annotatef(nil, "Stream server is node %#x", n.Id)
+
+	var rc *pb.RaftContext
 	raft := w.GetNode().Raft()
-	for loop := 1; ; loop++ {
-		batch, err := server.Recv()
-		if err != nil {
-			return err
-		}
-		if loop%1e6 == 0 {
-			glog.V(2).Infof("%d messages received by %#x", loop, n.Id)
-		}
-		if loop == 1 {
-			rc := batch.GetContext()
-			if rc != nil {
-				n.Connect(rc.Id, rc.Addr)
-			}
-		}
-		if batch.Payload == nil {
-			continue
-		}
-		data := batch.Payload.Data
+	step := func(data []byte) error {
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
 
 		for idx := 0; idx < len(data); {
 			x.AssertTruef(len(data[idx:]) >= 4,
@@ -233,10 +223,39 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 				x.Check(err)
 			}
 			// This should be done in order, and not via a goroutine.
+			// Step can block forever. See: https://github.com/etcd-io/etcd/issues/10585
+			// So, add a context with timeout to allow it to get out of the blockage.
 			if err := raft.Step(ctx, msg); err != nil {
-				return err
+				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
+					rc.GetId(), err)
+				return x.Errorf("Error while raft.Step from %#x: %v", rc.GetId(), err)
 			}
 			idx += sz
+		}
+		return nil
+	}
+
+	for loop := 1; ; loop++ {
+		batch, err := server.Recv()
+		if err != nil {
+			return err
+		}
+		if loop%1e6 == 0 {
+			glog.V(2).Infof("%d messages received by %#x from %#x", loop, n.Id, rc.GetId())
+		}
+		if loop == 1 {
+			rc = batch.GetContext()
+			span.Annotatef(nil, "Stream from %#x", rc.GetId())
+			if rc != nil {
+				n.Connect(rc.Id, rc.Addr)
+			}
+		}
+		if batch.Payload == nil {
+			continue
+		}
+		data := batch.Payload.Data
+		if err := step(data); err != nil {
+			return err
 		}
 	}
 }
