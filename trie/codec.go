@@ -20,11 +20,15 @@ func KeyEncode(k []byte) []byte {
 
 // keyToHex turns bytes into nibbles
 func keyToHex(in []byte) []byte {
-	res := make([]byte, len(in)*2)
+	l := len(in)*2 + 1
+	res := make([]byte, l)
 	for i, b := range in {
 		res[2*i] = b / 16
 		res[2*i+1] = b % 16
 	}
 
+	// last index of nibble array is set to 16 due to the way branches are indexed
+	// branch at 0...15 points to possible children, branch at 16 is the value at the branch
+	res[l-1] = 16
 	return res
 }

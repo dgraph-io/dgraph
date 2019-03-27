@@ -1,15 +1,14 @@
 package polkadb
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 )
 
 type memData struct {
 	input    string
 	expected string
 }
-
 
 func testData() []memData {
 	tests := []memData{
@@ -80,7 +79,7 @@ func testDelGet(db *MemDatabase, t *testing.T) {
 	}
 
 	for _, v := range tests {
-		err := db.Delete([]byte(v.input))
+		err := db.Del([]byte(v.input))
 		if err != nil {
 			t.Fatalf("delete %q failed: %v", v.input, err)
 		}
@@ -93,4 +92,3 @@ func testDelGet(db *MemDatabase, t *testing.T) {
 		}
 	}
 }
-

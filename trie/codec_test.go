@@ -60,7 +60,7 @@ func TestKeyToHex(t *testing.T) {
 
 	for _, test := range tests {
 		res := keyToHex(test.input)
-		for i := 0; i < len(res); i++ {
+		for i := 0; i < len(res)-1; i++ {
 			if res[i] != test.expected[i] {
 				t.Errorf("Output doesn't match expected. got=%v expected=%v\n", res, test.expected)
 			}

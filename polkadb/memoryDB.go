@@ -1,13 +1,13 @@
 package polkadb
 
 import (
-	"sync"
 	"errors"
+	"sync"
 )
 
 // MemDatabase test memory database, data is not persisted
 type MemDatabase struct {
-	db map[string][]byte
+	db   map[string][]byte
 	lock sync.RWMutex
 }
 
@@ -60,10 +60,15 @@ func (db *MemDatabase) Keys() [][]byte {
 }
 
 // Delete removes the key from the mapping
-func (db *MemDatabase) Delete(key []byte) error {
+func (db *MemDatabase) Del(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	delete(db.db, string(key))
+	return nil
+}
+
+// NewBatch ...
+func (db *MemDatabase) NewBatch() Batch {
 	return nil
 }
