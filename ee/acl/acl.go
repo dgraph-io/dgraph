@@ -233,7 +233,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	if err != nil {
 		return err
 	}
-	if len(entity.GetUid()) == 0 {
+	if entity == nil || len(entity.GetUid()) == 0 {
 		return fmt.Errorf("unable to delete %q since it does not exist",
 			userOrGroupId)
 	}
