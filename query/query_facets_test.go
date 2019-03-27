@@ -38,7 +38,7 @@ func populateClusterWithFacets() {
 		<25> <name> "Daryl Dixon" .
 		<31> <name> "Andrea" .
 		<33> <name> "Michale" .
-		<320> <name@en> "Test facet" (type = "Test facet with lang") .
+		<320> <name> "Test facet"@en (type = "Test facet with lang") .
 
 		<31> <friend> <24> .
 
