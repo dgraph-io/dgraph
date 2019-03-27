@@ -127,7 +127,34 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (
 			buf.WriteString(val)
 		}
 
-		// TODO facets!
+		for _, fct := range p.Facets {
+			buf.WriteString(fmt.Sprintf(`,"%s|%s":`, attr, fct.Key))
+
+			fVal, err := facets.ValFor(fct)
+			if err != nil {
+				glog.Errorf("Error getting value from facet %#v:%v", fct, err)
+				continue
+			}
+
+			fStringVal := &types.Val{Tid: types.StringID}
+			if err = types.Marshal(fVal, fStringVal); err != nil {
+				glog.Errorf("Error while marshaling facet value %v to string: %v",
+					fVal, err)
+				continue
+			}
+
+			facetTid, err := facets.TypeIDFor(fct)
+			if err != nil {
+				glog.Errorf("Error getting type id from facet %#v:%v", fct, err)
+				continue
+			}
+
+			if facetTid != types.IntID && facetTid != types.FloatID {
+				buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
+			} else {
+				buf.WriteString(fStringVal.Value.(string))
+			}
+		}
 
 		return nil
 	})
