@@ -174,7 +174,7 @@ func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		span.Annotate(nil, "Not Zero leader")
 		// I'm not the leader and this request was forwarded to me by a peer, who thought I'm the
 		// leader.
-		if num.Forward {
+		if num.Forwarded {
 			return x.Errorf("Invalid Zero received AssignUids request forward. Please retry")
 		}
 		// This is an original request. Forward it to the leader.
@@ -184,7 +184,7 @@ func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		}
 		span.Annotatef(nil, "Sending request to %v", pl.Addr)
 		zc := pb.NewZeroClient(pl.Get())
-		num.Forward = true
+		num.Forwarded = true
 		reply, err = zc.AssignUids(ctx, num)
 		return err
 	}
