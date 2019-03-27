@@ -102,6 +102,7 @@ func parseMutationTxnQuery(it *lex.ItemIterator) (string, error) {
 				parse = true
 				continue
 			}
+			// TODO: mutation conditionals
 			if item.Val != "mutation" {
 				return "", x.Errorf("Invalid txn operator %q.", item.Val)
 			}
