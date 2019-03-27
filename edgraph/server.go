@@ -529,7 +529,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 	}
 	startTime := time.Now()
 
-	ctx, span := x.UpsertSpan(ctx, methodQuery)
+	ctx, span := x.UpsertSpanWithMethod(ctx, methodQuery)
 	var measurements []ostats.Measurement
 	defer func() {
 		span.End()

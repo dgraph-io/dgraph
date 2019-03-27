@@ -214,21 +214,15 @@ func SinceMs(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
 }
 
-// UpsertSpan returns the current the span in the context if it exists.
-// Otherwise it create a new span with the given name and returns the new context and span
-func UpsertSpan(ctx context.Context, name string) (context.Context, *otrace.Span) {
-	span := otrace.FromContext(ctx)
-	if span != nil {
-		return ctx, span
-	}
-	return otrace.StartSpan(ctx, name)
-}
-
 // UpsertSpanWithMethod upserts a span using the provide name, and also upserts the name as a tag
 // under the method key
 func UpsertSpanWithMethod(ctx context.Context, name string) (context.Context,
 	*otrace.Span) {
-	ctx, span := UpsertSpan(ctx, name)
+	span := otrace.FromContext(ctx)
+	if span == nil {
+		ctx, span = otrace.StartSpan(ctx, name)
+	}
+
 	ctx, err := tag.New(ctx, tag.Upsert(KeyMethod, name))
 	Check(err)
 	return ctx, span
