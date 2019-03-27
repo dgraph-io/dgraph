@@ -645,7 +645,7 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case rs := <-readStateCh:
+		case <-readStateCh:
 			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
 		case req := <-n.requestCh:
 		slurpLoop:
