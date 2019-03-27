@@ -7,13 +7,12 @@ services:
   zero1:
     image: dgraph/dgraph:latest
     container_name: bank-dg0.1
-    working_dir: /data/dg0.1
     labels:
       cluster: test
     ports:
       - 5080:5080
       - 6080:6080
-    command: /gobin/dgraph zero --my=zero1:5080 --bindall --logtostderr -v=0
+    command: /gobin/dgraph --cwd=/data/dg0.1 zero --my=zero1:5080 --bindall --logtostderr -v=0
     user: ${UID:-0}
     volumes:
       - type: bind
@@ -27,7 +26,6 @@ services:
   dg1:
     image: dgraph/dgraph:latest
     container_name: bank-dg1
-    working_dir: /data/dg1
     labels:
       cluster: test
     user: ${UID:-0}
@@ -47,7 +45,6 @@ services:
   dg2:
     image: dgraph/dgraph:latest
     container_name: bank-dg2
-    working_dir: /data/dg2
     labels:
       cluster: test
     depends_on:
@@ -69,7 +66,6 @@ services:
   dg3:
     image: dgraph/dgraph:latest
     container_name: bank-dg3
-    working_dir: /data/dg3
     labels:
       cluster: test
     depends_on:
