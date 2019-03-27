@@ -630,6 +630,8 @@ func (n *node) Run() {
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
+				// No need to use select-case-default on pushing to readStateCh. It is typically
+				// empty.
 				readStateCh <- rs
 			}
 			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
