@@ -229,9 +229,9 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 		IsValueVar: gf.IsValueVar,
 	}
 
-	// type function is just an alias for eq(type, "type").
+	// type function is just an alias for eq(type, "dgraph.type").
 	if gf.Name == "type" {
-		sg.Attr = "type"
+		sg.Attr = "dgraph.type"
 		sg.SrcFunc.Name = "eq"
 		sg.SrcFunc.IsCount = false
 		sg.SrcFunc.IsValueVar = false
@@ -340,7 +340,7 @@ func aggWithVarFieldName(pc *SubGraph) string {
 
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	if len(pc.Params.uidToVal) == 0 {
-		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
+		return nil
 	}
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {

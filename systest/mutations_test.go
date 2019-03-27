@@ -685,7 +685,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
+		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"]}]`),
 		string(resp.Json))
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: "married"}))
@@ -706,7 +706,7 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}]`),
+		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"]}]`),
 		string(resp.Json))
 }
 
@@ -1719,8 +1719,8 @@ func RestoreReservedPreds(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	// Verify that the reserved predicates were restored to the schema.
-	query := `schema(preds: type) {predicate}`
+	query := `schema(preds: dgraph.type) {predicate}`
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
-	CompareJSON(t, `{"schema": [{"predicate":"type"}]}`, string(resp.Json))
+	CompareJSON(t, `{"schema": [{"predicate":"dgraph.type"}]}`, string(resp.Json))
 }

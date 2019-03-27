@@ -330,7 +330,7 @@ func Parse(key []byte) *ParsedKey {
 func IsReservedPredicate(pred string) bool {
 	var m = map[string]struct{}{
 		PredicateListAttr: {},
-		"type":            {},
+		"dgraph.type":     {},
 	}
 	_, ok := m[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred)
