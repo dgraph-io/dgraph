@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -110,6 +111,7 @@ type Latency struct {
 
 type params struct {
 	Alias      string
+	Type       string
 	Count      int
 	Offset     int
 	AfterUID   uint64
@@ -719,6 +721,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:          gchild.Alias,
+			Type:           gchild.Type,
 			Cascade:        sg.Params.Cascade,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
@@ -1886,6 +1889,17 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		// It could be expand(_all_), expand(_forward_), expand(_reverse_) or expand(val(x)).
 		case "_all_":
 			span.Annotate(nil, "expand(_all_)")
+			if len(sg.Params.Type) > 0 {
+				preds = getNodePredicatesFromType(sg.Params.Type)
+
+				rpreds, err := getReversePredicatesFromType(ctx, preds)
+				if err != nil {
+					return out, err
+				}
+				preds = append(preds, rpreds...)
+				break
+			}
+
 			// Get the predicate list for expansion.
 			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
@@ -1900,6 +1914,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			preds = append(preds, rpreds...)
 		case "_forward_":
 			span.Annotate(nil, "expand(_forward_)")
+			if len(sg.Params.Type) > 0 {
+				preds = getNodePredicatesFromType(sg.Params.Type)
+				break
+			}
+
 			child.ExpandPreds, err = getNodePredicates(ctx, sg)
 			if err != nil {
 				return out, err
@@ -1907,6 +1926,17 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			preds = uniquePreds(child.ExpandPreds)
 		case "_reverse_":
 			span.Annotate(nil, "expand(_reverse_)")
+			if len(sg.Params.Type) > 0 {
+				typePreds := getNodePredicatesFromType(sg.Params.Type)
+
+				rpreds, err := getReversePredicatesFromType(ctx, typePreds)
+				if err != nil {
+					return out, err
+				}
+				preds = append(preds, rpreds...)
+				break
+			}
+
 			rpreds, err := getReversePredicates(ctx)
 			if err != nil {
 				return out, err
@@ -1949,21 +1979,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 	}
 	return out, nil
-}
-
-func getReversePredicates(ctx context.Context) ([]string, error) {
-	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{})
-	if err != nil {
-		return nil, err
-	}
-	preds := make([]string, 0, len(schs))
-	for _, sch := range schs {
-		if !sch.Reverse {
-			continue
-		}
-		preds = append(preds, "~"+sch.Predicate)
-	}
-	return preds, nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
@@ -2509,6 +2524,59 @@ func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*pb.ValueList, erro
 		return nil, err
 	}
 	return result.ValueMatrix, nil
+}
+
+func getReversePredicates(ctx context.Context) ([]string, error) {
+	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{})
+	if err != nil {
+		return nil, err
+	}
+	preds := make([]string, 0, len(schs))
+	for _, sch := range schs {
+		if !sch.Reverse {
+			continue
+		}
+		preds = append(preds, "~"+sch.Predicate)
+	}
+	return preds, nil
+}
+
+func getNodePredicatesFromType(typeName string) []string {
+	var preds []string
+
+	typeDef, ok := schema.State().GetType(typeName)
+	if !ok {
+		return preds
+	}
+
+	for _, field := range typeDef.Fields {
+		preds = append(preds, field.Predicate)
+	}
+	return preds
+}
+
+func getReversePredicatesFromType(ctx context.Context, typePreds []string) ([]string, error) {
+	var rpreds []string
+	predMap := make(map[string]bool)
+	for _, pred := range typePreds {
+		predMap[pred] = true
+	}
+
+	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, sch := range schs {
+		if _, ok := predMap[sch.Predicate]; !ok {
+			continue
+		}
+		if !sch.Reverse {
+			continue
+		}
+		rpreds = append(rpreds, "~"+sch.Predicate)
+	}
+	return rpreds, nil
 }
 
 func GetAllPredicates(subGraphs []*SubGraph) []string {

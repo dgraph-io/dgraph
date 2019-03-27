@@ -4643,6 +4643,7 @@ func TestTypeInPredicate(t *testing.T) {
 	require.Equal(t, "uid", gq.Query[0].Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children))
 	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
+	require.Equal(t, "Person", gq.Query[0].Children[0].Type)
 
 	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
@@ -4669,6 +4670,7 @@ func TestMultipleTypeDirectives(t *testing.T) {
 	require.Equal(t, "uid", gq.Query[0].Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children))
 	require.Equal(t, "friend", gq.Query[0].Children[0].Attr)
+	require.Equal(t, "Person", gq.Query[0].Children[0].Type)
 
 	require.Equal(t, "type", gq.Query[0].Children[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Filter.Func.Args))
@@ -4676,6 +4678,7 @@ func TestMultipleTypeDirectives(t *testing.T) {
 
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children))
 	require.Equal(t, "pet", gq.Query[0].Children[0].Children[0].Attr)
+	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Type)
 
 	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
