@@ -704,7 +704,8 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	}
 
 	err = doAuthorizeQuery()
-	if span := otrace.FromContext(ctx); span != nil {
+	span := otrace.FromContext(ctx)
+	if span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,

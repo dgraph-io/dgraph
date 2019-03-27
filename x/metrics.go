@@ -27,6 +27,7 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -209,12 +210,26 @@ func MetricsContext() context.Context {
 	return context.Background()
 }
 
-func WithMethod(parent context.Context, method string) context.Context {
-	ctx, err := tag.New(parent, tag.Upsert(KeyMethod, method))
-	Check(err)
-	return ctx
-}
-
 func SinceMs(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
+}
+
+// UpsertSpan returns the current the span in the context if it exists.
+// Otherwise it create a new span with the given name and returns the new context and span
+func UpsertSpan(ctx context.Context, name string) (context.Context, *otrace.Span) {
+	span := otrace.FromContext(ctx)
+	if span != nil {
+		return ctx, span
+	}
+	return otrace.StartSpan(ctx, name)
+}
+
+// UpsertSpanWithMethod upserts a span using the provide name, and also upserts the name as a tag
+// under the method key
+func UpsertSpanWithMethod(ctx context.Context, name string) (context.Context,
+	*otrace.Span) {
+	ctx, span := UpsertSpan(ctx, name)
+	ctx, err := tag.New(ctx, tag.Upsert(KeyMethod, name))
+	Check(err)
+	return ctx, span
 }
