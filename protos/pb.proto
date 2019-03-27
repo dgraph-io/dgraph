@@ -439,7 +439,7 @@ service Worker {
 message Num {
 	uint64 val = 1;
 	bool read_only = 2;
-	bool forward = 3; // True if this request was forwarded by a peer.
+	bool forwarded = 3; // True if this request was forwarded by a peer.
 }
 
 message AssignedIds {
