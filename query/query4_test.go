@@ -210,8 +210,8 @@ func TestTypeExpandAll(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"automaker":"Ford","make":"Focus","year":2008, "dgraph.type":"CarModel", "~previous_model": [{"uid":"0xc9"}]},
-		{"automaker":"Ford","make":"Focus","year":2009, "dgraph.type":"CarModel", "previous_model": {"uid":"0xc8"}}
+		{"automaker":"Ford","make":"Focus","year":2008, "~previous_model": [{"uid":"0xc9"}]},
+		{"automaker":"Ford","make":"Focus","year":2009, "previous_model": {"uid":"0xc8"}}
 	]}}`, js)
 }
 
@@ -225,8 +225,8 @@ func TestTypeExpandForward(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[
-		{"automaker":"Ford","make":"Focus","year":2008, "dgraph.type":"CarModel"},
-		{"automaker":"Ford","make":"Focus","year":2009, "dgraph.type":"CarModel", "previous_model": {"uid":"0xc8"}}
+		{"automaker":"Ford","make":"Focus","year":2008},
+		{"automaker":"Ford","make":"Focus","year":2009, "previous_model": {"uid":"0xc8"}}
 	]}}`, js)
 }
 

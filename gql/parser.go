@@ -40,7 +40,6 @@ const (
 type GraphQuery struct {
 	UID        []uint64
 	Attr       string
-	Type       string
 	Langs      []string
 	Alias      string
 	IsCount    bool
@@ -1966,7 +1965,6 @@ func parseType(it *lex.ItemIterator, gq *GraphQuery) error {
 			},
 		},
 	}
-	gq.Type = typeName
 
 	return nil
 }

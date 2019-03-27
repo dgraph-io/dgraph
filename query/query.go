@@ -721,7 +721,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:          gchild.Alias,
-			Type:           gchild.Type,
 			Cascade:        sg.Params.Cascade,
 			Expand:         gchild.Expand,
 			Facet:          gchild.Facets,
@@ -1823,7 +1822,7 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
-func uniquePreds(vl []*pb.ValueList) []string {
+func uniqueValues(vl []*pb.ValueList) []string {
 	predMap := make(map[string]struct{})
 
 	for _, l := range vl {
@@ -1864,7 +1863,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	stop := x.SpanTimer(span, "expandSubgraph: "+sg.Attr)
 	defer stop()
 
-	var err error
 	out := make([]*SubGraph, 0, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
@@ -1885,12 +1883,17 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		var preds []string
+		types, err := getNodeTypes(ctx, sg)
+		if err != nil {
+			return out, err
+		}
+
 		switch child.Params.Expand {
 		// It could be expand(_all_), expand(_forward_), expand(_reverse_) or expand(val(x)).
 		case "_all_":
 			span.Annotate(nil, "expand(_all_)")
-			if len(sg.Params.Type) > 0 {
-				preds = getNodePredicatesFromType(sg.Params.Type)
+			if len(types) > 0 {
+				preds = getNodePredicatesFromTypes(types)
 
 				rpreds, err := getReversePredicatesFromType(ctx, preds)
 				if err != nil {
@@ -1905,7 +1908,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
-			preds = uniquePreds(child.ExpandPreds)
+			preds = uniqueValues(child.ExpandPreds)
 
 			rpreds, err := getReversePredicates(ctx)
 			if err != nil {
@@ -1914,8 +1917,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			preds = append(preds, rpreds...)
 		case "_forward_":
 			span.Annotate(nil, "expand(_forward_)")
-			if len(sg.Params.Type) > 0 {
-				preds = getNodePredicatesFromType(sg.Params.Type)
+			if len(types) > 0 {
+				preds = getNodePredicatesFromTypes(types)
 				break
 			}
 
@@ -1923,11 +1926,11 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if err != nil {
 				return out, err
 			}
-			preds = uniquePreds(child.ExpandPreds)
+			preds = uniqueValues(child.ExpandPreds)
 		case "_reverse_":
 			span.Annotate(nil, "expand(_reverse_)")
-			if len(sg.Params.Type) > 0 {
-				typePreds := getNodePredicatesFromType(sg.Params.Type)
+			if len(types) > 0 {
+				typePreds := getNodePredicatesFromTypes(types)
 
 				rpreds, err := getReversePredicatesFromType(ctx, typePreds)
 				if err != nil {
@@ -1945,7 +1948,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		default:
 			span.Annotate(nil, "expand default")
 			// We already have the predicates populated from the var.
-			preds = uniquePreds(child.ExpandPreds)
+			preds = uniqueValues(child.ExpandPreds)
 		}
 
 		for _, pred := range preds {
@@ -2541,16 +2544,35 @@ func getReversePredicates(ctx context.Context) ([]string, error) {
 	return preds, nil
 }
 
-func getNodePredicatesFromType(typeName string) []string {
+func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
+	temp := &SubGraph{
+		Attr:    "dgraph.type",
+		SrcUIDs: sg.DestUIDs,
+		ReadTs:  sg.ReadTs,
+	}
+	taskQuery, err := createTaskQuery(temp)
+	if err != nil {
+		return nil, err
+	}
+	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+	if err != nil {
+		return nil, err
+	}
+	return uniqueValues(result.ValueMatrix), nil
+}
+
+func getNodePredicatesFromTypes(types []string) []string {
 	var preds []string
 
-	typeDef, ok := schema.State().GetType(typeName)
-	if !ok {
-		return preds
-	}
+	for _, typeName := range types {
+		typeDef, ok := schema.State().GetType(typeName)
+		if !ok {
+			return preds
+		}
 
-	for _, field := range typeDef.Fields {
-		preds = append(preds, field.Predicate)
+		for _, field := range typeDef.Fields {
+			preds = append(preds, field.Predicate)
+		}
 	}
 	return preds
 }
