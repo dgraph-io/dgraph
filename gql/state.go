@@ -480,6 +480,9 @@ func lexTextQuery(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("Unclosed query text")
 		}
 		if isSpace(r) || lex.IsEndOfLine(r) {
+			if depth == 0 {
+				l.Ignore()
+			}
 			continue
 		}
 		if r == leftCurl {
