@@ -47,7 +47,7 @@ func checkLoadedData(t *testing.T) {
 			q(func: anyofterms(name, "Homer")) {
 				name
 				age
-				role @facets(gender,stage)
+				role @facets(gender,generation)
 				role@es
 			}
 		}
@@ -71,7 +71,7 @@ func checkLoadedData(t *testing.T) {
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				name
-				role @facets(gender,stage)
+				role @facets(gender,generation)
 				role@es
 				carries
 			}
@@ -87,7 +87,7 @@ func checkLoadedData(t *testing.T) {
 					"role@es": "hija",
 					"carries": "pacifier",
 					"role|gender": "female",
-					"role|stage": "baby"
+					"role|generation": 3
 				}
 			]
 		}

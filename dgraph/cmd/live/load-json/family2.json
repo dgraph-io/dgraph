@@ -28,7 +28,7 @@
     "age":"1",
     "role":"daughter",
     "role|gender":"female",
-    "role|stage":"baby",
+    "role|generation":3,
     "role@es":"hija",
     "carries":"pacifier",
     "sibling_of": [
