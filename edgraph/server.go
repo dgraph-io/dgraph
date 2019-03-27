@@ -519,6 +519,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 			return resp, err
 		}
 		queryVars = qr.GetUids()
+		// TODO: check mutation conditionals here
 		glog.V(3).Infof("TxnQuery: qr=%+v vars=%v", qr, queryVars)
 		l.Parsing += qr.Latency.Parsing
 		l.Processing += qr.Latency.Processing
