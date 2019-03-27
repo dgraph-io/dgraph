@@ -4,7 +4,7 @@
 
 [![GoDoc](https://godoc.org/github.com/ChainSafeSystems/gossamer?status.svg)](https://godoc.org/github.com/ChainSafeSystems/gossamer)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ChainSafeSystems/gossamer)](https://goreportcard.com/report/github.com/ChainSafeSystems/gossamer)
-[![CircleCI](https://circleci.com/gh/ChainSafeSystems/gossamer.svg?style=svg)](https://circleci.com/gh/ChainSafeSystems/gossamer)
+[![](https://img.shields.io/travis/com/ChainSafeSystems/gossamer/master.svg?label=master&logo=travis "Master Branch (Travis)")](https://travis-ci.com/ChainSafeSystems/gossamer)
 [![Maintainability](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/maintainability)](https://codeclimate.com/github/ChainSafeSystems/gossamer/badges)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/test_coverage)](https://codeclimate.com/github/ChainSafeSystems/gossamer/test_coverage)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)

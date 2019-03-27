@@ -1,0 +1,23 @@
+language: go
+
+go:
+- 1.11
+
+install:
+# Install GolangCI-Linter
+- wget -O - -q https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s v1.15.0
+# Install all packages
+- go get -v -d ./...
+
+before_script:
+  - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+  - chmod +x ./cc-test-reporter
+  - ./cc-test-reporter before-build
+
+script:
+- go test -v -short -coverprofile c.out ./... && ./cc-test-reporter after-build --exit-code $?
+- gofmt -d ./..
+- ./bin/golangci-lint run
+
+after_script:
+  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT

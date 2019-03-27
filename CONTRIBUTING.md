@@ -61,6 +61,33 @@ $ gometallinter ./...
 
 Navigate your browser to [https://github.com/ChainSafeSystems/gossamer](https://github.com/ChainSafeSystems/gossamer) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafeSystems/gossamer/pulls](https://github.com/ChainSafeSystems/gossamer/pulls).
 
+## Note on memory intensive tests
+Unfortunately, the free tier for CI's have a memory cap and some tests will cause the CI to experience an out of memory error.
+In order to mitigate this we have introduced the concept of **short tests**. If your PR causes an out of memory error please seperate the tests into two groups
+like below and make sure to label it `large`:
+
+```
+var stringTest = []string {
+    "This causes no leaks"
+}
+
+var largeStringTest = []string {
+    "Whoa this test is so big it causes an out of memory issue"
+}
+
+func TestStringTest(t *testing.T) {
+    ...
+}
+
+func TestLargeStringTest(t *testing.T) {
+   	if testing.Short() {
+  		t.Skip("\033[33mSkipping memory intesive test for <TEST NAME> in short mode\033[0m")
+    } else {
+        ...
+    }
+}
+```
+
 ## Contributor Responsibilities
 
 We consider two types of contributions to our repo and categorize them as follows:
