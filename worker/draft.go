@@ -770,6 +770,7 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			diskDur := time.Since(start)
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
@@ -847,8 +848,10 @@ func (n *node) Run() {
 			}
 			if time.Since(start) > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk.",
-					time.Since(start).Round(time.Millisecond))
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+						" Num entries: %d. MustSync: %v",
+					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
+					len(rd.Entries), rd.MustSync)
 			}
 		}
 	}

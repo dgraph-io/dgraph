@@ -656,6 +656,7 @@ func (n *node) Run() {
 			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			span.Annotatef(nil, "Saved to storage")
+			diskDur := time.Since(start)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -696,8 +697,10 @@ func (n *node) Run() {
 			span.End()
 			if time.Since(start) > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk.",
-					time.Since(start).Round(time.Millisecond))
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+						" Num entries: %d. MustSync: %v",
+					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
+					len(rd.Entries), rd.MustSync)
 			}
 		}
 	}
