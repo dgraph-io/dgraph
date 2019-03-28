@@ -169,7 +169,7 @@ func TestParseMutationTxn1(t *testing.T) {
 				v as uid
 			}
 		}`
-	require.EqualValues(t, query, mu.TxnQuery)
+	require.EqualValues(t, query, mu.CondQuery)
 	sets, err := parseNquads(mu.SetNquads)
 	require.NoError(t, err)
 	require.EqualValues(t,
