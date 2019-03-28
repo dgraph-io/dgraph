@@ -79,12 +79,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, x.Errorf("Invalid value for bool %v", data[0])
 			case DateTimeID:
 				var t time.Time
-				// Only try to convert binary data with length > 0. If the value is null,
-				// convert to zero-time value.
-				if len(data) != 0 {
-					if err := t.UnmarshalBinary(data); err != nil {
-						return to, err
-					}
+				if err := t.UnmarshalBinary(data); err != nil {
+					return to, err
 				}
 				*res = t
 			case GeoID:
@@ -106,46 +102,34 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				*res = []byte(vc)
 			case IntID:
-				*res = int64(0)
-				if vc != "" {
-					val, err := strconv.ParseInt(vc, 10, 64)
-					if err != nil {
-						return to, err
-					}
-					*res = val
+				val, err := strconv.ParseInt(vc, 10, 64)
+				if err != nil {
+					return to, err
 				}
+				*res = val
 			case FloatID:
-				*res = float64(0)
-				if vc != "" {
-					val, err := strconv.ParseFloat(vc, 64)
-					if err != nil {
-						return to, err
-					}
-					if math.IsNaN(val) {
-						return to, fmt.Errorf("Got invalid value: NaN")
-					}
-					*res = val
+				val, err := strconv.ParseFloat(vc, 64)
+				if err != nil {
+					return to, err
 				}
+				if math.IsNaN(val) {
+					return to, fmt.Errorf("Got invalid value: NaN")
+				}
+				*res = val
 			case StringID, DefaultID:
 				*res = vc
 			case BoolID:
-				*res = false
-				if vc != "" {
-					val, err := strconv.ParseBool(vc)
-					if err != nil {
-						return to, err
-					}
-					*res = val
+				val, err := strconv.ParseBool(vc)
+				if err != nil {
+					return to, err
 				}
+				*res = val
 			case DateTimeID:
-				*res = time.Time{}
-				if vc != "" {
-					t, err := ParseTime(vc)
-					if err != nil {
-						return to, err
-					}
-					*res = t
+				t, err := ParseTime(vc)
+				if err != nil {
+					return to, err
 				}
+				*res = t
 			case GeoID:
 				var g geom.T
 				text := bytes.Replace([]byte(vc), []byte("'"), []byte("\""), -1)
@@ -184,10 +168,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case StringID, DefaultID:
 				*res = strconv.FormatInt(vc, 10)
 			case DateTimeID:
-				*res = time.Time{}
-				if vc != 0 {
-					*res = time.Unix(vc, 0).UTC()
-				}
+				*res = time.Unix(vc, 0).UTC()
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -217,13 +198,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case StringID, DefaultID:
 				*res = strconv.FormatFloat(vc, 'G', -1, 64)
 			case DateTimeID:
-				*res = time.Time{}
-				if vc != 0 {
-					secs := int64(vc)
-					fracSecs := vc - float64(secs)
-					nsecs := int64(fracSecs * nanoSecondsInSec)
-					*res = time.Unix(secs, nsecs).UTC()
-				}
+				secs := int64(vc)
+				fracSecs := vc - float64(secs)
+				nsecs := int64(fracSecs * nanoSecondsInSec)
+				*res = time.Unix(secs, nsecs).UTC()
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -263,48 +241,28 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case DateTimeID:
 		{
 			var t time.Time
-			// When we use Convert(BinaryID, DateTimeID) to store values if the value is empty,
-			// the conversion yields a zero time value. Here we check if that's the case and skip
-			// marshaling and return the ztv. Then we can handle it better if we need to return it
-			// in a result.
-			if len(data) == 15 {
-				if err := t.UnmarshalBinary(data); err != nil {
-					return to, err
-				}
+			if err := t.UnmarshalBinary(data); err != nil {
+				return to, err
 			}
-			// NOTE: when converting datetime values to anything else, we must
-			// check for zero-time value and return the zero value of the new type.
 			switch toID {
 			case DateTimeID:
 				*res = t
 			case BinaryID:
-				*res = []byte("")
-				if !t.IsZero() {
-					r, err := t.MarshalBinary()
-					if err != nil {
-						return to, err
-					}
-					*res = r
+				r, err := t.MarshalBinary()
+				if err != nil {
+					return to, err
 				}
+				*res = r
 			case StringID, DefaultID:
-				*res = ""
-				if !t.IsZero() {
-					val, err := t.MarshalText()
-					if err != nil {
-						return to, err
-					}
-					*res = string(val)
+				val, err := t.MarshalText()
+				if err != nil {
+					return to, err
 				}
+				*res = string(val)
 			case IntID:
-				*res = int64(0)
-				if !t.IsZero() {
-					*res = t.Unix()
-				}
+				*res = t.Unix()
 			case FloatID:
-				*res = float64(0)
-				if !t.IsZero() {
-					*res = float64(t.UnixNano()) / float64(nanoSecondsInSec)
-				}
+				*res = float64(t.UnixNano()) / float64(nanoSecondsInSec)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -432,23 +390,17 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(time.Time)
 		switch toID {
 		case StringID, DefaultID:
-			*res = ""
-			if !vc.IsZero() {
-				val, err := vc.MarshalText()
-				if err != nil {
-					return err
-				}
-				*res = string(val)
+			val, err := vc.MarshalText()
+			if err != nil {
+				return err
 			}
+			*res = string(val)
 		case BinaryID:
-			*res = []byte("")
-			if !vc.IsZero() {
-				r, err := vc.MarshalBinary()
-				if err != nil {
-					return err
-				}
-				*res = r
+			r, err := vc.MarshalBinary()
+			if err != nil {
+				return err
 			}
+			*res = r
 		default:
 			return cantConvert(fromID, toID)
 		}

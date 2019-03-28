@@ -104,29 +104,34 @@ func TestConversionEdgeCases(t *testing.T) {
 			out:     Val{Tid: DateTimeID, Value: time.Time{}},
 			failure: "Time.UnmarshalBinary:"},
 		{in: Val{Tid: BinaryID, Value: []byte{}},
-			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+			out:     Val{Tid: DateTimeID, Value: time.Time{}},
+			failure: "Time.UnmarshalBinary:"},
 
 		// From StringID|DefaultID to X
 		{in: Val{Tid: StringID, Value: []byte{}},
-			out: Val{Tid: IntID, Value: int64(0)}},
+			out:     Val{Tid: IntID, Value: int64(0)},
+			failure: "strconv.ParseInt"},
 		{in: Val{Tid: StringID, Value: []byte{}},
-			out: Val{Tid: FloatID, Value: float64(0)}},
+			out:     Val{Tid: FloatID, Value: float64(0)},
+			failure: "strconv.ParseFloat"},
 		{in: Val{Tid: StringID, Value: []byte{}},
-			out: Val{Tid: BoolID, Value: false}},
+			out:     Val{Tid: BoolID, Value: false},
+			failure: "strconv.ParseBool"},
 		{in: Val{Tid: StringID, Value: []byte{}},
-			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+			out:     Val{Tid: DateTimeID, Value: time.Time{}},
+			failure: `parsing time "" as "2006": cannot parse "" as "2006"`},
 
 		// From IntID to X
 		{in: Val{Tid: IntID, Value: []byte{}},
 			failure: "Invalid data for int64"},
 		{in: Val{Tid: IntID, Value: bs(int64(0))},
-			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+			out: Val{Tid: DateTimeID, Value: time.Unix(0, 0).UTC()}},
 
 		// From FloatID to X
 		{in: Val{Tid: FloatID, Value: []byte{}},
 			failure: "Invalid data for float"},
 		{in: Val{Tid: FloatID, Value: bs(float64(0))},
-			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+			out: Val{Tid: DateTimeID, Value: time.Unix(0, 0).UTC()}},
 
 		// From BoolID to X
 		{in: Val{Tid: BoolID, Value: []byte{}},
@@ -136,32 +141,38 @@ func TestConversionEdgeCases(t *testing.T) {
 
 		// From DateTimeID to X
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
-			out: Val{Tid: DateTimeID, Value: time.Time{}}},
+			out:     Val{Tid: DateTimeID, Value: time.Time{}},
+			failure: "Time.UnmarshalBinary:"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
 			out: Val{Tid: DateTimeID, Value: time.Time{}}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
-			out: Val{Tid: BinaryID, Value: []byte{}}},
+			out:     Val{Tid: BinaryID, Value: []byte{}},
+			failure: "Time.UnmarshalBinary"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: BinaryID, Value: []byte{}}},
+			out: Val{Tid: BinaryID, Value: bs(time.Time{})}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
-			out: Val{Tid: StringID, Value: ""}},
+			out:     Val{Tid: StringID, Value: ""},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: StringID, Value: ""}},
+			out: Val{Tid: StringID, Value: "0001-01-01T00:00:00Z"}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
-			out: Val{Tid: DefaultID, Value: ""}},
+			out:     Val{Tid: DefaultID, Value: ""},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: DefaultID, Value: ""}},
+			out: Val{Tid: DefaultID, Value: "0001-01-01T00:00:00Z"}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
-			out: Val{Tid: IntID, Value: int64(0)}},
+			out:     Val{Tid: IntID, Value: int64(0)},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: IntID, Value: int64(0)}},
+			out: Val{Tid: IntID, Value: time.Time{}.Unix()}},
 		{in: Val{Tid: DateTimeID, Value: []byte{}},
-			out: Val{Tid: FloatID, Value: float64(0)}},
+			out:     Val{Tid: FloatID, Value: float64(0)},
+			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: FloatID, Value: float64(0)}},
+			out: Val{Tid: FloatID, Value: float64(time.Time{}.UnixNano()) / float64(nanoSecondsInSec)}},
 	}
 	for _, tc := range tests {
-		// t.Logf("%s to %s != %v", tc.in.Tid.Name(), tc.out.Tid.Name(), tc.out.Value)
+		t.Logf("%s to %s != %v", tc.in.Tid.Name(), tc.out.Tid.Name(), tc.out.Value)
 		out, err := Convert(tc.in, tc.out.Tid)
 		if tc.failure != "" {
 			require.Error(t, err)
@@ -185,7 +196,7 @@ func TestConvertToDefault(t *testing.T) {
 		{in: Val{IntID, bs(int64(3))}, out: "3"},
 		{in: Val{FloatID, bs(float64(-3.5))}, out: "-3.5"},
 		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: "2006-01-02T15:04:05Z"},
-		{in: Val{DateTimeID, bs(time.Time{})}, out: ""},
+		{in: Val{DateTimeID, bs(time.Time{})}, out: "0001-01-01T00:00:00Z"},
 	}
 
 	for _, tc := range tests {
@@ -208,7 +219,6 @@ func TestConvertFromDefault(t *testing.T) {
 		{in: "hello", out: Val{StringID, "hello"}},
 		{in: "", out: Val{StringID, ""}},
 		{in: "2016", out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
-		{in: "", out: Val{DateTimeID, time.Time{}}},
 	}
 
 	for _, tc := range tests {
@@ -230,7 +240,6 @@ func TestConvertToBinary(t *testing.T) {
 		{in: Val{IntID, bs(int64(3))}, out: bs(int64(3))},
 		{in: Val{FloatID, bs(float64(-3.5))}, out: bs(float64(-3.5))},
 		{in: Val{DateTimeID, bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))}, out: bs(time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC))},
-		{in: Val{DateTimeID, bs(time.Time{})}, out: []byte("")},
 	}
 
 	for _, tc := range tests {
@@ -257,7 +266,6 @@ func TestConvertFromBinary(t *testing.T) {
 		{in: []byte(""), out: Val{StringID, ""}},
 		{in: bs(time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)), out: Val{DateTimeID, time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC)}},
 		{in: bs(time.Time{}), out: Val{DateTimeID, time.Time{}}},
-		{in: []byte(""), out: Val{DateTimeID, time.Time{}}},
 	}
 
 	for _, tc := range tests {
@@ -276,7 +284,6 @@ func TestConvertStringToDateTime(t *testing.T) {
 		{in: "2006-01-02", out: time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC)},
 		{in: "2006-01", out: time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC)},
 		{in: "2006", out: time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC)},
-		{in: "", out: time.Time{}},
 	}
 
 	for _, tc := range tests {
@@ -294,7 +301,6 @@ func TestConvertDateTimeToString(t *testing.T) {
 		{in: time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC), out: "2006-01-02T15:04:05Z"},
 		{in: time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC), out: "2006-01-02T00:00:00Z"},
 		{in: time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC), out: "2006-01-01T00:00:00Z"},
-		{in: time.Time{}, out: ""},
 	}
 
 	for _, tc := range tests {
@@ -454,7 +460,10 @@ func TestConvertStringToBool(t *testing.T) {
 		{in: "0", out: false},
 		{in: "false", out: false},
 		{in: "False", out: false},
-		{in: "", out: false},
+		{
+			in:      "",
+			failure: `strconv.ParseBool: parsing "": invalid syntax`,
+		},
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseBool: parsing "srfrog": invalid syntax`,
@@ -532,9 +541,7 @@ func TestFalsy(t *testing.T) {
 		in Val
 	}{
 		{in: Val{Tid: StringID, Value: []byte("false")}},
-		{in: Val{Tid: StringID, Value: []byte("")}},
 		{in: Val{Tid: DefaultID, Value: []byte("false")}},
-		{in: Val{Tid: DefaultID, Value: []byte("")}},
 		{in: Val{Tid: IntID, Value: bs(int64(0))}},
 		{in: Val{Tid: FloatID, Value: bs(float64(0.0))}},
 		{in: Val{Tid: BinaryID, Value: []byte("")}},
@@ -672,11 +679,14 @@ func TestConvertStringToInt(t *testing.T) {
 		failure string
 	}{
 		{in: "1", out: int64(1)},
-		{in: "", out: int64(0)},
 		{in: "13816", out: int64(13816)},
 		{in: "-1221", out: int64(-1221)},
 		{in: "0", out: int64(0)},
 		{in: "203716381366627", out: int64(203716381366627)},
+		{
+			in:      "",
+			failure: `strconv.ParseInt: parsing "": invalid syntax`,
+		},
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseInt: parsing "srfrog": invalid syntax`,
@@ -710,12 +720,15 @@ func TestConvertStringToFloat(t *testing.T) {
 		failure string
 	}{
 		{in: "1", out: float64(1)},
-		{in: "", out: float64(0)},
 		{in: "13816.251", out: float64(13816.251)},
 		{in: "-1221.12", out: float64(-1221.12)},
 		{in: "-0.0", out: float64(-0.0)},
 		{in: "1e10", out: float64(1e10)},
 		{in: "1e-2", out: float64(0.01)},
+		{
+			in:      "",
+			failure: `strconv.ParseFloat: parsing "": invalid syntax`,
+		},
 		{
 			in:      "srfrog",
 			failure: `strconv.ParseFloat: parsing "srfrog": invalid syntax`,
@@ -753,7 +766,6 @@ func TestConvertFloatToDateTime(t *testing.T) {
 		{in: float64(-2150326800), out: time.Date(1901, time.November, 10, 23, 0, 0, 0, time.UTC)},
 		{in: float64(1257894000.001), out: time.Date(2009, time.November, 10, 23, 0, 0, 999927, time.UTC)},
 		{in: float64(-4409999.999), out: time.Date(1969, time.November, 10, 23, 0, 0, 1000001, time.UTC)},
-		{in: float64(0), out: time.Time{}},
 	}
 
 	for _, tc := range tests {
@@ -774,7 +786,6 @@ func TestConvertDateTimeToFloat(t *testing.T) {
 		{in: time.Date(1901, time.November, 10, 23, 0, 0, 0, time.UTC), out: float64(-2150326800)},
 		{in: time.Date(2009, time.November, 10, 23, 0, 0, 1000000, time.UTC), out: float64(1257894000.001)},
 		{in: time.Date(1969, time.November, 10, 23, 0, 0, 1000000, time.UTC), out: float64(-4409999.999)},
-		{in: time.Time{}, out: float64(0)},
 	}
 
 	for _, tc := range tests {
@@ -791,7 +802,6 @@ func TestConvertIntToDateTime(t *testing.T) {
 	}{
 		{in: int64(1257894000), out: time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)},
 		{in: int64(-4410000), out: time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC)},
-		{in: int64(0), out: time.Time{}},
 	}
 
 	for _, tc := range tests {
@@ -810,7 +820,6 @@ func TestConvertDateTimeToInt(t *testing.T) {
 		{in: time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC), out: int64(-4410000)},
 		{in: time.Date(2039, time.November, 10, 23, 0, 0, 0, time.UTC), out: int64(2204578800)},
 		{in: time.Date(1901, time.November, 10, 23, 0, 0, 0, time.UTC), out: int64(-2150326800)},
-		{in: time.Time{}, out: int64(0)},
 	}
 
 	for _, tc := range tests {
@@ -831,7 +840,6 @@ func TestConvertToString(t *testing.T) {
 		{in: Val{Tid: StringID, Value: []byte("srfrog")}, out: "srfrog"},
 		{in: Val{Tid: PasswordID, Value: []byte("password")}, out: "password"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC))}, out: "2006-01-02T15:04:05Z"},
-		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})}, out: ""},
 	}
 
 	for _, tc := range tests {
