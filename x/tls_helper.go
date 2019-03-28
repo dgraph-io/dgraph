@@ -79,8 +79,8 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 
 func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
-	// plaintext. However the client cert files are optional, depending on whether the server is
-	// requiring a client certificate.
+	// plaintext. However the client cert files are optional, depending on whether the server
+	// requires a client certificate.
 	caCert := v.GetString("tls_cacert")
 	if caCert != "" {
 		tlsCfg := tls.Config{}
@@ -128,7 +128,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 			return nil, err
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("Error reading CA file '%s'.\n%s", certPath, err)
+			return nil, fmt.Errorf("error reading CA file %q", certPath)
 		}
 	}
 

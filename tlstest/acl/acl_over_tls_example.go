@@ -32,7 +32,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 			return nil, err
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("Error reading CA file '%s'.\n%s", certPath, err)
+			return nil, fmt.Errorf("error reading CA file %q", certPath)
 		}
 	}
 
