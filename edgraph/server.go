@@ -427,7 +427,9 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return s.doMutate(ctx, mu)
 }
 
-func txnQuery(ctx context.Context, req *api.Request) (*query.QueryRequest, error) {
+// doCondQuery processes a conditional query within the same transaction of a mutation.
+// Returns a QueryRequest with the result subgraphs if successful, otherwise an error.
+func doCondQuery(ctx context.Context, req *api.Request) (*query.QueryRequest, error) {
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
@@ -509,18 +511,23 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 	// Parse query and process
 	var queryVars map[string][]string
-	if mu.TxnQuery != "" {
-		qr, err := txnQuery(ctx, &api.Request{
+	if mu.CondQuery != "" {
+		qr, err := doCondQuery(ctx, &api.Request{
 			StartTs: mu.StartTs,
-			Query:   mu.TxnQuery,
+			Query:   mu.CondQuery,
 			Vars:    make(map[string]string),
 		})
 		if err != nil {
 			return resp, err
 		}
+
+		// TODO: add conditional checks here.
 		queryVars = qr.GetUids()
-		// TODO: check mutation conditionals here
-		glog.V(3).Infof("TxnQuery: qr=%+v vars=%v", qr, queryVars)
+		if len(queryVars) == 0 {
+			return resp, x.Errorf("No variables defined in conditional query")
+		}
+		glog.V(3).Infof("CondQuery: qr=%+v vars=%v", qr, queryVars)
+
 		l.Parsing += qr.Latency.Parsing
 		l.Processing += qr.Latency.Processing
 	}
