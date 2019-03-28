@@ -25,15 +25,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const loginEndpoint = "http://localhost:8180/login"
+var loginEndpoint = "http://"+z.TestSockAddrHttp+"/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping because -short=true")
 	}
 
-	glog.Infof("testing with port 9180")
-	dg := z.DgraphClientWithGroot(":9180")
+	glog.Infof("testing with port %s", z.TestSockAddr)
+	dg := z.DgraphClientWithGroot(z.TestSockAddr)
 	createAccountAndData(t, dg)
 
 	// test query through curl

@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -42,13 +43,17 @@ var (
 	TestSockAddrHttp string
 )
 
-// This allows running most tests against dgraph running on the default ports, for example,
-// or a different host even. Defaults to localhost:9180.
+// This allows running (most) tests against dgraph running on the default ports, for example.
+// Only the GRPC port is needed and the others are inferred. Defaults to 9180.
 func init() {
-	TestSockAddr = os.Getenv("TEST_SOCK_ADDR")
-	if TestSockAddr == "" || strings.IndexRune(TestSockAddr, ':') < 0 {
-		TestSockAddr += ":9180"
+	var grpcPort int
+	if p := os.Getenv("DGRAPH_TEST_PORT"); p == "" {
+		grpcPort = 9180
+	} else {
+		grpcPort, _ = strconv.Atoi(p)
 	}
+	TestSockAddr = fmt.Sprintf("localhost:%d", grpcPort)
+	TestSockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 }
 
 // DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
