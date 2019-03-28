@@ -21,8 +21,7 @@ forum](https://discuss.dgraph.io).
 
 2. Create a plain text file, and store a randomly generated secret key in it. The secret key is used
 by Alpha servers to sign JSON Web Tokens (JWT). As you’ve probably guessed, it’s critical to keep
-the secret key as a secret. Another requirement for the secret key is that it must have at least 256
-bits, i.e.  32 ASCII characters, as we are using HMAC-SHA256 as the signing algorithm,.
+the secret key as a secret. Another requirement for the secret key is that it must have at least 256-bits, i.e. 32 ASCII characters, as we are using HMAC-SHA256 as the signing algorithm.
 
 3. Start all the alpha servers in your cluster with the
 options `--enterprise_features` and `--acl_secret_file`, and make sure they are all using the same
@@ -48,13 +47,13 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 Now that your cluster is running with the ACL feature turned on, let's set up the ACL rules. A typical workflow is the following:
 
-1. reset the root password. The example below uses the dgraph endpoint `localhost:9180` as a demo, make sure to choose the correct one for your environment:
+1. Reset the root password. The example below uses the dgraph endpoint `localhost:9180` as a demo, make sure to choose the correct one for your environment:
 ```bash
 dgraph acl -d localhost:9180 mod -u groot
 ```
 Now type in the password for the groot account, which is the superuser that has access to everything. If you have never changed the groot password, by default it's `password`.
 
-2. create a regular user
+2. Create a regular user
 ```bash
 dgraph acl -d localhost:9180 add -u alice
 ```
@@ -68,7 +67,7 @@ Retype new password for alice:
 Created new user with id alice
 ```
 
-3. create a group
+3. Create a group
 ```bash
 dgraph acl -d localhost:9180 add -g dev
 ```
@@ -79,7 +78,7 @@ Running transaction with dgraph endpoint: localhost:9180
 Login successful.
 Created new group with id dev
 ```
-4. assign the user to the group
+4. Assign the user to the group
 ```bash
 dgraph acl -d localhost:9180 mod -u alice -l dev
 ```
@@ -89,7 +88,7 @@ For example, to assign the user `alice` to both the group `dev` and the group `s
 ```bash
 dgraph acl -d localhost:9180 mod -u alice -l dev,sre
 ```
-5. assign predicate permissions to the group
+5. Assign predicate permissions to the group
 ```bash
 dgraph acl mod -d localhost:9180 -g dev -p friend -P 7
 ```
@@ -100,7 +99,7 @@ In order for the example in the next section to work, we also need to grant full
 dgraph acl mod -d localhost:9180 -g dev -p name -P 7
 ```
 
-6. check information about a user
+6. Check information about a user
 ```bash
 dgraph acl info -d localhost:9180 -u alice
 ```
@@ -114,7 +113,7 @@ Group : dev
 Group : sre
 ```
 
-7. check information about a group
+7. Check information about a group
 ```bash
 dgraph acl info -d localhost:9180 -g dev
 ```
