@@ -41,22 +41,27 @@ title = "Dgraph Documentation"
   identifier = "deploy"
   weight = 7
 [[menu.main]]
+  name = "Enterprise Features"
+  url = "/enterprise-features/"
+  identifier = "enterprise-features"
+  weight = 8
+[[menu.main]]
   name = "FAQ"
   url = "/faq/"
   identifier = "faq"
-  weight = 8
+  weight = 9
 [[menu.main]]
   name = "How To Guides"
   url = "/howto/"
   identifier = "how-to-guides"
-  weight = 9
+  weight = 10
 [[menu.main]]
   name = "Design Concepts"
   url = "/design-concepts/"
   identifier = "design-concepts"
-  weight = 10
+  weight = 11
 [[menu.main]]
   name = "Dgraph Compared to Other Databases"
   url = "/dgraph-compared-to-other-databases/"
   identifier = "dgraph-compared-to-other-databases"
-  weight = 11
+  weight = 12
