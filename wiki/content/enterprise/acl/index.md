@@ -58,7 +58,6 @@ dgraph acl -d localhost:9180 add -u alice
 Now you should be able to see the following output
 ```bash
 Current password for groot:
-
 Running transaction with dgraph endpoint: localhost:9180
 Login successful.
 New password for alice:
@@ -73,7 +72,6 @@ dgraph acl -d localhost:9180 add -g dev
 Again type in the groot password, and you should see the following output
 ```bash
 Current password for groot:
-
 Running transaction with dgraph endpoint: localhost:9180
 Login successful.
 Created new group with id dev
@@ -150,11 +148,3 @@ In the dgo client, this is done through the `Login` method:
 	defer txn.Discard(ctx)
 	_, err = txn.Mutate(...)
 ```
-
-Similarly, this can be done using the dgraph4j client:
-```java
-
-```
-
-## Implementation details
-If you are curious about how we implemented ACL, you can find the details [here](./impl)
