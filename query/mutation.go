@@ -147,7 +147,10 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad, vars map[string][]stri
 			return newUids, errors.New("Predicate deletion should be called via alter")
 		}
 
-		if nq.VarName != nil {
+		// Here we check if we have defined a varible in a conditional query.
+		// If we have a variable and it has a value, we assign the value to the Subject.
+		// If we don't have a value, the check below this will fail.
+		if nq.VarName != nil && vars != nil {
 			// TODO: check Typ
 			if s, ok := vars[nq.VarName.GetDefaultVal()]; ok {
 				nq.Subject = s[0]
