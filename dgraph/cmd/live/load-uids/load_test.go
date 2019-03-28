@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/z"
 )
 
-var alphaService = z.TestSockAddr
+var alphaService = z.SockAddr
 
 var (
 	testDataDir string
@@ -174,7 +174,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = z.DgraphClientWithGroot(z.TestSockAddr)
+	dg = z.DgraphClientWithGroot(z.SockAddr)
 	x.Check(dg.Alter(
 		context.Background(), &api.Operation{DropAll: true}))
 

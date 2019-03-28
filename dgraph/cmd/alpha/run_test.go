@@ -1593,7 +1593,7 @@ func TestJsonUnicode(t *testing.T) {
 }
 
 func TestGrpcCompressionSupport(t *testing.T) {
-	conn, err := grpc.Dial(z.TestSockAddr,
+	conn, err := grpc.Dial(z.SockAddr,
 		grpc.WithInsecure(),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
@@ -1701,7 +1701,7 @@ var grootRefreshJwt string
 
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial("localhost:5080", grpc.WithInsecure())
+	conn, err := grpc.Dial(z.SockAddrZero, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

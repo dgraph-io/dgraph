@@ -33,14 +33,14 @@ import (
 )
 
 func assignUids(num uint64) {
-	_, err := http.Get(fmt.Sprintf("http://localhost:6080/assign?what=uids&num=%d", num))
+	_, err := http.Get(fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
 	if err != nil {
 		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
 	}
 }
 
 func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(z.TestSockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
 }

@@ -1827,7 +1827,7 @@ func TestNonFlattenedResponse(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = z.DgraphClientWithGroot(z.TestSockAddr)
+	client = z.DgraphClientWithGroot(z.SockAddr)
 
 	populateCluster()
 	os.Exit(m.Run())

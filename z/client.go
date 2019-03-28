@@ -39,21 +39,33 @@ import (
 
 // socket addr = IP address and port number
 var (
-	TestSockAddr     string
-	TestSockAddrHttp string
+	SockAddr         string
+	SockAddrHttp     string
+	SockAddrZero     string
+	SockAddrZeroHttp string
 )
 
 // This allows running (most) tests against dgraph running on the default ports, for example.
-// Only the GRPC port is needed and the others are inferred. Defaults to 9180.
+// Only the GRPC ports are needed and the others are deduced.
 func init() {
 	var grpcPort int
-	if p := os.Getenv("DGRAPH_TEST_PORT"); p == "" {
-		grpcPort = 9180
-	} else {
-		grpcPort, _ = strconv.Atoi(p)
+
+	getPort := func(envVar string, dfault int) int {
+		if p := os.Getenv(envVar); p == "" {
+			return dfault
+		} else {
+			port, _ := strconv.Atoi(p)
+			return port
+		}
 	}
-	TestSockAddr = fmt.Sprintf("localhost:%d", grpcPort)
-	TestSockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
+
+	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
+	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
+	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
+
+	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
+	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
 
 // DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared

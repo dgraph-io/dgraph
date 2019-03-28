@@ -134,7 +134,7 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 }
 
 func setup(t *testing.T) *dgo.Dgraph {
-	dg := z.DgraphClientWithGroot(z.TestSockAddr)
+	dg := z.DgraphClientWithGroot(z.SockAddr)
 	ctx := context.Background()
 	op := api.Operation{DropAll: true}
 
