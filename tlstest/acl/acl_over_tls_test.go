@@ -95,8 +95,7 @@ func dgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 
 func ExampleLoginOverTLS() {
 	conf := viper.New()
-	conf.Set("tls_cacert", "./tls/ca.crt")
-	conf.Set("tls_server_name", "node")
+	conf.Set("tls_cacert", "../tls/ca.crt")
 	conf.Set("tls_server_name", "node")
 
 	dg, err := dgraphClientWithCerts(":9180", conf)

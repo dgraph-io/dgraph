@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -209,4 +210,53 @@ func GrootHttpLogin(endpoint string) (string, string) {
 	})
 	x.Check(err)
 	return accessJwt, refreshJwt
+}
+
+type FailureConfig struct {
+	ShouldFail   bool
+	CurlErrMsg   string
+	DgraphErrMsg string
+}
+
+type ErrorEntry struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type Output struct {
+	Data   map[string]interface{} `json:"data"`
+	Errors []ErrorEntry           `json:"errors"`
+}
+
+func verifyOutput(t *testing.T, bytes []byte, failureConfig *FailureConfig) {
+	output := Output{}
+	require.NoError(t, json.Unmarshal(bytes, &output),
+		"unable to unmarshal the curl output")
+
+	if failureConfig.ShouldFail {
+		require.True(t, len(output.Errors) > 0, "no error entry found")
+		if len(failureConfig.DgraphErrMsg) > 0 {
+			errorEntry := output.Errors[0]
+			require.True(t, strings.Contains(errorEntry.Message, failureConfig.DgraphErrMsg),
+				fmt.Sprintf("the failure msg\n%s\nis not part of the curl error output:%s\n",
+					failureConfig.DgraphErrMsg, errorEntry.Message))
+		}
+	} else {
+		require.True(t, len(output.Data) > 0,
+			fmt.Sprintf("no data entry found in the output:%+v", output))
+	}
+}
+
+func VerifyCurlCmd(t *testing.T, args []string,
+	failureConfig *FailureConfig) {
+	queryCmd := exec.Command("curl", args...)
+
+	output, err := queryCmd.Output()
+	if len(failureConfig.CurlErrMsg) > 0 {
+		// the curl command should have returned an non-zero code
+		require.Error(t, err, "the curl command should have failed")
+	} else {
+		require.NoError(t, err, "the curl command should have succeeded")
+		verifyOutput(t, output, failureConfig)
+	}
 }

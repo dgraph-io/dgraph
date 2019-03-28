@@ -26,3 +26,23 @@ func TestAccessWithCaCert(t *testing.T) {
 	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err, "Unable to perform dropall: %v", err)
 }
+
+func TestCurlAccessWithCaCert(t *testing.T) {
+	// curl over plaintext should fail
+	curlPlainTextArgs := []string{
+		"--cacert", "http://localhost:8180/alter",
+		"-d", "name: string @index(exact) .",
+	}
+	z.VerifyCurlCmd(t, curlPlainTextArgs, &z.FailureConfig{
+		ShouldFail: true,
+		CurlErrMsg: "SSL certificate problem",
+	})
+
+	curlArgs := []string{
+		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
+		"-d", "name: string @index(exact) .",
+	}
+	z.VerifyCurlCmd(t, curlArgs, &z.FailureConfig{
+		ShouldFail: false,
+	})
+}
