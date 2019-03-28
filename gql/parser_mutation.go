@@ -45,7 +45,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	if item.Typ == itemMutationTxn {
 		var err error
 		// Get the query text: txn{ query { ... }}
-		mu.TxnQuery, err = parseMutationTxnQuery(it)
+		mu.CondQuery, err = parseMutationCondQuery(it)
 		if err != nil {
 			return nil, err
 		}
@@ -78,10 +78,10 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	return nil, x.Errorf("Invalid mutation.")
 }
 
-// parseMutationTxnQuery gets the text inside a txn query block. It is possible that there's
+// parseMutationCondQuery gets the text inside a txn query block. It is possible that there's
 // no query to be found, in that case it's the caller's responsbility to fail.
 // Returns the query text if any is found, otherwise an empty string with error.
-func parseMutationTxnQuery(it *lex.ItemIterator) (string, error) {
+func parseMutationCondQuery(it *lex.ItemIterator) (string, error) {
 	var query string
 	var parse bool
 	for it.Next() {
