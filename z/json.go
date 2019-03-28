@@ -55,8 +55,26 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) {
 			t.Error("Could not marshal JSON:", err)
 		}
 		t.Errorf("Want JSON and Got JSON not equal\nWant:\n%v\nGot:\n%v",
-			string(wantBuf), string(gotBuf))
+			snipJSON(wantBuf), snipJSON(gotBuf))
 	}
+}
+
+// snipJSON snips the middle of a very long JSON string to make it less than 100 lines
+// so that it does not overwhelm a terminal's scrollback buffer
+func snipJSON(buf []byte) string {
+	var n int
+	for i, ch := range buf {
+		if ch == '\n' {
+			if n < 100 {
+				if n == 99 && i != len(buf) {
+					i++
+					return string(buf[:i]) + fmt.Sprintf("[%d bytes snipped]", len(buf)-i)
+				}
+				n++
+			}
+		}
+	}
+	return string(buf)
 }
 
 // sortJSON looks for any arrays in the unmarshalled JSON and sorts them in an
