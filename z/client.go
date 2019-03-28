@@ -36,7 +36,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var TestSockAddr string // socket addr = IP address and port number
+// socket addr = IP address and port number
+var (
+	TestSockAddr     string
+	TestSockAddrHttp string
+)
 
 // This allows running most tests against dgraph running on the default ports, for example,
 // or a different host even. Defaults to localhost:9180.

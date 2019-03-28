@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"google.golang.org/grpc"
 )
 
@@ -39,7 +40,7 @@ func assignUids(num uint64) {
 }
 
 func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+	conn, err := grpc.Dial(z.TestSockAddr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
 }
