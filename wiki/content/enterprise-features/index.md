@@ -3,6 +3,102 @@ date = "2017-03-20T19:35:35+11:00"
 title = "Enterprise Features"
 +++
 
+Dgraph enterprise features are proprietary licensed under the [Dgraph Community
+License][dcl]. These features are available with an enterprise contract from
+Dgraph. If you wish to use enterprise features, please reach out via [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss forum](https://discuss.dgraph.io).
+
+Regular releases contain proprietary code for these features, and the
+features can enabled via the `--enterprise_features` flag.
+
+[dcl]: https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
+
+## Binary Backups
+
+Binary backups are full backups of Dgraph that are backed up directly to cloud storage such as Amazon S3, any Minio storage backend, or to a local file. These backups can be used to restore a new Dgraph cluster to the previous state from the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}), binary backups are Dgraph-specific and can be used to restore a cluster quickly.
+
+### Configure backup
+
+To enable the backup feature, each Dgraph Alpha must run with the `--enterprise_features` flag enabled.
+
+#### Configure Amazon S3 credentials
+
+To backup to Amazon S3, the Alpha must have the following AWS credentials set via environment variables:
+
+ Environment Variable                        | Description
+ --------------------                        | -----------
+ `AWS_ACCESS_KEY_ID` or `AWS_ACCESS_KEY`     | AWS access key with permissions to write to the destination bucket.
+ `AWS_SECRET_ACCESS_KEY` or `AWS_SECRET_KEY` | AWS access key with permissions to write to the destination bucket.
+ `AWS_SESSION_TOKEN`                         | AWS session token (if required).
+
+#### Configure Minio credentials
+
+To backup to Minio, the Alpha must have the following Minio credentials set via environment variables:
+
+ Environment Variable                        | Description
+ --------------------                        | -----------
+ `MINIO_ACCESS_KEY`                          | Minio access key with permissions to write to the destination bucket.
+ `MINIO_SECRET_KEY`                          | Minio secret key with permissions to write to the destination bucket.
+
+### Create a backup
+
+To create a backup, make an HTTP POST request to `/admin/backup` to a Dgraph Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin` endpoints, this is only accessible on the same machine as the Alpha unless [whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
+
+#### Backup to Amazon S3
+
+```sh
+$ curl -XPOST localhost:8080/admin/backup -d "destination=s3://s3.us-west-2.amazonaws.com/<bucketname>"
+```
+
+#### Backup to Minio
+```sh
+$ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>"
+```
+
+#### Backup to local directory
+```
+# localhost:8080 is the default Alpha HTTP port
+$ curl -XPOST localhost:8080/admin/backup -d "destination=/path/to/local/directory"
+```
+
+### Restore from backup
+
+The `dgraph restore` command restores the postings directory from a previously created backup. Restore is intended to restore a backup to a new Dgraph cluster. During a restore, a new Dgraph Zero may be running to fully restore the backup state.
+
+The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects. This URI supports all
+the schemes used for backup.
+
+The `--posting` (`-p`) flag sets the posting list parent directory to store the loaded backup files.
+
+The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the start timestamp using
+the restored version. Otherwise, the timestamp must be manually updated through Zero's HTTP
+'assign' endpoint.
+
+Dgraph backup creates a unique backup object for each Alpha group. Restoring create
+a posting directory `p<N>` corresponding to the backup group ID. For example, a backup for Alpha group 2 would have the name ".../r32-g**2**.backup" and would be loaded to posting directory "p**2**".
+
+#### Restore from Amazon S3
+```sh
+$ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/<bucketname>
+```
+
+#### Restore from Minio
+```sh
+$ dgraph restore -p /var/db/dgraph -l minio://127.0.0.1:9000/<bucketname>
+```
+
+#### Restore from local directory
+```sh
+$ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph
+```
+
+
+#### Restore and update timestamp
+
+Specify the Zero address and port for the new cluster with `--zero`/`-z` to update the timestamp.
+```sh
+$ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
+```
+
 ## Access Control Lists
 
 Access Control List (ACL) provides access protection to your data stored in
@@ -17,7 +113,7 @@ the data protected by ACL rules.
 ### Turn on ACLs
 The ACL Feature can be turned on by following these steps
 
-1. Since ACL is one of our enterprise features, make sure your use case is covered under a contract with Dgraph Labs Inc.
+1. Since ACL is an enterprise feature, make sure your use case is covered under a contract with Dgraph Labs Inc.
 You can contact us by sending an email to [contact@dgraph.io](mailto:contact@dgraph.io) or post your request at [our discuss
 forum](https://discuss.dgraph.io).
 
