@@ -465,7 +465,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 	// Parse query and process
 	var queryVars map[string][]string
-	if mu.CondQuery != "" {
+	if len(mu.CondQuery) != 0 {
 		qr, err := doCondQuery(ctx, &api.Request{
 			StartTs: mu.StartTs,
 			Query:   mu.CondQuery,
