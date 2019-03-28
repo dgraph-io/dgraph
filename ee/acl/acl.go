@@ -159,7 +159,7 @@ func groupAdd(conf *viper.Viper, groupId string) error {
 		},
 		{
 			Subject:     "_:newgroup",
-			Predicate:   "type",
+			Predicate:   "dgraph.type",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
 		},
 	}
@@ -196,6 +196,8 @@ func del(conf *viper.Viper) error {
 }
 
 type AclEntity interface {
+	// the implementation of GetUid must check the case that the entity is nil
+	// and return an empty string accordingly
 	GetUid() string
 }
 
@@ -220,7 +222,7 @@ func userOrGroupDel(conf *viper.Viper, userOrGroupId string,
 	if err != nil {
 		return err
 	}
-	if entity == nil || len(entity.GetUid()) == 0 {
+	if len(entity.GetUid()) == 0 {
 		return fmt.Errorf("unable to delete %q since it does not exist",
 			userOrGroupId)
 	}

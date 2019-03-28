@@ -42,30 +42,31 @@ func TestCurlAuthorization(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	// test fail open with the accessJwt
-	queryArgs := func() []string {
-		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", accessJwt),
+	queryArgs := func(jwt string) []string {
+		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-d", query, curlQueryEndpoint}
 	}
-	z.VerifyCurlCmd(t, queryArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
 
-	mutateArgs := func() []string {
-		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", accessJwt),
+	mutateArgs := func(jwt string) []string {
+		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-d", fmt.Sprintf(`{ set {
 	   _:a <%s>  "string" .
 	   }}`, predicateToWrite), curlMutateEndpoint}
 
 	}
-	z.VerifyCurlCmd(t, mutateArgs(), &z.FailureConfig{
+
+	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
 
-	alterArgs := func() []string {
-		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", accessJwt),
+	alterArgs := func(jwt string) []string {
+		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
 			"-d", fmt.Sprintf(`%s: int .`, predicateToAlter), curlAlterEndpoint}
 	}
-	z.VerifyCurlCmd(t, alterArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
 
@@ -74,26 +75,26 @@ func TestCurlAuthorization(t *testing.T) {
 	// JWT
 	glog.Infof("Sleeping for 4 seconds for accessJwt to expire")
 	time.Sleep(4 * time.Second)
-	z.VerifyCurlCmd(t, queryArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
-	z.VerifyCurlCmd(t, mutateArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
-	z.VerifyCurlCmd(t, alterArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
 	// login again using the refreshJwt
-	_, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that the query works again with the new access jwt
-	z.VerifyCurlCmd(t, queryArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
 
@@ -101,27 +102,27 @@ func TestCurlAuthorization(t *testing.T) {
 	// wait for 6 seconds to ensure the new acl have reached all acl caches
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
-	z.VerifyCurlCmd(t, queryArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "Token is expired",
 	})
 	// refresh the jwts again
-	_, refreshJwt, err = z.HttpLogin(&z.LoginParams{
+	accessJwt, refreshJwt, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that with an ACL rule defined, all the operations should be denied when the acsess JWT
 	// does not have the required permissions
-	z.VerifyCurlCmd(t, queryArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-	z.VerifyCurlCmd(t, mutateArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
-	z.VerifyCurlCmd(t, alterArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
 		ShouldFail:   true,
 		DgraphErrMsg: "PermissionDenied",
 	})
@@ -130,24 +131,26 @@ func TestCurlAuthorization(t *testing.T) {
 	glog.Infof("Sleeping for 6 seconds for acl caches to be refreshed")
 	time.Sleep(6 * time.Second)
 	// refresh the jwts again
-	_, _, err = z.HttpLogin(&z.LoginParams{
+	accessJwt, _, err = z.HttpLogin(&z.LoginParams{
 		Endpoint:   loginEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
 	// verify that the operations should be allowed again through the dev group
-	z.VerifyCurlCmd(t, queryArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
-	z.VerifyCurlCmd(t, mutateArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, mutateArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
-	z.VerifyCurlCmd(t, alterArgs(), &z.FailureConfig{
+	z.VerifyCurlCmd(t, alterArgs(accessJwt), &z.FailureConfig{
 		ShouldFail: false,
 	})
 }
 
-var curlLoginEndpoint = "localhost:8180/login"
-var curlQueryEndpoint = "localhost:8180/query"
-var curlMutateEndpoint = "localhost:8180/mutate"
-var curlAlterEndpoint = "localhost:8180/alter"
+const (
+	curlLoginEndpoint  = "localhost:8180/login"
+	curlQueryEndpoint  = "localhost:8180/query"
+	curlMutateEndpoint = "localhost:8180/mutate"
+	curlAlterEndpoint  = "localhost:8180/alter"
+)

@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -204,12 +203,6 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 	return json.NewDecoder(reader).Decode(m)
 }
 
-type result struct {
-	idx int
-	m   *Manifest
-	err error
-}
-
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Ts version on success, error otherwise.
@@ -219,39 +212,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	const N = 100
-	// TODO: Simplify this batch read manifest. Can be executed serially.
-	batchReadManifests := func(objects []string) (map[int]*Manifest, error) {
-		rc := make(chan result, 1)
-		var wg sync.WaitGroup
-		for i, o := range objects {
-			wg.Add(1)
-			go func(i int, o string) {
-				defer wg.Done()
-				var m Manifest
-				err := h.readManifest(mc, o, &m)
-				rc <- result{i, &m, err}
-			}(i, o)
-			if i%N == 0 {
-				wg.Wait()
-			}
-		}
-		go func() {
-			wg.Wait()
-			close(rc)
-		}()
-
-		m := make(map[int]*Manifest)
-		for r := range rc {
-			if r.err != nil {
-				return nil, x.Wrapf(r.err, "While reading %q", objects[r.idx])
-			}
-			m[r.idx] = r.m
-		}
-		return m, nil
-	}
-
-	var objects []string
+	var manifests []string
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -259,20 +220,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
-			objects = append(objects, object.Key)
+			manifests = append(manifests, object.Key)
 		}
 	}
-	if len(objects) == 0 {
+	if len(manifests) == 0 {
 		return 0, x.Errorf("No manifests found at: %s", uri.String())
 	}
-	sort.Strings(objects)
+	sort.Strings(manifests)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, objects)
-	}
-
-	manifests, err := batchReadManifests(objects)
-	if err != nil {
-		return 0, err
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
 	}
 
 	// version is returned with the max manifest version found.
@@ -281,14 +237,14 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for i, manifest := range objects {
-		m, ok := manifests[i]
-		if !ok {
-			return 0, x.Errorf("Manifest not found: %s", manifest)
+	for _, manifest := range manifests {
+		var m Manifest
+		if err := h.readManifest(mc, manifest, &m); err != nil {
+			return 0, x.Wrapf(err, "While reading %q", manifest)
 		}
 		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, m)
+				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
 			continue
 		}
