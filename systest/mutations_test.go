@@ -39,7 +39,7 @@ import (
 func TestSystem(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg := z.DgraphClientWithGroot(":9180")
+			dg := z.DgraphClientWithGroot(z.TestSockAddr)
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)

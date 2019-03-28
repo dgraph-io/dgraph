@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,17 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 )
+
+var TestSockAddr string // socket addr = IP address and port number
+
+// This allows running most tests against dgraph running on the default ports, for example,
+// or a different host even. Defaults to localhost:9180.
+func init() {
+	TestSockAddr = os.Getenv("TEST_SOCK_ADDR")
+	if TestSockAddr == "" || strings.IndexRune(TestSockAddr, ':') < 0 {
+		TestSockAddr += ":9180"
+	}
+}
 
 // DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.

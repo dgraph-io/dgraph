@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ import (
 func TestNodes(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			conn, err := grpc.Dial(z.TestSockAddr, grpc.WithInsecure())
 			require.NoError(t, err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 			fn(t, dg)

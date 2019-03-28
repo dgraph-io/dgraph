@@ -30,10 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
+var (
 	userid         = "alice"
 	userpassword   = "simplepassword"
-	dgraphEndpoint = "localhost:9180"
+	dgraphEndpoint = z.TestSockAddr
 )
 
 func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
@@ -91,10 +91,10 @@ func TestReservedPredicates(t *testing.T) {
 	// cannot be altered even if the permissions allow it.
 	ctx := context.Background()
 
-	dg1 := z.DgraphClientWithGroot(":9180")
+	dg1 := z.DgraphClientWithGroot(z.TestSockAddr)
 	alterReservedPredicates(t, dg1)
 
-	dg2 := z.DgraphClientWithGroot(":9180")
+	dg2 := z.DgraphClientWithGroot(z.TestSockAddr)
 	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
 		t.Fatalf("unable to login using the groot account:%v", err)
 	}
@@ -107,7 +107,7 @@ func TestAuthorization(t *testing.T) {
 	}
 
 	glog.Infof("testing with port 9180")
-	dg1 := z.DgraphClientWithGroot(":9180")
+	dg1 := z.DgraphClientWithGroot(z.TestSockAddr)
 	testAuthorization(t, dg1)
 	glog.Infof("done")
 
@@ -346,7 +346,7 @@ func TestPredicateRegex(t *testing.T) {
 	}
 
 	glog.Infof("testing with port 9180")
-	dg := z.DgraphClientWithGroot(":9180")
+	dg := z.DgraphClientWithGroot(z.TestSockAddr)
 	createAccountAndData(t, dg)
 	ctx := context.Background()
 	err := dg.Login(ctx, userid, userpassword)
@@ -418,7 +418,7 @@ func TestPredicateRegex(t *testing.T) {
 }
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
-	dg := z.DgraphClientWithGroot(":9180")
+	dg := z.DgraphClientWithGroot(z.TestSockAddr)
 
 	createAccountAndData(t, dg)
 	// without logging in,

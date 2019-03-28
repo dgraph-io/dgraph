@@ -40,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -47,7 +48,7 @@ import (
 func TestBackup(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			conn, err := grpc.Dial(z.TestSockAddr, grpc.WithInsecure())
 			x.Check(err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 			fn(t, dg)
