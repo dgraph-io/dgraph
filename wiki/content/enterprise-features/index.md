@@ -5,12 +5,14 @@ title = "Enterprise Features"
 
 ## Access Control Lists
 
-Access Control List (ACL) provides protection to your data stored in
-Dgraph. When the ACL feature is turned on, a client, e.g. dgo or dgraph4j, must login first using a
-pair of username and password before executing any transactions, and is only allowed to access the
-data permitted by the ACL rules. This document has two parts: first we will talk about
-the admin operations needed for setting up ACL;  then we will explain how to use a client to
-access the data protected by ACL rules.
+Access Control List (ACL) provides access protection to your data stored in
+Dgraph. When the ACL feature is turned on, a client, e.g. dgo or dgraph4j, must
+authenticate with a username and password before executing any transactions, and
+is only allowed to access the data permitted by the ACL rules.
+
+This document has two parts: first we will talk about the admin operations
+needed for setting up ACL; then we will explain how to use a client to access
+the data protected by ACL rules.
 
 ### Turn on ACLs
 The ACL Feature can be turned on by following these steps
@@ -30,7 +32,7 @@ secret key file created in Step 2.
 Here is an example that starts one zero server and one alpha server with the ACL feature turned on:
 ```
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
-dgraph alpha --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr -v=3 --acl_secret_file ./hmac-secret --enterprise_features
+dgraph alpha --enterprise_features --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr -v=3 --acl_secret_file ./hmac-secret
 ```
 
 If you are using docker-compose, a sample cluster can be set up by:
@@ -51,13 +53,13 @@ Now that your cluster is running with the ACL feature turned on, let's set up th
 ```bash
 dgraph acl -d localhost:9180 mod -u groot
 ```
-Now type in the password for the groot account, which is the superuser that has access to everything. If you have never changed the groot password, by default it's `password`.
+Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
 
 2. Create a regular user
 ```bash
 dgraph acl -d localhost:9180 add -u alice
 ```
-Now you should be able to see the following output
+Now you should see the following output
 ```bash
 Current password for groot:
 Running transaction with dgraph endpoint: localhost:9180
@@ -92,8 +94,8 @@ dgraph acl -d localhost:9180 mod -u alice -l dev,sre
 ```bash
 dgraph acl mod -d localhost:9180 -g dev -p friend -P 7
 ```
-The command above grants the `dev` group with the `READ`+`WRITE`+`MODIFY` permisson on the `friend` predicate. Permissions are represented by a number following the UNIX file permission convention.
-That is, 4 (binary 100) represents `READ`, 2 (binary 010) represents `WRITE`, and 1 (binary 001) represents `MODIFY` (the permission to change a predicate's schema). Similarly, permisson numbers can be XORed to represent multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and `MODIFY`.
+The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the `friend` predicate. Permissions are represented by a number following the UNIX file permission convention.
+That is, 4 (binary 100) represents `READ`, 2 (binary 010) represents `WRITE`, and 1 (binary 001) represents `MODIFY` (the permission to change a predicate's schema). Similarly, permisson numbers can be bitwise OR-ed to represent multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and `MODIFY`.
 In order for the example in the next section to work, we also need to grant full permissions on another predicate `name` to the group `dev`
 ```bash
 dgraph acl mod -d localhost:9180 -g dev -p name -P 7
@@ -132,7 +134,7 @@ ACL  : {name  7}
 
 ### Access data using a client
 
-Now that the ACL data are set, to access the data protected by ACL rules, we need to first login through an user.
+Now that the ACL data are set, to access the data protected by ACL rules, we need to first log in through a user.
 In the dgo client, this is done through the `Login` method:
 ```go
 	serviceAddr := "localhost:9180"
