@@ -4681,3 +4681,15 @@ func TestMultipleTypeDirectives(t *testing.T) {
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
 	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
 }
+
+// this test contains all the input captured by go fuzz that has crashed the parser in the past
+func TestWithFuzzData(t *testing.T) {
+	crasherInputs := []string{"a<><\\�",
+		"L<\\𝌀",
+		"{d(after:<>0)}",
+		"{e(orderasc:#",
+	}
+	for _, crasher := range crasherInputs {
+		Parse(Request{Str: string(crasher)})
+	}
+}

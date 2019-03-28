@@ -2434,7 +2434,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 
 			// TODO - Allow only order by one of variable/predicate for now.
-			if val == "" {
+			if len(gq.NeedsVar) > 0 {
 				// Right now we only allow one sort by a variable and it has to be at the first
 				// position.
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
