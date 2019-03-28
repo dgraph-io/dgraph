@@ -524,7 +524,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		// TODO: add conditional checks here.
 		queryVars = qr.GetUids()
 		if len(queryVars) == 0 {
-			return resp, x.Errorf("No variables defined in conditional query")
+			return resp, x.Errorf("No variables defined in conditional query: %q", mu.CondQuery)
 		}
 		glog.V(3).Infof("CondQuery: qr=%+v vars=%v", qr, queryVars)
 
