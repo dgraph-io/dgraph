@@ -238,7 +238,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			mu.DeleteJson = delJSON.bs
 		}
 	} else {
-		// Parse NQuads.
+		// Parse N-Quads.
 		mu, err = gql.ParseMutation(string(m))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
