@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"path"
 	"runtime"
 	"strings"
@@ -58,7 +59,13 @@ func TestQueries(t *testing.T) {
 
 		t.Logf("running %s", file.Name())
 		if len(resp.GetJson()) > 0 {
-			z.CompareJSON(t, bodies[1], string(resp.GetJson()))
+			// some responses can be hundreds of lines
+			if ! z.EqualJSON(t, bodies[1], string(resp.GetJson())) {
+				if os.Getenv("DEBUG") != "" {
+					t.Error("aborting on first failure because $DEBUG is defined")
+					t.FailNow()
+				}
+			}
 		} else {
 			t.Error("  got empty response")
 		}

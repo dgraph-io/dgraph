@@ -8,11 +8,8 @@ BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
 SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
 DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
 
-# these may be used for testing the test
+# this may be used to load a smaller data set when testing the test itself
 #DATA_URL="$BENCHMARKS_REPO/blob/master/data/goldendata.rdf.gz?raw=true"
-DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
-DGRAPH_RELOAD=${DGRAPH_RELOAD:=yes}
-DGRAPH_LOAD_ONLY=${DGRAPH_LOAD_ONLY:=}
 
 function Info {
     echo -e "INFO: $*"
@@ -48,6 +45,10 @@ options:
     --cleanup       all = take down containers and data volume (default)
                     servers = take down dgraph zero and alpha but leave data volume up
                     none = leave up containers and data volume
+
+notes:
+
+    Run with DEBUG env var set to stop on first JSON diff.
 EOF
     exit 0
 fi

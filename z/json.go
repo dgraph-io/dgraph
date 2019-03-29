@@ -20,6 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc64"
+	"io/ioutil"
+	"os"
+	"os/exec"
 	"reflect"
 	"sort"
 	"testing"
@@ -29,6 +32,13 @@ func CompareJSON(t *testing.T, want, got string) {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
 	CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func EqualJSON(t *testing.T, want, got string) bool {
+	wantMap := UnmarshalJSON(t, want)
+	gotMap := UnmarshalJSON(t, got)
+
+	return CompareJSONMaps(t, wantMap, gotMap)
 }
 
 func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
@@ -41,7 +51,7 @@ func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 	return jsonMap
 }
 
-func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) {
+func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
@@ -54,14 +64,17 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) {
 		if err != nil {
 			t.Error("Could not marshal JSON:", err)
 		}
-		t.Errorf("Want JSON and Got JSON not equal\nWant:\n%v\nGot:\n%v",
-			snipJSON(wantBuf), snipJSON(gotBuf))
+		t.Errorf("Want JSON and Got JSON not equal:\n%s",
+			sdiffJSON(wantBuf, gotBuf))
+
+		return false
 	}
+
+	return true
 }
 
-// snipJSON snips the middle of a very long JSON string to make it less than 100 lines
-// so that it does not overwhelm a terminal's scrollback buffer
-func snipJSON(buf []byte) string {
+// SnipJSON snips the middle of a very long JSON string to make it less than 100 lines
+func SnipJSON(buf []byte) string {
 	var n int
 	for i, ch := range buf {
 		if ch == '\n' {
@@ -75,6 +88,20 @@ func snipJSON(buf []byte) string {
 		}
 	}
 	return string(buf)
+}
+
+func sdiffJSON(wantBuf, gotBuf []byte) string {
+	wantFile, _ := ioutil.TempFile("", "z.json.*")
+	defer os.RemoveAll(wantFile.Name())
+	ioutil.WriteFile(wantFile.Name(), wantBuf, 0600)
+
+	gotFile, _ := ioutil.TempFile("", "z.json.*")
+	defer os.RemoveAll(gotFile.Name())
+	ioutil.WriteFile(gotFile.Name(), gotBuf, 0600)
+
+	out, _ := exec.Command("sdiff", wantFile.Name(), gotFile.Name()).CombinedOutput()
+
+	return string(out)
 }
 
 // sortJSON looks for any arrays in the unmarshalled JSON and sorts them in an
