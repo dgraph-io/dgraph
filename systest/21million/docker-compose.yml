@@ -4,8 +4,7 @@ version: "3.5"
 services:
   zero1:
     image: dgraph/dgraph:latest
-    container_name: bank-dg0.1
-    working_dir: /data/dg0.1
+    container_name: zero1
     ports:
       - 5080:5080
       - 6080:6080
@@ -18,10 +17,9 @@ services:
         read_only: true
     command: /gobin/dgraph zero --my=zero1:5080 --logtostderr --bindall
 
-  dg1:
+  alpha1:
     image: dgraph/dgraph:latest
-    container_name: bank-dg1
-    working_dir: /data/dg1
+    container_name: alpha1
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -36,7 +34,7 @@ services:
     labels:
       cluster: test
     command: >
-      /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5080 -o 100 --logtostderr
+      /gobin/dgraph alpha --my=alpha1:7180 --zero=zero1:5080 -o 100 --logtostderr
                           --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --lru_mb=1024
 
 volumes:

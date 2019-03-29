@@ -76,32 +76,32 @@ cd $SRCDIR
 
 if [[ $LOADER != none ]]; then
     Info "removing old data (if any)"
-    DockerCompose down -v
+    DockerCompose down -v --remove-orphans
 else
     Info "using previously loaded data"
 fi
 
 Info "bringing up zero container"
-DockerCompose up -d --force-recreate zero1
+DockerCompose up -d --remove-orphans --force-recreate zero1
 
 Info "waiting for zero to become leader"
 DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
-    DockerCompose run --name bulk_load --rm dg1 \
+    DockerCompose run --name bulk_load --rm alpha1 \
         bash -s <<EOF
             /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                               --format=rdf --zero=zero1:5080 --out=/data/dg1/bulk
-            mv /data/dg1/bulk/0/p /data/dg1
+                               --format=rdf --zero=zero1:5080 --out=/data/alpha1/bulk
+            mv /data/alpha1/bulk/0/p /data/alpha1
 EOF
 fi
 
 Info "bringing up alpha container"
-DockerCompose up -d --force-recreate dg1
+DockerCompose up -d --force-recreate alpha1
 
 Info "waiting for alpha to be ready"
-DockerCompose logs -f dg1 | grep -q -m1 "Server is ready"
+DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
