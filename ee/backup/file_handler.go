@@ -157,8 +157,6 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 // ListManifests loads the manifests in the locations and returns them.
 func (h *fileHandler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
-	var listedManifests []*ManifestStatus
-
 	if !pathExist(uri.Path) {
 		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
@@ -178,30 +176,16 @@ func (h *fileHandler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file.
+	var listedManifests []*ManifestStatus
 	for _, manifest := range manifests {
 		var m Manifest
 		var ms ManifestStatus
-		allFilesValid := true
 
 		if err := h.readManifest(manifest, &m); err != nil {
 			return nil, x.Wrapf(err, "While reading %q", manifest)
 		}
 		ms.Manifest = &m
 		ms.FileName = manifest
-
-		// Load the backup for each group in manifest.
-		path := filepath.Dir(manifest)
-		for _, groupId := range m.Groups {
-			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
-			fp, err := os.Open(file)
-			if err != nil {
-				allFilesValid = false
-				break
-			}
-			fp.Close()
-		}
-
-		ms.Valid = allFilesValid
 		listedManifests = append(listedManifests, &ms)
 	}
 	return listedManifests, nil

@@ -90,8 +90,6 @@ type Manifest struct {
 type ManifestStatus struct {
 	Manifest *Manifest
 	FileName string
-	// Valid is true if all the group files listed by the manifest exist.
-	Valid bool
 }
 
 // GoString implements the GoStringer interface for Manifest.

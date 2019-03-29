@@ -307,38 +307,12 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
 	for _, manifest := range manifests {
 		var m Manifest
 		var ms ManifestStatus
-		allFilesValid := true
 
 		if err := h.readManifest(mc, manifest, &m); err != nil {
 			return nil, x.Wrapf(err, "While reading %q", manifest)
 		}
 		ms.Manifest = &m
 		ms.FileName = manifest
-
-		// Check the files for each group in the manifest exist.
-		path := filepath.Dir(manifest)
-		for _, groupId := range m.Groups {
-			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
-			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
-			if err != nil {
-				allFilesValid = false
-				break
-			}
-			defer reader.Close()
-
-			st, err := reader.Stat()
-			if err != nil {
-				allFilesValid = false
-				break
-			}
-
-			if st.Size <= 0 {
-				allFilesValid = false
-				break
-			}
-		}
-
-		ms.Valid = allFilesValid
 		listedManifests = append(listedManifests, &ms)
 	}
 	return listedManifests, nil
