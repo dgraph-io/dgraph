@@ -14,7 +14,7 @@ features can enabled via the `--enterprise_features` flag.
 
 ## Binary Backups
 
-Binary backups are full backups of Dgraph that are backed up directly to cloud storage such as Amazon S3, any Minio storage backend, or to a local file. These backups can be used to restore a new Dgraph cluster to the previous state from the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}), binary backups are Dgraph-specific and can be used to restore a cluster quickly.
+Binary backups are full backups of Dgraph that are backed up directly to cloud storage such as Amazon S3 or any Minio storage backend. Backups can also be saved to a local or NFS-mounted path. These backups can be used to restore a new Dgraph cluster to the previous state from the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}), binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure backup
 
@@ -54,7 +54,7 @@ $ curl -XPOST localhost:8080/admin/backup -d "destination=s3://s3.us-west-2.amaz
 $ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>"
 ```
 
-#### Backup to local directory
+#### Backup to local directory or NFS
 ```
 # localhost:8080 is the default Alpha HTTP port
 $ curl -XPOST localhost:8080/admin/backup -d "destination=/path/to/local/directory"
@@ -86,7 +86,7 @@ $ dgraph restore -p /var/db/dgraph -l s3://s3.us-west-2.amazonaws.com/<bucketnam
 $ dgraph restore -p /var/db/dgraph -l minio://127.0.0.1:9000/<bucketname>
 ```
 
-#### Restore from local directory
+#### Restore from local directory or NFS
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph
 ```
