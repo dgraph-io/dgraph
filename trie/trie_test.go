@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ChainSafeSystems/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/polkadb"
 )
 
 type commonPrefixTest struct {

@@ -25,13 +25,13 @@ $ git remote add your-gossamer-repo https://github.com/<your_github_user_name>/g
 **5. Link your local clone to the ChainSafe Systems repo so that you can easily fetch future changes to the ChainSafe Systems repo.**
 
 ```
-$ git remote add gossamer https://github.com/ChainSafeSystems/gossamer.git
+$ git remote add gossamer https://github.com/ChainSafe/gossamer.git
 $ git remote -v (you should see myrepo and gossamer in the list of remotes)
 ```
 
 **6. Find an issue to work on.**
 
-Check out [open issues](https://github.com/ChainSafeSystems/gossamer/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave an issue to state that you would like to work on it.
+Check out [open issues](https://github.com/ChainSafe/gossamer/issues) and pick one. Leave a comment to let the development team know that you would like to work on it. Or examine the code for areas that can be improved and leave an issue to state that you would like to work on it.
 
 **7. Make improvements to the code.**
 
@@ -59,7 +59,7 @@ $ gometallinter ./...
 
 **10. Create a pull request.**
 
-Navigate your browser to [https://github.com/ChainSafeSystems/gossamer](https://github.com/ChainSafeSystems/gossamer) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafeSystems/gossamer/pulls](https://github.com/ChainSafeSystems/gossamer/pulls).
+Navigate your browser to [https://github.com/ChainSafe/gossamer](https://github.com/ChainSafe/gossamer) and click on the new pull request button. In the “base” box on the left, change the branch to “**base development**”, the branch that you want your changes to be applied to. In the “compare” box on the right, select feature-in-progress-branch, the branch containing the changes you want to apply. You will then be asked to answer a few questions about your pull request. After you complete the questionnaire, the pull request will appear in the list of pull requests at [https://github.com/ChainSafe/gossamer/pulls](https://github.com/ChainSafe/gossamer/pulls).
 
 ## Note on memory intensive tests
 Unfortunately, the free tier for CI's have a memory cap and some tests will cause the CI to experience an out of memory error.

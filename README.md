@@ -2,11 +2,11 @@
  
  ## Golang Polkadot Runtime Environment Implementation  
 
-[![GoDoc](https://godoc.org/github.com/ChainSafeSystems/gossamer?status.svg)](https://godoc.org/github.com/ChainSafeSystems/gossamer)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ChainSafeSystems/gossamer)](https://goreportcard.com/report/github.com/ChainSafeSystems/gossamer)
-[![](https://img.shields.io/travis/com/ChainSafeSystems/gossamer/master.svg?label=master&logo=travis "Master Branch (Travis)")](https://travis-ci.com/ChainSafeSystems/gossamer)
-[![Maintainability](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/maintainability)](https://codeclimate.com/github/ChainSafeSystems/gossamer/badges)
-[![Test Coverage](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/test_coverage)](https://codeclimate.com/github/ChainSafeSystems/gossamer/test_coverage)
+[![GoDoc](https://godoc.org/github.com/ChainSafe/gossamer?status.svg)](https://godoc.org/github.com/ChainSafe/gossamer)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ChainSafe/gossamer)](https://goreportcard.com/report/github.com/ChainSafe/gossamer)
+[![](https://img.shields.io/travis/com/ChainSafe/gossamer/master.svg?label=master&logo=travis "Master Branch (Travis)")](https://travis-ci.com/ChainSafe/gossamer)
+[![Maintainability](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/maintainability)](https://codeclimate.com/github/ChainSafe/gossamer/badges)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/933c7bb58eee9aba85eb/test_coverage)](https://codeclimate.com/github/ChainSafe/gossamer/test_coverage)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 [![](https://img.shields.io/twitter/follow/espadrine.svg?label=Follow&style=social)](https://twitter.com/chainsafeth)

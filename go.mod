@@ -1,4 +1,4 @@
-module github.com/ChainSafeSystems/gossamer
+module github.com/ChainSafe/gossamer
 
 require (
 	github.com/dgraph-io/badger v1.5.5-0.20190226225317-8115aed38f8f
