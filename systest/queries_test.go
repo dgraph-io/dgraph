@@ -49,6 +49,8 @@ func TestQuery(t *testing.T) {
 	t.Run("schema specific predicate field", wrap(SchemaQueryTestPredicate3))
 	t.Run("multiple block eval", wrap(MultipleBlockEval))
 	t.Run("unmatched var assignment eval", wrap(UnmatchedVarEval))
+	t.Run("hash index queries", wrap(QueryHashIndex))
+	t.Run("groupby uid that works", wrap(GroupByUidWorks))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
@@ -571,4 +573,162 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
     ]
   }`
 	CompareJSON(t, js, string(m["data"]))
+}
+
+func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+      name: string @index(hash) @lang .
+    `,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:p0 <name> "" .
+      _:p1 <name> "0" .
+      _:p2 <name> "srfrog" .
+      _:p3 <name> "Lorem ipsum" .
+      _:p4 <name> "Lorem ipsum dolor sit amet" .
+      _:p5 <name> "Lorem ipsum dolor sit amet, consectetur adipiscing elit" .
+      _:p6 <name> "Lorem ipsum"@en .
+      _:p7 <name> "Lorem ipsum dolor sit amet"@en .
+      _:p8 <name> "Lorem ipsum dolor sit amet, consectetur adipiscing elit"@en .
+      _:p9 <name> "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed varius tellus ut sem bibendum, eu tristique augue congue. Praesent eget odio tincidunt, pellentesque ante sit amet, tempus sem. Donec et tellus et diam facilisis egestas ut ac risus. Proin feugiat risus tristique erat condimentum placerat. Nulla eget ligula tempus, blandit leo vel, accumsan tortor. Phasellus et felis in diam ultricies porta nec in ipsum. Phasellus id leo sagittis, bibendum enim ut, pretium lectus. Quisque ac ex viverra, suscipit turpis sed, scelerisque metus. Sed non dui facilisis, viverra leo eget, vulputate erat. Etiam nec enim sed nisi imperdiet cursus. Suspendisse sed ligula non nisi pharetra varius." .
+      _:pa <name> ""@fr .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			in: `schema(pred: [name]) {}`,
+			out: `
+      {
+        "schema": [
+          {
+            "index": true,
+            "lang": true,
+            "predicate": "name",
+            "tokenizer": [
+              "hash"
+            ],
+            "type": "string"
+          }
+        ]
+      }`,
+		},
+		{
+			in:  `{q(func:eq(name,"")){name}}`,
+			out: `{"q": [{"name":""}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"0")){name}}`,
+			out: `{"q": [{"name":"0"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"srfrog")){name}}`,
+			out: `{"q": [{"name":"srfrog"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"Lorem ipsum")){name}}`,
+			out: `{"q": [{"name":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,"Lorem ipsum dolor sit amet")){name}}`,
+			out: `{"q": [{"name":"Lorem ipsum dolor sit amet"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@en,"Lorem ipsum")){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@.,"Lorem ipsum dolor sit amet")){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum dolor sit amet"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["srfrog"])){name}}`,
+			out: `{"q": [{"name":"srfrog"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["srfrog","srf","srfrogg","sr","s"])){name}}`,
+			out: `{"q": [{"name":"srfrog"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["Lorem ipsum","Lorem ipsum dolor sit amet, consectetur adipiscing elit",""])){name}}`,
+			out: `{"q": [{"name":""},{"name":"Lorem ipsum"},{"name":"Lorem ipsum dolor sit amet, consectetur adipiscing elit"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name,["Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum"])){name}}`,
+			out: `{"q": [{"name":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@en,["Lorem ipsum","Lorem ipsum dolor sit amet, consectetur adipiscing elit",""])){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum"},{"name@en":"Lorem ipsum dolor sit amet, consectetur adipiscing elit"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@en,["Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum","Lorem ipsum"])){name@en}}`,
+			out: `{"q": [{"name@en":"Lorem ipsum"}]}`,
+		},
+		{
+			in:  `{q(func:eq(name@.,"")){name@fr}}`,
+			out: `{"q": [{"name@fr":""}]}`,
+		},
+	}
+
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
+}
+
+func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	assigned, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+      _:x1 <name> "horsejr" .
+      _:x2 <name> "srfrog" .
+      _:x3 <name> "missbug" .
+    `),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			in:  fmt.Sprintf(`{q(func:uid(%s)) @groupby(uid) {count(uid)}}`, assigned.Uids["x1"]),
+			out: `{}`,
+		},
+		{
+			in: fmt.Sprintf(`{q(func:uid(%s)) @groupby(name) {count(uid)}}`, assigned.Uids["x1"]),
+			out: `{"q":[{
+				"@groupby":[{
+					"count": 1,
+					"name": "horsejr"
+				}]}]}`,
+		},
+		{
+			in:  `{q(func:has(dummy)) @groupby(uid) {}}`,
+			out: `{}`,
+		},
+		{
+			in:  `{q(func:has(name)) @groupby(dummy) {}}`,
+			out: `{}`,
+		},
+	}
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
+		require.NoError(t, err)
+		CompareJSON(t, tc.out, string(resp.Json))
+	}
 }
