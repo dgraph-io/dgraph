@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.13] - 2019-03-10
+[1.0.13]: https://github.com/dgraph-io/dgraph/compare/v1.0.12...v1.0.13
+
+**Note: This release supersedes v1.0.12 with bug fixes. If you're running v1.0.12, please upgrade to v1.0.13. It is safe to upgrade in-place without a data export and import.**
+
+### Fixed
+
+- Fix Raft panic. ([8cb69ea](https://github.com/dgraph-io/dgraph/commit/8cb69ea))
+- Log an error instead of an assertion check for SrcUIDs being nil. ([691b3b3](https://github.com/dgraph-io/dgraph/commit/691b3b3))
+
 ## [1.0.12] - 2019-03-05
 [1.0.12]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...v1.0.12
 
@@ -30,7 +40,6 @@ upgrading or rolling back. The underlying data format has been changed.**
   instead of making an outbound request to Zero.
   ([#3071](https://github.com/dgraph-io/dgraph/issues/3071))
 
-
 ### Changed
 
 - Use the new Stream API from Badger instead of Dgraph's Stream framework. ([#2852](https://github.com/dgraph-io/dgraph/issues/2852))
@@ -49,6 +58,8 @@ upgrading or rolling back. The underlying data format has been changed.**
 - Introduce group checksums. ([#2964](https://github.com/dgraph-io/dgraph/issues/2964), [#3085](https://github.com/dgraph-io/dgraph/issues/3085))
 - Return aborted error if commit ts is 0.
 - Reduce number of "ClusterInfoOnly" requests to Zero by making VerifyUid wait for membership information. ([#2974](https://github.com/dgraph-io/dgraph/issues/2974))
+- Simplify Raft WAL storage caching. ([#3102](https://github.com/dgraph-io/dgraph/issues/3102))
+- Build release binary with Go version 1.11.5.
 
 ### Removed
 
@@ -74,6 +85,7 @@ upgrading or rolling back. The underlying data format has been changed.**
   in the cluster. This fixes an issue where queries made to one group may not
   return data served by other groups.
   ([#3065](https://github.com/dgraph-io/dgraph/issues/3065))
+- Remove the assert failure in raftwal/storage.go.
 
 ## [1.0.11] - 2018-12-17
 [1.0.11]: https://github.com/dgraph-io/dgraph/compare/v1.0.10...v1.0.11
@@ -289,7 +301,7 @@ are now exposed via flags named with `--badger.` prefix.
 ### Fixed
 
 * Fix bug where predicate with string type sometimes appeared as `_:uidffffffffffffffff` in exports.
-* Validate facet value should be according to the facet type supplied when mutating using NQuads ([#2074](https://github.com/dgraph-io/dgraph/issues/2074)).
+* Validate facet value should be according to the facet type supplied when mutating using N-Quads ([#2074](https://github.com/dgraph-io/dgraph/issues/2074)).
 * Use `time.Equal` function for comparing predicates with `datetime`([#2219](https://github.com/dgraph-io/dgraph/issues/2219)).
 * Skip `BitEmptyPosting` for `has` queries.
 * Return error from query if we don't serve the group for the attribute instead of crashing ([#2227](https://github.com/dgraph-io/dgraph/issues/2227)).
@@ -563,7 +575,7 @@ Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#ex
 #### Mutations
 
 * Mutations can only be done via `Mutate` Grpc endpoint or via [`/mutate` HTTP handler](https://docs.dgraph.io/clients/#transactions).
-* `Mutate` Grpc endpoint can be used to set/ delete JSON, or set/ delete a list of NQuads and set/ delete raw RDF strings.
+* `Mutate` Grpc endpoint can be used to set/ delete JSON, or set/ delete a list of N-Quads and set/ delete raw RDF strings.
 * Mutation blocks don't require the mutation keyword anymore. Here is an example of the new syntax.
 ```
 {

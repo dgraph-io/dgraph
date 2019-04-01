@@ -1394,7 +1394,7 @@ Dgraph Live Loader can be configured with following options:
 $ dgraph cert -c live
 
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s 21million.schema -r 21million.rdf.gz
+$ dgraph live --tls_dir tls -s 21million.schema -f 21million.rdf.gz
 ```
 
 ### Client authentication
@@ -1427,13 +1427,13 @@ There are two different tools that can be used for fast data loading:
 - `dgraph live` runs the Dgraph Live Loader
 - `dgraph bulk` runs the Dgraph Bulk Loader
 
-{{% notice "note" %}} Both tools only accept [RDF NQuad/Triple
+{{% notice "note" %}} Both tools only accept [RDF N-Quad/Triple
 data](https://www.w3.org/TR/n-quads/) in plain or gzipped format. Data
 in other formats must be converted.{{% /notice %}}
 
 ### Live Loader
 
-Dgraph Live Loader (run with `dgraph live`) is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
+Dgraph Live Loader (run with `dgraph live`) is a small helper program which reads RDF N-Quads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
 
 Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
@@ -1443,15 +1443,42 @@ given that live loader completed successfully in the previous run.{{% /notice %}
 ```sh
 $ dgraph live --help # To see the available flags.
 
-# Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
-$ dgraph live -r <path-to-rdf-gzipped-file>
+# Read RDFs or JSON from the passed file, and send them to Dgraph on localhost:9080.
+$ dgraph live -f <path-to-gzipped-RDF-or-JSON-file>
 
-# Use compressed gRPC connections to and from Dgraph
-$ dgraph live -C -r <path-to-rdf-gzipped-file>
+# Read multiple RDFs or JSON from the passed path, and send them to Dgraph on localhost:9080.
+$ dgraph live -f <./path-to-gzipped-RDF-or-JSON-files>
 
-# Read RDFs and a schema file and send to Dgraph running at given address
-$ dgraph live -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
+# Read multiple files strictly by name.
+$ dgraph live -f <file1.rdf, file2.rdf>
+
+# Use compressed gRPC connections to and from Dgraph.
+$ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
+
+# Read RDFs and a schema file and send to Dgraph running at given address.
+$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
+
+#### Other Live Loader options
+
+`--new_uids` (default: false): Assign new UIDs instead of using the existing
+UIDs in data files. This is useful to avoid overriding the data in a DB already
+in operation.
+
+`-f, --files`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
+load multiple files in a given path. If the path is a directory, then all files
+ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
+
+`--format`: Specify file format (rdf or json) instead of getting it from
+filenames. This is useful if you need to define a strict format manually.
+
+`-b, --batch` (default: 1000): Number of N-Quads to send as part of a mutation.
+
+`-c, --conc` (default: 10): Number of concurrent requests to make to Dgraph.
+Do not confuse with `-C`.
+
+`-C, --use_compression` (default: false): Enable compression for connections to and from the
+Alpha server.
 
 ### Bulk Loader
 
@@ -1497,7 +1524,8 @@ $ dgraph bulk -f goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_
 ```
 ```
 {
-	"RDFDir": "goldendata.rdf.gz",
+	"DataFiles": "goldendata.rdf.gz",
+	"DataFormat": "",
 	"SchemaFile": "goldendata.schema",
 	"DgraphsDir": "out",
 	"TmpDir": "tmp",
@@ -1511,6 +1539,7 @@ $ dgraph bulk -f goldendata.rdf.gz -s goldendata.schema --map_shards=4 --reduce_
 	"StoreXids": false,
 	"ZeroAddr": "localhost:5080",
 	"HttpAddr": "localhost:8000",
+	"IgnoreErrors": false,
 	"MapShards": 4,
 	"ReduceShards": 2
 }
@@ -1572,6 +1601,33 @@ Dgraph Alphas. Each Dgraph Alpha must have its own copy of the group's p
 directory output. Each replica of the first group should have its own copy of
 `./out/0/p`, each replica of the second group should have its own copy of
 `./out/1/p`, and so on.
+
+```sh
+$ dgraph bulk --help # To see the available flags.
+
+# Read RDFs or JSON from the passed file.
+$ dgraph bulk -f <path-to-gzipped-RDF-or-JSON-file> ...
+
+# Read multiple RDFs or JSON from the passed path.
+$ dgraph bulk -f <./path-to-gzipped-RDF-or-JSON-files> ...
+
+# Read multiple files strictly by name.
+$ dgraph bulk -f <file1.rdf, file2.rdf> ...
+
+```
+
+#### Other Bulk Loader options
+
+`--new_uids` (default: false): Assign new UIDs instead of using the existing
+UIDs in data files. This is useful to avoid overriding the data in a DB already
+in operation.
+
+`-f, --files`: Location of *.rdf(.gz) or *.json(.gz) file(s) to load. It can
+load multiple files in a given path. If the path is a directory, then all files
+ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
+
+`--format`: Specify file format (rdf or json) instead of getting it from
+filenames. This is useful if you need to define a strict format manually.
 
 #### Tuning & monitoring
 

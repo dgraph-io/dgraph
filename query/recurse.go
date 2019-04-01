@@ -51,6 +51,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		return ctx.Err()
 	}
 
+	if start.UnknownAttr {
+		return nil
+	}
+
 	// Add children back and expand if necessary
 	if exec, err = expandChildren(ctx, start, startChildren); err != nil {
 		return err
@@ -63,6 +67,16 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 			return nil
 		}
 		depth++
+
+		// When the maximum depth has been reached, avoid retrieving any facets as
+		// the nodes at the other end of the edge will not be a part of this query.
+		// Otherwise, the facets will be included in the query without any other
+		// information about the node, which is quite counter-intuitive.
+		if depth == maxDepth {
+			for _, sg := range exec {
+				sg.Params.Facet = nil
+			}
+		}
 
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
@@ -90,6 +104,15 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		}
 
 		for _, sg := range exec {
+			// sg.uidMatrix can be empty. Continue if that is the case.
+			if len(sg.uidMatrix) == 0 {
+				continue
+			}
+
+			if sg.UnknownAttr {
+				continue
+			}
+
 			if len(sg.Filters) > 0 {
 				// We need to do this in case we had some filters.
 				sg.updateUidMatrix()
@@ -126,6 +149,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		var out []*SubGraph
 		var exp []*SubGraph
 		for _, sg := range exec {
+			if sg.UnknownAttr == true {
+				continue
+			}
 			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
@@ -181,11 +207,19 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 	depth := sg.Params.RecurseArgs.Depth
 	if depth == 0 {
 		if sg.Params.RecurseArgs.AllowLoop {
-			return x.Errorf("Depth must be > 0 when loop is true for recurse query.")
+			return x.Errorf("Depth must be > 0 when loop is true for recurse query")
 		}
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.
 		depth = math.MaxUint64
 	}
+
+	for _, child := range sg.Children {
+		if len(child.Children) > 0 {
+			return x.Errorf(
+				"recurse queries require that all predicates are specified in one level")
+		}
+	}
+
 	return sg.expandRecurse(ctx, depth)
 }

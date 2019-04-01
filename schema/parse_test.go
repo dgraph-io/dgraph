@@ -401,13 +401,37 @@ func TestParseSingleType(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
 		},
 	}, result.Types[0])
+}
 
+func TestParseBaseTypesCaseInsensitive(t *testing.T) {
+	reset()
+	result, err := Parse(`
+		type Person {
+			Name: string
+			LastName: String
+		}
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Types))
+	require.Equal(t, &pb.TypeUpdate{
+		TypeName: "Person",
+		Fields: []*pb.SchemaUpdate{
+			{
+				Predicate: "Name",
+				ValueType: pb.Posting_STRING,
+			},
+			{
+				Predicate: "LastName",
+				ValueType: pb.Posting_STRING,
+			},
+		},
+	}, result.Types[0])
 }
 
 func TestParseCombinedSchemasAndTypes(t *testing.T) {
@@ -445,7 +469,7 @@ func TestParseMultipleTypes(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
@@ -454,7 +478,7 @@ func TestParseMultipleTypes(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Animal",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
@@ -476,17 +500,17 @@ func TestParseObjectType(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Father",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Mother",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Children",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
@@ -502,7 +526,7 @@ func TestParseScalarType(t *testing.T) {
 		type Person {
 			Name: string
 			Nickname: [String]
-			Alive: Bool 
+			Alive: Bool
 		}
 	`)
 	require.NoError(t, err)
@@ -510,16 +534,16 @@ func TestParseScalarType(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Nickname",
 				ValueType: pb.Posting_STRING,
 				List:      true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Alive",
 				ValueType: pb.Posting_BOOL,
 			},
@@ -541,16 +565,16 @@ func TestParseCombinedTypes(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Nickname",
 				ValueType: pb.Posting_STRING,
 				List:      true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:      "Parents",
 				ValueType:      pb.Posting_OBJECT,
 				ObjectTypeName: "Person",
@@ -573,12 +597,12 @@ func TestParseNonNullableScalar(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate:   "Name",
 				ValueType:   pb.Posting_STRING,
 				NonNullable: true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Nickname",
 				ValueType: pb.Posting_STRING,
 				List:      true,
@@ -600,11 +624,11 @@ func TestParseNonNullableList(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate: "Name",
 				ValueType: pb.Posting_STRING,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:       "Nickname",
 				ValueType:       pb.Posting_STRING,
 				List:            true,
@@ -627,12 +651,12 @@ func TestParseNonNullableScalarAndList(t *testing.T) {
 	require.Equal(t, &pb.TypeUpdate{
 		TypeName: "Person",
 		Fields: []*pb.SchemaUpdate{
-			&pb.SchemaUpdate{
+			{
 				Predicate:   "Name",
 				ValueType:   pb.Posting_STRING,
 				NonNullable: true,
 			},
-			&pb.SchemaUpdate{
+			{
 				Predicate:       "Nickname",
 				ValueType:       pb.Posting_STRING,
 				List:            true,
@@ -717,6 +741,66 @@ func TestParseTypeErrMissingType(t *testing.T) {
 	`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Missing field type in type declaration")
+}
+
+func TestParseComments(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		#
+		# This is a test
+		#
+		user: bool .
+		user.name: string @index(exact) . # this should be unique
+		user.email: string @index(exact) . # this should be unique and lower-cased
+		user.password: password .
+		user.code: string . # for password recovery (can be null)
+		node: bool .
+		node.hashid: string @index(exact) . # @username/hashid
+		node.owner: uid @reverse . # (can be null)
+		node.parent: uid . # [uid] (use facet)
+		node.xdata: string . # store custom json data
+		#
+		# End of test
+		#
+	`)
+	require.NoError(t, err)
+}
+
+func TestParseCommentsNoop(t *testing.T) {
+	reset()
+	_, err := Parse(`
+# Spicy jalapeno bacon ipsum dolor amet t-bone kevin spare ribs sausage jowl cow pastrami short.
+# Leberkas alcatra kielbasa chicken pastrami swine bresaola. Spare ribs landjaeger meatloaf.
+# Chicken biltong boudin porchetta jowl swine burgdoggen cow kevin ground round landjaeger ham.
+# Tongue buffalo cow filet mignon boudin sirloin pancetta pork belly beef ribs. Cow landjaeger.
+	`)
+	require.NoError(t, err)
+}
+
+func TestParseCommentsErrMissingType(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		# The definition below should trigger an error
+		# because we commented out its type.
+		node: # bool .
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Missing Type")
+}
+
+func TestParseTypeComments(t *testing.T) {
+	reset()
+	_, err := Parse(`
+		# User is a service user
+		type User {
+			# TODO: add more fields
+			Name: string # e.g., srfrog
+									 # expanded comment
+									 # embedded # comments # here
+		}
+		# /User
+	`)
+	require.NoError(t, err)
 }
 
 var ps *badger.DB

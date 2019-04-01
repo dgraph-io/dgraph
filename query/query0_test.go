@@ -24,7 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 func TestGetUID(t *testing.T) {
@@ -124,17 +126,59 @@ func TestQueryNamesBeforeA(t *testing.T) {
 		js)
 }
 
+func TestQueryNamesCompareEmpty(t *testing.T) {
+	tests := []struct {
+		in, out string
+	}{
+		{in: `{q(func: lt(name, "")) { name }}`,
+			out: `{"data":{"q": []}}`},
+		{in: `{q(func: le(name, "")) { uid name }}`,
+			out: `{"data":{"q": [{"uid":"0xdac", "name":""}, {"uid":"0xdae", "name":""}]}}`},
+		{in: `{q(func: gt(name, ""), first:3) { name }}`,
+			out: `{"data":{"q": [{"name":"Michonne"}, {"name":"King Lear"}, {"name":"Margaret"}]}}`},
+		{in: `{q(func: ge(name, ""), first:3, after:0x91d) { name }}`,
+			out: `{"data":{"q": [{"name":""}, {"name":"Alex"}, {"name":""}]}}`},
+	}
+	for _, tc := range tests {
+		js := processQueryNoErr(t, tc.in)
+		require.JSONEq(t, tc.out, js)
+	}
+}
+
 func TestQueryCountEmptyNames(t *testing.T) {
-	query := `{
-	  people_empty_name(func: has(name)) @filter(eq(name, "")) {
-		count(uid)
-	  }
-	}`
-	js := processQueryNoErr(t, query)
-	// only two empty names should be counted as the other one is empty in a particular lang.
-	require.JSONEq(t,
-		`{"data":{"people_empty_name": [{"count":2}]}}`,
-		js)
+	tests := []struct {
+		in, out, failure string
+	}{
+		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":2}]}}`},
+		{in: `{q(func: has(name)) @filter(gt(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":44}]}}`},
+		{in: `{q(func: has(name)) @filter(ge(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":46}]}}`},
+		{in: `{q(func: has(name)) @filter(lt(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":0}]}}`},
+		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":2}]}}`},
+		{in: `{q(func: has(name)) @filter(anyofterms(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":2}]}}`},
+		{in: `{q(func: has(name)) @filter(allofterms(name, "")) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":2}]}}`},
+		// NOTE: match with empty string filters values greater than the max distance.
+		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
+			out: `{"data":{"q": [{"count":26}]}}`},
+		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
+			failure: `Value "" in uid_in is not a number`},
+	}
+	for _, tc := range tests {
+		js, err := processQuery(t, context.Background(), tc.in)
+		if tc.failure != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.failure)
+		} else {
+			require.NoError(t, err)
+			require.JSONEq(t, tc.out, js)
+		}
+	}
 }
 
 func TestQueryEmptyRoomsWithTermIndex(t *testing.T) {
@@ -944,7 +988,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 	`
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
+	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
 }
 
 func TestQueryVarValOrderDesc(t *testing.T) {
@@ -1759,7 +1803,32 @@ func TestDefaultValueVar2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"data":[]}}`, js)
 }
 
+func TestNonFlattenedResponse(t *testing.T) {
+	query := `
+	{
+		me(func: eq(name@en, "Baz Luhrmann")) {
+			uid
+			director.film {
+				name@en	
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[
+		{"uid":"0x2af8", "director.film": [
+			{"name@en": "Strictly Ballroom"},
+			{"name@en": "Puccini: La boheme (Sydney Opera)"},
+			{"name@en": "No. 5 the film"}
+		]}
+	]}}`, js)
+
+}
+
+var client *dgo.Dgraph
+
 func TestMain(m *testing.M) {
+	client = z.DgraphClientWithGroot(":9180")
+
 	populateCluster()
 	os.Exit(m.Run())
 }

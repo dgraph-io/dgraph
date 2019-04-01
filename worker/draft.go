@@ -182,8 +182,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 					return err
 				}
 
-				if !groups().ServesTablet(s.Predicate) {
-					return fmt.Errorf("Group 1 should always serve reserved predicate %s",
+				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
+					return err
+				} else if !servesTablet {
+					return fmt.Errorf("group 1 should always serve reserved predicate %s",
 						s.Predicate)
 				}
 			}
@@ -195,8 +197,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 	startTs := proposal.Mutations.StartTs
 
-	if len(proposal.Mutations.Schema) > 0 {
-		span.Annotatef(nil, "Applying schema")
+	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
@@ -206,6 +208,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 		}
+
+		for _, tupdate := range proposal.Mutations.Types {
+			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 
@@ -651,7 +660,6 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	traceOpt := otrace.WithSampler(otrace.ProbabilitySampler(0.01))
 	var snapshotLoops uint64
 	for {
 		select {
@@ -691,13 +699,9 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			var start time.Time
-			var span *otrace.Span
-			if len(rd.Entries) > 0 || !raft.IsEmptySnap(rd.Snapshot) {
-				// Optionally, trace this run.
-				_, span = otrace.StartSpan(n.ctx, "Alpha.RunLoop", traceOpt)
-				start = time.Now()
-			}
+			start := time.Now()
+			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
+				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()
@@ -762,6 +766,7 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			diskDur := time.Since(start)
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
@@ -833,11 +838,16 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
-			}
-			if !start.IsZero() {
 				ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
 					x.LatencyMs.M(x.SinceMs(start)))
+			}
+			if time.Since(start) > 100*time.Millisecond {
+				glog.Warningf(
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+						" Num entries: %d. MustSync: %v",
+					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
+					len(rd.Entries), rd.MustSync)
 			}
 		}
 	}

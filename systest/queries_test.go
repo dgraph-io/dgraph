@@ -27,16 +27,14 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestQuery(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-			x.Check(err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+			dg := z.DgraphClientWithGroot(":9180")
 			require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 			fn(t, dg)
 		}
@@ -332,14 +330,14 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	js := `
   {
-    "schema": [
+    "schema": [` + x.AclPredicates + `,
       {
         "predicate": "_predicate_",
         "type": "string",
         "list": true
       },
       {
-        "predicate": "type",
+        "predicate": "dgraph.type",
         "type": "string",
         "index": true,
         "tokenizer": [
@@ -389,13 +387,25 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
   {
     "schema": [
       {
+        "predicate": "dgraph.xid"
+      },
+      {
+        "predicate": "dgraph.password"
+      },
+      {
+        "predicate": "dgraph.group.acl"
+      },
+      {
+        "predicate": "dgraph.user.group"
+      },
+      {
         "predicate": "_predicate_"
       },
       {
         "predicate": "friends"
       },
       {
-        "predicate": "type"
+        "predicate": "dgraph.type"
       },
       {
         "predicate": "name"
@@ -515,7 +525,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 
 	js := `
   {
-    "schema": [
+    "schema": [` + x.AclPredicates + `,
       {
         "predicate": "_predicate_",
         "type": "string",
@@ -523,7 +533,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
       },
       {
         "index": true,
-        "predicate": "type",
+        "predicate": "dgraph.type",
         "type": "string",
         "tokenizer": ["exact"]
       },
@@ -659,10 +669,6 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		{
 			in:  `{q(func:match(term, "dualway", 2)) {term}}`,
 			out: `{"q":[]}`,
-		},
-		{
-			in:      `{q(func:match(term, "", 8)) {term}}`,
-			failure: `Empty argument received`,
 		},
 		{
 			in:      `{q(func:match(name, "someone", 8)) {name}}`,

@@ -61,11 +61,11 @@ var rdfTypeMap = map[types.TypeID]string{
 var predNonSpecialChars = unicode.RangeTable{
 	R16: []unicode.Range16{
 		// Ranges must be in order.
-		unicode.Range16{'.', '.', 1},
-		unicode.Range16{'0', '9', 1},
-		unicode.Range16{'A', 'Z', 1},
-		unicode.Range16{'_', '_', 1},
-		unicode.Range16{'a', 'z', 1},
+		{'.', '.', 1},
+		{'0', '9', 1},
+		{'A', 'Z', 1},
+		{'_', '_', 1},
+		{'a', 'z', 1},
 	},
 }
 
@@ -290,7 +290,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		if pk.Attr == "_predicate_" {
 			return false
 		}
-		if !groups().ServesTablet(pk.Attr) {
+		if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 			return false
 		}
 		// We need to ensure that schema keys are separately identifiable, so they can be

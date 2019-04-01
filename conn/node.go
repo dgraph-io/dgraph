@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/y"
@@ -35,6 +36,7 @@ import (
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
 
@@ -143,7 +145,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		confChanges: make(map[uint64]chan error),
 		messages:    make(chan sendmsg, 100),
 		peers:       make(map[uint64]string),
-		requestCh:   make(chan linReadReq),
+		requestCh:   make(chan linReadReq, 100),
 	}
 	n.Applied.Init(nil)
 	// This should match up to the Applied index set above.
@@ -301,12 +303,18 @@ func (n *Node) PastLife() (uint64, bool, error) {
 }
 
 const (
-	messageBatchSoftLimit = 10000000
+	messageBatchSoftLimit = 10e6
 )
+
+type Stream struct {
+	msgCh chan []byte
+	alive int32
+}
 
 func (n *Node) BatchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
-	failedConn := make(map[uint64]bool)
+	streams := make(map[uint64]*Stream)
+
 	for {
 		totalSize := 0
 		sm := <-n.messages
@@ -342,59 +350,125 @@ func (n *Node) BatchAndSendMessages() {
 			if buf.Len() == 0 {
 				continue
 			}
-
-			addr, has := n.Peer(to)
-			pool, err := Get().Get(addr)
-			if !has || err != nil {
-				if exists := failedConn[to]; !exists {
-					// So that we print error only the first time we are not able to connect.
-					// Otherwise, the log is polluted with multiple errors.
-					glog.Warningf("No healthy connection to node Id: %#x addr: [%s], err: %v\n",
-						to, addr, err)
-					failedConn[to] = true
+			stream, ok := streams[to]
+			if !ok || atomic.LoadInt32(&stream.alive) <= 0 {
+				stream = &Stream{
+					msgCh: make(chan []byte, 100),
+					alive: 1,
 				}
-				continue
+				go n.streamMessages(to, stream)
+				streams[to] = stream
 			}
-
-			failedConn[to] = false
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
-			go n.doSendMessage(to, pool, data)
 			buf.Reset()
+
+			select {
+			case stream.msgCh <- data:
+			default:
+			}
 		}
 	}
 }
 
-func (n *Node) doSendMessage(to uint64, pool *Pool, data []byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+func (n *Node) streamMessages(to uint64, stream *Stream) {
+	defer atomic.StoreInt32(&stream.alive, 0)
 
-	client := pool.Get()
-
-	c := pb.NewRaftClient(client)
-	p := &api.Payload{Data: data}
-	batch := &pb.RaftBatch{
-		Context: n.RaftContext,
-		Payload: p,
-	}
-
-	// We don't need to run this in a goroutine, because doSendMessage is
-	// already being run in one.
-	_, err := c.RaftMessage(ctx, batch)
-	if err != nil {
-		switch {
-		case strings.Contains(err.Error(), "TransientFailure"):
-			glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
-			n.Raft().ReportUnreachable(to)
-			pool.SetUnhealthy()
-		default:
-			glog.V(3).Infof("Error while sending Raft message to node with addr: %s, err: %v\n",
-				pool.Addr, err)
+	const dur = 10 * time.Second
+	deadline := time.Now().Add(dur)
+	var lastLog time.Time
+	// Exit after a thousand tries or at least 10s. Let BatchAndSendMessages create another
+	// goroutine, if needed.
+	for i := 0; ; i++ {
+		if err := n.doSendMessage(to, stream.msgCh); err != nil {
+			// Update lastLog so we print error only a few times if we are not able to connect.
+			// Otherwise, the log is polluted with repeated errors.
+			if time.Since(lastLog) > dur {
+				glog.Warningf("Unable to send message to peer: %#x. Error: %v", to, err)
+			}
+			lastLog = time.Now()
+		}
+		if i >= 1e3 || time.Now().After(deadline) {
+			return
 		}
 	}
-	// We don't need to do anything if we receive any error while sending message.
-	// RAFT would automatically retry.
-	return
+}
+
+func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
+	addr, has := n.Peer(to)
+	if !has {
+		return x.Errorf("Do not have address of peer %#x", to)
+	}
+	pool, err := Get().Get(addr)
+	if err != nil {
+		return err
+	}
+
+	c := pb.NewRaftClient(pool.Get())
+	ctx, span := otrace.StartSpan(context.Background(),
+		fmt.Sprintf("RaftMessage-%d-to-%d", n.Id, to))
+	defer span.End()
+
+	mc, err := c.RaftMessage(ctx)
+	if err != nil {
+		return err
+	}
+
+	var packets, lastPackets uint64
+	slurp := func(batch *pb.RaftBatch) {
+		for {
+			if len(batch.Payload.Data) > messageBatchSoftLimit {
+				return
+			}
+			select {
+			case data := <-msgCh:
+				batch.Payload.Data = append(batch.Payload.Data, data...)
+				packets++
+			default:
+				return
+			}
+		}
+	}
+
+	ctx = mc.Context()
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case data := <-msgCh:
+			batch := &pb.RaftBatch{
+				Context: n.RaftContext,
+				Payload: &api.Payload{Data: data},
+			}
+			packets++
+			slurp(batch) // Pick up more entries from msgCh, if present.
+			span.Annotatef(nil, "[Packets: %d] Sending data of length: %d.",
+				packets, len(batch.Payload.Data))
+			if err := mc.Send(batch); err != nil {
+				span.Annotatef(nil, "Error while mc.Send: %v", err)
+				switch {
+				case strings.Contains(err.Error(), "TransientFailure"):
+					glog.Warningf("Reporting node: %d addr: %s as unreachable.", to, pool.Addr)
+					n.Raft().ReportUnreachable(to)
+					pool.SetUnhealthy()
+				default:
+				}
+				// We don't need to do anything if we receive any error while sending message.
+				// RAFT would automatically retry.
+				return err
+			}
+		case <-ticker.C:
+			if lastPackets == packets {
+				span.Annotatef(nil,
+					"No activity for a while [Packets == %d]. Closing connection.", packets)
+				return mc.CloseSend()
+			}
+			lastPackets = packets
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 // Connects the node and makes its peerPool refer to the constructed pool and address
@@ -508,36 +582,42 @@ type linReadReq struct {
 var errReadIndex = x.Errorf("Cannot get linearized read (time expired or no configured leader)")
 
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
-	indexCh := make(chan uint64, 1)
+	span := otrace.FromContext(ctx)
+	span.Annotate(nil, "WaitLinearizableRead")
 
+	indexCh := make(chan uint64, 1)
 	select {
 	case n.requestCh <- linReadReq{indexCh: indexCh}:
+		span.Annotate(nil, "Pushed to requestCh")
 	case <-ctx.Done():
+		span.Annotate(nil, "Context expired")
 		return ctx.Err()
 	}
 
 	select {
 	case index := <-indexCh:
+		span.Annotatef(nil, "Received index: %d", index)
 		if index == 0 {
 			return errReadIndex
 		}
-		return n.Applied.WaitForMark(ctx, index)
+		err := n.Applied.WaitForMark(ctx, index)
+		span.Annotatef(nil, "Error from Applied.WaitForMark: %v", err)
+		return err
 	case <-ctx.Done():
+		span.Annotate(nil, "Context expired")
 		return ctx.Err()
 	}
 }
 
 func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
-	readIndex := func() (uint64, error) {
-		// Read Request can get rejected then we would wait idefinitely on the channel
+	readIndex := func(activeRctx []byte) (uint64, error) {
+		// Read Request can get rejected then we would wait indefinitely on the channel
 		// so have a timeout.
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		var activeRctx [8]byte
-		x.Check2(n.Rand.Read(activeRctx[:]))
-		if err := n.Raft().ReadIndex(ctx, activeRctx[:]); err != nil {
+		if err := n.Raft().ReadIndex(ctx, activeRctx); err != nil {
 			glog.Errorf("Error while trying to call ReadIndex: %v\n", err)
 			return 0, err
 		}
@@ -547,7 +627,8 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		case <-closer.HasBeenClosed():
 			return 0, errors.New("Closer has been called")
 		case rs := <-readStateCh:
-			if !bytes.Equal(activeRctx[:], rs.RequestCtx) {
+			if !bytes.Equal(activeRctx, rs.RequestCtx) {
+				glog.V(3).Infof("Read state: %x != requested %x", rs.RequestCtx, activeRctx[:])
 				goto again
 			}
 			return rs.Index, nil
@@ -564,9 +645,8 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case rs := <-readStateCh:
+		case <-readStateCh:
 			// Do nothing, discard ReadState as we don't have any pending ReadIndex requests.
-			glog.Warningf("Received a read state unexpectedly: %+v\n", rs)
 		case req := <-n.requestCh:
 		slurpLoop:
 			for {
@@ -577,8 +657,15 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 					break slurpLoop
 				}
 			}
+			// Create one activeRctx slice for the read index, even if we have to call readIndex
+			// repeatedly. That way, we can process the requests as soon as we encounter the first
+			// activeRctx. This is better than flooding readIndex with a new activeRctx on each
+			// call, causing more unique traffic and further delays in request processing.
+			activeRctx := make([]byte, 8)
+			x.Check2(n.Rand.Read(activeRctx))
+			glog.V(3).Infof("Request readctx: %#x", activeRctx)
 			for {
-				index, err := readIndex()
+				index, err := readIndex(activeRctx)
 				if err == errInternalRetry {
 					continue
 				}

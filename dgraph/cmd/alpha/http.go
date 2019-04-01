@@ -199,11 +199,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.WriteRune('{')
-	writeEntry("extensions", js)
-	out.WriteRune(',')
-
-	// User can either ask for schema or have a query.
 	writeEntry("data", resp.Json)
+	out.WriteRune(',')
+	writeEntry("extensions", js)
 	out.WriteRune('}')
 
 	writeResponse(w, r, out.Bytes())
@@ -240,7 +238,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			mu.DeleteJson = delJSON.bs
 		}
 	} else {
-		// Parse NQuads.
+		// Parse N-Quads.
 		mu, err = gql.ParseMutation(string(m))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -423,7 +421,7 @@ func abortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
-	if accessJwt := r.Header.Get("X-Dgraph-AccessJWT"); accessJwt != "" {
+	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			md = metadata.New(nil)

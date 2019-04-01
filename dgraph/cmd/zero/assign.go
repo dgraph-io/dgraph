@@ -19,6 +19,7 @@ package zero
 import (
 	"errors"
 
+	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -159,30 +160,45 @@ func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
+	ctx, span := otrace.StartSpan(ctx, "Zero.AssignUids")
+	defer span.End()
 
 	reply := &emptyAssignedIds
-	c := make(chan error, 1)
-	go func() {
+	lease := func() error {
 		var err error
 		if s.Node.AmLeader() {
+			span.Annotatef(nil, "Zero leader leasing %d ids", num.GetVal())
 			reply, err = s.lease(ctx, num, false)
-			c <- err
-			return
+			return err
 		}
+		span.Annotate(nil, "Not Zero leader")
+		// I'm not the leader and this request was forwarded to me by a peer, who thought I'm the
+		// leader.
+		if num.Forwarded {
+			return x.Errorf("Invalid Zero received AssignUids request forward. Please retry")
+		}
+		// This is an original request. Forward it to the leader.
 		pl := s.Leader(0)
 		if pl == nil {
-			err = x.Errorf("No healthy connection found to Leader of group zero")
-		} else {
-			zc := pb.NewZeroClient(pl.Get())
-			reply, err = zc.AssignUids(ctx, num)
+			return x.Errorf("No healthy connection found to Leader of group zero")
 		}
-		c <- err
+		span.Annotatef(nil, "Sending request to %v", pl.Addr)
+		zc := pb.NewZeroClient(pl.Get())
+		num.Forwarded = true
+		reply, err = zc.AssignUids(ctx, num)
+		return err
+	}
+
+	c := make(chan error, 1)
+	go func() {
+		c <- lease()
 	}()
 
 	select {
 	case <-ctx.Done():
 		return reply, ctx.Err()
 	case err := <-c:
+		span.Annotatef(nil, "Error while leasing %+v: %v", num, err)
 		return reply, err
 	}
 }

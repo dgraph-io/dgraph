@@ -158,7 +158,10 @@ func (g *groupi) informZeroAboutTablets() {
 		failed := false
 		preds := schema.State().Predicates()
 		for _, pred := range preds {
-			if tablet := g.Tablet(pred); tablet == nil {
+			if tablet, err := g.Tablet(pred); err != nil {
+				failed = true
+				glog.Errorf("Error while getting tablet for pred %q: %v", pred, err)
+			} else if tablet == nil {
 				failed = true
 			}
 		}
@@ -177,13 +180,6 @@ func (g *groupi) proposeInitialSchema() {
 }
 
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
-	g.RLock()
-	_, ok := g.tablets[schema.Predicate]
-	g.RUnlock()
-	if ok {
-		return
-	}
-
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for _predicate_ is not changed once set.
@@ -315,31 +311,76 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 	}
 }
 
-func (g *groupi) BelongsTo(key string) uint32 {
-	tablet := g.Tablet(key)
-	if tablet != nil {
-		return tablet.GroupId
+func (g *groupi) BelongsTo(key string) (uint32, error) {
+	if tablet, err := g.Tablet(key); err != nil {
+		return 0, err
+	} else if tablet != nil {
+		return tablet.GroupId, nil
 	}
-	return 0
+	return 0, nil
 }
 
-func (g *groupi) ServesTablet(key string) bool {
-	tablet := g.Tablet(key)
-	if tablet != nil && tablet.GroupId == groups().groupId() {
-		return true
+// BelongsToReadOnly acts like BelongsTo except it does not ask zero to serve
+// the tablet for key if no group is currently serving it.
+func (g *groupi) BelongsToReadOnly(key string) (uint32, error) {
+	g.RLock()
+	tablet := g.tablets[key]
+	g.RUnlock()
+	if tablet != nil {
+		return tablet.GetGroupId(), nil
 	}
-	return false
+
+	// We don't know about this tablet. Talk to dgraphzero to find out who is
+	// serving this tablet.
+	pl := g.connToZeroLeader()
+	zc := pb.NewZeroClient(pl.Get())
+
+	tablet = &pb.Tablet{
+		Predicate: key,
+		ReadOnly:  true,
+	}
+	out, err := zc.ShouldServe(context.Background(), tablet)
+	if err != nil {
+		glog.Errorf("Error while ShouldServe grpc call %v", err)
+		return 0, err
+	}
+	if out.GetGroupId() == 0 {
+		return 0, nil
+	}
+
+	g.Lock()
+	defer g.Unlock()
+	g.tablets[key] = out
+	return out.GetGroupId(), nil
+}
+
+func (g *groupi) ServesTablet(key string) (bool, error) {
+	if tablet, err := g.Tablet(key); err != nil {
+		return false, err
+	} else if tablet != nil && tablet.GroupId == groups().groupId() {
+		return true, nil
+	}
+	return false, nil
+}
+
+// ServesTabletReadOnly acts like ServesTablet except it does not ask zero to
+// serve the tablet for key if no group is currently serving it.
+func (g *groupi) ServesTabletReadOnly(key string) (bool, error) {
+	gid, err := g.BelongsToReadOnly(key)
+	if err != nil {
+		return false, err
+	}
+	return gid == groups().groupId(), nil
 }
 
 // Do not modify the returned Tablet
-// TODO: This should return error.
-func (g *groupi) Tablet(key string) *pb.Tablet {
+func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 	if ok {
-		return tablet
+		return tablet, nil
 	}
 
 	// We don't know about this tablet.
@@ -351,7 +392,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
-		return nil
+		return nil, err
 	}
 	g.Lock()
 	g.tablets[key] = out
@@ -360,7 +401,7 @@ func (g *groupi) Tablet(key string) *pb.Tablet {
 	if out.GroupId == groups().groupId() {
 		glog.Infof("Serving tablet for: %v\n", key)
 	}
-	return out
+	return out, nil
 }
 
 func (g *groupi) HasMeInState() bool {
@@ -816,6 +857,11 @@ func (g *groupi) processOracleDeltaStream() {
 			sort.Slice(delta.Txns, func(i, j int) bool {
 				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
 			})
+			if len(delta.Txns) > 0 {
+				last := delta.Txns[len(delta.Txns)-1]
+				// Update MaxAssigned on commit so best effort queries can get back latest data.
+				delta.MaxAssigned = x.Max(delta.MaxAssigned, last.CommitTs)
+			}
 			if glog.V(3) {
 				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
 					batch, delta.MaxAssigned)

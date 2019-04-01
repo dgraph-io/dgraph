@@ -2,13 +2,34 @@
 #
 # usage: test.sh [pkg_regex]
 
+# Notes for testing under macOS (Sierra and up)
+# Required Homebrew (https://brew.sh/) packages:
+#   - bash
+#   - curl
+#   - coreutils
+#   - gnu-getop
+#   - findutils
+#
+# Your $PATH must have all required packages in .bashrc:
+#   PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
+#   PATH="/usr/local/opt/curl/bin:$PATH"
+#   PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+#   PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
+#   export PATH
+#
+# After brew packages and PATHs are set, run tests with:
+#   /usr/local/bin/bash test.sh
+#
+# Keep in mind that the test build will overwrite the "dgraph"
+# binary in your $GOPATH/bin with the Linux-ELF binary for Docker.
+
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 
 source $DGRAPH_ROOT/contrib/scripts/functions.sh
 
 PATH+=:$DGRAPH_ROOT/contrib/scripts/
-GO_TEST_OPTS=( "-short=true" )
+GO_TEST_OPTS=( )
 TEST_FAILED=0
 TEST_SET="unit"
 BUILD_TAGS=
@@ -26,6 +47,7 @@ options:
     -u --unit       run unit tests only
     -c --cluster    run unit tests and custom cluster test
     -f --full       run all tests
+       --oss        run tests with 'oss' tagging
     -v --verbose    run tests in verbose mode
     -n --no-cache   re-run test even if previous result is in cache
 
@@ -35,7 +57,6 @@ notes:
 
     Tests are always run with -short=true."
 }
-
 
 function Info {
     echo -e "\e[1;36mINFO: $*\e[0m"
@@ -47,6 +68,10 @@ function FmtTime {
     [[ $hrs -gt 0 ]]               && printf "%dh " $hrs
     [[ $hrs -gt 0 || $min -gt 0 ]] && printf "%dm " $min
                                       printf "%ds" $secs
+}
+
+function IsCi {
+    [[ ! -z "$TEAMCITY_VERSION" ]]
 }
 
 function FindCustomClusterTests {
@@ -70,6 +95,10 @@ function FindDefaultClusterTests {
 function Run {
     set -o pipefail
     echo -en "...\r"
+    if IsCi; then
+        go test -v ${GO_TEST_OPTS[*]} $@ | go-test-teamcity
+        return
+    fi
     go test ${GO_TEST_OPTS[*]} $@ \
     | GREP_COLORS='ne:mt=01;32' egrep --line-buffered --color=always '^ok\ .*|$' \
     | GREP_COLORS='ne:mt=00;38;5;226' egrep --line-buffered --color=always '^\?\ .*|$' \
@@ -77,11 +106,14 @@ function Run {
 }
 
 function RunCmd {
+    IsCi && echo "##teamcity[testStarted name='$1' captureStandardOutput='true']"
     if eval "$@"; then
         echo -e "\e[1;32mok $1\e[0m"
+         IsCi && echo "##teamcity[testFinished name='$1']"
         return 0
     else
         echo -e "\e[1;31mfail $1\e[0m"
+        IsCi && echo "##teamcity[testFailed name='$1']"
         return 1
     fi
 }
@@ -111,7 +143,7 @@ function RunCustomClusterTests {
 # MAIN
 #
 
-ARGS=$(/usr/bin/getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,verbose,no-cache" -- "$@") \
+ARGS=$(getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,oss,verbose,no-cache" -- "$@") \
     || exit 1
 eval set -- "$ARGS"
 while true; do
@@ -122,6 +154,7 @@ while true; do
         -f|--full)      TEST_SET="unit:cluster:full"  ;;
         -v|--verbose)   GO_TEST_OPTS+=( "-v" )        ;;
         -n|--no-cache)  GO_TEST_OPTS+=( "-count=1" )  ;;
+        --oss)          GO_TEST_OPTS+=( "-tags=oss" )  ;;
         --)             shift; break                  ;;
     esac
     shift
@@ -133,6 +166,9 @@ cd $DGRAPH_ROOT
 export TMPDIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
 trap "rm -rf $TMPDIR" EXIT
 
+# docker-compose files may use this to run as user instead of as root
+export UID
+
 MATCHING_TESTS=$TMPDIR/tests
 CUSTOM_CLUSTER_TESTS=$TMPDIR/custom
 DEFAULT_CLUSTER_TESTS=$TMPDIR/default
@@ -141,6 +177,7 @@ if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
     if [[ $TEST_SET == unit ]]; then
         Info "Running only unit tests"
+        GO_TEST_OPTS+=( "-short=true" )
     fi
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
@@ -155,6 +192,9 @@ fi
 # assemble list of tests before executing any
 FindCustomClusterTests
 FindDefaultClusterTests
+
+# abort all tests on Ctrl-C, not just the current one
+trap "echo >&2 SIGINT ; exit 2" SIGINT
 
 START_TIME=$(date +%s)
 

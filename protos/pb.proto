@@ -69,6 +69,7 @@ message Query {
 	bool expand_all = 10; // expand all language variants.
 
 	uint64 read_ts = 13;
+	int32 cache = 14;
 }
 
 message ValueList {
@@ -174,6 +175,7 @@ message Tablet {
 	bool force       = 3; // Used while moving predicate.
 	int64 space      = 7;
 	bool remove      = 8;
+  bool read_only   = 9; // If true, do not ask zero to serve any tablets.
 }
 
 message DirectedEdge {
@@ -199,6 +201,7 @@ message Mutations {
 	repeated SchemaUpdate schema = 4;
 	bool drop_all                = 5;
 	bool ignore_index_conflict   = 6;
+	repeated TypeUpdate types    = 7;
 }
 
 message Snapshot {
@@ -316,6 +319,8 @@ message SchemaRequest {
 	repeated string predicates = 2;
 	// fields can be on of type, index, reverse or tokenizer
 	repeated string fields = 3;
+
+  repeated string types = 4;
 }
 
 message SchemaResult {
@@ -398,10 +403,10 @@ message RaftBatch {
 }
 
 service Raft {
-	rpc Heartbeat (api.Payload)   returns (stream api.Payload) {}
-	rpc RaftMessage (RaftBatch)   returns (api.Payload) {}
-	rpc JoinCluster (RaftContext) returns (api.Payload) {}
-	rpc IsPeer (RaftContext)      returns (PeerResponse) {}
+	rpc Heartbeat (api.Payload)        returns (stream api.Payload) {}
+	rpc RaftMessage (stream RaftBatch) returns (api.Payload) {}
+	rpc JoinCluster (RaftContext)      returns (api.Payload) {}
+	rpc IsPeer (RaftContext)           returns (PeerResponse) {}
 }
 
 service Zero {
@@ -425,7 +430,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Backup (BackupRequest)              returns (Num) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -434,6 +439,7 @@ service Worker {
 message Num {
 	uint64 val = 1;
 	bool read_only = 2;
+	bool forwarded = 3; // True if this request was forwarded by a peer.
 }
 
 message AssignedIds {
@@ -457,10 +463,12 @@ message Status {
 }
 
 message BackupRequest {
-	uint64 read_ts  = 1;
-	uint32 group_id = 2;
-	string unix_ts  = 3;
-	string location = 4;
+	uint64 read_ts      = 1;
+	uint32 group_id     = 2;
+	string unix_ts      = 3;
+	string location     = 4;
+	uint64 since        = 5;
+	uint64 snapshot_ts  = 6;
 }
 
 message ExportRequest {

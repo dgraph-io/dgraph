@@ -238,9 +238,8 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 				return nil, fmt.Errorf("invalid IP address: %s", tuple[1])
 			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
 				return nil, fmt.Errorf("inverted IP address range: %s", s)
-			} else {
-				ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 			}
+			ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 		default:
 			return nil, fmt.Errorf("invalid IP address range: %s", s)
 		}
@@ -519,7 +518,9 @@ func run() {
 		}
 	}
 	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler: otrace.ProbabilitySampler(x.WorkerConfig.Tracing)})
+		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Tracing),
+		MaxAnnotationEventsPerSpan: 64,
+	})
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

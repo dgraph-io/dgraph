@@ -17,7 +17,13 @@ var ctxb = context.Background()
 
 func run(ctx context.Context, command string) error {
 	args := strings.Split(command, " ")
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	var checkedArgs []string
+	for _, arg := range args {
+		if len(arg) > 0 {
+			checkedArgs = append(checkedArgs, arg)
+		}
+	}
+	cmd := exec.CommandContext(ctx, checkedArgs[0], checkedArgs[1:]...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -33,15 +39,15 @@ func partition(instance string) error {
 	return run(ctxb, fmt.Sprintf("blockade partition %s", instance))
 }
 
-func increment(atLeast int) error {
+func increment(atLeast int, args string) error {
 	errCh := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(ctxb, time.Minute)
+	ctx, cancel := context.WithTimeout(ctxb, 1*time.Minute)
 	defer cancel()
 
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 	for _, addr := range addrs {
 		go func(addr string) {
-			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s", addr))
+			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s %s", addr, args))
 		}(addr)
 	}
 	start := time.Now()
@@ -82,14 +88,7 @@ func getStatus(zero string) error {
 	return nil
 }
 
-func testCommon(remove, join string, minAlphasUp int) error {
-	var nodes []string
-	for i := 1; i <= 3; i++ {
-		for j := 1; j <= 3; j++ {
-			nodes = append(nodes, fmt.Sprintf("zero%d dg%d", i, j))
-		}
-	}
-
+func testCommon(remove, join, incrementArgs string, nodes []string, minAlphasUp int) error {
 	fmt.Printf("Nodes: %+v\n", nodes)
 	for _, node := range nodes {
 		if err := getStatus("localhost:6080"); err != nil {
@@ -102,7 +101,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 		if err := run(ctxb, "blockade status"); err != nil {
 			return err
 		}
-		if err := increment(minAlphasUp); err != nil {
+		if err := increment(minAlphasUp, incrementArgs); err != nil {
 			return err
 		}
 		// Then join, if available.
@@ -112,7 +111,7 @@ func testCommon(remove, join string, minAlphasUp int) error {
 		if err := run(ctxb, join); err != nil {
 			return err
 		}
-		if err := increment(3); err != nil {
+		if err := increment(3, incrementArgs); err != nil {
 			return err
 		}
 	}
@@ -144,6 +143,18 @@ func runTests() error {
 		}
 	}
 
+	var nodes []string
+	for i := 1; i <= 3; i++ {
+		for j := 1; j <= 3; j++ {
+			nodes = append(nodes, fmt.Sprintf("zero%d dg%d", i, j))
+		}
+	}
+
+	var alphaNodes []string
+	for i := 1; i <= 3; i++ {
+		alphaNodes = append(alphaNodes, fmt.Sprintf("dg%d", i))
+	}
+
 	// Setting flaky --all just does not converge. Too many network interruptions.
 	// if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
 	// 	fmt.Printf("Error testFlaky: %v\n", err)
@@ -157,23 +168,29 @@ func runTests() error {
 	// }
 	// fmt.Println("===> Slow TEST: OK")
 
-	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
+	if err := testCommon("blockade stop", "blockade start --all", "", nodes, 2); err != nil {
 		fmt.Printf("Error testRestart with stop: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST1: OK")
 
-	if err := testCommon("blockade restart", "", 3); err != nil {
+	if err := testCommon("blockade restart", "", "", nodes, 3); err != nil {
 		fmt.Printf("Error testRestart with restart: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST2: OK")
 
-	if err := testCommon("blockade partition", "blockade join", 2); err != nil {
+	if err := testCommon("blockade partition", "blockade join", "", nodes, 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Partition TEST: OK")
+
+	if err := testCommon("blockade partition", "blockade join", "--be", alphaNodes, 3); err != nil {
+		fmt.Printf("Error testPartitionsBestEffort: %v\n", err)
+		return err
+	}
+	fmt.Println("===> Partition best-effort TEST: OK")
 
 	return nil
 }

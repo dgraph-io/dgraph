@@ -39,7 +39,42 @@ func TestRecurseError(t *testing.T) {
 
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query.")
+	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query")
+}
+
+func TestRecurseNestedError1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) @recurse {
+				friend {
+					name
+				}
+				name
+			}
+		}`
+
+	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"recurse queries require that all predicates are specified in one level")
+}
+
+func TestRecurseNestedError2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) @recurse {
+				friend {
+					pet {
+						name
+					}
+				}
+			}
+		}`
+
+	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"recurse queries require that all predicates are specified in one level")
 }
 
 func TestRecurseQuery(t *testing.T) {
@@ -1869,6 +1904,19 @@ func TestFilterRegex16(t *testing.T) {
 		js)
 }
 
+func TestFilterRegex17(t *testing.T) {
+	query := `
+		{
+			me(func:regexp(name, "")) {
+				name
+			}
+		}
+	`
+	_, err := processQuery(t, context.Background(), query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function 'regexp' requires 2 arguments,")
+}
+
 func TestTypeFunction(t *testing.T) {
 	query := `
 		{
@@ -1973,4 +2021,27 @@ func TestMaxPredicateSize(t *testing.T) {
 	_, err := processQuery(t, context.Background(), query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
+}
+
+func TestQueryUnknownType(t *testing.T) {
+	query := `schema(type: UnknownType) {}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestQuerySingleType(t *testing.T) {
+	query := `schema(type: Person) {}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Person",
+		"fields":[{"name":"name", "type":"string"}, {"name":"pet", "type":"Animal"}]}]}}`,
+		js)
+}
+
+func TestQueryMultipleTypes(t *testing.T) {
+	query := `schema(type: [Person, Animal]) {}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"types":[{"name":"Animal",
+		"fields":[{"name":"name", "type":"string"}]},
+	{"name":"Person", "fields":[{"name":"name", "type": "string"},
+		{"name":"pet", "type":"Animal"}]}]}}`, js)
 }

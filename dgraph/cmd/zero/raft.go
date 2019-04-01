@@ -253,6 +253,13 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 			sort.Strings(preds)
 			g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
 		}
+		if n.AmLeader() {
+			// It is important to push something to Oracle updates channel, so the subscribers would
+			// get the latest checksum that we calculated above. Otherwise, if all the queries are
+			// best effort queries which don't create any transaction, then the OracleDelta never
+			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
+			n.server.orc.updates <- &pb.OracleDelta{}
+		}
 	}()
 
 	if tablet.GroupId == 0 {
@@ -516,14 +523,21 @@ func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 	}
 }
 
+var startOption = otrace.WithSampler(otrace.ProbabilitySampler(0.01))
+
 func (n *node) checkQuorum(closer *y.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	quorum := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Make this timeout 1.5x the timeout on RunReadIndexLoop.
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
+
+		ctx, span := otrace.StartSpan(ctx, "Zero.checkQuorum", startOption)
+		defer span.End()
+		span.Annotatef(nil, "Node id: %d", n.Id)
 
 		if state, err := n.server.latestMembershipState(ctx); err == nil {
 			n.mu.Lock()
@@ -531,9 +545,11 @@ func (n *node) checkQuorum(closer *y.Closer) {
 			n.mu.Unlock()
 			// Also do some connection cleanup.
 			conn.Get().RemoveInvalid(state)
+			span.Annotate(nil, "Updated lastQuorum")
 
 		} else if glog.V(1) {
-			glog.Warningf("Zero node: %#x unable to reach quorum.", n.Id)
+			span.Annotatef(nil, "Got error: %v", err)
+			glog.Warningf("Zero node: %#x unable to reach quorum. Error: %v", n.Id, err)
 		}
 	}
 
@@ -587,7 +603,7 @@ func (n *node) Run() {
 
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
-	readStateCh := make(chan raft.ReadState, 10)
+	readStateCh := make(chan raft.ReadState, 100)
 	closer := y.NewCloser(4)
 	defer func() {
 		closer.SignalAndWait()
@@ -610,11 +626,36 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
+			start := time.Now()
+			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
+				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
+				// No need to use select-case-default on pushing to readStateCh. It is typically
+				// empty.
 				readStateCh <- rs
 			}
+			span.Annotatef(nil, "Pushed %d readstates", len(rd.ReadStates))
 
+			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateLeader && !leader {
+					glog.Infoln("I've become the leader, updating leases.")
+					n.server.updateLeases()
+				}
+				leader = rd.RaftState == raft.StateLeader
+				// Oracle stream would close the stream once it steps down as leader
+				// predicate move would cancel any in progress move on stepping down.
+				n.triggerLeaderChange()
+			}
+			if leader {
+				// Leader can send messages in parallel with writing to disk.
+				for _, msg := range rd.Messages {
+					n.Send(msg)
+				}
+			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			span.Annotatef(nil, "Saved to storage")
+			diskDur := time.Since(start)
+
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
@@ -639,22 +680,26 @@ func (n *node) Run() {
 				}
 				n.Applied.Done(entry.Index)
 			}
+			span.Annotatef(nil, "Applied %d CommittedEntries", len(rd.CommittedEntries))
 
-			if rd.SoftState != nil {
-				if rd.RaftState == raft.StateLeader && !leader {
-					glog.Infoln("I've become the leader, updating leases.")
-					n.server.updateLeases()
+			if !leader {
+				// Followers should send messages later.
+				for _, msg := range rd.Messages {
+					n.Send(msg)
 				}
-				leader = rd.RaftState == raft.StateLeader
-				// Oracle stream would close the stream once it steps down as leader
-				// predicate move would cancel any in progress move on stepping down.
-				n.triggerLeaderChange()
 			}
+			span.Annotate(nil, "Sent messages")
 
-			for _, msg := range rd.Messages {
-				n.Send(msg)
-			}
 			n.Raft().Advance()
+			span.Annotate(nil, "Advanced Raft")
+			span.End()
+			if time.Since(start) > 100*time.Millisecond {
+				glog.Warningf(
+					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+						" Num entries: %d. MustSync: %v",
+					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
+					len(rd.Entries), rd.MustSync)
+			}
 		}
 	}
 }

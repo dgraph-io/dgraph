@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -34,7 +35,10 @@ type AclCache struct {
 	predRegexRules []*PredRegexRule
 }
 
-var aclCache *AclCache
+var aclCache *AclCache = &AclCache{
+	predPerms:      make(map[string]map[string]int32),
+	predRegexRules: make([]*PredRegexRule, 0),
+}
 
 func (cache *AclCache) update(groups []acl.Group) {
 	// In dgraph, acl rules are divided by groups, e.g.
@@ -112,6 +116,10 @@ func (cache *AclCache) update(groups []acl.Group) {
 
 func (cache *AclCache) authorizePredicate(groups []string, predicate string,
 	operation *acl.Operation) error {
+	if x.IsAclPredicate(predicate) {
+		return fmt.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
+	}
+
 	aclCache.RLock()
 	predPerms, predRegexRules := aclCache.predPerms, aclCache.predRegexRules
 	aclCache.RUnlock()
