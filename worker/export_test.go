@@ -100,6 +100,57 @@ func initTestExport(t *testing.T, schemaStr string) {
 	populateGraphExport(t)
 }
 
+func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles []string) {
+	searchDir := bdir
+	err := filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
+		if f.IsDir() {
+			return nil
+		}
+		if path != bdir {
+			if strings.Contains(path, "schema") {
+				schemaFiles = append(schemaFiles, path)
+			} else {
+				dataFiles = append(dataFiles, path)
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(dataFiles), "filelist=%v", dataFiles)
+
+	return
+}
+
+func checkExportSchema(t *testing.T, schemaFileList []string) {
+	require.Equal(t, 1, len(schemaFileList))
+	file := schemaFileList[0]
+	f, err := os.Open(file)
+	require.NoError(t, err)
+
+	r, err := gzip.NewReader(f)
+	require.NoError(t, err)
+
+	scanner := bufio.NewScanner(r)
+	count := 0
+	for scanner.Scan() {
+		result, err := schema.Parse(scanner.Text())
+		require.NoError(t, err)
+		require.Equal(t, 1, len(result.Schemas))
+		// We wrote schema for only two predicates
+		if result.Schemas[0].Predicate == "friend" {
+			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
+		} else {
+			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+				result.Schemas[0].Predicate)
+			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
+		}
+		count = len(result.Schemas)
+	}
+	require.NoError(t, scanner.Err())
+	// This order will be preserved due to file naming
+	require.Equal(t, 1, count)
+}
+
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	initTestExport(t, "name:string @index .")
@@ -118,24 +169,7 @@ func TestExportRdf(t *testing.T) {
 	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1})
 	require.NoError(t, err)
 
-	searchDir := bdir
-	fileList := []string{}
-	schemaFileList := []string{}
-	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
-		if f.IsDir() {
-			return nil
-		}
-		if path != bdir {
-			if strings.Contains(path, "schema") {
-				schemaFileList = append(schemaFileList, path)
-			} else {
-				fileList = append(fileList, path)
-			}
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(fileList), "filelist=%v", fileList)
+	fileList, schemaFileList := getExportFileList(t, bdir)
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -205,33 +239,7 @@ func TestExportRdf(t *testing.T) {
 	// This order will be preserved due to file naming.
 	require.Equal(t, 8, count)
 
-	require.Equal(t, 1, len(schemaFileList))
-	file = schemaFileList[0]
-	f, err = os.Open(file)
-	require.NoError(t, err)
-
-	r, err = gzip.NewReader(f)
-	require.NoError(t, err)
-
-	scanner = bufio.NewScanner(r)
-	count = 0
-	for scanner.Scan() {
-		result, err := schema.Parse(scanner.Text())
-		require.NoError(t, err)
-		require.Equal(t, 1, len(result.Schemas))
-		// We wrote schema for only two predicates
-		if result.Schemas[0].Predicate == "friend" {
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		} else {
-			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
-				result.Schemas[0].Predicate)
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		}
-		count = len(result.Schemas)
-	}
-	require.NoError(t, scanner.Err())
-	// This order will be preserved due to file naming
-	require.Equal(t, 1, count)
+	checkExportSchema(t, schemaFileList)
 }
 
 func TestExportJson(t *testing.T) {
@@ -250,24 +258,7 @@ func TestExportJson(t *testing.T) {
 	err = export(context.Background(), &req)
 	require.NoError(t, err)
 
-	searchDir := bdir
-	fileList := []string{}
-	schemaFileList := []string{}
-	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
-		if f.IsDir() {
-			return nil
-		}
-		if path != bdir {
-			if strings.Contains(path, "schema") {
-				schemaFileList = append(schemaFileList, path)
-			} else {
-				fileList = append(fileList, path)
-			}
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, 1, len(fileList), "filelist=%v", fileList)
+	fileList, schemaFileList := getExportFileList(t, bdir)
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -292,33 +283,7 @@ func TestExportJson(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, wantJson, string(gotJson))
 
-	require.Equal(t, 1, len(schemaFileList))
-	file = schemaFileList[0]
-	f, err = os.Open(file)
-	require.NoError(t, err)
-
-	r, err = gzip.NewReader(f)
-	require.NoError(t, err)
-
-	scanner := bufio.NewScanner(r)
-	count := 0
-	for scanner.Scan() {
-		result, err := schema.Parse(scanner.Text())
-		require.NoError(t, err)
-		require.Equal(t, 1, len(result.Schemas))
-		// We wrote schema for only two predicates
-		if result.Schemas[0].Predicate == "friend" {
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		} else {
-			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
-				result.Schemas[0].Predicate)
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		}
-		count = len(result.Schemas)
-	}
-	require.NoError(t, scanner.Err())
-	// This order will be preserved due to file naming
-	require.Equal(t, 1, count)
+	checkExportSchema(t, schemaFileList)
 }
 
 type skv struct {
