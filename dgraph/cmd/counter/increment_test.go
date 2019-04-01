@@ -92,7 +92,6 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 	conf.Set("ro", true)
 	cnt, err := process(dg, conf)
 	require.NoError(t, err)
-	ts := cnt.startTs
 	t.Logf("Readonly stage counter: %+v\n", cnt)
 
 	var wg sync.WaitGroup
@@ -106,7 +105,6 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 					t.Logf("Error while reading: %v\n", err)
 				} else {
 					require.Equal(t, expected, cnt.Val)
-					require.Equal(t, ts, cnt.startTs)
 				}
 			}
 		}()
