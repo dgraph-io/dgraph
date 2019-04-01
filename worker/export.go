@@ -93,9 +93,9 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 		buf.WriteString(",\n")
 	}
 
-	startedArray := false
 	buf.WriteString(fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, uid))
 	err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
+		startedArray := false
 		if p.PostingType == pb.Posting_REF {
 			if !startedArray {
 				buf.WriteString(fmt.Sprintf(`,"%s":[`, attr))
@@ -125,6 +125,9 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 				val = strconv.Quote(val)
 			}
 			buf.WriteString(val)
+		}
+		if startedArray {
+			buf.WriteString("]")
 		}
 
 		for _, fct := range p.Facets {
@@ -158,9 +161,6 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 
 		return nil
 	})
-	if startedArray {
-		buf.WriteString("]")
-	}
 	buf.WriteString("}")
 
 	kv := &bpb.KV{

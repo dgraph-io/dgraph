@@ -100,7 +100,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	populateGraphExport(t)
 }
 
-func TestExport(t *testing.T) {
+func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	initTestExport(t, "name:string @index .")
 	// Remove already existing export folders is any.
@@ -215,6 +215,93 @@ func TestExport(t *testing.T) {
 
 	scanner = bufio.NewScanner(r)
 	count = 0
+	for scanner.Scan() {
+		result, err := schema.Parse(scanner.Text())
+		require.NoError(t, err)
+		require.Equal(t, 1, len(result.Schemas))
+		// We wrote schema for only two predicates
+		if result.Schemas[0].Predicate == "friend" {
+			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
+		} else {
+			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+				result.Schemas[0].Predicate)
+			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
+		}
+		count = len(result.Schemas)
+	}
+	require.NoError(t, scanner.Err())
+	// This order will be preserved due to file naming
+	require.Equal(t, 1, count)
+}
+
+func TestExportJson(t *testing.T) {
+	bdir, err := ioutil.TempDir("", "export")
+	require.NoError(t, err)
+	defer os.RemoveAll(bdir)
+
+	time.Sleep(1 * time.Second)
+
+	// We have 4 friend type edges. FP("friends")%10 = 2.
+	x.WorkerConfig.ExportPath = bdir
+	readTs := timestamp()
+	// Do the following so export won't block forever for readTs.
+	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
+	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, JsonFmt: true }
+	err = export(context.Background(), &req)
+	require.NoError(t, err)
+
+	searchDir := bdir
+	fileList := []string{}
+	schemaFileList := []string{}
+	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
+		if f.IsDir() {
+			return nil
+		}
+		if path != bdir {
+			if strings.Contains(path, "schema") {
+				schemaFileList = append(schemaFileList, path)
+			} else {
+				fileList = append(fileList, path)
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(fileList), "filelist=%v", fileList)
+
+	file := fileList[0]
+	f, err := os.Open(file)
+	require.NoError(t, err)
+
+	r, err := gzip.NewReader(f)
+	require.NoError(t, err)
+
+	wantJson := `
+[
+  {"uid":"0x1","name":"pho\ton"},
+  {"uid":"0x2","name@en":"pho\ton"},
+  {"uid":"0x3","name":"First Line\nSecondLine"},
+  {"uid":"0x5","name":""},
+  {"uid":"0x1","friend":[{"uid":"0x5"}]},
+  {"uid":"0x2","friend":[{"uid":"0x5"}]},
+  {"uid":"0x3","friend":[{"uid":"0x5"}]},
+  {"uid":"0x4","friend":[{"uid":"0x5"}],"friend|age":33,"friend|close":"true","friend|game":"football","friend|poem":"roses are red\nviolets are blue","friend|since":"2005-05-02T15:04:05Z"}
+]
+`
+	gotJson, err := ioutil.ReadAll(r)
+	require.NoError(t, err)
+	require.JSONEq(t, wantJson, string(gotJson))
+
+	require.Equal(t, 1, len(schemaFileList))
+	file = schemaFileList[0]
+	f, err = os.Open(file)
+	require.NoError(t, err)
+
+	r, err = gzip.NewReader(f)
+	require.NoError(t, err)
+
+	scanner := bufio.NewScanner(r)
+	count := 0
 	for scanner.Scan() {
 		result, err := schema.Parse(scanner.Text())
 		require.NoError(t, err)
