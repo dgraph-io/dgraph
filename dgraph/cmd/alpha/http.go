@@ -157,6 +157,20 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	d := r.URL.Query().Get("debug")
 	ctx := context.WithValue(context.Background(), query.DebugKey, d)
 
+	// Timeout is expected to be in millisecond
+	paramTimeout := r.URL.Query().Get("timeout")
+	if paramTimeout != "" {
+		timeout, err := time.ParseDuration(paramTimeout)
+		if err != nil {
+			x.SetStatusWithData(w, x.Error, err.Error())
+			return
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
 	if req.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
 		be, _ := strconv.ParseBool(r.URL.Query().Get("be"))

@@ -35,15 +35,26 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type respError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 type res struct {
 	Data       json.RawMessage   `json:"data"`
 	Extensions *query.Extensions `json:"extensions,omitempty"`
+	Errors     []respError       `json:"errors,omitempty"`
 }
 
 var addr = "http://localhost:8180"
 
-func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, error) {
+func queryWithGz(q string, gzReq bool, gzResp bool, timeout string) (
+	string, *http.Response, error) {
+
 	url := addr + "/query"
+	if timeout != "" {
+		url = url + fmt.Sprintf("?timeout=%v", timeout)
+	}
 
 	var buf *bytes.Buffer
 	if gzReq {
@@ -98,6 +109,11 @@ func queryWithGz(q string, gzReq bool, gzResp bool) (string, *http.Response, err
 
 	var r res
 	x.Check(json.Unmarshal(body, &r))
+
+	// Check for errors
+	if len(r.Errors) != 0 {
+		return "", nil, errors.New(r.Errors[0].Message)
+	}
 
 	// Remove the extensions.
 	r2 := res{
@@ -308,23 +324,33 @@ func TestHttpCompressionSupport(t *testing.T) {
 	err := runMutation(m1)
 	require.NoError(t, err)
 
-	data, resp, err := queryWithGz(q1, false, false)
+	data, resp, err := queryWithGz(q1, false, false, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, false, true)
+	data, resp, err = queryWithGz(q1, false, true, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, true, false)
+	data, resp, err = queryWithGz(q1, true, false, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, true, true)
+	data, resp, err = queryWithGz(q1, true, true, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+	// query with timeout
+	data, resp, err = queryWithGz(q1, false, false, "1ms")
+	require.EqualError(t, err, ": context deadline exceeded")
+	require.Equal(t, "", data)
+
+	data, resp, err = queryWithGz(q1, false, false, "1s")
+	require.NoError(t, err)
+	require.Equal(t, r1, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
 }
