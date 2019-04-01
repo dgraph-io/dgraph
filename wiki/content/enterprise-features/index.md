@@ -231,21 +231,4 @@ ACL  : {name  7}
 ### Access data using a client
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to first log in through a user.
-In the dgo client, this is done through the `Login` method:
-```go
-	serviceAddr := "localhost:9180"
-	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	if err := dg.Login(ctx, "alice", "password123"); err != nil {
-		return err
-	}
-
-	txn := dg.NewTxn()
-	defer txn.Discard(ctx)
-	_, err = txn.Mutate(...)
-```
+A sample code using the dgo client can be found [here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
