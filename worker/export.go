@@ -85,11 +85,11 @@ var predNonSpecialChars = unicode.RangeTable{
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
 
-func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, idx int) (*bpb.KVList, error) {
+func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*bpb.KVList, error) {
 	var err error
 	var buf bytes.Buffer
 
-	if idx != 1 {
+	if n != 1 {
 		buf.WriteString(",\n")
 	}
 
