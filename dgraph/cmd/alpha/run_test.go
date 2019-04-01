@@ -1468,6 +1468,50 @@ func TestDeleteScalarValue(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
 
+func TestDeleteValueLang(t *testing.T) {
+	var s = `name: string @lang .`
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+	require.NoError(t, alterSchemaWithRetry(s))
+
+	var m = `
+	{
+	  set {
+	    <0x12345> <name> "Mark"@en .
+	    <0x12345> <name> "Marco"@es .
+	    <0x12345> <name> "Marc"@fr .
+	  }
+	}
+	`
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	q := `
+	{
+	  me(func: uid(0x12345)) {
+		name@*
+	  }
+	}`
+	output, err := runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[
+		{"name@en":"Mark", "name@es":"Marco", "name@fr":"Marc"}]}}`, output)
+
+	var d1 = `
+    {
+      delete {
+        <0x12345> <name@fr> * .
+      }
+    }
+	`
+	err = runMutation(d1)
+	require.NoError(t, err)
+
+	// Verify only the specific tagged value was deleted.
+	output, err = runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, output, `{"data": {"me":[{"name@en":"Mark", "name@es":"Marco"}]}}`)
+}
+
 func TestDropAll(t *testing.T) {
 	var m1 = `
 	{
