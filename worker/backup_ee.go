@@ -109,7 +109,7 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 	req := pb.BackupRequest{
 		ReadTs:   ts.ReadOnly,
 		Location: destination,
-		UnixTs:   time.Now().UTC().Format("20060102.1504"),
+		UnixTs:   time.Now().UTC().Format("20060102.150405"),
 	}
 	m := backup.Manifest{Groups: groups().KnownGroups()}
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
