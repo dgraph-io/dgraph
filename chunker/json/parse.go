@@ -261,7 +261,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					Subject:     mr.uid,
 					Predicate:   pred,
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
-					}
+				}
 				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
 				// mutations that's the only way to send language for a value.
 				nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
