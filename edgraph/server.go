@@ -667,6 +667,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
+	tctx.StartTs = tc.StartTs
 	tctx.CommitTs = commitTs
 	return tctx, err
 }
