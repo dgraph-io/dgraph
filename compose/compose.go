@@ -423,6 +423,9 @@ func main() {
 	x.CheckfNoTrace(err)
 
 	doc := fmt.Sprintf("# Auto-generated with: %v\n#\n", os.Args[:])
+	if opts.UserOwnership {
+		doc += fmt.Sprint("# NOTE: Env var UID must be exported by the shell\n#\n")
+	}
 	doc += fmt.Sprintf("%s", yml)
 	if opts.OutFile == "-" {
 		_, _ = fmt.Printf("%s", doc)

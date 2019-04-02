@@ -2,6 +2,27 @@
 #
 # usage: test.sh [pkg_regex]
 
+# Notes for testing under macOS (Sierra and up)
+# Required Homebrew (https://brew.sh/) packages:
+#   - bash
+#   - curl
+#   - coreutils
+#   - gnu-getop
+#   - findutils
+#
+# Your $PATH must have all required packages in .bashrc:
+#   PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
+#   PATH="/usr/local/opt/curl/bin:$PATH"
+#   PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+#   PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
+#   export PATH
+#
+# After brew packages and PATHs are set, run tests with:
+#   /usr/local/bin/bash test.sh
+#
+# Keep in mind that the test build will overwrite the "dgraph"
+# binary in your $GOPATH/bin with the Linux-ELF binary for Docker.
+
 readonly ME=${0##*/}
 readonly DGRAPH_ROOT=${GOPATH:-$HOME}/src/github.com/dgraph-io/dgraph
 
@@ -26,6 +47,7 @@ options:
     -u --unit       run unit tests only
     -c --cluster    run unit tests and custom cluster test
     -f --full       run all tests
+       --oss        run tests with 'oss' tagging
     -v --verbose    run tests in verbose mode
     -n --no-cache   re-run test even if previous result is in cache
 
@@ -121,7 +143,7 @@ function RunCustomClusterTests {
 # MAIN
 #
 
-ARGS=$(/usr/bin/getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,verbose,no-cache" -- "$@") \
+ARGS=$(getopt -n$ME -o"hucfvn" -l"help,unit,cluster,full,oss,verbose,no-cache" -- "$@") \
     || exit 1
 eval set -- "$ARGS"
 while true; do
@@ -132,6 +154,7 @@ while true; do
         -f|--full)      TEST_SET="unit:cluster:full"  ;;
         -v|--verbose)   GO_TEST_OPTS+=( "-v" )        ;;
         -n|--no-cache)  GO_TEST_OPTS+=( "-count=1" )  ;;
+        --oss)          GO_TEST_OPTS+=( "-tags=oss" )  ;;
         --)             shift; break                  ;;
     esac
     shift
@@ -142,6 +165,9 @@ cd $DGRAPH_ROOT
 # tests should put temp files under this directory for easier cleanup
 export TMPDIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
 trap "rm -rf $TMPDIR" EXIT
+
+# docker-compose files may use this to run as user instead of as root
+export UID
 
 MATCHING_TESTS=$TMPDIR/tests
 CUSTOM_CLUSTER_TESTS=$TMPDIR/custom

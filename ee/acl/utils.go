@@ -70,6 +70,9 @@ type User struct {
 }
 
 func (u *User) GetUid() string {
+	if u == nil {
+		return ""
+	}
 	return u.Uid
 }
 
@@ -109,6 +112,9 @@ type Group struct {
 }
 
 func (g *Group) GetUid() string {
+	if g == nil {
+		return ""
+	}
 	return g.Uid
 }
 
@@ -188,10 +194,10 @@ func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
 	}
 
-	x.LoadTLSConfig(&tlsConf, CmdAcl.Conf, x.TlsClientCert, x.TlsClientKey)
-	tlsConf.ServerName = CmdAcl.Conf.GetString("tls_server_name")
+	tlsCfg, err := x.LoadClientTLSConfig(conf)
+	x.Checkf(err, "While loading TLS configuration")
 
-	conn, err := x.SetupConnection(opt.dgraph, &tlsConf, false)
+	conn, err := x.SetupConnection(opt.dgraph, tlsCfg, false)
 	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 
 	dc := api.NewDgraphClient(conn)
@@ -247,7 +253,7 @@ func CreateUserNQuads(userId string, password string) []*api.NQuad {
 		},
 		{
 			Subject:     "_:newuser",
-			Predicate:   "type",
+			Predicate:   "dgraph.type",
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
 		},
 	}

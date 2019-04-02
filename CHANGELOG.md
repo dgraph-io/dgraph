@@ -301,7 +301,7 @@ are now exposed via flags named with `--badger.` prefix.
 ### Fixed
 
 * Fix bug where predicate with string type sometimes appeared as `_:uidffffffffffffffff` in exports.
-* Validate facet value should be according to the facet type supplied when mutating using NQuads ([#2074](https://github.com/dgraph-io/dgraph/issues/2074)).
+* Validate facet value should be according to the facet type supplied when mutating using N-Quads ([#2074](https://github.com/dgraph-io/dgraph/issues/2074)).
 * Use `time.Equal` function for comparing predicates with `datetime`([#2219](https://github.com/dgraph-io/dgraph/issues/2219)).
 * Skip `BitEmptyPosting` for `has` queries.
 * Return error from query if we don't serve the group for the attribute instead of crashing ([#2227](https://github.com/dgraph-io/dgraph/issues/2227)).
@@ -575,7 +575,7 @@ Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#ex
 #### Mutations
 
 * Mutations can only be done via `Mutate` Grpc endpoint or via [`/mutate` HTTP handler](https://docs.dgraph.io/clients/#transactions).
-* `Mutate` Grpc endpoint can be used to set/ delete JSON, or set/ delete a list of NQuads and set/ delete raw RDF strings.
+* `Mutate` Grpc endpoint can be used to set/ delete JSON, or set/ delete a list of N-Quads and set/ delete raw RDF strings.
 * Mutation blocks don't require the mutation keyword anymore. Here is an example of the new syntax.
 ```
 {

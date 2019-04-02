@@ -593,7 +593,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		if !req.ReadOnly {
 			return resp, x.Errorf("A best effort query must be read-only.")
 		}
-		req.StartTs = posting.Oracle().MaxAssigned()
+		if req.StartTs == 0 {
+			req.StartTs = posting.Oracle().MaxAssigned()
+		}
 		queryRequest.Cache = worker.NoTxnCache
 	}
 	if req.StartTs == 0 {
@@ -665,6 +667,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		tctx.Aborted = true
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
+	tctx.StartTs = tc.StartTs
 	tctx.CommitTs = commitTs
 	return tctx, err
 }
@@ -850,7 +853,7 @@ func validateKey(key string) error {
 	return nil
 }
 
-// validateKeys checks predicate and facet keys in Nquad for syntax errors.
+// validateKeys checks predicate and facet keys in N-Quad for syntax errors.
 func validateKeys(nq *api.NQuad) error {
 	if err := validateKey(nq.Predicate); err != nil {
 		return x.Errorf("predicate %q %s", nq.Predicate, err)
