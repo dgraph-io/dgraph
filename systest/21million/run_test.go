@@ -20,8 +20,8 @@ package main
 
 import (
 	"context"
+	"flag"
 	"io/ioutil"
-	"os"
 	"path"
 	"runtime"
 	"strings"
@@ -33,9 +33,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// JSON output can be hundreds of lines and diffs can scroll off the terminal before you
+// can look at them. This option allows saving the JSON to a specified directory instead
+// for easier reviewing after the test completes.
+var savedir = flag.String("savedir", "", "directory to test failure json")
+
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
-	queryDir := path.Dir(thisFile) + "/queries"
+	queryDir := path.Join(path.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
 	dg := z.DgraphClient(":9180")
@@ -43,8 +48,9 @@ func TestQueries(t *testing.T) {
 	files, err := ioutil.ReadDir(queryDir)
 	x.CheckfNoTrace(err)
 
+	savepath := ""
 	for _, file := range files {
-		filename := queryDir + "/" + file.Name()
+		filename := path.Join(queryDir, file.Name())
 
 		reader, cleanup := chunker.FileReader(filename)
 		bytes, err := ioutil.ReadAll(reader)
@@ -58,16 +64,14 @@ func TestQueries(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Logf("running %s", file.Name())
-		if len(resp.GetJson()) > 0 {
-			// some responses can be hundreds of lines
-			if ! z.EqualJSON(t, bodies[1], string(resp.GetJson())) {
-				if os.Getenv("DEBUG") != "" {
-					t.Error("aborting on first failure because $DEBUG is defined")
-					t.FailNow()
-				}
-			}
-		} else {
-			t.Error("  got empty response")
+		if *savedir != "" {
+			savepath = path.Join(*savedir, file.Name())
 		}
+
+		z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath)
+	}
+
+	if *savedir != "" {
+		t.Logf("test json saved in directory: %s", *savedir)
 	}
 }

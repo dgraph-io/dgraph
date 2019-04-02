@@ -5,6 +5,7 @@ services:
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
+    working_dir: /data/zero1
     ports:
       - 5080:5080
       - 6080:6080
@@ -20,6 +21,7 @@ services:
   alpha1:
     image: dgraph/dgraph:latest
     container_name: alpha1
+    working_dir: /data/alpha1
     volumes:
       - type: bind
         source: $GOPATH/bin
@@ -27,7 +29,7 @@ services:
         read_only: true
       - type: volume
         source: data
-        target: /data/dg1
+        target: /data/alpha1
     ports:
       - 8180:8180
       - 9180:9180

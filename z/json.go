@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"reflect"
 	"sort"
 	"testing"
@@ -31,14 +32,14 @@ import (
 func CompareJSON(t *testing.T, want, got string) {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
-	CompareJSONMaps(t, wantMap, gotMap)
+	CompareJSONMaps(t, wantMap, gotMap, "")
 }
 
-func EqualJSON(t *testing.T, want, got string) bool {
+func EqualJSON(t *testing.T, want, got string, savepath string) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
 
-	return CompareJSONMaps(t, wantMap, gotMap)
+	return CompareJSONMaps(t, wantMap, gotMap, savepath)
 }
 
 func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
@@ -51,7 +52,7 @@ func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 	return jsonMap
 }
 
-func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
+func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}, savepath string) bool {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
@@ -64,9 +65,8 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool 
 		if err != nil {
 			t.Error("Could not marshal JSON:", err)
 		}
-		t.Errorf("Want JSON and Got JSON not equal:\n%s",
-			sdiffJSON(wantBuf, gotBuf))
-
+		t.Errorf("Expected JSON and actual JSON differ:\n%s",
+			sdiffJSON(wantBuf, gotBuf, savepath))
 		return false
 	}
 
@@ -90,14 +90,22 @@ func SnipJSON(buf []byte) string {
 	return string(buf)
 }
 
-func sdiffJSON(wantBuf, gotBuf []byte) string {
-	wantFile, _ := ioutil.TempFile("", "z.json.*")
-	defer os.RemoveAll(wantFile.Name())
-	ioutil.WriteFile(wantFile.Name(), wantBuf, 0600)
+func sdiffJSON(wantBuf, gotBuf []byte, savepath string) string {
+	var wantFile, gotFile *os.File
 
-	gotFile, _ := ioutil.TempFile("", "z.json.*")
-	defer os.RemoveAll(gotFile.Name())
-	ioutil.WriteFile(gotFile.Name(), gotBuf, 0600)
+	if savepath != "" {
+		_ = os.MkdirAll(path.Dir(savepath), 0700)
+		wantFile, _ = os.Create(savepath + ".expected.json")
+		gotFile, _ = os.Create(savepath + ".received.json")
+	} else {
+		wantFile, _ := ioutil.TempFile("", "z.expected.json.*")
+		defer os.RemoveAll(wantFile.Name())
+		gotFile, _ := ioutil.TempFile("", "z.expected.json.*")
+		defer os.RemoveAll(gotFile.Name())
+	}
+
+	_ = ioutil.WriteFile(wantFile.Name(), wantBuf, 0600)
+	_ = ioutil.WriteFile(gotFile.Name(), gotBuf, 0600)
 
 	out, _ := exec.Command("sdiff", wantFile.Name(), gotFile.Name()).CombinedOutput()
 

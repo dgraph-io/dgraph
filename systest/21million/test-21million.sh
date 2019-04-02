@@ -19,15 +19,16 @@ function DockerCompose {
     docker-compose -p dgraph "$@"
 }
 
-HELP= LOADER=bulk CLEANUP=
+HELP= LOADER=bulk CLEANUP= SAVEDIR=
 
-ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
         -h|--help)  HELP=yes;              ;;
         --loader)   LOADER=${2,,}; shift   ;;
         --cleanup)  CLEANUP=${2,,}; shift  ;;
+        --savedir)  SAVEDIR=${2,,}; shift  ;;
         --)         shift; break           ;;
     esac
     shift
@@ -35,7 +36,7 @@ done
 
 if [[ $HELP ]]; then
     cat <<EOF
-usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>]
+usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path]
 
 options:
 
@@ -45,6 +46,8 @@ options:
     --cleanup       all = take down containers and data volume (default)
                     servers = take down dgraph zero and alpha but leave data volume up
                     none = leave up containers and data volume
+    --savedir=path  specify a directory to save test failure json in
+                    for easier post-test review
 
 notes:
 
@@ -70,6 +73,10 @@ if [[ -z $CLEANUP  ]]; then
 elif [[ $CLEANUP != all && $CLEANUP != servers && $CLEANUP != none ]]; then
     echo >&2 "$ME: cleanup must be 'all' or 'servers' or 'none' -- $LOADER"
     exit 1
+fi
+
+if [[ $SAVEDIR ]]; then
+    SAVEDIR="-savedir=$SAVEDIR"
 fi
 
 Info "entering directory $SRCDIR"
@@ -111,12 +118,14 @@ if [[ $LOADER == live ]]; then
 fi
 
 Info "running benchmarks/regression queries"
-go test -v -tags standalone || FOUND_DIFFS=1
+go test -v -tags standalone $SAVEDIR || FOUND_DIFFS=1
 
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"
     DockerCompose down -v
-elif [[ $CLEANUP != none ]]; then
+elif [[ $CLEANUP == none ]]; then
+    Info "leaving up zero and alpha"
+else
     Info "bringing down zero and alpha only"
     DockerCompose down
 fi
