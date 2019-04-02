@@ -93,17 +93,22 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 		buf.WriteString(",\n")
 	}
 
-	buf.WriteString(fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, uid))
+	// We could output more compact JSON at the cost of code complexity.
+	// Leaving it simple for now.
+	continuing := false
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, uid)
 	err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
-		startedArray := false
+		if continuing {
+			buf.WriteString(",\n")
+		} else {
+			continuing = true
+		}
+
+		buf.WriteString(mapStart)
 		if p.PostingType == pb.Posting_REF {
-			if !startedArray {
-				buf.WriteString(fmt.Sprintf(`,"%s":[`, attr))
-				startedArray = true
-			} else {
-				buf.WriteString(",")
-			}
+			buf.WriteString(fmt.Sprintf(`,"%s":[`, attr))
 			buf.WriteString(fmt.Sprintf("{\"uid\":"+uidFmtStrJson+"}", p.Uid))
+			buf.WriteString("]")
 		} else {
 			if p.PostingType != pb.Posting_VALUE_LANG {
 				buf.WriteString(fmt.Sprintf(`,"%s":`, attr))
@@ -125,9 +130,6 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 				val = strconv.Quote(val)
 			}
 			buf.WriteString(val)
-		}
-		if startedArray {
-			buf.WriteString("]")
 		}
 
 		for _, fct := range p.Facets {
@@ -159,9 +161,9 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 			}
 		}
 
+		buf.WriteString("}")
 		return nil
 	})
-	buf.WriteString("}")
 
 	kv := &bpb.KV{
 		Value:   buf.Bytes(),
