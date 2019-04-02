@@ -51,7 +51,7 @@ func sane(s string) bool {
 	return false
 }
 
-// Parse parses a mutation string and returns the NQuad representation for it.
+// Parse parses a mutation string and returns the N-Quad representation for it.
 func Parse(line string) (api.NQuad, error) {
 	var rnq api.NQuad
 	l := lex.NewLexer(line)
@@ -152,7 +152,7 @@ L:
 			if !it.Next() {
 				return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 			}
-			// RDF spec says NQuad's should be terminated with a newline. Since we break the input
+			// RDF spec says N-Quads should be terminated with a newline. Since we break the input
 			// by newline already. We should get EOF or # after dot(.)
 			item = it.Item()
 			if !(item.Typ == lex.ItemEOF || item.Typ == itemComment) {

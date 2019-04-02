@@ -46,8 +46,7 @@ func init() {
 	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
 
 	// TLS configuration
-	x.RegisterTLSFlags(flag)
-	flag.String("tls_server_name", "", "Used to verify the server hostname.")
+	x.RegisterClientTLSFlags(flag)
 
 	subcommands := initSubcommands()
 	for _, sc := range subcommands {

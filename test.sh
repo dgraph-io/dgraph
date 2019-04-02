@@ -166,6 +166,9 @@ cd $DGRAPH_ROOT
 export TMPDIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
 trap "rm -rf $TMPDIR" EXIT
 
+# docker-compose files may use this to run as user instead of as root
+export UID
+
 MATCHING_TESTS=$TMPDIR/tests
 CUSTOM_CLUSTER_TESTS=$TMPDIR/custom
 DEFAULT_CLUSTER_TESTS=$TMPDIR/default
