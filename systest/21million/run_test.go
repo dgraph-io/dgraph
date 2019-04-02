@@ -36,7 +36,8 @@ import (
 // JSON output can be hundreds of lines and diffs can scroll off the terminal before you
 // can look at them. This option allows saving the JSON to a specified directory instead
 // for easier reviewing after the test completes.
-var savedir = flag.String("savedir", "", "directory to test failure json")
+var savedir = flag.String("savedir", "",
+	"directory to save json from test failures in")
 
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
