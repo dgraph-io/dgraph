@@ -55,6 +55,8 @@ func init() {
 	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 	flag.String("user", "", "Username if login is required.")
 	flag.String("password", "", "Password of the user.")
+	// TLS configuration
+	x.RegisterClientTLSFlags(flag)
 }
 
 type Counter struct {
@@ -132,6 +134,7 @@ func run(conf *viper.Viper) {
 	addr := conf.GetString("addr")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
+
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
