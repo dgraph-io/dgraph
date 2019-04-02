@@ -246,7 +246,7 @@ func runLsbackupCmd() error {
 		return x.Errorf("Error while listing manifests: %v", err.Error())
 	}
 
-	fmt.Printf("Name\tVersion\tReadTs\tGroups\tValid\n")
+	fmt.Printf("Name\tVersion\tReadTs\tGroups\n")
 	for _, manifest := range manifests {
 		fmt.Printf("%v\t%v\t%v\t%v\n",
 			manifest.FileName,
