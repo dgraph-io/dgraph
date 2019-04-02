@@ -514,7 +514,7 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 			return def, x.Errorf("Expected value of type []byte. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_BytesVal{BytesVal: v}}, nil
-	// Geo and datetime are stored in binary format in the NQuad, so lets
+	// Geo and datetime are stored in binary format in the N-Quad, so lets
 	// convert them here.
 	case GeoID:
 		b, err := toBinary(id, value)

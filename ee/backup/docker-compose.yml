@@ -20,12 +20,14 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $PWD/data
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data
         target: /data
 
   dg1:
     image: dgraph/dgraph:latest
     container_name: bank-dg1
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
     labels:
       cluster: test
     user: ${UID:-0}
@@ -35,7 +37,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $PWD/data
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data
         target: /data
     ports:
       - 8180:8180
@@ -45,6 +47,8 @@ services:
   dg2:
     image: dgraph/dgraph:latest
     container_name: bank-dg2
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
     labels:
       cluster: test
     depends_on:
@@ -56,7 +60,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $PWD/data
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data
         target: /data
     ports:
       - 8182:8182
@@ -66,6 +70,8 @@ services:
   dg3:
     image: dgraph/dgraph:latest
     container_name: bank-dg3
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
     labels:
       cluster: test
     depends_on:
@@ -77,9 +83,21 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: $PWD/data
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data
         target: /data
     ports:
       - 8183:8183
       - 9183:9183
     command: /gobin/dgraph alpha --cwd=/data/dg3 --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+  minio1:
+    image: minio/minio:latest
+    container_name: minio1
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+    working_dir: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data/minio
+    ports:
+      - 9001:9001
+    labels:
+      cluster: test
+    command: minio server /data/minio --address :9001
