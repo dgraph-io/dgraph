@@ -19,17 +19,18 @@ function DockerCompose {
     docker-compose -p dgraph "$@"
 }
 
-HELP= LOADER=bulk CLEANUP= SAVEDIR=
+HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY=
 
-ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
-        -h|--help)  HELP=yes;              ;;
-        --loader)   LOADER=${2,,}; shift   ;;
-        --cleanup)  CLEANUP=${2,,}; shift  ;;
-        --savedir)  SAVEDIR=${2,,}; shift  ;;
-        --)         shift; break           ;;
+        -h|--help)      HELP=yes;              ;;
+        --loader)       LOADER=${2,,}; shift   ;;
+        --cleanup)      CLEANUP=${2,,}; shift  ;;
+        --savedir)      SAVEDIR=${2,,}; shift  ;;
+        --load-only)    LOAD_ONLY=yes          ;;
+        --)             shift; break           ;;
     esac
     shift
 done
@@ -48,10 +49,7 @@ options:
                     none = leave up containers and data volume
     --savedir=path  specify a directory to save test failure json in
                     for easier post-test review
-
-notes:
-
-    Run with DEBUG env var set to stop on first JSON diff.
+    --load-only     load data but do not run tests
 EOF
     exit 0
 fi
@@ -115,6 +113,11 @@ if [[ $LOADER == live ]]; then
     Info "live loading data set"
     dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
                 --format=rdf --zero=:5080 --dgraph=:9180 --logtostderr
+fi
+
+if [[ $LOAD_ONLY ]]; then
+    Info "exiting after data load"
+    exit 0
 fi
 
 Info "running benchmarks/regression queries"

@@ -32,14 +32,14 @@ import (
 func CompareJSON(t *testing.T, want, got string) {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
-	CompareJSONMaps(t, wantMap, gotMap, "")
+	CompareJSONMaps(t, wantMap, gotMap)
 }
 
 func EqualJSON(t *testing.T, want, got string, savepath string) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
 
-	return CompareJSONMaps(t, wantMap, gotMap, savepath)
+	return DiffJSONMaps(t, wantMap, gotMap, savepath)
 }
 
 func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
@@ -52,7 +52,11 @@ func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 	return jsonMap
 }
 
-func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}, savepath string) bool {
+func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
+	return DiffJSONMaps(t, wantMap, gotMap, "")
+}
+
+func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}, savepath string) bool {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
