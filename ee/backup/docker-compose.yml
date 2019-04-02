@@ -1,7 +1,9 @@
 # Docker compose file for testing. Use it with:
 # docker-compose up --force-recreate
 # This would pick up dgraph binary from $GOPATH.
-
+#
+# NOTE: Env var UID must be exported by the shell
+#
 version: "3.5"
 services:
   zero1:
