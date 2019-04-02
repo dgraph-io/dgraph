@@ -17,8 +17,8 @@
 package cert
 
 import (
-	"crypto/md5"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -33,7 +33,7 @@ type certInfo struct {
 	commonName   string
 	serialNumber string
 	verifiedCA   string
-	md5sum       string
+	digest       string
 	expireDate   time.Time
 	hosts        []string
 	fileMode     string
@@ -76,10 +76,9 @@ func getFileInfo(file string) *certInfo {
 		}
 
 		if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
-			h := md5.Sum(key.N.Bytes())
-			info.md5sum = fmt.Sprintf("%X", h[:])
+			info.digest = getHexDigest(key.N.Bytes())
 		} else {
-			info.md5sum = "Invalid RSA public key"
+			info.digest = "Invalid RSA public key"
 		}
 
 		if file != defaultCACert {
@@ -115,14 +114,28 @@ func getFileInfo(file string) *certInfo {
 			info.err = err
 			return &info
 		}
-		h := md5.Sum(key.PublicKey.N.Bytes())
-		info.md5sum = fmt.Sprintf("%X", h[:])
+		info.digest = getHexDigest(key.PublicKey.N.Bytes())
 
 	default:
 		info.err = fmt.Errorf("Unsupported file")
 	}
 
 	return &info
+}
+
+// getHexDigest returns a SHA-256 hex digest broken up into 32-bit chunks
+// so that they easier to compare visually
+func getHexDigest(data []byte) string {
+	const groupSize = 4
+
+	digest := sha256.Sum256(data)
+	groups := len(digest) / groupSize
+	hex := fmt.Sprintf("%0*X", groupSize*2, digest[0:groupSize])
+	for i := 1; i < groups; i++ {
+		hex += fmt.Sprintf(" %0*X", groupSize*2, digest[i*groupSize:(i+1)*groupSize])
+	}
+
+	return hex
 }
 
 // getDirFiles walks dir and collects information about the files contained.
