@@ -19,7 +19,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --enterprise_features --bindall --expose_trace --profile_mode block --block_rate 10
+    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 3 --idx 1 --logtostderr -v=2 --bindall --expose_trace --profile_mode block --block_rate 10
 
   zero2:
     image: dgraph/dgraph:latest
@@ -38,7 +38,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --idx 2 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --idx 2 --logtostderr -v=2 --peer=zero1:5080
 
   zero3:
     image: dgraph/dgraph:latest
@@ -57,7 +57,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --idx 3 --logtostderr -v=2 --enterprise_features --peer=zero1:5080
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --idx 3 --logtostderr -v=2 --peer=zero1:5080
 
   dg1:
     image: dgraph/dgraph:latest
