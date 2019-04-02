@@ -147,7 +147,7 @@ Now that your cluster is running with the ACL feature turned on, let's set up th
 
 1. Reset the root password. The example below uses the dgraph endpoint `localhost:9180` as a demo, make sure to choose the correct one for your environment:
 ```bash
-dgraph acl -d localhost:9180 mod -u groot
+dgraph acl -d localhost:9180 mod -u groot --new_password
 ```
 Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
 
@@ -188,13 +188,13 @@ dgraph acl -d localhost:9180 mod -u alice -l dev,sre
 ```
 5. Assign predicate permissions to the group
 ```bash
-dgraph acl mod -d localhost:9180 -g dev -p friend -P 7
+dgraph acl mod -d localhost:9180 -g dev -p friend -m 7
 ```
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the `friend` predicate. Permissions are represented by a number following the UNIX file permission convention.
 That is, 4 (binary 100) represents `READ`, 2 (binary 010) represents `WRITE`, and 1 (binary 001) represents `MODIFY` (the permission to change a predicate's schema). Similarly, permisson numbers can be bitwise OR-ed to represent multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRITE` and `MODIFY`.
 In order for the example in the next section to work, we also need to grant full permissions on another predicate `name` to the group `dev`
 ```bash
-dgraph acl mod -d localhost:9180 -g dev -p name -P 7
+dgraph acl mod -d localhost:9180 -g dev -p name -m 7
 ```
 
 6. Check information about a user
