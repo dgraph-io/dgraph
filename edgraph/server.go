@@ -385,35 +385,52 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 }
 
 // doCondQuery processes a conditional query within the same transaction of a mutation.
-// Returns a QueryRequest with the result subgraphs if successful, otherwise an error.
-func doCondQuery(ctx context.Context, req *api.Request) (*query.QueryRequest, error) {
+// Returns a map with the vars created from the query, otherwise nil and an error.
+func doCondQuery(ctx context.Context, l *query.Latency, req *api.Request,
+) (map[string][]string, error) {
+	var queryVars map[string][]string
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	// Nothing to do
+	if req.Query == "" {
+		return queryVars, nil
+	}
+	if req.StartTs == 0 {
+		return nil, x.Errorf("Missing transaction timestamp.")
+	}
+
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
-		Variables: req.Vars,
+		Variables: make(map[string]string),
 	})
 	if err != nil {
 		return nil, err
 	}
+
 	if err = validateQuery(parsedReq.Query); err != nil {
 		return nil, err
 	}
-	if req.StartTs == 0 {
-		return nil, x.Errorf("No startTs")
-	}
 
-	var l query.Latency
-	l.Start = time.Now()
-
-	var qr = query.QueryRequest{
-		Latency:  &l,
+	qr := query.QueryRequest{
+		Latency:  l,
 		GqlQuery: &parsedReq,
 		ReadTs:   req.StartTs,
 	}
-
 	if err = qr.ProcessQuery(ctx); err != nil {
-		return nil, x.Wrap(err)
+		return nil, x.Wrapf(err, "while processing query: %q", req.Query)
 	}
-	return &qr, nil
+
+	queryVars = qr.GetUids()
+	if len(queryVars) == 0 {
+		// TODO: remove this error when mutation conditional expressions are added.
+		return nil, x.Errorf("No variables defined in conditional query: %q", req.Query)
+	}
+	glog.V(3).Infof("CondQuery: qr=%+v vars=%v", qr, queryVars)
+
+	return queryVars, nil
 }
 
 func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
@@ -467,27 +484,14 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	l.Start = time.Now()
 
 	// Parse query and process
-	var queryVars map[string][]string
-	if len(mu.CondQuery) != 0 {
-		qr, err := doCondQuery(ctx, &api.Request{
-			StartTs: mu.StartTs,
-			Query:   mu.CondQuery,
-			Vars:    make(map[string]string),
-		})
-		if err != nil {
-			return resp, err
-		}
-
-		// TODO: add conditional checks here.
-		queryVars = qr.GetUids()
-		if len(queryVars) == 0 {
-			return resp, x.Errorf("No variables defined in conditional query: %q", mu.CondQuery)
-		}
-		glog.V(3).Infof("CondQuery: qr=%+v vars=%v", qr, queryVars)
-
-		l.Parsing += qr.Latency.Parsing
-		l.Processing += qr.Latency.Processing
+	queryVars, err := doCondQuery(ctx, &l, &api.Request{
+		StartTs: mu.StartTs,
+		Query:   mu.CondQuery,
+	})
+	if err != nil {
+		return resp, err
 	}
+	// TODO: add conditional checks here.
 
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
