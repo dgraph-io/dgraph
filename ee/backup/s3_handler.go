@@ -49,6 +49,7 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
+	uri                      *url.URL
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
@@ -276,15 +277,14 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 }
 
 // ListManifests loads the manifests in the locations and returns them.
-func (h *s3Handler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
+func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return nil, err
 	}
+	h.uri = uri
 
 	var manifests []string
-	var listedManifests []*ManifestStatus
-
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
@@ -301,21 +301,16 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]*ManifestStatus, error) {
 	if glog.V(3) {
 		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
 	}
+	return manifests, nil
+}
 
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file.
-	for _, manifest := range manifests {
-		var m Manifest
-		var ms ManifestStatus
-
-		if err := h.readManifest(mc, manifest, &m); err != nil {
-			return nil, x.Wrapf(err, "While reading %q", manifest)
-		}
-		ms.Manifest = &m
-		ms.FileName = manifest
-		listedManifests = append(listedManifests, &ms)
+func (h *s3Handler) ReadManifest(path string, m *Manifest) error {
+	mc, err := h.setup(h.uri)
+	if err != nil {
+		return err
 	}
-	return listedManifests, nil
+
+	return h.readManifest(mc, path, m)
 }
 
 // upload will block until it's done or an error occurs.

@@ -73,11 +73,15 @@ type handler interface {
 	// load to DB.
 	Load(*url.URL, loadFn) (uint64, error)
 
-	// ListManifests will scan the provided URI for backup manifests. This operation
-	// should be read-only.
+	// ListManifests will scan the provided URI and return the paths to the manifests stored
+	// in that location.
 	//
 	// The URL object is parsed as described in `newHandler`.
-	ListManifests(*url.URL) ([]*ManifestStatus, error)
+	ListManifests(*url.URL) ([]string, error)
+
+	// ReadManifest will read the manifest at the given location and load it into the given
+	// Manifest object.
+	ReadManifest(string, *Manifest) error
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -167,5 +171,23 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 		return nil, x.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.ListManifests(uri)
+	paths, err := h.ListManifests(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	var listedManifests []*ManifestStatus
+	for _, path := range paths {
+		var m Manifest
+		var ms ManifestStatus
+
+		if err := h.ReadManifest(path, &m); err != nil {
+			return nil, x.Wrapf(err, "While reading %q", path)
+		}
+		ms.Manifest = &m
+		ms.FileName = path
+		listedManifests = append(listedManifests, &ms)
+	}
+
+	return listedManifests, nil
 }
