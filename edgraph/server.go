@@ -398,9 +398,7 @@ func doCondQuery(ctx context.Context, l *query.Latency, req *api.Request,
 	if req.Query == "" {
 		return queryVars, nil
 	}
-	if req.StartTs == 0 {
-		return nil, x.Errorf("Missing transaction timestamp.")
-	}
+	x.AssertTruef(req.StartTs != 0, "Transaction timestamp is zero")
 
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
