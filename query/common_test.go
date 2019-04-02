@@ -478,7 +478,9 @@ func populateCluster() {
 		<3> <dgraph.type> "Person" .
 		<4> <dgraph.type> "Person" .
 		<5> <dgraph.type> "Animal" .
+		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
+		<6> <dgraph.type> "Pet" .
 
 		<2> <pet> <5> .
 		<3> <pet> <6> .
