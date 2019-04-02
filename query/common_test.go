@@ -237,6 +237,7 @@ room                           : string @index(term) .
 office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
+created_at                     : datetime @index(hour) .
 `
 
 func populateCluster() {
@@ -542,4 +543,15 @@ func populateCluster() {
 		addTriplesToCluster(triples)
 		nextId++
 	}
+
+	// Add data for datetime tests
+	addTriplesToCluster(`
+		<301> <created_at> "2019-03-28T14:41:57+30:00" .
+		<302> <created_at> "2019-03-28T13:41:57+29:00" .
+		<303> <created_at> "2019-03-27T14:41:57+06:00" .
+		<304> <created_at> "2019-03-28T15:41:57+30:00" .
+		<305> <created_at> "2019-03-28T13:41:57+30:00" .
+		<306> <created_at> "2019-03-24T14:41:57+05:30" .
+		<307> <created_at> "2019-05-28T14:41:57+30:00" .
+	`)
 }

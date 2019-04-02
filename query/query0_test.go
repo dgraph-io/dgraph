@@ -1824,6 +1824,36 @@ func TestNonFlattenedResponse(t *testing.T) {
 
 }
 
+func TestDateTimeQuery1(t *testing.T) {
+	query := `
+	{
+		q(func: ge(created_at, "2019-03-28T13:41:57")) {
+			uid
+			created_at
+		}
+	 }
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		js)
+}
+
+func TestDateTimeQuery2(t *testing.T) {
+	query := `
+	{
+		q(func: ge(created_at, "2019-03-28T13:41:57+00:00")) {
+			uid
+			created_at
+		}
+	 }
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		js)
+}
+
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
