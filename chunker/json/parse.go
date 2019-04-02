@@ -289,14 +289,6 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		// mutations that's the only way to send language for a value.
 		nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
 
-		if v == nil {
-			if op == DeleteNquads {
-				nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
-				mr.nquads = append(mr.nquads, &nq)
-			}
-			continue
-		}
-
 		switch v := v.(type) {
 		case string, json.Number, bool:
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
