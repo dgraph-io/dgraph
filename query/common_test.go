@@ -251,6 +251,7 @@ make                           : string @index(term) .
 year                           : int .
 previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
+updated_at                     : datetime @index(year) .
 `
 
 func populateCluster() {
@@ -344,9 +345,9 @@ func populateCluster() {
 		<31> <friend> <24> .
 		<23> <friend> <1> .
 
-		<2> <best_friend> <64> .
-		<3> <best_friend> <64> .
-		<4> <best_friend> <64> .
+		<2> <best_friend> <64> (since=2019-03-28T14:41:57+30:00) .
+		<3> <best_friend> <64> (since=2018-03-24T14:41:57+05:30) .
+		<4> <best_friend> <64> (since=2019-03-27) .
 
 		<1> <age> "38" .
 		<23> <age> "15" .
@@ -574,12 +575,20 @@ func populateCluster() {
 
 	// Add data for datetime tests
 	addTriplesToCluster(`
-		<301> <created_at> "2019-03-28T14:41:57+30:00" .
-		<302> <created_at> "2019-03-28T13:41:57+29:00" .
-		<303> <created_at> "2019-03-27T14:41:57+06:00" .
-		<304> <created_at> "2019-03-28T15:41:57+30:00" .
-		<305> <created_at> "2019-03-28T13:41:57+30:00" .
-		<306> <created_at> "2019-03-24T14:41:57+05:30" .
+		<301> <created_at> "2019-03-28T14:41:57+30:00" (modified_at=2019-05-28T14:41:57+30:00) .
+		<302> <created_at> "2019-03-28T13:41:57+29:00" (modified_at=2019-03-28T14:41:57+30:00) .
+		<303> <created_at> "2019-03-27T14:41:57+06:00" (modified_at=2019-03-29) .
+		<304> <created_at> "2019-03-28T15:41:57+30:00" (modified_at=2019-03-27T14:41:57+06:00) .
+		<305> <created_at> "2019-03-28T13:41:57+30:00" (modified_at=2019-03-28) .
+		<306> <created_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
 		<307> <created_at> "2019-05-28T14:41:57+30:00" .
+
+		<301> <updated_at> "2019-03-28T14:41:57+30:00" (modified_at=2019-05-28) .
+		<302> <updated_at> "2019-03-28T13:41:57+29:00" (modified_at=2019-03-28T14:41:57+30:00) .
+		<303> <updated_at> "2019-03-27T14:41:57+06:00" (modified_at=2019-03-28T13:41:57+29:00) .
+		<304> <updated_at> "2019-03-28T15:41:57+30:00" .
+		<305> <updated_at> "2019-03-28T13:41:57+30:00" (modified_at=2019-03-28T15:41:57+30:00) .
+		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
+		<307> <updated_at> "2019-05-28T14:41:57+30:00" (modified_at=2019-03-24T14:41:57+05:30) .
 	`)
 }
