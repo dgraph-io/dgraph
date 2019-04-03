@@ -123,7 +123,7 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
 }
@@ -137,7 +137,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
 }
@@ -151,7 +151,7 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
 }
@@ -165,7 +165,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 			"--dgraph", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
 }
@@ -173,6 +173,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
+	z.ShowError = true
 
 	dg = z.DgraphClientWithGroot(":9180")
 	x.Check(dg.Alter(
