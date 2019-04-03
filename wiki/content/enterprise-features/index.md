@@ -3,6 +3,10 @@ date = "2017-03-20T19:35:35+11:00"
 title = "Enterprise Features"
 +++
 
+{{% notice "note" %}}
+Enterpise features will be available in Dgraph v1.1.
+{{% /notice %}}
+
 Dgraph enterprise features are proprietary licensed under the [Dgraph Community
 License][dcl]. These features are available with an enterprise contract from
 Dgraph. If you wish to use enterprise features, please reach out via [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss forum](https://discuss.dgraph.io).
