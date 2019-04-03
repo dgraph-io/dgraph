@@ -152,6 +152,10 @@ _:c,_:d
 _:d,_:a
 ```
 
+{{% notice "note" %}}
+To reuse existing integer IDs from a CSV file as UIDs in Dgraph, use Dgraph Zero's [assign endpoint]({{< relref "deploy/index.md#more-about-dgraph-zero" >}}) before data loading to allocate a range of UIDs that can be safely assigned.
+{{% /notice %}}
+
 To get the correct JSON format, you can convert the CSV into JSON and use `jq`
 to transform it in the correct format where the `connects` edge is a node uid:
 
