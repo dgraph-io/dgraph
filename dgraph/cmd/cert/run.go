@@ -80,7 +80,7 @@ func run() {
 		verify:  Cert.Conf.GetBool("verify"),
 	}
 
-	x.Check(createCerts(opt))
+	x.CheckfNoTrace(createCerts(opt))
 }
 
 // listCerts handles the subcommand of "dgraph cert ls".

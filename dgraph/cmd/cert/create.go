@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultDir      = "tls"
+	defaultDir      = "./tls"
 	defaultDays     = 1826
 	defaultCADays   = 3651
 	defaultCACert   = "ca.crt"
@@ -38,8 +38,11 @@ const (
 	defaultKeySize  = 2048
 	defaultNodeCert = "node.crt"
 	defaultNodeKey  = "node.key"
-	keySizeTooSmall = 512
-	keySizeTooLarge = 4096
+)
+
+const (
+	keySizeMin = 512
+	keySizeMax = 4096
 )
 
 // makeKey generates an RSA private key of bitSize length, storing it in the
@@ -213,6 +216,8 @@ func createClientPair(opt options) error {
 func createCerts(opt options) error {
 	if opt.dir == "" {
 		return errors.New("Invalid TLS directory")
+	} else {
+		fmt.Printf("Using TLS directory: %s\n", opt.dir)
 	}
 
 	err := os.Mkdir(opt.dir, 0700)
@@ -221,12 +226,15 @@ func createCerts(opt options) error {
 	}
 
 	switch {
-	case opt.keySize < keySizeTooSmall:
-		return errors.New("Key size value is too small (x < 512)")
-	case opt.keySize > keySizeTooLarge:
-		return errors.New("Key size value is too large (x > 4096)")
-	case opt.keySize%2 != 0:
-		return errors.New("Key size value must be a factor of 2")
+	case opt.keySize < keySizeMin:
+		return fmt.Errorf("Key size (%d) is too small (<%d bits)", opt.keySize, keySizeMin)
+	case opt.keySize > keySizeMax:
+		return fmt.Errorf("Key size (%d) is too big (>%d bits)", opt.keySize, keySizeMax)
+	case opt.keySize&(opt.keySize-1) != 0:
+		return fmt.Errorf("Key size (%d) must be a power of 2", opt.keySize)
+	case opt.keySize < defaultKeySize:
+		fmt.Printf("WARNING! Key size (%d) is smaller than recommended (%d bits)\n",
+			opt.keySize, defaultKeySize)
 	}
 
 	// no path then save it in certsDir.
