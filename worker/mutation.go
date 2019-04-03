@@ -162,7 +162,7 @@ func updateSchema(attr string, s pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func updateSchemaType(attr string, typ types.TypeID, index uint64) {
+func createSchema(attr string, typ types.TypeID) {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
