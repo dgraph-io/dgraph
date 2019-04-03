@@ -560,7 +560,7 @@ func (s *Server) ShouldServe(
 	tablet.Force = false
 	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
-		// This is to make it eaiser to stream ACL updates to all alpha servers
+		// This is to make it easier to stream ACL updates to all alpha servers
 		// since they only need to open one pipeline to receive updates for all
 		// ACL predicates.
 		// This will also make it easier to restore the reserved predicates after
