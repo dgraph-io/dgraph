@@ -1824,7 +1824,8 @@ func TestNonFlattenedResponse(t *testing.T) {
 
 }
 
-func TestDateTimeQuery1(t *testing.T) {
+func TestDateTimeQuery(t *testing.T) {
+	// Test 1
 	query := `
 	{
 		q(func: ge(created_at, "2019-03-28T13:41:57")) {
@@ -1837,10 +1838,9 @@ func TestDateTimeQuery1(t *testing.T) {
 	require.JSONEq(t,
 		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
 		js)
-}
 
-func TestDateTimeQuery2(t *testing.T) {
-	query := `
+	// Test 2
+	query = `
 	{
 		q(func: ge(created_at, "2019-03-28T13:41:57+00:00")) {
 			uid
@@ -1848,9 +1848,65 @@ func TestDateTimeQuery2(t *testing.T) {
 		}
 	 }
 	`
-	js := processQueryNoErr(t, query)
+	js = processQueryNoErr(t, query)
 	require.JSONEq(t,
 		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		js)
+
+	// Test 3
+	query = `
+	{
+		q(func: le(created_at, "2019-03-27T14:41:56+06:00")) {
+			uid
+			created_at
+		}
+	 }
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		js)
+
+	// Test 4
+	query = `
+	{
+		q(func: ge(updated_at, "2019-03-28T13:41:57")) {
+			uid
+			updated_at
+		}
+	 }
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","updated_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		js)
+
+	// Test 5
+	query = `
+	{
+		q(func: ge(updated_at, "2019-03-28T13:41:57+00:00")) {
+			uid
+			updated_at
+		}
+	 }
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","updated_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		js)
+
+	// Test 6
+	query = `
+	{
+		q(func: le(updated_at, "2019-03-27T14:41:56+06:00")) {
+			uid
+			updated_at
+		}
+	 }
+	`
+	js = processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x131","updated_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","updated_at":"2019-03-24T14:41:57+05:30"}]}}`,
 		js)
 }
 

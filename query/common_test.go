@@ -238,6 +238,7 @@ office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
 created_at                     : datetime @index(hour) .
+updated_at                     : datetime @index(month) .
 `
 
 func populateCluster() {
@@ -553,5 +554,13 @@ func populateCluster() {
 		<305> <created_at> "2019-03-28T13:41:57+30:00" .
 		<306> <created_at> "2019-03-24T14:41:57+05:30" .
 		<307> <created_at> "2019-05-28T14:41:57+30:00" .
+
+		<301> <updated_at> "2019-03-28T14:41:57+30:00" .
+		<302> <updated_at> "2019-03-28T13:41:57+29:00" .
+		<303> <updated_at> "2019-03-27T14:41:57+06:00" .
+		<304> <updated_at> "2019-03-28T15:41:57+30:00" .
+		<305> <updated_at> "2019-03-28T13:41:57+30:00" .
+		<306> <updated_at> "2019-03-24T14:41:57+05:30" .
+		<307> <updated_at> "2019-05-28T14:41:57+30:00" .
 	`)
 }
