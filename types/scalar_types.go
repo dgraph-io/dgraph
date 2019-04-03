@@ -167,6 +167,8 @@ func ValueForType(id TypeID) Val {
 	}
 }
 
+// ParseTime parses the time from string trying various datetime formats.
+// By default, Go parses time in UTC unless specified in the data itself.
 func ParseTime(val string) (time.Time, error) {
 	var t time.Time
 	if err := t.UnmarshalText([]byte(val)); err == nil {
