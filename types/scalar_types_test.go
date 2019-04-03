@@ -23,10 +23,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestTypeForName(t *testing.T) {
+	for name, tid := range typeNameMap {
+		typ, ok := TypeForName(name)
+		require.EqualValues(t, tid, typ, "%s != %s", name, typ.Name())
+		require.True(t, ok)
+	}
+	typ, ok := TypeForName("--invalid--")
+	require.EqualValues(t, 0, typ)
+	require.False(t, ok)
+}
+
+func TestValueForType(t *testing.T) {
+	for name, tid := range typeNameMap {
+		val := ValueForType(tid)
+		require.EqualValues(t, tid, val.Tid, "%s != %s", name, val.Tid.Name())
+		require.NotNil(t, val.Value)
+	}
+	val := ValueForType(UndefinedID)
+	require.EqualValues(t, 0, val.Tid)
+	require.Nil(t, val.Value)
+}
+
 func TestParseTime(t *testing.T) {
 	tests := []struct {
-		in, failure string
-		out         time.Time
+		in  string
+		out time.Time
 	}{
 		{in: "2018-10-28T04:00:10",
 			out: time.Date(2018, 10, 28, 4, 00, 10, 0, time.UTC)},
@@ -44,15 +66,16 @@ func TestParseTime(t *testing.T) {
 			out: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -6*60*60))},
 		{in: "2018-05-28T14:41:57+30:00",
 			out: time.Date(2018, 5, 28, 14, 41, 57, 0, time.FixedZone("", 30*60*60))},
+		{in: "2018",
+			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{in: "2018-01",
+			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{in: "2018-01-01",
+			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range tests {
 		out, err := ParseTime(tc.in)
-		if tc.failure != "" {
-			require.Error(t, err)
-			require.Contains(t, err.Error(), tc.failure)
-		} else {
-			require.NoError(t, err)
-			require.EqualValues(t, tc.out, out)
-		}
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
 	}
 }
