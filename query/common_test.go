@@ -285,25 +285,25 @@ func populateCluster() {
 		<2301> <name> "Alice\"" .
 		<2333> <name> "Helmut" .
 		<3500> <name> "" .
-		<3500> <name@ko> "상현" .
+		<3500> <name> "상현"@ko .
 		<3501> <name> "Alex" .
-		<3501> <name@en> "Alex" .
+		<3501> <name> "Alex"@en .
 		<3502> <name> "" .
-		<3502> <name@en> "Amit" .
-		<3502> <name@hi> "अमित" .
-		<3503> <name@en> "Andrew" .
-		<3503> <name@hi> "" .
+		<3502> <name> "Amit"@en .
+		<3502> <name> "अमित"@hi .
+		<3503> <name> "Andrew"@en .
+		<3503> <name> ""@hi .
 		<4097> <name> "Badger" .
-		<4097> <name@en> "European badger" .
-		<4097> <name@xx> "European badger barger European" .
-		<4097> <name@pl> "Borsuk europejski" .
-		<4097> <name@de> "Europäischer Dachs" .
-		<4097> <name@ru> "Барсук" .
-		<4097> <name@fr> "Blaireau européen" .
-		<4098> <name@en> "Honey badger" .
-		<4099> <name@en> "Honey bee" .
-		<4100> <name@en> "Artem Tkachenko" .
-		<4100> <name@ru> "Артём Ткаченко" .
+		<4097> <name> "European badger"@en .
+		<4097> <name> "European badger barger European"@xx .
+		<4097> <name> "Borsuk europejski"@pl .
+		<4097> <name> "Europäischer Dachs"@de .
+		<4097> <name> "Барсук"@ru .
+		<4097> <name> "Blaireau européen"@fr .
+		<4098> <name> "Honey badger"@en .
+		<4099> <name> "Honey bee"@en .
+		<4100> <name> "Artem Tkachenko"@en .
+		<4100> <name> "Артём Ткаченко"@ru .
 		<5000> <name> "School A" .
 		<5001> <name> "School B" .
 		<5101> <name> "Googleplex" .
@@ -322,10 +322,10 @@ func populateCluster() {
 		<10005> <name> "Bob" .
 		<10006> <name> "Colin" .
 		<10007> <name> "Elizabeth" .
-		<11000> <name@en> "Baz Luhrmann" .
-		<11001> <name@en> "Strictly Ballroom" .
-		<11002> <name@en> "Puccini: La boheme (Sydney Opera)" .
-		<11003> <name@en> "No. 5 the film" .
+		<11000> <name> "Baz Luhrmann"@en .
+		<11001> <name> "Strictly Ballroom"@en .
+		<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .
+		<11003> <name> "No. 5 the film"@en .
 
 		<1> <full_name> "Michonne's large name for hashing" .
 
@@ -455,21 +455,21 @@ func populateCluster() {
 		<5010> <nick_name> "Two Terms" .
 
 		<4097> <lossy> "Badger" .
-		<4097> <lossy@en> "European badger" .
-		<4097> <lossy@xx> "European badger barger European" .
-		<4097> <lossy@pl> "Borsuk europejski" .
-		<4097> <lossy@de> "Europäischer Dachs" .
-		<4097> <lossy@ru> "Барсук" .
-		<4097> <lossy@fr> "Blaireau européen" .
-		<4098> <lossy@en> "Honey badger" .
+		<4097> <lossy> "European badger"@en .
+		<4097> <lossy> "European badger barger European"@xx .
+		<4097> <lossy> "Borsuk europejski"@pl .
+		<4097> <lossy> "Europäischer Dachs"@de .
+		<4097> <lossy> "Барсук"@ru .
+		<4097> <lossy> "Blaireau européen"@fr .
+		<4098> <lossy> "Honey badger"@en .
 
 		<23> <film.film.initial_release_date> "1900-01-02" .
 		<24> <film.film.initial_release_date> "1909-05-05" .
 		<25> <film.film.initial_release_date> "1929-01-10" .
 		<31> <film.film.initial_release_date> "1801-01-15" .
 
-		<0x10000> <royal_title@en> "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith" .
-		<0x10000> <royal_title@fr> "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi" .
+		<0x10000> <royal_title> "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"@en .
+		<0x10000> <royal_title> "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi"@fr .
 
 		<32> <school> <33> .
 		<33> <district> <34> .
@@ -489,7 +489,9 @@ func populateCluster() {
 		<3> <dgraph.type> "Person" .
 		<4> <dgraph.type> "Person" .
 		<5> <dgraph.type> "Animal" .
+		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
+		<6> <dgraph.type> "Pet" .
 
 		<2> <pet> <5> .
 		<3> <pet> <6> .

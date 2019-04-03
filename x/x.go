@@ -19,6 +19,7 @@ package x
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -70,9 +71,6 @@ const (
 	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
 	// start aborting old transactions.
 	ForceAbortDifference = 5000
-
-	TlsClientCert = "client.crt"
-	TlsClientKey  = "client.key"
 
 	GrootId       = "groot"
 	AclPredicates = `
@@ -421,7 +419,7 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
-func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.ClientConn, error) {
+func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
@@ -436,12 +434,7 @@ func SetupConnection(host string, tlsConf *TLSHelperConfig, useGz bool) (*grpc.C
 		grpc.WithBlock(),
 		grpc.WithTimeout(10*time.Second))
 
-	if tlsConf != nil && tlsConf.CertRequired {
-		tlsConf.ConfigType = TLSClientConfig
-		tlsCfg, _, err := GenerateTLSConfig(*tlsConf)
-		if err != nil {
-			return nil, err
-		}
+	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
 		dialOpts = append(dialOpts, grpc.WithInsecure())

@@ -425,6 +425,7 @@ func InitialSchema() []*pb.SchemaUpdate {
 		ValueType: pb.Posting_STRING,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"exact"},
+		List:      true,
 	})
 
 	if x.WorkerConfig.AclEnabled {

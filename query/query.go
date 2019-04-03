@@ -342,7 +342,7 @@ func aggWithVarFieldName(pc *SubGraph) string {
 
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	if len(pc.Params.uidToVal) == 0 {
-		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
+		return nil
 	}
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {

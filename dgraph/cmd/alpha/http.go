@@ -159,6 +159,20 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), query.DebugKey, d)
 	ctx = attachAccessJwt(ctx, r)
 
+	// Timeout is expected to be in millisecond
+	paramTimeout := r.URL.Query().Get("timeout")
+	if paramTimeout != "" {
+		timeout, err := time.ParseDuration(paramTimeout)
+		if err != nil {
+			x.SetStatusWithData(w, x.Error, err.Error())
+			return
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
 	if req.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
 		be, _ := strconv.ParseBool(r.URL.Query().Get("be"))
@@ -199,11 +213,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.WriteRune('{')
-	writeEntry("extensions", js)
-	out.WriteRune(',')
-
-	// User can either ask for schema or have a query.
 	writeEntry("data", resp.Json)
+	out.WriteRune(',')
+	writeEntry("extensions", js)
 	out.WriteRune('}')
 
 	writeResponse(w, r, out.Bytes())
@@ -240,7 +252,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			mu.DeleteJson = delJSON.bs
 		}
 	} else {
-		// Parse NQuads.
+		// Parse N-Quads.
 		mu, err = gql.ParseMutation(string(m))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
