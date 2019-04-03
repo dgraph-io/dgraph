@@ -140,6 +140,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
+	z.ShowError = true
 
 	dg = z.DgraphClientWithGroot(":9180")
 
