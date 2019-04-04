@@ -184,7 +184,7 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 		if err := h.ReadManifest(path, &m); err != nil {
 			return nil, x.Wrapf(err, "While reading %q", path)
 		}
-		ms.Manifest = m
+		ms.Manifest = &m
 		ms.FileName = path
 		listedManifests = append(listedManifests, &ms)
 	}

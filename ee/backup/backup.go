@@ -88,7 +88,7 @@ type Manifest struct {
 // that should not be inside the Manifest struct since it should not be
 // recorded in manifest files.
 type ManifestStatus struct {
-	Manifest
+	*Manifest
 	FileName string
 }
 
