@@ -76,10 +76,11 @@ The client can be configured to use gRPC compression:
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
-	dialOpts := append([]grpc.CallOption{},
+	dialOpts := append([]grpc.DialOption{},
 		grpc.WithInsecure(),
-		grpc.UseCompressor("gzip"))
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)))
 	d, err := grpc.Dial("localhost:9080", dialOpts...)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,6 +89,7 @@ func newClient() *dgo.Dgraph {
 		api.NewDgraphClient(d),
 	)
 }
+
 ```
 
 ### Alter the database
