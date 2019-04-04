@@ -125,14 +125,16 @@ func getFileInfo(file string) *certInfo {
 
 // getHexDigest returns a SHA-256 hex digest broken up into 32-bit chunks
 // so that they easier to compare visually
+// e.g. 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
 func getHexDigest(data []byte) string {
-	const groupSize = 4
+	const groupSizeBytes = 4
 
 	digest := sha256.Sum256(data)
-	groups := len(digest) / groupSize
-	hex := fmt.Sprintf("%0*X", groupSize*2, digest[0:groupSize])
+	groups := len(digest) / groupSizeBytes
+	hex := fmt.Sprintf("%0*X", groupSizeBytes*2, digest[0:groupSizeBytes])
 	for i := 1; i < groups; i++ {
-		hex += fmt.Sprintf(" %0*X", groupSize*2, digest[i*groupSize:(i+1)*groupSize])
+		hex += fmt.Sprintf(" %0*X", groupSizeBytes*2,
+			digest[i*groupSizeBytes:(i+1)*groupSizeBytes])
 	}
 
 	return hex
