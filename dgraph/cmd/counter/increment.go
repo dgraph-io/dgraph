@@ -148,7 +148,7 @@ func run(conf *viper.Viper) {
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
 	if user := conf.GetString("user"); len(user) > 0 {
-		x.Check(dg.Login(context.Background(), user, conf.GetString("password")))
+		x.CheckfNoTrace(dg.Login(context.Background(), user, conf.GetString("password")))
 	}
 
 	for num > 0 {
