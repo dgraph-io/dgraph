@@ -25,8 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// for debugging the tests
-
+// These are exported so they can also be set directly from outside this package.
 var (
 	ShowOutput  bool = os.Getenv("DEBUG_SHOW_OUTPUT") != ""
 	ShowError   bool = os.Getenv("DEBUG_SHOW_ERROR") != ""
