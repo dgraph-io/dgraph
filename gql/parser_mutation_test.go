@@ -288,5 +288,5 @@ func TestParseMutationErr5(t *testing.T) {
 		`
 	_, err := ParseMutation(m)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `Invalid character '}' inside query text`)
+	require.Contains(t, err.Error(), `Unbalanced '}' found inside query text`)
 }
