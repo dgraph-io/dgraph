@@ -45,25 +45,25 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemEqual                                   // equals to symbol
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemColon                                   // Colon
-	itemAt                                      // @
-	itemPeriod                                  // .
-	itemDollar                                  // $
-	itemRegex                                   // /
-	itemBackslash                               // \
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
-	itemMutationTxn                             // mutation txn
-	itemMutationTxnOp                           // mutation txn operation
+	itemText              lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                  // left curly bracket
+	itemRightCurl                                 // right curly bracket
+	itemEqual                                     // equals to symbol
+	itemName                                      // [9] names
+	itemOpType                                    // operation type
+	itemString                                    // quoted string
+	itemLeftRound                                 // left round bracket
+	itemRightRound                                // right round bracket
+	itemColon                                     // Colon
+	itemAt                                        // @
+	itemPeriod                                    // .
+	itemDollar                                    // $
+	itemRegex                                     // /
+	itemBackslash                                 // \
+	itemMutationOp                                // mutation operation
+	itemMutationOpContent                         // mutation operation content (inc. query)
+	itemMutationTxn                               // mutation txn
+	itemMutationTxnOp                             // mutation txn operation
 	itemLeftSquare
 	itemRightSquare
 	itemComma
@@ -458,7 +458,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideMutation
@@ -489,7 +489,7 @@ func lexTextCondQuery(l *lex.Lexer) lex.StateFn {
 		if depth > 0 {
 			continue
 		}
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideTxn
