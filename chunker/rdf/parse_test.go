@@ -115,6 +115,26 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: `_:alice <name@en> "Alice In Wonderland" .`,
+		nq: api.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "name",
+			ObjectId:    "",
+			Lang:        "en",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "Alice In Wonderland"}},
+		},
+	},
+	{
+		input: `_:alice <name@en> * .`,
+		nq: api.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "name",
+			ObjectId:    "",
+			Lang:        "en",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "_STAR_ALL"}},
+		},
+	},
+	{
 		input: `_:alice <name> "Alice In Wonderland"^^<xs:string> .`,
 		nq: api.NQuad{
 			Subject:     "_:alice",
