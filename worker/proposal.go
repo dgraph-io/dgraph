@@ -112,7 +112,7 @@ var errUnableToServe = errors.New("Server overloaded with pending proposals. Ple
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
 	startTime := time.Now()
-	ctx, _ = x.UpsertSpanWithMethod(ctx, "n.proposeAndWait")
+	ctx = x.WithMethod(ctx, "n.proposeAndWait")
 	defer func() {
 		v := x.TagValueStatusOK
 		if perr != nil {

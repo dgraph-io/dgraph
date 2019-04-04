@@ -223,7 +223,12 @@ func UpsertSpanWithMethod(ctx context.Context, name string) (context.Context,
 		ctx, span = otrace.StartSpan(ctx, name)
 	}
 
-	ctx, err := tag.New(ctx, tag.Upsert(KeyMethod, name))
-	Check(err)
+	ctx = WithMethod(ctx, name)
 	return ctx, span
+}
+
+func WithMethod(parent context.Context, method string) context.Context {
+	ctx, err := tag.New(parent, tag.Upsert(KeyMethod, method))
+	Check(err)
+	return ctx
 }
