@@ -89,7 +89,7 @@ func parseMutationCondQuery(it *lex.ItemIterator) (string, error) {
 		switch item.Typ {
 		case itemLeftCurl:
 			continue
-		case itemMutationContent:
+		case itemMutationOpContent:
 			if !parse {
 				return "", x.Errorf("Invalid query block.")
 			}
@@ -131,7 +131,7 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 			}
 			parse = true
 		}
-		if item.Typ == itemMutationContent {
+		if item.Typ == itemMutationOpContent {
 			if !parse {
 				return x.Errorf("Mutation syntax invalid.")
 			}
