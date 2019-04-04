@@ -435,7 +435,7 @@ func lexMutationTxn(l *lex.Lexer) lex.StateFn {
 		switch word {
 		case "query":
 			l.Emit(itemMutationTxnOp)
-			return lexTextQuery
+			return lexTextCondQuery
 		case "mutation":
 			l.Depth = 0
 			l.Emit(itemMutationTxnOp)
@@ -472,7 +472,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 	return lexInsideMutation
 }
 
-func lexTextQuery(l *lex.Lexer) lex.StateFn {
+func lexTextCondQuery(l *lex.Lexer) lex.StateFn {
 	depth := 0
 	for {
 		r := l.Next()
