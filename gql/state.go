@@ -483,7 +483,7 @@ func lexTextCondQuery(l *lex.Lexer) lex.StateFn {
 		if r == rightCurl {
 			depth--
 			if l.Depth < depth {
-				return l.Errorf("Invalid character '}' inside query text")
+				return l.Errorf("Unbalanced '}' found inside query text")
 			}
 		}
 		if depth > 0 {
