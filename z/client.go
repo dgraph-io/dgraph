@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +38,37 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
+
+// socket addr = IP address and port number
+var (
+	SockAddr         string
+	SockAddrHttp     string
+	SockAddrZero     string
+	SockAddrZeroHttp string
+)
+
+// This allows running (most) tests against dgraph running on the default ports, for example.
+// Only the GRPC ports are needed and the others are deduced.
+func init() {
+	var grpcPort int
+
+	getPort := func(envVar string, dfault int) int {
+		if p := os.Getenv(envVar); p == "" {
+			return dfault
+		} else {
+			port, _ := strconv.Atoi(p)
+			return port
+		}
+	}
+
+	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
+	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
+	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
+
+	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
+	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
+}
 
 // DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.

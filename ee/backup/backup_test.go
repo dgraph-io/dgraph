@@ -40,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -47,7 +48,7 @@ import (
 func TestBackup(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
 			x.Check(err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 			fn(t, dg)
@@ -110,7 +111,7 @@ func BackupSetup(t *testing.T, c *dgo.Dgraph) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	// move tablet to group 1 to avoid messes later.
-	_, err = http.Get("http://localhost:6080/moveTablet?tablet=movie&group=1")
+	_, err = http.Get("http://" + z.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 	// if the move happened, we need to pause a bit to give zero a chance to quorum
 	t.Log("Pausing to let zero move tablet...")
@@ -382,7 +383,7 @@ type response struct {
 }
 
 func getState() (*response, error) {
-	resp, err := http.Get("http://localhost:6080/state")
+	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/state")
 	if err != nil {
 		return nil, err
 	}
