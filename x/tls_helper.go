@@ -108,12 +108,9 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		}
 
 		return &tlsCfg, nil
-	} else if v.GetBool("tls_use_system_ca") == true ||
-		v.GetString("tls_server_name") != "" ||
-		v.GetString("tls_cert") != "" ||
-		v.GetString("tls_key") != "" {
-
-		return nil, fmt.Errorf("--tls_cacert is required to use TLS")
+	} else if v.IsSet("tls_use_system_ca") || v.IsSet("tls_server_name") ||
+		v.IsSet("tls_cert") || v.IsSet("tls_key") {
+		return nil, fmt.Errorf("--tls_cacert is required for enabling TLS")
 	}
 	return nil, nil
 }

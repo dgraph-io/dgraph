@@ -138,6 +138,9 @@ func run(conf *viper.Viper) {
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
 
+	_, err := x.LoadClientTLSConfig(conf)
+	x.CheckfNoTrace(err)
+
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
