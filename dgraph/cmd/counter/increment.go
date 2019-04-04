@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 )
 
 var Increment x.SubCommand
@@ -138,10 +137,11 @@ func run(conf *viper.Viper) {
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
 
-	_, err := x.LoadClientTLSConfig(conf)
+	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	x.CheckfNoTrace(err)
 
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	//conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := x.SetupConnection(addr, tlsCfg, false)
 	if err != nil {
 		log.Fatal(err)
 	}
