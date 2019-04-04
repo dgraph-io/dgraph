@@ -208,6 +208,13 @@ type Animal {
 	name: string
 }
 
+type CarModel {
+	make: string
+	model: string
+	year: int
+	previous_model: CarModel
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
@@ -239,6 +246,10 @@ office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
 node                           : [uid] .
+model                          : string @index(term) .
+make                           : string @index(term) .
+year                           : int .
+previous_model                 : uid @reverse .
 `
 
 func populateCluster() {
@@ -498,6 +509,17 @@ func populateCluster() {
 		<11000> <director.film> <11003> .
 
 		<11100> <node> <11100> .
+
+		<200> <make> "Ford" .
+		<200> <model> "Focus" .
+		<200> <year> "2008" .
+		<200> <dgraph.type> "CarModel" .
+
+		<201> <make> "Ford" .
+		<201> <model> "Focus" .
+		<201> <year> "2009" .
+		<201> <dgraph.type> "CarModel" .
+		<201> <previous_model> <200> .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
