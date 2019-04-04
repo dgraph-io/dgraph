@@ -238,6 +238,7 @@ room                           : string @index(term) .
 office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
+node                           : [uid] .
 `
 
 func populateCluster() {
@@ -312,10 +313,12 @@ func populateCluster() {
 		<10005> <name> "Bob" .
 		<10006> <name> "Colin" .
 		<10007> <name> "Elizabeth" .
+
 		<11000> <name> "Baz Luhrmann"@en .
 		<11001> <name> "Strictly Ballroom"@en .
 		<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .
 		<11003> <name> "No. 5 the film"@en .
+		<11100> <name> "expand" .
 
 		<1> <full_name> "Michonne's large name for hashing" .
 
@@ -479,7 +482,9 @@ func populateCluster() {
 		<3> <dgraph.type> "Person" .
 		<4> <dgraph.type> "Person" .
 		<5> <dgraph.type> "Animal" .
+		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
+		<6> <dgraph.type> "Pet" .
 
 		<2> <pet> <5> .
 		<3> <pet> <6> .
@@ -491,6 +496,8 @@ func populateCluster() {
 		<11000> <director.film> <11001> .
 		<11000> <director.film> <11002> .
 		<11000> <director.film> <11003> .
+
+		<11100> <node> <11100> .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})

@@ -342,7 +342,8 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "index": true,
         "tokenizer": [
           "exact"
-        ]
+        ],
+		"list": true
       },
       {
         "predicate": "name",
@@ -535,7 +536,8 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
         "index": true,
         "predicate": "dgraph.type",
         "type": "string",
-        "tokenizer": ["exact"]
+        "tokenizer": ["exact"],
+		"list": true
       },
       {
         "predicate": "name",

@@ -72,6 +72,16 @@ type handler interface {
 	// The loadFn receives the files as they are processed by a handler, to do the actual
 	// load to DB.
 	Load(*url.URL, loadFn) (uint64, error)
+
+	// ListManifests will scan the provided URI and return the paths to the manifests stored
+	// in that location.
+	//
+	// The URL object is parsed as described in `newHandler`.
+	ListManifests(*url.URL) ([]string, error)
+
+	// ReadManifest will read the manifest at the given location and load it into the given
+	// Manifest object.
+	ReadManifest(string, *Manifest) error
 }
 
 // getHandler returns a handler for the URI scheme.
@@ -147,4 +157,37 @@ func Load(l string, fn loadFn) (version uint64, err error) {
 	}
 
 	return h.Load(uri, fn)
+}
+
+// ListManifests scans location l for backup files and returns the list of manifests.
+func ListManifests(l string) ([]*ManifestStatus, error) {
+	uri, err := url.Parse(l)
+	if err != nil {
+		return nil, err
+	}
+
+	h := getHandler(uri.Scheme)
+	if h == nil {
+		return nil, x.Errorf("Unsupported URI: %v", uri)
+	}
+
+	paths, err := h.ListManifests(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	var listedManifests []*ManifestStatus
+	for _, path := range paths {
+		var m Manifest
+		var ms ManifestStatus
+
+		if err := h.ReadManifest(path, &m); err != nil {
+			return nil, x.Wrapf(err, "While reading %q", path)
+		}
+		ms.Manifest = &m
+		ms.FileName = path
+		listedManifests = append(listedManifests, &ms)
+	}
+
+	return listedManifests, nil
 }

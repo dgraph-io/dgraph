@@ -1427,13 +1427,13 @@ There are two different tools that can be used for fast data loading:
 - `dgraph live` runs the Dgraph Live Loader
 - `dgraph bulk` runs the Dgraph Bulk Loader
 
-{{% notice "note" %}} Both tools only accept [RDF NQuad/Triple
+{{% notice "note" %}} Both tools only accept [RDF N-Quad/Triple
 data](https://www.w3.org/TR/n-quads/) in plain or gzipped format. Data
 in other formats must be converted.{{% /notice %}}
 
 ### Live Loader
 
-Dgraph Live Loader (run with `dgraph live`) is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
+Dgraph Live Loader (run with `dgraph live`) is a small helper program which reads RDF N-Quads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph.
 
 Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
