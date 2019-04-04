@@ -250,9 +250,9 @@ func runLsbackupCmd() error {
 	for _, manifest := range manifests {
 		fmt.Printf("%v\t%v\t%v\t%v\n",
 			manifest.FileName,
-			manifest.Manifest.Version,
-			manifest.Manifest.ReadTs,
-			manifest.Manifest.Groups)
+			manifest.Version,
+			manifest.ReadTs,
+			manifest.Groups)
 	}
 
 	return nil
