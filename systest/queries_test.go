@@ -337,12 +337,13 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "list": true
       },
       {
-        "predicate": "type",
+        "predicate": "dgraph.type",
         "type": "string",
         "index": true,
         "tokenizer": [
           "exact"
-        ]
+        ],
+		"list": true
       },
       {
         "predicate": "name",
@@ -405,7 +406,7 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
         "predicate": "friends"
       },
       {
-        "predicate": "type"
+        "predicate": "dgraph.type"
       },
       {
         "predicate": "name"
@@ -533,9 +534,10 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
       },
       {
         "index": true,
-        "predicate": "type",
+        "predicate": "dgraph.type",
         "type": "string",
-        "tokenizer": ["exact"]
+        "tokenizer": ["exact"],
+		"list": true
       },
       {
         "predicate": "name",

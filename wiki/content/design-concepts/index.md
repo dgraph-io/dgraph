@@ -70,7 +70,7 @@ visible to all future readers, irrespective of client boundaries.
 
 ### Edges
 
-Typical data format is RDF [NQuad](https://www.w3.org/TR/n-quads/) which is:
+Typical data format is RDF [N-Quad](https://www.w3.org/TR/n-quads/) which is:
 
 * `Subject, Predicate, Object, Label`, aka
 * `Entity, Attribute, Other Entity / Value, Label`
@@ -82,7 +82,7 @@ i.e. from `Subject -> Object`. This is the direction that the queries would be r
 queries in that direction, they would need to define the [reverse edge](/query-language#reverse-edges)
 as part of the schema.{{% /notice %}}
 
-Internally, the RDF NQuad gets parsed into this format.
+Internally, the RDF N-Quad gets parsed into this format.
 
 ```
 type DirectedEdge struct {

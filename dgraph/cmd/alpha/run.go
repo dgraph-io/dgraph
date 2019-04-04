@@ -64,7 +64,6 @@ const (
 
 var (
 	bindall bool
-	tlsConf x.TLSHelperConfig
 )
 
 var Alpha x.SubCommand
@@ -156,9 +155,9 @@ they form a Raft group and provide synchronous replication.
 			" This applies to shortest path and recursive queries.")
 
 	// TLS configurations
-	x.RegisterTLSFlags(flag)
+	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
+	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
-	tlsConf.ConfigType = x.TLSServerConfig
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -275,18 +274,7 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
-func setupListener(addr string, port int, reload func()) (net.Listener, error) {
-	if reload != nil {
-		go func() {
-			sigChan := make(chan os.Signal, 1)
-			signal.Notify(sigChan, syscall.SIGHUP)
-			for range sigChan {
-				glog.Infoln("SIGHUP signal received")
-				reload()
-				glog.Infoln("TLS certificates and CAs reloaded")
-			}
-		}()
-	}
+func setupListener(addr string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
@@ -361,24 +349,17 @@ func setupServer() {
 		laddr = "0.0.0.0"
 	}
 
-	var (
-		tlsCfg *tls.Config
-		reload func()
-	)
-	if tlsConf.CertRequired {
-		var err error
-		tlsCfg, reload, err = x.GenerateTLSConfig(tlsConf)
-		if err != nil {
-			log.Fatalf("Failed to setup TLS: %v\n", err)
-		}
+	tlsCfg, err := x.LoadServerTLSConfig(Alpha.Conf, tlsNodeCert, tlsNodeKey)
+	if err != nil {
+		log.Fatalf("Failed to setup TLS: %v\n", err)
 	}
 
-	httpListener, err := setupListener(laddr, httpPort(), reload)
+	httpListener, err := setupListener(laddr, httpPort())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	grpcListener, err := setupListener(laddr, grpcPort(), nil)
+	grpcListener, err := setupListener(laddr, grpcPort())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -494,9 +475,6 @@ func run() {
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
 		AclEnabled:          secretFile != "",
 	}
-
-	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)
-	tlsConf.ClientAuth = Alpha.Conf.GetString("tls_client_auth")
 
 	setupCustomTokenizers()
 	x.Init()

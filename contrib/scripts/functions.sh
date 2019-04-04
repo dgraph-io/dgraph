@@ -14,7 +14,11 @@ function restartCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
   echo "Rebuilding dgraph ..."
-  make install
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    (env GOOS=linux GOARCH=amd64 go build) && mv -f dgraph $GOPATH/bin/dgraph
+  else
+    make install
+  fi
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
   docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
   popd >/dev/null

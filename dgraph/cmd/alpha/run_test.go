@@ -276,8 +276,8 @@ func TestDeletePredicate(t *testing.T) {
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+
-		`{"predicate":"type","type":"string","index":true, "tokenizer":["exact"]}`+
-		`]}}`, output)
+		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
+			"list":true}]}}`, output)
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
@@ -1350,7 +1350,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"occupations","type":"string"},`+
-		`{"predicate":"type", "type":"string", "index":true, "tokenizer": ["exact"]}]}}`, res)
+		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
+			"list":true}]}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1507,7 +1508,8 @@ func TestDropAll(t *testing.T) {
 	z.CompareJSON(t,
 		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
 			x.AclPredicates+","+
-			`{"predicate":"type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
+			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
+				"list":true}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1613,11 +1615,11 @@ func TestTypeMutationAndQuery(t *testing.T) {
 		"set": [
 			{
 				"name": "Alice",
-				"type": "Employee"
+				"dgraph.type": "Employee"
 			},
 			{
 				"name": "Bob",
-				"type": "Employer"
+				"dgraph.type": "Employer"
 			}
 		]
 	}

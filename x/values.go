@@ -18,7 +18,7 @@ package x
 
 type ValueTypeInfo int32
 
-// Type of a data inside DirectedEdge, Posting or NQuad
+// Type of a data inside DirectedEdge, Posting or N-Quad
 const (
 	ValueUnknown ValueTypeInfo = iota // unknown type of value
 	ValueEmpty                        // no UID and no value
@@ -28,7 +28,7 @@ const (
 	ValueMulti
 )
 
-// Helper function, to decide value type of DirectedEdge/Posting/NQuad
+// Helper function, to decide value type of DirectedEdge/Posting/N-Quad
 func ValueType(hasValue, hasLang, hasSpecialId bool) ValueTypeInfo {
 	switch {
 	case hasValue && hasLang:
