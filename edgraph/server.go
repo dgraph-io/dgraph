@@ -531,16 +531,20 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 
 	ctx, span := x.UpsertSpanWithMethod(ctx, methodQuery)
 	var measurements []ostats.Measurement
+	var err error
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
+		if err != nil {
+			v = x.TagValueStatusError
+		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		timeSpentMs := x.SinceMs(startTime)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
 	}()
 
-	if err := x.HealthCheck(); err != nil {
+	if err = x.HealthCheck(); err != nil {
 		return nil, err
 	}
 
