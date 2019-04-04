@@ -47,14 +47,17 @@ func init() {
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
 
 	flag := Increment.Cmd.Flags()
-	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
+	flag.String("dgraph", "localhost:9080", "Address of Dgraph alpha.")
 	flag.Int("num", 1, "How many times to run.")
-	flag.Bool("ro", false, "Only read the counter value, don't update it.")
-	flag.Bool("be", false, "Read counter value without retrieving timestamp from Zero.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
-	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 	flag.String("user", "", "Username if login is required.")
 	flag.String("password", "", "Password of the user.")
+	flag.String("pred", "counter.val",
+		"Predicate to use for storing the counter.")
+	flag.Bool("ro", false,
+		"Read-only. Read the counter value without updating it.")
+	flag.Bool("be", false,
+		"Best-effort. Read counter value without retrieving timestamp from Zero.")
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
 }
@@ -131,7 +134,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
-	addr := conf.GetString("addr")
+	addr := conf.GetString("dgraph")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
 
