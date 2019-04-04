@@ -53,9 +53,9 @@ go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
 ## Using The Debug Tool
 
 {{% notice "note" %}}
-The debug tool can only be run an offline cluster. To inspect the posting lists
-of a live cluster, you can create an offline copy of the p directory to use the
-debug tool.
+To debug a running Dgraph cluster, first copy the postings ("p") directory to
+another location. If the Dgraph cluster is not running, then you can use the
+same postings directory with the debug tool.
 {{% /notice %}}
 
 The `dgraph debug` tool can be used to inspect Dgraph's posting list structure.
