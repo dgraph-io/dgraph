@@ -34,6 +34,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -41,7 +42,7 @@ import (
 func TestNodes(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			conn, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+			conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
 			require.NoError(t, err)
 			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 			fn(t, dg)
@@ -141,7 +142,7 @@ func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
 }
 
 func getState() (*response, error) {
-	resp, err := http.Get("http://localhost:6080/state")
+	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/state")
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +181,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=2",
+		url := fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
 			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
@@ -195,7 +196,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err := http.Get("http://localhost:6080/removeNode?group=3&id=3")
+	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=3&id=3")
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
@@ -212,7 +213,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
-		url := fmt.Sprintf("http://localhost:6080/moveTablet?tablet=%s&group=1",
+		url := fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=1",
 			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
@@ -227,7 +228,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err := http.Get("http://localhost:6080/removeNode?group=2&id=2")
+	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=2&id=2")
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
