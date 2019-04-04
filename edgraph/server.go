@@ -423,10 +423,17 @@ func doCondQuery(ctx context.Context, l *query.Latency, req *api.Request,
 
 	queryVars = qr.GetUids()
 	if len(queryVars) == 0 {
-		// TODO: remove this error when mutation conditional expressions are added.
-		return nil, x.Errorf("No variables defined in conditional query: %q", req.Query)
+		glog.V(2).Infof("No variables defined in conditional query: %q", req.Query)
+		return nil, nil
 	}
 	glog.V(3).Infof("CondQuery: qr=%+v vars=%v", qr, queryVars)
+
+	// NOTE: This is a temporary check until the mutation logic is defined clearly.
+	for varName, uids := range queryVars {
+		if len(uids) > 1 {
+			return nil, x.Errorf("Too many Uids for %q, expected 1 got %d", varName, len(uids))
+		}
+	}
 
 	return queryVars, nil
 }
@@ -486,10 +493,10 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		StartTs: mu.StartTs,
 		Query:   mu.CondQuery,
 	})
-	if err != nil {
+	// Quit early if we got an error or expected queryVars and got none.
+	if err != nil || (mu.CondQuery != "" && queryVars == nil) {
 		return resp, err
 	}
-	// TODO: add conditional checks here.
 
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
