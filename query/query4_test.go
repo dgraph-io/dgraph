@@ -200,6 +200,92 @@ func TestDropPredicate(t *testing.T) {
 	setSchema(testSchema)
 }
 
+func TestNestedExpandAll(t *testing.T) {
+	query := `{
+		q(func: has(node)) {
+			uid
+			expand(_all_) {
+				uid
+				node {
+					uid
+					expand(_all_)
+				}
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {
+    "q": [
+      {
+        "uid": "0x2b5c",
+        "name": "expand",
+        "node": [
+          {
+            "uid": "0x2b5c",
+            "node": [
+              {
+                "uid": "0x2b5c",
+                "name": "expand"
+              }
+            ]
+          }
+        ]
+      }
+    ]}}`, js)
+}
+
+func TestNoResultsFilter(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred)) @filter(le(name, "abc")) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+func TestNoResultsPagination(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred), first: 50) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+func TestNoResultsGroupBy(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred)) @groupby(name) {
+			count(uid)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestNoResultsOrder(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred), orderasc: name) {
+			uid
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+func TestNoResultsCount(t *testing.T) {
+	query := `{
+		q(func: has(nonexistent_pred)) {
+			uid
+			count(friend)
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q": []}}`, js)
+}
+
+
 func TestTypeExpandAll(t *testing.T) {
 	query := `{
 		q(func: has(make)) {
