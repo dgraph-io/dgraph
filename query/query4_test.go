@@ -285,7 +285,6 @@ func TestNoResultsCount(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q": []}}`, js)
 }
 
-
 func TestTypeExpandAll(t *testing.T) {
 	query := `{
 		q(func: has(make)) {

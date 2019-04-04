@@ -1894,7 +1894,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		case "_all_":
 			span.Annotate(nil, "expand(_all_)")
 			if len(types) > 0 {
-				preds = getNodePredicatesFromTypes(types)
+				preds = getPredicatesFromTypes(types)
 
 				rpreds, err := getReversePredicatesFromType(ctx, preds)
 				if err != nil {
@@ -1919,7 +1919,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		case "_forward_":
 			span.Annotate(nil, "expand(_forward_)")
 			if len(types) > 0 {
-				preds = getNodePredicatesFromTypes(types)
+				preds = getPredicatesFromTypes(types)
 				break
 			}
 
@@ -1931,7 +1931,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		case "_reverse_":
 			span.Annotate(nil, "expand(_reverse_)")
 			if len(types) > 0 {
-				typePreds := getNodePredicatesFromTypes(types)
+				typePreds := getPredicatesFromTypes(types)
 
 				rpreds, err := getReversePredicatesFromType(ctx, typePreds)
 				if err != nil {
@@ -2563,13 +2563,14 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	return uniqueValues(result.ValueMatrix), nil
 }
 
-func getNodePredicatesFromTypes(types []string) []string {
+// getPredicatesFromTypes returns the list of preds contained in the given types.
+func getPredicatesFromTypes(types []string) []string {
 	var preds []string
 
 	for _, typeName := range types {
 		typeDef, ok := schema.State().GetType(typeName)
 		if !ok {
-			return preds
+			continue
 		}
 
 		for _, field := range typeDef.Fields {
@@ -2579,14 +2580,16 @@ func getNodePredicatesFromTypes(types []string) []string {
 	return preds
 }
 
-func getReversePredicatesFromType(ctx context.Context, typePreds []string) ([]string, error) {
+// getReversePredicatesFromType queries the schema and returns a list of the
+// reverse predicates that exist within the given preds.
+func getReversePredicatesFromType(ctx context.Context, preds []string) ([]string, error) {
 	var rpreds []string
 	predMap := make(map[string]bool)
-	for _, pred := range typePreds {
+	for _, pred := range preds {
 		predMap[pred] = true
 	}
 
-	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{})
+	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
 	if err != nil {
 		return nil, err
 	}
