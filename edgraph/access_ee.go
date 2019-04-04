@@ -482,8 +482,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 
 	err := doAuthorizeAlter()
-	span := otrace.FromContext(ctx)
-	if span != nil {
+	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
@@ -594,8 +593,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 
 	err = doAuthorizeMutation()
-	span := otrace.FromContext(ctx)
-	if span != nil {
+	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
