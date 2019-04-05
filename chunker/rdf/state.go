@@ -26,23 +26,24 @@ import (
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.
 const (
-	itemText       lex.ItemType = 5 + iota // plain text
-	itemSubject                            // subject, 6
-	itemPredicate                          // predicate, 7
-	itemObject                             // object, 8
-	itemLabel                              // label, 9
-	itemLiteral                            // literal, 10
-	itemLanguage                           // language, 11
-	itemObjectType                         // object type, 12
-	itemValidEnd                           // end with dot, 13
-	itemComment                            // comment, 14
-	itemComma                              // comma, 15
-	itemEqual                              // equal, 16
-	itemLeftRound                          // '(', 17
-	itemRightRound                         // ')', 18
-	itemStar                               // *, 19
-	itemVarKeyword                         // var, 20
-	itemVarName                            // 21
+	itemText           lex.ItemType = 5 + iota // plain text
+	itemSubject                                // subject, 6
+	itemPredicate                              // predicate, 7
+	itemObject                                 // object, 8
+	itemLabel                                  // label, 9
+	itemLiteral                                // literal, 10
+	itemLanguage                               // language, 11
+	itemObjectType                             // object type, 12
+	itemValidEnd                               // end with dot, 13
+	itemComment                                // comment, 14
+	itemComma                                  // comma, 15
+	itemEqual                                  // equal, 16
+	itemLeftRound                              // '(', 17
+	itemRightRound                             // ')', 18
+	itemStar                                   // *, 19
+	itemVarKeyword                             // var, 20
+	itemSubjectVarName                         // 21
+	itemObjectVarName                          // 22
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -451,7 +452,11 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 			break
 		}
 	}
-	l.Emit(itemVarName)
+	if l.Depth == atSubject {
+		l.Emit(itemSubjectVarName)
+	} else {
+		l.Emit(itemObjectVarName)
+	}
 
 	l.IgnoreRun(isSpace)
 
