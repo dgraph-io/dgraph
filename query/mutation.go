@@ -147,12 +147,11 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad, queryVars map[string][
 			return newUids, errors.New("Predicate deletion should be called via alter")
 		}
 
-		// Here we check if we have defined a varible in the mutation.
+		// Here we check if we have defined a subject varible in the mutation.
 		// If we have a variable and it has a value, we assign the value to the Subject.
 		// If we don't have a value, the check below this will fail.
-		if nq.VarName != nil && queryVars != nil {
-			// TODO: check Typ
-			if s, ok := queryVars[nq.VarName.GetDefaultVal()]; ok {
+		if queryVars != nil && nq.SubjectVar != "" {
+			if s, ok := queryVars[nq.SubjectVar]; ok {
 				nq.Subject = s[0]
 			}
 		}
@@ -168,6 +167,15 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad, queryVars map[string][
 		}
 		if err = verifyUid(ctx, uid); err != nil {
 			return newUids, err
+		}
+
+		// Here we check if we have defined an object varible in the mutation.
+		// If we have a variable and it has a value, we assign the value to the ObjectId.
+		// The next check will validate the value.
+		if queryVars != nil && nq.ObjectVar != "" {
+			if s, ok := queryVars[nq.ObjectVar]; ok {
+				nq.ObjectId = s[0]
+			}
 		}
 
 		if len(nq.ObjectId) > 0 {
