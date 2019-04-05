@@ -45,6 +45,9 @@ install:
 		$(MAKE) -C $$i install; \
 	done)
 
+install_debug:
+	$(MAKE) BUILD_DEBUG=debug
+
 install_oss oss_install:
 	$(MAKE) BUILD_TAGS=oss install
 

@@ -20,6 +20,7 @@ BUILD_DATE    ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION ?= $(shell git describe --always --tags)
 BUILD_TAGS    ?=
+BUILD_DEBUG   ?=
 GOPATH        ?= $(shell go env GOPATH)
 
 # Build-time Go variables
@@ -36,6 +37,11 @@ ifneq ($(strip $(BUILD_TAGS)),)
 	ifneq (,$(findstring oss,$(BUILD_TAGS)))
 		BUILD_VERSION := $(BUILD_VERSION)-oss
 	endif
+endif
+
+# add the gcflags to disable compiler optimazations, which will help debugging with dlv
+ifneq ($(strip $(BUILD_DEBUG)),)
+	BUILD_FLAGS += -gcflags="all=-N -l"
 endif
 
 .PHONY: all $(BIN)
