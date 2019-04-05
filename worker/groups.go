@@ -182,7 +182,7 @@ func (g *groupi) proposeInitialSchema() {
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
-	// schema for _predicate_ is not changed once set.
+	// schema for a reserved predicate is not changed once set.
 	m.StartTs = 1
 	m.Schema = append(m.Schema, schema)
 

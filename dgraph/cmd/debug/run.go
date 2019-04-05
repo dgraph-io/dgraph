@@ -237,7 +237,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 
 		pk := x.Parse(item.Key())
-		if !pk.IsData() || pk.Attr == "_predicate_" {
+		if !pk.IsData() {
 			continue
 		}
 

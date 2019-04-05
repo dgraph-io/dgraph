@@ -60,9 +60,6 @@ const (
 	// message sizes allowable on the client size when dialing.
 	GrpcMaxSize = 4 << 30
 
-	// The attr used to store list of predicates for a node.
-	PredicateListAttr = "_predicate_"
-
 	PortZeroGrpc = 5080
 	PortZeroHTTP = 6080
 	PortInternal = 7080

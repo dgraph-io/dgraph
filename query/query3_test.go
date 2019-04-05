@@ -1190,7 +1190,6 @@ func TestQueryPassword(t *testing.T) {
 }
 
 func TestPasswordExpandAll1(t *testing.T) {
-	// We ignore password in expand(_all_)
 	query := `
     {
         me(func: uid(0x01)) {
@@ -1199,7 +1198,7 @@ func TestPasswordExpandAll1(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"age":38,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","_xid_":"mich","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","graduation":["1932-01-01T00:00:00Z"],"dob":"1910-01-01T00:00:00Z","bin_data":"YmluLWRhdGE=","power":13.250000,"survival_rate":98.990000,"name":"Michonne","sword_present":"true","alive":true,"gender":"female","noindex_name":"Michonne's name not indexed"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne"}]}}`, js)
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
@@ -1212,7 +1211,7 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"_xid_":"mich","address":"31, 32 street, Jupiter","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"sword_present":"true","dob_day":"1910-01-01T00:00:00Z","gender":"female","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"noindex_name":"Michonne's name not indexed","name":"Michonne","graduation":["1932-01-01T00:00:00Z"],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"age":38,"full_name":"Michonne's large name for hashing","alive":true,"power":13.250000,"checkpwd(password)":false}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne", "checkpwd(password)":false}]}}`, js)
 }
 
 func TestPasswordExpandError(t *testing.T) {

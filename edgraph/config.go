@@ -69,17 +69,6 @@ func setConfVar(conf Options) {
 		return v
 	}
 
-	// Expvar doesn't have bool type so we use an int.
-	newIntFromBool := func(b bool) *expvar.Int {
-		v := new(expvar.Int)
-		if b {
-			v.Set(1)
-		} else {
-			v.Set(0)
-		}
-		return v
-	}
-
 	// This is so we can find these options in /debug/vars.
 	x.Conf.Set("badger.tables", newStr(conf.BadgerTables))
 	x.Conf.Set("badger.vlog", newStr(conf.BadgerVlog))
@@ -90,7 +79,6 @@ func setConfVar(conf Options) {
 	// Set some vars from worker.Config.
 	x.Conf.Set("tracing", newFloat(x.WorkerConfig.Tracing))
 	x.Conf.Set("num_pending_proposals", newInt(x.WorkerConfig.NumPendingProposals))
-	x.Conf.Set("expand_edge", newIntFromBool(x.WorkerConfig.ExpandEdge))
 }
 
 func SetConfiguration(newConfig Options) {

@@ -152,9 +152,9 @@ func TestQueryCountEmptyNames(t *testing.T) {
 		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
 		{in: `{q(func: has(name)) @filter(gt(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":45}]}}`},
+			out: `{"data":{"q": [{"count":46}]}}`},
 		{in: `{q(func: has(name)) @filter(ge(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":47}]}}`},
+			out: `{"data":{"q": [{"count":48}]}}`},
 		{in: `{q(func: has(name)) @filter(lt(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":0}]}}`},
 		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
@@ -165,7 +165,7 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			out: `{"data":{"q": [{"count":2}]}}`},
 		// NOTE: match with empty string filters values greater than the max distance.
 		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":27}]}}`},
+			out: `{"data":{"q": [{"count":28}]}}`},
 		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
 			failure: `Value "" in uid_in is not a number`},
 	}
