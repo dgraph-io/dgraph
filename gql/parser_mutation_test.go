@@ -174,14 +174,14 @@ func TestParseMutationTxn1(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t,
 		&api.NQuad{
-			VarName:     &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "v"}},
+			SubjectVar:  "v",
 			Predicate:   "name",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "Some One"}},
 		},
 		sets[0])
 	require.EqualValues(t,
 		&api.NQuad{
-			VarName:     &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "v"}},
+			SubjectVar:  "v",
 			Predicate:   "email",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "someone@gmail.com"}},
 		},
@@ -205,16 +205,86 @@ func TestParseMutationTxn2(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t,
 		&api.NQuad{
-			VarName:     &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "v"}},
+			SubjectVar:  "v",
 			Predicate:   "name",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "Some One"}},
 		},
 		sets[0])
 	require.EqualValues(t,
 		&api.NQuad{
-			VarName:     &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "v"}},
+			SubjectVar:  "v",
 			Predicate:   "email",
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "someone@gmail.com"}},
+		},
+		sets[1])
+}
+
+func TestParseMutationTxn3(t *testing.T) {
+	m := `
+	txn {
+		mutation {
+			set {
+				<0x1> <name> "Some One" .
+				<0x1> <email> "someone@gmail.com" .
+				<0x1> <friend> uid(v) .
+			}
+		}
+	}`
+	mu, err := ParseMutation(m)
+	require.NoError(t, err)
+	require.NotNil(t, mu)
+	sets, err := parseNquads(mu.SetNquads)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		&api.NQuad{
+			Subject:     "0x1",
+			Predicate:   "name",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "Some One"}},
+		},
+		sets[0])
+	require.EqualValues(t,
+		&api.NQuad{
+			Subject:     "0x1",
+			Predicate:   "email",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "someone@gmail.com"}},
+		},
+		sets[1])
+	require.EqualValues(t,
+		&api.NQuad{
+			Subject:   "0x1",
+			Predicate: "friend",
+			ObjectVar: "v",
+		},
+		sets[2])
+}
+
+func TestParseMutationTxn4(t *testing.T) {
+	m := `
+	txn {
+		mutation {
+			set {
+				uid(v) <name> "Some One" .
+				uid(v) <friend> uid(w) .
+			}
+		}
+	}`
+	mu, err := ParseMutation(m)
+	require.NoError(t, err)
+	require.NotNil(t, mu)
+	sets, err := parseNquads(mu.SetNquads)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		&api.NQuad{
+			SubjectVar:  "v",
+			Predicate:   "name",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "Some One"}},
+		},
+		sets[0])
+	require.EqualValues(t,
+		&api.NQuad{
+			SubjectVar: "v",
+			Predicate:  "friend",
+			ObjectVar:  "w",
 		},
 		sets[1])
 }
