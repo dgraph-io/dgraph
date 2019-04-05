@@ -46,7 +46,10 @@ install:
 	done)
 
 install_debug:
-	$(MAKE) BUILD_DEBUG=debug
+	@(set -e;for i in $(SUBDIRS); do \
+		echo Installing $$i ...; \
+		$(MAKE) -C $$i install BUILD_DEBUG=debug; \
+	done)
 
 install_oss oss_install:
 	$(MAKE) BUILD_TAGS=oss install
