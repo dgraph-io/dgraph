@@ -51,6 +51,6 @@ uninstall:
 	@go clean -i -x
 
 install:
-	@echo "Old MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
-	@echo "New MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
