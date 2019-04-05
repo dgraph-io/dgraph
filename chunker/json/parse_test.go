@@ -435,3 +435,11 @@ func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 	}
 	require.Equal(t, expected, nq[0])
 }
+
+func TestSetNquadNilValue(t *testing.T) {
+	json := `{"uid":1000,"name": null}`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(nq))
+}
