@@ -38,6 +38,11 @@ ifneq ($(strip $(BUILD_TAGS)),)
 	endif
 endif
 
+# add the gcflags to disable compiler optimizations, which will help debugging with dlv
+ifneq ($(strip $(BUILD_DEBUG)),)
+	BUILD_FLAGS += -gcflags="all=-N -l"
+endif
+
 .PHONY: all $(BIN)
 all: $(BIN)
 
