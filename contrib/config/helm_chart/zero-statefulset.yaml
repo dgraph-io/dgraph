@@ -1,0 +1,129 @@
+apiVersion: apps/v1beta2
+kind: StatefulSet
+metadata:
+  name: "{{ template "dgraph.zero.fullname" . }}"
+  labels:
+    app: {{ template "dgraph.name" . }}
+    chart: {{ template "dgraph.chart" . }}
+    component: {{ .Values.zero.name | quote }}
+    release: {{ .Release.Name | quote }}
+    heritage: {{ .Release.Service | quote }}
+spec:
+  serviceName: {{ template "dgraph.zero.fullname" . }}-headless
+  replicas: {{ .Values.zero.replicaCount }}
+  podManagementPolicy: {{ .Values.zero.podManagementPolicy | quote }}
+  updateStrategy:
+    type: {{ .Values.zero.updateStrategy | quote }}
+    {{- if (eq "Recreate" .Values.updateStrategy) }}
+    rollingUpdate: null
+    {{- else if .Values.zero.rollingUpdatePartition }}
+    rollingUpdate:
+      partition: {{ .Values.zero.rollingUpdatePartition }}
+    {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "dgraph.name" . }}
+      release: {{ .Release.Name | quote }}
+      component: {{ .Values.zero.name | quote }}
+  template:
+    metadata:
+      name: "{{ template "dgraph.zero.fullname" . }}"
+      labels:
+        app: {{ template "dgraph.name" . }}
+        release: {{ .Release.Name | quote }}
+        component: {{ .Values.zero.name | quote }}
+    spec:
+{{- include "dgraph.imagePullSecrets" . | indent 6 }}
+      {{- if .Values.zero.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.zero.securityContext.fsGroup }}
+        runAsUser: {{ .Values.zero.securityContext.runAsUser }}
+      {{- end }}
+      {{- if .Values.zero.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.zero.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.zero.tolerations }}
+      tolerations:
+{{ toYaml .Values.zero.tolerations | indent 8 }}
+      {{- end }}
+      containers:
+      - name: "{{ template "dgraph.zero.fullname" . }}"
+        image: "{{ template "dgraph.image" . }}"
+        imagePullPolicy: {{ .Values.dgraph.image.pullPolicy | quote }}
+        command:
+         - bash
+         - "-c"
+         - |
+           set -ex
+           [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+            ordinal=${BASH_REMATCH[1]}
+            idx=$(($ordinal + 1))
+            if [[ $ordinal -eq 0 ]]; then
+              dgraph zero --my=$(hostname -f):5080 --idx $idx --replicas {{ .Values.zero.replicas }}
+            else
+              dgraph zero --my=$(hostname -f):5080 --peer {{ template "dgraph.zero.fullname" . }}-0.{{ template "dgraph.zero.fullname" . }}-headless.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas {{ .Values.zero.replicas }}
+            fi 
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+        env:
+        - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        {{- if .Values.zero.livenessProbe.enabled }}
+        livenessProbe:
+          tcpSocket:
+            port: {{ .Values.zero.livenessProbe.port }}
+          initialDelaySeconds: {{ .Values.zero.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.zero.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.zero.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.zero.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.zero.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.readinessProbe.enabled }}
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.zero.readinessProbe.port }}
+          initialDelaySeconds: {{ .Values.zero.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.zero.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.zero.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.zero.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.zero.readinessProbe.failureThreshold }}
+        {{- end }}
+        volumeMounts:
+        {{- if .Values.zero.persistence.enabled }}
+        - name: datadir
+          mountPath: /dgraph
+        {{ end }}
+      volumes:
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+{{- if .Values.zero.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+        annotations:
+        {{- range $key, $value := .Values.zero.persistence.annotations }}
+          {{ $key }}: {{ $value }}
+        {{- end }}
+      spec:
+        accessModes:
+        {{- range .Values.zero.persistence.accessModes }}
+          - {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.zero.persistence.size | quote }}
+      {{- if .Values.zero.persistence.storageClass }}
+      {{- if (eq "-" .Values.zero.persistence.storageClass) }}
+        storageClassName: ""
+      {{- else }}
+        storageClassName: {{ .Values.zero.persistence.storageClass | quote }}
+      {{- end }}
+      {{- end }}
+{{- else }}
+        - name: datadir
+          emptyDir: {}
+{{- end }}
