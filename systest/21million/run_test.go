@@ -38,6 +38,8 @@ import (
 // for easier reviewing after the test completes.
 var savedir = flag.String("savedir", "",
 	"directory to save json from test failures in")
+var quiet = flag.Bool("quiet", false,
+	"just output whether json differs, not a diff")
 
 func TestQueries(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -69,7 +71,7 @@ func TestQueries(t *testing.T) {
 			savepath = path.Join(*savedir, file.Name())
 		}
 
-		z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath)
+		z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet)
 	}
 
 	if *savedir != "" {

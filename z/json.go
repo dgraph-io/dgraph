@@ -35,11 +35,11 @@ func CompareJSON(t *testing.T, want, got string) {
 	CompareJSONMaps(t, wantMap, gotMap)
 }
 
-func EqualJSON(t *testing.T, want, got string, savepath string) bool {
+func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
 
-	return DiffJSONMaps(t, wantMap, gotMap, savepath)
+	return DiffJSONMaps(t, wantMap, gotMap, savepath, quiet)
 }
 
 func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
@@ -53,10 +53,11 @@ func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 }
 
 func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
-	return DiffJSONMaps(t, wantMap, gotMap, "")
+	return DiffJSONMaps(t, wantMap, gotMap, "", false)
 }
 
-func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}, savepath string) bool {
+func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{},
+	savepath string, quiet bool) bool {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
@@ -69,8 +70,8 @@ func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}, savepath
 		if err != nil {
 			t.Error("Could not marshal JSON:", err)
 		}
-		t.Errorf("Expected JSON and actual JSON differ:\n%s",
-			sdiffJSON(wantBuf, gotBuf, savepath))
+			t.Errorf("Expected JSON and actual JSON differ:\n%s",
+				sdiffJSON(wantBuf, gotBuf, savepath, quiet))
 		return false
 	}
 
@@ -94,7 +95,7 @@ func SnipJSON(buf []byte) string {
 	return string(buf)
 }
 
-func sdiffJSON(wantBuf, gotBuf []byte, savepath string) string {
+func sdiffJSON(wantBuf, gotBuf []byte, savepath string, quiet bool) string {
 	var wantFile, gotFile *os.File
 
 	if savepath != "" {
@@ -114,6 +115,8 @@ func sdiffJSON(wantBuf, gotBuf []byte, savepath string) string {
 	// don't do diff when one side is missing
 	if len(gotBuf) == 0 {
 		return "Got empty response"
+	} else if quiet {
+		return "Not showing diff in quiet mode"
 	}
 
 	out, _ := exec.Command("sdiff", wantFile.Name(), gotFile.Name()).CombinedOutput()

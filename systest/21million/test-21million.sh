@@ -50,6 +50,7 @@ options:
     --savedir=path  specify a directory to save test failure json in
                     for easier post-test review
     --load-only     load data but do not run tests
+    --quiet         just report which queries differ, without a diff
 EOF
     exit 0
 fi
