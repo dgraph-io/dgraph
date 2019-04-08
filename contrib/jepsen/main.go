@@ -60,7 +60,8 @@ const (
 )
 
 var (
-	defaultWorkloads = strings.Join([]string{
+	// Comma-separated arguments
+	defaultWorkloads = []string{
 		"bank",
 		"delete",
 		"long-fork",
@@ -70,13 +71,14 @@ var (
 		"set",
 		"uid-set",
 		"sequential",
-	}, ",")
-	defaultNemeses = strings.Join([]string{
+	}
+	// Space-separated arguments
+	defaultNemeses = []string{
 		"none",
 		"kill-alpha,kill-zero",
 		"partition-ring",
 		"move-tablet",
-	}, " ")
+	}
 )
 
 var (
@@ -86,8 +88,9 @@ var (
 	timeLimit   = flag.Int("jepsen.time-limit", 600, "Time limit per Jepsen test in seconds.")
 	nodes       = flag.String("jepsen.nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
 	concurrency = flag.String("jepsen.concurrency", "6n", "Number of concurrent workers.")
-	workload    = flag.String("jepsen.workload", defaultWorkloads, "Test workload to run.")
-	nemesis     = flag.String("jepsen.nemesis", defaultNemeses,
+	workload    = flag.String("jepsen.workload", strings.Join(defaultWorkloads, ","),
+		"Test workload to run.")
+	nemesis = flag.String("jepsen.nemesis", strings.Join(defaultNemeses, " "),
 		"A space-separated, comma-separated list of nemesis types.")
 	localBinary = flag.String("jepsen.local-binary", "/gobin/dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
@@ -107,15 +110,22 @@ var (
 )
 
 func Command(command ...string) *exec.Cmd {
-	if *dryRun {
-		return exec.Command("echo", command...)
-	}
-	return exec.Command(command[0], command[1:]...)
+	return CommandContext(ctxb, command...)
 }
 
 func CommandContext(ctx context.Context, command ...string) *exec.Cmd {
 	if *dryRun {
-		return exec.CommandContext(ctx, "echo", command...)
+		// Properly quote the args so the echoed output can run via copy/paste.
+		quoted := []string{}
+		for _, c := range command {
+			if strings.Contains(c, " ") {
+				quoted = append(quoted, strconv.Quote(c))
+			} else {
+				quoted = append(quoted, c)
+			}
+
+		}
+		return exec.CommandContext(ctx, "echo", quoted...)
 	}
 	return exec.CommandContext(ctx, command[0], command[1:]...)
 }
@@ -140,8 +150,12 @@ func jepsenServe() {
 }
 
 func runJepsenTest(test *JepsenTest) int {
-	command := []string{
-		// setup commands
+	dockerCmd := []string{
+		"docker", "exec", "jepsen-control",
+		"/bin/bash", "-c",
+	}
+	testCmd := []string{
+		// setup commands needed to set up ssh-agent to ssh into nodes.
 		"source", "~/.bashrc", "&&",
 		"cd", "/jepsen/dgraph", "&&",
 		// test commands
@@ -156,19 +170,19 @@ func runJepsenTest(test *JepsenTest) int {
 		"--test-count", strconv.Itoa(test.testCount),
 	}
 	if test.nemesis == "skew-clock" {
-		command = append(command, "--skew", test.skew)
+		testCmd = append(testCmd, "--skew", test.skew)
 	}
 	if *jaeger != "" {
-		command = append(command, "--dgraph-jaeger-collector", *jaeger)
+		testCmd = append(testCmd, "--dgraph-jaeger-collector", *jaeger)
 	}
+	command := append(dockerCmd, strings.Join(testCmd, " "))
 
 	// Timeout should be a bit longer than the Jepsen test time limit to account
 	// for post-analysis time.
 	commandTimeout := 10*time.Minute + time.Duration(test.timeLimit)*time.Second
 	ctx, cancel := context.WithTimeout(ctxb, commandTimeout)
 	defer cancel()
-	cmd := CommandContext(ctx, "docker", "exec", "jepsen-control",
-		"/bin/bash", "-c", strings.Join(command, " "))
+	cmd := CommandContext(ctx, command...)
 
 	var out bytes.Buffer
 	var stdout io.Writer
@@ -176,7 +190,7 @@ func runJepsenTest(test *JepsenTest) int {
 	stdout = io.MultiWriter(&out, os.Stdout)
 	stderr = io.MultiWriter(&out, os.Stderr)
 	if inCi() {
-		// Jepsen test output is not needed in TeamCity.
+		// Jepsen test output to os.Stdout/os.Stderr is not needed in TeamCity.
 		stdout = &out
 		stderr = &out
 	}
