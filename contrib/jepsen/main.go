@@ -203,7 +203,7 @@ func inCi() bool {
 
 func tcStart(testName string) func(pass int) {
 	if !inCi() {
-		return nil
+		return func(int) {}
 	}
 	now := time.Now()
 	fmt.Printf("##teamcity[testStarted name='%v']\n", testName)
