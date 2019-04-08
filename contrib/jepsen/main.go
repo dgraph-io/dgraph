@@ -19,8 +19,11 @@
 //
 // Example usage:
 //
-// # Runs all test and nemesis combinations (36 total)
-// ./jepsen
+// Runs all test and nemesis combinations (36 total)
+//     ./jepsen
+//
+// Runs bank test with partition-ring nemesis for 10 minutes
+//     ./jepsen --jepsen.workload bank --jepsen.nemesis partition-ring
 
 package main
 
