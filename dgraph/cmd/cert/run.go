@@ -50,7 +50,7 @@ func init() {
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
 	flag.StringP("ca-key", "k", defaultCAKey, "path to the CA private key")
 	flag.IntP("keysize", "r", defaultKeySize, "RSA key bit size for creating new keys")
-	flag.StringP("curve", "e", "",
+	flag.StringP("elliptic-curve", "e", "",
 		`ECDSA curve for private key. Values are: "P224", "P256", "P384", "P521".`)
 	flag.Int("duration", defaultDays, "duration of cert validity in days")
 	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes")
@@ -80,7 +80,7 @@ func run() {
 		nodes:   Cert.Conf.GetStringSlice("nodes"),
 		force:   Cert.Conf.GetBool("force"),
 		verify:  Cert.Conf.GetBool("verify"),
-		curve:   Cert.Conf.GetString("curve"),
+		curve:   Cert.Conf.GetString("elliptic-curve"),
 	}
 
 	x.Check(createCerts(opt))
