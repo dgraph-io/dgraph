@@ -111,6 +111,11 @@ func sdiffJSON(wantBuf, gotBuf []byte, savepath string) string {
 	_ = ioutil.WriteFile(wantFile.Name(), wantBuf, 0600)
 	_ = ioutil.WriteFile(gotFile.Name(), gotBuf, 0600)
 
+	// don't do diff when one side is missing
+	if len(gotBuf) == 0 {
+		return "Got empty response"
+	}
+
 	out, _ := exec.Command("sdiff", wantFile.Name(), gotFile.Name()).CombinedOutput()
 
 	return string(out)
