@@ -136,7 +136,7 @@ func jepsenServe() {
 		"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
 		"lein", "run", "serve")
 	// Ignore output and errors. It's okay if "lein run serve" already ran before.
-	cmd.Run()
+	_ = cmd.Run()
 }
 
 func runJepsenTest(test *JepsenTest) int {
@@ -165,7 +165,8 @@ func runJepsenTest(test *JepsenTest) int {
 	// Timeout should be a bit longer than the Jepsen test time limit to account
 	// for post-analysis time.
 	commandTimeout := 10*time.Minute + time.Duration(test.timeLimit)*time.Second
-	ctx, _ := context.WithTimeout(ctxb, commandTimeout)
+	ctx, cancel := context.WithTimeout(ctxb, commandTimeout)
+	defer cancel()
 	cmd := CommandContext(ctx, "docker", "exec", "jepsen-control",
 		"/bin/bash", "-c", strings.Join(command, " "))
 
