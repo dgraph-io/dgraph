@@ -60,7 +60,7 @@ const (
 )
 
 var (
-	defaultWorkloads = []string{
+	defaultWorkloads = strings.Join([]string{
 		"bank",
 		"delete",
 		"long-fork",
@@ -70,29 +70,33 @@ var (
 		"set",
 		"uid-set",
 		"sequential",
-	}
-	defaultNemeses = []string{
+	}, ",")
+	defaultNemeses = strings.Join([]string{
 		"none",
 		"kill-alpha,kill-zero",
 		"partition-ring",
 		"move-tablet",
-	}
+	}, " ")
 )
 
 var (
 	ctxb = context.Background()
 
 	// Jepsen test flags
-	timeLimit         = flag.Int("jepsen.time-limit", 600, "Time limit per Jepsen test in seconds.")
-	nodes             = flag.String("jepsen.nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
-	concurrency       = flag.String("jepsen.concurrency", "6n", "Number of concurrent workers.")
-	workload          = flag.String("jepsen.workload", strings.Join(defaultWorkloads, ","), "Test workload to run.")
-	nemesis           = flag.String("jepsen.nemesis", strings.Join(defaultNemeses, " "), "A space-separated, comma-separated list of nemesis types.")
-	localBinary       = flag.String("jepsen.local-binary", "/gobin/dgraph", "Path to Dgraph binary within the Jepsen control node.")
-	rebalanceInterval = flag.String("jepsen.rebalance-interval", "10h", "Interval of Dgraph's tablet rebalancing.")
-	skew              = flag.String("jepsen.skew", "", "Skew clock (tiny, small, big, huge)")
-	jaeger            = flag.String("jepsen.dgraph-jaeger-collector", "http://jaeger:14268", "Run with Jaeger collector. Set to empty string to disable.")
-	testCount         = flag.Int("jepsen.test-count", 1, "Test count per Jepsen test.")
+	timeLimit   = flag.Int("jepsen.time-limit", 600, "Time limit per Jepsen test in seconds.")
+	nodes       = flag.String("jepsen.nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
+	concurrency = flag.String("jepsen.concurrency", "6n", "Number of concurrent workers.")
+	workload    = flag.String("jepsen.workload", defaultWorkloads, "Test workload to run.")
+	nemesis     = flag.String("jepsen.nemesis", defaultNemeses,
+		"A space-separated, comma-separated list of nemesis types.")
+	localBinary = flag.String("jepsen.local-binary", "/gobin/dgraph",
+		"Path to Dgraph binary within the Jepsen control node.")
+	rebalanceInterval = flag.String("jepsen.rebalance-interval", "10h",
+		"Interval of Dgraph's tablet rebalancing.")
+	skew   = flag.String("jepsen.skew", "", "Skew clock amount. (tiny, small, big, huge)")
+	jaeger = flag.String("jepsen.dgraph-jaeger-collector", "http://jaeger:14268",
+		"Run with Jaeger collector. Set to empty string to disable.")
+	testCount = flag.Int("jepsen.test-count", 1, "Test count per Jepsen test.")
 
 	// Jepsen control flags
 	doUp    = flag.Bool("up", true, "Run Jepsen ./up.sh.")
@@ -117,7 +121,8 @@ func CommandContext(ctx context.Context, command ...string) *exec.Cmd {
 }
 
 func jepsenUp() {
-	cmd := Command("./up.sh", "--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
+	cmd := Command("./up.sh",
+		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
 	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -180,10 +185,6 @@ func runJepsenTest(test *JepsenTest) int {
 	if err := cmd.Run(); err != nil {
 		// TODO The exit code could probably be checked instead of checking the output.
 		// Check jepsen source to be sure.
-		// 0 = pass, 1 = failed, 255 = incomplete
-		// Pass status: https://github.com/jepsen-io/jepsen/blob/master/jepsen/src/jepsen/cli.clj#L298-L300
-		// Fail status: https://github.com/jepsen-io/jepsen/blob/master/jepsen/src/jepsen/cli.clj#L363-L364
-		// Incomplete status: https://github.com/jepsen-io/jepsen/blob/master/jepsen/src/jepsen/cli.clj#L302-L304
 		if strings.Contains(out.String(), "Analysis invalid") {
 			return TestFail
 		} else {
@@ -214,7 +215,8 @@ func tcStart(testName string) func(pass int) {
 		case TestFail:
 			fmt.Printf("##teamcity[testFailed='%v' duration='%v']\n", testName, durMs)
 		case TestIncomplete:
-			fmt.Printf("##teamcity[testFailed='%v' duration='%v' message='Test incomplete.']\n", testName, durMs)
+			fmt.Printf("##teamcity[testFailed='%v' duration='%v' message='Test incomplete.']\n",
+				testName, durMs)
 		}
 	}
 }
