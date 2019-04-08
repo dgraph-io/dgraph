@@ -199,7 +199,6 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
-	batch := make([]*api.NQuad, 0, 2*opt.batchSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -207,33 +206,9 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		default:
 		}
 
-		var nqs []*api.NQuad
 		chunkBuf, err := ck.Chunk(rd)
-		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err = ck.Parse(chunkBuf)
-			x.CheckfNoTrace(err)
-
-			for _, nq := range nqs {
-				nq.Subject = l.uid(nq.Subject)
-				if len(nq.ObjectId) > 0 {
-					nq.ObjectId = l.uid(nq.ObjectId)
-				}
-			}
-
-			batch = append(batch, nqs...)
-			for len(batch) >= opt.batchSize {
-				mu := api.Mutation{Set: batch[:opt.batchSize]}
-				l.reqs <- mu
-				// The following would create a new batch slice. We should not use batch =
-				// batch[opt.batchSize:], because it would end up modifying the batch array passed
-				// to l.reqs above.
-				batch = append([]*api.NQuad{}, batch[opt.batchSize:]...)
-			}
-		}
+		l.processChunk(chunkBuf, ck)
 		if err == io.EOF {
-			if len(batch) > 0 {
-				l.reqs <- api.Mutation{Set: batch}
-			}
 			break
 		} else {
 			x.Check(err)
@@ -242,6 +217,41 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	x.CheckfNoTrace(ck.End(rd))
 
 	return nil
+}
+
+// processChunk parses the rdf entries from the chunk, and group them into
+// batches (each one containing opt.batchSize entries) and sends the batches
+// to the loader.reqs channel
+func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
+	if chunkBuf != nil && chunkBuf.Len() > 0 {
+		nqs, err := ck.Parse(chunkBuf)
+		x.CheckfNoTrace(err)
+
+		batch := make([]*api.NQuad, 0, opt.batchSize)
+		for _, nq := range nqs {
+			nq.Subject = l.uid(nq.Subject)
+			if len(nq.ObjectId) > 0 {
+				nq.ObjectId = l.uid(nq.ObjectId)
+			}
+
+			batch = append(batch, nq)
+
+			if len(batch) >= opt.batchSize {
+				mu := api.Mutation{Set: batch}
+				l.reqs <- mu
+
+				// The following would create a new batch slice. We should not use batch =
+				// batch[:0], because it would end up modifying the batch array passed
+				// to l.reqs above.
+				batch = make([]*api.NQuad, 0, opt.batchSize)
+			}
+		}
+
+		// sends the left over nqs
+		if len(batch) > 0 {
+			l.reqs <- api.Mutation{Set: batch}
+		}
+	}
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
