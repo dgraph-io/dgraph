@@ -122,6 +122,11 @@ func (s *Service) Broadcast(msg []byte) (err error) {
 
 // Send sends a message to a specific peer
 func (s *Service) Send(peer ps.PeerInfo, msg []byte) error {
+	err := s.host.Connect(s.ctx, peer)
+	if err != nil {
+		return err
+	}
+
 	stream, err := s.host.NewStream(s.ctx, peer.ID, protocolPrefix)
 	if err != nil {
 		return err
@@ -137,9 +142,14 @@ func (s *Service) Send(peer ps.PeerInfo, msg []byte) error {
 
 // Ping pings a peer
 func (s *Service) Ping(peer peer.ID) error {
-	_, err := s.dht.FindPeer(s.ctx, peer)
+	ps, err := s.dht.FindPeer(s.ctx, peer)
 	if err != nil {
 		return fmt.Errorf("could not find peer: %s", err)
+	}
+
+	err = s.host.Connect(s.ctx, ps)
+	if err != nil {
+		return err
 	}
 
 	return s.dht.Ping(s.ctx, peer)
@@ -179,6 +189,7 @@ func (sc *ServiceConfig) buildOpts() ([]libp2p.Option, error) {
 		libp2p.DisableRelay(),
 		libp2p.Identity(priv),
 		libp2p.NATPortMap(),
+		libp2p.Ping(true),
 	}, nil
 }
 
