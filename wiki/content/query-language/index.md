@@ -586,6 +586,7 @@ Filters nodes at the current query level to only nodes in the given set of UIDs.
 
 For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For value variable `b`, `uid(b)` represents the UIDs from the UID to value map.  With two or more variables, `uid(a,b,...)` represents the union of all the variables.
 
+`uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
 Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
 
@@ -748,9 +749,9 @@ Schema Types: `geo`
 
 Index Required: `geo`
 
-Matches all entities where the location given by `predicate` is within `distance` metres of geojson coordinate `[long, lat]`.
+Matches all entities where the location given by `predicate` is within `distance` meters of geojson coordinate `[long, lat]`.
 
-Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Francisco.
+Query Example: Tourist destinations within 1000 meters (1 kilometer) of a point in Golden Gate Park in San Francisco.
 
 {{< runnable >}}
 {
@@ -2684,7 +2685,7 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 ## K-Shortest Path Queries
 
-The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
@@ -3494,3 +3495,4 @@ num: int @index(factor) .
   }
 }
 ```
+
