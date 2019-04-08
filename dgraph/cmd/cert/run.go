@@ -27,10 +27,10 @@ import (
 var Cert x.SubCommand
 
 type options struct {
-	dir, caKey, caCert, client string
-	force, verify              bool
-	keySize, days              int
-	nodes                      []string
+	dir, caKey, caCert, client, curve string
+	force, verify                     bool
+	keySize, days                     int
+	nodes                             []string
 }
 
 var opt options
@@ -49,7 +49,9 @@ func init() {
 	flag := Cert.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
 	flag.StringP("ca-key", "k", defaultCAKey, "path to the CA private key")
-	flag.Int("keysize", defaultKeySize, "RSA key bit size for creating new keys")
+	flag.IntP("keysize", "r", defaultKeySize, "RSA key bit size for creating new keys")
+	flag.StringP("curve", "e", "",
+		`ECDSA curve for private key. Values are: "P224", "P256", "P384", "P521".`)
 	flag.Int("duration", defaultDays, "duration of cert validity in days")
 	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes")
 	flag.StringP("client", "c", "", "create cert/key pair for a client name")
@@ -78,6 +80,7 @@ func run() {
 		nodes:   Cert.Conf.GetStringSlice("nodes"),
 		force:   Cert.Conf.GetBool("force"),
 		verify:  Cert.Conf.GetBool("verify"),
+		curve:   Cert.Conf.GetString("curve"),
 	}
 
 	x.Check(createCerts(opt))
