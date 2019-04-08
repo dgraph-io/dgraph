@@ -17,6 +17,9 @@
 package cert
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/md5"
 	"crypto/rsa"
 	"encoding/hex"
@@ -25,6 +28,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type certInfo struct {
@@ -110,13 +115,23 @@ func getFileInfo(file string) *certInfo {
 			return &info
 		}
 
-		key, err := readKey(file)
+		priv, err := readKey(file)
 		if err != nil {
 			info.err = err
 			return &info
 		}
-		h := md5.Sum(key.PublicKey.N.Bytes())
-		info.md5sum = fmt.Sprintf("%X", h[:])
+		key, ok := priv.(crypto.Signer)
+		if !ok {
+			info.err = x.Errorf("Unknown private key type: %T", key)
+		}
+		switch k := key.(type) {
+		case *ecdsa.PrivateKey:
+			h := md5.Sum(elliptic.Marshal(k.PublicKey.Curve, k.PublicKey.X, k.PublicKey.Y))
+			info.md5sum = fmt.Sprintf("%X", h[:])
+		case *rsa.PrivateKey:
+			h := md5.Sum(k.PublicKey.N.Bytes())
+			info.md5sum = fmt.Sprintf("%X", h[:])
+		}
 
 	default:
 		info.err = fmt.Errorf("Unsupported file")
