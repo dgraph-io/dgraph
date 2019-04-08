@@ -80,10 +80,14 @@ func getFileInfo(file string) *certInfo {
 			return &info
 		}
 
-		if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+		switch key := cert.PublicKey.(type) {
+		case *rsa.PublicKey:
 			h := md5.Sum(key.N.Bytes())
 			info.md5sum = fmt.Sprintf("%X", h[:])
-		} else {
+		case *ecdsa.PublicKey:
+			h := md5.Sum(elliptic.Marshal(key.Curve, key.X, key.Y))
+			info.md5sum = fmt.Sprintf("%X", h[:])
+		default:
 			info.md5sum = "Invalid RSA public key"
 		}
 
