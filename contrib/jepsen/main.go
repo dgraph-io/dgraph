@@ -85,7 +85,7 @@ var (
 	concurrency       = flag.String("jepsen.concurrency", "6n", "Number of concurrent workers.")
 	workload          = flag.String("jepsen.workload", strings.Join(defaultWorkloads, ","), "Test workload to run.")
 	nemesis           = flag.String("jepsen.nemesis", strings.Join(defaultNemeses, " "), "A space-separated, comma-separated list of nemesis types.")
-	localBinary       = flag.String("jepsen.local-binary", "/gobin/dgraph", "Path to local Dgraph binary.")
+	localBinary       = flag.String("jepsen.local-binary", "/gobin/dgraph", "Path to Dgraph binary within the Jepsen control node.")
 	rebalanceInterval = flag.String("jepsen.rebalance-interval", "10h", "Interval of Dgraph's tablet rebalancing.")
 	skew              = flag.String("jepsen.skew", "", "Skew clock (tiny, small, big, huge)")
 	jaeger            = flag.String("jepsen.dgraph-jaeger-collector", "http://jaeger:14268", "Run with Jaeger collector. Set to empty string to disable.")
@@ -225,7 +225,6 @@ func main() {
 	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH must be set.")
 	}
-
 	if strings.Contains(*nemesis, "skew-clock") && *skew == "" {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
