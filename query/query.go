@@ -1510,8 +1510,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 	if len(sg.counts) > 0 {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
+			Vals:    make(map[uint64]types.Val),
+			path:    sgPath,
 			strList: sg.valueMatrix,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
@@ -1523,8 +1523,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 	} else if sg.Params.uidCount {
 		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
+			Vals:    make(map[uint64]types.Val),
+			path:    sgPath,
 			strList: sg.valueMatrix,
 		}
 
@@ -1543,9 +1543,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// This implies it is a entity variable.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids: uids,
-				path: sgPath,
-				Vals: make(map[uint64]types.Val),
+				Uids:    uids,
+				path:    sgPath,
+				Vals:    make(map[uint64]types.Val),
 				strList: sg.valueMatrix,
 			}
 			return nil
@@ -1587,8 +1587,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = varValue{
-			path: sgPath,
-			Vals: make(map[uint64]types.Val),
+			path:    sgPath,
+			Vals:    make(map[uint64]types.Val),
 			strList: sg.valueMatrix,
 		}
 	}

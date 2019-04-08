@@ -37,7 +37,7 @@ type schemaStore struct {
 
 func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
-		m: map[string]*pb.SchemaUpdate{},
+		m:     map[string]*pb.SchemaUpdate{},
 		state: state,
 	}
 	if opt.StoreXids {

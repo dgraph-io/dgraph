@@ -333,7 +333,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	checkPreds := func() error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
 		preds := make(map[string]struct{})
-		
+
 		for _, k := range src.Preds {
 			preds[k] = struct{}{}
 		}
