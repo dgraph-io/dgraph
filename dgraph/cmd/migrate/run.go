@@ -103,6 +103,9 @@ type TableGuide struct {
 
 	// mappedPredNames[i] stores the predicate name for value in column i of a MySQL table
 	columnNameToPredicate map[string]string
+
+	// the current table row number, used to generate labels for uids
+	tableRowNum int
 }
 
 // getUidColumn asks the user to type a column name, whole value will be used to generate
@@ -189,8 +192,28 @@ func getTableGuide(table string, pool *sql.DB) (*TableGuide, error) {
 	return tableGuide, nil
 }
 
+func getUidLabel(table string, column string, value interface{}) string {
+	return fmt.Sprintf("_:%s_%s_%v", table, column, value)
+}
+
+func getSubjectLabel(table string, columnNames []string, columnValues []interface{},
+	tableGuide *TableGuide) string {
+	if len(tableGuide.uidColumn) > 0 {
+		for i := 0; i < len(columnNames); i++ {
+			if columnNames[i] == tableGuide.uidColumn {
+				return getUidLabel(table, columnNames[i], reflect.ValueOf(columnValues[i]).Elem())
+			}
+		}
+		// we should never reach here
+		logger.Fatalf("Unable to find the column name: %s", tableGuide.uidColumn)
+	}
+
+	tableGuide.tableRowNum++
+	return getUidLabel(table, "", tableGuide.tableRowNum)
+}
+
 // dumpTable reads data from a table and sends to standard output
-func dumpTable(table string, pool *sql.DB) error {
+func dumpTable(table string, tableGuide *TableGuide, pool *sql.DB) error {
 	query := fmt.Sprintf(`select * from %s`, table)
 	rows, err := pool.Query(query)
 	if err != nil {
@@ -206,7 +229,6 @@ func dumpTable(table string, pool *sql.DB) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("columns: %s", strings.Join(columns, "   "))
 
 			columnTypes, err = rows.ColumnTypes()
 			if err != nil {
@@ -229,9 +251,18 @@ func dumpTable(table string, pool *sql.DB) error {
 		}
 		rows.Scan(colValues...)
 
+		subjectLabel := getSubjectLabel(table, columns, colValues, tableGuide)
+
 		for i := 0; i < len(columns); i++ {
 			// dereference the pointer
-			fmt.Printf("%v ", reflect.ValueOf(colValues[i]).Elem())
+			colName := columns[i]
+			if colName == tableGuide.uidColumn {
+				continue
+			}
+
+			fmt.Printf("%s <%s> %v .", subjectLabel,
+				tableGuide.columnNameToPredicate[colName],
+				reflect.ValueOf(colValues[i]).Elem())
 		}
 		fmt.Println()
 	}
@@ -270,11 +301,11 @@ func run(conf *viper.Viper) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%+v", tableGuide)
-		/*
-			if err = dumpTable(table, pool); err != nil {
-				return err
-			}*/
+		//fmt.Printf("%+v", tableGuide)
+
+		if err = dumpTable(table, tableGuide, pool); err != nil {
+			return err
+		}
 	}
 	return nil
 }
