@@ -54,7 +54,7 @@ const (
 // For ECDSA, the configuration elliptical curve is used.
 // Returns the RSA or ECDSA private key, or error otherwise.
 func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
-	f, err := safeCreate(keyFile, c.force, 0600)
+	fp, err := safeCreate(keyFile, c.force, 0600)
 	if err != nil {
 		// reuse the existing key, if possible.
 		if os.IsExist(err) {
@@ -62,7 +62,7 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer fp.Close()
 
 	var key crypto.PrivateKey
 	switch c.curve {
@@ -87,12 +87,12 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		return key, pem.Encode(f, &pem.Block{
+		return key, pem.Encode(fp, &pem.Block{
 			Type:  "EC PRIVATE KEY",
 			Bytes: b,
 		})
 	case *rsa.PrivateKey:
-		return key, pem.Encode(f, &pem.Block{
+		return key, pem.Encode(fp, &pem.Block{
 			Type:  "RSA PRIVATE KEY",
 			Bytes: x509.MarshalPKCS1PrivateKey(k),
 		})
@@ -100,10 +100,10 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 	return nil, x.Errorf("Unsupported key type: %T", key)
 }
 
-// readKey tries to read and decode the contents of a private key at fn.
-// Returns the RSA private key, or error otherwise.
-func readKey(fn string) (crypto.PrivateKey, error) {
-	b, err := ioutil.ReadFile(fn)
+// readKey tries to read and decode the contents of a private key file.
+// Returns the private key, or error otherwise.
+func readKey(keyFile string) (crypto.PrivateKey, error) {
+	b, err := ioutil.ReadFile(keyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -120,10 +120,10 @@ func readKey(fn string) (crypto.PrivateKey, error) {
 	return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
 }
 
-// readCert tries to read and decode the contents of an RSA-signed cert at fn.
+// readCert tries to read and decode the contents of a signed cert file.
 // Returns the x509v3 cert, or error otherwise.
-func readCert(fn string) (*x509.Certificate, error) {
-	b, err := ioutil.ReadFile(fn)
+func readCert(certFile string) (*x509.Certificate, error) {
+	b, err := ioutil.ReadFile(certFile)
 	if err != nil {
 		return nil, err
 	}
@@ -140,12 +140,12 @@ func readCert(fn string) (*x509.Certificate, error) {
 }
 
 // safeCreate only creates a file if it doesn't exist or we force overwrite.
-func safeCreate(fn string, overwrite bool, perm os.FileMode) (*os.File, error) {
+func safeCreate(name string, overwrite bool, perm os.FileMode) (*os.File, error) {
 	flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	if !overwrite {
 		flag |= os.O_EXCL
 	}
-	return os.OpenFile(fn, flag, perm)
+	return os.OpenFile(name, flag, perm)
 }
 
 // createCAPair creates a CA certificate and key pair. The key file is created only
@@ -267,12 +267,11 @@ func createCerts(opt options) error {
 		return errors.New("Key size value must be a factor of 2")
 	}
 
-	if opt.curve != "" {
-		switch opt.curve {
-		case "P224", "P256", "P384", "P521":
-		default:
-			return errors.New(`Elliptic curve value must be one of: "P224", "P256", "P384", "P521"`)
-		}
+	switch opt.curve {
+	case "":
+	case "P224", "P256", "P384", "P521":
+	default:
+		return errors.New(`Elliptic curve value must be one of: P224, P256, P384 or P521`)
 	}
 
 	// no path then save it in certsDir.
