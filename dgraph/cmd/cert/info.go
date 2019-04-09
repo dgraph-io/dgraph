@@ -20,8 +20,8 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/md5"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -38,7 +38,7 @@ type certInfo struct {
 	commonName   string
 	serialNumber string
 	verifiedCA   string
-	md5sum       string
+	digest       string
 	expireDate   time.Time
 	hosts        []string
 	fileMode     string
@@ -82,13 +82,11 @@ func getFileInfo(file string) *certInfo {
 
 		switch key := cert.PublicKey.(type) {
 		case *rsa.PublicKey:
-			h := md5.Sum(key.N.Bytes())
-			info.md5sum = fmt.Sprintf("%X", h[:])
+			info.digest = getHexDigest(key.N.Bytes())
 		case *ecdsa.PublicKey:
-			h := md5.Sum(elliptic.Marshal(key.Curve, key.X, key.Y))
-			info.md5sum = fmt.Sprintf("%X", h[:])
+			info.digest = getHexDigest(elliptic.Marshal(key.Curve, key.X, key.Y))
 		default:
-			info.md5sum = "Invalid RSA public key"
+			info.digest = "Invalid RSA public key"
 		}
 
 		if file != defaultCACert {
@@ -130,11 +128,10 @@ func getFileInfo(file string) *certInfo {
 		}
 		switch k := key.(type) {
 		case *ecdsa.PrivateKey:
-			h := md5.Sum(elliptic.Marshal(k.PublicKey.Curve, k.PublicKey.X, k.PublicKey.Y))
-			info.md5sum = fmt.Sprintf("%X", h[:])
+			info.digest = getHexDigest(elliptic.Marshal(k.PublicKey.Curve,
+				k.PublicKey.X, k.PublicKey.Y))
 		case *rsa.PrivateKey:
-			h := md5.Sum(k.PublicKey.N.Bytes())
-			info.md5sum = fmt.Sprintf("%X", h[:])
+			info.digest = getHexDigest(k.PublicKey.N.Bytes())
 		}
 
 	default:
@@ -142,6 +139,23 @@ func getFileInfo(file string) *certInfo {
 	}
 
 	return &info
+}
+
+// getHexDigest returns a SHA-256 hex digest broken up into 32-bit chunks
+// so that they easier to compare visually
+// e.g. 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
+func getHexDigest(data []byte) string {
+	const groupSizeBytes = 4
+
+	digest := sha256.Sum256(data)
+	groups := len(digest) / groupSizeBytes
+	hex := fmt.Sprintf("%0*X", groupSizeBytes*2, digest[0:groupSizeBytes])
+	for i := 1; i < groups; i++ {
+		hex += fmt.Sprintf(" %0*X", groupSizeBytes*2,
+			digest[i*groupSizeBytes:(i+1)*groupSizeBytes])
+	}
+
+	return hex
 }
 
 // getDirFiles walks dir and collects information about the files contained.

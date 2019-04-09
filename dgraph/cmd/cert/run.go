@@ -124,21 +124,21 @@ func listCerts() error {
 		}
 		fmt.Printf("%s %s - %s\n", f.fileMode, f.fileName, f.commonName)
 		if f.issuerName != "" {
-			fmt.Printf("%10s: %s\n", "Issuer", f.issuerName)
+			fmt.Printf("%14s: %s\n", "Issuer", f.issuerName)
 		}
 		if f.verifiedCA != "" {
-			fmt.Printf("%10s: %s\n", "CA Verify", f.verifiedCA)
+			fmt.Printf("%14s: %s\n", "CA Verify", f.verifiedCA)
 		}
 		if f.serialNumber != "" {
-			fmt.Printf("%10s: %s\n", "S/N", f.serialNumber)
+			fmt.Printf("%14s: %s\n", "S/N", f.serialNumber)
 		}
 		if !f.expireDate.IsZero() {
-			fmt.Printf("%10s: %x\n", "Expiration", f)
+			fmt.Printf("%14s: %x\n", "Expiration", f)
 		}
 		if f.hosts != nil {
-			fmt.Printf("%10s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
+			fmt.Printf("%14s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
 		}
-		fmt.Printf("%10s: %s\n\n", "MD5 hash", f.md5sum)
+		fmt.Printf("%14s: %s\n\n", "SHA-256 Digest", f.digest)
 	}
 
 	return nil
