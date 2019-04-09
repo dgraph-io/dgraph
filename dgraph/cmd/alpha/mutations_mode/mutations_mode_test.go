@@ -31,6 +31,8 @@ import (
 
 // Tests in this file require a cluster running with the --mutations=<mode> option.
 
+// Since this requires three alphas they will likely always be run with docker-compose,
+// so no point in trying to use z.TestSockAddr here.
 const disallowModeAlpha = "localhost:9180"
 const strictModeAlphaGroup1 = "localhost:9182"
 const strictModeAlphaGroup2 = "localhost:9183"

@@ -50,6 +50,7 @@ type s3Handler struct {
 	preader                  *io.PipeReader
 	cerr                     chan error
 	req                      *Request
+	uri                      *url.URL
 }
 
 func (h *s3Handler) credentialsInRequest() bool {
@@ -287,6 +288,43 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		version = m.Version
 	}
 	return version, nil
+}
+
+// ListManifests loads the manifests in the locations and returns them.
+func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
+	mc, err := h.setup(uri)
+	if err != nil {
+		return nil, err
+	}
+	h.uri = uri
+
+	var manifests []string
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	suffix := "/" + backupManifest
+	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+		if strings.HasSuffix(object.Key, suffix) {
+			manifests = append(manifests, object.Key)
+		}
+	}
+	if len(manifests) == 0 {
+		return nil, x.Errorf("No manifests found at: %s", uri.String())
+	}
+	sort.Strings(manifests)
+	if glog.V(3) {
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
+	}
+	return manifests, nil
+}
+
+func (h *s3Handler) ReadManifest(path string, m *Manifest) error {
+	mc, err := h.setup(h.uri)
+	if err != nil {
+		return err
+	}
+
+	return h.readManifest(mc, path, m)
 }
 
 // upload will block until it's done or an error occurs.
