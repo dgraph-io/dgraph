@@ -370,7 +370,7 @@ func TestPredicateRegex(t *testing.T) {
 	// create a new group
 	createGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "add",
-		"-d", dgraphEndpoint,
+		"-a", dgraphEndpoint,
 		"-g", devGroup, "-x", "password")
 	if errOutput, err := createGroupCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Unable to create group:%v", string(errOutput))
@@ -379,7 +379,7 @@ func TestPredicateRegex(t *testing.T) {
 	// add the user to the group
 	addUserToGroupCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "mod",
-		"-d", dgraphEndpoint,
+		"-a", dgraphEndpoint,
 		"-u", userid, "--group_list", devGroup, "-x", "password")
 	if errOutput, err := addUserToGroupCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Unable to add user %s to group %s:%v", userid, devGroup, string(errOutput))
@@ -387,7 +387,7 @@ func TestPredicateRegex(t *testing.T) {
 
 	addReadToNameCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "mod",
-		"-d", dgraphEndpoint,
+		"-a", dgraphEndpoint,
 		"-g", devGroup, "--pred", "name", "-m", strconv.Itoa(int(Read.Code)|int(Write.Code)),
 		"-x",
 		"password")
@@ -400,7 +400,7 @@ func TestPredicateRegex(t *testing.T) {
 	predRegex := "^predicate_to(.*)$"
 	addReadWriteToRegexPermCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
 		"acl", "mod",
-		"-d", dgraphEndpoint,
+		"-a", dgraphEndpoint,
 		"-g", devGroup, "-P", predRegex, "-m",
 		strconv.Itoa(int(Read.Code)|int(Write.Code)), "-x", "password")
 	if errOutput, err := addReadWriteToRegexPermCmd.CombinedOutput(); err != nil {

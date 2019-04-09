@@ -111,7 +111,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", rdfFile,
 		"--schema", schemaFile,
-		"--dgraph", z.SockAddr,
+		"--alpha", z.SockAddr,
 	)
 	liveCmd.Dir = liveDir
 	if err := liveCmd.Run(); err != nil {
