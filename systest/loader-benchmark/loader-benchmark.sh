@@ -4,7 +4,7 @@ readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
 BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
-BENCHMARK_SIZE=${BENCHMARK_SIZE:=small}
+BENCHMARK_SIZE=${BENCHMARK_SIZE:=big}
 SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million-noindex.schema?raw=true"
 DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
 
