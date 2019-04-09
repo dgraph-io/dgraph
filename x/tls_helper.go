@@ -53,7 +53,8 @@ type TLSHelperConfig struct {
 }
 
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
-	flag.String("tls_cacert", "", "The CA Cert file used to verify server certificates.")
+	flag.String("tls_cacert", "",
+		"The CA Cert file used to verify server certificates. Required for enabling TLS.")
 	flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	flag.String("tls_server_name", "", "Used to verify the server hostname.")
 	flag.String("tls_cert", "", "(optional) The Cert file provided by the client to the server.")
@@ -107,6 +108,14 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 		}
 
 		return &tlsCfg, nil
+	} else
+	// Attempt to determine if user specified *any* TLS option. Unfortunately and contrary to
+	// Viper's own documentation, there's no way to tell whether an option value came from a
+	// command-line option or a built-it default.
+	if v.GetString("tls_server_name") != "" ||
+		v.GetString("tls_cert") != "" ||
+		v.GetString("tls_key") != "" {
+		return nil, fmt.Errorf("--tls_cacert is required for enabling TLS")
 	}
 	return nil, nil
 }
