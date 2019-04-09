@@ -79,7 +79,10 @@ func FindDataFiles(str string, ext []string) []string {
 	}
 
 	list := strings.Split(str, ",")
-	if len(list) == 1 {
+	if len(list) == 1 && list[0] != "-" {
+		// make sure the file or directory exists,
+		// and recursively search for files if it's a directory
+
 		fi, err := os.Stat(str)
 		if os.IsNotExist(err) {
 			glog.Errorf("File or directory does not exist: %s", str)
