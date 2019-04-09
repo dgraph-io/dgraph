@@ -486,6 +486,17 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		}
 	}
 
+	if src.DropData {
+		for _, gid := range groups().KnownGroups() {
+			mu := mm[gid]
+			if mu == nil {
+				mu = &pb.Mutations{GroupId: gid}
+				mm[gid] = mu
+			}
+			mu.DropData = true
+		}
+	}
+
 	// Type definitions are sent to all groups.
 	if len(src.Types) > 0 {
 		for _, gid := range groups().KnownGroups() {

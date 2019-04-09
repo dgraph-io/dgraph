@@ -284,7 +284,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Received ALTER op: %+v", op)
 
 	// The following code block checks if the operation should run or not.
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && !op.DropData {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
@@ -292,6 +292,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		return empty, err
+	}
+
+	if op.DropAll && op.DropData {
+		return nil, x.Errorf("Only one of DropAll and DropData can be true")
 	}
 
 	if !isMutationAllowed(ctx) {
@@ -317,6 +321,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
+		ResetAcl()
+		return empty, err
+	}
+
+	if op.DropData {
+		m.DropData = true
+		_, err := query.ApplyMutations(ctx, m)
+
+		// recreate the admin account after a drop data operation
 		ResetAcl()
 		return empty, err
 	}
