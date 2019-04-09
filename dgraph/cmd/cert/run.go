@@ -40,9 +40,9 @@ func init() {
 		Use:   "cert",
 		Short: "Dgraph TLS certificate management",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			defer x.StartProfile(Cert.Conf).Stop()
-			run()
+			return run()
 		},
 	}
 
@@ -70,7 +70,7 @@ func init() {
 	Cert.Cmd.AddCommand(cmdList)
 }
 
-func run() {
+func run() error {
 	opt = options{
 		dir:     Cert.Conf.GetString("dir"),
 		caKey:   Cert.Conf.GetString("ca-key"),
@@ -83,7 +83,7 @@ func run() {
 		curve:   Cert.Conf.GetString("elliptic-curve"),
 	}
 
-	x.Check(createCerts(opt))
+	return createCerts(opt)
 }
 
 // listCerts handles the subcommand of "dgraph cert ls".
@@ -137,6 +137,9 @@ func listCerts() error {
 		}
 		if f.hosts != nil {
 			fmt.Printf("%14s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
+		}
+		if f.encType != "" {
+			fmt.Printf("%14s: %s\n", "Encryption", f.encType)
 		}
 		fmt.Printf("%14s: %s\n\n", "SHA-256 Digest", f.digest)
 	}
