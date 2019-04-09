@@ -119,7 +119,7 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		return err
 	}
 
-	f, err := safeCreate(certFile, c.force, 0666)
+	fp, err := safeCreate(certFile, c.force, 0666)
 	if err != nil {
 		// check the existing cert.
 		if os.IsExist(err) {
@@ -127,9 +127,9 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer fp.Close()
 
-	err = pem.Encode(f, &pem.Block{
+	err = pem.Encode(fp, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: der,
 	})
