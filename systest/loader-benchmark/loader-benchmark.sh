@@ -6,10 +6,7 @@ readonly SRCDIR=$(dirname $0)
 BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
 BENCHMARK_SIZE=${BENCHMARK_SIZE:=small}
 SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
-
 DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
-DGRAPH_RELOAD=${DGRAPH_RELOAD:=yes}
-DGRAPH_LOAD_ONLY=${DGRAPH_LOAD_ONLY:=}
 
 function Info {
     echo -e "INFO: $*"
@@ -35,19 +32,11 @@ if [[ $DGRAPH_LOADER != bulk && $DGRAPH_LOADER != live ]]; then
     exit 1
 fi
 
-if [[ ${DGRAPH_RELOAD,,} != yes ]]; then
-    unset DGRAPH_RELOAD
-fi
-
 Info "entering directory $SRCDIR"
 cd $SRCDIR
 
-if [[ $DGRAPH_RELOAD ]]; then
-    Info "removing old data (if any)"
-    DockerCompose down -v
-else
-    Info "using previously loaded data"
-fi
+Info "removing old data"
+DockerCompose down -v
 
 Info "bringing up zero container"
 DockerCompose up -d zero1
@@ -55,7 +44,7 @@ DockerCompose up -d zero1
 Info "waiting for zero to become leader"
 DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
-if [[ $DGRAPH_RELOAD && $DGRAPH_LOADER == bulk ]]; then
+if [[ $DGRAPH_LOADER == bulk ]]; then
     Info "bulk loading 21million data set"
     DockerCompose run --rm dg1 \
         bash -s <<EOF
@@ -71,7 +60,7 @@ DockerCompose up -d dg1
 Info "waiting for alpha to be ready"
 DockerCompose logs -f dg1 | grep -q -m1 "Server is ready"
 
-if [[ $DGRAPH_RELOAD && $DGRAPH_LOADER == live ]]; then
+if [[ $DGRAPH_LOADER == live ]]; then
     Info "live loading 21million data set"
     dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
                 --format=rdf --zero=:5080 --dgraph=:9180 --logtostderr
