@@ -45,19 +45,38 @@ func TestValueForType(t *testing.T) {
 	require.Nil(t, val.Value)
 }
 
-func TestParseTime(t *testing.T) {
+func TestParseTimeWithoutTZ(t *testing.T) {
 	tests := []struct {
 		in  string
 		out time.Time
 	}{
 		{in: "2018-10-28T04:00:10",
 			out: time.Date(2018, 10, 28, 4, 00, 10, 0, time.UTC)},
+		{in: "2018-05-30T09:30:10.5",
+			out: time.Date(2018, 5, 30, 9, 30, 10, 500000000, time.UTC)},
+		{in: "2018",
+			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{in: "2018-01",
+			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{in: "2018-01-01",
+			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	for _, tc := range tests {
+		out, err := ParseTime(tc.in)
+		require.NoError(t, err)
+		require.EqualValues(t, tc.out, out)
+	}
+}
+
+func TestParseTimeWithTZ(t *testing.T) {
+	tests := []struct {
+		in  string
+		out time.Time
+	}{
 		{in: "2018-10-28T04:00:10Z",
 			out: time.Date(2018, 10, 28, 4, 00, 10, 0, time.UTC)},
 		{in: "2018-10-28T04:00:10-00:00",
 			out: time.Date(2018, 10, 28, 4, 00, 10, 0, time.FixedZone("", 0))},
-		{in: "2018-05-30T09:30:10.5",
-			out: time.Date(2018, 5, 30, 9, 30, 10, 500000000, time.UTC)},
 		{in: "2018-05-30T09:30:10.5Z",
 			out: time.Date(2018, 5, 30, 9, 30, 10, 500000000, time.UTC)},
 		{in: "2018-05-30T09:30:10.5-00:00",
@@ -66,12 +85,6 @@ func TestParseTime(t *testing.T) {
 			out: time.Date(2018, 5, 30, 9, 30, 10, 0, time.FixedZone("", -6*60*60))},
 		{in: "2018-05-28T14:41:57+30:00",
 			out: time.Date(2018, 5, 28, 14, 41, 57, 0, time.FixedZone("", 30*60*60))},
-		{in: "2018",
-			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{in: "2018-01",
-			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{in: "2018-01-01",
-			out: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range tests {
 		out, err := ParseTime(tc.in)
