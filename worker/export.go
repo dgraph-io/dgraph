@@ -48,9 +48,16 @@ const (
 	ExportFormatJson
 )
 
-// XXX Other options?
 type ExportOpts struct {
 	Format ExportFormat
+}
+
+type DataExportParams struct {
+	pl      *posting.List
+	uid     uint64
+	attr    string
+	readTs  uint64
+	counter int
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -85,19 +92,27 @@ var predNonSpecialChars = unicode.RangeTable{
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
 
-func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*bpb.KVList, error) {
+func kvListWrap(buf bytes.Buffer) *bpb.KVList {
+	kv := &bpb.KV{
+		Value:   buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
+		Version: 1,           // Data value.
+	}
+	return listWrap(kv)
+}
+
+func toJSON(dxp *DataExportParams) (*bpb.KVList, error) {
 	var err error
 	var buf bytes.Buffer
 
-	if n != 1 {
+	if dxp.counter != 1 {
 		buf.WriteString(",\n")
 	}
 
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, uid)
-	err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, dxp.uid)
+	err = dxp.pl.Iterate(dxp.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			buf.WriteString(",\n")
 		} else {
@@ -106,14 +121,14 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 
 		buf.WriteString(mapStart)
 		if p.PostingType == pb.Posting_REF {
-			buf.WriteString(fmt.Sprintf(`,"%s":[`, attr))
+			buf.WriteString(fmt.Sprintf(`,"%s":[`, dxp.attr))
 			buf.WriteString(fmt.Sprintf("{\"uid\":"+uidFmtStrJson+"}", p.Uid))
 			buf.WriteString("]")
 		} else {
 			if p.PostingType != pb.Posting_VALUE_LANG {
-				buf.WriteString(fmt.Sprintf(`,"%s":`, attr))
+				buf.WriteString(fmt.Sprintf(`,"%s":`, dxp.attr))
 			} else {
-				buf.WriteString(fmt.Sprintf(`,"%s@%s":`, attr, string(p.LangTag)))
+				buf.WriteString(fmt.Sprintf(`,"%s@%s":`, dxp.attr, string(p.LangTag)))
 			}
 
 			vID := types.TypeID(p.ValType)
@@ -125,7 +140,7 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 				return nil
 			}
 
-			val := strings.TrimRight(str.Value.(string), "\x00")
+			val := strings.TrimRight(str.Value.(string), "\x00") // trim trailing null char
 			if vID != types.IntID && vID != types.FloatID {
 				val = strconv.Quote(val)
 			}
@@ -133,7 +148,7 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 		}
 
 		for _, fct := range p.Facets {
-			buf.WriteString(fmt.Sprintf(`,"%s|%s":`, attr, fct.Key))
+			buf.WriteString(fmt.Sprintf(`,"%s|%s":`, dxp.attr, fct.Key))
 
 			fVal, err := facets.ValFor(fct)
 			if err != nil {
@@ -165,11 +180,7 @@ func toJSON(pl *posting.List, uid uint64, attr string, readTs uint64, n int) (*b
 		return nil
 	})
 
-	kv := &bpb.KV{
-		Value:   buf.Bytes(),
-		Version: 1,
-	}
-	return listWrap(kv), err
+	return kvListWrap(buf), err
 }
 
 func toRDF(pl *posting.List, uid uint64, attr string, readTs uint64) (*bpb.KVList, error) {
@@ -390,7 +401,10 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	idx := 0
+	dxp := DataExportParams{
+		readTs:  in.ReadTs,
+		counter: 0,
+	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
@@ -407,9 +421,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return pk.IsData() || pk.IsSchema()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		idx += 1
 		item := itr.Item()
 		pk := x.Parse(item.Key())
+
+		dxp.counter += 1
+		dxp.uid = pk.Uid
+		dxp.attr = pk.Attr
 
 		switch {
 		case pk.IsSchema():
@@ -426,14 +443,14 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return toSchema(pk.Attr, update)
 
 		case pk.IsData():
-			pl, err := posting.ReadPostingList(key, itr)
+			dxp.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
 			}
 			if in.JsonFmt {
-				return toJSON(pl, pk.Uid, pk.Attr, in.ReadTs, idx)
+				return toJSON(&dxp)
 			}
-			return toRDF(pl, pk.Uid, pk.Attr, in.ReadTs)
+			return toRDF(dxp.pl, pk.Uid, pk.Attr, in.ReadTs)
 
 		default:
 			glog.Fatalf("Invalid key found: %+v\n", pk)
