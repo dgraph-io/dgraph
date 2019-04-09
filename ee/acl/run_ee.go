@@ -23,7 +23,7 @@ import (
 )
 
 type options struct {
-	dgraph string
+	alpha string
 }
 
 var (

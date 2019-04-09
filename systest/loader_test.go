@@ -39,7 +39,7 @@ func TestLoaderXidmap(t *testing.T) {
 	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/first.rdf.gz")
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
-		"--dgraph", ":"+cluster.dgraphPort,
+		"--alpha", ":"+cluster.dgraphPort,
 		"--zero", ":"+cluster.zeroPort,
 		"-x", "x",
 	)
@@ -53,7 +53,7 @@ func TestLoaderXidmap(t *testing.T) {
 	data = os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/second.rdf.gz")
 	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
-		"--dgraph", ":"+cluster.dgraphPort,
+		"--alpha", ":"+cluster.dgraphPort,
 		"--zero", ":"+cluster.zeroPort,
 		"-x", "x",
 	)
