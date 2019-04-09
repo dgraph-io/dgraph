@@ -166,13 +166,13 @@ func detectPendingTxns(attr string) error {
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
 
-	if proposal.Mutations.DropData {
+	if proposal.Mutations.DropOp == pb.Mutations_DATA {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		return posting.DeleteData()
 	}
 
-	if proposal.Mutations.DropAll {
+	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
