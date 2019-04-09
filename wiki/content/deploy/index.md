@@ -1331,41 +1331,43 @@ Example of command output:
 
 ```sh
 -rw-r--r-- ca.crt - Dgraph Root CA certificate
-    Issuer: Dgraph Labs, Inc.
-       S/N: 3e468ac77ecd5017
-Expiration: 23 Sep 28 19:10 UTC
-  MD5 hash: 85B533D86B0DD689B9DBDAD6755B702F
+        Issuer: Dgraph Labs, Inc.
+           S/N: 043c4d8fdd347f06
+    Expiration: 02 Apr 29 16:56 UTC
+SHA-256 Digest: 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
 
 -r-------- ca.key - Dgraph Root CA key
-  MD5 hash: 85B533D86B0DD689B9DBDAD6755B702F
+SHA-256 Digest: 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
 
--rw-r--r-- client.srfrog.crt - Dgraph client certificate: srfrog
-    Issuer: Dgraph Labs, Inc.
- CA Verify: PASSED
-       S/N: 55cedf3c8606d98e
-Expiration: 25 Sep 23 19:25 UTC
-  MD5 hash: 445DCB276E29FA1000F79CAC376569BA
+-rw-r--r-- client.admin.crt - Dgraph client certificate: admin
+        Issuer: Dgraph Labs, Inc.
+     CA Verify: PASSED
+           S/N: 297e4cb4f97c71f9
+    Expiration: 03 Apr 24 17:29 UTC
+SHA-256 Digest: D23EFB61 DE03C735 EB07B318 DB70D471 D3FE8556 B15D084C 62675857 788DF26C
 
--rw------- client.srfrog.key - Dgraph Client key
-  MD5 hash: 445DCB276E29FA1000F79CAC376569BA
+-rw------- client.admin.key - Dgraph Client key
+SHA-256 Digest: D23EFB61 DE03C735 EB07B318 DB70D471 D3FE8556 B15D084C 62675857 788DF26C
 
 -rw-r--r-- node.crt - Dgraph Node certificate
-    Issuer: Dgraph Labs, Inc.
- CA Verify: PASSED
-       S/N: 75aeb1ccd9a6f3fd
-Expiration: 25 Sep 23 19:39 UTC
-     Hosts: localhost
-  MD5 hash: FA0FFC88F7AA654575CD48A493C3D65A
+        Issuer: Dgraph Labs, Inc.
+     CA Verify: PASSED
+           S/N: 795ff0e0146fdb2d
+    Expiration: 03 Apr 24 17:00 UTC
+         Hosts: 104.25.165.23, 2400:cb00:2048:1::6819:a417, localhost, dgraph.io
+SHA-256 Digest: 7E243ED5 3286AE71 B9B4E26C 5B2293DA D3E7F336 1B1AFFA7 885E8767 B1A84D28
 
 -rw------- node.key - Dgraph Node key
-  MD5 hash: FA0FFC88F7AA654575CD48A493C3D65A
+SHA-256 Digest: 7E243ED5 3286AE71 B9B4E26C 5B2293DA D3E7F336 1B1AFFA7 885E8767 B1A84D28
 ```
 
 Important points:
 
-* The cert/key pairs should always have matching MD5 hashes. Otherwise, the cert(s) must be regenerated. If the Root CA pair differ, all cert/key must be regenerated; the flag `--force` can help.
+* The cert/key pairs should always have matching SHA-256 digests. Otherwise, the cert(s) must be
+  regenerated. If the Root CA pair differ, all cert/key must be regenerated; the flag `--force`
+  can help.
 * All certificates must pass Dgraph CA verification.
-* All key files should have the least access permissions, specially the `ca.key`, but be readable.
+* All key files should have the least access permissions, especially the `ca.key`, but be readable.
 * Key files won't be overwritten if they have limited access, even with `--force`.
 * Node certificates are only valid for the hosts listed.
 * Client certificates are only valid for the named client/user.

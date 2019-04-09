@@ -38,6 +38,11 @@ ifneq ($(strip $(BUILD_TAGS)),)
 	endif
 endif
 
+# add the gcflags to disable compiler optimizations, which will help debugging with dlv
+ifneq ($(strip $(BUILD_DEBUG)),)
+	BUILD_FLAGS += -gcflags="all=-N -l"
+endif
+
 .PHONY: all $(BIN)
 all: $(BIN)
 
@@ -51,6 +56,6 @@ uninstall:
 	@go clean -i -x
 
 install:
-	@echo "Old MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+	@echo "Old SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`
 	@go install $(BUILD_FLAGS)
-	@echo "New MD5:" `md5sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-32`
+	@echo "New SHA256:" `sha256sum $(GOPATH)/bin/$(BIN) 2>/dev/null | cut -c-64`

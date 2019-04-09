@@ -271,7 +271,7 @@ func (l *List) SetForDeletion() bool {
 }
 
 func hasDeleteAll(mpost *pb.Posting) bool {
-	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star))
+	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.

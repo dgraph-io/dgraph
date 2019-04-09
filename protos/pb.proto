@@ -465,12 +465,19 @@ message Status {
 }
 
 message BackupRequest {
-	uint64 read_ts      = 1;
-	uint32 group_id     = 2;
-	string unix_ts      = 3;
-	string location     = 4;
-	uint64 since        = 5;
-	uint64 snapshot_ts  = 6;
+	uint64 read_ts = 1;
+	uint32 group_id = 2;
+	string unix_ts = 3;
+	string location = 4;
+	uint64 since = 5;
+	uint64 snapshot_ts = 6;
+	string access_key = 7;
+	string secret_key = 8;
+	string session_token = 9;
+
+  // True if no credentials should be used to access the S3 or minio bucket.
+  // For example, when using a bucket with a public policy.
+  bool anonymous = 10;
 }
 
 message ExportRequest {
