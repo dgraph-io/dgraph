@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package migrate
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
 	"log"
@@ -96,6 +97,98 @@ func getMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 	return tables, nil
 }
 
+type TableGuide struct {
+	// optionally one column can be used as the uidColumn, whose values are mapped to Dgraph uids
+	uidColumn string
+
+	// mappedPredNames[i] stores the predicate name for value in column i of a MySQL table
+	columnNameToPredicate map[string]string
+}
+
+// getUidColumn asks the user to type a column name, whole value will be used to generate
+// uids in Dgraph, if the input is empty, then each SQL row will have a new uid in Dgraph
+func getUidColumn(columnNameMap map[string]string) (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Printf("choose a column to generate UIDs (hit ENTER for none):")
+		columnInput, err := reader.ReadString('\n')
+		columnInput = columnInput[:len(columnInput)-1]
+		if err != nil {
+			return "", err
+		}
+		if len(columnInput) == 0 {
+			return "", nil
+		}
+		if _, ok := columnNameMap[columnInput]; ok {
+			return columnInput, nil
+		}
+		fmt.Printf("the column %s does not exist, please try again\n", columnInput)
+	}
+}
+
+// getPredicateForColumn asks the user to type a predicate name that will be used for the column
+// if the input is empty, the columnName will be used as the predicate
+func getPredicateForColumn(columnName string) (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("choose a predicate name for the column %s ("+
+		"hit ENTER to use the exact column name):", columnName)
+	predicate, err := reader.ReadString('\n')
+	predicate = predicate[:len(predicate)-1]
+	if len(predicate) == 0 {
+		predicate = columnName
+	}
+	return predicate, err
+}
+
+func getTableGuide(table string, pool *sql.DB) (*TableGuide, error) {
+	query := fmt.Sprintf(`describe %s`, table)
+	rows, err := pool.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// 6 columns will be returned for the describe command
+	const PROPERTIES = 6
+	// Field, Type, Null, Key, Default, Extra
+	columnProperties := make([]interface{}, 0, PROPERTIES)
+	for i := 0; i < PROPERTIES; i++ {
+		columnProperties = append(columnProperties, new(string))
+	}
+
+	columnNameToPredicate := make(map[string]string)
+	columnNames := make([]string, 0)
+	for rows.Next() {
+		rows.Scan(columnProperties...)
+		columnName := reflect.ValueOf(columnProperties[0]).Elem().String()
+		columnNameToPredicate[columnName] = ""
+		columnNames = append(columnNames, columnName)
+	}
+	fmt.Printf("Columns in the table %s:\n", table)
+	for _, colName := range columnNames {
+		fmt.Printf("%s\n", colName)
+	}
+
+	tableGuide := &TableGuide{}
+	tableGuide.uidColumn, err = getUidColumn(columnNameToPredicate)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, colName := range columnNames {
+		if colName == tableGuide.uidColumn {
+			continue
+		}
+		columnNameToPredicate[colName], err = getPredicateForColumn(colName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tableGuide.columnNameToPredicate = columnNameToPredicate
+	return tableGuide, nil
+}
+
 // dumpTable reads data from a table and sends to standard output
 func dumpTable(table string, pool *sql.DB) error {
 	query := fmt.Sprintf(`select * from %s`, table)
@@ -173,29 +266,15 @@ func run(conf *viper.Viper) error {
 	}
 
 	for _, table := range tablesToRead {
-		if err = dumpTable(table, pool); err != nil {
-			return err
-		}
-	}
-	/*
-		query := `select user_id, follower_user_id from user_relation`
-		rows, err := pool.Query(query)
+		tableGuide, err := getTableGuide(table, pool)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var (
-				userID         int64
-				followerUserID int64
-			)
-			if err := rows.Scan(&userID, &followerUserID); err != nil {
-				log.Fatal(err)
-			}
-
-			fmt.Printf("_:%s_%d <follows> _:%s_%d .\n", mysqlDB, followerUserID, mysqlDB, userID)
-		}
-	*/
+		fmt.Printf("%+v", tableGuide)
+		/*
+			if err = dumpTable(table, pool); err != nil {
+				return err
+			}*/
+	}
 	return nil
 }
