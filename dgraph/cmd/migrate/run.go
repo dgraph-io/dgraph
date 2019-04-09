@@ -19,6 +19,7 @@ package migrate
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -40,20 +42,47 @@ func init() {
 	Migrate.Cmd = &cobra.Command{
 		Use:   "migrate",
 		Short: "Run the Dgraph migrate tool",
-		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(Migrate.Conf).Stop()
-			if err := run(Migrate.Conf); err != nil {
-				logger.Fatalf("Error while migrating: %v", err)
-			}
-		},
 	}
 	Migrate.EnvPrefix = "DGRAPH_MIGRATE"
 
-	flag := Migrate.Cmd.Flags()
+	flag := Migrate.Cmd.PersistentFlags()
 	flag.StringP("mysql_user", "", "", "The MySQL user used for logging in")
 	flag.StringP("mysql_password", "", "", "The MySQL password used for logging in")
 	flag.StringP("mysql_db", "", "", "The MySQL database to import")
 	flag.StringP("mysql_tables", "", "", "The MySQL tables to import")
+
+	subcommands := initSubCommands()
+	for _, sc := range subcommands {
+		Migrate.Cmd.AddCommand(sc.Cmd)
+		sc.Conf = viper.New()
+		if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
+			glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
+		}
+		glog.Infof("binding persistent flags from Migrate: %v", Migrate.Cmd.PersistentFlags())
+		if err := sc.Conf.BindPFlags(Migrate.Cmd.PersistentFlags()); err != nil {
+			glog.Fatalf("Unable to bind persistent flags from acl for command %v: %v", sc, err)
+		}
+		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
+	}
+}
+
+func initSubCommands() []*x.SubCommand {
+	var genGuideCmd x.SubCommand
+	genGuideCmd.Cmd = &cobra.Command{
+		Use:   "gen-guide",
+		Short: "Run the gen-guide tool to generate a migration guide",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := genGuide(genGuideCmd.Conf); err != nil {
+				logger.Fatalf("%v\n", err)
+			}
+		},
+	}
+	genGuideFlags := genGuideCmd.Cmd.Flags()
+	genGuideFlags.StringP("output", "o", "guide.json",
+		"The output file for the table guide")
+	genGuideFlags.StringP("config", "", "", "The config file
+
+	return []*x.SubCommand{&genGuideCmd}
 }
 
 type CancelFunc func()
@@ -98,14 +127,16 @@ func getMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 }
 
 type TableGuide struct {
+	TableName string
+
 	// optionally one column can be used as the uidColumn, whose values are mapped to Dgraph uids
-	uidColumn string
+	UidColumn string
 
 	// mappedPredNames[i] stores the predicate name for value in column i of a MySQL table
-	columnNameToPredicate map[string]string
+	ColumnNameToPredicate map[string]string
 
 	// the current table row number, used to generate labels for uids
-	tableRowNum int
+	TableRowNum int
 }
 
 // getUidColumn asks the user to type a column name, whole value will be used to generate
@@ -172,14 +203,16 @@ func getTableGuide(table string, pool *sql.DB) (*TableGuide, error) {
 		fmt.Printf("%s\n", colName)
 	}
 
-	tableGuide := &TableGuide{}
-	tableGuide.uidColumn, err = getUidColumn(columnNameToPredicate)
+	tableGuide := &TableGuide{
+		TableName: table,
+	}
+	tableGuide.UidColumn, err = getUidColumn(columnNameToPredicate)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, colName := range columnNames {
-		if colName == tableGuide.uidColumn {
+		if colName == tableGuide.UidColumn {
 			continue
 		}
 		columnNameToPredicate[colName], err = getPredicateForColumn(colName)
@@ -188,7 +221,7 @@ func getTableGuide(table string, pool *sql.DB) (*TableGuide, error) {
 		}
 	}
 
-	tableGuide.columnNameToPredicate = columnNameToPredicate
+	tableGuide.ColumnNameToPredicate = columnNameToPredicate
 	return tableGuide, nil
 }
 
@@ -198,18 +231,18 @@ func getUidLabel(table string, column string, value interface{}) string {
 
 func getSubjectLabel(table string, columnNames []string, columnValues []interface{},
 	tableGuide *TableGuide) string {
-	if len(tableGuide.uidColumn) > 0 {
+	if len(tableGuide.UidColumn) > 0 {
 		for i := 0; i < len(columnNames); i++ {
-			if columnNames[i] == tableGuide.uidColumn {
+			if columnNames[i] == tableGuide.UidColumn {
 				return getUidLabel(table, columnNames[i], reflect.ValueOf(columnValues[i]).Elem())
 			}
 		}
 		// we should never reach here
-		logger.Fatalf("Unable to find the column name: %s", tableGuide.uidColumn)
+		logger.Fatalf("Unable to find the column name: %s", tableGuide.UidColumn)
 	}
 
-	tableGuide.tableRowNum++
-	return getUidLabel(table, "", tableGuide.tableRowNum)
+	tableGuide.TableRowNum++
+	return getUidLabel(table, "", tableGuide.TableRowNum)
 }
 
 // dumpTable reads data from a table and sends to standard output
@@ -256,12 +289,12 @@ func dumpTable(table string, tableGuide *TableGuide, pool *sql.DB) error {
 		for i := 0; i < len(columns); i++ {
 			// dereference the pointer
 			colName := columns[i]
-			if colName == tableGuide.uidColumn {
+			if colName == tableGuide.UidColumn {
 				continue
 			}
 
 			fmt.Printf("%s <%s> %v .", subjectLabel,
-				tableGuide.columnNameToPredicate[colName],
+				tableGuide.ColumnNameToPredicate[colName],
 				reflect.ValueOf(colValues[i]).Elem())
 		}
 		fmt.Println()
@@ -269,11 +302,12 @@ func dumpTable(table string, tableGuide *TableGuide, pool *sql.DB) error {
 	return nil
 }
 
-func run(conf *viper.Viper) error {
+func genGuide(conf *viper.Viper) error {
 	mysqlUser := conf.GetString("mysql_user")
 	mysqlDB := conf.GetString("mysql_db")
 	mysqlPassword := conf.GetString("mysql_password")
 	mysqlTables := conf.GetString("mysql_tables")
+	outputFile := conf.GetString("output")
 
 	if len(mysqlUser) == 0 {
 		logger.Fatalf("the mysql_user property should not be empty")
@@ -284,6 +318,16 @@ func run(conf *viper.Viper) error {
 	if len(mysqlPassword) == 0 {
 		logger.Fatalf("the mysql_password property should not be empty")
 	}
+	if len(outputFile) == 0 {
+		logger.Fatalf("the output file should not be empty")
+	}
+
+	output, err := os.OpenFile(outputFile, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	ioWriter := bufio.NewWriter(output)
 
 	pool, cancelFunc, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
 	if err != nil {
@@ -301,11 +345,20 @@ func run(conf *viper.Viper) error {
 		if err != nil {
 			return err
 		}
-		//fmt.Printf("%+v", tableGuide)
 
-		if err = dumpTable(table, tableGuide, pool); err != nil {
+		guideBytes, err := json.Marshal(tableGuide)
+		if err != nil {
 			return err
 		}
+
+		if _, err = ioWriter.Write(guideBytes); err != nil {
+			return err
+		}
+		/*
+			if err = dumpTable(table, tableGuide, pool); err != nil {
+				return err
+			}*/
 	}
+	ioWriter.Flush()
 	return nil
 }
