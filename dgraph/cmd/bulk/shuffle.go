@@ -43,6 +43,7 @@ func (s *shuffler) run() {
 	x.AssertTrue(len(s.opt.shardOutputDirs) == s.opt.ReduceShards)
 
 	thr := x.NewThrottle(s.opt.NumShufflers)
+	readMapThr := x.NewThrottle(s.opt.NumGoroutines)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
 		go func(shardId int, db *badger.DB) {
@@ -50,9 +51,10 @@ func (s *shuffler) run() {
 			shuffleInputChs := make([]chan *pb.MapEntry, len(mapFiles))
 			for i, mapFile := range mapFiles {
 				shuffleInputChs[i] = make(chan *pb.MapEntry, 1000)
-				go readMapOutput(mapFile, shuffleInputChs[i])
+				readMapThr.Start()
+				go readMapOutput(mapFile, shuffleInputChs[i], readMapThr)
 			}
-
+			readMapThr.Wait()
 			ci := &countIndexer{state: s.state, db: db}
 			s.shufflePostings(shuffleInputChs, ci)
 			ci.wait()
@@ -75,7 +77,7 @@ func (s *shuffler) createBadger(i int) *badger.DB {
 	return db
 }
 
-func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry) {
+func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry, thr *x.Throttle) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
@@ -104,6 +106,7 @@ func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry) {
 		mapEntryCh <- me
 	}
 	close(mapEntryCh)
+	thr.Done()
 }
 
 func (s *shuffler) shufflePostings(mapEntryChs []chan *pb.MapEntry, ci *countIndexer) {
