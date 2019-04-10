@@ -87,7 +87,8 @@ func init() {
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Comma-separated list of Dgraph alpha gRPC server addresses")
+	flag.StringP("dgraph", "d", "127.0.0.1:9080",
+		"Comma-separated list of Dgraph alpha gRPC server addresses")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
