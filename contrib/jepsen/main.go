@@ -102,8 +102,11 @@ var (
 	testCount = flag.Int("jepsen.test-count", 1, "Test count per Jepsen test.")
 
 	// Jepsen control flags
-	doUp    = flag.Bool("up", true, "Run Jepsen ./up.sh.")
-	doServe = flag.Bool("serve", true, "Serve the test results page (lein run serve).")
+	doUp       = flag.Bool("up", true, "Run Jepsen ./up.sh.")
+	doUpOnly   = flag.Bool("up-only", false, "Do --up and exit.")
+	doDown     = flag.Bool("down", false, "Stop the Jepsen cluster after tests run.")
+	doDownOnly = flag.Bool("down-only", false, "Stop the Jepsen cluster and exit.")
+	doServe    = flag.Bool("serve", true, "Serve the test results page (lein run serve).")
 
 	// Debug flags
 	dryRun = flag.Bool("dry-run", false, "Echo commands that would run, but don't execute them.")
@@ -133,6 +136,19 @@ func CommandContext(ctx context.Context, command ...string) *exec.Cmd {
 func jepsenUp() {
 	cmd := Command("./up.sh",
 		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
+	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func jepsenDown() {
+	cmd := Command("docker-compose",
+		"-f", "./docker-compose.yml",
+		"-f", "../dgraph/docker/docker-compose.yml",
+		"down")
 	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -249,18 +265,25 @@ func main() {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
 
+	if *doDownOnly {
+		jepsenDown()
+		os.Exit(0)
+	}
+	if *doUp {
+		jepsenUp()
+		if *doUpOnly {
+			os.Exit(0)
+		}
+	}
+	if *doServe {
+		go jepsenServe()
+	}
+
 	workloads := strings.Split(*workload, ",")
 	nemeses := strings.Split(*nemesis, " ")
 
 	numTests := len(workloads) * len(nemeses)
 	fmt.Printf("Num tests: %v\n", numTests)
-
-	if *doUp {
-		jepsenUp()
-	}
-	if *doServe {
-		go jepsenServe()
-	}
 
 	for _, n := range nemeses {
 		for _, w := range workloads {
@@ -278,5 +301,9 @@ func main() {
 			})
 			tcEnd(pass)
 		}
+	}
+
+	if *doDown {
+		jepsenDown()
 	}
 }
