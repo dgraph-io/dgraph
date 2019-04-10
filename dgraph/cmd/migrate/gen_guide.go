@@ -143,10 +143,6 @@ func genGuide(conf *viper.Viper) error {
 		if _, err = ioWriter.Write(guideBytes); err != nil {
 			return err
 		}
-		/*
-			if err = dumpTable(table, tableGuide, pool); err != nil {
-				return err
-			}*/
 	}
 	ioWriter.Flush()
 	return nil
