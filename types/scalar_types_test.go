@@ -69,6 +69,12 @@ func TestParseTimeWithoutTZ(t *testing.T) {
 }
 
 func TestParseTimeWithTZ(t *testing.T) {
+	var err error
+
+	// Set local time to UTC.
+	time.Local, err = time.LoadLocation("UTC")
+	require.NoError(t, err)
+
 	tests := []struct {
 		in  string
 		out time.Time
