@@ -138,8 +138,8 @@ func listCerts() error {
 		if f.hosts != nil {
 			fmt.Printf("%14s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
 		}
-		if f.encType != "" {
-			fmt.Printf("%14s: %s\n", "Encryption", f.encType)
+		if f.algo != "" {
+			fmt.Printf("%14s: %s\n", "Algorithm", f.algo)
 		}
 		fmt.Printf("%14s: %s\n\n", "SHA-256 Digest", f.digest)
 	}

@@ -39,7 +39,7 @@ type certInfo struct {
 	serialNumber string
 	verifiedCA   string
 	digest       string
-	encType      string
+	algo         string
 	expireDate   time.Time
 	hosts        []string
 	fileMode     string
@@ -129,11 +129,11 @@ func getFileInfo(file string) *certInfo {
 		}
 		switch k := key.(type) {
 		case *ecdsa.PrivateKey:
-			info.encType = fmt.Sprintf("ECDSA %s (FIPS-3)", k.PublicKey.Curve.Params().Name)
+			info.algo = fmt.Sprintf("ECDSA %s (FIPS-3)", k.PublicKey.Curve.Params().Name)
 			info.digest = getHexDigest(elliptic.Marshal(k.PublicKey.Curve,
 				k.PublicKey.X, k.PublicKey.Y))
 		case *rsa.PrivateKey:
-			info.encType = fmt.Sprintf("RSA %d bits (PKCS#1)", k.PublicKey.N.BitLen())
+			info.algo = fmt.Sprintf("RSA %d bits (PKCS#1)", k.PublicKey.N.BitLen())
 			info.digest = getHexDigest(k.PublicKey.N.Bytes())
 		}
 
