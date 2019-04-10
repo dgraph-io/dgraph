@@ -50,6 +50,10 @@ Dgraph by default doesn't collect the block profile. Dgraph must be started with
 go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
 ```
 
+#### Goroutine stack
+
+The HTTP page `/debug/pprof/` is available at the HTTP port of a Dgraph Zero or Dgraph Alpha. From this page a link to the "full goroutine stack dump" is available (e.g., on a Dgraph Alpha this page would be at `http://localhost:8080/debug/pprof/goroutine?debug=2`). Looking at the full goroutine stack can be useful to understand goroutine usage at that moment.
+
 ## Using the Debug Tool
 
 {{% notice "note" %}}
@@ -217,7 +221,7 @@ Min commit: 1. Max commit: 5, w.r.t 18446744073709551615
 
 For index keys, a lookup shows the UIDs that are part of this index. Below, we see that the `fast` index for the `<description>` predicate has UIDs 0x1 and 0x2.
 
-```
+```sh
 $ dgraph debug --postings ./p --lookup 00000b6465736372697074696f6e020866617374
 ```
 
