@@ -41,15 +41,35 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type ExportFormat int
-
-const (
-	ExportFormatRdf ExportFormat = iota
-	ExportFormatJson
-)
-
-type ExportOpts struct {
-	Format ExportFormat
+//type ExportFormat int
+//
+//const (
+//	ExportFormatRdf ExportFormat = iota
+//	ExportFormatJson
+//)
+//
+//type ExportOpts struct {
+//	Format ExportFormat
+//}
+//
+//type ExportType struct {
+//	ext string
+//	pb  pb.ExportRequest_ExportFormat
+//}
+//
+//var ExportTypes = map[string]ExportType{
+//	"rdf": ExportType{
+//		ext: ".rdf",
+//		pb:  pb.ExportRequest_RDF,
+//	},
+//	"json": ExportType{
+//		ext: ".json",
+//		pb:  pb.ExportRequest_JSON,
+//	},
+//}
+var ExportFormats = map[string]bool{
+	"rdf":  true,
+	"json": true,
 }
 
 type DataExportParams struct {
@@ -350,11 +370,6 @@ func (writer *fileWriter) Close() error {
 
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) error {
-	ext := "rdf"
-	if in.JsonFmt {
-		ext = "json"
-	}
-
 	if in.GroupId != groups().groupId() {
 		return x.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
 			groups().groupId(), in.GroupId)
@@ -379,7 +394,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	// Open data file now.
-	dataPath, err := path(ext + ".gz")
+	dataPath, err := path(in.Format + ".gz")
 	if err != nil {
 		return err
 	}
@@ -447,10 +462,14 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			if err != nil {
 				return nil, err
 			}
-			if in.JsonFmt {
+			switch in.Format {
+			case "rdf":
+				return toRDF(dxp.pl, pk.Uid, pk.Attr, in.ReadTs)
+			case "json":
 				return toJSON(&dxp)
+			default:
+				panic("logic error")
 			}
-			return toRDF(dxp.pl, pk.Uid, pk.Attr, in.ReadTs)
 
 		default:
 			glog.Fatalf("Invalid key found: %+v\n", pk)
@@ -477,7 +496,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil
 	}
 	// All prepwork done. Time to roll.
-	if in.JsonFmt {
+	if in.Format == "json" {
 		if _, err = dataWriter.gw.Write([]byte("[\n")); err != nil {
 			return err
 		}
@@ -485,7 +504,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	if in.JsonFmt {
+	if in.Format == "json" {
 		if _, err = dataWriter.gw.Write([]byte("\n]\n")); err != nil {
 			return err
 		}
@@ -538,7 +557,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	return err
 }
 
-func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
+func ExportOverNetwork(ctx context.Context, format string) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Rejecting export request due to health check error: %v\n", err)
@@ -557,11 +576,6 @@ func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
 	gids := groups().KnownGroups()
 	glog.Infof("Requesting export for groups: %v\n", gids)
 
-	jsonFmt := false
-	if opts.Format == ExportFormatJson {
-		jsonFmt = true
-	}
-
 	ch := make(chan error, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
@@ -569,7 +583,7 @@ func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
 				GroupId: group,
 				ReadTs:  readTs,
 				UnixTs:  time.Now().Unix(),
-				JsonFmt: jsonFmt,
+				Format:  format,
 			}
 			ch <- handleExportOverNetwork(ctx, req)
 		}(gid)
@@ -585,4 +599,16 @@ func ExportOverNetwork(ctx context.Context, opts ExportOpts) error {
 	}
 	glog.Infof("Export at readTs %d DONE", readTs)
 	return nil
+}
+
+// NormalizeExportFormat returns the normalized string for the export format if it is valid, an
+// empty string otherwise. The normalized string should be the file extension without the dot.
+func ValidExportFormat(fmt string) string {
+	switch strings.ToLower(fmt) {
+	case "rdf":
+		return "rdf"
+	case "json":
+		return "json"
+	}
+	return ""
 }

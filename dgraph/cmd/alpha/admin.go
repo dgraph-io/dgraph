@@ -65,7 +65,10 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, err.Error(), "Parse of export request failed.")
 		return
 	}
-	exportOpts := worker.ExportOpts{Format: worker.ExportFormatRdf}
+
+	// Set the default export format here.
+	format := "rdf"
+
 	for key, vals := range r.Form {
 		switch key {
 		case "format":
@@ -73,12 +76,8 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 				x.SetStatus(w, "Invalid", "Only one export format may be specified.")
 				return
 			}
-			switch vals[0] {
-			case "rdf":
-				exportOpts.Format = worker.ExportFormatRdf
-			case "json":
-				exportOpts.Format = worker.ExportFormatJson
-			default:
+			format = worker.ValidExportFormat(vals[0])
+			if format == "" {
 				x.SetStatus(w, "Invalid", "Invalid export format.")
 				return
 			}
@@ -87,7 +86,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := worker.ExportOverNetwork(context.Background(), exportOpts); err != nil {
+	if err := worker.ExportOverNetwork(context.Background(), format); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
