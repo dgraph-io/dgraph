@@ -54,7 +54,10 @@ func (s *shuffler) run() {
 				readMapThr.Start()
 				go readMapOutput(mapFile, shuffleInputChs[i], readMapThr)
 			}
+
+			// All map files must be opened before shufflePostings starts.
 			readMapThr.Wait()
+
 			ci := &countIndexer{state: s.state, db: db}
 			s.shufflePostings(shuffleInputChs, ci)
 			ci.wait()
@@ -78,6 +81,8 @@ func (s *shuffler) createBadger(i int) *badger.DB {
 }
 
 func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry, thr *x.Throttle) {
+	defer thr.Done()
+
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
@@ -105,8 +110,8 @@ func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry, thr *x.Throt
 		x.Check(proto.Unmarshal(unmarshalBuf[:sz], me))
 		mapEntryCh <- me
 	}
+
 	close(mapEntryCh)
-	thr.Done()
 }
 
 func (s *shuffler) shufflePostings(mapEntryChs []chan *pb.MapEntry, ci *countIndexer) {
