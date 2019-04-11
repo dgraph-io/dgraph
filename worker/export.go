@@ -193,11 +193,11 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 	return kvListWrap(buf), err
 }
 
-func toRDF(pl *posting.List, uid uint64, attr string, readTs uint64) (*bpb.KVList, error) {
+func toRDF(dxp *dataExportParams) (*bpb.KVList, error) {
 	var buf bytes.Buffer
 
-	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", uid, attr)
-	err := pl.Iterate(readTs, 0, func(p *pb.Posting) error {
+	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", dxp.uid, dxp.attr)
+	err := dxp.pl.Iterate(dxp.readTs, 0, func(p *pb.Posting) error {
 		buf.WriteString(prefix)
 		if p.PostingType == pb.Posting_REF {
 			buf.WriteString(fmt.Sprintf(uidFmtStrRdf, p.Uid))
@@ -272,11 +272,8 @@ func toRDF(pl *posting.List, uid uint64, attr string, readTs uint64) (*bpb.KVLis
 		buf.WriteString(" .\n")
 		return nil
 	})
-	kv := &bpb.KV{
-		Value:   buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
-		Version: 1,           // Data value.
-	}
-	return listWrap(kv), err
+
+	return kvListWrap(buf), err
 }
 
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
@@ -455,12 +452,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				return nil, err
 			}
 			switch in.Format {
-			case "rdf":
-				return toRDF(dxp.pl, pk.Uid, pk.Attr, in.ReadTs)
 			case "json":
 				return toJSON(&dxp)
+			case "rdf":
+				return toRDF(&dxp)
 			default:
-				panic(in.Format)
+				glog.Fatalf("Invalid export format found: %s", in.Format)
 			}
 
 		default:
