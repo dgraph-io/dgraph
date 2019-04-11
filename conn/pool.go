@@ -135,7 +135,7 @@ func (p *Pools) Connect(addr string) *Pool {
 	defer p.Unlock()
 	existingPool, has = p.all[addr]
 	if has {
-		defer pool.shutdown() // Not being used, so release the resources.
+		go pool.shutdown() // Not being used, so release the resources.
 		return existingPool
 	}
 	glog.Infof("CONNECTED to %v\n", addr)
