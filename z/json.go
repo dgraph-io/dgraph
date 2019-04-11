@@ -20,6 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc64"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path"
 	"reflect"
 	"sort"
 	"testing"
@@ -29,6 +33,13 @@ func CompareJSON(t *testing.T, want, got string) {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
 	CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool {
+	wantMap := UnmarshalJSON(t, want)
+	gotMap := UnmarshalJSON(t, got)
+
+	return DiffJSONMaps(t, wantMap, gotMap, savepath, quiet)
 }
 
 func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
@@ -41,7 +52,12 @@ func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 	return jsonMap
 }
 
-func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) {
+func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
+	return DiffJSONMaps(t, wantMap, gotMap, "", false)
+}
+
+func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{},
+	savepath string, quiet bool) bool {
 	sortJSON(wantMap)
 	sortJSON(gotMap)
 
@@ -54,9 +70,58 @@ func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) {
 		if err != nil {
 			t.Error("Could not marshal JSON:", err)
 		}
-		t.Errorf("Want JSON and Got JSON not equal\nWant:\n%v\nGot:\n%v",
-			string(wantBuf), string(gotBuf))
+		t.Errorf("Expected JSON and actual JSON differ:\n%s",
+			sdiffJSON(wantBuf, gotBuf, savepath, quiet))
+		return false
 	}
+
+	return true
+}
+
+// SnipJSON snips the middle of a very long JSON string to make it less than 100 lines
+func SnipJSON(buf []byte) string {
+	var n int
+	for i, ch := range buf {
+		if ch == '\n' {
+			if n < 100 {
+				if n == 99 && i != len(buf) {
+					i++
+					return string(buf[:i]) + fmt.Sprintf("[%d bytes snipped]", len(buf)-i)
+				}
+				n++
+			}
+		}
+	}
+	return string(buf)
+}
+
+func sdiffJSON(wantBuf, gotBuf []byte, savepath string, quiet bool) string {
+	var wantFile, gotFile *os.File
+
+	if savepath != "" {
+		_ = os.MkdirAll(path.Dir(savepath), 0700)
+		wantFile, _ = os.Create(savepath + ".expected.json")
+		gotFile, _ = os.Create(savepath + ".received.json")
+	} else {
+		wantFile, _ = ioutil.TempFile("", "z.expected.json.*")
+		defer os.RemoveAll(wantFile.Name())
+		gotFile, _ = ioutil.TempFile("", "z.expected.json.*")
+		defer os.RemoveAll(gotFile.Name())
+	}
+
+	_ = ioutil.WriteFile(wantFile.Name(), wantBuf, 0600)
+	_ = ioutil.WriteFile(gotFile.Name(), gotBuf, 0600)
+
+	// don't do diff when one side is missing
+	if len(gotBuf) == 0 {
+		return "Got empty response"
+	} else if quiet {
+		return "Not showing diff in quiet mode"
+	}
+
+	out, _ := exec.Command("sdiff", wantFile.Name(), gotFile.Name()).CombinedOutput()
+
+	return string(out)
 }
 
 // sortJSON looks for any arrays in the unmarshalled JSON and sorts them in an

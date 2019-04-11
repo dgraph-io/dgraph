@@ -9,6 +9,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/z"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -98,7 +99,7 @@ func ExampleLoginOverTLS() {
 	conf.Set("tls_cacert", "../tls/ca.crt")
 	conf.Set("tls_server_name", "node")
 
-	dg, err := dgraphClientWithCerts(":9180", conf)
+	dg, err := dgraphClientWithCerts(z.SockAddr, conf)
 	if err != nil {
 		glog.Fatalf("Unable to get dgraph client: %v", err)
 	}

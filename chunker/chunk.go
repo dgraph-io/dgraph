@@ -69,6 +69,10 @@ func (rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
+// Chunk reads the input line by line until one of the following 3 conditions happens
+// 1) the EOF is reached
+// 2) 1e5 lines have been read
+// 3) some unexpected error happened
 func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
@@ -273,7 +277,14 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 // and decompressed automatically even without the gz extension. The caller is responsible for
 // calling the returned cleanup function when done with the reader.
 func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
-	f, err := os.Open(file)
+	var f *os.File
+	var err error
+	if file == "-" {
+		f = os.Stdin
+	} else {
+		f, err = os.Open(file)
+	}
+
 	x.Check(err)
 
 	cleanup = func() { f.Close() }
