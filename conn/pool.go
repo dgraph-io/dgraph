@@ -125,7 +125,7 @@ func (p *Pools) Connect(addr string) *Pool {
 		return existingPool
 	}
 
-	pool, err := NewPool(addr)
+	pool, err := newPool(addr)
 	if err != nil {
 		glog.Errorf("Unable to connect to host: %s", addr)
 		return nil
@@ -143,8 +143,8 @@ func (p *Pools) Connect(addr string) *Pool {
 	return pool
 }
 
-// NewPool creates a new "pool" with one gRPC connection, refcount 0.
-func NewPool(addr string) (*Pool, error) {
+// newPool creates a new "pool" with one gRPC connection, refcount 0.
+func newPool(addr string) (*Pool, error) {
 	conn, err := grpc.Dial(addr,
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
@@ -168,7 +168,7 @@ func (p *Pool) Get() *grpc.ClientConn {
 }
 
 func (p *Pool) shutdown() {
-	glog.V(2).Infof("Shutting down extra connection.")
+	glog.Warningf("Shutting down extra connection to %s", p.Addr)
 	p.closer.SignalAndWait()
 	p.conn.Close()
 }
