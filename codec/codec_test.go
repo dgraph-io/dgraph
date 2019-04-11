@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -79,6 +80,7 @@ func TestSeek(t *testing.T) {
 	tests := []struct {
 		in, out uint64
 		whence  int
+		empty   bool
 	}{
 		{in: 0, out: 0, whence: SeekStart},
 		{in: 0, out: 0, whence: SeekCurrent},
@@ -92,11 +94,19 @@ func TestSeek(t *testing.T) {
 		{in: 1101, out: 1110, whence: SeekCurrent},
 		{in: 10000, out: 10000, whence: SeekStart},
 		{in: 9999, out: 10000, whence: SeekCurrent},
+		{in: uint64(N), empty: true, whence: SeekStart},
+		{in: uint64(N), empty: true, whence: SeekCurrent},
+		{in: math.MaxUint64, empty: true, whence: SeekStart},
+		{in: math.MaxUint64, empty: true, whence: SeekCurrent},
 	}
 
 	for _, tc := range tests {
 		uids := dec.Seek(tc.in, tc.whence)
-		require.Equal(t, tc.out, uids[0])
+		if tc.empty {
+			require.Empty(t, uids)
+		} else {
+			require.Equal(t, tc.out, uids[0])
+		}
 	}
 }
 
