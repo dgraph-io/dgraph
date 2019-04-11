@@ -115,6 +115,12 @@ func (d *Decoder) ApproxLen() int {
 
 type searchFunc func(int) bool
 
+// Seek will search for uid in a packed block using the specified whence position.
+// The value of whence must be one of the predefined values SeekStart or SeekCurrent.
+// SeekStart searches uid and includes it as part of the results.
+// SeekCurrent searches uid but only as offset, it won't be included with results.
+//
+// Returns a slice of all uids whence the position, or an empty slice if none found.
 func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
