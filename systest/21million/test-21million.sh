@@ -19,9 +19,9 @@ function DockerCompose {
     docker-compose -p dgraph "$@"
 }
 
-HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY=
+HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY= QUIET=
 
-ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only,quiet" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
@@ -30,6 +30,7 @@ while true; do
         --cleanup)      CLEANUP=${2,,}; shift  ;;
         --savedir)      SAVEDIR=${2,,}; shift  ;;
         --load-only)    LOAD_ONLY=yes          ;;
+        --quiet)        QUIET=yes              ;;
         --)             shift; break           ;;
     esac
     shift
@@ -72,10 +73,6 @@ if [[ -z $CLEANUP  ]]; then
 elif [[ $CLEANUP != all && $CLEANUP != servers && $CLEANUP != none ]]; then
     echo >&2 "$ME: cleanup must be 'all' or 'servers' or 'none' -- $LOADER"
     exit 1
-fi
-
-if [[ $SAVEDIR ]]; then
-    SAVEDIR="-savedir=$SAVEDIR"
 fi
 
 Info "entering directory $SRCDIR"
@@ -121,8 +118,12 @@ if [[ $LOAD_ONLY ]]; then
     exit 0
 fi
 
+# replace variables if set with the corresponding option
+SAVEDIR=${SAVEDIR:+-savedir=$SAVEDIR}
+QUIET=${QUIET:+-quiet}
+
 Info "running benchmarks/regression queries"
-go test -v -tags standalone $SAVEDIR || FOUND_DIFFS=1
+go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"
