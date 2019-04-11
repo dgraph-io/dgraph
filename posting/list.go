@@ -786,26 +786,25 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		return nil, nil
 	}
 
-	newPlist := &pb.PostingList{
-		Splits: l.plist.Splits,
+	out := &rollupOutput{
+		newPlist: &pb.PostingList{
+			Splits: l.plist.Splits,
+		},
+		newSplits: make(map[uint64]*pb.PostingList),
 	}
-	newSplits := make(map[uint64]*pb.PostingList)
 
 	var plist *pb.PostingList
-	var final *pb.PostingList
 	var enc codec.Encoder
-	var endUid uint64
+	var startUid, endUid uint64
 	var splitIdx int
-	var startUid uint64
 
 	// Method to properly initialize all the variables described above.
 	init := func() {
-		final = new(pb.PostingList)
 		enc = codec.Encoder{BlockSize: blockSize}
 
 		// If not a multi-part list, all uids go to the same encoder.
 		if len(l.plist.Splits) == 0 {
-			plist = newPlist
+			plist = out.newPlist
 			endUid = math.MaxUint64
 			return
 		}
@@ -825,10 +824,8 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	init()
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
-			final.Pack = enc.Done()
-			plist.Pack = final.Pack
-			plist.Postings = final.Postings
-			newSplits[startUid] = plist
+			plist.Pack = enc.Done()
+			out.newSplits[startUid] = plist
 
 			splitIdx++
 			init()
@@ -836,17 +833,15 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 
 		enc.Add(p.Uid)
 		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-			final.Postings = append(final.Postings, p)
+			plist.Postings = append(plist.Postings, p)
 		}
 		return nil
 	})
 	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
 	x.Check(err)
-	final.Pack = enc.Done()
-	plist.Pack = final.Pack
-	plist.Postings = final.Postings
+	plist.Pack = enc.Done()
 	if len(l.plist.Splits) > 0 {
-		newSplits[startUid] = plist
+		out.newSplits[startUid] = plist
 	}
 
 	maxCommitTs := l.minTs
@@ -864,11 +859,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 
 	// Check if the list (or any of it's parts if it's been previously split) have
 	// become too big. Split the list if that is the case.
-	out := &rollupOutput{
-		newPlist:  newPlist,
-		newSplits: newSplits,
-		newMinTs:  maxCommitTs,
-	}
+	out.newMinTs = maxCommitTs
 	out.splitUpList()
 	out.cleanUpList()
 	return out, nil
@@ -1141,8 +1132,8 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	return part, nil
 }
 
-// isPlistTooBig returns true if the given plist should be split in two.
-func isPlistTooBig(plist *pb.PostingList) bool {
+// shouldSplit returns true if the given plist should be split in two.
+func shouldSplit(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
@@ -1169,8 +1160,8 @@ func (out *rollupOutput) splitUpList() {
 			startUid = out.newPlist.Splits[i]
 		}
 
-		if isPlistTooBig(list) {
-			startUids, pls := splitPostingList(startUid, list)
+		if shouldSplit(list) {
+			startUids, pls := binSplit(startUid, list)
 			for i, startUid := range startUids {
 				pl := pls[i]
 				out.newSplits[startUid] = pl
@@ -1192,10 +1183,10 @@ func (out *rollupOutput) splitUpList() {
 	}
 }
 
-// splitPostingList takes the given plist and returns two new plists, each with
+// binSplit takes the given plist and returns two new plists, each with
 // half of the blocks and postings of the original as well as the new startUids
 // for each of the new parts.
-func splitPostingList(startUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList) {
+func binSplit(startUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList) {
 	midBlock := len(plist.Pack.Blocks) / 2
 	midUid := plist.Pack.Blocks[midBlock].GetBase()
 
