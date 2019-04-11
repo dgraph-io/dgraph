@@ -84,8 +84,8 @@ func TestConversionEdgeCases(t *testing.T) {
 		in, out Val
 		failure string
 	}{
-		{in: Val{Tid: BinaryID, Value: nil},
-			out:     Val{Tid: BinaryID, Value: nil},
+		{in: Val{Tid: BinaryID},
+			out:     Val{Tid: BinaryID},
 			failure: "Invalid data to convert to binary"},
 
 		// From BinaryID to X
@@ -169,7 +169,8 @@ func TestConversionEdgeCases(t *testing.T) {
 			out:     Val{Tid: FloatID, Value: float64(0)},
 			failure: "Time.UnmarshalBinary: no data"},
 		{in: Val{Tid: DateTimeID, Value: bs(time.Time{})},
-			out: Val{Tid: FloatID, Value: float64(time.Time{}.UnixNano()) / float64(nanoSecondsInSec)}},
+			out: Val{Tid: FloatID,
+				Value: float64(time.Time{}.UnixNano()) / float64(nanoSecondsInSec)}},
 	}
 	for _, tc := range tests {
 		t.Logf("%s to %s != %v", tc.in.Tid.Name(), tc.out.Tid.Name(), tc.out.Value)
