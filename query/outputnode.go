@@ -159,7 +159,12 @@ func valToBytes(v types.Val) ([]byte, error) {
 		}
 		return []byte("false"), nil
 	case types.DateTimeID:
-		return v.Value.(time.Time).MarshalJSON()
+		// Return empty string instead of zero-time value string - issue#3166
+		t := v.Value.(time.Time)
+		if t.IsZero() {
+			return []byte(`""`), nil
+		}
+		return t.MarshalJSON()
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
