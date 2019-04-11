@@ -1458,7 +1458,7 @@ $ dgraph live -f <file1.rdf, file2.rdf>
 $ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
 
 # Read RDFs and a schema file and send to Dgraph running at given address.
-$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
+$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
 #### Other Live Loader options
