@@ -138,10 +138,19 @@ func (it *PIterator) Init(l *List, afterUid, deleteBelowTs uint64) error {
 
 func (it *PIterator) selectInitialSplit(afterUid uint64) int {
 	for i, startUid := range it.l.plist.Splits {
+		// If startUid == afterUid, the current block should be selected.
+		if startUid == afterUid {
+			return i
+		}
+		// If this split starts at an uid greater than afterUid, there might be
+		// elements in the previous split that need to be checked.
 		if startUid > afterUid {
 			return i - 1
 		}
 	}
+
+	// In case no split's startUid is greater or equal than afterUid, start the
+	// iteration at the start of the last split.
 	return len(it.l.plist.Splits) - 1
 }
 
@@ -715,13 +724,13 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(out.newPlist)
+	val, meta := marshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 	kvs = append(kvs, kv)
 
-	for _, startUid := range out.newPlist.Splits {
-		plist := out.newSplits[startUid]
+	for _, startUid := range out.plist.Splits {
+		plist := out.splits[startUid]
 		kv := out.marshalPostingListPart(l.key, startUid, plist)
 		kvs = append(kvs, kv)
 	}
@@ -768,8 +777,8 @@ func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
 const blockSize int = 256
 
 type rollupOutput struct {
-	newPlist       *pb.PostingList
-	newSplits      map[uint64]*pb.PostingList
+	plist          *pb.PostingList
+	splits         map[uint64]*pb.PostingList
 	splitsToDelete map[uint64]*pb.PostingList
 	newMinTs       uint64
 }
@@ -787,10 +796,11 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	}
 
 	out := &rollupOutput{
-		newPlist: &pb.PostingList{
+		plist: &pb.PostingList{
 			Splits: l.plist.Splits,
 		},
-		newSplits: make(map[uint64]*pb.PostingList),
+		splits:         make(map[uint64]*pb.PostingList),
+		splitsToDelete: make(map[uint64]*pb.PostingList),
 	}
 
 	var plist *pb.PostingList
@@ -804,7 +814,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 
 		// If not a multi-part list, all uids go to the same encoder.
 		if len(l.plist.Splits) == 0 {
-			plist = out.newPlist
+			plist = out.plist
 			endUid = math.MaxUint64
 			return
 		}
@@ -825,7 +835,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 		if p.Uid > endUid {
 			plist.Pack = enc.Done()
-			out.newSplits[startUid] = plist
+			out.splits[startUid] = plist
 
 			splitIdx++
 			init()
@@ -841,7 +851,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	x.Check(err)
 	plist.Pack = enc.Done()
 	if len(l.plist.Splits) > 0 {
-		out.newSplits[startUid] = plist
+		out.splits[startUid] = plist
 	}
 
 	maxCommitTs := l.minTs
@@ -1139,46 +1149,58 @@ func shouldSplit(plist *pb.PostingList) bool {
 
 // splitUpList checks the list and splits it in smaller parts if needed.
 func (out *rollupOutput) splitUpList() {
+	// Contains the posting lists that should be split.
 	var lists []*pb.PostingList
 
-	existingSplits := false
-	if len(out.newPlist.Splits) == 0 {
-		lists = append(lists, out.newPlist)
-	} else {
-		existingSplits = true
-		for _, startUid := range out.newPlist.Splits {
-			part := out.newSplits[startUid]
-			lists = append(lists, part)
-		}
+	// If list is not split yet, insert the main list.
+	if len(out.plist.Splits) == 0 {
+		lists = append(lists, out.plist)
 	}
 
+	// Insert the split lists if they exist.
+	for _, startUid := range out.plist.Splits {
+		part := out.splits[startUid]
+		lists = append(lists, part)
+	}
+
+	// List of startUids for each list part after the splitting process is complete.
 	var newSplits []uint64
-	var newPls []*pb.PostingList
+
 	for i, list := range lists {
 		var startUid uint64
-		if existingSplits {
-			startUid = out.newPlist.Splits[i]
+		// If the list is split, select the right startUid for this list.
+		if len(out.plist.Splits) > 0 {
+			startUid = out.plist.Splits[i]
 		}
 
 		if shouldSplit(list) {
+			// Split the list. Update out.splits with the new lists and add their
+			// start uids to the list of new splits.
 			startUids, pls := binSplit(startUid, list)
 			for i, startUid := range startUids {
 				pl := pls[i]
-				out.newSplits[startUid] = pl
-				newPls = append(newPls, pl)
+				out.splits[startUid] = pl
 				newSplits = append(newSplits, startUid)
 			}
 		} else {
-			newPls = append(newPls, list)
+			// No need to split the list. Add the startUid to the array of new splits.
 			newSplits = append(newSplits, startUid)
 		}
 	}
 
-	if len(newPls) == 1 || len(newPls) == len(out.newPlist.Splits) {
+	// Only one split after the splitting process, which means that the original list
+	// was not split and did not change.
+	if len(newSplits) == 1 {
 		return
 	}
 
-	out.newPlist = &pb.PostingList{
+	// The list was split before but the number of splits did not change.
+	if len(newSplits) == len(out.plist.Splits) {
+		return
+	}
+
+	// The splits changed so update them.
+	out.plist = &pb.PostingList{
 		Splits: newSplits,
 	}
 }
@@ -1219,16 +1241,16 @@ func binSplit(startUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingLi
 // cleanUpList marks empty splits for removal and update the split list accordingly.
 func (out *rollupOutput) cleanUpList() {
 	var splits []uint64
-	for _, startUid := range out.newPlist.Splits {
-		plist := out.newSplits[startUid]
+	for _, startUid := range out.plist.Splits {
+		plist := out.splits[startUid]
 		if isPlistEmpty(plist) {
 			out.splitsToDelete[startUid] = plist
-			delete(out.newSplits, startUid)
+			delete(out.splits, startUid)
 		} else {
 			splits = append(splits, startUid)
 		}
 	}
-	out.newPlist.Splits = splits
+	out.plist.Splits = splits
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are
