@@ -46,9 +46,10 @@ const (
 )
 
 type ColumnInfo struct {
-	name     string
-	keyType  KeyType
-	dataType DataType
+	name         string
+	keyType      KeyType
+	dataType     DataType
+	referencedBy []*ForeignColumn //the columns that are referencing this column
 }
 
 type ForeignColumn struct {
@@ -58,7 +59,7 @@ type ForeignColumn struct {
 
 type TableInfo struct {
 	tableName string
-	columns   []*ColumnInfo
+	columns   map[string]*ColumnInfo
 
 	// the referenced tables by the current table through foreign keys
 	referencedTables     map[string]interface{}
@@ -99,7 +100,7 @@ func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
 	return &columnInfo
 }
 
-func genTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
+func getTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
 	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE,
 COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 	rows, err := pool.Query(query)
@@ -110,7 +111,7 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 
 	tableInfo := &TableInfo{
 		tableName:            table,
-		columns:              make([]*ColumnInfo, 0),
+		columns:              make(map[string]*ColumnInfo),
 		referencedTables:     make(map[string]interface{}),
 		foreignKeyReferences: make(map[string]*ForeignColumn),
 	}
@@ -131,7 +132,7 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 				table, err)
 		}
 
-		tableInfo.columns = append(tableInfo.columns, getColumnInfo(&columnOutput))
+		tableInfo.columns[columnOutput.fieldName] = getColumnInfo(&columnOutput)
 	}
 
 	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME, REFERENCED_TABLE_NAME,
@@ -167,6 +168,24 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 		}
 	}
 	return tableInfo, nil
+}
+
+func populateReferencedByColumns(tables map[string]*TableInfo) {
+	for table, tableInfo := range tables {
+		for columnName, foreignColumn := range tableInfo.foreignKeyReferences {
+			foreignTable := foreignColumn.tableName
+			foreignColumn := foreignColumn.columnName
+
+			foreignColumnInfo := tables[foreignTable].columns[foreignColumn]
+			if foreignColumnInfo.referencedBy == nil {
+				foreignColumnInfo.referencedBy = make([]*ForeignColumn, 0)
+			}
+			foreignColumnInfo.referencedBy = append(foreignColumnInfo.referencedBy, &ForeignColumn{
+				tableName:  table,
+				columnName: columnName,
+			})
+		}
+	}
 }
 
 func genGuide(conf *viper.Viper) error {
@@ -211,13 +230,23 @@ func genGuide(conf *viper.Viper) error {
 
 	tables := make(map[string]*TableInfo, 0)
 	for _, table := range tablesToRead {
-		tableInfo, err := genTableInfo(table, pool)
+		tableInfo, err := getTableInfo(table, pool)
 		if err != nil {
 			return err
 		}
 		tables[tableInfo.tableName] = tableInfo
 	}
+	populateReferencedByColumns(tables)
 
 	spew.Dump(tables)
+	tablesSorted, err := topoSortTables(tables)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("topo sorted tables:\n")
+	for _, table := range tablesSorted {
+		fmt.Printf("%s\n", table)
+	}
+
 	return nil
 }
