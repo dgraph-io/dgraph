@@ -25,11 +25,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// for debugging the tests
-
+// These are exported so they can also be set directly from outside this package.
 var (
-	showOutput  bool = os.Getenv("DEBUG_SHOW_OUTPUT") != ""
-	showCommand bool = os.Getenv("DEBUG_SHOW_COMMAND") != ""
+	ShowOutput  bool = os.Getenv("DEBUG_SHOW_OUTPUT") != ""
+	ShowError   bool = os.Getenv("DEBUG_SHOW_ERROR") != ""
+	ShowCommand bool = os.Getenv("DEBUG_SHOW_COMMAND") != ""
 )
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
@@ -44,7 +44,7 @@ func Pipeline(cmds [][]string) error {
 	// Run all commands in parallel, connecting stdin of each to the stdout of the previous.
 	for i, c := range cmds {
 		lastCmd := i == numCmds-1
-		if showCommand {
+		if ShowCommand {
 			fmt.Fprintf(os.Stderr, "%+v", c)
 		}
 
@@ -54,14 +54,16 @@ func Pipeline(cmds [][]string) error {
 			p, _ = cmd[i].StdoutPipe()
 		}
 
-		if showOutput {
+		if ShowOutput {
 			cmd[i].Stderr = os.Stderr
 			if lastCmd {
 				cmd[i].Stdout = os.Stdout
 			}
+		} else if ShowError {
+			cmd[i].Stderr = os.Stderr
 		}
 
-		if showCommand {
+		if ShowCommand {
 			if lastCmd {
 				fmt.Fprintf(os.Stderr, "\n")
 			} else {

@@ -170,10 +170,13 @@ func runRestoreCmd() error {
 	// user.
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
-		zero, err := grpc.Dial(opt.zero,
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		zero, err := grpc.DialContext(ctx, opt.zero,
 			grpc.WithBlock(),
-			grpc.WithInsecure(),
-			grpc.WithTimeout(10*time.Second))
+			grpc.WithInsecure())
 		if err != nil {
 			return x.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}
