@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 )
 
@@ -105,6 +104,7 @@ func getUidLabel(table string, column string, value interface{}) string {
 	return fmt.Sprintf("_:%s_%s_%v", table, column, value)
 }
 
+/*
 func inferSubjectLabel(table string, columnNames []string, columnValues []interface{},
 	tableGuide *TableGuide) string {
 	if len(tableGuide.UidColumn) > 0 {
@@ -120,3 +120,4 @@ func inferSubjectLabel(table string, columnNames []string, columnValues []interf
 	tableGuide.TableRowNum++
 	return getUidLabel(table, "", tableGuide.TableRowNum)
 }
+*/

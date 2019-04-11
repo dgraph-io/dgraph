@@ -16,13 +16,8 @@
 
 package migrate
 
-import (
-	"database/sql"
-	"fmt"
-	"reflect"
-)
-
 // dumpTable reads data from a table and sends to standard output
+/*
 func dumpTable(table string, tableGuide *TableGuide, pool *sql.DB) error {
 	query := fmt.Sprintf(`select * from %s`, table)
 	rows, err := pool.Query(query)
@@ -78,3 +73,4 @@ func dumpTable(table string, tableGuide *TableGuide, pool *sql.DB) error {
 	}
 	return nil
 }
+*/

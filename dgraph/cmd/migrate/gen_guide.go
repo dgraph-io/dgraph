@@ -17,30 +17,83 @@
 package migrate
 
 import (
-	"bufio"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"os"
-	"reflect"
+	"strings"
+
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/spf13/viper"
 )
 
-type TableGuide struct {
-	TableName string
+type KeyType int
 
-	// optionally one column can be used as the uidColumn, whose values are mapped to Dgraph uids
-	UidColumn string
+const (
+	NONE KeyType = iota
+	PRIMARY
+	MULTI
+)
 
-	// mappedPredNames[i] stores the predicate name for value in column i of a MySQL table
-	ColumnNameToPredicate map[string]string
+type DataType int
 
-	// the current table row number, used to generate labels for uids
-	TableRowNum int
+const (
+	UNKNOWN DataType = iota
+	INT
+	STRING
+	FLOAT
+	DOUBLE
+	DATETIME
+)
+
+type ColumnInfo struct {
+	name     string
+	keyType  KeyType
+	dataType DataType
 }
 
-func genGuideForTable(table string, pool *sql.DB) (*TableGuide, error) {
+type TableInfo struct {
+	tableName string
+	columns   []*ColumnInfo
+}
+
+type ColumnOutput struct {
+	fieldName string
+	dataType  string
+	nullable  string
+	keyType   string
+	defaults  string
+	extra     string
+}
+
+func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
+	columnInfo := ColumnInfo{}
+	columnInfo.name = columnOutput.fieldName
+	switch columnOutput.keyType {
+	case "PRI":
+		columnInfo.keyType = PRIMARY
+	case "MUL":
+		columnInfo.keyType = MULTI
+	}
+
+	prefixToType := make(map[string]DataType, 0)
+	prefixToType["int"] = INT
+	prefixToType["varchar"] = STRING
+	prefixToType["date"] = DATETIME
+	prefixToType["time"] = DATETIME
+	prefixToType["datetime"] = DATETIME
+	prefixToType["float"] = FLOAT
+	prefixToType["double"] = DOUBLE
+
+	for prefix, dataType := range prefixToType {
+		if strings.HasPrefix(columnOutput.dataType, prefix) {
+			columnInfo.dataType = dataType
+			break
+		}
+	}
+	return &columnInfo
+}
+
+func genTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
 	query := fmt.Sprintf(`describe %s`, table)
 	rows, err := pool.Query(query)
 	if err != nil {
@@ -48,47 +101,27 @@ func genGuideForTable(table string, pool *sql.DB) (*TableGuide, error) {
 	}
 	defer rows.Close()
 
-	// 6 columns will be returned for the describe command
-	const PROPERTIES = 6
-	// Field, Type, Null, Key, Default, Extra
-	columnProperties := make([]interface{}, 0, PROPERTIES)
-	for i := 0; i < PROPERTIES; i++ {
-		columnProperties = append(columnProperties, new(string))
+	tableInfo := &TableInfo{
+		tableName: table,
+		columns:   make([]*ColumnInfo, 0),
 	}
 
-	columnNameToPredicate := make(map[string]string)
-	columnNames := make([]string, 0)
 	for rows.Next() {
-		rows.Scan(columnProperties...)
-		columnName := reflect.ValueOf(columnProperties[0]).Elem().String()
-		columnNameToPredicate[columnName] = ""
-		columnNames = append(columnNames, columnName)
-	}
-	fmt.Printf("Columns in the table %s:\n", table)
-	for _, colName := range columnNames {
-		fmt.Printf("%s\n", colName)
-	}
+		/*
+			each row represents info about a column, for example
+			+----------+-------------+------+-----+---------+-------+
+			| Field    | Type        | Null | Key | Default | Extra |
+			+----------+-------------+------+-----+---------+-------+
+			| ssn      | varchar(50) | NO   | PRI | NULL    |       |
+		*/
+		columnOutput := ColumnOutput{}
+		rows.Scan(&columnOutput.fieldName, &columnOutput.dataType,
+			&columnOutput.nullable, &columnOutput.keyType,
+			&columnOutput.defaults, &columnOutput.extra)
 
-	tableGuide := &TableGuide{
-		TableName: table,
+		tableInfo.columns = append(tableInfo.columns, getColumnInfo(&columnOutput))
 	}
-	tableGuide.UidColumn, err = askUidColumn(columnNameToPredicate)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, colName := range columnNames {
-		if colName == tableGuide.UidColumn {
-			continue
-		}
-		columnNameToPredicate[colName], err = askPredicateForColumn(colName)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	tableGuide.ColumnNameToPredicate = columnNameToPredicate
-	return tableGuide, nil
+	return tableInfo, nil
 }
 
 func genGuide(conf *viper.Viper) error {
@@ -97,6 +130,8 @@ func genGuide(conf *viper.Viper) error {
 	mysqlPassword := conf.GetString("mysql_password")
 	mysqlTables := conf.GetString("mysql_tables")
 	outputFile := conf.GetString("output")
+
+	fmt.Printf("genGuide config file: %s", conf.GetString("config"))
 
 	if len(mysqlUser) == 0 {
 		logger.Fatalf("the mysql_user property should not be empty")
@@ -111,12 +146,14 @@ func genGuide(conf *viper.Viper) error {
 		logger.Fatalf("the output file should not be empty")
 	}
 
-	output, err := os.OpenFile(outputFile, os.O_WRONLY, 0)
-	if err != nil {
-		return err
-	}
-	defer output.Close()
-	ioWriter := bufio.NewWriter(output)
+	/*
+		output, err := os.OpenFile(outputFile, os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+		defer output.Close()
+		ioWriter := bufio.NewWriter(output)
+	*/
 
 	pool, cancelFunc, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
 	if err != nil {
@@ -129,21 +166,15 @@ func genGuide(conf *viper.Viper) error {
 		return err
 	}
 
+	tables := make(map[string]*TableInfo, 0)
 	for _, table := range tablesToRead {
-		tableGuide, err := genGuideForTable(table, pool)
+		tableInfo, err := genTableInfo(table, pool)
 		if err != nil {
 			return err
 		}
-
-		guideBytes, err := json.Marshal(tableGuide)
-		if err != nil {
-			return err
-		}
-
-		if _, err = ioWriter.Write(guideBytes); err != nil {
-			return err
-		}
+		tables[tableInfo.tableName] = tableInfo
 	}
-	ioWriter.Flush()
+
+	spew.Dump(tables)
 	return nil
 }

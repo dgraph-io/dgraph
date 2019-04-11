@@ -17,6 +17,7 @@
 package migrate
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -52,20 +53,34 @@ func init() {
 		if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
 			glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
 		}
-		glog.Infof("binding persistent flags from Migrate: %v", Migrate.Cmd.PersistentFlags())
 		if err := sc.Conf.BindPFlags(Migrate.Cmd.PersistentFlags()); err != nil {
 			glog.Fatalf("Unable to bind persistent flags from acl for command %v: %v", sc, err)
 		}
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 	}
+
+	// pass down the values in the config file to the subcommand viper configuration
+	cobra.OnInitialize(func() {
+		cfg := Migrate.Conf.GetString("config")
+		if cfg == "" {
+			return
+		}
+		for _, sc := range subcommands {
+			sc.Conf.SetConfigFile(cfg)
+			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+		}
+	})
 }
 
 func initSubCommands() []*x.SubCommand {
 	var genGuideCmd x.SubCommand
 	genGuideCmd.Cmd = &cobra.Command{
-		Use:   "gen-guide",
-		Short: "Run the gen-guide tool to generate a migration guide",
+		Use:   "gen_guide",
+		Short: "Run the gen_guide tool to generate a migration guide",
 		Run: func(cmd *cobra.Command, args []string) {
+			configFile, err := genGuideCmd.Cmd.Flags().GetString("config")
+			fmt.Printf("config file:%s, %v", configFile, err)
+
 			if err := genGuide(genGuideCmd.Conf); err != nil {
 				logger.Fatalf("%v\n", err)
 			}
