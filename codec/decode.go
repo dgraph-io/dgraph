@@ -94,9 +94,7 @@ func (sd *Decoder) DecodeInteger() (o int64, err error) {
 	_, err = sd.Reader.Read(buf)
 	if err != nil {
 		return 0, err
-	}
-
-	if err == nil {
+	} else {
 		if byteLen == 4 {
 			o = int64(binary.LittleEndian.Uint32(buf))
 		} else if byteLen > 4 && byteLen < 8 {

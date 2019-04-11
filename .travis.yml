@@ -19,8 +19,9 @@ before_script:
 
 script:
 - go test -v -short -coverprofile c.out ./... && ./cc-test-reporter after-build --exit-code $?
-- gofmt -d ./..
-- ./bin/golangci-lint run
+# To be run on GolangCI
+# - gofmt -d ./..
+# - ./bin/golangci-lint run
 
 after_script:
   - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
