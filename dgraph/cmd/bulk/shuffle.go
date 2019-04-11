@@ -43,7 +43,7 @@ func (s *shuffler) run() {
 	x.AssertTrue(len(s.opt.shardOutputDirs) == s.opt.ReduceShards)
 
 	thr := x.NewThrottle(s.opt.NumShufflers)
-	readMapThr := x.NewThrottle(s.opt.NumGoroutines)
+	readMapThr := x.NewThrottle(1000)
 	for i := 0; i < s.opt.ReduceShards; i++ {
 		thr.Start()
 		go func(shardId int, db *badger.DB) {
