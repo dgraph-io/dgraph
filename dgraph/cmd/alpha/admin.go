@@ -66,9 +66,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set the default export format here.
-	format := "rdf"
-
+	format := worker.DefaultExportFormat
 	for key, vals := range r.Form {
 		switch key {
 		case "format":
@@ -76,7 +74,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 				x.SetStatus(w, "Invalid", "Only one export format may be specified.")
 				return
 			}
-			format = worker.ValidExportFormat(vals[0])
+			format = worker.NormalizeExportFormat(vals[0])
 			if format == "" {
 				x.SetStatus(w, "Invalid", "Invalid export format.")
 				return

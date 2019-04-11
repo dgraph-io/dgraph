@@ -166,7 +166,7 @@ func TestExportRdf(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1})
+	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
 	require.NoError(t, err)
 
 	fileList, schemaFileList := getExportFileList(t, bdir)
@@ -254,7 +254,7 @@ func TestExportJson(t *testing.T) {
 	readTs := timestamp()
 	// Do the following so export won't block forever for readTs.
 	posting.Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
-	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, JsonFmt: true }
+	req := pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "json"}
 	err = export(context.Background(), &req)
 	require.NoError(t, err)
 

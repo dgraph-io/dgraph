@@ -41,38 +41,28 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-//type ExportFormat int
-//
-//const (
-//	ExportFormatRdf ExportFormat = iota
-//	ExportFormatJson
-//)
-//
-//type ExportOpts struct {
-//	Format ExportFormat
-//}
-//
-//type ExportType struct {
-//	ext string
-//	pb  pb.ExportRequest_ExportFormat
-//}
-//
-//var ExportTypes = map[string]ExportType{
-//	"rdf": ExportType{
-//		ext: ".rdf",
-//		pb:  pb.ExportRequest_RDF,
-//	},
-//	"json": ExportType{
-//		ext: ".json",
-//		pb:  pb.ExportRequest_JSON,
-//	},
-//}
-var ExportFormats = map[string]bool{
-	"rdf":  true,
-	"json": true,
+const DefaultExportFormat = "rdf"
+
+type exportFormat struct {
+	ext  string // file extension
+	pre  string // string to write before exported records
+	post string // string to write after exported records
 }
 
-type DataExportParams struct {
+var exportFormats = map[string]exportFormat{
+	"json": exportFormat{
+		ext:  ".json",
+		pre:  "[\n",
+		post: "\n]\n",
+	},
+	"rdf": exportFormat{
+		ext:  ".rdf",
+		pre:  "",
+		post: "",
+	},
+}
+
+type dataExportParams struct {
 	pl      *posting.List
 	uid     uint64
 	attr    string
@@ -120,7 +110,7 @@ func kvListWrap(buf bytes.Buffer) *bpb.KVList {
 	return listWrap(kv)
 }
 
-func toJSON(dxp *DataExportParams) (*bpb.KVList, error) {
+func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 	var err error
 	var buf bytes.Buffer
 
@@ -389,12 +379,14 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	if err := os.MkdirAll(bdir, 0700); err != nil {
 		return err
 	}
+
+	xfmt := exportFormats[in.Format]
 	path := func(suffix string) (string, error) {
-		return filepath.Abs(path.Join(bdir, fmt.Sprintf("g%02d.%s", in.GroupId, suffix)))
+		return filepath.Abs(path.Join(bdir, fmt.Sprintf("g%02d%s", in.GroupId, suffix)))
 	}
 
 	// Open data file now.
-	dataPath, err := path(in.Format + ".gz")
+	dataPath, err := path(xfmt.ext + ".gz")
 	if err != nil {
 		return err
 	}
@@ -416,7 +408,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	dxp := DataExportParams{
+	dxp := dataExportParams{
 		readTs:  in.ReadTs,
 		counter: 0,
 	}
@@ -468,7 +460,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			case "json":
 				return toJSON(&dxp)
 			default:
-				panic("logic error")
+				panic(in.Format)
 			}
 
 		default:
@@ -495,19 +487,16 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		// Once all the sends are done, writers must be flushed and closed in order.
 		return nil
 	}
+
 	// All prepwork done. Time to roll.
-	if in.Format == "json" {
-		if _, err = dataWriter.gw.Write([]byte("[\n")); err != nil {
-			return err
-		}
+	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
+		return err
 	}
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	if in.Format == "json" {
-		if _, err = dataWriter.gw.Write([]byte("\n]\n")); err != nil {
-			return err
-		}
+	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
+		return err
 	}
 	if err := dataWriter.Close(); err != nil {
 		return err
@@ -602,13 +591,11 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 }
 
 // NormalizeExportFormat returns the normalized string for the export format if it is valid, an
-// empty string otherwise. The normalized string should be the file extension without the dot.
-func ValidExportFormat(fmt string) string {
-	switch strings.ToLower(fmt) {
-	case "rdf":
-		return "rdf"
-	case "json":
-		return "json"
+// empty string otherwise.
+func NormalizeExportFormat(fmt string) string {
+	fmt = strings.ToLower(fmt)
+	if _, ok := exportFormats[fmt]; ok {
+		return fmt
 	}
 	return ""
 }
