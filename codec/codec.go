@@ -29,8 +29,10 @@ import (
 type seekPos int
 
 const (
-	SeekStart   seekPos = iota // seek relative to the origin of the list (inclusive)
-	SeekCurrent                // seek relative to the current offset
+	// SeekStart is used with Seek() to search relative to the Uid, returning it in the results.
+	SeekStart seekPos = iota
+	// SeekCurrent to Seek() a Uid using it as offset, not as part of the results.
+	SeekCurrent
 )
 
 type Encoder struct {
