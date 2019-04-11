@@ -82,12 +82,14 @@ func TestSeek(t *testing.T) {
 	}{
 		{in: 0, out: 0, whence: SeekStart},
 		{in: 0, out: 0, whence: SeekCurrent},
+		{in: 100, out: 100, whence: SeekStart},
+		{in: 100, out: 110, whence: SeekCurrent},
 		{in: 1000, out: 1000, whence: SeekStart},
 		{in: 1000, out: 1010, whence: SeekCurrent},
-		{in: 99, out: 100, whence: SeekStart},
-		{in: 99, out: 100, whence: SeekCurrent},
-		{in: 101, out: 110, whence: SeekStart},
-		{in: 101, out: 110, whence: SeekCurrent},
+		{in: 1999, out: 2000, whence: SeekStart},
+		{in: 1999, out: 2000, whence: SeekCurrent},
+		{in: 1101, out: 1110, whence: SeekStart},
+		{in: 1101, out: 1110, whence: SeekCurrent},
 		{in: 10000, out: 10000, whence: SeekStart},
 		{in: 9999, out: 10000, whence: SeekCurrent},
 	}

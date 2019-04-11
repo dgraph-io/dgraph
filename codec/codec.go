@@ -112,6 +112,8 @@ func (d *Decoder) ApproxLen() int {
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
 
+type searchFunc func(int) bool
+
 func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
@@ -122,10 +124,18 @@ func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
 	}
 
 	pack := d.Pack
-	idx := sort.Search(len(pack.Blocks), func(i int) bool {
-		return (whence == SeekStart && pack.Blocks[i].Base >= uid) ||
-			(whence == SeekCurrent && pack.Blocks[i].Base > uid)
-	})
+	blocksFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekCurrent:
+			f = func(i int) bool { return pack.Blocks[i].Base > uid }
+		default: // SeekStart
+			f = func(i int) bool { return pack.Blocks[i].Base >= uid }
+		}
+		return f
+	}
+
+	idx := sort.Search(len(pack.Blocks), blocksFunc())
 	// The first block.Base >= uid.
 	if idx == 0 {
 		return d.unpackBlock()
@@ -142,11 +152,19 @@ func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
 	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
 	d.unpackBlock()      // And get all their uids.
 
+	uidsFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekCurrent:
+			f = func(i int) bool { return d.uids[i] > uid }
+		default: // SeekStart
+			f = func(i int) bool { return d.uids[i] >= uid }
+		}
+		return f
+	}
+
 	// uidx points to the first uid in the uid list, which is >= uid.
-	uidx := sort.Search(len(d.uids), func(i int) bool {
-		return (whence == SeekStart && d.uids[i] >= uid) ||
-			(whence == SeekCurrent && d.uids[i] > uid)
-	})
+	uidx := sort.Search(len(d.uids), uidsFunc())
 	if uidx < len(d.uids) { // Found an entry in uids, which >= uid.
 		d.uids = d.uids[uidx:]
 		return d.uids
