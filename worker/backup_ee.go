@@ -13,6 +13,7 @@
 package worker
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/dgraph-io/dgraph/ee/backup"
@@ -92,7 +93,17 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 }
 
 // BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(ctx context.Context, destination string) error {
+func BackupOverNetwork(ctx context.Context, r *http.Request) error {
+	destination := r.FormValue("destination")
+	if destination == "" {
+		return x.Errorf("You must specify a 'destination' value")
+	}
+
+	accessKey := r.FormValue("access_key")
+	secretKey := r.FormValue("secret_key")
+	sessionToken := r.FormValue("session_token")
+	anonymous := r.FormValue("anonymous") == "true"
+
 	// Check that this node can accept requests.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
@@ -107,9 +118,13 @@ func BackupOverNetwork(ctx context.Context, destination string) error {
 	}
 
 	req := pb.BackupRequest{
-		ReadTs:   ts.ReadOnly,
-		Location: destination,
-		UnixTs:   time.Now().UTC().Format("20060102.150405"),
+		ReadTs:       ts.ReadOnly,
+		Location:     destination,
+		UnixTs:       time.Now().UTC().Format("20060102.150405"),
+		AccessKey:    accessKey,
+		SecretKey:    secretKey,
+		SessionToken: sessionToken,
+		Anonymous:    anonymous,
 	}
 	m := backup.Manifest{Groups: groups().KnownGroups()}
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)

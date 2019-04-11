@@ -123,7 +123,7 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
 }
@@ -137,7 +137,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
 }
@@ -151,7 +151,7 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
 }
@@ -165,7 +165,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
 }
