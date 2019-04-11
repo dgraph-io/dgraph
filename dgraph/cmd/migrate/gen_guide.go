@@ -51,18 +51,24 @@ type ColumnInfo struct {
 	dataType DataType
 }
 
+type ForeignColumn struct {
+	tableName  string
+	columnName string
+}
+
 type TableInfo struct {
 	tableName string
 	columns   []*ColumnInfo
+
+	// the referenced tables by the current table through foreign keys
+	referencedTables     map[string]interface{}
+	foreignKeyReferences map[string]*ForeignColumn // a map from column names to ForgeignColumns
 }
 
 type ColumnOutput struct {
 	fieldName string
 	dataType  string
-	nullable  string
 	keyType   string
-	defaults  string
-	extra     string
 }
 
 func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
@@ -94,7 +100,8 @@ func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
 }
 
 func genTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
-	query := fmt.Sprintf(`describe %s`, table)
+	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE,
+COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 	rows, err := pool.Query(query)
 	if err != nil {
 		return nil, err
@@ -102,8 +109,10 @@ func genTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
 	defer rows.Close()
 
 	tableInfo := &TableInfo{
-		tableName: table,
-		columns:   make([]*ColumnInfo, 0),
+		tableName:            table,
+		columns:              make([]*ColumnInfo, 0),
+		referencedTables:     make(map[string]interface{}),
+		foreignKeyReferences: make(map[string]*ForeignColumn),
 	}
 
 	for rows.Next() {
@@ -114,12 +123,48 @@ func genTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
 			+----------+-------------+------+-----+---------+-------+
 			| ssn      | varchar(50) | NO   | PRI | NULL    |       |
 		*/
+
 		columnOutput := ColumnOutput{}
-		rows.Scan(&columnOutput.fieldName, &columnOutput.dataType,
-			&columnOutput.nullable, &columnOutput.keyType,
-			&columnOutput.defaults, &columnOutput.extra)
+		err := rows.Scan(&columnOutput.fieldName, &columnOutput.dataType, &columnOutput.keyType)
+		if err != nil {
+			return nil, fmt.Errorf("unable to scan table description result for table %s: %v",
+				table, err)
+		}
 
 		tableInfo.columns = append(tableInfo.columns, getColumnInfo(&columnOutput))
+	}
+
+	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME, REFERENCED_TABLE_NAME,
+		REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where TABLE_NAME = "%s"
+        AND REFERENCED_TABLE_NAME IS NOT NULL`,
+		table)
+	foreignKeyRows, err := pool.Query(foreignKeysQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer foreignKeyRows.Close()
+	for foreignKeyRows.Next() {
+		/* example output from MySQL when querying the registration table
+		+-------------+-----------------------+------------------------+
+		| COLUMN_NAME | REFERENCED_TABLE_NAME | REFERENCED_COLUMN_NAME |
+		+-------------+-----------------------+------------------------+
+		| student_id  | student               | id                     |
+		| course_id   | course                | id                     |
+		| faculty_id  | faculty               | id                     |
+		+-------------+-----------------------+------------------------+
+
+		*/
+		var columnName, referencedTableName, referencedColumnName string
+		err := foreignKeyRows.Scan(&columnName, &referencedTableName, &referencedColumnName)
+		if err != nil {
+			return nil, fmt.Errorf("unable to scan usage info for table %s: %v", table, err)
+		}
+
+		tableInfo.referencedTables[referencedTableName] = struct{}{}
+		tableInfo.foreignKeyReferences[columnName] = &ForeignColumn{
+			tableName:  referencedTableName,
+			columnName: referencedColumnName,
+		}
 	}
 	return tableInfo, nil
 }
@@ -130,8 +175,6 @@ func genGuide(conf *viper.Viper) error {
 	mysqlPassword := conf.GetString("mysql_password")
 	mysqlTables := conf.GetString("mysql_tables")
 	outputFile := conf.GetString("output")
-
-	fmt.Printf("genGuide config file: %s", conf.GetString("config"))
 
 	if len(mysqlUser) == 0 {
 		logger.Fatalf("the mysql_user property should not be empty")

@@ -17,7 +17,6 @@
 package migrate
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -78,9 +77,6 @@ func initSubCommands() []*x.SubCommand {
 		Use:   "gen_guide",
 		Short: "Run the gen_guide tool to generate a migration guide",
 		Run: func(cmd *cobra.Command, args []string) {
-			configFile, err := genGuideCmd.Cmd.Flags().GetString("config")
-			fmt.Printf("config file:%s, %v", configFile, err)
-
 			if err := genGuide(genGuideCmd.Conf); err != nil {
 				logger.Fatalf("%v\n", err)
 			}
