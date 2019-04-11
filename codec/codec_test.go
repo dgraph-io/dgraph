@@ -79,7 +79,7 @@ func TestSeek(t *testing.T) {
 
 	tests := []struct {
 		in, out uint64
-		whence  int
+		whence  seekPos
 		empty   bool
 	}{
 		{in: 0, out: 0, whence: SeekStart},

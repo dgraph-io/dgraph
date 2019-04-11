@@ -26,9 +26,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type seekPos int
+
 const (
-	SeekStart   = 0 // seek relative to the origin of the list (inclusive)
-	SeekCurrent = 1 // seek relative to the current offset
+	SeekStart   seekPos = iota // seek relative to the origin of the list (inclusive)
+	SeekCurrent                // seek relative to the current offset
 )
 
 type Encoder struct {
@@ -113,7 +115,7 @@ func (d *Decoder) ApproxLen() int {
 
 type searchFunc func(int) bool
 
-func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
+func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
 	}
@@ -126,10 +128,10 @@ func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
 	blocksFunc := func() searchFunc {
 		var f searchFunc
 		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return pack.Blocks[i].Base >= uid }
 		case SeekCurrent:
 			f = func(i int) bool { return pack.Blocks[i].Base > uid }
-		default: // SeekStart
-			f = func(i int) bool { return pack.Blocks[i].Base >= uid }
 		}
 		return f
 	}
@@ -154,10 +156,10 @@ func (d *Decoder) Seek(uid uint64, whence int) []uint64 {
 	uidsFunc := func() searchFunc {
 		var f searchFunc
 		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return d.uids[i] >= uid }
 		case SeekCurrent:
 			f = func(i int) bool { return d.uids[i] > uid }
-		default: // SeekStart
-			f = func(i int) bool { return d.uids[i] >= uid }
 		}
 		return f
 	}
