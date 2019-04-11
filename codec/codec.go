@@ -29,7 +29,6 @@ import (
 const (
 	SeekStart   = 0 // seek relative to the origin of the list (inclusive)
 	SeekCurrent = 1 // seek relative to the current offset
-	SeekEnd     = 2 // seek relative to the end
 )
 
 type Encoder struct {
