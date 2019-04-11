@@ -185,7 +185,9 @@ func (it *PIterator) Next() error {
 			return nil
 		}
 
-		for it.splitIdx+1 < len(it.l.plist.Splits) {
+		for it.splitIdx <= len(it.l.plist.Splits)-2 {
+			// moveToNextSplit will increment it.splitIdx. Therefore, the for loop must only
+			// continue until len(splits) - 2.
 			if err := it.moveToNextSplit(); err != nil {
 				return err
 			}
@@ -1132,11 +1134,11 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	if err != nil {
 		return nil, err
 	}
-	var part pb.PostingList
-	if err := unmarshalOrCopy(&part, item); err != nil {
+	part := &pb.PostingList{}
+	if err := unmarshalOrCopy(part, item); err != nil {
 		return nil, err
 	}
-	return &part, nil
+	return part, nil
 }
 
 // isPlistTooBig returns true if the given plist should be split in two.

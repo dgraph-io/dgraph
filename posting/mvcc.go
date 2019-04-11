@@ -166,7 +166,6 @@ func (txn *Txn) CommitToMemory(commitTs uint64) error {
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
-	// It's delta
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {
 			// empty pl
