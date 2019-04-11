@@ -30,7 +30,7 @@ import (
 func TestLivePassword(t *testing.T) {
 	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
 		return func(t *testing.T) {
-			dg := z.DgraphClientWithGroot(":9180")
+			dg := z.DgraphClientWithGroot(z.SockAddr)
 			fn(t, dg)
 			require.NoError(t, dg.Alter(
 				context.Background(), &api.Operation{DropAll: true}))

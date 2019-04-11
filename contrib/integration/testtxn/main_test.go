@@ -38,12 +38,12 @@ type state struct {
 }
 
 var s state
-var addr string = "localhost:9180"
+var addr string = z.SockAddr
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	dg := z.DgraphClientWithGroot(":9180")
+	dg := z.DgraphClientWithGroot(z.SockAddr)
 	s.dg = dg
 
 	r := m.Run()
