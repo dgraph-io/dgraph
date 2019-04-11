@@ -176,7 +176,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
 		"--schema", schema,
-		"--dgraph", ":"+cluster.alphaPort,
+		"--alpha", ":"+cluster.alphaPort,
 		"--zero", ":"+cluster.zeroPort,
 	)
 	liveCmd.Dir = tmpDir
