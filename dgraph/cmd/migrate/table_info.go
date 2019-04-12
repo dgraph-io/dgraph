@@ -69,18 +69,9 @@ func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
 		columnInfo.keyType = MULTI
 	}
 
-	prefixToType := make(map[string]DataType, 0)
-	prefixToType["int"] = INT
-	prefixToType["varchar"] = STRING
-	prefixToType["date"] = DATETIME
-	prefixToType["time"] = DATETIME
-	prefixToType["datetime"] = DATETIME
-	prefixToType["float"] = FLOAT
-	prefixToType["double"] = DOUBLE
-
-	for prefix, dataType := range prefixToType {
+	for prefix, goType := range mysqlTypePrefixToGoType {
 		if strings.HasPrefix(columnOutput.dataType, prefix) {
-			columnInfo.dataType = dataType
+			columnInfo.dataType = goType
 			break
 		}
 	}

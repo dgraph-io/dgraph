@@ -19,6 +19,7 @@ package migrate
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -41,7 +42,6 @@ func getMySQLPool(mysqlUser string, mysqlDB string, password string) (*sql.DB, C
 // by splitting the parameter with the separate comma
 // 2) if the parameter is empty, this function will read all the tables under the given
 // database from MySQL and then return the result
-
 func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 	if len(mysqlTables) > 0 {
 		return strings.Split(mysqlTables, ","), nil
@@ -61,4 +61,42 @@ func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 	}
 
 	return tables, nil
+}
+
+// getColumnIndices first sort the columns in the table alphabetically, and then
+// returns the indices of the columns satisfying the criteria function
+func getColumnIndices(info *TableInfo,
+	criteria CriteriaFunc) []*ColumnIdx {
+	columns := getSortedColumns(info)
+
+	indices := make([]*ColumnIdx, 0)
+	for i, column := range columns {
+		if criteria(info, column) {
+			indices = append(indices, &ColumnIdx{
+				name:  column,
+				index: i,
+			})
+		}
+	}
+	return indices
+}
+
+type ColumnIdx struct {
+	name  string // the column name
+	index int    // the column index
+}
+
+func getLinkPredicate(predicate string) string {
+	return "mysql." + predicate
+}
+
+// ptrToValues takes a slice of pointers, deference them, and return the values referenced by these
+// pointers
+func ptrToValues(ptrs []interface{}) []interface{} {
+	values := make([]interface{}, 0, len(ptrs))
+	for _, ptr := range ptrs {
+		// dereference the pointer to get the actual value
+		values = append(values, reflect.ValueOf(ptr).Elem())
+	}
+	return values
 }

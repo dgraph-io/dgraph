@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -169,15 +168,6 @@ func outputPlainCell(uidLabel string, dbType string, predName string,
 	}
 }
 
-func ptrToValues(colValuePtrs []interface{}) []interface{} {
-	colValues := make([]interface{}, 0, len(colValuePtrs))
-	for _, colValuePtr := range colValuePtrs {
-		// dereference the pointer to get the actual value
-		colValues = append(colValues, reflect.ValueOf(colValuePtr).Elem())
-	}
-	return colValues
-}
-
 func getFileWriter(filename string) (*bufio.Writer, func(), error) {
 	output, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
@@ -232,7 +222,7 @@ func run(conf *viper.Viper) error {
 	}
 	populateReferencedByColumns(tableInfos)
 
-	tableGuides := genGuide(tableInfos)
+	tableGuides := getTableGuides(tableInfos)
 
 	return generateSchemaAndData(schemaOutput, dataOutput, tableInfos, tableGuides, pool)
 }
@@ -279,10 +269,8 @@ func dumpTables(tableInfos map[string]*TableInfo, tableGuides map[string]*TableG
 		return err
 	}
 
-	//fmt.Printf("topo sorted tables:\n")
 	for _, table := range tablesSorted {
 		fmt.Printf("Dumping table %s\n", table)
-		//spew.Dump(guide.indexGenerator.generateDgraphIndices(tables[table]))
 		dumpTable(table, tableInfos[table], tableGuides, pool, writer)
 	}
 

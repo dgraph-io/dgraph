@@ -27,10 +27,10 @@ const (
 )
 
 var typeToString map[DataType]string
+var mysqlTypePrefixToGoType map[string]DataType
 
 func init() {
 	typeToString = make(map[DataType]string)
-
 	typeToString[UNKNOWN] = "unknown"
 	typeToString[INT] = "int"
 	typeToString[STRING] = "string"
@@ -38,6 +38,15 @@ func init() {
 	typeToString[DOUBLE] = "double"
 	typeToString[DATETIME] = "datetime"
 	typeToString[UID] = "uid"
+
+	mysqlTypePrefixToGoType = make(map[string]DataType)
+	mysqlTypePrefixToGoType["int"] = INT
+	mysqlTypePrefixToGoType["varchar"] = STRING
+	mysqlTypePrefixToGoType["date"] = DATETIME
+	mysqlTypePrefixToGoType["time"] = DATETIME
+	mysqlTypePrefixToGoType["datetime"] = DATETIME
+	mysqlTypePrefixToGoType["float"] = FLOAT
+	mysqlTypePrefixToGoType["double"] = DOUBLE
 }
 
 func (t DataType) String() string {

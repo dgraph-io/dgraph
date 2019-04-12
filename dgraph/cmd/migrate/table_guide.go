@@ -2,7 +2,6 @@ package migrate
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -10,20 +9,13 @@ const (
 	SEPERATOR = "_"
 )
 
-// a KeyGenerator generates the unique label that corresponds to a Dgraph uid
-// values are passed to the generateKey method in the order of alphabetically sorted columns
-// For example, if the person table has the fname and last name combined as the primary key
-// then a row John, Doe would passed to the key generator would return _:person_fname_John_lname:Doe
+// A KeyGenerator generates the unique blank node label that corresponds to a Dgraph uid.
+// Values are passed to the generateKey method in the order of alphabetically sorted columns
 type KeyGenerator interface {
 	generateKey(info *TableInfo, values []interface{}) string
 }
 
-type ColumnIdx struct {
-	name  string // the column name
-	index int    // the column index
-}
-
-// generate uidLabels using values in the primary key columns
+// generate blank node labels using values in the primary key columns
 type ColumnKeyGenerator struct {
 	primaryKeyIndices []*ColumnIdx
 	separator         string
@@ -31,32 +23,11 @@ type ColumnKeyGenerator struct {
 
 type CriteriaFunc func(info *TableInfo, column string) bool
 
-// getColumnIndices first sort the columns in the table alphabetically, and then
-// returns the indices of primary key columns
-func getColumnIndices(info *TableInfo,
-	criteria CriteriaFunc) []*ColumnIdx {
-	columns := make([]string, 0)
-	for _, columnInfo := range info.columns {
-		columns = append(columns, columnInfo.name)
-	}
-
-	// sort the column names alphabetically
-	sort.Slice(columns, func(i, j int) bool {
-		return columns[i] < columns[j]
-	})
-
-	indices := make([]*ColumnIdx, 0)
-	for i, column := range columns {
-		if criteria(info, column) {
-			indices = append(indices, &ColumnIdx{
-				name:  column,
-				index: i,
-			})
-		}
-	}
-	return indices
-}
-
+// For example, if the employee table has 3 columns (f_name, l_name, and title),
+// where f_name and l_name together form the primary key.
+// Then a row with values John (f_name), Doe (l_name), Software Engineer (title)
+// would generate a blank node label _:person_John_Doe using values from the columns
+// of the primary key in the alphabetic order, i.e. f_name, l_name in this case.
 func (g *ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
 		g.primaryKeyIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
@@ -74,7 +45,7 @@ func (g *ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) 
 		strings.Join(valuesForKey, g.separator))
 }
 
-// generate uidLabels using a row counter
+// generate blank node labels using a row counter
 type CounterKeyGenerator struct {
 	rowCounter int
 	separator  string
@@ -85,15 +56,16 @@ func (g *CounterKeyGenerator) generateKey(info *TableInfo, values []interface{})
 	return fmt.Sprintf("_:%s%s%d", info.tableName, g.separator, g.rowCounter)
 }
 
-// a ValuesRecorder remembers the mapping between an alias and its uid label
-// For example, if the person table has the id as the primary key (hence uidLabel _:person_id_xx)
-// and there are two unique indices on the columns (fname, lname), and (ssn) respectively.
-// then for the row id (101), fname (John), lname (Doe), ssn (999-999-9999)
-// the Value recorder would remember the following mapping
-// _:person_fname_John_lname_Doe -> _:person_101
-// _:person_ssn_999-999-9999 -> _:person:101
-// we remember the mapping so that if another table references the person table through foreign keys
-// we will be able to look up the uidLabel and use it to establish links in Dgraph
+// a ValuesRecorder remembers the mapping between an alias and its blank node label
+// For example, if the person table has the (fname, lname) as the primary key,
+// and hence the blank node labels are like _:person_<first name value>_<last name value>,
+// there are two unique indices on the columns license, and (ssn) respectively.
+// For the row fname (John), lname (Doe), license(101), ssn (999-999-9999)
+// the Value recorder would remember the following mappings
+// _:person_license_101 -> _:person_John_Doe
+// _:person_ssn_999-999-9999 -> _:person_John_Doe
+// It remembers these mapping so that if another table references the person table through foreign
+// keys, it will be able to look up the blank node labels and use it to establish links in Dgraph
 type ValuesRecorder interface {
 	record(info *TableInfo, values []interface{}, uidLabel string)
 	getUidLabel(indexLabel string) string
@@ -152,10 +124,6 @@ type IndexGenerator interface {
 // or index, where only the first column in the primary key or index will be used
 type NoneCompositeIndexGenerator struct {
 	separator string
-}
-
-func getLinkPredicate(predicate string) string {
-	return "mysql." + predicate
 }
 
 func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
@@ -226,7 +194,7 @@ func getKeyGenerator(tableInfo *TableInfo) KeyGenerator {
 	}
 }
 
-func genGuide(tables map[string]*TableInfo) map[string]*TableGuide {
+func getTableGuides(tables map[string]*TableInfo) map[string]*TableGuide {
 	tableGuides := make(map[string]*TableGuide)
 	for table, tableInfo := range tables {
 		guide := &TableGuide{
