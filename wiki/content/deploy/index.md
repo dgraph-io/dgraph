@@ -1482,6 +1482,9 @@ Do not confuse with `-C`.
 `-C, --use_compression` (default: false): Enable compression for connections to and from the
 Alpha server.
 
+`-a, --alpha` - Distributed Load: You can do a distributed load with Liveloader. Just enter a
+Comma-separated list of Dgraph alpha gRPC server addresses. e.g: `-a "alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
+
 ### Bulk Loader
 
 {{% notice "note" %}}
