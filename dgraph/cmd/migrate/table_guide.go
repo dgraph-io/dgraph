@@ -207,7 +207,8 @@ func genGuide(tables map[string]*TableInfo) map[string]*TableGuide {
 		guide := &TableGuide{
 			keyGenerator: getKeyGenerator(tableInfo),
 			valuesRecordor: &ForeignKeyValuesRecorder{
-				separator: SEPERATOR,
+				referenceToUidLabel: make(map[string]string),
+				separator:           SEPERATOR,
 			},
 			indexGenerator: &NoneCompositeIndexGenerator{},
 			predNameGenerator: &SimplePredNameGenerator{
