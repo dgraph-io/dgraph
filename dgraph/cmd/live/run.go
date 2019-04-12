@@ -366,6 +366,8 @@ func run() error {
 		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
 
+	go x.MonitorMemory()
+
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
