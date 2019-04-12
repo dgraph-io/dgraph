@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -1022,6 +1023,10 @@ func TestMultiPartListMarshal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(kvs), len(ol.plist.Splits)+1)
 	require.NoError(t, writePostingListToDisk(kvs))
+
+	sort.Slice(kvs, func(i, j int) bool {
+		return string(kvs[i].Key) < string(kvs[j].Key)
+	})
 
 	key := x.DataKey("multi-bal", 1331)
 	require.Equal(t, key, kvs[0].Key)
