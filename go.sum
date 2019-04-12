@@ -52,6 +52,8 @@ github.com/fd/go-nat v1.0.0 h1:DPyQ97sxA9ThrWYRPcWUz/z9TnpTIGRYODIQc/dy64M=
 github.com/fd/go-nat v1.0.0/go.mod h1:BTBu/CKvMmOMUPkKVef1pngt2WFH/lg7E6yQnulfp6E=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/go-check/check v0.0.0-20180628173108-788fd7840127/go.mod h1:9ES+weclKsC9YodN5RgxqK/VD9HM9JsCSh7rNhMZE98=
+github.com/go-stack/stack v1.8.0 h1:5SgMzNM5HxrEjV0ww2lTmX6E2Izsfxas4+YHWRs3Lsk=
+github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
 github.com/gogo/protobuf v1.2.1 h1:/s5zKNz0uPFCZ5hddgPdo2TK2TVrUNMn0OOX8/aZMTE=
 github.com/gogo/protobuf v1.2.1/go.mod h1:hp+jE20tsWTFYpLwKvXlhS1hjn+gTNwPg2I6zVXpSg4=
 github.com/golang/mock v1.2.0/go.mod h1:oTYuIxOrZwtPieC+H1uAHpcLFnEyAGVDL/k47Jfbm0A=
@@ -85,6 +87,8 @@ github.com/hsanjuan/go-libp2p-gostream v0.0.31/go.mod h1:cWvV5/NQ5XWi0eQZnX/svsA
 github.com/hsanjuan/go-libp2p-http v0.0.2/go.mod h1:MynY94gfOZxrw/0lVF4o7vbV2Zr84IC8sLBXmj8F5IE=
 github.com/huin/goupnp v0.0.0-20180415215157-1395d1447324 h1:PV190X5/DzQ/tbFFG5YpT5mH6q+cHlfgqI5JuRnH9oE=
 github.com/huin/goupnp v0.0.0-20180415215157-1395d1447324/go.mod h1:MZ2ZmwcBpvOoJ22IJsc7va19ZwoheaBk43rKg12SKag=
+github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec h1:CGkYB1Q7DSsH/ku+to+foV4agt2F2miquaLUgF6L178=
+github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec/go.mod h1:cOaXtrgN4ScfRrD9Bre7U1thNq5RtJ8ZoP4iXVGRj6o=
 github.com/ipfs/bbloom v0.0.1 h1:s7KkiBPfxCeDVo47KySjK0ACPc5GJRUxFpdyWEuDjhw=
 github.com/ipfs/bbloom v0.0.1/go.mod h1:oqo8CVWsJFMOZqTglBG4wydCE4IQA/G2/SEofB0rjUI=
 github.com/ipfs/dir-index-html v1.0.3/go.mod h1:TG9zbaH/+4MnkGel0xF4SLNhk+YZvBNo6jjBkO/LaWc=
@@ -363,6 +367,7 @@ github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/polydawn/refmt v0.0.0-20190221155625-df39d6c2d992 h1:bzMe+2coZJYHnhGgVlcQKuRy4FSny4ds8dLQjw5P1XE=
 github.com/polydawn/refmt v0.0.0-20190221155625-df39d6c2d992/go.mod h1:uIp+gprXxxrWSjjklXD+mN4wed/tMfjMMmN/9+JsA9o=
 github.com/prometheus/client_golang v0.9.2/go.mod h1:OsXs2jCmiKlQ1lTBmv21f2mNfw4xf/QclQDMrYNZzcM=
 github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910/go.mod h1:MbSGuTsp3dbXC40dX6PRTWyKYBIrTGTE9sqQNg2J8bo=
