@@ -21,10 +21,7 @@ func testData() []memData {
 }
 
 func TestMemoryDB_PutGet(t *testing.T) {
-	memDB, err := NewMemDatabase()
-	if err != nil {
-		t.Fatalf("failed to create memoryDB %q", err)
-	}
+	memDB := NewMemDatabase()
 	testPutGet(memDB, t)
 	testHasGet(memDB, t)
 	testDelGet(memDB, t)

@@ -12,10 +12,10 @@ type MemDatabase struct {
 }
 
 // NewMemDatabase returns an initialized mapping used for test database
-func NewMemDatabase() (*MemDatabase, error) {
+func NewMemDatabase() *MemDatabase {
 	return &MemDatabase{
 		db: make(map[string][]byte),
-	}, nil
+	}
 }
 
 // Put puts the given key / value into the mapping
