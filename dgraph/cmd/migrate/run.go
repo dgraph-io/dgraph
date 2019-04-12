@@ -22,9 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -36,6 +34,11 @@ func init() {
 	Migrate.Cmd = &cobra.Command{
 		Use:   "migrate",
 		Short: "Run the Dgraph migrate tool",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := run(Migrate.Conf); err != nil {
+				logger.Fatalf("%v\n", err)
+			}
+		},
 	}
 	Migrate.EnvPrefix = "DGRAPH_MIGRATE"
 
@@ -45,39 +48,43 @@ func init() {
 	flag.StringP("mysql_db", "", "", "The MySQL database to import")
 	flag.StringP("mysql_tables", "", "", "The MySQL tables to import")
 
-	subcommands := initSubCommands()
-	for _, sc := range subcommands {
-		Migrate.Cmd.AddCommand(sc.Cmd)
-		sc.Conf = viper.New()
-		if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
-			glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
-		}
-		if err := sc.Conf.BindPFlags(Migrate.Cmd.PersistentFlags()); err != nil {
-			glog.Fatalf("Unable to bind persistent flags from acl for command %v: %v", sc, err)
-		}
-		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
-	}
-
-	// pass down the values in the config file to the subcommand viper configuration
-	cobra.OnInitialize(func() {
-		cfg := Migrate.Conf.GetString("config")
-		if cfg == "" {
-			return
-		}
+	/*
+		subcommands := initSubCommands()
 		for _, sc := range subcommands {
-			sc.Conf.SetConfigFile(cfg)
-			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			Migrate.Cmd.AddCommand(sc.Cmd)
+			sc.Conf = viper.New()
+			if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
+				glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
+			}
+			if err := sc.Conf.BindPFlags(Migrate.Cmd.PersistentFlags()); err != nil {
+				glog.Fatalf("Unable to bind persistent flags from acl for command %v: %v", sc, err)
+			}
+			sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 		}
-	})
+
+
+			// pass down the values in the config file to the subcommand viper configuration
+			cobra.OnInitialize(func() {
+				cfg := Migrate.Conf.GetString("config")
+				if cfg == "" {
+					return
+				}
+				for _, sc := range subcommands {
+					sc.Conf.SetConfigFile(cfg)
+					x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+				}
+			})
+	*/
 }
 
+/*
 func initSubCommands() []*x.SubCommand {
 	var genGuideCmd x.SubCommand
 	genGuideCmd.Cmd = &cobra.Command{
 		Use:   "gen_guide",
 		Short: "Run the gen_guide tool to generate a migration guide",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := genGuide(genGuideCmd.Conf); err != nil {
+			if err := run(genGuideCmd.Conf); err != nil {
 				logger.Fatalf("%v\n", err)
 			}
 		},
@@ -89,3 +96,4 @@ func initSubCommands() []*x.SubCommand {
 
 	return []*x.SubCommand{&genGuideCmd}
 }
+*/

@@ -36,15 +36,6 @@ const (
 
 type DataType int
 
-const (
-	UNKNOWN DataType = iota
-	INT
-	STRING
-	FLOAT
-	DOUBLE
-	DATETIME
-)
-
 type ColumnInfo struct {
 	name         string
 	keyType      KeyType
@@ -170,6 +161,9 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 	return tableInfo, nil
 }
 
+// populateReferencedByColumns calculates the reverse links of
+// the data at tables[table name].foreignKeyRefences
+// and stores them in tables[table name].columns[column name].referecedBy
 func populateReferencedByColumns(tables map[string]*TableInfo) {
 	for table, tableInfo := range tables {
 		for columnName, foreignColumn := range tableInfo.foreignKeyReferences {
@@ -188,12 +182,12 @@ func populateReferencedByColumns(tables map[string]*TableInfo) {
 	}
 }
 
-func genGuide(conf *viper.Viper) error {
+func run(conf *viper.Viper) error {
 	mysqlUser := conf.GetString("mysql_user")
 	mysqlDB := conf.GetString("mysql_db")
 	mysqlPassword := conf.GetString("mysql_password")
 	mysqlTables := conf.GetString("mysql_tables")
-	outputFile := conf.GetString("output")
+	//outputFile := conf.GetString("output")
 
 	if len(mysqlUser) == 0 {
 		logger.Fatalf("the mysql_user property should not be empty")
@@ -204,9 +198,11 @@ func genGuide(conf *viper.Viper) error {
 	if len(mysqlPassword) == 0 {
 		logger.Fatalf("the mysql_password property should not be empty")
 	}
-	if len(outputFile) == 0 {
-		logger.Fatalf("the output file should not be empty")
-	}
+	/*
+		if len(outputFile) == 0 {
+			logger.Fatalf("the output file should not be empty")
+		}
+	*/
 
 	/*
 		output, err := os.OpenFile(outputFile, os.O_WRONLY, 0)
@@ -238,14 +234,18 @@ func genGuide(conf *viper.Viper) error {
 	}
 	populateReferencedByColumns(tables)
 
-	spew.Dump(tables)
+	tableGuides := genGuide(tables)
+
 	tablesSorted, err := topoSortTables(tables)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("topo sorted tables:\n")
+
+	//fmt.Printf("topo sorted tables:\n")
 	for _, table := range tablesSorted {
 		fmt.Printf("%s\n", table)
+		guide := tableGuides[table]
+		spew.Dump(guide.indexGenerator.generateDgraphIndices(tables[table]))
 	}
 
 	return nil

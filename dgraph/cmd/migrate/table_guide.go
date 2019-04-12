@@ -96,7 +96,9 @@ type ValuesRecorder interface {
 }
 
 type ForeignKeyValuesRecorder struct {
-	indexToUid map[string]string
+	referencedByColumnIndices []*ColumnIdx
+	referenceToUidLabel       map[string]string
+	separator                 string
 }
 
 /*
@@ -121,14 +123,73 @@ the tool will treat them as two different foreign keys, where the p_fname refere
 and p_lname references person lname.
 */
 func (r ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
+	if r.referencedByColumnIndices == nil {
+		r.referencedByColumnIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
+			return len(info.columns[column].referencedBy) > 0
+		})
+	}
 
+	for _, columnIndex := range r.referencedByColumnIndices {
+		referenceLabel := fmt.Sprintf("_:%s%s%s%s%v", info.tableName,
+			r.separator, columnIndex.name, r.separator, values[columnIndex.index])
+		r.referenceToUidLabel[referenceLabel] = uidLabel
+	}
 }
 
 func (r ForeignKeyValuesRecorder) getUidLabel(indexLabel string) string {
-	return ""
+	return r.referenceToUidLabel[indexLabel]
+}
+
+type IndexGenerator interface {
+	generateDgraphIndices(info *TableInfo) []string
+}
+
+// NoneCompositeIndexGenerator generates one Dgraph index per SQL table primary key
+// or index, where only the first column in the primary key or index will be used
+type NoneCompositeIndexGenerator struct{}
+
+func (g NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
+	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
+		return info.columns[column].keyType != NONE
+	})
+
+	dgraphIndexes := make([]string, 0)
+	for _, column := range sqlIndexedColumns {
+		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s @index(exact) .",
+			column.name, info.columns[column.name].dataType))
+	}
+	return dgraphIndexes
 }
 
 type TableGuide struct {
 	keyGenerator   KeyGenerator
-	valuesRecorder ValuesRecorder
+	valuesRecordor ValuesRecorder
+	indexGenerator IndexGenerator
+}
+
+func getKeyGenerator(tableInfo *TableInfo) KeyGenerator {
+	// check if the table has primary keys
+	primaryKeyIndices := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
+		return info.columns[column].keyType == PRIMARY
+	})
+
+	if len(primaryKeyIndices) > 0 {
+		return ColumnKeyGenerator{}
+	}
+
+	return CounterKeyGenerator{}
+}
+
+func genGuide(tables map[string]*TableInfo) map[string]*TableGuide {
+	tableGuides := make(map[string]*TableGuide)
+	for table, tableInfo := range tables {
+		guide := &TableGuide{
+			keyGenerator:   getKeyGenerator(tableInfo),
+			valuesRecordor: ForeignKeyValuesRecorder{},
+			indexGenerator: NoneCompositeIndexGenerator{},
+		}
+
+		tableGuides[table] = guide
+	}
+	return tableGuides
 }
