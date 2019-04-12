@@ -137,6 +137,10 @@ func (it *PIterator) Init(l *List, afterUid, deleteBelowTs uint64) error {
 }
 
 func (it *PIterator) selectInitialSplit(afterUid uint64) int {
+	if afterUid == 0 {
+		return 0
+	}
+
 	for i, startUid := range it.l.plist.Splits {
 		// If startUid == afterUid, the current block should be selected.
 		if startUid == afterUid {
@@ -1153,7 +1157,7 @@ func (out *rollupOutput) splitUpList() {
 
 	for i, list := range lists {
 		// TODO: Make this start from one instead of zero.
-		var startUid uint64
+		startUid := uint64(1)
 		// If the list is split, select the right startUid for this list.
 		if len(out.plist.Splits) > 0 {
 			startUid = out.plist.Splits[i]
