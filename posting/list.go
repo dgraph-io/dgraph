@@ -1226,6 +1226,7 @@ func (out *rollupOutput) removeEmptySplits() {
 		}
 	}
 	out.plist.Splits = splits
+	sortSplits(splits)
 }
 
 // Returns the sorted list of start uids based on the keys in out.parts.
