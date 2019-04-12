@@ -1156,7 +1156,6 @@ func (out *rollupOutput) splitUpList() {
 	var newSplits []uint64
 
 	for i, list := range lists {
-		// TODO: Make this start from one instead of zero.
 		startUid := uint64(1)
 		// If the list is split, select the right startUid for this list.
 		if len(out.plist.Splits) > 0 {
