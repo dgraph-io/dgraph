@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+const (
+	SEPERATOR = "_"
+)
+
 // a KeyGenerator generates the unique label that corresponds to a Dgraph uid
 // values are passed to the generateKey method in the order of alphabetically sorted columns
 // For example, if the person table has the fname and last name combined as the primary key
@@ -53,7 +57,7 @@ func getColumnIndices(info *TableInfo,
 	return indices
 }
 
-func (g ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
+func (g *ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
 		g.primaryKeyIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
 			return info.columns[column].keyType == PRIMARY
@@ -63,7 +67,7 @@ func (g ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) s
 	// use the primary key indices to retrieve values in the current row
 	valuesForKey := make([]string, 0)
 	for _, columnIndex := range g.primaryKeyIndices {
-		valuesForKey = append(valuesForKey, fmt.Sprintf("%s", values[columnIndex.index]))
+		valuesForKey = append(valuesForKey, fmt.Sprintf("%v", values[columnIndex.index]))
 	}
 
 	return fmt.Sprintf("_:%s%s%s", info.tableName, g.separator,
@@ -76,7 +80,7 @@ type CounterKeyGenerator struct {
 	separator  string
 }
 
-func (g CounterKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
+func (g *CounterKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
 	g.rowCounter++
 	return fmt.Sprintf("_:%s%s%d", info.tableName, g.separator, g.rowCounter)
 }
@@ -122,7 +126,7 @@ FOREIGN KEY (p_fname, p_lname) REFERENCES person (fname, lname)
 the tool will treat them as two different foreign keys, where the p_fname references person fname,
 and p_lname references person lname.
 */
-func (r ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
+func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
 	if r.referencedByColumnIndices == nil {
 		r.referencedByColumnIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
 			return len(info.columns[column].referencedBy) > 0
@@ -136,7 +140,7 @@ func (r ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, 
 	}
 }
 
-func (r ForeignKeyValuesRecorder) getUidLabel(indexLabel string) string {
+func (r *ForeignKeyValuesRecorder) getUidLabel(indexLabel string) string {
 	return r.referenceToUidLabel[indexLabel]
 }
 
@@ -148,7 +152,7 @@ type IndexGenerator interface {
 // or index, where only the first column in the primary key or index will be used
 type NoneCompositeIndexGenerator struct{}
 
-func (g NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
+func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
 	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType != NONE
 	})
@@ -161,10 +165,23 @@ func (g NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []st
 	return dgraphIndexes
 }
 
+type PredNameGenerator interface {
+	generatePredicateName(info *TableInfo, column string) string
+}
+
+type SimplePredNameGenerator struct {
+	separator string
+}
+
+func (g *SimplePredNameGenerator) generatePredicateName(info *TableInfo, column string) string {
+	return fmt.Sprintf("%s%s%s", info.tableName, g.separator, column)
+}
+
 type TableGuide struct {
-	keyGenerator   KeyGenerator
-	valuesRecordor ValuesRecorder
-	indexGenerator IndexGenerator
+	keyGenerator      KeyGenerator
+	valuesRecordor    ValuesRecorder
+	indexGenerator    IndexGenerator
+	predNameGenerator PredNameGenerator
 }
 
 func getKeyGenerator(tableInfo *TableInfo) KeyGenerator {
@@ -174,19 +191,28 @@ func getKeyGenerator(tableInfo *TableInfo) KeyGenerator {
 	})
 
 	if len(primaryKeyIndices) > 0 {
-		return ColumnKeyGenerator{}
+		return &ColumnKeyGenerator{
+			separator: SEPERATOR,
+		}
 	}
 
-	return CounterKeyGenerator{}
+	return &CounterKeyGenerator{
+		separator: SEPERATOR,
+	}
 }
 
 func genGuide(tables map[string]*TableInfo) map[string]*TableGuide {
 	tableGuides := make(map[string]*TableGuide)
 	for table, tableInfo := range tables {
 		guide := &TableGuide{
-			keyGenerator:   getKeyGenerator(tableInfo),
-			valuesRecordor: ForeignKeyValuesRecorder{},
-			indexGenerator: NoneCompositeIndexGenerator{},
+			keyGenerator: getKeyGenerator(tableInfo),
+			valuesRecordor: &ForeignKeyValuesRecorder{
+				separator: SEPERATOR,
+			},
+			indexGenerator: &NoneCompositeIndexGenerator{},
+			predNameGenerator: &SimplePredNameGenerator{
+				separator: SEPERATOR,
+			},
 		}
 
 		tableGuides[table] = guide

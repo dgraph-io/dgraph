@@ -20,10 +20,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-
-	"github.com/davecgh/go-spew/spew"
-
-	"github.com/spf13/viper"
 )
 
 type KeyType int
@@ -180,73 +176,4 @@ func populateReferencedByColumns(tables map[string]*TableInfo) {
 			})
 		}
 	}
-}
-
-func run(conf *viper.Viper) error {
-	mysqlUser := conf.GetString("mysql_user")
-	mysqlDB := conf.GetString("mysql_db")
-	mysqlPassword := conf.GetString("mysql_password")
-	mysqlTables := conf.GetString("mysql_tables")
-	//outputFile := conf.GetString("output")
-
-	if len(mysqlUser) == 0 {
-		logger.Fatalf("the mysql_user property should not be empty")
-	}
-	if len(mysqlDB) == 0 {
-		logger.Fatalf("the mysql_db property should not be empty")
-	}
-	if len(mysqlPassword) == 0 {
-		logger.Fatalf("the mysql_password property should not be empty")
-	}
-	/*
-		if len(outputFile) == 0 {
-			logger.Fatalf("the output file should not be empty")
-		}
-	*/
-
-	/*
-		output, err := os.OpenFile(outputFile, os.O_WRONLY, 0)
-		if err != nil {
-			return err
-		}
-		defer output.Close()
-		ioWriter := bufio.NewWriter(output)
-	*/
-
-	pool, cancelFunc, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
-	if err != nil {
-		return err
-	}
-	defer cancelFunc()
-
-	tablesToRead, err := readMySqlTables(mysqlTables, pool)
-	if err != nil {
-		return err
-	}
-
-	tables := make(map[string]*TableInfo, 0)
-	for _, table := range tablesToRead {
-		tableInfo, err := getTableInfo(table, pool)
-		if err != nil {
-			return err
-		}
-		tables[tableInfo.tableName] = tableInfo
-	}
-	populateReferencedByColumns(tables)
-
-	tableGuides := genGuide(tables)
-
-	tablesSorted, err := topoSortTables(tables)
-	if err != nil {
-		return err
-	}
-
-	//fmt.Printf("topo sorted tables:\n")
-	for _, table := range tablesSorted {
-		fmt.Printf("%s\n", table)
-		guide := tableGuides[table]
-		spew.Dump(guide.indexGenerator.generateDgraphIndices(tables[table]))
-	}
-
-	return nil
 }

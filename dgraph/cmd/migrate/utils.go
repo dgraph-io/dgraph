@@ -17,10 +17,8 @@
 package migrate
 
 import (
-	"bufio"
 	"database/sql"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -64,60 +62,3 @@ func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 
 	return tables, nil
 }
-
-// askUidColumn asks the user to type a column name, whole value will be used to generate
-// uids in Dgraph, if the input is empty, then each SQL row will have a new uid in Dgraph
-func askUidColumn(columnNameMap map[string]string) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Printf("choose a column to generate UIDs (hit ENTER for none):")
-		columnInput, err := reader.ReadString('\n')
-		columnInput = columnInput[:len(columnInput)-1]
-		if err != nil {
-			return "", err
-		}
-		if len(columnInput) == 0 {
-			return "", nil
-		}
-		if _, ok := columnNameMap[columnInput]; ok {
-			return columnInput, nil
-		}
-		fmt.Printf("the column %s does not exist, please try again\n", columnInput)
-	}
-}
-
-// askPredicateForColumn asks the user to type a predicate name that will be used for the column
-// if the input is empty, the columnName will be used as the predicate
-func askPredicateForColumn(columnName string) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("choose a predicate name for the column %s ("+
-		"hit ENTER to use the exact column name):", columnName)
-	predicate, err := reader.ReadString('\n')
-	predicate = predicate[:len(predicate)-1]
-	if len(predicate) == 0 {
-		predicate = columnName
-	}
-	return predicate, err
-}
-
-func getUidLabel(table string, column string, value interface{}) string {
-	return fmt.Sprintf("_:%s_%s_%v", table, column, value)
-}
-
-/*
-func inferSubjectLabel(table string, columnNames []string, columnValues []interface{},
-	tableGuide *TableGuide) string {
-	if len(tableGuide.UidColumn) > 0 {
-		for i := 0; i < len(columnNames); i++ {
-			if columnNames[i] == tableGuide.UidColumn {
-				return getUidLabel(table, columnNames[i], reflect.ValueOf(columnValues[i]).Elem())
-			}
-		}
-		// we should never reach here
-		logger.Fatalf("Unable to find the column name: %s", tableGuide.UidColumn)
-	}
-
-	tableGuide.TableRowNum++
-	return getUidLabel(table, "", tableGuide.TableRowNum)
-}
-*/
