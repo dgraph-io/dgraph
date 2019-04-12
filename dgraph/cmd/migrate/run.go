@@ -44,11 +44,12 @@ func init() {
 
 	flag := Migrate.Cmd.Flags()
 	flag.StringP("mysql_user", "", "",
-		"The MySQL user used for logging in")
+		"The MySQL user for logging in")
 	flag.StringP("mysql_password", "", "",
 		"The MySQL password used for logging in")
 	flag.StringP("mysql_db", "", "", "The MySQL database to import")
-	flag.StringP("mysql_tables", "", "", "The MySQL tables to import")
-	flag.StringP("schema_output", "s", "", "The schema output file")
-	flag.StringP("data_output", "o", "", "The data output file")
+	flag.StringP("mysql_tables", "", "", "The MySQL tables to import, "+
+		"an empty string means all tables in the database")
+	flag.StringP("output_schema", "s", "", "The schema output file")
+	flag.StringP("output_data", "o", "", "The data output file")
 }

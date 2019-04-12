@@ -157,8 +157,8 @@ func run(conf *viper.Viper) error {
 	mysqlDB := conf.GetString("mysql_db")
 	mysqlPassword := conf.GetString("mysql_password")
 	mysqlTables := conf.GetString("mysql_tables")
-	schemaOutput := conf.GetString("schema_output")
-	dataOutput := conf.GetString("data_output")
+	schemaOutput := conf.GetString("output_schema")
+	dataOutput := conf.GetString("output_data")
 
 	if len(mysqlUser) == 0 {
 		logger.Fatalf("the mysql_user property should not be empty")
