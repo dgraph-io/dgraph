@@ -150,7 +150,9 @@ type IndexGenerator interface {
 
 // NoneCompositeIndexGenerator generates one Dgraph index per SQL table primary key
 // or index, where only the first column in the primary key or index will be used
-type NoneCompositeIndexGenerator struct{}
+type NoneCompositeIndexGenerator struct {
+	separator string
+}
 
 func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
 	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
@@ -159,8 +161,27 @@ func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []s
 
 	dgraphIndexes := make([]string, 0)
 	for _, column := range sqlIndexedColumns {
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s @index(exact) .",
-			column.name, info.columns[column.name].dataType))
+		predicate := fmt.Sprintf("%s%s%s", info.tableName, g.separator, column.name)
+
+		var dataType DataType
+		if _, ok := info.foreignKeyReferences[column.name]; ok {
+			// this column is a foreign key
+			dataType = UID
+		} else {
+			dataType = info.columns[column.name].dataType
+		}
+
+		var index string
+		if dataType == STRING {
+			index = "@index(exact)"
+		} else if dataType == UID {
+			// no need to create index on UID predicates
+		} else {
+			index = fmt.Sprintf("@index(%s)", dataType)
+		}
+
+		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s %s .\n",
+			predicate, dataType, index))
 	}
 	return dgraphIndexes
 }
@@ -210,7 +231,9 @@ func genGuide(tables map[string]*TableInfo) map[string]*TableGuide {
 				referenceToUidLabel: make(map[string]string),
 				separator:           SEPERATOR,
 			},
-			indexGenerator: &NoneCompositeIndexGenerator{},
+			indexGenerator: &NoneCompositeIndexGenerator{
+				separator: SEPERATOR,
+			},
 			predNameGenerator: &SimplePredNameGenerator{
 				separator: SEPERATOR,
 			},

@@ -42,58 +42,13 @@ func init() {
 	}
 	Migrate.EnvPrefix = "DGRAPH_MIGRATE"
 
-	flag := Migrate.Cmd.PersistentFlags()
-	flag.StringP("mysql_user", "", "", "The MySQL user used for logging in")
-	flag.StringP("mysql_password", "", "", "The MySQL password used for logging in")
+	flag := Migrate.Cmd.Flags()
+	flag.StringP("mysql_user", "", "",
+		"The MySQL user used for logging in")
+	flag.StringP("mysql_password", "", "",
+		"The MySQL password used for logging in")
 	flag.StringP("mysql_db", "", "", "The MySQL database to import")
 	flag.StringP("mysql_tables", "", "", "The MySQL tables to import")
-
-	/*
-		subcommands := initSubCommands()
-		for _, sc := range subcommands {
-			Migrate.Cmd.AddCommand(sc.Cmd)
-			sc.Conf = viper.New()
-			if err := sc.Conf.BindPFlags(sc.Cmd.Flags()); err != nil {
-				glog.Fatalf("Unable to bind flags for command %v: %v", sc, err)
-			}
-			if err := sc.Conf.BindPFlags(Migrate.Cmd.PersistentFlags()); err != nil {
-				glog.Fatalf("Unable to bind persistent flags from acl for command %v: %v", sc, err)
-			}
-			sc.Conf.SetEnvPrefix(sc.EnvPrefix)
-		}
-
-
-			// pass down the values in the config file to the subcommand viper configuration
-			cobra.OnInitialize(func() {
-				cfg := Migrate.Conf.GetString("config")
-				if cfg == "" {
-					return
-				}
-				for _, sc := range subcommands {
-					sc.Conf.SetConfigFile(cfg)
-					x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
-				}
-			})
-	*/
+	flag.StringP("schema_output", "s", "", "The schema output file")
+	flag.StringP("data_output", "o", "", "The data output file")
 }
-
-/*
-func initSubCommands() []*x.SubCommand {
-	var genGuideCmd x.SubCommand
-	genGuideCmd.Cmd = &cobra.Command{
-		Use:   "gen_guide",
-		Short: "Run the gen_guide tool to generate a migration guide",
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := run(genGuideCmd.Conf); err != nil {
-				logger.Fatalf("%v\n", err)
-			}
-		},
-	}
-	genGuideFlags := genGuideCmd.Cmd.Flags()
-	genGuideFlags.StringP("output", "o", "guide.json",
-		"The output file for the table guide")
-	//genGuideFlags.StringP("config", "", "", "The config file
-
-	return []*x.SubCommand{&genGuideCmd}
-}
-*/

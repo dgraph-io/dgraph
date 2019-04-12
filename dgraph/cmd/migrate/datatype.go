@@ -7,6 +7,7 @@ const (
 	FLOAT
 	DOUBLE
 	DATETIME
+	UID // foreign key reference, which would corrspond to uid type in Dgraph
 )
 
 var typeToString map[DataType]string
@@ -20,6 +21,7 @@ func init() {
 	typeToString[FLOAT] = "float"
 	typeToString[DOUBLE] = "double"
 	typeToString[DATETIME] = "datetime"
+	typeToString[UID] = "uid"
 }
 
 func (t DataType) String() string {

@@ -17,8 +17,10 @@
 package migrate
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -39,12 +41,11 @@ func getSortedColumns(tableInfo *TableInfo) []string {
 
 // dumpTable reads data from a table and sends to standard output
 func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*TableGuide,
-	pool *sql.DB) error {
+	pool *sql.DB, writer *bufio.Writer) error {
 	tableGuide := tableGuides[table]
 	sortedColumns := getSortedColumns(tableInfo)
 	columnsQuery := strings.Join(sortedColumns, ",")
 	query := fmt.Sprintf(`select %s from %s`, columnsQuery, table)
-	fmt.Printf("%s\n", query)
 	rows, err := pool.Query(query)
 	if err != nil {
 		return err
@@ -100,10 +101,10 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*Table
 					foreignColumn.columnName, SEPERATOR, colValue)
 				foreignUidLabel := tableGuides[foreignColumn.tableName].valuesRecordor.
 					getUidLabel(refLabel)
-				outputPlainCell(uidLabel, "REF", columnPredicateNames[i], foreignUidLabel)
+				outputPlainCell(uidLabel, "UID", columnPredicateNames[i], foreignUidLabel, writer)
 			} else {
 				outputPlainCell(uidLabel, columnTypes[i].DatabaseTypeName(), columnPredicateNames[i],
-					colValue)
+					colValue, writer)
 			}
 		}
 
@@ -115,13 +116,16 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*Table
 }
 
 func outputPlainCell(uidLabel string, dbType string, predName string,
-	colValue interface{}) {
+	colValue interface{}, writer *bufio.Writer) {
 	// step 1: each cell value should be stored under a predicate
-	fmt.Printf("%s %s ", uidLabel, predName)
-	if dbType == "VARCHAR" {
-		fmt.Printf("%q . \n", colValue)
-	} else {
-		fmt.Printf("%v . \n", colValue)
+	fmt.Fprintf(writer, "%s <%s> ", uidLabel, predName)
+	switch dbType {
+	case "VARCHAR":
+		fmt.Fprintf(writer, "%q .\n", colValue)
+	case "UID":
+		fmt.Fprintf(writer, "%s .\n", colValue)
+	default:
+		fmt.Fprintf(writer, "\"%v\" .\n", colValue)
 	}
 }
 
@@ -134,12 +138,22 @@ func getColValues(colValuePtrs []interface{}) []interface{} {
 	return colValues
 }
 
+func getFileWriter(filename string) (*bufio.Writer, func(), error) {
+	output, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return bufio.NewWriter(output), func() { output.Close() }, nil
+}
+
 func run(conf *viper.Viper) error {
 	mysqlUser := conf.GetString("mysql_user")
 	mysqlDB := conf.GetString("mysql_db")
 	mysqlPassword := conf.GetString("mysql_password")
 	mysqlTables := conf.GetString("mysql_tables")
-	//outputFile := conf.GetString("output")
+	schemaOutput := conf.GetString("schema_output")
+	dataOutput := conf.GetString("data_output")
 
 	if len(mysqlUser) == 0 {
 		logger.Fatalf("the mysql_user property should not be empty")
@@ -150,20 +164,12 @@ func run(conf *viper.Viper) error {
 	if len(mysqlPassword) == 0 {
 		logger.Fatalf("the mysql_password property should not be empty")
 	}
-	/*
-		if len(outputFile) == 0 {
-			logger.Fatalf("the output file should not be empty")
-		}
-	*/
-
-	/*
-		output, err := os.OpenFile(outputFile, os.O_WRONLY, 0)
-		if err != nil {
-			return err
-		}
-		defer output.Close()
-		ioWriter := bufio.NewWriter(output)
-	*/
+	if len(schemaOutput) == 0 {
+		logger.Fatalf("the schema output file should not be empty")
+	}
+	if len(dataOutput) == 0 {
+		logger.Fatalf("the data output file should not be empty")
+	}
 
 	pool, cancelFunc, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
 	if err != nil {
@@ -176,29 +182,69 @@ func run(conf *viper.Viper) error {
 		return err
 	}
 
-	tables := make(map[string]*TableInfo, 0)
+	tableInfos := make(map[string]*TableInfo, 0)
 	for _, table := range tablesToRead {
 		tableInfo, err := getTableInfo(table, pool)
 		if err != nil {
 			return err
 		}
-		tables[tableInfo.tableName] = tableInfo
+		tableInfos[tableInfo.tableName] = tableInfo
 	}
-	populateReferencedByColumns(tables)
+	populateReferencedByColumns(tableInfos)
 
-	tableGuides := genGuide(tables)
+	tableGuides := genGuide(tableInfos)
 
-	tablesSorted, err := topoSortTables(tables)
+	return generateSchemaAndData(schemaOutput, dataOutput, tableInfos, tableGuides, pool)
+}
+
+func generateSchemaAndData(schemaOutput string, dataOutput string,
+	tableInfos map[string]*TableInfo, tableGuides map[string]*TableGuide, pool *sql.DB) error {
+	schemaWriter, schemaCancelFunc, err := getFileWriter(schemaOutput)
+	if err != nil {
+		return err
+	}
+	defer schemaCancelFunc()
+	dataWriter, dataCancelFunc, err := getFileWriter(dataOutput)
+	if err != nil {
+		return err
+	}
+	defer dataCancelFunc()
+	if err := dumpSchema(tableInfos, tableGuides, schemaWriter); err != nil {
+		return fmt.Errorf("error while writing schema file: %v", err)
+	}
+	if err := dumpTables(tableInfos, tableGuides, pool, dataWriter); err != nil {
+		return fmt.Errorf("error while writeng data file: %v", err)
+	}
+	return nil
+}
+
+func dumpSchema(tableInfos map[string]*TableInfo, guides map[string]*TableGuide,
+	writer *bufio.Writer) error {
+	for table, guide := range guides {
+		tableInfo := tableInfos[table]
+		for _, index := range guide.indexGenerator.generateDgraphIndices(tableInfo) {
+			_, err := writer.WriteString(index)
+			if err != nil {
+				return fmt.Errorf("error while writing schema: %v", err)
+			}
+		}
+	}
+	return writer.Flush()
+}
+
+func dumpTables(tableInfos map[string]*TableInfo, tableGuides map[string]*TableGuide,
+	pool *sql.DB, writer *bufio.Writer) error {
+	tablesSorted, err := topoSortTables(tableInfos)
 	if err != nil {
 		return err
 	}
 
 	//fmt.Printf("topo sorted tables:\n")
 	for _, table := range tablesSorted {
-		fmt.Printf("%s\n", table)
+		fmt.Printf("Dumping table %s\n", table)
 		//spew.Dump(guide.indexGenerator.generateDgraphIndices(tables[table]))
-		dumpTable(table, tables[table], tableGuides, pool)
+		dumpTable(table, tableInfos[table], tableGuides, pool, writer)
 	}
 
-	return nil
+	return writer.Flush()
 }
