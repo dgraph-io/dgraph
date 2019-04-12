@@ -131,7 +131,7 @@ type ParsedKey struct {
 	Attr        string
 	Uid         uint64
 	StartUid    uint64
-	HasStartUid bool
+	HasStartUid bool // TODO: Remove this, once StartUid must be atleast 1.
 	Term        string
 	Count       uint32
 	bytePrefix  byte
