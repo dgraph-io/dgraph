@@ -113,7 +113,7 @@ DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
     dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                --format=rdf --zero=:5080 --dgraph=:9180 --logtostderr
+                --format=rdf --zero=:5080 --alpha=:9180 --logtostderr
 fi
 
 if [[ $LOAD_ONLY ]]; then
