@@ -18,12 +18,12 @@ package x
 
 import (
 	"bufio"
-	"fmt"
 	"os"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 const redlineMemAvailKb = 4 * 1024 * 1024 // 4 GB
@@ -54,16 +54,16 @@ func MonitorMemory() {
 		}
 		_ = file.Close()
 
-		fmt.Fprintf(os.Stderr, "MEM total_mb: %d, free_mb: %d, avail_mb: %d\n",
+		glog.Infof("MEM total_mb: %d, free_mb: %d, avail_mb: %d\n",
 			memTotalKb / 1024, memFreeKb / 1024, memAvailKb / 1024)
 
-		if memAvailKb > 0 {
-			if counter%10 == 0 || memAvailKb <= redlineMemAvailKb {
-				if memAvailKb <= redlineMemAvailKb {
-					fmt.Fprintf(os.Stderr, "MEM attempting to release some memory\n")
-					debug.FreeOSMemory()
-				}
-			}
-		}
+		//if memAvailKb > 0 {
+		//	if counter%10 == 0 || memAvailKb <= redlineMemAvailKb {
+		//		if memAvailKb <= redlineMemAvailKb {
+		//			fmt.Fprintf(os.Stderr, "MEM attempting to release some memory\n")
+		//			debug.FreeOSMemory()
+		//		}
+		//	}
+		//}
 	}
 }
