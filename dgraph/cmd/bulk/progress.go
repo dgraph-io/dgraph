@@ -76,13 +76,13 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
+	timestamp := time.Now().Format("15:04:05Z0700")
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
 	case nothing:
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.nquadCount)
 		errCount := atomic.LoadInt64(&p.errCount)
 		elapsed := time.Since(p.start)
-		timestamp := time.Now().Format("15:04:05")
 		fmt.Printf("[%s] MAP %s nquad_count:%s err_count:%s nquad_speed:%s/sec "+
 			"edge_count:%s edge_speed:%s/sec\n",
 			timestamp,
@@ -96,7 +96,6 @@ func (p *progress) reportOnce() {
 	case reducePhase:
 		now := time.Now()
 		elapsed := time.Since(p.startReduce)
-		timestamp := time.Now().Format("15:04:05")
 		if p.startReduce.IsZero() {
 			p.startReduce = time.Now()
 			elapsed = time.Second
