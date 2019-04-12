@@ -158,7 +158,8 @@ func (it *PIterator) selectInitialSplit(afterUid uint64) int {
 	return len(it.l.plist.Splits) - 1
 }
 
-func (it *PIterator) moveToNextSplit() error {
+// moveToNextPart re-initializes the iterator at the start of the next list part.
+func (it *PIterator) moveToNextPart() error {
 	it.splitIdx++
 	plist, err := it.l.readListPart(it.l.plist.Splits[it.splitIdx])
 	if err != nil {
@@ -180,6 +181,32 @@ func (it *PIterator) moveToNextSplit() error {
 	return nil
 }
 
+// moveToNextValidPart moves the iterator to the next part that contains valid data.
+// This is used to skip over parts of the list that might not contain postings.
+func (it *PIterator) moveToNextValidPart() error {
+	// Not a multi-part list, the iterator has reached the end of the list.
+	if len(it.l.plist.Splits) == 0 {
+		return nil
+	}
+
+	// If there are no more uids to iterate over, move to the next part of the
+	// list that contains valid data.
+	if len(it.uids) == 0 {
+		for it.splitIdx <= len(it.l.plist.Splits)-2 {
+			// moveToNextPart will increment it.splitIdx. Therefore, the for loop must only
+			// continue until len(splits) - 2.
+			if err := it.moveToNextPart(); err != nil {
+				return err
+			}
+
+			if len(it.uids) > 0 {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 func (it *PIterator) Next() error {
 	if it.deleteBelowTs > 0 {
 		it.uids = nil
@@ -193,29 +220,20 @@ func (it *PIterator) Next() error {
 	it.uidx = 0
 	it.uids = it.dec.Next()
 
-	if len(it.uids) == 0 {
-		if len(it.l.plist.Splits) == 0 {
-			return nil
-		}
-
-		for it.splitIdx <= len(it.l.plist.Splits)-2 {
-			// moveToNextSplit will increment it.splitIdx. Therefore, the for loop must only
-			// continue until len(splits) - 2.
-			if err := it.moveToNextSplit(); err != nil {
-				return err
-			}
-
-			if len(it.uids) > 0 {
-				return nil
-			}
-		}
-	}
-
-	return nil
+	return it.moveToNextValidPart()
 }
 
-func (it *PIterator) Valid() bool {
-	return len(it.uids) > 0
+func (it *PIterator) Valid() (bool, error) {
+	if len(it.uids) > 0 {
+		return true, nil
+	}
+
+	if err := it.moveToNextValidPart(); err != nil {
+		return false, err
+	} else if len(it.uids) > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (it *PIterator) Posting() *pb.Posting {
@@ -633,7 +651,9 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		} else {
 			mp = emptyPosting
 		}
-		if pitr.Valid() {
+		if valid, err := pitr.Valid(); err != nil {
+			return err
+		} else if valid {
 			pp = pitr.Posting()
 		} else {
 			pp = emptyPosting
@@ -808,7 +828,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 			return
 		}
 
-		// Otherwise, load the corresponding part and set endUid  to correctly
+		// Otherwise, load the corresponding part and set endUid to correctly
 		// detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
 		if splitIdx+1 == len(l.plist.Splits) {
@@ -1224,12 +1244,27 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 func (out *rollupOutput) removeEmptySplits() {
 	var splits []uint64
 	for startUid, plist := range out.parts {
+		// Do not remove the first split for now, as every multi-part list should always
+		// have a split starting with uid 1.
+		if startUid == 1 {
+			splits = append(splits, startUid)
+			continue
+		}
+
 		if !isPlistEmpty(plist) {
 			splits = append(splits, startUid)
 		}
 	}
 	out.plist.Splits = splits
 	sortSplits(splits)
+
+	if len(out.plist.Splits) == 1 {
+		// Only the first split remains. If it's also empty, remove it as well.
+		// This should mark the entire list for deletion.
+		if isPlistEmpty(out.parts[1]) {
+			out.plist.Splits = []uint64{}
+		}
+	}
 }
 
 // Returns the sorted list of start uids based on the keys in out.parts.

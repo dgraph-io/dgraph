@@ -19,7 +19,6 @@ package posting
 import (
 	"context"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -907,7 +906,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 
 func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	// For testing, set the max list size to a lower threshold.
-	maxListSize = math.MaxInt32
+	maxListSize = 5000
 	defer func() {
 		maxListSize = math.MaxInt32
 	}()
@@ -966,6 +965,7 @@ func writePostingListToDisk(kvs []*bpb.KV) error {
 	return writer.Flush()
 }
 
+// Create a multi-part list and verify all the uids are there.
 func TestMultiPartListBasic(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, false)
@@ -979,6 +979,7 @@ func TestMultiPartListBasic(t *testing.T) {
 	}
 }
 
+// Verify that iteration works with an afterUid value greater than zero.
 func TestMultiPartListIterAfterUid(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
@@ -995,6 +996,7 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 	}
 }
 
+// Verify that postings can be retrieved in multi-part lists.
 func TestMultiPartListWithPostings(t *testing.T) {
 	size := int(1e5)
 	ol, commits := createMultiPartList(t, size, true)
@@ -1014,6 +1016,7 @@ func TestMultiPartListWithPostings(t *testing.T) {
 	}
 }
 
+// Verify marshaling of multi-part lists.
 func TestMultiPartListMarshal(t *testing.T) {
 	size := int(1e5)
 	ol, _ := createMultiPartList(t, size, false)
@@ -1044,7 +1047,8 @@ func TestMultiPartListMarshal(t *testing.T) {
 	}
 }
 
-func TestMultiPartListWrite(t *testing.T) {
+// Verify that writing a multi-part list to disk works correctly.
+func TestMultiPartListWriteToDisk(t *testing.T) {
 	size := int(1e5)
 	originalList, commits := createMultiPartList(t, size, false)
 
@@ -1067,6 +1071,7 @@ func TestMultiPartListWrite(t *testing.T) {
 	}
 }
 
+// Verify that adding and deleting all the entries returns an empty list.
 func TestMultiPartListDelete(t *testing.T) {
 	size := int(1e4)
 	ol, commits := createAndDeleteMultiPartList(t, size)
@@ -1075,7 +1080,6 @@ func TestMultiPartListDelete(t *testing.T) {
 
 	counter := 0
 	ol.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
-		log.Printf("%v", p.Uid)
 		counter++
 		return nil
 	})
@@ -1088,6 +1092,117 @@ func TestMultiPartListDelete(t *testing.T) {
 	for _, kv := range kvs {
 		require.Equal(t, []byte{BitEmptyPosting}, kv.UserMeta)
 		require.Equal(t, ol.minTs, kv.Version)
+	}
+}
+
+// Verify that the first part of a multi-part list is kept even when all its
+// entries have been deleted. Do this by creating a list, deleting the first
+// half, and ensuring iteration and mutation still work as expected.
+func TestMultiPartListDeleteAndAdd(t *testing.T) {
+	size := int(1e5)
+	// For testing, set the max list size to a lower threshold.
+	maxListSize = 5000
+	defer func() {
+		maxListSize = math.MaxInt32
+	}()
+
+	// Add entries to the maps.
+	key := x.DataKey("del_add", 1331)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	for i := 1; i <= size; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		if i%2000 == 0 {
+			kvs, err := ol.Rollup()
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps)
+			require.NoError(t, err)
+		}
+	}
+
+	// Verify all entries are in the list.
+	opt := ListOptions{ReadTs: math.MaxUint64}
+	l, err := ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, uint64(i+1), uid)
+	}
+
+	// Delete the first half of the previously inserted entries from the list.
+	baseStartTs := uint64(size) + 1
+	for i := 1; i <= 50000; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		txn := Txn{StartTs: baseStartTs + uint64(i)}
+		addMutationHelper(t, ol, edge, Del, &txn)
+		require.NoError(t, ol.CommitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
+		if i%2000 == 0 {
+			kvs, err := ol.Rollup()
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps)
+			require.NoError(t, err)
+		}
+	}
+
+	// Rollup list at the end of all the deletions.
+	kvs, err := ol.Rollup()
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = getNew(key, ps)
+	require.NoError(t, err)
+
+	// Verify that the entries were actually deleted.
+	opt = ListOptions{ReadTs: math.MaxUint64}
+	l, err = ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, 50000, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, 50000+uint64(i+1), uid)
+	}
+
+	// Re-add the entries that were just deleted.
+	baseStartTs = uint64(2*size) + 1
+	for i := 1; i <= 50000; i++ {
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		txn := Txn{StartTs: baseStartTs + uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.CommitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
+
+		if i%2000 == 0 {
+			kvs, err := ol.Rollup()
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps)
+			require.NoError(t, err)
+		}
+	}
+
+	// Rollup list at the end of all the additions
+	kvs, err = ol.Rollup()
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = getNew(key, ps)
+	require.NoError(t, err)
+
+	// Verify all entries are once again in the list.
+	opt = ListOptions{ReadTs: math.MaxUint64}
+	l, err = ol.Uids(opt)
+	require.NoError(t, err)
+	require.Equal(t, size, len(l.Uids), "List of Uids received: %+v", l.Uids)
+	for i, uid := range l.Uids {
+		require.Equal(t, uint64(i+1), uid)
 	}
 }
 
