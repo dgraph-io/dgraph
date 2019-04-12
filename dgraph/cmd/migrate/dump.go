@@ -38,11 +38,13 @@ func getSortedColumns(tableInfo *TableInfo) []string {
 }
 
 // dumpTable reads data from a table and sends to standard output
-func dumpTable(table string, tableInfo *TableInfo, tableGuide *TableGuide, pool *sql.DB) error {
+func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*TableGuide,
+	pool *sql.DB) error {
+	tableGuide := tableGuides[table]
 	sortedColumns := getSortedColumns(tableInfo)
 	columnsQuery := strings.Join(sortedColumns, ",")
 	query := fmt.Sprintf(`select %s from %s`, columnsQuery, table)
-	fmt.Printf("query %s\n", query)
+	fmt.Printf("%s\n", query)
 	rows, err := pool.Query(query)
 	if err != nil {
 		return err
@@ -91,15 +93,36 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuide *TableGuide, pool 
 
 		uidLabel := tableGuide.keyGenerator.generateKey(tableInfo, colValues)
 		for i, colValue := range colValues {
-			fmt.Printf("%s %s ", uidLabel, columnPredicateNames[i])
-			if columnTypes[i].DatabaseTypeName() == "VARCHAR" {
-				fmt.Printf("%q . \n", colValue)
+			column := columns[i]
+			foreignColumn, found := tableInfo.foreignKeyReferences[column]
+			if found {
+				refLabel := fmt.Sprintf("_:%s%s%s%s%v", foreignColumn.tableName, SEPERATOR,
+					foreignColumn.columnName, SEPERATOR, colValue)
+				foreignUidLabel := tableGuides[foreignColumn.tableName].valuesRecordor.
+					getUidLabel(refLabel)
+				outputPlainCell(uidLabel, "REF", columnPredicateNames[i], foreignUidLabel)
 			} else {
-				fmt.Printf("%v . \n", colValue)
+				outputPlainCell(uidLabel, columnTypes[i].DatabaseTypeName(), columnPredicateNames[i],
+					colValue)
 			}
 		}
+
+		// step 2: record mappings to the uidLabel so that future tables can look up the
+		// uidLabel
+		tableGuide.valuesRecordor.record(tableInfo, colValues, uidLabel)
 	}
 	return nil
+}
+
+func outputPlainCell(uidLabel string, dbType string, predName string,
+	colValue interface{}) {
+	// step 1: each cell value should be stored under a predicate
+	fmt.Printf("%s %s ", uidLabel, predName)
+	if dbType == "VARCHAR" {
+		fmt.Printf("%q . \n", colValue)
+	} else {
+		fmt.Printf("%v . \n", colValue)
+	}
 }
 
 func getColValues(colValuePtrs []interface{}) []interface{} {
@@ -173,9 +196,8 @@ func run(conf *viper.Viper) error {
 	//fmt.Printf("topo sorted tables:\n")
 	for _, table := range tablesSorted {
 		fmt.Printf("%s\n", table)
-		guide := tableGuides[table]
 		//spew.Dump(guide.indexGenerator.generateDgraphIndices(tables[table]))
-		dumpTable(table, tables[table], guide, pool)
+		dumpTable(table, tables[table], tableGuides, pool)
 	}
 
 	return nil
