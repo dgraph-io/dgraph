@@ -154,6 +154,10 @@ type NoneCompositeIndexGenerator struct {
 	separator string
 }
 
+func getLinkPredicate(predicate string) string {
+	return "mysql." + predicate
+}
+
 func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
 	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType != NONE
@@ -163,25 +167,25 @@ func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []s
 	for _, column := range sqlIndexedColumns {
 		predicate := fmt.Sprintf("%s%s%s", info.tableName, g.separator, column.name)
 
-		var dataType DataType
-		if _, ok := info.foreignKeyReferences[column.name]; ok {
-			// this column is a foreign key
-			dataType = UID
-		} else {
-			dataType = info.columns[column.name].dataType
-		}
+		dataType := info.columns[column.name].dataType
 
 		var index string
 		if dataType == STRING {
 			index = "@index(exact)"
-		} else if dataType == UID {
-			// no need to create index on UID predicates
 		} else {
 			index = fmt.Sprintf("@index(%s)", dataType)
 		}
 
 		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s %s .\n",
 			predicate, dataType, index))
+
+		// if this column is a foreign key, we also need to add a new predicate of type uid
+		// which will be used to store the link to the remote node
+		if _, ok := info.foreignKeyReferences[column.name]; ok {
+			dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
+				getLinkPredicate(predicate), UID))
+		}
+
 	}
 	return dgraphIndexes
 }

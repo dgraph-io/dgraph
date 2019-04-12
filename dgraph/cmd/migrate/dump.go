@@ -94,17 +94,22 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*Table
 
 		uidLabel := tableGuide.keyGenerator.generateKey(tableInfo, colValues)
 		for i, colValue := range colValues {
+			predicate := columnPredicateNames[i]
+			outputPlainCell(uidLabel, columnTypes[i].DatabaseTypeName(), predicate,
+				colValue, writer)
+
+			// when the column is a foreign key, we also need to store an edge from the current
+			// node to the remote node, the predicate we use is the predicate prepended with _
 			column := columns[i]
 			foreignColumn, found := tableInfo.foreignKeyReferences[column]
+
 			if found {
 				refLabel := fmt.Sprintf("_:%s%s%s%s%v", foreignColumn.tableName, SEPERATOR,
 					foreignColumn.columnName, SEPERATOR, colValue)
 				foreignUidLabel := tableGuides[foreignColumn.tableName].valuesRecordor.
 					getUidLabel(refLabel)
-				outputPlainCell(uidLabel, "UID", columnPredicateNames[i], foreignUidLabel, writer)
-			} else {
-				outputPlainCell(uidLabel, columnTypes[i].DatabaseTypeName(), columnPredicateNames[i],
-					colValue, writer)
+				outputPlainCell(uidLabel, "UID", getLinkPredicate(predicate), foreignUidLabel,
+					writer)
 			}
 		}
 
