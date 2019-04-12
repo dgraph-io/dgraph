@@ -1188,14 +1188,8 @@ func (out *rollupOutput) splitUpList() {
 		}
 	}
 
-	// Only one split after the splitting process, which means that the original list
-	// was not split and did not change.
-	if len(newSplits) == 1 {
-		return
-	}
-
-	// The list was split before but the number of splits did not change.
-	if len(newSplits) == len(out.plist.Splits) {
+	// No new lists were created so there's no need to update the list of splits.
+	if len(newSplits) == len(lists) {
 		return
 	}
 
