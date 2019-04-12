@@ -268,6 +268,19 @@ Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done i
 1. Using the star notation mentioned in the last section.
 1. Setting the object to a specific value. If the value passed is not the current value, the mutation will succeed but will have no effect. If the value passed is the current value, the mutation will succeed and will delete the triple.
 
+For language-tagged values, the following special syntax is supported:
+
+```
+{
+	delete {
+		<0x12345> <name@es> * .
+	}
+}
+```
+
+In this example, the value of name tagged with language tag `es` will be deleted.
+Other tagged values are left untouched.
+
 ## Mutations using cURL
 
 Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the HTTP header `X-DgraphCommitNow: true`.

@@ -127,10 +127,6 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_IntVal{IntVal: i}}
 
 	case string:
-		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
-		// mutations that's the only way to send language for a value.
-		nq.Predicate, nq.Lang = x.PredicateLang(k)
-
 		// Default value is considered as S P * deletion.
 		if v == "" && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
@@ -258,16 +254,24 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			continue
 		}
 
-		if op == DeleteNquads {
-			// This corresponds to edge deletion.
-			if v == nil {
-				mr.nquads = append(mr.nquads, &api.NQuad{
+		if v == nil {
+			if op == DeleteNquads {
+				// This corresponds to edge deletion.
+				nq := &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
-				})
+				}
+				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
+				// mutations that's the only way to send language for a value.
+				nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
+
+				mr.nquads = append(mr.nquads, nq)
 				continue
 			}
+
+			// If op is SetNquads, ignore this triplet and continue.
+			continue
 		}
 
 		prefix := pred + query.FacetDelimeter
@@ -284,13 +288,9 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			Facets:    fts,
 		}
 
-		if v == nil {
-			if op == DeleteNquads {
-				nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
-				mr.nquads = append(mr.nquads, &nq)
-			}
-			continue
-		}
+		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
+		// mutations that's the only way to send language for a value.
+		nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
 
 		switch v := v.(type) {
 		case string, json.Number, bool:

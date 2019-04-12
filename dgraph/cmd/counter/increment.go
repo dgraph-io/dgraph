@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 )
 
 var Increment x.SubCommand
@@ -47,14 +46,19 @@ func init() {
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
 
 	flag := Increment.Cmd.Flags()
-	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
+	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
-	flag.Bool("ro", false, "Only read the counter value, don't update it.")
-	flag.Bool("be", false, "Read counter value without retrieving timestamp from Zero.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
-	flag.String("pred", "counter.val", "Predicate to use for storing the counter.")
 	flag.String("user", "", "Username if login is required.")
 	flag.String("password", "", "Password of the user.")
+	flag.String("pred", "counter.val",
+		"Predicate to use for storing the counter.")
+	flag.Bool("ro", false,
+		"Read-only. Read the counter value without updating it.")
+	flag.Bool("be", false,
+		"Best-effort. Read counter value without retrieving timestamp from Zero.")
+	// TLS configuration
+	x.RegisterClientTLSFlags(flag)
 }
 
 type Counter struct {
@@ -129,17 +133,21 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
-	addr := conf.GetString("addr")
+	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+
+	tlsCfg, err := x.LoadClientTLSConfig(conf)
+	x.CheckfNoTrace(err)
+
+	conn, err := x.SetupConnection(alpha, tlsCfg, false)
 	if err != nil {
 		log.Fatal(err)
 	}
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
 	if user := conf.GetString("user"); len(user) > 0 {
-		x.Check(dg.Login(context.Background(), user, conf.GetString("password")))
+		x.CheckfNoTrace(dg.Login(context.Background(), user, conf.GetString("password")))
 	}
 
 	for num > 0 {

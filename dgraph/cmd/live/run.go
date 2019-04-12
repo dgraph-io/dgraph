@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -52,7 +53,7 @@ type options struct {
 	dataFiles           string
 	dataFormat          string
 	schemaFile          string
-	dgraph              string
+	alpha               string
 	zero                string
 	concurrent          int
 	batchSize           int
@@ -64,9 +65,9 @@ type options struct {
 }
 
 var (
-	opt     options
-	tlsConf x.TLSHelperConfig
-	Live    x.SubCommand
+	opt    options
+	tlsCfg *tls.Config
+	Live   x.SubCommand
 )
 
 func init() {
@@ -86,7 +87,8 @@ func init() {
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph alpha gRPC server address")
+	flag.StringP("alpha", "a", "127.0.0.1:9080",
+		"Comma-separated list of Dgraph alpha gRPC server addresses")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
 		"Number of concurrent requests to make to Dgraph")
@@ -95,7 +97,7 @@ func init() {
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
-	flag.StringP("auth_token", "a", "",
+	flag.StringP("auth_token", "t", "",
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
@@ -103,8 +105,7 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// TLS configuration
-	x.RegisterTLSFlags(flag)
-	flag.String("tls_server_name", "", "Used to verify the server hostname.")
+	x.RegisterClientTLSFlags(flag)
 }
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -199,7 +200,6 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
-	batch := make([]*api.NQuad, 0, 2*opt.batchSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -207,33 +207,9 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		default:
 		}
 
-		var nqs []*api.NQuad
 		chunkBuf, err := ck.Chunk(rd)
-		if chunkBuf != nil && chunkBuf.Len() > 0 {
-			nqs, err = ck.Parse(chunkBuf)
-			x.CheckfNoTrace(err)
-
-			for _, nq := range nqs {
-				nq.Subject = l.uid(nq.Subject)
-				if len(nq.ObjectId) > 0 {
-					nq.ObjectId = l.uid(nq.ObjectId)
-				}
-			}
-
-			batch = append(batch, nqs...)
-			for len(batch) >= opt.batchSize {
-				mu := api.Mutation{Set: batch[:opt.batchSize]}
-				l.reqs <- mu
-				// The following would create a new batch slice. We should not use batch =
-				// batch[opt.batchSize:], because it would end up modifying the batch array passed
-				// to l.reqs above.
-				batch = append([]*api.NQuad{}, batch[opt.batchSize:]...)
-			}
-		}
+		l.processChunk(chunkBuf, ck)
 		if err == io.EOF {
-			if len(batch) > 0 {
-				l.reqs <- api.Mutation{Set: batch}
-			}
 			break
 		} else {
 			x.Check(err)
@@ -242,6 +218,43 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	x.CheckfNoTrace(ck.End(rd))
 
 	return nil
+}
+
+// processChunk parses the rdf entries from the chunk, and group them into
+// batches (each one containing opt.batchSize entries) and sends the batches
+// to the loader.reqs channel
+func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
+	if chunkBuf == nil && chunkBuf.Len() == 0 {
+		return
+	}
+
+	nqs, err := ck.Parse(chunkBuf)
+	x.CheckfNoTrace(err)
+
+	batch := make([]*api.NQuad, 0, opt.batchSize)
+	for _, nq := range nqs {
+		nq.Subject = l.uid(nq.Subject)
+		if len(nq.ObjectId) > 0 {
+			nq.ObjectId = l.uid(nq.ObjectId)
+		}
+
+		batch = append(batch, nq)
+
+		if len(batch) >= opt.batchSize {
+			mu := api.Mutation{Set: batch}
+			l.reqs <- mu
+
+			// The following would create a new batch slice. We should not use batch =
+			// batch[:0], because it would end up modifying the batch array passed
+			// to l.reqs above.
+			batch = make([]*api.NQuad, 0, opt.batchSize)
+		}
+	}
+
+	// sends the left over nqs
+	if len(batch) > 0 {
+		l.reqs <- api.Mutation{Set: batch}
+	}
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
@@ -260,7 +273,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	}
 
 	// compression with zero server actually makes things worse
-	connzero, err := x.SetupConnection(opt.zero, &tlsConf, false)
+	connzero, err := x.SetupConnection(opt.zero, tlsCfg, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
 	alloc := xidmap.New(connzero, db)
@@ -289,7 +302,7 @@ func run() error {
 		dataFiles:           Live.Conf.GetString("files"),
 		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
-		dgraph:              Live.Conf.GetString("dgraph"),
+		alpha:               Live.Conf.GetString("alpha"),
 		zero:                Live.Conf.GetString("zero"),
 		concurrent:          Live.Conf.GetInt("conc"),
 		batchSize:           Live.Conf.GetInt("batch"),
@@ -299,8 +312,10 @@ func run() error {
 		useCompression:      Live.Conf.GetBool("use_compression"),
 		newUids:             Live.Conf.GetBool("new_uids"),
 	}
-	x.LoadTLSConfig(&tlsConf, Live.Conf, x.TlsClientCert, x.TlsClientKey)
-	tlsConf.ServerName = Live.Conf.GetString("tls_server_name")
+	tlsCfg, err := x.LoadClientTLSConfig(Live.Conf)
+	if err != nil {
+		return err
+	}
 
 	go http.ListenAndServe("localhost:6060", nil)
 	ctx := context.Background()
@@ -312,10 +327,10 @@ func run() error {
 		MaxRetries:    math.MaxUint32,
 	}
 
-	ds := strings.Split(opt.dgraph, ",")
+	ds := strings.Split(opt.alpha, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
-		conn, err := x.SetupConnection(d, &tlsConf, opt.useCompression)
+		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
 		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
 		defer conn.Close()
 

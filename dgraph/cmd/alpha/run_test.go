@@ -276,8 +276,8 @@ func TestDeletePredicate(t *testing.T) {
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+
-		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"]}`+
-		`]}}`, output)
+		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
+			"list":true}]}}`, output)
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
@@ -1350,7 +1350,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 		x.AclPredicates+","+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"occupations","type":"string"},`+
-		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"]}]}}`, res)
+		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
+			"list":true}]}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1468,6 +1469,50 @@ func TestDeleteScalarValue(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
 
+func TestDeleteValueLang(t *testing.T) {
+	var s = `name: string @lang .`
+	require.NoError(t, schema.ParseBytes([]byte(""), 1))
+	require.NoError(t, alterSchemaWithRetry(s))
+
+	var m = `
+	{
+	  set {
+	    <0x12345> <name> "Mark"@en .
+	    <0x12345> <name> "Marco"@es .
+	    <0x12345> <name> "Marc"@fr .
+	  }
+	}
+	`
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	q := `
+	{
+	  me(func: uid(0x12345)) {
+		name@*
+	  }
+	}`
+	output, err := runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"me":[
+		{"name@en":"Mark", "name@es":"Marco", "name@fr":"Marc"}]}}`, output)
+
+	var d1 = `
+    {
+      delete {
+        <0x12345> <name@fr> * .
+      }
+    }
+	`
+	err = runMutation(d1)
+	require.NoError(t, err)
+
+	// Verify only the specific tagged value was deleted.
+	output, err = runQuery(q)
+	require.NoError(t, err)
+	require.JSONEq(t, output, `{"data": {"me":[{"name@en":"Mark", "name@es":"Marco"}]}}`)
+}
+
 func TestDropAll(t *testing.T) {
 	var m1 = `
 	{
@@ -1507,7 +1552,8 @@ func TestDropAll(t *testing.T) {
 	z.CompareJSON(t,
 		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
 			x.AclPredicates+","+
-			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"]}]}}`, output)
+			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
+				"list":true}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1593,7 +1639,7 @@ func TestJsonUnicode(t *testing.T) {
 }
 
 func TestGrpcCompressionSupport(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9180",
+	conn, err := grpc.Dial(z.SockAddr,
 		grpc.WithInsecure(),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
@@ -1701,7 +1747,7 @@ var grootRefreshJwt string
 
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial("localhost:5080", grpc.WithInsecure())
+	conn, err := grpc.Dial(z.SockAddrZero, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

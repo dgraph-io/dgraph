@@ -74,6 +74,17 @@ function IsCi {
     [[ ! -z "$TEAMCITY_VERSION" ]]
 }
 
+function TestFailed {
+    TEST_FAILED=1
+    [[ $CURRENT_TEST ]] && echo $CURRENT_TEST >> $FAILED_TESTS
+}
+
+function ListFailedTests {
+    echo -en "\e[1;31m"
+    sed 's/^/  /' $FAILED_TESTS
+    echo -en "\e[0m"
+}
+
 function FindCustomClusterTests {
     # look for directories containing a docker compose and *_test.go files
     touch $CUSTOM_CLUSTER_TESTS
@@ -106,10 +117,11 @@ function Run {
 }
 
 function RunCmd {
+    CURRENT_TEST=$1
     IsCi && echo "##teamcity[testStarted name='$1' captureStandardOutput='true']"
     if eval "$@"; then
         echo -e "\e[1;32mok $1\e[0m"
-         IsCi && echo "##teamcity[testFinished name='$1']"
+        IsCi && echo "##teamcity[testFinished name='$1']"
         return 0
     else
         echo -e "\e[1;31mfail $1\e[0m"
@@ -121,8 +133,10 @@ function RunCmd {
 function RunDefaultClusterTests {
     while read -r PKG; do
         Info "Running test for $PKG"
-        Run $PKG || TEST_FAILED=1
+        CURRENT_TEST=$PKG
+        Run $PKG || TestFailed
     done < $DEFAULT_CLUSTER_TESTS
+    CURRENT_TEST=
     return $TEST_FAILED
 }
 
@@ -133,9 +147,11 @@ function RunCustomClusterTests {
         Info "Running tests in directory $DIR"
         restartCluster $DIR/docker-compose.yml
         pushd $DIR >/dev/null
-        Run || TEST_FAILED=1
+        CURRENT_TEST=$DIR
+        Run || TestFailed
         popd >/dev/null
     done < $CUSTOM_CLUSTER_TESTS
+    CURRENT_TEST=
     return $TEST_FAILED
 }
 
@@ -154,7 +170,7 @@ while true; do
         -f|--full)      TEST_SET="unit:cluster:full"  ;;
         -v|--verbose)   GO_TEST_OPTS+=( "-v" )        ;;
         -n|--no-cache)  GO_TEST_OPTS+=( "-count=1" )  ;;
-        --oss)          GO_TEST_OPTS+=( "-tags=oss" )  ;;
+           --oss)       GO_TEST_OPTS+=( "-tags=oss" ) ;;
         --)             shift; break                  ;;
     esac
     shift
@@ -166,9 +182,13 @@ cd $DGRAPH_ROOT
 export TMPDIR=$(mktemp --tmpdir --directory $ME.tmp-XXXXXX)
 trap "rm -rf $TMPDIR" EXIT
 
+# docker-compose files may use this to run as user instead of as root
+export UID
+
 MATCHING_TESTS=$TMPDIR/tests
 CUSTOM_CLUSTER_TESTS=$TMPDIR/custom
 DEFAULT_CLUSTER_TESTS=$TMPDIR/default
+FAILED_TESTS=$TMPDIR/failures
 
 if [[ $# -eq 0 ]]; then
     go list ./... > $MATCHING_TESTS
@@ -199,7 +219,7 @@ if [[ :${TEST_SET}: == *:unit:* ]]; then
     if [[ -s $DEFAULT_CLUSTER_TESTS ]]; then
         Info "Running tests using the default cluster"
         restartCluster
-        RunDefaultClusterTests || TEST_FAILED=1
+        RunDefaultClusterTests || TestFailed
     else
         Info "Skipping default cluster tests because none match"
     fi
@@ -208,7 +228,7 @@ fi
 if [[ :${TEST_SET}: == *:cluster:* ]]; then
     if [[ -s $CUSTOM_CLUSTER_TESTS ]]; then
         Info "Running tests using custom clusters"
-        RunCustomClusterTests || TEST_FAILED=1
+        RunCustomClusterTests || TestFailed
     else
         Info "Skipping custom cluster tests because none match"
     fi
@@ -216,13 +236,13 @@ fi
 
 if [[ :${TEST_SET}: == *:full:* ]]; then
     Info "Running small load test"
-    RunCmd ./contrib/scripts/load-test.sh || TEST_FAILED=1
+    RunCmd ./contrib/scripts/load-test.sh || TestFailed
 
     Info "Running custom test scripts"
-    RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TEST_FAILED=1
+    RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TestFailed
 
     Info "Running large load test"
-    RunCmd ./systest/21million/test-21million.sh || TEST_FAILED=1
+    RunCmd ./systest/21million/test-21million.sh || TestFailed
 fi
 
 Info "Stopping cluster"
@@ -235,6 +255,7 @@ if [[ $TEST_FAILED -eq 0 ]]; then
     Info "\e[1;32mAll tests passed!"
 else
     Info "\e[1;31m*** One or more tests failed! ***"
+    ListFailedTests
 fi
 
 exit $TEST_FAILED

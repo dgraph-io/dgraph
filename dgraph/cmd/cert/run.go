@@ -27,10 +27,10 @@ import (
 var Cert x.SubCommand
 
 type options struct {
-	dir, caKey, caCert, client string
-	force, verify              bool
-	keySize, days              int
-	nodes                      []string
+	dir, caKey, caCert, client, curve string
+	force, verify                     bool
+	keySize, days                     int
+	nodes                             []string
 }
 
 var opt options
@@ -40,16 +40,18 @@ func init() {
 		Use:   "cert",
 		Short: "Dgraph TLS certificate management",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			defer x.StartProfile(Cert.Conf).Stop()
-			run()
+			return run()
 		},
 	}
 
 	flag := Cert.Cmd.Flags()
 	flag.StringP("dir", "d", defaultDir, "directory containing TLS certs and keys")
 	flag.StringP("ca-key", "k", defaultCAKey, "path to the CA private key")
-	flag.Int("keysize", defaultKeySize, "RSA key bit size for creating new keys")
+	flag.IntP("keysize", "r", defaultKeySize, "RSA key bit size for creating new keys")
+	flag.StringP("elliptic-curve", "e", "",
+		`ECDSA curve for private key. Values are: "P224", "P256", "P384", "P521".`)
 	flag.Int("duration", defaultDays, "duration of cert validity in days")
 	flag.StringSliceP("nodes", "n", nil, "creates cert/key pair for nodes")
 	flag.StringP("client", "c", "", "create cert/key pair for a client name")
@@ -68,7 +70,7 @@ func init() {
 	Cert.Cmd.AddCommand(cmdList)
 }
 
-func run() {
+func run() error {
 	opt = options{
 		dir:     Cert.Conf.GetString("dir"),
 		caKey:   Cert.Conf.GetString("ca-key"),
@@ -78,9 +80,10 @@ func run() {
 		nodes:   Cert.Conf.GetStringSlice("nodes"),
 		force:   Cert.Conf.GetBool("force"),
 		verify:  Cert.Conf.GetBool("verify"),
+		curve:   Cert.Conf.GetString("elliptic-curve"),
 	}
 
-	x.Check(createCerts(opt))
+	return createCerts(opt)
 }
 
 // listCerts handles the subcommand of "dgraph cert ls".
@@ -121,21 +124,24 @@ func listCerts() error {
 		}
 		fmt.Printf("%s %s - %s\n", f.fileMode, f.fileName, f.commonName)
 		if f.issuerName != "" {
-			fmt.Printf("%10s: %s\n", "Issuer", f.issuerName)
+			fmt.Printf("%14s: %s\n", "Issuer", f.issuerName)
 		}
 		if f.verifiedCA != "" {
-			fmt.Printf("%10s: %s\n", "CA Verify", f.verifiedCA)
+			fmt.Printf("%14s: %s\n", "CA Verify", f.verifiedCA)
 		}
 		if f.serialNumber != "" {
-			fmt.Printf("%10s: %s\n", "S/N", f.serialNumber)
+			fmt.Printf("%14s: %s\n", "S/N", f.serialNumber)
 		}
 		if !f.expireDate.IsZero() {
-			fmt.Printf("%10s: %x\n", "Expiration", f)
+			fmt.Printf("%14s: %x\n", "Expiration", f)
 		}
 		if f.hosts != nil {
-			fmt.Printf("%10s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
+			fmt.Printf("%14s: %s\n", "Hosts", strings.Join(f.hosts, ", "))
 		}
-		fmt.Printf("%10s: %s\n\n", "MD5 hash", f.md5sum)
+		if f.algo != "" {
+			fmt.Printf("%14s: %s\n", "Algorithm", f.algo)
+		}
+		fmt.Printf("%14s: %s\n\n", "SHA-256 Digest", f.digest)
 	}
 
 	return nil

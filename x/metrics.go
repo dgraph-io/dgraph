@@ -27,6 +27,7 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -209,12 +210,25 @@ func MetricsContext() context.Context {
 	return context.Background()
 }
 
+func SinceMs(startTime time.Time) float64 {
+	return float64(time.Since(startTime)) / 1e6
+}
+
+// UpsertSpanWithMethod upserts a span using the provide name, and also upserts the name as a tag
+// under the method key
+func UpsertSpanWithMethod(ctx context.Context, name string) (context.Context,
+	*otrace.Span) {
+	span := otrace.FromContext(ctx)
+	if span == nil {
+		ctx, span = otrace.StartSpan(ctx, name)
+	}
+
+	ctx = WithMethod(ctx, name)
+	return ctx, span
+}
+
 func WithMethod(parent context.Context, method string) context.Context {
 	ctx, err := tag.New(parent, tag.Upsert(KeyMethod, method))
 	Check(err)
 	return ctx
-}
-
-func SinceMs(startTime time.Time) float64 {
-	return float64(time.Since(startTime)) / 1e6
 }

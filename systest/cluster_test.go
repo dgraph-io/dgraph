@@ -176,7 +176,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
 		"--schema", schema,
-		"--dgraph", ":"+cluster.dgraphPort,
+		"--alpha", ":"+cluster.alphaPort,
 		"--zero", ":"+cluster.zeroPort,
 	)
 	liveCmd.Dir = tmpDir
@@ -190,7 +190,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 		//		shutdownCluster()
 		log.Fatal(err)
 	}
-	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+x.PortHTTP)
+	waitForNodeToBeHealthy(t, cluster.alphaPortOffset+x.PortHTTP)
 	waitForConvergence(t, cluster)
 	// TODO(pawan) - Investigate why the test fails if we remove this export.
 	// The second export has less RDFs than it should if we don't do this export.
@@ -198,7 +198,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 		expectedRDF:    2e5,
 		expectedSchema: 10,
 		dir:            cluster.dir,
-		port:           cluster.dgraphPortOffset + x.PortHTTP,
+		port:           cluster.alphaPortOffset + x.PortHTTP,
 	})
 	if err != nil {
 		//		shutdownCluster()
@@ -250,7 +250,7 @@ func DONOTRUNTestClusterSnapshot(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	waitForNodeToBeHealthy(t, cluster.dgraphPortOffset+x.PortHTTP)
+	waitForNodeToBeHealthy(t, cluster.alphaPortOffset+x.PortHTTP)
 	waitForNodeToBeHealthy(t, o+x.PortHTTP)
 	waitForConvergence(t, cluster)
 

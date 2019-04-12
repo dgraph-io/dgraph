@@ -106,7 +106,7 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 					t.Logf("Error while reading: %v\n", err)
 				} else {
 					require.Equal(t, expected, cnt.Val)
-					require.Equal(t, ts, cnt.startTs)
+					require.True(t, cnt.startTs >= ts, "the timestamp should never decrease")
 				}
 			}
 		}()
@@ -134,8 +134,7 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 }
 
 func setup(t *testing.T) *dgo.Dgraph {
-	dg := z.DgraphClientWithGroot(":9180")
-	// dg := z.DgraphClient(":9180")
+	dg := z.DgraphClientWithGroot(z.SockAddr)
 	ctx := context.Background()
 	op := api.Operation{DropAll: true}
 
