@@ -35,7 +35,6 @@ func TestDataKey(t *testing.T) {
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, uid, pk.Uid)
 		require.Equal(t, uint64(0), pk.StartUid)
-		require.Equal(t, false, pk.HasStartUid)
 	}
 
 	keys := make([]string, 0, 1024)
@@ -65,7 +64,6 @@ func TestParseKeysWithStartUid(t *testing.T) {
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, uid, pk.Uid)
 		require.Equal(t, startUid, pk.StartUid)
-		require.Equal(t, true, pk.HasStartUid)
 	}
 }
 
