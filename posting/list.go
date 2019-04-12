@@ -1143,7 +1143,7 @@ func (out *rollupOutput) splitUpList() {
 	}
 
 	// Insert the split lists if they exist.
-	for _, startUid := range out.plist.Splits {
+	for _, startUid := range out.splits() {
 		part := out.parts[startUid]
 		lists = append(lists, part)
 	}
@@ -1220,14 +1220,24 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 // removeEmptySplits updates the split list by removing empty posting lists' startUids.
 func (out *rollupOutput) removeEmptySplits() {
 	var splits []uint64
-	// TODO: Always iterate over out.parts and derive out.plist.Splits.
-	for _, startUid := range out.plist.Splits {
-		plist := out.parts[startUid]
+	for startUid, plist := range out.parts {
 		if !isPlistEmpty(plist) {
 			splits = append(splits, startUid)
 		}
 	}
 	out.plist.Splits = splits
+}
+
+// Returns the sorted list of start uids based on the keys in out.parts.
+// out.parts is considered the source of truth so this method is considered
+// safer than using out.plist.Splits directly.
+func (out *rollupOutput) splits() []uint64 {
+	var splits []uint64
+	for startUid, _ := range out.parts {
+		splits = append(splits, startUid)
+	}
+	sortSplits(splits)
+	return splits
 }
 
 // isPlistEmpty returns true if the given plist is empty. Plists with splits are
@@ -1240,4 +1250,10 @@ func isPlistEmpty(plist *pb.PostingList) bool {
 		return true
 	}
 	return false
+}
+
+func sortSplits(splits []uint64) {
+	sort.Slice(splits, func(i, j int) bool {
+		return splits[i] < splits[j]
+	})
 }
