@@ -11,7 +11,7 @@ import (
 )
 
 func TestAccessOverPlaintext(t *testing.T) {
-	dg := z.DgraphClient(":9180")
+	dg := z.DgraphClient(z.SockAddr)
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.Error(t, err, "The authentication handshake should have failed")
 }
@@ -21,7 +21,7 @@ func TestAccessWithCaCert(t *testing.T) {
 	conf.Set("tls_cacert", "../tls/ca.crt")
 	conf.Set("tls_server_name", "node")
 
-	dg, err := z.DgraphClientWithCerts(":9180", conf)
+	dg, err := z.DgraphClientWithCerts(z.SockAddr, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
 	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err, "Unable to perform dropall: %v", err)
