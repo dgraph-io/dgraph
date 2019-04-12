@@ -28,6 +28,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+// getSortedColumns sorts the column alphabetically using the column names
+// and return the column names as a slice
 func getSortedColumns(tableInfo *TableInfo) []string {
 	columns := make([]string, 0)
 	for column := range tableInfo.columns {
@@ -39,7 +41,15 @@ func getSortedColumns(tableInfo *TableInfo) []string {
 	return columns
 }
 
-// dumpTable reads data from a table and sends to standard output
+type RowMetaInfo struct {
+	colValues       []interface{}
+	columnPredNames []string
+	columnNames     []string
+	blankNodeLabel  string
+	columnTypes     []*sql.ColumnType
+}
+
+// dumpTable reads data from a table and sends to the writer
 func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*TableGuide,
 	pool *sql.DB, writer *bufio.Writer) error {
 	tableGuide := tableGuides[table]
@@ -52,72 +62,97 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*Table
 	}
 	defer rows.Close()
 
-	var columns []string
+	var columnNames []string
 	var columnTypes []*sql.ColumnType
-	var columnPredicateNames []string
+	var columnPredNames []string
 	for rows.Next() {
-		if columns == nil {
-			columns, err = rows.Columns()
+		if columnNames == nil {
+			columnNames, columnTypes, columnPredNames, err = getColumnTypesAndPreNames(rows,
+				tableGuide, tableInfo)
 			if err != nil {
-				return err
-			}
-
-			columnTypes, err = rows.ColumnTypes()
-			if err != nil {
-				return err
-			}
-
-			// initialize the columnPredicateNames
-			for _, column := range columns {
-				columnPredicateNames = append(columnPredicateNames,
-					tableGuide.predNameGenerator.generatePredicateName(tableInfo, column))
+				return fmt.Errorf("unable to get column types and pred names: %v", err)
 			}
 		}
 
-		colValuePtrs := make([]interface{}, 0, len(columns))
-		for i := 0; i < len(columns); i++ {
-			switch columnTypes[i].DatabaseTypeName() {
-			case "VARCHAR":
-				colValuePtrs = append(colValuePtrs, new(string))
-			case "INT":
-				colValuePtrs = append(colValuePtrs, new(int))
-			case "FLOAT":
-				colValuePtrs = append(colValuePtrs, new(float64))
-			default:
-				panic(fmt.Sprintf("unknown type %v at index %d",
-					columnTypes[i].ScanType().Kind(), i))
-			}
-		}
-		rows.Scan(colValuePtrs...)
+		// step 1: read the row's column values
+		colValues := getColumnValues(columnNames, columnTypes, rows)
 
-		colValues := getColValues(colValuePtrs)
+		// step 2: output the column values in RDF format
+		blankNodeLabel := tableGuide.keyGenerator.generateKey(tableInfo, colValues)
+		outputColumnValues(&RowMetaInfo{
+			colValues:       colValues,
+			columnPredNames: columnPredNames,
+			columnNames:     columnNames,
+			blankNodeLabel:  blankNodeLabel,
+			columnTypes:     columnTypes,
+		}, writer, tableInfo, tableGuides)
 
-		uidLabel := tableGuide.keyGenerator.generateKey(tableInfo, colValues)
-		for i, colValue := range colValues {
-			predicate := columnPredicateNames[i]
-			outputPlainCell(uidLabel, columnTypes[i].DatabaseTypeName(), predicate,
-				colValue, writer)
-
-			// when the column is a foreign key, we also need to store an edge from the current
-			// node to the remote node, the predicate we use is the predicate prepended with _
-			column := columns[i]
-			foreignColumn, found := tableInfo.foreignKeyReferences[column]
-
-			if found {
-				refLabel := fmt.Sprintf("_:%s%s%s%s%v", foreignColumn.tableName, SEPERATOR,
-					foreignColumn.columnName, SEPERATOR, colValue)
-				foreignUidLabel := tableGuides[foreignColumn.tableName].valuesRecordor.
-					getUidLabel(refLabel)
-				outputPlainCell(uidLabel, "UID", getLinkPredicate(predicate), foreignUidLabel,
-					writer)
-			}
-		}
-
-		// step 2: record mappings to the uidLabel so that future tables can look up the
-		// uidLabel
-		tableGuide.valuesRecordor.record(tableInfo, colValues, uidLabel)
+		// step 3: record mappings to the blankNodeLabel so that future tables can look up the
+		// blankNodeLabel
+		tableGuide.valuesRecordor.record(tableInfo, colValues, blankNodeLabel)
 	}
 	return nil
+}
+
+func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer, tableInfo *TableInfo,
+	tableGuides map[string]*TableGuide) {
+	for i, colValue := range rowMetaInfo.colValues {
+		predicate := rowMetaInfo.columnPredNames[i]
+		outputPlainCell(rowMetaInfo.blankNodeLabel, rowMetaInfo.columnTypes[i].DatabaseTypeName(),
+			predicate,
+			colValue, writer)
+
+		columnName := rowMetaInfo.columnNames[i]
+		if foreignColumn, found := tableInfo.foreignKeyReferences[columnName]; found {
+			// when the column is a foreign key, we also need to store an edge from the current
+			// node to the remote node, the predicate we use is the predicate prepended with _
+			refLabel := fmt.Sprintf("_:%s%s%s%s%v", foreignColumn.tableName, SEPERATOR,
+				foreignColumn.columnName, SEPERATOR, colValue)
+			foreignUidLabel := tableGuides[foreignColumn.tableName].valuesRecordor.
+				getUidLabel(refLabel)
+			outputPlainCell(rowMetaInfo.blankNodeLabel, "UID", getLinkPredicate(predicate), foreignUidLabel,
+				writer)
+		}
+	}
+}
+
+func getColumnValues(columns []string, columnTypes []*sql.ColumnType, rows *sql.Rows) []interface{} {
+	colValuePtrs := make([]interface{}, 0, len(columns))
+	for i := 0; i < len(columns); i++ {
+		switch columnTypes[i].DatabaseTypeName() {
+		case "VARCHAR":
+			colValuePtrs = append(colValuePtrs, new(string))
+		case "INT":
+			colValuePtrs = append(colValuePtrs, new(int))
+		case "FLOAT":
+			colValuePtrs = append(colValuePtrs, new(float64))
+		default:
+			panic(fmt.Sprintf("unknown type %v at index %d",
+				columnTypes[i].ScanType().Kind(), i))
+		}
+	}
+	rows.Scan(colValuePtrs...)
+	colValues := ptrToValues(colValuePtrs)
+	return colValues
+}
+
+func getColumnTypesAndPreNames(rows *sql.Rows, tableGuide *TableGuide,
+	tableInfo *TableInfo) ([]string, []*sql.ColumnType, []string, error) {
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	columnTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// initialize the columnPredicateNames
+	var columnPredicateNames []string
+	for _, column := range columns {
+		columnPredicateNames = append(columnPredicateNames,
+			tableGuide.predNameGenerator.generatePredicateName(tableInfo, column))
+	}
+	return columns, columnTypes, columnPredicateNames, nil
 }
 
 func outputPlainCell(uidLabel string, dbType string, predName string,
@@ -134,7 +169,7 @@ func outputPlainCell(uidLabel string, dbType string, predName string,
 	}
 }
 
-func getColValues(colValuePtrs []interface{}) []interface{} {
+func ptrToValues(colValuePtrs []interface{}) []interface{} {
 	colValues := make([]interface{}, 0, len(colValuePtrs))
 	for _, colValuePtr := range colValuePtrs {
 		// dereference the pointer to get the actual value
