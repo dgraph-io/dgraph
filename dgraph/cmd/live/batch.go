@@ -130,18 +130,21 @@ func handleError(err error) {
 	switch {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
 		x.Fatalf(s.Message())
+	case s.Code() == codes.Aborted:
+		fmt.Printf("Transaction aborted.\n")
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
 	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.", dur.Round(time.Minute))
 		time.Sleep(dur)
-	case err != y.ErrAborted && err != y.ErrConflict:
+	case err.Error() != y.ErrConflict.Error():
 		fmt.Printf("Error while mutating: %v\n", s.Message())
 	}
 }
 
 func (l *loader) infinitelyRetry(req api.Mutation) {
+	fmt.Printf("Retrying mutation %p ...\n", &req)
 	defer l.retryRequestsWg.Done()
 	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
@@ -159,6 +162,7 @@ func (l *loader) infinitelyRetry(req api.Mutation) {
 		}
 		time.Sleep(i)
 	}
+	fmt.Printf("Retry %p succeeded\n", req)
 }
 
 func (l *loader) request(req api.Mutation) {
