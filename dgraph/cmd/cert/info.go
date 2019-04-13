@@ -17,6 +17,9 @@
 package cert
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
@@ -25,6 +28,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type certInfo struct {
@@ -34,6 +39,7 @@ type certInfo struct {
 	serialNumber string
 	verifiedCA   string
 	digest       string
+	algo         string
 	expireDate   time.Time
 	hosts        []string
 	fileMode     string
@@ -75,10 +81,13 @@ func getFileInfo(file string) *certInfo {
 			return &info
 		}
 
-		if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+		switch key := cert.PublicKey.(type) {
+		case *rsa.PublicKey:
 			info.digest = getHexDigest(key.N.Bytes())
-		} else {
-			info.digest = "Invalid RSA public key"
+		case *ecdsa.PublicKey:
+			info.digest = getHexDigest(elliptic.Marshal(key.Curve, key.X, key.Y))
+		default:
+			info.digest = "Invalid public key"
 		}
 
 		if file != defaultCACert {
@@ -109,12 +118,24 @@ func getFileInfo(file string) *certInfo {
 			return &info
 		}
 
-		key, err := readKey(file)
+		priv, err := readKey(file)
 		if err != nil {
 			info.err = err
 			return &info
 		}
-		info.digest = getHexDigest(key.PublicKey.N.Bytes())
+		key, ok := priv.(crypto.Signer)
+		if !ok {
+			info.err = x.Errorf("Unknown private key type: %T", key)
+		}
+		switch k := key.(type) {
+		case *ecdsa.PrivateKey:
+			info.algo = fmt.Sprintf("ECDSA %s (FIPS-3)", k.PublicKey.Curve.Params().Name)
+			info.digest = getHexDigest(elliptic.Marshal(k.PublicKey.Curve,
+				k.PublicKey.X, k.PublicKey.Y))
+		case *rsa.PrivateKey:
+			info.algo = fmt.Sprintf("RSA %d bits (PKCS#1)", k.PublicKey.N.BitLen())
+			info.digest = getHexDigest(k.PublicKey.N.Bytes())
+		}
 
 	default:
 		info.err = fmt.Errorf("Unsupported file")

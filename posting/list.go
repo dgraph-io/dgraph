@@ -125,7 +125,7 @@ func (it *PIterator) Init(l *List, afterUid, deleteBelowTs uint64) error {
 
 	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	it.uids = it.dec.Seek(it.afterUid)
+	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
@@ -167,9 +167,9 @@ func (it *PIterator) moveToNextPart() error {
 	}
 	it.plist = plist
 
-	it.uidPosting = &pb.Posting{}
 	it.dec = &codec.Decoder{Pack: it.plist.Pack}
-	it.uids = it.dec.Seek(it.afterUid)
+	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
+	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
 	it.plen = len(it.plist.Postings)
@@ -637,14 +637,16 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
-	var mp, pp *pb.Posting
-	var pitr PIterator
-	err := pitr.Init(l, afterUid, deleteBelowTs)
+	var (
+		mp, pp  *pb.Posting
+		pitr    PIterator
+		prevUid uint64
+		err     error
+	)
+	err = pitr.Init(l, afterUid, deleteBelowTs)
 	if err != nil {
 		return err
 	}
-
-	prevUid := uint64(0)
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]

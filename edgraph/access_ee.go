@@ -296,7 +296,8 @@ func RefreshAcls(closer *y.Closer) {
 	retrieveAcls := func() error {
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
-			Query: queryAcls,
+			Query:    queryAcls,
+			ReadOnly: true,
 		}
 
 		ctx := context.Background()
@@ -482,7 +483,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 
 	err := doAuthorizeAlter()
-	if span := otrace.FromContext(ctx); span != nil {
+	span := otrace.FromContext(ctx)
+	if span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
@@ -593,7 +595,8 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 
 	err = doAuthorizeMutation()
-	if span := otrace.FromContext(ctx); span != nil {
+	span := otrace.FromContext(ctx)
+	if span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,

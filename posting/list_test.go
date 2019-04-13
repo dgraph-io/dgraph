@@ -990,9 +990,9 @@ func TestMultiPartListIterAfterUid(t *testing.T) {
 		visitedUids = append(visitedUids, p.Uid)
 		return nil
 	})
-	require.Equal(t, 50001, len(visitedUids))
+	require.Equal(t, 50000, len(visitedUids))
 	for i, uid := range visitedUids {
-		require.Equal(t, uint64(50000+i), uid)
+		require.Equal(t, uint64(50000+i+1), uid)
 	}
 }
 

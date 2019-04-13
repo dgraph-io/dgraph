@@ -26,6 +26,15 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type seekPos int
+
+const (
+	// SeekStart is used with Seek() to search relative to the Uid, returning it in the results.
+	SeekStart seekPos = iota
+	// SeekCurrent to Seek() a Uid using it as offset, not as part of the results.
+	SeekCurrent
+)
+
 type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
@@ -106,7 +115,15 @@ func (d *Decoder) ApproxLen() int {
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
 
-func (d *Decoder) Seek(uid uint64) []uint64 {
+type searchFunc func(int) bool
+
+// Seek will search for uid in a packed block using the specified whence position.
+// The value of whence must be one of the predefined values SeekStart or SeekCurrent.
+// SeekStart searches uid and includes it as part of the results.
+// SeekCurrent searches uid but only as offset, it won't be included with results.
+//
+// Returns a slice of all uids whence the position, or an empty slice if none found.
+func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	if d.Pack == nil {
 		return []uint64{}
 	}
@@ -116,9 +133,18 @@ func (d *Decoder) Seek(uid uint64) []uint64 {
 	}
 
 	pack := d.Pack
-	idx := sort.Search(len(pack.Blocks), func(i int) bool {
-		return pack.Blocks[i].Base >= uid
-	})
+	blocksFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return pack.Blocks[i].Base >= uid }
+		case SeekCurrent:
+			f = func(i int) bool { return pack.Blocks[i].Base > uid }
+		}
+		return f
+	}
+
+	idx := sort.Search(len(pack.Blocks), blocksFunc())
 	// The first block.Base >= uid.
 	if idx == 0 {
 		return d.unpackBlock()
@@ -135,10 +161,19 @@ func (d *Decoder) Seek(uid uint64) []uint64 {
 	d.blockIdx = idx - 1 // Move to the previous block. If blockIdx<0, unpack will deal with it.
 	d.unpackBlock()      // And get all their uids.
 
+	uidsFunc := func() searchFunc {
+		var f searchFunc
+		switch whence {
+		case SeekStart:
+			f = func(i int) bool { return d.uids[i] >= uid }
+		case SeekCurrent:
+			f = func(i int) bool { return d.uids[i] > uid }
+		}
+		return f
+	}
+
 	// uidx points to the first uid in the uid list, which is >= uid.
-	uidx := sort.Search(len(d.uids), func(i int) bool {
-		return d.uids[i] >= uid
-	})
+	uidx := sort.Search(len(d.uids), uidsFunc())
 	if uidx < len(d.uids) { // Found an entry in uids, which >= uid.
 		d.uids = d.uids[uidx:]
 		return d.uids
@@ -241,7 +276,7 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 	uids := make([]uint64, 0, ApproxLen(pack))
 	dec := Decoder{Pack: pack}
 
-	for block := dec.Seek(seek); len(block) > 0; block = dec.Next() {
+	for block := dec.Seek(seek, SeekStart); len(block) > 0; block = dec.Next() {
 		uids = append(uids, block...)
 	}
 	return uids
