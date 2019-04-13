@@ -102,6 +102,11 @@ func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer, tableInf
 			colValue, writer)
 
 		columnName := rowMetaInfo.columnNames[i]
+
+		for _, constraint := range tableInfo.foreignKeyConstraints {
+			//constraint.parts
+		}
+
 		if foreignColumn, found := tableInfo.foreignKeyReferences[columnName]; found {
 			// when the column is a foreign key, we also need to store an edge from the current
 			// node to the remote node, the predicate we use is the predicate prepended with _

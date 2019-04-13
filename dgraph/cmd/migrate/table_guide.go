@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 )
@@ -72,7 +73,6 @@ type ValuesRecorder interface {
 }
 
 type ForeignKeyValuesRecorder struct {
-	referencedByColumnIndices []*ColumnIdx
 	referenceToUidLabel       map[string]string
 	separator                 string
 }
@@ -99,9 +99,10 @@ the tool will treat them as two different foreign keys, where the p_fname refere
 and p_lname references person lname.
 */
 func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
+	/*
 	if r.referencedByColumnIndices == nil {
 		r.referencedByColumnIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
-			return len(info.columns[column].referencedBy) > 0
+			return info.columns[column].isForeignKeyTarget
 		})
 	}
 
@@ -110,6 +111,38 @@ func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{},
 			r.separator, columnIndex.name, r.separator, values[columnIndex.index])
 		r.referenceToUidLabel[referenceLabel] = uidLabel
 	}
+	 */
+
+	for _, constraint := range info.constraintSources {
+		// for each foreign key constraint, there should be a mapping
+		constraintColumns := getConstraintColumns(constraint)
+		constraintColumnIndices := getColumnIndices(info, func(info *TableInfo, column string) bool {
+			_, ok := constraintColumns[column]
+			return ok
+		})
+
+		aliasLabel := getAliasLabel(info, r.separator, constraintColumnIndices, values)
+		r.referenceToUidLabel[aliasLabel] = uidLabel
+	}
+}
+
+func getConstraintColumns(constraint *ForeignKeyConstraint) map[string]interface{} {
+	columnNames := make(map[string]interface{})
+	for _, part := range constraint.parts {
+		columnNames[part.columnName] = struct{}{}
+	}
+	return columnNames
+}
+
+func getAliasLabel(info *TableInfo, separator string, columnIndices []*ColumnIdx,
+	values []interface) string {
+	columnNameAndIdxes := make([]string, 0)
+	for _, columnIdx := range columnIndices {
+		columnNameAndIdxes = append(columnNameAndIdxes,
+			fmt.Sprintf( "%s%s%v", columnIdx.name, separator, values[columnIdx.index]))
+	}
+
+	return fmt.Sprintf("_:%s%s", info.tableName, strings.Join(columnNameAndIdxes, separator))
 }
 
 func (r *ForeignKeyValuesRecorder) getUidLabel(indexLabel string) string {
@@ -146,15 +179,17 @@ func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []s
 
 		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s %s .\n",
 			predicate, dataType, index))
-
+		/*
 		// if this column is a foreign key, we also need to add a new predicate of type uid
 		// which will be used to store the link to the remote node
-		if _, ok := info.foreignKeyReferences[column.name]; ok {
-			dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
-				getLinkPredicate(predicate), UID))
-		}
-
+			if _, ok := info.foreignKeyReferences[column.name]; ok {
+				dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
+					getLinkPredicate(predicate), UID))
+			}
+		*/
 	}
+
+	for _, constraint := range 
 	return dgraphIndexes
 }
 

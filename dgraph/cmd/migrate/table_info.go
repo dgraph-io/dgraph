@@ -20,6 +20,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type KeyType int
@@ -33,15 +35,24 @@ const (
 type DataType int
 
 type ColumnInfo struct {
-	name         string
-	keyType      KeyType
-	dataType     DataType
-	referencedBy []*ForeignColumn //the columns that are referencing this column
+	name     string
+	keyType  KeyType
+	dataType DataType
 }
 
-type ForeignColumn struct {
-	tableName  string
+type ForeignKeyConstraint struct {
+	parts []*ConstraintPart
+}
+
+type ConstraintPart struct {
+	// the local table name
+	tableName string
+	// the local column name
 	columnName string
+	// the remote table name can be either the source or target of a foreign key constraint
+	remoteTableName string
+	// the remote column name can be either the source or target of a foreign key constraint
+	remoteColumnName string
 }
 
 type TableInfo struct {
@@ -49,8 +60,13 @@ type TableInfo struct {
 	columns   map[string]*ColumnInfo
 
 	// the referenced tables by the current table through foreign keys
-	referencedTables     map[string]interface{}
-	foreignKeyReferences map[string]*ForeignColumn // a map from column names to ForgeignColumns
+	referencedTables map[string]interface{}
+
+	// a map from constraint names to constraints
+	foreignKeyConstraints map[string]*ForeignKeyConstraint
+
+	// the list of foreign key constraints using this table as the target
+	constraintSources []*ForeignKeyConstraint
 }
 
 type ColumnOutput struct {
@@ -88,10 +104,10 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 	defer rows.Close()
 
 	tableInfo := &TableInfo{
-		tableName:            table,
-		columns:              make(map[string]*ColumnInfo),
-		referencedTables:     make(map[string]interface{}),
-		foreignKeyReferences: make(map[string]*ForeignColumn),
+		tableName:             table,
+		columns:               make(map[string]*ColumnInfo),
+		referencedTables:      make(map[string]interface{}),
+		foreignKeyConstraints: make(map[string]*ForeignKeyConstraint),
 	}
 
 	for rows.Next() {
@@ -113,7 +129,7 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 		tableInfo.columns[columnOutput.fieldName] = getColumnInfo(&columnOutput)
 	}
 
-	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME, REFERENCED_TABLE_NAME,
+	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME,
 		REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where TABLE_NAME = "%s"
         AND REFERENCED_TABLE_NAME IS NOT NULL`,
 		table)
@@ -133,38 +149,63 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 		+-------------+-----------------------+------------------------+
 
 		*/
-		var columnName, referencedTableName, referencedColumnName string
-		err := foreignKeyRows.Scan(&columnName, &referencedTableName, &referencedColumnName)
+		var columnName, constraintName, referencedTableName, referencedColumnName string
+		err := foreignKeyRows.Scan(&columnName, &constraintName, &referencedTableName,
+			&referencedColumnName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan usage info for table %s: %v", table, err)
 		}
 
 		tableInfo.referencedTables[referencedTableName] = struct{}{}
-		tableInfo.foreignKeyReferences[columnName] = &ForeignColumn{
-			tableName:  referencedTableName,
-			columnName: referencedColumnName,
+		var constraint *ForeignKeyConstraint
+		if constraint, ok := tableInfo.foreignKeyConstraints[constraintName]; !ok {
+			constraint = &ForeignKeyConstraint{
+				parts: make([]*ConstraintPart, 0),
+			}
+			tableInfo.foreignKeyConstraints[constraintName] = constraint
 		}
+		constraint.parts = append(constraint.parts, &ConstraintPart{
+			tableName:        table,
+			columnName:       columnName,
+			remoteTableName:  referencedTableName,
+			remoteColumnName: referencedColumnName,
+		})
 	}
 	return tableInfo, nil
+}
+
+func validateAndGetReverse(constraint *ForeignKeyConstraint) (string, *ForeignKeyConstraint) {
+	reverseParts := make([]*ConstraintPart, 0)
+	// verify that within one constraint, the remote table names are the same
+	var remoteTableName string
+	for _, part := range constraint.parts {
+		if len(remoteTableName) == 0 {
+			remoteTableName = part.remoteTableName
+		} else {
+			x.AssertTrue(part.remoteTableName == remoteTableName)
+		}
+		reverseParts = append(reverseParts, &ConstraintPart{
+			tableName:        part.remoteColumnName,
+			columnName:       part.remoteColumnName,
+			remoteTableName:  part.tableName,
+			remoteColumnName: part.columnName,
+		})
+	}
+	return remoteTableName, &ForeignKeyConstraint{
+		parts: reverseParts,
+	}
 }
 
 // populateReferencedByColumns calculates the reverse links of
 // the data at tables[table name].foreignKeyRefences
 // and stores them in tables[table name].columns[column name].referecedBy
 func populateReferencedByColumns(tables map[string]*TableInfo) {
-	for table, tableInfo := range tables {
-		for columnName, foreignColumn := range tableInfo.foreignKeyReferences {
-			foreignTable := foreignColumn.tableName
-			foreignColumn := foreignColumn.columnName
+	for _, tableInfo := range tables {
+		for _, constraint := range tableInfo.foreignKeyConstraints {
+			reverseTable, reverseConstraint := validateAndGetReverse(constraint)
 
-			foreignColumnInfo := tables[foreignTable].columns[foreignColumn]
-			if foreignColumnInfo.referencedBy == nil {
-				foreignColumnInfo.referencedBy = make([]*ForeignColumn, 0)
-			}
-			foreignColumnInfo.referencedBy = append(foreignColumnInfo.referencedBy, &ForeignColumn{
-				tableName:  table,
-				columnName: columnName,
-			})
+			tables[reverseTable].constraintSources = append(tables[reverseTable].
+				constraintSources, reverseConstraint)
 		}
 	}
 }
