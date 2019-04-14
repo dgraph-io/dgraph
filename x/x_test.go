@@ -17,6 +17,7 @@
 package x
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -93,4 +94,24 @@ func TestValidateAddress(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestID64(t *testing.T) {
+	testData := []struct {
+		num uint64
+		id  string
+	}{
+		{num: 0, id: "0000000000000"},
+		{num: 1000000000, id: "0000000XTPKH0"},
+		{num: 1234567890, id: "00000014TC0QK"},
+		{num: 0x100000000, id: "0000004000000"},
+		{num: 0x1BABEFACE, id: "0000006XBXYQE"},
+		{num: 3.72e13, id: "00011UP6CK800"},  // number of cells in the human body
+		{num: 4.355e17, id: "0C2TNY57UXH00"}, // number of years since the big bang
+		{num: math.MaxUint64, id: "FZZZZZZZZZZZZ"},
+	}
+
+	for _, test := range testData {
+		require.Equal(t, test.id, ID64(test.num))
+	}
 }

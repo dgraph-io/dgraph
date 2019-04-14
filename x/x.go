@@ -481,3 +481,16 @@ func SpanTimer(span *trace.Span, name string) func() {
 		// TODO: We can look into doing a latency record here.
 	}
 }
+
+// ID64 converts a 64-bit integer to a 13-character alphanumeric string.
+// The alphabet omits letters that can look like numbers in some fonts.
+var id64chars = []byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+					   'H', 'J', 'K', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' }
+func ID64(num uint64) string {
+	var id string
+	// TODO benchmark other ways of creating the string
+	for n := 60; n >= 0; n -= 5 {
+		id += string(id64chars[(num >> uint(n)) & 0x1F])
+	}
+	return id
+}
