@@ -25,6 +25,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/spf13/viper"
 )
 
@@ -239,11 +241,13 @@ func run(conf *viper.Viper) error {
 
 	tableInfos := make(map[string]*TableInfo, 0)
 	for _, table := range tablesToRead {
-		tableInfo, err := getTableInfo(table, pool)
+		tableInfo, err := getTableInfo(table, mysqlDB, pool)
 		if err != nil {
 			return err
 		}
 		tableInfos[tableInfo.tableName] = tableInfo
+		fmt.Printf("info of table %s\n", table)
+		spew.Dump(tableInfo)
 	}
 	populateReferencedByColumns(tableInfos)
 

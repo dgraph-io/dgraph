@@ -159,11 +159,11 @@ type CompositeIndexGenerator struct {
 }
 
 func (g *CompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
+	dgraphIndexes := make([]string, 0)
 	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType != NONE
 	})
 
-	dgraphIndexes := make([]string, 0)
 	for _, column := range sqlIndexedColumns {
 		predicate := fmt.Sprintf("%s%s%s", info.tableName, g.separator, column.name)
 
@@ -181,19 +181,20 @@ func (g *CompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []strin
 	}
 
 	for _, constraint := range info.foreignKeyConstraints {
-		pred := g.getPredFromConstraint(constraint)
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
+		pred := g.getPredFromConstraint(info.tableName, constraint)
+		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: [%s] .\n",
 			pred, UID))
 	}
 	return dgraphIndexes
 }
 
-func (g *CompositeIndexGenerator) getPredFromConstraint(constraint *ForeignKeyConstraint) string {
+func (g *CompositeIndexGenerator) getPredFromConstraint(
+	tableName string, constraint *ForeignKeyConstraint) string {
 	columnNames := make([]string, 0)
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
 	}
-	return strings.Join(columnNames, g.separator)
+	return fmt.Sprintf("%s%s%s", tableName, g.separator, strings.Join(columnNames, g.separator))
 }
 
 type PredNameGenerator interface {

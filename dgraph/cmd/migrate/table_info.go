@@ -72,18 +72,11 @@ type TableInfo struct {
 type ColumnOutput struct {
 	fieldName string
 	dataType  string
-	keyType   string
 }
 
 func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
 	columnInfo := ColumnInfo{}
 	columnInfo.name = columnOutput.fieldName
-	switch columnOutput.keyType {
-	case "PRI":
-		columnInfo.keyType = PRIMARY
-	case "MUL":
-		columnInfo.keyType = MULTI
-	}
 
 	for prefix, goType := range mysqlTypePrefixToGoType {
 		if strings.HasPrefix(columnOutput.dataType, prefix) {
@@ -94,14 +87,15 @@ func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
 	return &columnInfo
 }
 
-func getTableInfo(table string, pool *sql.DB) (*TableInfo, error) {
-	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE,
-COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
-	rows, err := pool.Query(query)
+func getTableInfo(table string, database string, pool *sql.DB) (*TableInfo, error) {
+	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE from INFORMATION_SCHEMA.
+COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
+		database)
+	columnRows, err := pool.Query(query)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer columnRows.Close()
 
 	tableInfo := &TableInfo{
 		tableName:             table,
@@ -110,7 +104,7 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 		foreignKeyConstraints: make(map[string]*ForeignKeyConstraint),
 	}
 
-	for rows.Next() {
+	for columnRows.Next() {
 		/*
 			each row represents info about a column, for example
 			+----------+-------------+------+-----+---------+-------+
@@ -120,13 +114,36 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 		*/
 
 		columnOutput := ColumnOutput{}
-		err := rows.Scan(&columnOutput.fieldName, &columnOutput.dataType, &columnOutput.keyType)
+		err := columnRows.Scan(&columnOutput.fieldName, &columnOutput.dataType)
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan table description result for table %s: %v",
 				table, err)
 		}
 
 		tableInfo.columns[columnOutput.fieldName] = getColumnInfo(&columnOutput)
+	}
+
+	// query indices
+	indexQuery := fmt.Sprintf(`SELECT INDEX_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.
+STATISTICS where TABLE_NAME = "%s" AND index_schema="%s"`, table, database)
+	indexRows, err := pool.Query(indexQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer indexRows.Close()
+	for indexRows.Next() {
+		var indexName, columnName string
+		err := indexRows.Scan(&indexName, &columnName)
+		if err != nil {
+			return nil, fmt.Errorf("unable to scan index info for table %s: %v", table, err)
+		}
+		switch indexName {
+		case "PRIMARY":
+			tableInfo.columns[columnName].keyType = PRIMARY
+		default:
+			tableInfo.columns[columnName].keyType = MULTI
+		}
+
 	}
 
 	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME,
@@ -158,7 +175,8 @@ COLUMN_KEY from INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = "%s"`, table)
 
 		tableInfo.referencedTables[referencedTableName] = struct{}{}
 		var constraint *ForeignKeyConstraint
-		if constraint, ok := tableInfo.foreignKeyConstraints[constraintName]; !ok {
+		var ok bool
+		if constraint, ok = tableInfo.foreignKeyConstraints[constraintName]; !ok {
 			constraint = &ForeignKeyConstraint{
 				parts: make([]*ConstraintPart, 0),
 			}
