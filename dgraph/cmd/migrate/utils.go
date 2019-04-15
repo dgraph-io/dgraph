@@ -98,7 +98,8 @@ func ptrToValues(ptrs []interface{}) []interface{} {
 	values := make([]interface{}, 0, len(ptrs))
 	for _, ptr := range ptrs {
 		// dereference the pointer to get the actual value
-		values = append(values, reflect.ValueOf(ptr).Elem())
+		v := reflect.ValueOf(ptr).Elem()
+		values = append(values, v)
 	}
 	return values
 }

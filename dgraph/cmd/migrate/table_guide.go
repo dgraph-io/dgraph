@@ -38,7 +38,10 @@ func (g *ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) 
 	// use the primary key indices to retrieve values in the current row
 	valuesForKey := make([]string, 0)
 	for _, columnIndex := range g.primaryKeyIndices {
-		valuesForKey = append(valuesForKey, fmt.Sprintf("%v", values[columnIndex.index]))
+		valuesForKey = append(valuesForKey,
+			getValue(info.columns[columnIndex.name].dataType,
+				values[columnIndex.index]))
+		//			fmt.Sprintf("%v", values[columnIndex.index])
 	}
 
 	return fmt.Sprintf("_:%s%s%s", info.tableName, g.separator,
@@ -120,8 +123,9 @@ func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{},
 			return ok
 		})
 
-		aliasLabel := getAliasLabel(info, r.separator, constraintColumnIndices, values)
+		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator, constraintColumnIndices, values)
 		r.referenceToUidLabel[aliasLabel] = uidLabel
+		fmt.Printf("%s -> %s\n", aliasLabel, uidLabel)
 	}
 }
 
@@ -133,18 +137,35 @@ func getConstraintColumns(constraint *ForeignKeyConstraint) map[string]interface
 	return columnNames
 }
 
-func getAliasLabel(info *TableInfo, separator string, columnIndices []*ColumnIdx,
+func getValue(dataType DataType, value interface{}) string {
+	switch dataType {
+	case STRING:
+		return fmt.Sprintf("%s", value)
+	default:
+		return fmt.Sprintf("%v", value)
+	}
+}
+
+func getAliasLabel(columnMaps map[string]*ColumnInfo, tableName string, separator string,
+	columnIndices []*ColumnIdx,
 	values []interface{}) string {
-	columnNameAndIdxes := make([]string, 0)
+
+	columnNameAndValues := make([]string, 0)
 	for _, columnIdx := range columnIndices {
-		columnNameAndIdxes = append(columnNameAndIdxes,
-			fmt.Sprintf("%s%s%v", columnIdx.name, separator, values[columnIdx.index]))
+		nameAndValue := fmt.Sprintf("%s%s%s", columnIdx.name,
+			separator,
+			getValue(columnMaps[columnIdx.name].dataType, values[columnIdx.index]))
+
+		columnNameAndValues = append(columnNameAndValues,
+			nameAndValue)
 	}
 
-	return fmt.Sprintf("_:%s%s", info.tableName, strings.Join(columnNameAndIdxes, separator))
+	return fmt.Sprintf("_:%s%s%s", tableName, separator, strings.Join(columnNameAndValues,
+		separator))
 }
 
 func (r *ForeignKeyValuesRecorder) getUidLabel(indexLabel string) string {
+	fmt.Printf("looking up %s\n", indexLabel)
 	return r.referenceToUidLabel[indexLabel]
 }
 

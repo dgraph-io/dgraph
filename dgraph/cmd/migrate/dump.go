@@ -52,7 +52,9 @@ type RowMetaInfo struct {
 }
 
 // dumpTable reads data from a table and sends to the writer
-func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*TableGuide,
+func dumpTable(table string, tableInfo *TableInfo,
+	tableInfos map[string]*TableInfo,
+	tableGuides map[string]*TableGuide,
 	pool *sql.DB, writer *bufio.Writer) error {
 	tableGuide := tableGuides[table]
 	sortedColumns := getSortedColumns(tableInfo)
@@ -87,7 +89,7 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*Table
 			columnNames:     columnNames,
 			blankNodeLabel:  blankNodeLabel,
 			columnTypes:     columnTypes,
-		}, writer, tableInfo, tableGuides)
+		}, writer, tableInfo, tableInfos, tableGuides)
 
 		// step 3: record mappings to the blankNodeLabel so that future tables can look up the
 		// blankNodeLabel
@@ -96,7 +98,9 @@ func dumpTable(table string, tableInfo *TableInfo, tableGuides map[string]*Table
 	return nil
 }
 
-func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer, tableInfo *TableInfo,
+func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer,
+	tableInfo *TableInfo,
+	tableInfos map[string]*TableInfo,
 	tableGuides map[string]*TableGuide) {
 	for i, colValue := range rowMetaInfo.colValues {
 		predicate := rowMetaInfo.columnPredNames[i]
@@ -111,7 +115,8 @@ func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer, tableInf
 
 			foreignTableName := constraint.parts[0].remoteTableName
 
-			refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo, foreignTableName,
+			refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo,
+				tableInfos[foreignTableName],
 				constraint)
 			foreignUidLabel := tableGuides[foreignTableName].valuesRecordor.getUidLabel(refLabel)
 			outputPlainCell(rowMetaInfo.blankNodeLabel, "UID", getLinkPredicate(predicate), foreignUidLabel,
@@ -120,26 +125,42 @@ func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer, tableInf
 	}
 }
 
-func getRefLabelFromConstraint(rowMetaInfo *RowMetaInfo, tableInfo *TableInfo,
-	foreignTableName string, constraint *ForeignKeyConstraint) string {
+func getRefLabelFromConstraint(rowMetaInfo *RowMetaInfo,
+	tableInfo *TableInfo, foreignTableInfo *TableInfo,
+	constraint *ForeignKeyConstraint) string {
 
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "_:%s%s", foreignTableName, SEPERATOR)
+	fmt.Fprintf(&buf, "_:%s%s", foreignTableInfo.tableName, SEPERATOR)
 
-	foreignKeyColumnNames := make(map[string]interface{})
+	foreignKeyColumnNames := make(map[string]string)
 	for _, part := range constraint.parts {
-		foreignKeyColumnNames[part.columnName] = struct{}{}
+		foreignKeyColumnNames[part.columnName] = part.remoteColumnName
 	}
 
-	foreignKeyColumns := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
+	foreignColumnIndices := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
 		_, ok := foreignKeyColumnNames[column]
 		return ok
 	})
 
-	for _, c := range foreignKeyColumns {
-		fmt.Fprintf(&buf, "%s%s%s", c.name, SEPERATOR, rowMetaInfo.colValues[c.index])
+	// replace the column names to be the foreign column names
+	for _, columnIdx := range foreignColumnIndices {
+		columnIdx.name = foreignKeyColumnNames[columnIdx.name]
 	}
-	return buf.String()
+
+	return getAliasLabel(foreignTableInfo.columns, foreignTableInfo.tableName, SEPERATOR,
+		foreignColumnIndices,
+		rowMetaInfo.colValues)
+	/*
+		foreignKeyColumns := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
+			_, ok := foreignKeyColumnNames[column]
+			return ok
+		})
+
+		for _, c := range foreignKeyColumns {
+			fmt.Fprintf(&buf, "%s%s%s", c.name, SEPERATOR, rowMetaInfo.colValues[c.index])
+		}
+		return buf.String()
+	*/
 }
 
 func getColumnValues(columns []string, columnTypes []*sql.ColumnType, rows *sql.Rows) []interface{} {
@@ -147,7 +168,7 @@ func getColumnValues(columns []string, columnTypes []*sql.ColumnType, rows *sql.
 	for i := 0; i < len(columns); i++ {
 		switch columnTypes[i].DatabaseTypeName() {
 		case "VARCHAR":
-			colValuePtrs = append(colValuePtrs, new(string))
+			colValuePtrs = append(colValuePtrs, new([]byte)) // the value can be nil
 		case "INT":
 			colValuePtrs = append(colValuePtrs, new(int))
 		case "FLOAT":
@@ -246,7 +267,6 @@ func run(conf *viper.Viper) error {
 			return err
 		}
 		tableInfos[tableInfo.tableName] = tableInfo
-		fmt.Printf("info of table %s\n", table)
 		spew.Dump(tableInfo)
 	}
 	populateReferencedByColumns(tableInfos)
@@ -300,7 +320,7 @@ func dumpTables(tableInfos map[string]*TableInfo, tableGuides map[string]*TableG
 
 	for _, table := range tablesSorted {
 		fmt.Printf("Dumping table %s\n", table)
-		dumpTable(table, tableInfos[table], tableGuides, pool, writer)
+		dumpTable(table, tableInfos[table], tableInfos, tableGuides, pool, writer)
 	}
 
 	return writer.Flush()
