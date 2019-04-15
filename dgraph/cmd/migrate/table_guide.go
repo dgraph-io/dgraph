@@ -1,3 +1,18 @@
+/*
+ * Copyright 2017-2019 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package migrate
 
 import (
@@ -9,10 +24,10 @@ const (
 	SEPERATOR = "_"
 )
 
-// A KeyGenerator generates the unique blank node label that corresponds to a Dgraph uid.
-// Values are passed to the generateKey method in the order of alphabetically sorted columns
-type KeyGenerator interface {
-	generateKey(info *TableInfo, values []interface{}) string
+// A BlankNodeGenerator generates the unique blank node label that corresponds to a Dgraph uid.
+// Values are passed to the generateBlankNode method in the order of alphabetically sorted columns
+type BlankNodeGenerator interface {
+	generateBlankNode(info *TableInfo, values []interface{}) string
 }
 
 // generate blank node labels using values in the primary key columns
@@ -28,7 +43,7 @@ type CriteriaFunc func(info *TableInfo, column string) bool
 // Then a row with values John (f_name), Doe (l_name), Software Engineer (title)
 // would generate a blank node label _:person_John_Doe using values from the columns
 // of the primary key in the alphabetic order, i.e. f_name, l_name in this case.
-func (g *ColumnKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
+func (g *ColumnKeyGenerator) generateBlankNode(info *TableInfo, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
 		g.primaryKeyIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
 			return info.columns[column].keyType == PRIMARY
@@ -54,7 +69,7 @@ type CounterKeyGenerator struct {
 	separator  string
 }
 
-func (g *CounterKeyGenerator) generateKey(info *TableInfo, values []interface{}) string {
+func (g *CounterKeyGenerator) generateBlankNode(info *TableInfo, values []interface{}) string {
 	g.rowCounter++
 	return fmt.Sprintf("_:%s%s%d", info.tableName, g.separator, g.rowCounter)
 }
@@ -231,13 +246,13 @@ func (g *SimplePredNameGenerator) generatePredicateName(info *TableInfo, column 
 }
 
 type TableGuide struct {
-	keyGenerator      KeyGenerator
-	valuesRecordor    ValuesRecorder
-	indexGenerator    IndexGenerator
-	predNameGenerator PredNameGenerator
+	blankNodeGenerator BlankNodeGenerator
+	valuesRecorder     ValuesRecorder
+	indexGenerator     IndexGenerator
+	predNameGenerator  PredNameGenerator
 }
 
-func getKeyGenerator(tableInfo *TableInfo) KeyGenerator {
+func getKeyGenerator(tableInfo *TableInfo) BlankNodeGenerator {
 	// check if the table has primary keys
 	primaryKeyIndices := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType == PRIMARY
@@ -258,8 +273,8 @@ func getTableGuides(tables map[string]*TableInfo) map[string]*TableGuide {
 	tableGuides := make(map[string]*TableGuide)
 	for table, tableInfo := range tables {
 		guide := &TableGuide{
-			keyGenerator: getKeyGenerator(tableInfo),
-			valuesRecordor: &ForeignKeyValuesRecorder{
+			blankNodeGenerator: getKeyGenerator(tableInfo),
+			valuesRecorder: &ForeignKeyValuesRecorder{
 				referenceToUidLabel: make(map[string]string),
 				separator:           SEPERATOR,
 			},

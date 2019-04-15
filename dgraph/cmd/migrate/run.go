@@ -17,11 +17,16 @@
 package migrate
 
 import (
+	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -51,4 +56,84 @@ func init() {
 		"an empty string means all tables in the database")
 	flag.StringP("output_schema", "s", "", "The schema output file")
 	flag.StringP("output_data", "o", "", "The data output file")
+}
+
+func run(conf *viper.Viper) error {
+	mysqlUser := conf.GetString("mysql_user")
+	mysqlDB := conf.GetString("mysql_db")
+	mysqlPassword := conf.GetString("mysql_password")
+	mysqlTables := conf.GetString("mysql_tables")
+	schemaOutput := conf.GetString("output_schema")
+	dataOutput := conf.GetString("output_data")
+
+	if len(mysqlUser) == 0 {
+		logger.Fatalf("the mysql_user property should not be empty")
+	}
+	if len(mysqlDB) == 0 {
+		logger.Fatalf("the mysql_db property should not be empty")
+	}
+	if len(mysqlPassword) == 0 {
+		logger.Fatalf("the mysql_password property should not be empty")
+	}
+	if len(schemaOutput) == 0 {
+		logger.Fatalf("the schema output file should not be empty")
+	}
+	if len(dataOutput) == 0 {
+		logger.Fatalf("the data output file should not be empty")
+	}
+
+	pool, cancelFunc, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
+	if err != nil {
+		return err
+	}
+	defer cancelFunc()
+
+	tablesToRead, err := readMySqlTables(mysqlTables, pool)
+	if err != nil {
+		return err
+	}
+
+	tableInfos := make(map[string]*TableInfo, 0)
+	for _, table := range tablesToRead {
+		tableInfo, err := getTableInfo(table, mysqlDB, pool)
+		if err != nil {
+			return err
+		}
+		tableInfos[tableInfo.tableName] = tableInfo
+		spew.Dump(tableInfo)
+	}
+	populateReferencedByColumns(tableInfos)
+
+	tableGuides := getTableGuides(tableInfos)
+
+	return generateSchemaAndData(schemaOutput, dataOutput, tableInfos, tableGuides, pool)
+}
+
+func generateSchemaAndData(schemaOutput string, dataOutput string,
+	tableInfos map[string]*TableInfo, tableGuides map[string]*TableGuide, pool *sql.DB) error {
+	schemaWriter, schemaCancelFunc, err := getFileWriter(schemaOutput)
+	if err != nil {
+		return err
+	}
+	defer schemaCancelFunc()
+	dataWriter, dataCancelFunc, err := getFileWriter(dataOutput)
+	if err != nil {
+		return err
+	}
+	defer dataCancelFunc()
+	m := DumpMeta{
+		tableInfos:   tableInfos,
+		tableGuides:  tableGuides,
+		dataWriter:   dataWriter,
+		schemaWriter: schemaWriter,
+		sqlPool:      pool,
+	}
+
+	if err := m.dumpSchema(); err != nil {
+		return fmt.Errorf("error while writing schema file: %v", err)
+	}
+	if err := m.dumpTables(); err != nil {
+		return fmt.Errorf("error while writeng data file: %v", err)
+	}
+	return nil
 }
