@@ -1,0 +1,15 @@
+ARG GO_VERSION=1.12
+FROM golang:1.12-alpine3.9 as builder
+
+RUN apk --no-cache add git linux-headers ca-certificates
+COPY . /go/src/github.com/ChainSafe/gossamer
+WORKDIR /go/src/github.com/ChainSafe/gossamer
+ENV GO111MODULE=on
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o gossamer .
+
+FROM scratch
+
+WORKDIR /
+COPY --from=builder ./go/src/github.com/ChainSafe/gossamer/gossamer .
+CMD ["./gossamer"]

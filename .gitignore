@@ -24,4 +24,4 @@
 # Sublime
 *.sublime*
 
-go-pre.db
+/bin
