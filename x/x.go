@@ -19,6 +19,7 @@ package x
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -431,15 +432,18 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 
 	dialOpts := append([]grpc.DialOption{},
 		grpc.WithDefaultCallOptions(callOpts...),
-		grpc.WithBlock(),
-		grpc.WithTimeout(10*time.Second))
+		grpc.WithBlock())
 
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
 		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}
-	return grpc.Dial(host, dialOpts...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return grpc.DialContext(ctx, host, dialOpts...)
 }
 
 func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string) {

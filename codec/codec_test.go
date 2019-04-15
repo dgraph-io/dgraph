@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -67,6 +68,48 @@ func TestUidPack(t *testing.T) {
 	}
 }
 
+func TestSeek(t *testing.T) {
+	N := 10001
+	enc := Encoder{BlockSize: 10}
+	for i := 0; i < N; i += 10 {
+		enc.Add(uint64(i))
+	}
+	pack := enc.Done()
+	dec := Decoder{Pack: pack}
+
+	tests := []struct {
+		in, out uint64
+		whence  seekPos
+		empty   bool
+	}{
+		{in: 0, out: 0, whence: SeekStart},
+		{in: 0, out: 0, whence: SeekCurrent},
+		{in: 100, out: 100, whence: SeekStart},
+		{in: 100, out: 110, whence: SeekCurrent},
+		{in: 1000, out: 1000, whence: SeekStart},
+		{in: 1000, out: 1010, whence: SeekCurrent},
+		{in: 1999, out: 2000, whence: SeekStart},
+		{in: 1999, out: 2000, whence: SeekCurrent},
+		{in: 1101, out: 1110, whence: SeekStart},
+		{in: 1101, out: 1110, whence: SeekCurrent},
+		{in: 10000, out: 10000, whence: SeekStart},
+		{in: 9999, out: 10000, whence: SeekCurrent},
+		{in: uint64(N), empty: true, whence: SeekStart},
+		{in: uint64(N), empty: true, whence: SeekCurrent},
+		{in: math.MaxUint64, empty: true, whence: SeekStart},
+		{in: math.MaxUint64, empty: true, whence: SeekCurrent},
+	}
+
+	for _, tc := range tests {
+		uids := dec.Seek(tc.in, tc.whence)
+		if tc.empty {
+			require.Empty(t, uids)
+		} else {
+			require.Equal(t, tc.out, uids[0])
+		}
+	}
+}
+
 func TestDecoder(t *testing.T) {
 	N := 10001
 	var expected []uint64
@@ -79,13 +122,13 @@ func TestDecoder(t *testing.T) {
 
 	dec := Decoder{Pack: pack}
 	for i := 3; i < N; i += 3 {
-		uids := dec.Seek(uint64(i))
+		uids := dec.Seek(uint64(i), SeekStart)
 		require.Equal(t, uint64(i), uids[0])
 
-		uids = dec.Seek(uint64(i - 1))
+		uids = dec.Seek(uint64(i-1), SeekStart)
 		require.Equal(t, uint64(i), uids[0])
 
-		uids = dec.Seek(uint64(i - 2))
+		uids = dec.Seek(uint64(i-2), SeekStart)
 		require.Equal(t, uint64(i), uids[0])
 
 		start := i/3 - 1

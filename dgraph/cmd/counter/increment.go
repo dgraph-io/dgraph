@@ -46,7 +46,7 @@ func init() {
 	Increment.EnvPrefix = "DGRAPH_INCREMENT"
 
 	flag := Increment.Cmd.Flags()
-	flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
+	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("user", "", "Username if login is required.")
@@ -133,14 +133,14 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
-	addr := conf.GetString("addr")
+	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
 
 	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	x.CheckfNoTrace(err)
 
-	conn, err := x.SetupConnection(addr, tlsCfg, false)
+	conn, err := x.SetupConnection(alpha, tlsCfg, false)
 	if err != nil {
 		log.Fatal(err)
 	}
