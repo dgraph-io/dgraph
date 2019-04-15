@@ -61,23 +61,23 @@ type ComposeConfig struct {
 }
 
 type Options struct {
-	NumZeros       int
-	NumAlphas      int
-	NumReplicas    int
-	LruSizeMB      int
-	EnterpriseMode bool
-	AclSecret      string
-	DataDir        string
-	DataVol        bool
-	TempFS         bool
-	UserOwnership  bool
-	Jaeger         bool
-	Metrics        bool
-	PortOffset     int
-	Verbosity      int
-	OutFile        string
-	LocalBin       bool
-	WhiteList      bool
+	NumZeros      int
+	NumAlphas     int
+	NumReplicas   int
+	LruSizeMB     int
+	Enterprise    bool
+	AclSecret     string
+	DataDir       string
+	DataVol       bool
+	TempFS        bool
+	UserOwnership bool
+	Jaeger        bool
+	Metrics       bool
+	PortOffset    int
+	Verbosity     int
+	OutFile       string
+	LocalBin      bool
+	WhiteList     bool
 }
 
 var opts Options
@@ -218,7 +218,7 @@ func getAlpha(idx int) Service {
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
-	if opts.EnterpriseMode {
+	if opts.Enterprise {
 		svc.Command += " --enterprise_features"
 		if opts.AclSecret != "" {
 			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
@@ -341,7 +341,7 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
-	cmd.PersistentFlags().BoolVarP(&opts.EnterpriseMode, "enterprise", "e", false,
+	cmd.PersistentFlags().BoolVarP(&opts.Enterprise, "enterprise", "e", false,
 		"enable enterprise features in alphas")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
@@ -357,12 +357,12 @@ func main() {
 		"port offset for alpha and, if not 100, zero as well")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
-	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O", "./docker-compose.yml",
+	cmd.PersistentFlags().StringVar(&opts.OutFile, "out", "./docker-compose.yml",
 		"name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
-		"Use locally compiled binary. Set to false to pick binary from docker container.")
+		"use locally-compiled binary if true, otherwise use binary from docker container")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
-		"If true, include a whitelist.")
+		"include a whitelist if true")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -386,9 +386,9 @@ func main() {
 	if opts.LruSizeMB < 1024 {
 		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
 	}
-	if opts.AclSecret != "" && !opts.EnterpriseMode {
+	if opts.AclSecret != "" && !opts.Enterprise {
 		warning("adding --enterprise because it is required by ACL feature")
-		opts.EnterpriseMode = true
+		opts.Enterprise = true
 	}
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
