@@ -202,20 +202,20 @@ func (g *CompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []strin
 	}
 
 	for _, constraint := range info.foreignKeyConstraints {
-		pred := g.getPredFromConstraint(info.tableName, constraint)
+		pred := getPredFromConstraint(info.tableName, g.separator, constraint)
 		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: [%s] .\n",
 			pred, UID))
 	}
 	return dgraphIndexes
 }
 
-func (g *CompositeIndexGenerator) getPredFromConstraint(
-	tableName string, constraint *ForeignKeyConstraint) string {
+func getPredFromConstraint(
+	tableName string, separator string, constraint *ForeignKeyConstraint) string {
 	columnNames := make([]string, 0)
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
 	}
-	return fmt.Sprintf("%s%s%s", tableName, g.separator, strings.Join(columnNames, g.separator))
+	return fmt.Sprintf("%s%s%s", tableName, separator, strings.Join(columnNames, separator))
 }
 
 type PredNameGenerator interface {

@@ -107,21 +107,24 @@ func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer,
 		outputPlainCell(rowMetaInfo.blankNodeLabel, rowMetaInfo.columnTypes[i].DatabaseTypeName(),
 			predicate,
 			colValue, writer)
+	}
 
-		for _, constraint := range tableInfo.foreignKeyConstraints {
-			if len(constraint.parts) == 0 {
-				logger.Fatalf("The constraint should have at least one part: %v", constraint)
-			}
-
-			foreignTableName := constraint.parts[0].remoteTableName
-
-			refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo,
-				tableInfos[foreignTableName],
-				constraint)
-			foreignUidLabel := tableGuides[foreignTableName].valuesRecordor.getUidLabel(refLabel)
-			outputPlainCell(rowMetaInfo.blankNodeLabel, "UID", getLinkPredicate(predicate), foreignUidLabel,
-				writer)
+	for _, constraint := range tableInfo.foreignKeyConstraints {
+		if len(constraint.parts) == 0 {
+			logger.Fatalf("The constraint should have at least one part: %v", constraint)
 		}
+
+		foreignTableName := constraint.parts[0].remoteTableName
+
+		refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo,
+			tableInfos[foreignTableName],
+			constraint)
+		fmt.Printf("refLabel %s\n", refLabel)
+		foreignUidLabel := tableGuides[foreignTableName].valuesRecordor.getUidLabel(refLabel)
+		outputPlainCell(rowMetaInfo.blankNodeLabel, "UID",
+			getPredFromConstraint(tableInfo.tableName, SEPERATOR, constraint),
+			foreignUidLabel,
+			writer)
 	}
 }
 
