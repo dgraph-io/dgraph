@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: { template "dgraph.zero.fullname" . }}-headless
+  name: {{ template "dgraph.zero.fullname" . }}-headless
   labels:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
-    component: {{ .Values.zero.name | quote }}
+    component: {{ .Values.zero.name }}
     release: {{ .Release.Name | quote }}
     heritage: {{ .Release.Service | quote }}
 spec:
@@ -16,5 +16,7 @@ spec:
     port: 5080
     targetPort: 5080
   selector:
+    app: {{ template "dgraph.name" . }}
+    chart: {{ template "dgraph.chart" . }}
+    release: {{ .Release.Name | quote }}
     component: {{ .Values.zero.name | quote }}
-    

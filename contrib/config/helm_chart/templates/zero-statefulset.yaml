@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta2
+apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
   name: "{{ template "dgraph.zero.fullname" . }}"
@@ -14,7 +14,7 @@ spec:
   podManagementPolicy: {{ .Values.zero.podManagementPolicy | quote }}
   updateStrategy:
     type: {{ .Values.zero.updateStrategy | quote }}
-    {{- if (eq "Recreate" .Values.updateStrategy) }}
+    {{- if (eq "Recreate" .Values.zero.updateStrategy) }}
     rollingUpdate: null
     {{- else if .Values.zero.rollingUpdatePartition }}
     rollingUpdate:
@@ -30,9 +30,40 @@ spec:
       name: "{{ template "dgraph.zero.fullname" . }}"
       labels:
         app: {{ template "dgraph.name" . }}
+        chart: {{ template "dgraph.chart" . }}
         release: {{ .Release.Name | quote }}
         component: {{ .Values.zero.name | quote }}
     spec:
+      {{- if or (eq .Values.zero.antiAffinity "hard") (eq .Values.zero.antiAffinity "soft") .Values.zero.nodeAffinity }}
+      affinity:
+      {{- end }}
+      {{- if eq .Values.zero.antiAffinity "hard" }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - {{ .Values.zero.name | quote }}
+            topologyKey: {{ .Values.zero.podAntiAffinitytopologyKey }}
+      {{- else if eq .Values.zero.antiAffinity "soft" }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - {{ .Values.zero.name | quote }}
+              topologyKey: {{ .Values.zero.podAntiAffinitytopologyKey }}        
+      {{- end }}
+      {{- with .Values.zero.nodeAffinity }}
+        nodeAffinity:
+{{ toYaml . | indent 10 }}
+      {{- end }}
 {{- include "dgraph.imagePullSecrets" . | indent 6 }}
       {{- if .Values.zero.securityContext.enabled }}
       securityContext:
@@ -50,41 +81,48 @@ spec:
       containers:
       - name: "{{ template "dgraph.zero.fullname" . }}"
         image: "{{ template "dgraph.image" . }}"
-        imagePullPolicy: {{ .Values.dgraph.image.pullPolicy | quote }}
+        ports:
+        - containerPort: 5080
+          name: zero-grpc
+        - containerPort: 6080
+          name: zero-http
+        imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         command:
          - bash
          - "-c"
          - |
-           set -ex
-           [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
-            ordinal=${BASH_REMATCH[1]}
-            idx=$(($ordinal + 1))
-            if [[ $ordinal -eq 0 ]]; then
-              dgraph zero --my=$(hostname -f):5080 --idx $idx --replicas {{ .Values.zero.replicas }}
-            else
-              dgraph zero --my=$(hostname -f):5080 --peer {{ template "dgraph.zero.fullname" . }}-0.{{ template "dgraph.zero.fullname" . }}-headless.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas {{ .Values.zero.replicas }}
-            fi 
+            set -ex
+            [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+             ordinal=${BASH_REMATCH[1]}
+             idx=$(($ordinal + 1))
+             if [[ $ordinal -eq 0 ]]; then
+               dgraph zero --my=$(hostname -f):5080 --idx $idx --replicas {{ .Values.zero.replicaCount }}
+             else
+               dgraph zero --my=$(hostname -f):5080 --peer {{ template "dgraph.zero.fullname" . }}-0.{{ template "dgraph.zero.fullname" . }}-headless.${POD_NAMESPACE}.svc.cluster.local:5080 --idx $idx --replicas {{ .Values.zero.replicaCount }}
+             fi 
         resources:
-{{ toYaml .Values.resources | indent 10 }}
-        env:
-        - name: POD_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
+{{ toYaml .Values.zero.resources | indent 10 }}
         {{- if .Values.zero.livenessProbe.enabled }}
         livenessProbe:
-          tcpSocket:
+          httpGet:
             port: {{ .Values.zero.livenessProbe.port }}
+            path: {{ .Values.zero.livenessProbe.path }}
           initialDelaySeconds: {{ .Values.zero.livenessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.zero.livenessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.zero.livenessProbe.timeoutSeconds }}
           successThreshold: {{ .Values.zero.livenessProbe.successThreshold }}
           failureThreshold: {{ .Values.zero.livenessProbe.failureThreshold }}
         {{- end }}
-        {{- if .Values.readinessProbe.enabled }}
+        {{- if .Values.zero.readinessProbe.enabled }}
         readinessProbe:
-          tcpSocket:
-            port: {{ .Values.zero.readinessProbe.port }}
+          httpGet:
+            port: {{ .Values.zero.livenessProbe.port }}
+            path: {{ .Values.zero.livenessProbe.path }}          
           initialDelaySeconds: {{ .Values.zero.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.zero.readinessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.zero.readinessProbe.timeoutSeconds }}
@@ -95,7 +133,8 @@ spec:
         {{- if .Values.zero.persistence.enabled }}
         - name: datadir
           mountPath: /dgraph
-        {{ end }}
+        {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.zero.terminationGracePeriodSeconds }}
       volumes:
       - name: datadir
         persistentVolumeClaim:
@@ -108,6 +147,7 @@ spec:
         {{- range $key, $value := .Values.zero.persistence.annotations }}
           {{ $key }}: {{ $value }}
         {{- end }}
+          volume.alpha.kubernetes.io/storage-class: anything
       spec:
         accessModes:
         {{- range .Values.zero.persistence.accessModes }}
@@ -121,8 +161,8 @@ spec:
         storageClassName: ""
       {{- else }}
         storageClassName: {{ .Values.zero.persistence.storageClass | quote }}
-      {{- end }}
-      {{- end }}
+      {{- end -}}
+      {{- end -}}
 {{- else }}
         - name: datadir
           emptyDir: {}
