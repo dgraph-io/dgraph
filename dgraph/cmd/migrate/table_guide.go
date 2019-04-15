@@ -1,7 +1,6 @@
 package migrate
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 )
@@ -73,8 +72,8 @@ type ValuesRecorder interface {
 }
 
 type ForeignKeyValuesRecorder struct {
-	referenceToUidLabel       map[string]string
-	separator                 string
+	referenceToUidLabel map[string]string
+	separator           string
 }
 
 /*
@@ -100,18 +99,18 @@ and p_lname references person lname.
 */
 func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
 	/*
-	if r.referencedByColumnIndices == nil {
-		r.referencedByColumnIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
-			return info.columns[column].isForeignKeyTarget
-		})
-	}
+		if r.referencedByColumnIndices == nil {
+			r.referencedByColumnIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
+				return info.columns[column].isForeignKeyTarget
+			})
+		}
 
-	for _, columnIndex := range r.referencedByColumnIndices {
-		referenceLabel := fmt.Sprintf("_:%s%s%s%s%v", info.tableName,
-			r.separator, columnIndex.name, r.separator, values[columnIndex.index])
-		r.referenceToUidLabel[referenceLabel] = uidLabel
-	}
-	 */
+		for _, columnIndex := range r.referencedByColumnIndices {
+			referenceLabel := fmt.Sprintf("_:%s%s%s%s%v", info.tableName,
+				r.separator, columnIndex.name, r.separator, values[columnIndex.index])
+			r.referenceToUidLabel[referenceLabel] = uidLabel
+		}
+	*/
 
 	for _, constraint := range info.constraintSources {
 		// for each foreign key constraint, there should be a mapping
@@ -135,11 +134,11 @@ func getConstraintColumns(constraint *ForeignKeyConstraint) map[string]interface
 }
 
 func getAliasLabel(info *TableInfo, separator string, columnIndices []*ColumnIdx,
-	values []interface) string {
+	values []interface{}) string {
 	columnNameAndIdxes := make([]string, 0)
 	for _, columnIdx := range columnIndices {
 		columnNameAndIdxes = append(columnNameAndIdxes,
-			fmt.Sprintf( "%s%s%v", columnIdx.name, separator, values[columnIdx.index]))
+			fmt.Sprintf("%s%s%v", columnIdx.name, separator, values[columnIdx.index]))
 	}
 
 	return fmt.Sprintf("_:%s%s", info.tableName, strings.Join(columnNameAndIdxes, separator))
@@ -153,13 +152,13 @@ type IndexGenerator interface {
 	generateDgraphIndices(info *TableInfo) []string
 }
 
-// NoneCompositeIndexGenerator generates one Dgraph index per SQL table primary key
+// CompositeIndexGenerator generates one Dgraph index per SQL table primary key
 // or index, where only the first column in the primary key or index will be used
-type NoneCompositeIndexGenerator struct {
+type CompositeIndexGenerator struct {
 	separator string
 }
 
-func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
+func (g *CompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []string {
 	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType != NONE
 	})
@@ -179,18 +178,22 @@ func (g *NoneCompositeIndexGenerator) generateDgraphIndices(info *TableInfo) []s
 
 		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s %s .\n",
 			predicate, dataType, index))
-		/*
-		// if this column is a foreign key, we also need to add a new predicate of type uid
-		// which will be used to store the link to the remote node
-			if _, ok := info.foreignKeyReferences[column.name]; ok {
-				dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
-					getLinkPredicate(predicate), UID))
-			}
-		*/
 	}
 
-	for _, constraint := range 
+	for _, constraint := range info.foreignKeyConstraints {
+		pred := g.getPredFromConstraint(constraint)
+		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
+			pred, UID))
+	}
 	return dgraphIndexes
+}
+
+func (g *CompositeIndexGenerator) getPredFromConstraint(constraint *ForeignKeyConstraint) string {
+	columnNames := make([]string, 0)
+	for _, part := range constraint.parts {
+		columnNames = append(columnNames, part.columnName)
+	}
+	return strings.Join(columnNames, g.separator)
 }
 
 type PredNameGenerator interface {
@@ -238,7 +241,7 @@ func getTableGuides(tables map[string]*TableInfo) map[string]*TableGuide {
 				referenceToUidLabel: make(map[string]string),
 				separator:           SEPERATOR,
 			},
-			indexGenerator: &NoneCompositeIndexGenerator{
+			indexGenerator: &CompositeIndexGenerator{
 				separator: SEPERATOR,
 			},
 			predNameGenerator: &SimplePredNameGenerator{

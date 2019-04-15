@@ -18,6 +18,7 @@ package migrate
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
 	"fmt"
 	"os"
@@ -101,23 +102,42 @@ func outputColumnValues(rowMetaInfo *RowMetaInfo, writer *bufio.Writer, tableInf
 			predicate,
 			colValue, writer)
 
-		columnName := rowMetaInfo.columnNames[i]
-
 		for _, constraint := range tableInfo.foreignKeyConstraints {
-			//constraint.parts
-		}
+			if len(constraint.parts) == 0 {
+				logger.Fatalf("The constraint should have at least one part: %v", constraint)
+			}
 
-		if foreignColumn, found := tableInfo.foreignKeyReferences[columnName]; found {
-			// when the column is a foreign key, we also need to store an edge from the current
-			// node to the remote node, the predicate we use is the predicate prepended with _
-			refLabel := fmt.Sprintf("_:%s%s%s%s%v", foreignColumn.tableName, SEPERATOR,
-				foreignColumn.columnName, SEPERATOR, colValue)
-			foreignUidLabel := tableGuides[foreignColumn.tableName].valuesRecordor.
-				getUidLabel(refLabel)
+			foreignTableName := constraint.parts[0].remoteTableName
+
+			refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo, foreignTableName,
+				constraint)
+			foreignUidLabel := tableGuides[foreignTableName].valuesRecordor.getUidLabel(refLabel)
 			outputPlainCell(rowMetaInfo.blankNodeLabel, "UID", getLinkPredicate(predicate), foreignUidLabel,
 				writer)
 		}
 	}
+}
+
+func getRefLabelFromConstraint(rowMetaInfo *RowMetaInfo, tableInfo *TableInfo,
+	foreignTableName string, constraint *ForeignKeyConstraint) string {
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "_:%s%s", foreignTableName, SEPERATOR)
+
+	foreignKeyColumnNames := make(map[string]interface{})
+	for _, part := range constraint.parts {
+		foreignKeyColumnNames[part.columnName] = struct{}{}
+	}
+
+	foreignKeyColumns := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
+		_, ok := foreignKeyColumnNames[column]
+		return ok
+	})
+
+	for _, c := range foreignKeyColumns {
+		fmt.Fprintf(&buf, "%s%s%s", c.name, SEPERATOR, rowMetaInfo.colValues[c.index])
+	}
+	return buf.String()
 }
 
 func getColumnValues(columns []string, columnTypes []*sql.ColumnType, rows *sql.Rows) []interface{} {
