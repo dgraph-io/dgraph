@@ -116,20 +116,6 @@ the tool will treat them as two different foreign keys, where the p_fname refere
 and p_lname references person lname.
 */
 func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
-	/*
-		if r.referencedByColumnIndices == nil {
-			r.referencedByColumnIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
-				return info.columns[column].isForeignKeyTarget
-			})
-		}
-
-		for _, columnIndex := range r.referencedByColumnIndices {
-			referenceLabel := fmt.Sprintf("_:%s%s%s%s%v", info.tableName,
-				r.separator, columnIndex.name, r.separator, values[columnIndex.index])
-			r.referenceToUidLabel[referenceLabel] = uidLabel
-		}
-	*/
-
 	for _, constraint := range info.constraintSources {
 		// for each foreign key constraint, there should be a mapping
 		constraintColumns := getConstraintColumns(constraint)
@@ -140,7 +126,6 @@ func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{},
 
 		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator, constraintColumnIndices, values)
 		r.referenceToUidLabel[aliasLabel] = uidLabel
-		fmt.Printf("%s -> %s\n", aliasLabel, uidLabel)
 	}
 }
 
@@ -180,7 +165,6 @@ func getAliasLabel(columnMaps map[string]*ColumnInfo, tableName string, separato
 }
 
 func (r *ForeignKeyValuesRecorder) getUidLabel(indexLabel string) string {
-	fmt.Printf("looking up %s\n", indexLabel)
 	return r.referenceToUidLabel[indexLabel]
 }
 

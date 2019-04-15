@@ -151,7 +151,6 @@ func (m *DumpMeta) outputColumnValues(rowMetaInfo *RowMetaInfo, tableInfo *Table
 		refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo,
 			m.tableInfos[foreignTableName],
 			constraint)
-		fmt.Printf("refLabel %s\n", refLabel)
 		foreignUidLabel := m.tableGuides[foreignTableName].valuesRecorder.getUidLabel(refLabel)
 		outputPlainCell(rowMetaInfo.blankNodeLabel, "UID",
 			getPredFromConstraint(tableInfo.tableName, SEPERATOR, constraint),
