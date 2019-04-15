@@ -177,7 +177,9 @@ func getZero(idx int) Service {
 
 	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
-	svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
+	if opts.NumAlphas > 1 {
+		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
+	}
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
