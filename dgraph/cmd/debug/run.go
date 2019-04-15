@@ -506,7 +506,7 @@ func printKeys(db *badger.DB) {
 		if pk.Uid > 0 {
 			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
 		}
-		if pk.StartUid >0  {
+		if pk.StartUid > 0 {
 			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
