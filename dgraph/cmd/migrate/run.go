@@ -22,8 +22,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -100,7 +98,6 @@ func run(conf *viper.Viper) error {
 			return err
 		}
 		tableInfos[tableInfo.tableName] = tableInfo
-		spew.Dump(tableInfo)
 	}
 	populateReferencedByColumns(tableInfos)
 
