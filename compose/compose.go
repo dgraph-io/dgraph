@@ -357,8 +357,8 @@ func main() {
 		"port offset for alpha and, if not 100, zero as well")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
-	cmd.PersistentFlags().StringVar(&opts.OutFile, "out", "./docker-compose.yml",
-		"name of output file")
+	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O",
+		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
@@ -366,14 +366,14 @@ func main() {
 
 	// Output the help message if there are no arguments.
 	if len(os.Args) < 2 {
-		cmd.Usage()
+		_ = cmd.Usage()
 		os.Exit(1)
 	}
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
-			cmd.Usage()
+			_ = cmd.Usage()
 			os.Exit(0)
 		}
 		fatal(err)
