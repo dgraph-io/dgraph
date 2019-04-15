@@ -95,15 +95,11 @@ func toExposedPort(i int) string {
 	return fmt.Sprintf("%d:%d", i, i)
 }
 
-func getZeroBasePort(o int) int {
-	// A lot of existing code (e.g. the regression tests) expect an offset of 100 for alpha
-	// but no offset for zero, so keep that behavior. For any other offset, changing the ports
-	// for zero as well allows running concurrent dgraph clusters on the same host.
-	if o == 100 {
-		return zeroBasePort
-	} else {
-		return zeroBasePort + o
+func getOffset(idx int) int {
+	if idx == 1 {
+		return 0
 	}
+	return idx
 }
 
 func initService(basename string, idx, grpcPort int) Service {
@@ -168,16 +164,9 @@ func initService(basename string, idx, grpcPort int) Service {
 	return svc
 }
 
-func getOffset(idx int) int {
-	if idx == 1 {
-		return 0
-	}
-	return idx
-}
-
 func getZero(idx int) Service {
 	basename := "zero"
-	basePort := getZeroBasePort(opts.PortOffset)
+	basePort := zeroBasePort + opts.PortOffset
 	grpcPort := basePort + getOffset(idx)
 
 	svc := initService(basename, idx, grpcPort)
@@ -213,7 +202,7 @@ func getAlpha(idx int) Service {
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
-	svc.Command += fmt.Sprintf(" --zero=zero1:%d", getZeroBasePort(opts.PortOffset))
+	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort + opts.PortOffset)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
