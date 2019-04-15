@@ -890,8 +890,10 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
 		// way to get the max commit timestamp is to pick all the relevant postings for the given
 		// readTs and calculate the maxCommitTs.
-		deleteBelow, mposts := l.pickPostings(readTs)
-		maxCommitTs = x.Max(maxCommitTs, deleteBelow)
+		// If deleteBelowTs is greater than zero, there was a delete all marker. The list of postings
+		// has been trimmed down.
+		deleteBelowTs, mposts := l.pickPostings(readTs)
+		maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
 		for _, mp := range mposts {
 			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
 		}
