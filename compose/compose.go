@@ -73,7 +73,7 @@ type Options struct {
 	UserOwnership  bool
 	Jaeger         bool
 	Metrics        bool
-	TestPortRange  bool
+	PortOffset     int
 	Verbosity      int
 	OutFile        string
 	LocalBin       bool
@@ -83,8 +83,8 @@ type Options struct {
 var opts Options
 
 const (
-	zeroBasePort  int = 5080
-	alphaBasePort int = 7080
+	zeroBasePort  int = 5080 // HTTP=6080
+	alphaBasePort int = 7080 // HTTP=8080, GRPC=9080
 )
 
 func name(prefix string, idx int) string {
@@ -93,6 +93,17 @@ func name(prefix string, idx int) string {
 
 func toExposedPort(i int) string {
 	return fmt.Sprintf("%d:%d", i, i)
+}
+
+func getZeroBasePort(o int) int {
+	// A lot of existing code (e.g. the regression tests) expect an offset of 100 for alpha
+	// but no offset for zero, so keep that behavior. For any other offset, changing the ports
+	// for zero as well allows running concurrent dgraph clusters on the same host.
+	if o == 100 {
+		return zeroBasePort
+	} else {
+		return zeroBasePort + o
+	}
 }
 
 func initService(basename string, idx, grpcPort int) Service {
@@ -166,7 +177,8 @@ func getOffset(idx int) int {
 
 func getZero(idx int) Service {
 	basename := "zero"
-	grpcPort := zeroBasePort + getOffset(idx)
+	basePort := getZeroBasePort(opts.PortOffset)
+	grpcPort := basePort + getOffset(idx)
 
 	svc := initService(basename, idx, grpcPort)
 
@@ -174,26 +186,22 @@ func getZero(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d --idx=%d", getOffset(idx), idx)
+	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, grpcPort)
 	svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), zeroBasePort)
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
 	}
 
 	return svc
 }
 
 func getAlpha(idx int) Service {
-	baseOffset := 0
-	if opts.TestPortRange {
-		baseOffset += 100
-	}
 	basename := "alpha"
-	internalPort := alphaBasePort + baseOffset + getOffset(idx)
+	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
 	grpcPort := internalPort + 1000
 
 	svc := initService(basename, idx, grpcPort)
@@ -202,10 +210,10 @@ func getAlpha(idx int) Service {
 		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
-	svc.Command += fmt.Sprintf(" -o %d", baseOffset+getOffset(idx))
+	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
-	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort)
+	svc.Command += fmt.Sprintf(" --zero=zero1:%d", getZeroBasePort(opts.PortOffset))
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
@@ -329,7 +337,7 @@ func main() {
 		"number of alpha replicas in dgraph cluster")
 	cmd.PersistentFlags().IntVar(&opts.LruSizeMB, "lru_mb", 1024,
 		"approximate size of LRU cache")
-	cmd.PersistentFlags().BoolVarP(&opts.DataVol, "data_vol", "o", false,
+	cmd.PersistentFlags().BoolVar(&opts.DataVol, "data_vol", false,
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
@@ -345,8 +353,8 @@ func main() {
 		"include jaeger service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
-	cmd.PersistentFlags().BoolVar(&opts.TestPortRange, "test_ports", true,
-		"use alpha ports expected by regression tests")
+	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
+		"port offset for alpha and, if not 100, zero as well")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O", "./docker-compose.yml",
