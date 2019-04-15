@@ -364,6 +364,12 @@ func main() {
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
 
+	// Output the help message if there are no arguments.
+	if len(os.Args) < 2 {
+		cmd.Usage()
+		os.Exit(1)
+	}
+
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
