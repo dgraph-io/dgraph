@@ -2049,15 +2049,21 @@ Query:
 
 ### Upsert directive
 
-Predicates can specify the `@upsert` directive if you want to do upsert operations against it.
-If the `@upsert` directive is specified then the index key for the predicate would be checked for
-conflict while committing a transaction, which would allow upserts.
+Predicates can specify the `@upsert` directive in the schema if you want to do
+upsert operations against it. If the `@upsert` directive is specified then the
+index key for the predicate would be checked for conflict while committing a
+transaction. The `@upsert` directive helps enforce uniqueness constraints when
+running concurrent upserts.
 
-This is how you specify the upsert directive for a predicate. This replaces the `IgnoreIndexConflict`
-field which was part of the mutation object in previous releases.
+This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
 ```
+
+{{% notice "note" %}}
+This replaces the `IgnoreIndexConflict` field which was part of the mutation
+object in previous releases.
+{{% /notice %}}
 
 ### RDF Types
 
