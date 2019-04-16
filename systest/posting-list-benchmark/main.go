@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
@@ -103,7 +104,6 @@ func runBenchmark() {
 	})
 	x.Check(err)
 
-	txn := dg.NewTxn()
 	var triples []string
 	for i := uint64(0); i < opt.numMutations; i++ {
 		uid := fmt.Sprintf("_:uid%d", i)
@@ -111,24 +111,36 @@ func runBenchmark() {
 		triples = append(triples, triple)
 
 		if i > 0 && i%opt.mutationsPerTxn == 0 {
-			mu := api.Mutation{
-				SetNquads: []byte(strings.Join(triples, "\n")),
-				CommitNow: true,
-			}
-			_, err = txn.Mutate(context.Background(), &mu)
-			x.Check(err)
-
-			txn = dg.NewTxn()
+			commitTriples(dg, triples)
+			triples = nil
 		}
 	}
 
 	// Commit last transaction in case it has not still been done.
-	mu := api.Mutation{
-		SetNquads: []byte(strings.Join(triples, "\n")),
-		CommitNow: true,
+	commitTriples(dg, triples)
+	triples = nil
+}
+
+func commitTriples(dg *dgo.Dgraph, triples []string) {
+	for {
+		txn := dg.NewTxn()
+		mu := api.Mutation{
+			SetNquads: []byte(strings.Join(triples, "\n")),
+			CommitNow: true,
+		}
+		_, err := txn.Mutate(context.Background(), &mu)
+
+		if err == nil {
+			break
+		}
+
+		// Retry in case the transaction has been aborted.
+		if err != nil && strings.Contains(err.Error(), "Transaction has been aborted") {
+			continue
+		}
+
+		x.Check(err)
 	}
-	_, err = txn.Mutate(context.Background(), &mu)
-	x.Check(err)
 }
 
 func main() {
