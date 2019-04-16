@@ -410,9 +410,11 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	ostats.Record(ctx, x.NumMutations.M(1))
 
 	if len(mu.SetJson) > 0 {
-		span.Annotatef(nil, "Got JSON Mutation: %s", mu.SetJson)
+		span.Annotatef(nil, "Got text JSON Mutation: %s", mu.SetJson)
 	} else if len(mu.SetNquads) > 0 {
-		span.Annotatef(nil, "Got NQuad Mutation: %s", mu.SetNquads)
+		span.Annotatef(nil, "Got text NQuad Mutation: %s", mu.SetNquads)
+	} else if len(mu.Set) > 0 {
+		span.Annotatef(nil, "Got binary NQuad mutation: %v", mu.Set)
 	}
 
 	if !isMutationAllowed(ctx) {
