@@ -135,7 +135,7 @@ func commitTriples(dg *dgo.Dgraph, triples []string) {
 		}
 
 		// Retry in case the transaction has been aborted.
-		if err != nil && strings.Contains(err.Error(), "Transaction has been aborted") {
+		if strings.Contains(err.Error(), "Transaction has been aborted") {
 			continue
 		}
 
