@@ -61,7 +61,9 @@ func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 	tables := make([]string, 0)
 	for rows.Next() {
 		var table string
-		rows.Scan(&table)
+		if err := rows.Scan(&table); err != nil {
+			return nil, fmt.Errorf("error while scanning table name: %v", err)
+		}
 		tables = append(tables, table)
 	}
 
@@ -112,7 +114,8 @@ func getFileWriter(filename string) (*bufio.Writer, func(), error) {
 	return bufio.NewWriter(output), func() { output.Close() }, nil
 }
 
-func getColumnValues(columns []string, columnTypes []*sql.ColumnType, rows *sql.Rows) []interface{} {
+func getColumnValues(columns []string, columnTypes []*sql.ColumnType,
+	rows *sql.Rows) ([]interface{}, error) {
 	colValuePtrs := make([]interface{}, 0, len(columns))
 	for i := 0; i < len(columns); i++ {
 		switch columnTypes[i].DatabaseTypeName() {
@@ -127,9 +130,11 @@ func getColumnValues(columns []string, columnTypes []*sql.ColumnType, rows *sql.
 				columnTypes[i].ScanType().Kind(), i))
 		}
 	}
-	rows.Scan(colValuePtrs...)
+	if err := rows.Scan(colValuePtrs...); err != nil {
+		return nil, fmt.Errorf("error while scanning column values: %v", err)
+	}
 	colValues := ptrToValues(colValuePtrs)
-	return colValues
+	return colValues, nil
 }
 
 // getSortedColumns sorts the column alphabetically using the column names

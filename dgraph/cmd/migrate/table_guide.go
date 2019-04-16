@@ -124,7 +124,8 @@ func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{},
 			return ok
 		})
 
-		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator, constraintColumnIndices, values)
+		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator,
+			constraintColumnIndices, values)
 		r.referenceToUidLabel[aliasLabel] = uidLabel
 	}
 }

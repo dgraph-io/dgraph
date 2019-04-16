@@ -124,8 +124,8 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 	}
 
 	// query indices
-	indexQuery := fmt.Sprintf(`SELECT INDEX_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.
-STATISTICS where TABLE_NAME = "%s" AND index_schema="%s"`, table, database)
+	indexQuery := fmt.Sprintf(`select INDEX_NAME,COLUMN_NAME from INFORMATION_SCHEMA.`+
+		`STATISTICS where TABLE_NAME = "%s" AND index_schema="%s"`, table, database)
 	indexRows, err := pool.Query(indexQuery)
 	if err != nil {
 		return nil, err

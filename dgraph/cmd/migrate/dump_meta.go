@@ -63,7 +63,9 @@ func (m *DumpMeta) dumpTables() error {
 
 	for _, table := range tablesSorted {
 		fmt.Printf("Dumping table %s\n", table)
-		m.dumpTable(table)
+		if err := m.dumpTable(table); err != nil {
+			return fmt.Errorf("error while dumping table %s: %v", table, err)
+		}
 	}
 
 	return m.dataWriter.Flush()
@@ -95,7 +97,10 @@ func (m *DumpMeta) dumpTable(table string) error {
 		}
 
 		// step 1: read the row's column values
-		colValues := getColumnValues(columnNames, columnTypes, rows)
+		colValues, err := getColumnValues(columnNames, columnTypes, rows)
+		if err != nil {
+			return err
+		}
 
 		// step 2: output the column values in RDF format
 		blankNodeLabel := tableGuide.blankNodeGenerator.generateBlankNode(tableInfo, colValues)
