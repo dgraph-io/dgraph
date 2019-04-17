@@ -114,15 +114,18 @@ type ForeignKeyValuesRecorder struct {
 // and we need to record the mapping from the refLabel to the blank node label
 // _:person_company_Google_employee_id_100 -> _:person_John_Doe
 // this mapping will be used later when processing the salary table to find the blank node label
-// _:person_John_Doe, which is used further to create the Dgraph edge between a salary row and the person row
-func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, blankNodeLabel string) {
+// _:person_John_Doe, which is used further to create the Dgraph edge between a salary row
+// and the person row
+func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{},
+	blankNodeLabel string) {
 	for _, constraint := range info.constraintSources {
 		// for each foreign key constraint, there should be a mapping
 		constraintColumns := getConstraintColumns(constraint)
-		constraintColumnIndices := getColumnIndices(info, func(info *TableInfo, column string) bool {
-			_, ok := constraintColumns[column]
-			return ok
-		})
+		constraintColumnIndices := getColumnIndices(info,
+			func(info *TableInfo, column string) bool {
+				_, ok := constraintColumns[column]
+				return ok
+			})
 
 		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator,
 			constraintColumnIndices, values)

@@ -24,15 +24,14 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
 type CancelFunc func()
 
 func getMySQLPool(mysqlUser string, mysqlDB string, password string) (*sql.DB, CancelFunc,
 	error) {
-	pool, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/%s", mysqlUser, password, mysqlDB))
+	pool, err := sql.Open("mysql",
+		fmt.Sprintf("%s:%s@/%s", mysqlUser, password, mysqlDB))
 	if err != nil {
 		return nil, nil, err
 	}

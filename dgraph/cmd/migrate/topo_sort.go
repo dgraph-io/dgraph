@@ -12,7 +12,7 @@ const (
 
 // visit traverses the dependency graph in the order of depth-first search
 // and when we are done visiting a node, it will be added to the collector.
-// As a retult, it returns the new collector
+// As a result, it returns the new collector
 func visit(tables map[string]*TableInfo, nodeColor map[string]NodeColor, curTable string,
 	collector []string) ([]string, error) {
 	switch nodeColor[curTable] {
