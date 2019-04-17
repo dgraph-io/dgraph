@@ -1798,13 +1798,13 @@ There are four ways to use the `expand` function.
 
 * Predicates can be stored in a variable and passed to `expand()` to expand all
   the predicates in the variable.
-* If `_all_` is passed as an argument to `expand()`, all the predicates at that
-  level are retrieved. More levels can be specified in a nested fashion under
-  `expand()`.
-* If `_forward_` is passed as an argument to `expand()`, all predicates at that
-  level (minus any reverse predicates) are retrieved.
+* If `_all_` is passed as an argument to `expand()`, all the predicates for each
+  node at that level are retrieved. More levels can be specified in a nested
+  fashion under `expand()`.
+* If `_forward_` is passed as an argument to `expand()`, all predicates for each
+  node at that level (minus any reverse predicates) are retrieved.
 * If `_reverse_` is passed as an argument to `expand()`, only the reverse
-  predicates are retrieved.
+  predicates at each node in that level are retrieved.
 
 The last three keywords require that the node's types have been set to properly
 work. Dgraph will look for all the types that have been assigned to this node,
@@ -2158,7 +2158,7 @@ The types can also be used to filter results inside the queries. For example:
 ```
 
 This query will return the nodes that have a parent predicate but only if the
-type of the parent node has been previously set to `Parent`.
+type of the parent node has been previously set to `Person`.
 
 #### Deleting a type
 
