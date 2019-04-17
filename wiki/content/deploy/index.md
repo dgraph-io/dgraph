@@ -1482,6 +1482,8 @@ Do not confuse with `-C`.
 `-C, --use_compression` (default: false): Enable compression for connections to and from the
 Alpha server.
 
+`-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
+
 ### Bulk Loader
 
 {{% notice "note" %}}

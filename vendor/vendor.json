@@ -463,20 +463,26 @@
 		{
 			"checksumSHA1": "0hrzVs4TUnFfydHG0QidJYURqfg=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "015408399101177ddb1e52ebc04edb5282d5dd11",
-			"revisionTime": "2019-03-01T02:09:43Z"
+			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
+			"revisionTime": "2019-04-17T18:34:19Z"
 		},
 		{
-			"checksumSHA1": "TyNDi94Qlav5+Q/kDNtIXh2JOHI=",
+			"checksumSHA1": "YJWFJlDmDGChkem2kWswwyOU0S4=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "015408399101177ddb1e52ebc04edb5282d5dd11",
-			"revisionTime": "2019-03-01T02:09:43Z"
+			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
+			"revisionTime": "2019-04-17T18:34:19Z"
+		},
+		{
+			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
+			"path": "github.com/dgraph-io/dgo/x",
+			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
+			"revisionTime": "2019-04-17T18:34:19Z"
 		},
 		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
-			"revision": "015408399101177ddb1e52ebc04edb5282d5dd11",
-			"revisionTime": "2019-03-01T02:09:43Z"
+			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
+			"revisionTime": "2019-04-17T18:34:19Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
