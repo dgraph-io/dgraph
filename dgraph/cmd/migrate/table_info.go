@@ -42,6 +42,8 @@ type ColumnInfo struct {
 
 type ForeignKeyConstraint struct {
 	parts []*ConstraintPart
+	// the referenced column names and their indices in the foreign table
+	foreignColumnIndices []*ColumnIdx
 }
 
 type ConstraintPart struct {
@@ -107,12 +109,16 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 	for columnRows.Next() {
 		/*
 			each row represents info about a column, for example
-			+----------+-------------+------+-----+---------+-------+
-			| Field    | Type        | Null | Key | Default | Extra |
-			+----------+-------------+------+-----+---------+-------+
-			| ssn      | varchar(50) | NO   | PRI | NULL    |       |
+			+---------------+-----------+
+			| COLUMN_NAME   | DATA_TYPE |
+			+---------------+-----------+
+			| p_company     | varchar   |
+			| p_employee_id | int       |
+			| p_fname       | varchar   |
+			| p_lname       | varchar   |
+			| title         | varchar   |
+			+---------------+-----------+
 		*/
-
 		columnOutput := ColumnOutput{}
 		err := columnRows.Scan(&columnOutput.fieldName, &columnOutput.dataType)
 		if err != nil {
@@ -148,7 +154,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 
 	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME,
 		REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where TABLE_NAME = "%s"
-        AND REFERENCED_TABLE_NAME IS NOT NULL`,
+        AND CONSTRAINT_SCHEMA="%s" REFERENCED_TABLE_NAME IS NOT NULL`, database,
 		table)
 	foreignKeyRows, err := pool.Query(foreignKeysQuery)
 	if err != nil {
@@ -156,15 +162,15 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 	}
 	defer foreignKeyRows.Close()
 	for foreignKeyRows.Next() {
-		/* example output from MySQL when querying the registration table
-		+-------------+-----------------------+------------------------+
-		| COLUMN_NAME | REFERENCED_TABLE_NAME | REFERENCED_COLUMN_NAME |
-		+-------------+-----------------------+------------------------+
-		| student_id  | student               | id                     |
-		| course_id   | course                | id                     |
-		| faculty_id  | faculty               | id                     |
-		+-------------+-----------------------+------------------------+
-
+		/* example output from MySQL
+		+---------------+-----------------+-----------------------+------------------------+
+		| COLUMN_NAME   | CONSTRAINT_NAME | REFERENCED_TABLE_NAME | REFERENCED_COLUMN_NAME |
+		+---------------+-----------------+-----------------------+------------------------+
+		| p_fname       | role_ibfk_1     | person                | fname                  |
+		| p_lname       | role_ibfk_1     | person                | lname                  |
+		| p_company     | role_ibfk_2     | person                | company                |
+		| p_employee_id | role_ibfk_2     | person                | employee_id            |
+		+---------------+-----------------+-----------------------+------------------------+
 		*/
 		var columnName, constraintName, referencedTableName, referencedColumnName string
 		err := foreignKeyRows.Scan(&columnName, &constraintName, &referencedTableName,
@@ -192,6 +198,12 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 	return tableInfo, nil
 }
 
+// validateAndGetReverse flip the foreign key reference direction in a constraint.
+// For example, if the constraint's local table name is A, and it has 3 columns
+// col1, col2, col3 that references a remote table B's 3 columns col4, col5, col6,
+// then we return a reversed constraint whose local table name is B with local columns
+// col4, col5, col6, while the remote table name is A, and the remote columns are
+// col1, col2 and col3
 func validateAndGetReverse(constraint *ForeignKeyConstraint) (string, *ForeignKeyConstraint) {
 	reverseParts := make([]*ConstraintPart, 0)
 	// verify that within one constraint, the remote table names are the same
@@ -215,8 +227,8 @@ func validateAndGetReverse(constraint *ForeignKeyConstraint) (string, *ForeignKe
 }
 
 // populateReferencedByColumns calculates the reverse links of
-// the data at tables[table name].foreignKeyRefences
-// and stores them in tables[table name].columns[column name].referecedBy
+// the data at tables[table name].foreignKeyReferences
+// and stores them in tables[table name].columns[column name].referencedBy
 func populateReferencedByColumns(tables map[string]*TableInfo) {
 	for _, tableInfo := range tables {
 		for _, constraint := range tableInfo.foreignKeyConstraints {

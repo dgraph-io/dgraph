@@ -106,6 +106,9 @@ func run(conf *viper.Viper) error {
 	return generateSchemaAndData(schemaOutput, dataOutput, tableInfos, tableGuides, pool)
 }
 
+// generateSchemaAndData opens the two files schemaOutput and dataOutput,
+// then it dumps schema to the writer backed by schemaOutput, and data in RDF format
+// to the writer backed by dataOutput
 func generateSchemaAndData(schemaOutput string, dataOutput string,
 	tableInfos map[string]*TableInfo, tableGuides map[string]*TableGuide, pool *sql.DB) error {
 	schemaWriter, schemaCancelFunc, err := getFileWriter(schemaOutput)

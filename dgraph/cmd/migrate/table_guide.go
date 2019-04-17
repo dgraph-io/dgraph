@@ -36,7 +36,7 @@ type ColumnKeyGenerator struct {
 	separator         string
 }
 
-type CriteriaFunc func(info *TableInfo, column string) bool
+type criteriaFunc func(info *TableInfo, column string) bool
 
 // For example, if the employee table has 3 columns (f_name, l_name, and title),
 // where f_name and l_name together form the primary key.
@@ -56,7 +56,6 @@ func (g *ColumnKeyGenerator) generateBlankNode(info *TableInfo, values []interfa
 		valuesForKey = append(valuesForKey,
 			getValue(info.columns[columnIndex.name].dataType,
 				values[columnIndex.index]))
-		//			fmt.Sprintf("%v", values[columnIndex.index])
 	}
 
 	return fmt.Sprintf("_:%s%s%s", info.tableName, g.separator,
@@ -85,7 +84,7 @@ func (g *CounterKeyGenerator) generateBlankNode(info *TableInfo, values []interf
 // It remembers these mapping so that if another table references the person table through foreign
 // keys, it will be able to look up the blank node labels and use it to establish links in Dgraph
 type ValuesRecorder interface {
-	record(info *TableInfo, values []interface{}, uidLabel string)
+	record(info *TableInfo, values []interface{}, blankNodeLabel string)
 	getUidLabel(indexLabel string) string
 }
 
@@ -94,28 +93,29 @@ type ForeignKeyValuesRecorder struct {
 	separator           string
 }
 
-/*
-TODO: for now we do NOT support composite foreign keys
-For example, if we have the following two tables where <fname, lname> combined serves as the
-foreign key,
+// record keeps track of the mapping between referenced foreign columns and the blank node label
+// Consider the "person" table
+// fname varchar(50)
+// lname varchar(50)
+// company varchar(50)
+// employee_id int
+// primary key (fname, lname)
+// index unique (company, employee_id)
 
-create table person (
-fname varchar(50),
-lname varchar(50),
-INDEX (fname, lname)
-);
+// and it is referenced by the "salary" table
+// person_company varchar (50)
+// person_employee_id int
+// salary float
+// foreign key (person_company, person_employee_id) references person (company, employee_id)
 
-create table role (
-title varchar(50),
-p_fname varchar(50),
-p_lname varchar(50),
-FOREIGN KEY (p_fname, p_lname) REFERENCES person (fname, lname)
-);
-
-the tool will treat them as two different foreign keys, where the p_fname references person fname,
-and p_lname references person lname.
-*/
-func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, uidLabel string) {
+// then the following row in the person table will have blankNodeLabel _:person_John_Doe
+// John (fname), Doe (lname), Google (company), 100 (employee_id)
+//
+// and we need to record the mapping from the refLabel to the blank node label
+// _:person_company_Google_employee_id_100 -> _:person_John_Doe
+// this mapping will be used later when processing the salary table to find the blank node label
+// _:person_John_Doe, which is used further to create the Dgraph edge between a salary row and the person row
+func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{}, blankNodeLabel string) {
 	for _, constraint := range info.constraintSources {
 		// for each foreign key constraint, there should be a mapping
 		constraintColumns := getConstraintColumns(constraint)
@@ -126,7 +126,7 @@ func (r *ForeignKeyValuesRecorder) record(info *TableInfo, values []interface{},
 
 		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator,
 			constraintColumnIndices, values)
-		r.referenceToUidLabel[aliasLabel] = uidLabel
+		r.referenceToUidLabel[aliasLabel] = blankNodeLabel
 	}
 }
 

@@ -73,7 +73,7 @@ func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 // getColumnIndices first sort the columns in the table alphabetically, and then
 // returns the indices of the columns satisfying the criteria function
 func getColumnIndices(info *TableInfo,
-	criteria CriteriaFunc) []*ColumnIdx {
+	criteria criteriaFunc) []*ColumnIdx {
 	columns := getSortedColumns(info)
 
 	indices := make([]*ColumnIdx, 0)
