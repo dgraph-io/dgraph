@@ -63,7 +63,6 @@ func (m *DumpMeta) dumpSchema() error {
 }
 
 // dumpTables runs a topological sort through all the tables in m.tableInfos,
-// so that tables referenced by foreign key constraints are processed first;
 // then this method dumps all the tables following that topological order where
 // the most deeply referenced tables are processed first, and the non-referenced tables
 // are processed later
@@ -159,7 +158,6 @@ func getColumnTypesAndPredNames(rows *sql.Rows, tableGuide *TableGuide,
 
 // outputColumnValues takes a row with its metadata as well as the table metadata, and
 // spits out one or more RDF entries to the DumpMeta's dataWriter.
-// The generated RDF entries can be classified into two types.
 // Consider the following table "salary"
 // person_company varchar (50)
 // person_employee_id int
