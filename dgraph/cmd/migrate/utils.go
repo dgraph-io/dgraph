@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type CancelFunc func()
