@@ -284,7 +284,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Received ALTER op: %+v", op)
 
 	// The following code block checks if the operation should run or not.
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll &&
+		op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
@@ -321,17 +322,28 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	if len(op.DropAttr) > 0 {
+	if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
+		return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+	}
+
+	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
+		var attr string
+		if len(op.DropAttr) > 0 {
+			attr = op.DropAttr
+		} else {
+			attr = op.DropValue
+		}
+
 		// Reserved predicates cannot be dropped.
-		if x.IsReservedPredicate(op.DropAttr) {
+		if x.IsReservedPredicate(attr) {
 			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
-				op.DropAttr)
-			return nil, err
+				attr)
+			return empty, err
 		}
 
 		nq := &api.NQuad{
 			Subject:     x.Star,
-			Predicate:   op.DropAttr,
+			Predicate:   attr,
 			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: x.Star}},
 		}
 		wnq := &gql.NQuad{NQuad: nq}
@@ -343,6 +355,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		m.Edges = edges
 		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
+	}
+
+	if op.DropOp == api.Operation_TYPE {
+		if len(op.DropValue) == 0 {
+			return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+		}
 	}
 
 	result, err := schema.Parse(op.Schema)
