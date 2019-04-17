@@ -154,7 +154,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 
 	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME,CONSTRAINT_NAME,REFERENCED_TABLE_NAME,
 		REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where TABLE_NAME = "%s"
-        AND CONSTRAINT_SCHEMA="%s" REFERENCED_TABLE_NAME IS NOT NULL`, database,
+        AND CONSTRAINT_SCHEMA="%s" AND REFERENCED_TABLE_NAME IS NOT NULL`, database,
 		table)
 	foreignKeyRows, err := pool.Query(foreignKeysQuery)
 	if err != nil {
