@@ -276,7 +276,7 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	ctx, span := x.UpsertSpanWithMethod(ctx, "Server.Alter")
+	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
@@ -390,7 +390,6 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	ctx, _ = x.UpsertSpanWithMethod(ctx, methodMutate)
 	if err := authorizeMutation(ctx, mu); err != nil {
 		return nil, err
 	}
@@ -404,7 +403,8 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	}
 	startTime := time.Now()
 
-	ctx, span := x.UpsertSpanWithMethod(ctx, methodMutate)
+	ctx, span := otrace.StartSpan(ctx, methodMutate)
+	ctx = x.WithMethod(ctx, methodMutate)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
@@ -522,8 +522,6 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	ctx, _ = x.UpsertSpanWithMethod(ctx, methodQuery)
-
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
@@ -536,19 +534,19 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	startTime := time.Now()
 
-	ctx, span := x.UpsertSpanWithMethod(ctx, methodQuery)
 	var measurements []ostats.Measurement
-	var err error
+	ctx, span := otrace.StartSpan(ctx, methodQuery)
+	ctx = x.WithMethod(ctx, methodQuery)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
-		if err != nil {
+		if rerr != nil {
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
@@ -557,7 +555,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 		ostats.Record(ctx, measurements...)
 	}()
 
-	if err = x.HealthCheck(); err != nil {
+	if err := x.HealthCheck(); err != nil {
 		return nil, err
 	}
 
@@ -566,7 +564,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 		measurements = append(measurements, x.PendingQueries.M(-1))
 	}()
 
-	resp := &api.Response{}
+	resp = &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")

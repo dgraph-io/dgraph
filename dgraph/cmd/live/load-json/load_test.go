@@ -93,7 +93,7 @@ func TestLiveLoadJSONFile(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -108,7 +108,7 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 		{"gzip", "-c", testDataDir + "/family.json"},
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON stream exited with error")
@@ -129,7 +129,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", fileList,
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading multiple JSON files exited with error")

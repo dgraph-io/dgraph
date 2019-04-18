@@ -23,7 +23,7 @@ import (
 )
 
 type options struct {
-	dgraph string
+	alpha string
 }
 
 var (
@@ -42,7 +42,7 @@ func init() {
 	}
 
 	flag := CmdAcl.Cmd.PersistentFlags()
-	flag.StringP("dgraph", "d", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
+	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.StringP(gPassword, "x", "", "Groot password to authorize this operation")
 
 	// TLS configuration

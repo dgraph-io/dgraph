@@ -47,7 +47,7 @@ func increment(atLeast int, args string) error {
 	addrs := []string{"localhost:9180", "localhost:9182", "localhost:9183"}
 	for _, addr := range addrs {
 		go func(addr string) {
-			errCh <- run(ctx, fmt.Sprintf("dgraph increment --addr=%s %s", addr, args))
+			errCh <- run(ctx, fmt.Sprintf("dgraph increment --alpha=%s %s", addr, args))
 		}(addr)
 	}
 	start := time.Now()
@@ -125,7 +125,7 @@ func waitForHealthy() error {
 		}
 	}
 	for _, alpha := range []string{"localhost:9180", "localhost:9182", "localhost:9183"} {
-		if err := run(ctxb, "dgraph increment --addr="+alpha); err != nil {
+		if err := run(ctxb, "dgraph increment --alpha="+alpha); err != nil {
 			return err
 		}
 	}
