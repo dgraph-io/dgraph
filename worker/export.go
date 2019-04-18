@@ -68,6 +68,7 @@ type exporter struct {
 	attr    string
 	readTs  uint64
 	counter int
+	buf     *bytes.Buffer
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -102,7 +103,7 @@ var predNonSpecialChars = unicode.RangeTable{
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
 
-func kvListWrap(buf bytes.Buffer) *bpb.KVList {
+func kvListWrap(buf *bytes.Buffer) *bpb.KVList {
 	kv := &bpb.KV{
 		Value:   buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
 		Version: 1,           // Data value.
@@ -112,10 +113,10 @@ func kvListWrap(buf bytes.Buffer) *bpb.KVList {
 
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	var err error
-	var buf bytes.Buffer
 
+	e.buf.Reset()
 	if e.counter != 1 {
-		buf.WriteString(",\n")
+		fmt.Fprint(e.buf, ",\n")
 	}
 
 	// We could output more compact JSON at the cost of code complexity.
@@ -125,21 +126,21 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
 	err = e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
-			buf.WriteString(",\n")
+			fmt.Fprint(e.buf, ",\n")
 		} else {
 			continuing = true
 		}
 
-		buf.WriteString(mapStart)
+		fmt.Fprint(e.buf, mapStart)
 		if p.PostingType == pb.Posting_REF {
-			fmt.Fprintf(&buf, `,"%s":[`, e.attr)
-			fmt.Fprintf(&buf, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
-			buf.WriteString("]")
+			fmt.Fprintf(e.buf, `,"%s":[`, e.attr)
+			fmt.Fprintf(e.buf, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
+			fmt.Fprint(e.buf, "]")
 		} else {
 			if p.PostingType != pb.Posting_VALUE_LANG {
-				fmt.Fprintf(&buf, `,"%s":`, e.attr)
+				fmt.Fprintf(e.buf, `,"%s":`, e.attr)
 			} else {
-				fmt.Fprintf(&buf, `,"%s@%s":`, e.attr, string(p.LangTag))
+				fmt.Fprintf(e.buf, `,"%s@%s":`, e.attr, string(p.LangTag))
 			}
 
 			vID := types.TypeID(p.ValType)
@@ -155,11 +156,11 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			if vID != types.IntID && vID != types.FloatID {
 				val = strconv.Quote(val)
 			}
-			buf.WriteString(val)
+			fmt.Fprint(e.buf, val)
 		}
 
 		for _, fct := range p.Facets {
-			fmt.Fprintf(&buf, `,"%s|%s":`, e.attr, fct.Key)
+			fmt.Fprintf(e.buf, `,"%s|%s":`, e.attr, fct.Key)
 
 			fVal, err := facets.ValFor(fct)
 			if err != nil {
@@ -181,27 +182,27 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if facetTid != types.IntID && facetTid != types.FloatID {
-				buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
+				fmt.Fprint(e.buf, strconv.Quote(fStringVal.Value.(string)))
 			} else {
-				buf.WriteString(fStringVal.Value.(string))
+				fmt.Fprint(e.buf, fStringVal.Value.(string))
 			}
 		}
 
-		buf.WriteString("}")
+		fmt.Fprint(e.buf, "}")
 		return nil
 	})
 
-	return kvListWrap(buf), err
+	return kvListWrap(e.buf), err
 }
 
 func (e *exporter) toRDF() (*bpb.KVList, error) {
-	var buf bytes.Buffer
+	e.buf.Reset()
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
-		buf.WriteString(prefix)
+		fmt.Fprint(e.buf, prefix)
 		if p.PostingType == pb.Posting_REF {
-			buf.WriteString(fmt.Sprintf(uidFmtStrRdf, p.Uid))
+			fmt.Fprint(e.buf, fmt.Sprintf(uidFmtStrRdf, p.Uid))
 
 		} else {
 			// Value posting
@@ -217,17 +218,17 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 
 			// trim null character at end
 			trimmed := strings.TrimRight(str.Value.(string), "\x00")
-			buf.WriteString(strconv.Quote(trimmed))
+			fmt.Fprint(e.buf, strconv.Quote(trimmed))
 			if p.PostingType == pb.Posting_VALUE_LANG {
-				buf.WriteByte('@')
-				buf.WriteString(string(p.LangTag))
+				fmt.Fprint(e.buf, '@')
+				fmt.Fprint(e.buf, string(p.LangTag))
 
 			} else if vID != types.DefaultID {
 				rdfType, ok := rdfTypeMap[vID]
 				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
-				buf.WriteString("^^<")
-				buf.WriteString(rdfType)
-				buf.WriteByte('>')
+				fmt.Fprint(e.buf, "^^<")
+				fmt.Fprint(e.buf, rdfType)
+				fmt.Fprint(e.buf, '>')
 			}
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
@@ -235,13 +236,13 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		// Facets.
 		fcs := p.Facets
 		if len(fcs) != 0 {
-			buf.WriteString(" (")
+			fmt.Fprint(e.buf, " (")
 			for i, f := range fcs {
 				if i != 0 {
-					buf.WriteByte(',')
+					fmt.Fprint(e.buf, ',')
 				}
-				buf.WriteString(f.Key)
-				buf.WriteByte('=')
+				fmt.Fprint(e.buf, f.Key)
+				fmt.Fprint(e.buf, '=')
 
 				fVal, err := facets.ValFor(f)
 				if err != nil {
@@ -262,19 +263,19 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 
 				if facetTid == types.StringID {
-					buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
+					fmt.Fprint(e.buf, strconv.Quote(fStringVal.Value.(string)))
 				} else {
-					buf.WriteString(fStringVal.Value.(string))
+					fmt.Fprint(e.buf, fStringVal.Value.(string))
 				}
 			}
-			buf.WriteByte(')')
+			fmt.Fprint(e.buf, ')')
 		}
 		// End dot.
-		buf.WriteString(" .\n")
+		fmt.Fprint(e.buf, " .\n")
 		return nil
 	})
 
-	return kvListWrap(buf), err
+	return kvListWrap(e.buf), err
 }
 
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
@@ -409,6 +410,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	e := exporter{
 		readTs:  in.ReadTs,
 		counter: 0,
+		buf:     &bytes.Buffer{},
 	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
