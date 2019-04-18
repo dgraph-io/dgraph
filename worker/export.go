@@ -105,8 +105,8 @@ var uidFmtStrJson = "\"0x%x\""
 
 func kvListWrap(buf *bytes.Buffer) *bpb.KVList {
 	kv := &bpb.KV{
-		Value:   buf.Bytes(), // Don't think we need to copy these, because buf is not being reused.
-		Version: 1,           // Data value.
+		Value:   append([]byte(nil), buf.Bytes()...), // return copy since buf is reused
+		Version: 1,
 	}
 	return listWrap(kv)
 }
@@ -407,7 +407,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	e := exporter{
+	e := &exporter{
 		readTs:  in.ReadTs,
 		counter: 0,
 		buf:     &bytes.Buffer{},
