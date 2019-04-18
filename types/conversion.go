@@ -26,11 +26,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -538,4 +539,42 @@ func (v Val) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.Value.(string))
 	}
 	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
+}
+
+func ValToStr(v Val) (string, error) {
+	var arr []byte
+	var err error
+
+	switch v.Tid {
+	case StringID, DefaultID:
+		arr, err = json.Marshal(v.Value)
+	case BinaryID:
+		return fmt.Sprintf("%q", v.Value), nil
+	case IntID:
+		return fmt.Sprintf("%d", v.Value), nil
+	case FloatID:
+		return fmt.Sprintf("%f", v.Value), nil
+	case BoolID:
+		if v.Value.(bool) {
+			return "true", nil
+		}
+		return "false", nil
+	case DateTimeID:
+		// Return empty string instead of zero-time value string - issue#3166
+		t := v.Value.(time.Time)
+		if t.IsZero() {
+			return `""`, nil
+		}
+		arr, err = t.MarshalJSON()
+	case GeoID:
+		arr, err = geojson.Marshal(v.Value.(geom.T))
+	case UidID:
+		return fmt.Sprintf("\"%#x\"", v.Value), nil
+	case PasswordID:
+		return fmt.Sprintf("%q", v.Value.(string)), nil
+	default:
+		return "", errors.New("Unsupported Val.Tid")
+	}
+
+	return string(arr), err
 }

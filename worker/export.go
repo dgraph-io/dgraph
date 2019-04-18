@@ -34,6 +34,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -102,6 +103,19 @@ var predNonSpecialChars = unicode.RangeTable{
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
 
+// valToStr converts a posting value to a string. Based on valToBytes()
+// but instead of converting a TypeID and interface{} to
+//func valToStr(p *pb.Posting) (string, error) {
+//	v := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
+//
+//	arr, err := types.ValToBytes(v)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	return string(arr), nil
+//}
+
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	var err error
 	var buf bytes.Buffer
@@ -136,20 +150,13 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 				fmt.Fprintf(bp, `,"%s@%s":`, e.attr, string(p.LangTag))
 			}
 
-			vID := types.TypeID(p.ValType)
-			src := types.ValueForType(vID)
-			src.Value = p.Value
-			str, err := types.Convert(src, types.StringID)
+			v := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
+			str, err := types.ValToStr(v)
 			if err != nil {
-				glog.Errorf("While converting %v to string. Err=%v. Ignoring.\n", src, err)
+				glog.Errorf("While converting %v to string. Err=%v. Ignoring.\n", p.Value, err)
 				return nil
 			}
-
-			val := strings.TrimRight(str.Value.(string), "\x00") // trim trailing null char
-			if vID != types.IntID && vID != types.FloatID {
-				val = strconv.Quote(val)
-			}
-			fmt.Fprint(bp, val)
+			fmt.Fprint(bp, str)
 		}
 
 		for _, fct := range p.Facets {
