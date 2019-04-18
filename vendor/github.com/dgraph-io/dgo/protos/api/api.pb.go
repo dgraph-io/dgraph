@@ -455,7 +455,7 @@ type Operation struct {
 	DropAttr string           `protobuf:"bytes,2,opt,name=drop_attr,json=dropAttr,proto3" json:"drop_attr,omitempty"`
 	DropAll  bool             `protobuf:"varint,3,opt,name=drop_all,json=dropAll,proto3" json:"drop_all,omitempty"`
 	DropOp   Operation_DropOp `protobuf:"varint,4,opt,name=drop_op,json=dropOp,proto3,enum=api.Operation_DropOp" json:"drop_op,omitempty"`
-	// If drop_op is ATTR or TYPE, this field holds the name of the predicate or
+	// If drop_op is ATTR or TYPE, drop_value holds the name of the predicate or
 	// type to delete.
 	DropValue            string   `protobuf:"bytes,5,opt,name=drop_value,json=dropValue,proto3" json:"drop_value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
