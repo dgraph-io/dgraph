@@ -317,6 +317,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
 	if isDropAll(op) {
+		if len(op.DropValue) > 0 {
+			return empty, fmt.Errorf("If DropOp is set to ALL, DropValue must be empty")
+		}
+
 		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
 
@@ -326,6 +330,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if op.DropOp == api.Operation_DATA {
+		if len(op.DropValue) > 0 {
+			return empty, fmt.Errorf("If DropOp is set to DATA, DropValue must be empty")
+		}
+
 		m.DropOp = pb.Mutations_DATA
 		_, err := query.ApplyMutations(ctx, m)
 
@@ -334,11 +342,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
-		return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
-	}
-
 	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
+		if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
+			return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+		}
+
 		var attr string
 		if len(op.DropAttr) > 0 {
 			attr = op.DropAttr
@@ -371,8 +379,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if op.DropOp == api.Operation_TYPE {
 		if len(op.DropValue) == 0 {
-			return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+			return empty, fmt.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
+
+		m.DropOp = pb.Mutations_TYPE
+		m.DropValue = op.DropValue
+		_, err := query.ApplyMutations(ctx, m)
+		return empty, err
 	}
 
 	result, err := schema.Parse(op.Schema)

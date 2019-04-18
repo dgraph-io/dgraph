@@ -80,6 +80,8 @@ func TestSystem(t *testing.T) {
 	t.Run("restore reserved preds", wrap(RestoreReservedPreds))
 	t.Run("drop data", wrap(DropData))
 	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
+	t.Run("drop type", wrap(DropType))
+	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1771,7 +1773,6 @@ func DropData(t *testing.T, c *dgo.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	CompareJSON(t, `{"q": []}`, string(resp.GetJson()))
-
 }
 
 func DropDataAndDropAll(t *testing.T, c *dgo.Dgraph) {
@@ -1783,4 +1784,42 @@ func DropDataAndDropAll(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only one of DropAll and DropData can be true")
+}
+
+func DropType(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			type Person {
+				name: string
+			}
+		`,
+	}))
+
+	// Check type has been added.
+	query := `schema(type: Person) {}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, `{"types":[{"name":"Person",
+		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		DropOp:    api.Operation_TYPE,
+		DropValue: "Person",
+	}))
+
+	// Check type is gone.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, "{}", string(resp.Json))
+}
+
+func DropTypeNoValue(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	err := c.Alter(ctx, &api.Operation{
+		DropOp: api.Operation_TYPE,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DropValue must not be empty")
 }
