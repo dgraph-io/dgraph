@@ -33,7 +33,7 @@ const (
 	ByteCountRev = ByteCount | ByteReverse
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
-	defaultPrefix = byte(0x00)
+	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
 )
@@ -72,7 +72,7 @@ func TypeKey(typeName string) []byte {
 
 func DataKey(attr string, uid uint64) []byte {
 	buf := make([]byte, 2+len(attr)+2+8)
-	buf[0] = defaultPrefix
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
@@ -85,7 +85,7 @@ func DataKey(attr string, uid uint64) []byte {
 
 func ReverseKey(attr string, uid uint64) []byte {
 	buf := make([]byte, 2+len(attr)+2+8)
-	buf[0] = defaultPrefix
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
@@ -98,7 +98,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 
 func IndexKey(attr, term string) []byte {
 	buf := make([]byte, 2+len(attr)+2+len(term))
-	buf[0] = defaultPrefix
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
@@ -111,7 +111,7 @@ func IndexKey(attr, term string) []byte {
 
 func CountKey(attr string, count uint32, reverse bool) []byte {
 	buf := make([]byte, 1+2+len(attr)+1+4)
-	buf[0] = defaultPrefix
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
@@ -136,20 +136,20 @@ type ParsedKey struct {
 }
 
 func (p ParsedKey) IsData() bool {
-	return p.bytePrefix == defaultPrefix && p.byteType == ByteData
+	return p.bytePrefix == DefaultPrefix && p.byteType == ByteData
 }
 
 func (p ParsedKey) IsReverse() bool {
-	return p.bytePrefix == defaultPrefix && p.byteType == ByteReverse
+	return p.bytePrefix == DefaultPrefix && p.byteType == ByteReverse
 }
 
 func (p ParsedKey) IsCount() bool {
-	return p.bytePrefix == defaultPrefix && (p.byteType == ByteCount ||
+	return p.bytePrefix == DefaultPrefix && (p.byteType == ByteCount ||
 		p.byteType == ByteCountRev)
 }
 
 func (p ParsedKey) IsIndex() bool {
-	return p.bytePrefix == defaultPrefix && p.byteType == ByteIndex
+	return p.bytePrefix == DefaultPrefix && p.byteType == ByteIndex
 }
 
 func (p ParsedKey) IsSchema() bool {
@@ -273,7 +273,7 @@ func TypePrefix() []byte {
 // to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
 	buf := make([]byte, 1+2+len(predicate))
-	buf[0] = defaultPrefix
+	buf[0] = DefaultPrefix
 	k := writeAttr(buf[1:], predicate)
 	AssertTrue(len(k) == 0)
 	return buf
