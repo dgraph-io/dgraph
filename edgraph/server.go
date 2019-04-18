@@ -294,7 +294,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	if (op.DropAll || op.DropOp == api.Operation_ALL) && op.DropOp == api.Operation_DATA {
+	if isDropAll(op) && op.DropOp == api.Operation_DATA {
 		return nil, x.Errorf("Only one of DropAll and DropData can be true")
 	}
 
@@ -316,7 +316,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
-	if op.DropAll || op.DropOp == api.Operation_ALL {
+	if isDropAll(op) {
 		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
 
@@ -956,4 +956,11 @@ func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
 		res = append(res, typeMap)
 	}
 	return res
+}
+
+func isDropAll(op *api.Operation) bool {
+	if op.DropAll || op.DropOp == api.Operation_ALL {
+		return true
+	}
+	return false
 }

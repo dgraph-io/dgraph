@@ -1778,8 +1778,8 @@ func DropDataAndDropAll(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 
 	err := c.Alter(ctx, &api.Operation{
-		DropAll:  true,
-		DropOp: api.Operation_DATA,
+		DropAll: true,
+		DropOp:  api.Operation_DATA,
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only one of DropAll and DropData can be true")
