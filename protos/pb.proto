@@ -482,7 +482,7 @@ message ExportRequest {
 	uint32  group_id = 1;  // Group id to back up.
 	uint64  read_ts  = 2;
 	int64   unix_ts  = 3;
-	string	format   = 4;
+	string  format   = 4;
 }
 
 // vim: noexpandtab sw=2 ts=2

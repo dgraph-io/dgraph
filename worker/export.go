@@ -120,6 +120,7 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
+
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, dxp.uid)
 	err = dxp.pl.Iterate(dxp.readTs, 0, func(p *pb.Posting) error {
@@ -131,14 +132,14 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 
 		buf.WriteString(mapStart)
 		if p.PostingType == pb.Posting_REF {
-			buf.WriteString(fmt.Sprintf(`,"%s":[`, dxp.attr))
-			buf.WriteString(fmt.Sprintf("{\"uid\":"+uidFmtStrJson+"}", p.Uid))
+			fmt.Fprintf(&buf,`,"%s":[`, dxp.attr)
+			fmt.Fprintf(&buf,"{\"uid\":"+uidFmtStrJson+"}", p.Uid)
 			buf.WriteString("]")
 		} else {
 			if p.PostingType != pb.Posting_VALUE_LANG {
-				buf.WriteString(fmt.Sprintf(`,"%s":`, dxp.attr))
+				fmt.Fprintf(&buf, `,"%s":`, dxp.attr)
 			} else {
-				buf.WriteString(fmt.Sprintf(`,"%s@%s":`, dxp.attr, string(p.LangTag)))
+				fmt.Fprintf(&buf, `,"%s@%s":`, dxp.attr, string(p.LangTag))
 			}
 
 			vID := types.TypeID(p.ValType)
@@ -158,7 +159,7 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 		}
 
 		for _, fct := range p.Facets {
-			buf.WriteString(fmt.Sprintf(`,"%s|%s":`, dxp.attr, fct.Key))
+			fmt.Fprintf(&buf, `,"%s|%s":`, dxp.attr, fct.Key)
 
 			fVal, err := facets.ValFor(fct)
 			if err != nil {
