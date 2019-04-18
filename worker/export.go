@@ -62,7 +62,7 @@ var exportFormats = map[string]exportFormat{
 	},
 }
 
-type dataExportParams struct {
+type exporter struct {
 	pl      *posting.List
 	uid     uint64
 	attr    string
@@ -110,11 +110,11 @@ func kvListWrap(buf bytes.Buffer) *bpb.KVList {
 	return listWrap(kv)
 }
 
-func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
+func (e *exporter) toJSON() (*bpb.KVList, error) {
 	var err error
 	var buf bytes.Buffer
 
-	if dxp.counter != 1 {
+	if e.counter != 1 {
 		buf.WriteString(",\n")
 	}
 
@@ -122,8 +122,8 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 	// Leaving it simple for now.
 
 	continuing := false
-	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, dxp.uid)
-	err = dxp.pl.Iterate(dxp.readTs, 0, func(p *pb.Posting) error {
+	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
+	err = e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			buf.WriteString(",\n")
 		} else {
@@ -132,14 +132,14 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 
 		buf.WriteString(mapStart)
 		if p.PostingType == pb.Posting_REF {
-			fmt.Fprintf(&buf,`,"%s":[`, dxp.attr)
-			fmt.Fprintf(&buf,"{\"uid\":"+uidFmtStrJson+"}", p.Uid)
+			fmt.Fprintf(&buf, `,"%s":[`, e.attr)
+			fmt.Fprintf(&buf, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
 			buf.WriteString("]")
 		} else {
 			if p.PostingType != pb.Posting_VALUE_LANG {
-				fmt.Fprintf(&buf, `,"%s":`, dxp.attr)
+				fmt.Fprintf(&buf, `,"%s":`, e.attr)
 			} else {
-				fmt.Fprintf(&buf, `,"%s@%s":`, dxp.attr, string(p.LangTag))
+				fmt.Fprintf(&buf, `,"%s@%s":`, e.attr, string(p.LangTag))
 			}
 
 			vID := types.TypeID(p.ValType)
@@ -159,7 +159,7 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 		}
 
 		for _, fct := range p.Facets {
-			fmt.Fprintf(&buf, `,"%s|%s":`, dxp.attr, fct.Key)
+			fmt.Fprintf(&buf, `,"%s|%s":`, e.attr, fct.Key)
 
 			fVal, err := facets.ValFor(fct)
 			if err != nil {
@@ -194,11 +194,11 @@ func toJSON(dxp *dataExportParams) (*bpb.KVList, error) {
 	return kvListWrap(buf), err
 }
 
-func toRDF(dxp *dataExportParams) (*bpb.KVList, error) {
+func (e *exporter) toRDF() (*bpb.KVList, error) {
 	var buf bytes.Buffer
 
-	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", dxp.uid, dxp.attr)
-	err := dxp.pl.Iterate(dxp.readTs, 0, func(p *pb.Posting) error {
+	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
+	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		buf.WriteString(prefix)
 		if p.PostingType == pb.Posting_REF {
 			buf.WriteString(fmt.Sprintf(uidFmtStrRdf, p.Uid))
@@ -406,7 +406,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	dxp := dataExportParams{
+	e := exporter{
 		readTs:  in.ReadTs,
 		counter: 0,
 	}
@@ -429,9 +429,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
 
-		dxp.counter += 1
-		dxp.uid = pk.Uid
-		dxp.attr = pk.Attr
+		e.counter += 1
+		e.uid = pk.Uid
+		e.attr = pk.Attr
 
 		switch {
 		case pk.IsSchema():
@@ -448,15 +448,15 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return toSchema(pk.Attr, update)
 
 		case pk.IsData():
-			dxp.pl, err = posting.ReadPostingList(key, itr)
+			e.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
 			}
 			switch in.Format {
 			case "json":
-				return toJSON(&dxp)
+				return e.toJSON()
 			case "rdf":
-				return toRDF(&dxp)
+				return e.toRDF()
 			default:
 				glog.Fatalf("Invalid export format found: %s", in.Format)
 			}
