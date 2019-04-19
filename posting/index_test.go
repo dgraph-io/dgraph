@@ -181,7 +181,7 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 
 	key := x.DataKey("name", 1)
-	l, err := getNew(key, ps)
+	l, err := GetNew(key, ps)
 	require.NoError(t, err)
 
 	edge := &pb.DirectedEdge{

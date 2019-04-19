@@ -242,7 +242,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 // TODO: We should only create a posting list with a specific readTs.
-func getNew(key []byte, pstore *badger.DB) (*List, error) {
+func GetNew(key []byte, pstore *badger.DB) (*List, error) {
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 

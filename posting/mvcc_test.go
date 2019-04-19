@@ -46,7 +46,7 @@ func TestRollupTimestamp(t *testing.T) {
 	}
 	addMutation(t, l, edge, Del, 9, 10, false)
 
-	nl, err := getNew(key, pstore)
+	nl, err := GetNew(key, pstore)
 	require.NoError(t, err)
 
 	uidList, err = nl.Uids(ListOptions{ReadTs: 11})
@@ -64,7 +64,7 @@ func TestPostingListRead(t *testing.T) {
 	key := x.DataKey("emptypl", 1)
 
 	assertLength := func(readTs, sz int) {
-		nl, err := getNew(key, pstore)
+		nl, err := GetNew(key, pstore)
 		require.NoError(t, err)
 		uidList, err := nl.Uids(ListOptions{ReadTs: uint64(readTs)})
 		require.NoError(t, err)

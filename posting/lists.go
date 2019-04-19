@@ -171,7 +171,7 @@ func Cleanup() {
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
 func GetNoStore(key []byte) (rlist *List, err error) {
-	return getNew(key, pstore)
+	return GetNew(key, pstore)
 }
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
@@ -207,14 +207,14 @@ func (lc *LocalCache) Set(key string, updated *List) *List {
 
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	if lc == nil {
-		return getNew(key, pstore)
+		return GetNew(key, pstore)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
 		return pl, nil
 	}
 
-	pl, err := getNew(key, pstore)
+	pl, err := GetNew(key, pstore)
 	if err != nil {
 		return nil, err
 	}

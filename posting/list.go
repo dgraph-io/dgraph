@@ -50,7 +50,10 @@ var (
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
-	maxListSize      = MB / 2
+
+	// MaxListSize is the size before a list (or a part of an already split list)
+	// is split in two.
+	MaxListSize      = MB / 2
 )
 
 const (
@@ -1176,7 +1179,7 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 
 // shouldSplit returns true if the given plist should be split in two.
 func shouldSplit(plist *pb.PostingList) bool {
-	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+	return plist.Size() >= MaxListSize && len(plist.Pack.Blocks) > 1
 }
 
 // splitUpList checks the list and splits it in smaller parts if needed.
