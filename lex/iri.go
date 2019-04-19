@@ -47,6 +47,7 @@ func IsIRIChar(r rune, l *Lexer) bool {
 	case '\\':
 		r2 := l.Next()
 		if r2 != 'u' && r2 != 'U' {
+			l.Backup()
 			return false
 		}
 		return HasUChars(r2, l)

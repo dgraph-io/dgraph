@@ -3874,6 +3874,10 @@ func TestParserFuzz(t *testing.T) {
 		{"test054", "{e(orderasc:val(0)){min(val(0)0("},
 		{"test055", "{e(){@filter(p(/"},
 		{"test056", "{e(func:uid())@filter(p(/"},
+		{"test057", "a<><\\�"},
+		{"test058", "L<\\𝌀"},
+		{"test059", "{d(after:<>0)}"},
+		{"test060", "{e(orderasc:#"},
 	}
 
 	for _, test := range tests {
@@ -4680,16 +4684,4 @@ func TestMultipleTypeDirectives(t *testing.T) {
 	require.Equal(t, "type", gq.Query[0].Children[0].Children[0].Filter.Func.Name)
 	require.Equal(t, 1, len(gq.Query[0].Children[0].Children[0].Filter.Func.Args))
 	require.Equal(t, "Animal", gq.Query[0].Children[0].Children[0].Filter.Func.Args[0].Value)
-}
-
-// this test contains all the input captured by go fuzz that has crashed the parser in the past
-func TestWithFuzzData(t *testing.T) {
-	crasherInputs := []string{"a<><\\�",
-		"L<\\𝌀",
-		"{d(after:<>0)}",
-		"{e(orderasc:#",
-	}
-	for _, crasher := range crasherInputs {
-		Parse(Request{Str: string(crasher)})
-	}
 }
