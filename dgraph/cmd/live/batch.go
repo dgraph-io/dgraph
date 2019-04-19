@@ -197,8 +197,9 @@ func (l *loader) printCounters() {
 		counter := l.Counter()
 		rate := float64(counter.Nquads-last.Nquads) / period.Seconds()
 		elapsed := time.Since(start).Round(time.Second)
-		fmt.Printf("[%6s] Txns: %d N-Quads: %d N-Quads/s [last 5s]: %5.0f Aborts: %d\n",
-			elapsed, counter.TxnsDone, counter.Nquads, rate, counter.Aborts)
+		timestamp := time.Now().Format("15:04:05Z0700")
+		fmt.Printf("[%s] Elapsed: %s Txns: %d N-Quads: %d N-Quads/s [last 5s]: %5.0f Aborts: %d\n",
+			timestamp, x.FixedDuration(elapsed), counter.TxnsDone, counter.Nquads, rate, counter.Aborts)
 		last = counter
 	}
 }

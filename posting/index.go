@@ -951,6 +951,11 @@ func DeleteAll() error {
 	return pstore.DropAll()
 }
 
+// DeleteData deletes all data but leaves types and schema intact.
+func DeleteData() error {
+	return pstore.DropPrefix([]byte{x.DefaultPrefix})
+}
+
 // DeletePredicate deletes all entries and indices for a given predicate.
 func DeletePredicate(ctx context.Context, attr string) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
