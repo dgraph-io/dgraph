@@ -35,6 +35,8 @@ import (
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
 
+	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -103,18 +105,30 @@ var predNonSpecialChars = unicode.RangeTable{
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
 
-// valToStr converts a posting value to a string. Based on valToBytes()
-// but instead of converting a TypeID and interface{} to
-//func valToStr(p *pb.Posting) (string, error) {
-//	v := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
-//
-//	arr, err := types.ValToBytes(v)
-//	if err != nil {
-//		return "", err
-//	}
-//
-//	return string(arr), nil
-//}
+// valToStr converts a posting value to a string.
+func valToStr(v types.Val) (string, error) {
+	v2, err := types.Convert(v, types.StringID)
+	if err != nil {
+		return "", fmt.Errorf("converting %v to string: %v\n", v2.Value, err)
+	}
+
+	return v2.Value.(string), nil
+}
+
+// fctToString convert a facet value to a string.
+func fctToStr(fct *api.Facet) (string, error) {
+	v1, err := facets.ValFor(fct)
+	if err != nil {
+		return "", fmt.Errorf("getting value from facet %#v: %v", fct, err)
+	}
+
+	v2 := &types.Val{Tid: types.StringID}
+	if err = types.Marshal(v1, v2); err != nil {
+		return "", fmt.Errorf("marshaling facet value %v to string: %v", v1, err)
+	}
+
+	return v2.Value.(string), nil
+}
 
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	var err error
@@ -150,42 +164,42 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 				fmt.Fprintf(bp, `,"%s@%s":`, e.attr, string(p.LangTag))
 			}
 
-			v := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
-			str, err := types.ValToStr(v)
+			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
+			str, err := valToStr(val)
 			if err != nil {
-				glog.Errorf("While converting %v to string. Err=%v. Ignoring.\n", p.Value, err)
+				// Copying this behavior from RDF exporter,
+				// but how is this not data loss?
+				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
+
+			if !val.Tid.IsNumber() {
+				str = strconv.Quote(str)
+			}
+
 			fmt.Fprint(bp, str)
 		}
 
 		for _, fct := range p.Facets {
 			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, fct.Key)
 
-			fVal, err := facets.ValFor(fct)
+			str, err := fctToStr(fct)
 			if err != nil {
-				glog.Errorf("Error getting value from facet %#v:%v", fct, err)
-				continue
+				glog.Errorf("Ignoring error: %+v", err)
+				return nil
 			}
 
-			fStringVal := &types.Val{Tid: types.StringID}
-			if err = types.Marshal(fVal, fStringVal); err != nil {
-				glog.Errorf("Error while marshaling facet value %v to string: %v",
-					fVal, err)
-				continue
-			}
-
-			facetTid, err := facets.TypeIDFor(fct)
+			tid, err := facets.TypeIDFor(fct)
 			if err != nil {
-				glog.Errorf("Error getting type id from facet %#v:%v", fct, err)
+				glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
 				continue
 			}
 
-			if facetTid != types.IntID && facetTid != types.FloatID {
-				fmt.Fprint(bp, strconv.Quote(fStringVal.Value.(string)))
-			} else {
-				fmt.Fprint(bp, fStringVal.Value.(string))
+			if !tid.IsNumber() {
+				str = strconv.Quote(str)
 			}
+
+			fmt.Fprint(bp, str)
 		}
 
 		fmt.Fprint(bp, "}")
