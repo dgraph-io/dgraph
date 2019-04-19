@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -898,9 +899,21 @@ var testNQuads = []struct {
 	},
 }
 
+type TestStruct struct {
+	input        string
+	nq           api.NQuad
+	expectedErr  bool
+	shouldIgnore bool
+}
+
 func TestLex(t *testing.T) {
+	/*
+		test := TestStruct{
+			input: `_:alice <knows> "stuff" (key1="val1",key1= "val1" .`,
+		}
+	*/
 	for _, test := range testNQuads {
-		t.Logf("Testing %v", test.input)
+		glog.Infof("Testing %v", test.input)
 		rnq, err := Parse(test.input)
 		if test.expectedErr && test.shouldIgnore {
 			assert.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",

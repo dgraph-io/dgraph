@@ -405,9 +405,12 @@ forLoop:
 			}
 			l.Emit(itemText)
 		default:
-			l.AcceptRun(func(r rune) bool {
+			_, validr := l.AcceptRun(func(r rune) bool {
 				return r != equal && !isSpace(r) && r != rightRound && r != comma
 			})
+			if !validr {
+				break forLoop
+			}
 			l.Emit(itemText)
 		}
 	}

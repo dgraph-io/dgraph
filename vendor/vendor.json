@@ -539,6 +539,12 @@
 			"revisionTime": "2018-09-25T08:36:12Z"
 		},
 		{
+			"checksumSHA1": "06pu4WTqbWBAHCJhCLZaI1droeM=",
+			"path": "github.com/golang-collections/collections/stack",
+			"revision": "604e922904d35e97f98a774db7881f049cd8d970",
+			"revisionTime": "2013-07-29T18:54:59Z"
+		},
+		{
 			"checksumSHA1": "ewUc/AddabJQQ6xmSgRTY+T5cRg=",
 			"path": "github.com/golang/geo/r1",
 			"revision": "31fb0106dc4a947e5aaee1fe186e56447f839510",

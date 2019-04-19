@@ -137,7 +137,7 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 
 func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexFuncOrArg
-	var empty bool
+	empty := true
 	for {
 		switch r := l.Next(); {
 		case r == at:
