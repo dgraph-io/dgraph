@@ -166,7 +166,6 @@ func (txn *Txn) CommitToMemory(commitTs uint64) error {
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
-	// It's delta
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {
 			// empty pl
@@ -208,8 +207,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			// No need to do Next here. The outer loop can take care of skipping more versions of
-			// the same key.
+			// No need to do Next here. The outer loop can take care of skipping
+			// more versions of the same key.
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {

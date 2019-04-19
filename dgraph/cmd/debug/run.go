@@ -112,6 +112,11 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		if pk.IsSchema() {
 			continue
 		}
+		if pk.StartUid > 0 {
+			// This key is part of a multi-part posting list. Skip it and only read
+			// the main key, which is the entry point to read the whole list.
+			continue
+		}
 
 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 		if err != nil {
@@ -500,6 +505,9 @@ func printKeys(db *badger.DB) {
 		}
 		if pk.Uid > 0 {
 			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
+		}
+		if pk.StartUid > 0 {
+			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
 		if opt.itemMeta {
