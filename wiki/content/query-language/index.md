@@ -44,7 +44,7 @@ Query Example: In the example dataset, edges that link movies to directors and a
 }
 {{< /runnable >}}
 
-The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
+The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equaling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
 Every node had a unique 64-bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
@@ -622,6 +622,7 @@ Filters nodes at the current query level to only nodes in the given set of UIDs.
 
 For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For value variable `b`, `uid(b)` represents the UIDs from the UID to value map.  With two or more variables, `uid(a,b,...)` represents the union of all the variables.
 
+`uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
 Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
 
@@ -662,7 +663,7 @@ Query Example: The films of Taraji Henson by genre.
 
 
 
-Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
+Query Example: Taraji Henson films ordered by number of genres, with genres listed in order of how many films Taraji has made in each genre.
 {{< runnable >}}
 {
   var(func: allofterms(name@en, "Taraji Henson")) {
@@ -784,9 +785,9 @@ Schema Types: `geo`
 
 Index Required: `geo`
 
-Matches all entities where the location given by `predicate` is within `distance` metres of geojson coordinate `[long, lat]`.
+Matches all entities where the location given by `predicate` is within `distance` meters of geojson coordinate `[long, lat]`.
 
-Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within 1000 meters (1 kilometer) of a point in Golden Gate Park in San Francisco.
 
 {{< runnable >}}
 {
@@ -807,7 +808,7 @@ Index Required: `geo`
 
 Matches all entities where the location given by `predicate` lies within the polygon specified by the geojson coordinate array.
 
-Query Example: Tourist destinations within the specified area of Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within the specified area of Golden Gate Park, San Francisco.
 
 {{< runnable >}}
 {
@@ -828,7 +829,7 @@ Index Required: `geo`
 
 Matches all entities where the polygon describing the location given by `predicate` contains geojson coordinate `[long, lat]` or given geojson polygon.
 
-Query Example : All entities that contain a point in the flamingo enclosure of San Fransico Zoo.
+Query Example : All entities that contain a point in the flamingo enclosure of San Francisco Zoo.
 {{< runnable >}}
 {
   tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
@@ -1123,7 +1124,7 @@ Syntax Examples:
 
 Sortable Types: `int`, `float`, `String`, `dateTime`, `default`
 
-Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by a predicate or variable.
+Results can be sorted in ascending order (`orderasc`) or descending order (`orderdesc`) by a predicate or variable.
 
 For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
 
@@ -1644,7 +1645,7 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
 ## Math on value variables
 
-Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then be used to order or perform other operations, such as might be used in building newsfeeds, simple recommendation systems and the likes.
+Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then used to order or perform other operations, such as might be used in building news feeds, simple recommendation systems, and so on.
 
 Math statements must be enclosed within `math( <exp> )` and must be stored to a value variable.
 
@@ -1707,7 +1708,7 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
 {{< /runnable >}}
 
 
-Values calculated with math operations are stored to value variables and so can be aggreated.
+Values calculated with math operations are stored to value variables and so can be aggregated.
 
 Query Example: Compute a score for each Steven Spielberg movie and then aggregate the score.
 
@@ -1812,7 +1813,7 @@ Query Example: All predicates from actor Geoffrey Rush and the count of such pre
 
 Predicates can be stored in a variable and passed to `expand()` to expand all the predicates in the variable.
 
-If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specfied in a nested fashion under `expand()`.
+If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specified in a nested fashion under `expand()`.
 If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
 If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
 
@@ -1890,7 +1891,7 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
-Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
+Query Example: All the co-actors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
 
 {{< runnable >}}
 {
@@ -1910,7 +1911,12 @@ Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the r
 
 ## Debug
 
-For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` information.
+For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` and `start_ts` information under the `extensions` key of the response.
+
+- `parsing_ns`: Latency in nanoseconds to parse the query.
+- `processing_ns`: Latency in nanoseconds to process the query.
+- `encoding_ns`: Latency in nanoseconds to encode the JSON response.
+- `start_ts`: The logical start timestamp of the transaction.
 
 Query with debug as a query parameter
 ```
@@ -1943,11 +1949,15 @@ Returns `uid` and `server_latency`
         "name@en": "The Big Lebowski"
       }
     ],
-    "server_latency": {
-      "parsing": "101µs",
-      "processing": "802ms",
-      "json": "115µs",
-      "total": "802ms"
+    "extensions": {
+      "server_latency": {
+        "parsing_ns": 18559,
+        "processing_ns": 802990982,
+        "encoding_ns": 1177565
+      },
+      "txn": {
+        "start_ts": 40010
+      }
     }
   }
 }
@@ -1966,7 +1976,7 @@ If a schema type isn't specified before a mutation adds triples for a predicate,
 
 * type `uid`, if the first mutation for the predicate has nodes for the subject and object, or
 
-* derived from the [rdf type]({{< relref "#rdf-types" >}}), if the object is a literal and an rdf type is present in the first mutation, or
+* derived from the [RDF type]({{< relref "#rdf-types" >}}), if the object is a literal and an RDF type is present in the first mutation, or
 
 * `default` type, otherwise.
 
@@ -2711,7 +2721,7 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 ## K-Shortest Path Queries
 
-The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
@@ -2999,7 +3009,7 @@ This brings some restrictions to how plugins can be used.
 - Plugins must be written in Go.
 
 - As of Go 1.9, `pkg/plugin` only works on Linux. Therefore, plugins will only
-  work on dgraph instances deployed in a Linux environment.
+  work on Dgraph instances deployed in a Linux environment.
 
 - The version of Go used to compile the plugin should be the same as the version
   of Go used to compile Dgraph itself. Dgraph always uses the latest version of
@@ -3068,7 +3078,7 @@ go build -buildmode=plugin -o myplugin.so ~/go/src/myplugin/main.go
 
 ### Running Dgraph with plugins
 
-When starting Dgraph, use the `--custom_tokenizers` flag to tell dgraph which
+When starting Dgraph, use the `--custom_tokenizers` flag to tell Dgraph which
 tokenizers to load. It accepts a comma separated list of plugins. E.g.
 
 ```sh
@@ -3545,3 +3555,4 @@ num: int @index(factor) .
   }
 }
 ```
+

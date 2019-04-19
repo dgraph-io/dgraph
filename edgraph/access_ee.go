@@ -296,7 +296,8 @@ func RefreshAcls(closer *y.Closer) {
 	retrieveAcls := func() error {
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
-			Query: queryAcls,
+			Query:    queryAcls,
+			ReadOnly: true,
 		}
 
 		ctx := context.Background()

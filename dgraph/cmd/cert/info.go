@@ -17,14 +17,19 @@
 package cert
 
 import (
-	"crypto/md5"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type certInfo struct {
@@ -33,7 +38,8 @@ type certInfo struct {
 	commonName   string
 	serialNumber string
 	verifiedCA   string
-	md5sum       string
+	digest       string
+	algo         string
 	expireDate   time.Time
 	hosts        []string
 	fileMode     string
@@ -75,11 +81,13 @@ func getFileInfo(file string) *certInfo {
 			return &info
 		}
 
-		if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
-			h := md5.Sum(key.N.Bytes())
-			info.md5sum = fmt.Sprintf("%X", h[:])
-		} else {
-			info.md5sum = "Invalid RSA public key"
+		switch key := cert.PublicKey.(type) {
+		case *rsa.PublicKey:
+			info.digest = getHexDigest(key.N.Bytes())
+		case *ecdsa.PublicKey:
+			info.digest = getHexDigest(elliptic.Marshal(key.Curve, key.X, key.Y))
+		default:
+			info.digest = "Invalid public key"
 		}
 
 		if file != defaultCACert {
@@ -110,19 +118,47 @@ func getFileInfo(file string) *certInfo {
 			return &info
 		}
 
-		key, err := readKey(file)
+		priv, err := readKey(file)
 		if err != nil {
 			info.err = err
 			return &info
 		}
-		h := md5.Sum(key.PublicKey.N.Bytes())
-		info.md5sum = fmt.Sprintf("%X", h[:])
+		key, ok := priv.(crypto.Signer)
+		if !ok {
+			info.err = x.Errorf("Unknown private key type: %T", key)
+		}
+		switch k := key.(type) {
+		case *ecdsa.PrivateKey:
+			info.algo = fmt.Sprintf("ECDSA %s (FIPS-3)", k.PublicKey.Curve.Params().Name)
+			info.digest = getHexDigest(elliptic.Marshal(k.PublicKey.Curve,
+				k.PublicKey.X, k.PublicKey.Y))
+		case *rsa.PrivateKey:
+			info.algo = fmt.Sprintf("RSA %d bits (PKCS#1)", k.PublicKey.N.BitLen())
+			info.digest = getHexDigest(k.PublicKey.N.Bytes())
+		}
 
 	default:
 		info.err = fmt.Errorf("Unsupported file")
 	}
 
 	return &info
+}
+
+// getHexDigest returns a SHA-256 hex digest broken up into 32-bit chunks
+// so that they easier to compare visually
+// e.g. 4A2B0F0F 716BF5B6 C603E01A 6229D681 0B2AFDC5 CADF5A0D 17D59299 116119E5
+func getHexDigest(data []byte) string {
+	const groupSizeBytes = 4
+
+	digest := sha256.Sum256(data)
+	groups := len(digest) / groupSizeBytes
+	hex := fmt.Sprintf("%0*X", groupSizeBytes*2, digest[0:groupSizeBytes])
+	for i := 1; i < groups; i++ {
+		hex += fmt.Sprintf(" %0*X", groupSizeBytes*2,
+			digest[i*groupSizeBytes:(i+1)*groupSizeBytes])
+	}
+
+	return hex
 }
 
 // getDirFiles walks dir and collects information about the files contained.

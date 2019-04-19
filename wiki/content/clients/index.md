@@ -76,10 +76,11 @@ The client can be configured to use gRPC compression:
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
-	dialOpts := append([]grpc.CallOption{},
+	dialOpts := append([]grpc.DialOption{},
 		grpc.WithInsecure(),
-		grpc.UseCompressor("gzip"))
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)))
 	d, err := grpc.Dial("localhost:9080", dialOpts...)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,6 +89,7 @@ func newClient() *dgo.Dgraph {
 		api.NewDgraphClient(d),
 	)
 }
+
 ```
 
 ### Alter the database
@@ -134,11 +136,19 @@ func runTxn(c *dgo.Dgraph) {
 }
 ```
 
+#### Read-Only Transactions
+
 Read-only transactions can be created by calling `c.NewReadOnlyTxn()`. Read-only
 transactions are useful to increase read speed because they can circumvent the
 usual consensus protocol. Read-only transactions cannot contain mutations and
 trying to call `txn.Commit()` will result in an error. Calling `txn.Discard()`
 will be a no-op.
+
+Read-only queries can optionally be set as best-effort. Using this flag will ask
+the Dgraph Alpha to try to get timestamps from memory on a best-effort basis to
+reduce the number of outbound requests to Zero. This may yield improved
+latencies in read-bound workloads where linearizable reads are not strictly
+needed.
 
 ### Run a query
 

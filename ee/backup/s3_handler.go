@@ -49,6 +49,12 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
+	req                      *Request
+	uri                      *url.URL
+}
+
+func (h *s3Handler) credentialsInRequest() bool {
+	return h.req.Backup.GetAccessKey() != "" && h.req.Backup.GetSecretKey() != ""
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
@@ -59,35 +65,43 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		return nil, x.Errorf("Invalid bucket: %q", uri.Path)
 	}
 
-	var provider credentials.Provider
-	switch uri.Scheme {
-	case "s3":
-		// s3:///bucket/folder
-		if !strings.Contains(uri.Host, ".") {
-			uri.Host = defaultEndpointS3
-		}
-		if !s3utils.IsAmazonEndpoint(*uri) {
-			return nil, x.Errorf("Invalid S3 endpoint %q", uri.Host)
-		}
-		// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
-		// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
-		// Secret Token:      AWS_SESSION_TOKEN.
-		provider = &credentials.EnvAWS{}
-
-	default: // minio
-		if uri.Host == "" {
-			return nil, x.Errorf("Minio handler requires a host")
-		}
-		// Access Key ID:     MINIO_ACCESS_KEY.
-		// Secret Access Key: MINIO_SECRET_KEY.
-		provider = &credentials.EnvMinio{}
-	}
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
-	creds, _ := provider.Retrieve() // error is always nil
-	if creds.SignerType == credentials.SignatureAnonymous {
-		return nil, x.Errorf("Environment variable credentials were not found. " +
-			"If you need assistance please contact our support team.")
+	var creds credentials.Value
+	if h.req.Backup.GetAnonymous() {
+		// No need to setup credentials.
+	} else if !h.credentialsInRequest() {
+		var provider credentials.Provider
+		switch uri.Scheme {
+		case "s3":
+			// s3:///bucket/folder
+			if !strings.Contains(uri.Host, ".") {
+				uri.Host = defaultEndpointS3
+			}
+			if !s3utils.IsAmazonEndpoint(*uri) {
+				return nil, x.Errorf("Invalid S3 endpoint %q", uri.Host)
+			}
+			// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
+			// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
+			// Secret Token:      AWS_SESSION_TOKEN.
+			provider = &credentials.EnvAWS{}
+
+		default: // minio
+			if uri.Host == "" {
+				return nil, x.Errorf("Minio handler requires a host")
+			}
+			// Access Key ID:     MINIO_ACCESS_KEY.
+			// Secret Access Key: MINIO_SECRET_KEY.
+			provider = &credentials.EnvMinio{}
+		}
+
+		// If no credentials can be retrieved, an attempt to access the destination
+		// with no credentials will be made.
+		creds, _ = provider.Retrieve() // error is always nil
+	} else {
+		creds.AccessKeyID = h.req.Backup.GetAccessKey()
+		creds.SecretAccessKey = h.req.Backup.GetSecretKey()
+		creds.SessionToken = h.req.Backup.GetSessionToken()
 	}
 
 	secure := uri.Query().Get("secure") != "false" // secure by default
@@ -141,6 +155,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
+	h.req = req
 	mc, err := h.setup(uri)
 	if err != nil {
 		return err
@@ -273,6 +288,43 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		version = m.Version
 	}
 	return version, nil
+}
+
+// ListManifests loads the manifests in the locations and returns them.
+func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
+	mc, err := h.setup(uri)
+	if err != nil {
+		return nil, err
+	}
+	h.uri = uri
+
+	var manifests []string
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	suffix := "/" + backupManifest
+	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
+		if strings.HasSuffix(object.Key, suffix) {
+			manifests = append(manifests, object.Key)
+		}
+	}
+	if len(manifests) == 0 {
+		return nil, x.Errorf("No manifests found at: %s", uri.String())
+	}
+	sort.Strings(manifests)
+	if glog.V(3) {
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
+	}
+	return manifests, nil
+}
+
+func (h *s3Handler) ReadManifest(path string, m *Manifest) error {
+	mc, err := h.setup(h.uri)
+	if err != nil {
+		return err
+	}
+
+	return h.readManifest(mc, path, m)
 }
 
 // upload will block until it's done or an error occurs.

@@ -99,7 +99,8 @@ func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
 	it.uidPosting = &pb.Posting{}
 
 	it.dec = &codec.Decoder{Pack: pl.Pack}
-	it.uids = it.dec.Seek(afterUid)
+	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
+	it.uids = it.dec.Seek(afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
 	it.plen = len(pl.Postings)
@@ -190,7 +191,7 @@ func (l *List) SetForDeletion() bool {
 }
 
 func hasDeleteAll(mpost *pb.Posting) bool {
-	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star))
+	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
@@ -526,11 +527,13 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
-	var mp, pp *pb.Posting
-	var pitr PIterator
+	var (
+		mp, pp  *pb.Posting
+		pitr    PIterator
+		prevUid uint64
+		err     error
+	)
 	pitr.Init(plist, afterUid)
-	prevUid := uint64(0)
-	var err error
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]

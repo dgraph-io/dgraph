@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ONE_GB=$((1024 ** 3))
-REQUIRED_MEM=$((24 * ONE_GB))
+REQUIRED_MEM=$((20 * ONE_GB))
 
 set -e
 

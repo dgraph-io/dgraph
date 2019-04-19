@@ -400,3 +400,46 @@ func TestNquadsFromJsonDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
 }
+
+func TestNquadsFromJsonDeleteStar(t *testing.T) {
+	json := `{"uid":1000,"name": null}`
+
+	nq, err := Parse([]byte(json), DeleteNquads)
+	require.NoError(t, err)
+	expected := &api.NQuad{
+		Subject:   "1000",
+		Predicate: "name",
+		ObjectValue: &api.Value{
+			Val: &api.Value_DefaultVal{
+				DefaultVal: "_STAR_ALL",
+			},
+		},
+	}
+	require.Equal(t, expected, nq[0])
+}
+
+func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
+	json := `{"uid":1000,"name@es": null}`
+
+	nq, err := Parse([]byte(json), DeleteNquads)
+	require.NoError(t, err)
+	expected := &api.NQuad{
+		Subject:   "1000",
+		Predicate: "name",
+		ObjectValue: &api.Value{
+			Val: &api.Value_DefaultVal{
+				DefaultVal: "_STAR_ALL",
+			},
+		},
+		Lang: "es",
+	}
+	require.Equal(t, expected, nq[0])
+}
+
+func TestSetNquadNilValue(t *testing.T) {
+	json := `{"uid":1000,"name": null}`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(nq))
+}

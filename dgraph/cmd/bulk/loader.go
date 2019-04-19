@@ -88,10 +88,13 @@ type loader struct {
 
 func newLoader(opt options) *loader {
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
-	zero, err := grpc.Dial(opt.ZeroAddr,
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	zero, err := grpc.DialContext(ctx, opt.ZeroAddr,
 		grpc.WithBlock(),
-		grpc.WithInsecure(),
-		grpc.WithTimeout(time.Minute))
+		grpc.WithInsecure())
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,
