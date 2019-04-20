@@ -190,6 +190,7 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 | &#60;xs:date&#62;                                       | `datetime`       |
 | &#60;xs:int&#62;                                        | `int`            |
 | &#60;xs:boolean&#62;                                    | `bool`           |
+| &#60;xs:base64Binary&#62;                               | `binary`         |
 | &#60;xs:double&#62;                                     | `float`          |
 | &#60;xs:float&#62;                                      | `float`          |
 | &#60;geo:geojson&#62;                                   | `geo`            |
@@ -203,7 +204,7 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
 
 
-See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.
+See the section on [RDF schema types]({{< relref "query-language/index.md#rdf-types" >}}) to understand how RDF types affect mutations and storage.
 
 
 ## Batch mutations

@@ -2004,9 +2004,10 @@ For all triples with a predicate of scalar types the object is a literal.
 | ------------|:--------|
 |  `default`  | string  |
 |  `int`      | int64   |
-|  `float`    | float   |
+|  `float`     | float    |
 |  `string`   | string  |
 |  `bool`     | bool    |
+|  `binary`   | base64  |
 |  `dateTime` | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
 |  `password` | string (encrypted) |
@@ -2023,6 +2024,14 @@ The `uid` type denotes a node-node edge; internally each node is represented as 
 | Dgraph Type | Go type |
 | ------------|:--------|
 |  `uid`      | uint64  |
+
+#### Binary Type
+
+The `binary` represents arbitrary Base64-encoded binary data. For base64Binary data the entire binary stream is encoded using the Base64 Encoding.
+
+| Dgraph Type | Go type |
+| ------------|:--------|
+|  `binary`   | base64  |
 
 
 ### Adding or Modifying Schema
@@ -2068,7 +2077,7 @@ Types are defined using the GraphQL standard. Here's an example of a basic type.
 
 ```
 type Student {
-	name: string
+    name: string
     dob: datetime
     home_address: string
     year: int
@@ -2092,11 +2101,11 @@ names for each type. Below there is a small example.
 
 ```
 type Student {
-	student_name: string
+    student_name: string
 }
 
 type Textbook {
-	textbook_name: string
+    textbook_name: string
 }
 
 student_name: string @index(exact) .
@@ -2151,7 +2160,7 @@ The types can also be used to filter results inside the queries. For example:
     	uid
     	parent @type(Person) {
         	uid
-            name
+        	name
         }
     }
 }
@@ -2240,13 +2249,13 @@ If a predicate has a schema type and a mutation has an RDF type with a different
 For example, if no schema is set for the `age` predicate.  Given the mutation
 ```
 {
- set {
-  _:a <age> "15"^^<xs:int> .
-  _:b <age> "13" .
-  _:c <age> "14"^^<xs:string> .
-  _:d <age> "14.5"^^<xs:string> .
-  _:e <age> "14.5" .
- }
+  set {
+    _:a <age> "15"^^<xs:int> .
+    _:b <age> "13" .
+    _:c <age> "14"^^<xs:string> .
+    _:d <age> "14.5"^^<xs:string> .
+    _:e <age> "14.5" .
+  }
 }
 ```
 Dgraph:
