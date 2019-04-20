@@ -75,6 +75,8 @@ func TestSystem(t *testing.T) {
 	t.Run("facet json input supports anyofterms query", wrap(FacetJsonInputSupportsAnyOfTerms))
 	t.Run("max predicate size", wrap(MaxPredicateSize))
 	t.Run("restore reserved preds", wrap(RestoreReservedPreds))
+	t.Run("drop data", wrap(DropData))
+	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1495,4 +1497,61 @@ func RestoreReservedPreds(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
 	require.NoError(t, err)
 	CompareJSON(t, `{"schema": [{"predicate":"dgraph.type"}]}`, string(resp.Json))
+}
+
+func DropData(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string @index(term) .
+			follow: [uid] @reverse .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:alice <name> "alice" .
+			_:bob <name> "bob" .
+			_:carol <name> "carol" .
+			_:alice <follow> _:carol .
+			_:bob <follow> _:carol .
+		`),
+	})
+	require.NoError(t, err)
+
+	err = c.Alter(ctx, &api.Operation{
+		DropOp: api.Operation_DATA,
+	})
+	require.NoError(t, err)
+
+	// Check schema is still there.
+	query := `schema(preds: [name, follow]) {predicate}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, `{"schema": [{"predicate":"name"}, {"predicate":"follow"}]}`, string(resp.Json))
+
+	// Check data is gone.
+	resp, err = c.NewTxn().Query(ctx, `{
+		q(func: has(name)) {
+			uid
+			name
+		}
+	}`)
+	require.NoError(t, err)
+	CompareJSON(t, `{"q": []}`, string(resp.GetJson()))
+
+}
+
+func DropDataAndDropAll(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	err := c.Alter(ctx, &api.Operation{
+		DropAll: true,
+		DropOp:  api.Operation_DATA,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only one of DropAll and DropData can be true")
 }

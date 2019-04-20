@@ -166,7 +166,13 @@ func detectPendingTxns(attr string) error {
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
 
-	if proposal.Mutations.DropAll {
+	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		// Ensures nothing get written to disk due to commit proposals.
+		posting.Oracle().ResetTxns()
+		return posting.DeleteData()
+	}
+
+	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
@@ -898,9 +904,16 @@ func (n *node) rollupLists(readTs uint64) error {
 			return nil, err
 		}
 		atomic.AddUint64(&numKeys, 1)
-		kv, err := l.MarshalToKv()
-		addTo(key, int64(kv.Size()))
-		return listWrap(kv), err
+		kvs, err := l.Rollup()
+
+		// If there are multiple keys, the posting list was split into multiple
+		// parts. The key of the first part is the right key to use for tablet
+		// size calculations.
+		for _, kv := range kvs {
+			addTo(kvs[0].Key, int64(kv.Size()))
+		}
+
+		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
 		return writer.Send(&pb.KVS{Kv: list.Kv})

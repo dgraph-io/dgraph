@@ -807,7 +807,7 @@ func (qs *queryState) helpProcessTask(
 
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
-		AfterUID: uint64(q.AfterUid),
+		AfterUID: q.AfterUid,
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {

@@ -276,7 +276,7 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 }
 
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	ctx, span := x.UpsertSpanWithMethod(ctx, "Server.Alter")
+	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 	span.Annotatef(nil, "Alter operation: %+v", op)
 
@@ -284,7 +284,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Received ALTER op: %+v", op)
 
 	// The following code block checks if the operation should run or not.
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
@@ -292,6 +292,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		return empty, err
+	}
+
+	if isDropAll(op) && op.DropOp == api.Operation_DATA {
+		return nil, x.Errorf("Only one of DropAll and DropData can be true")
 	}
 
 	if !isMutationAllowed(ctx) {
@@ -312,11 +316,20 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
-	if op.DropAll {
-		m.DropAll = true
+	if isDropAll(op) {
+		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
+		ResetAcl()
+		return empty, err
+	}
+
+	if op.DropOp == api.Operation_DATA {
+		m.DropOp = pb.Mutations_DATA
+		_, err := query.ApplyMutations(ctx, m)
+
+		// recreate the admin account after a drop data operation
 		ResetAcl()
 		return empty, err
 	}
@@ -377,7 +390,6 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	ctx, _ = x.UpsertSpanWithMethod(ctx, methodMutate)
 	if err := authorizeMutation(ctx, mu); err != nil {
 		return nil, err
 	}
@@ -391,7 +403,8 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	}
 	startTime := time.Now()
 
-	ctx, span := x.UpsertSpanWithMethod(ctx, methodMutate)
+	ctx, span := otrace.StartSpan(ctx, methodMutate)
+	ctx = x.WithMethod(ctx, methodMutate)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
@@ -509,8 +522,6 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	ctx, _ = x.UpsertSpanWithMethod(ctx, methodQuery)
-
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
@@ -523,19 +534,19 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	startTime := time.Now()
 
-	ctx, span := x.UpsertSpanWithMethod(ctx, methodQuery)
 	var measurements []ostats.Measurement
-	var err error
+	ctx, span := otrace.StartSpan(ctx, methodQuery)
+	ctx = x.WithMethod(ctx, methodQuery)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
-		if err != nil {
+		if rerr != nil {
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
@@ -544,7 +555,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 		ostats.Record(ctx, measurements...)
 	}()
 
-	if err = x.HealthCheck(); err != nil {
+	if err := x.HealthCheck(); err != nil {
 		return nil, err
 	}
 
@@ -553,7 +564,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (*api.Response, 
 		measurements = append(measurements, x.PendingQueries.M(-1))
 	}()
 
-	resp := &api.Response{}
+	resp = &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, fmt.Errorf("Empty query")
@@ -943,4 +954,11 @@ func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
 		res = append(res, typeMap)
 	}
 	return res
+}
+
+func isDropAll(op *api.Operation) bool {
+	if op.DropAll || op.DropOp == api.Operation_ALL {
+		return true
+	}
+	return false
 }

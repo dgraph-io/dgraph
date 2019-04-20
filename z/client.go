@@ -186,6 +186,12 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 
 	var outputJson map[string]map[string]string
 	if err := json.Unmarshal(respBody, &outputJson); err != nil {
+		var errOutputJson map[string]interface{}
+		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
+			if _, ok := errOutputJson["errors"]; ok {
+				return "", "", fmt.Errorf("response error: %v", string(respBody))
+			}
+		}
 		return "", "", fmt.Errorf("unable to unmarshal the output to get JWTs: %v", err)
 	}
 
