@@ -118,7 +118,6 @@ func runBenchmark() {
 
 	// Commit last transaction in case it has not still been done.
 	commitTriples(dg, triples)
-	triples = nil
 }
 
 func commitTriples(dg *dgo.Dgraph, triples []string) {

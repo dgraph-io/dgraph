@@ -33,16 +33,17 @@ var (
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set     []*api.NQuad
-	Del     []*api.NQuad
-	DropAll bool
-	Schema  string
+	Set      []*api.NQuad
+	Del      []*api.NQuad
+	DropAll  bool
+	DropData bool
+	Schema   string
 }
 
 // HasOps returns true iff the mutation has at least one non-empty
 // part.
 func (m Mutation) HasOps() bool {
-	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0 || m.DropAll
+	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0 || m.DropAll || m.DropData
 }
 
 // Gets the uid corresponding
