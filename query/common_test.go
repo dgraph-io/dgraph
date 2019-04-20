@@ -252,6 +252,7 @@ year                           : int .
 previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
+bin_data                         : binary .
 `
 
 func populateCluster() {
@@ -433,7 +434,7 @@ func populateCluster() {
 		<31> <alias> "Allan Matt" .
 		<101> <alias> "John Oliver" .
 
-		<1> <bin_data> "YmluLWRhdGE=" .
+		<1> <bin_data> "YmluLWRhdGE="^^<xs:base64Binary> .
 
 		<1> <graduation> "1932-01-01" .
 		<31> <graduation> "1933-01-01" .
