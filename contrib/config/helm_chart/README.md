@@ -7,6 +7,16 @@ To install the chart with the release name `my-release`:
 ```bash
 $ helm install --name my-release ./
 ```
+The above command will  install the latest available dgraph docker image. In order to install the older versions:
+```bash
+$ helm install --name my-release ./ --set image.tag=XXX
+```
+
+By default zero and alpha services are exposed only within the kubernetes cluster as kubernets service type "ClusterIP". In order to expose the alpha service to internet you can use kubernetes service type "LoadBalancer":
+
+```bash
+$ helm install --name my-release ./ --set alpha.service.type="LoadBalancer"
+```
 
 ## Deleting the Charts
 
@@ -24,7 +34,6 @@ $ kubectl delete pvc -l release=my-release,chart=dgraph
 ## Configuration
 
 The following table lists the configurable parameters of the dgraph chart and their default values.
-
 
 |              Parameter               |                             Description                             |                       Default                       |
 | ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------- |
@@ -51,8 +60,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `zero.persistence.size`              | PVC Storage Request for zero volume                                 | `8Gi`                                               |
 | `zero.nodeSelector`                  | Node labels for zero pod assignment                                 | `{}`                                                |
 | `zero.tolerations`                   | Zero tolerations                                                    | `[]`                                                |
-| `zero.resources`                     | Zero node resources requests & limits                               | `{}`
-                |
+| `zero.resources`                     | Zero node resources requests & limits                               | `{}`                                                |
 | `zero.livenessProbe`                 | Zero liveness probes                                                | `See values.yaml for defaults`                      |
 | `zero.readinessProbe`                | Zero readiness probes                                               | `See values.yaml for defaults`                      |
 | `alpha.name`                         | Alpha component name                                                | `alpha`                                             |
@@ -74,8 +82,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `alpha.persistence.size`             | PVC Storage Request for alpha volume                                | `8Gi`                                               |
 | `alpha.nodeSelector`                 | Node labels for alpha pod assignment                                | `{}`                                                |
 | `alpha.tolerations`                  | Alpha tolerations                                                   | `[]`                                                |
-| `alpha.resources`                    | Alpha node resources requests & limits                              | `{}`
-                |
+| `alpha.resources`                    | Alpha node resources requests & limits                              | `{}`                                                |
 | `alpha.livenessProbe`                | Alpha liveness probes                                               | `See values.yaml for defaults`                      |
 | `alpha.readinessProbe`               | Alpha readiness probes                                              | `See values.yaml for defaults`                      |
 | `ratel.name`                         | Ratel component name                                                | `ratel`                                             |

@@ -10,7 +10,7 @@
 image:
   registry: docker.io
   repository: dgraph/dgraph
-  tag: v1.0.13
+  tag: latest
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -89,7 +89,7 @@ zero:
     # storageClass: "-"
     accessModes:
       - ReadWriteOnce
-    size: 8Gi
+    size: 1.5Gi
 
   ## Node labels and tolerations for pod assignment
   ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
@@ -101,10 +101,11 @@ zero:
   ## Configure resource requests and limits
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
-  ##resources:
-  ## requests:
-  ##    memory: 256Mi
-  ##    cpu: 250m
+  resources:
+    requests:
+      memory: 100Mi
+    limits:
+      memory: 1Gi
 
   ## Configure extra options for liveness and readiness probes
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
@@ -190,7 +191,7 @@ alpha:
     # storageClass: "-"
     accessModes:
       - ReadWriteOnce
-    size: 5Gi
+    size: 16Gi
     annotations: {}
 
   ## Node labels and tolerations for pod assignment
@@ -203,10 +204,11 @@ alpha:
   ## Configure resource requests and limits
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
-  ## resources:
-  ##   requests:
-  ##     memory: 256Mi
-  ##     cpu: 250m
+  resources:
+    requests:
+      memory: 100Mi
+    limits:
+      memory: 1Gi
 
   ## Configure extra options for liveness and readiness probes
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
