@@ -57,11 +57,10 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	var err error
 	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
-	if err = r.ParseForm(); err != nil {
+	if err := r.ParseForm(); err != nil {
 		x.SetStatus(w, err.Error(), "Parse of export request failed.")
 		return
 	}
