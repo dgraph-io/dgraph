@@ -433,6 +433,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 	var l query.Latency
 	l.Start = time.Now()
+	glog.Infof("parsing mutation object: %v", mu)
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
@@ -721,9 +722,9 @@ func isAlterAllowed(ctx context.Context) error {
 }
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
+	glog.Infof("parsing N quads: %v", string(b))
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		line = bytes.TrimSpace(line)
 		nq, err := rdf.Parse(string(line))
 		if err == rdf.ErrEmpty {
 			continue

@@ -19,12 +19,11 @@ package rdf
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var testNQuads = []struct {
@@ -907,23 +906,17 @@ type TestStruct struct {
 }
 
 func TestLex(t *testing.T) {
-	/*
-		test := TestStruct{
-			input: `_:alice <knows> "stuff" (key1="val1",key1= "val1" .`,
-		}
-	*/
 	for _, test := range testNQuads {
-		glog.Infof("Testing %v", test.input)
 		rnq, err := Parse(test.input)
 		if test.expectedErr && test.shouldIgnore {
-			assert.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
+			require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
 				err.Error())
 		} else if test.expectedErr {
-			assert.Error(t, err, "Expected error for input: %q. Output: %+v",
+			require.Error(t, err, "Expected error for input: %q. Output: %+v",
 				test.input, rnq)
 		} else {
-			assert.NoError(t, err, "Got error for input: %q", test.input)
-			assert.Equal(t, test.nq, rnq, "Mismatch for input: %q", test.input)
+			require.NoError(t, err, "Got error for input: %q", test.input)
+			require.Equal(t, test.nq, rnq, "Mismatch for input: %q", test.input)
 		}
 	}
 }

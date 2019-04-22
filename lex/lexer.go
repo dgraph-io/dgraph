@@ -19,6 +19,8 @@ package lex
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"runtime"
 	"unicode/utf8"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -195,7 +197,7 @@ func (l *Lexer) ValidateResult() error {
 func (l *Lexer) Run(f StateFn) *Lexer {
 	for state := f; state != nil; {
 		// The following statement is useful for debugging.
-		//fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
+		fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
 		state = state(l)
 	}
 	return l
@@ -225,6 +227,9 @@ func (l *Lexer) Emit(t ItemType) {
 		line:   l.Line,
 		column: l.Column,
 	})
+	if l.Input[l.Start:l.Pos] == "func:" {
+		fmt.Printf("func:")
+	}
 	l.moveStartToPos()
 }
 
@@ -299,15 +304,21 @@ type CheckRuneRec func(r rune, l *Lexer) bool
 // Returns last rune accepted and valid flag for rune.
 func (l *Lexer) AcceptRun(c CheckRune) (lastr rune, validr bool) {
 	validr = false
+	eof := false
 	for {
 		r := l.Next()
+		if r == EOF {
+			eof = true
+		}
 		if r == EOF || !c(r) {
 			break
 		}
 		validr = true
 		lastr = r
 	}
-	l.Backup()
+	if !eof { // we should not backup in the EOF case
+		l.Backup()
+	}
 	return lastr, validr
 }
 

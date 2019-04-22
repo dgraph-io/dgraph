@@ -3829,6 +3829,7 @@ func TestParserFuzz(t *testing.T) {
 		{"test009", "{e(){@filter(p(/\\"},
 		{"test010", "{m(func:0(0(0(0,/"},
 		{"test011", "{e(){@filter(0(%0"},
+
 		{"test012", "{e(func:uid()){@filter(p(%"},
 		{"test013", "{e(orderasc:val(0)){{min(val(0)0("},
 		{"test014", "query{e(func:uid(val(0)"},
@@ -4309,7 +4310,6 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		line = bytes.TrimSpace(line)
 		nq, err := rdf.Parse(string(line))
 		if err == rdf.ErrEmpty {
 			continue

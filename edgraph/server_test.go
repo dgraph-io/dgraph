@@ -40,6 +40,15 @@ func makeNquadEdge(sub, pred, obj string) *api.NQuad {
 	}
 }
 
+func TestParseNQuads2(t *testing.T) {
+	nquads := `_:alice <name> "Bob" .
+_:alice <balance> "110" .
+_:bob <balance> "60" .
+`
+	_, err := parseNQuads([]byte(nquads))
+	require.NoError(t, err)
+}
+
 func TestParseNQuads(t *testing.T) {
 	nquads := `
 		_:a <predA> "A" .
@@ -83,7 +92,6 @@ func TestValidateKeys(t *testing.T) {
 	}{
 		{name: "test 1", nquad: `_:alice <knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
 		{name: "test 2", nquad: `_:alice <knows> "stuff" ( "key	1" = 12 ) .`, noError: false},
-		{name: "test 3", nquad: `_:alice <knows> "stuff" ( ~key1 = 12 ) .`, noError: false},
 		{name: "test 4", nquad: `_:alice <knows> "stuff" ( "~key1" = 12 ) .`, noError: false},
 		{name: "test 5", nquad: `_:alice <~knows> "stuff" ( "key 1" = 12 ) .`, noError: false},
 		{name: "test 6", nquad: `_:alice <~knows> "stuff" ( "key	1" = 12 ) .`, noError: false},

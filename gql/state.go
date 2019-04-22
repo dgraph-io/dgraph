@@ -137,7 +137,7 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 
 func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexFuncOrArg
-	empty := true
+	var empty bool
 	for {
 		switch r := l.Next(); {
 		case r == at:
@@ -482,15 +482,7 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 
 // lexArgName lexes and emits the name part of an argument.
 func lexArgName(l *lex.Lexer) lex.StateFn {
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-		break
-	}
+	l.AcceptRun(isNameSuffix)
 	return l.Mode
 }
 

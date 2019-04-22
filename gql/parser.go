@@ -1124,7 +1124,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			expectArg = true
 			continue
 		} else {
-			return result, item.Errorf("Expecting argument name. Got: %v", item)
+			return result, item.Errorf("1 Expecting argument name. Got: %v", item)
 		}
 
 		it.Next()
@@ -2327,6 +2327,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		var key string
 		// Get key.
 		item := it.Item()
+		glog.Infof("got item: %+v", item)
 		if item.Typ == itemName {
 			if !expectArg {
 				return nil, item.Errorf("Expecting a comma. Got: %v", item)
@@ -2346,7 +2347,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			expectArg = true
 			continue
 		} else {
-			return nil, item.Errorf("Expecting argument name. Got: %v", item)
+			return nil, item.Errorf("2 Expecting argument name. Got: %v", item)
 		}
 
 		if !validKeyAtRoot(key) {
