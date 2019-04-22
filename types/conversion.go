@@ -26,12 +26,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgo/protos/api"
-
 	"github.com/dgraph-io/dgraph/x"
 )
 
