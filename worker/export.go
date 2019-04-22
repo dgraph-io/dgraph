@@ -112,7 +112,8 @@ func valToStr(v types.Val) (string, error) {
 		return "", fmt.Errorf("converting %v to string: %v\n", v2.Value, err)
 	}
 
-	return v2.Value.(string), nil
+	// Strip terminating null, if any.
+	return strings.TrimRight(v2.Value.(string), "\x00"), nil
 }
 
 // fctToString convert a facet value to a string.
@@ -240,7 +241,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 			trimmed := strings.TrimRight(str.Value.(string), "\x00")
 			fmt.Fprint(bp, strconv.Quote(trimmed))
 			if p.PostingType == pb.Posting_VALUE_LANG {
-				fmt.Fprint(bp, '@')
+				fmt.Fprint(bp, "@")
 				fmt.Fprint(bp, string(p.LangTag))
 
 			} else if vID != types.DefaultID {
@@ -248,7 +249,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
 				fmt.Fprint(bp, "^^<")
 				fmt.Fprint(bp, rdfType)
-				fmt.Fprint(bp, '>')
+				fmt.Fprint(bp, ">")
 			}
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
@@ -259,10 +260,10 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 			fmt.Fprint(bp, " (")
 			for i, f := range fcs {
 				if i != 0 {
-					fmt.Fprint(bp, ',')
+					fmt.Fprint(bp, ",")
 				}
 				fmt.Fprint(bp, f.Key)
-				fmt.Fprint(bp, '=')
+				fmt.Fprint(bp, "=")
 
 				fVal, err := facets.ValFor(f)
 				if err != nil {
@@ -288,7 +289,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 					fmt.Fprint(bp, fStringVal.Value.(string))
 				}
 			}
-			fmt.Fprint(bp, ')')
+			fmt.Fprint(bp, ")")
 		}
 		// End dot.
 		fmt.Fprint(bp, " .\n")
