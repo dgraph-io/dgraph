@@ -48,14 +48,13 @@ func TestStringToPeerInfo(t *testing.T) {
 }
 
 func TestStringsToPeerInfos(t *testing.T) {
-	for _, str := range IPFS_PEERS {
-		pi, err := stringToPeerInfo(str)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if pi.ID.Pretty() != str[len(str)-46:] {
-			t.Errorf("StringToPeerInfo error: got %s expected %s", pi.ID.Pretty(), str)
+	pi, err := stringsToPeerInfos(IPFS_PEERS)
+	if err != nil {
+		t.Error(err)
+	}
+	for k, pi := range pi {
+		if pi.ID.Pretty() != IPFS_PEERS[k][len(IPFS_PEERS[k])-46:] {
+			t.Errorf("StringToPeerInfo error: got %s expected %s", pi.ID.Pretty(), IPFS_PEERS[k])
 		}
 	}
 }
