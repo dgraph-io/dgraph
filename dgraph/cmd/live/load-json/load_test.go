@@ -101,7 +101,7 @@ func TestLiveLoadJSONFileEmpty(t *testing.T) {
 		{"echo", "[]"},
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file ran successfully")
