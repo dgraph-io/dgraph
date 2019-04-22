@@ -99,12 +99,13 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		MyAddr: rc.Addr,
 		Store:  store,
 		Cfg: &raft.Config{
-			ID:              rc.Id,
-			ElectionTick:    100, // 2s if we call Tick() every 20 ms.
-			HeartbeatTick:   1,   // 20ms if we call Tick() every 20 ms.
-			Storage:         store,
-			MaxSizePerMsg:   1 << 20, // 1MB should allow more batching.
-			MaxInflightMsgs: 256,
+			ID:                       rc.Id,
+			ElectionTick:             100, // 2s if we call Tick() every 20 ms.
+			HeartbeatTick:            1,   // 20ms if we call Tick() every 20 ms.
+			Storage:                  store,
+			MaxInflightMsgs:          256,
+			MaxSizePerMsg:            256 << 10, // 256 KB should allow more batching.
+			MaxCommittedSizePerReady: 64 << 20,  // Avoid loading entire Raft log into memory.
 			// We don't need lease based reads. They cause issues because they
 			// require CheckQuorum to be true, and that causes a lot of issues
 			// for us during cluster bootstrapping and later. A seemingly
