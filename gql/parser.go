@@ -2327,7 +2327,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		var key string
 		// Get key.
 		item := it.Item()
-		glog.Infof("got item: %+v", item)
 		if item.Typ == itemName {
 			if !expectArg {
 				return nil, item.Errorf("Expecting a comma. Got: %v", item)

@@ -19,8 +19,6 @@ package lex
 import (
 	"errors"
 	"fmt"
-	"reflect"
-	"runtime"
 	"unicode/utf8"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -197,7 +195,7 @@ func (l *Lexer) ValidateResult() error {
 func (l *Lexer) Run(f StateFn) *Lexer {
 	for state := f; state != nil; {
 		// The following statement is useful for debugging.
-		fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
+		//fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
 		state = state(l)
 	}
 	return l

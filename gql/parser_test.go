@@ -4357,22 +4357,23 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
 		m      string
 		errStr string
 	}{
+
 		{m: `
-			{
-				set { _:a1 <reg> "a1 content" . }
-			}{
-				set { _:b2 <reg> "b2 content" . }
-			}`,
+				{
+					set { _:a1 <reg> "a1 content" . }
+				}{
+					set { _:b2 <reg> "b2 content" . }
+				}`,
 			errStr: "Unexpected { after the end of the block.",
 		},
 		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
 			errStr: "Invalid operation type: something after the end of the block",
 		},
 		{m: `
-			# comments are ok
-			{
-				set { _:a1 <reg> "a1 content" . } # comments are ok
-			} # comments are ok`,
+				# comments are ok
+				{
+					set { _:a1 <reg> "a1 content" . } # comments are ok
+				} # comments are ok`,
 		},
 	}
 	for _, tc := range tests {
