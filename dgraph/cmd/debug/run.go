@@ -18,6 +18,7 @@ package debug
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -48,6 +49,7 @@ type flagOptions struct {
 	predicate     string
 	readOnly      bool
 	pdir          string
+	wdir          string
 	itemMeta      bool
 	jepsen        string
 	readTs        uint64
@@ -76,6 +78,7 @@ func init() {
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
+	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
 }
@@ -649,17 +652,55 @@ func sizeHistogram(db *badger.DB) {
 	valueSizeHistogram.PrintHistogram()
 }
 
+func parseWal(db *badger.DB) error {
+	printKey := func(buf *bytes.Buffer, key []byte) {
+		if len(key) < 14 {
+			fmt.Fprintf(buf, "key = %s\n", hex.Dump(key))
+		}
+		id := binary.BigEndian.Uint64(key[0:8])
+		fmt.Fprintf(buf, " id: %d ", id)
+		switch len(key) {
+		case 14:
+			fmt.Fprintf(buf, " %s %d", key[8:10], binary.BigEndian.U
+		if len(key) < 10 {
+		}
+	}
+
+	return db.View(func(txn *badger.Txn) error {
+		itr := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer itr.Close()
+
+		for itr.Rewind(); itr.Valid(); itr.Next() {
+			item := itr.Item()
+			var buf bytes.Buffer
+
+		}
+	})
+}
+
 func run() {
+	dir := opt.pdir
+	isWal := false
+	if len(dir) == 0 {
+		dir = opt.wdir
+		isWal = true
+	}
 	bopts := badger.DefaultOptions
-	bopts.Dir = opt.pdir
-	bopts.ValueDir = opt.pdir
+	bopts.Dir = dir
+	bopts.ValueDir = dir
 	bopts.TableLoadingMode = options.MemoryMap
 	bopts.ReadOnly = opt.readOnly
 
-	x.AssertTruef(len(bopts.Dir) > 0, "No posting dir specified.")
+	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
-	db, err := badger.OpenManaged(bopts)
+	var db *badger.DB
+	var err error
+	if isWal {
+		db, err = badger.Open(bopts)
+	} else {
+		db, err := badger.OpenManaged(bopts)
+	}
 	x.Check(err)
 	defer db.Close()
 
@@ -667,6 +708,8 @@ func run() {
 	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
 	switch {
+	case isWal:
+		parseWal(db)
 	case len(opt.keyLookup) > 0:
 		lookup(db)
 	case len(opt.jepsen) > 0:
