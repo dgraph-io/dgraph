@@ -433,7 +433,6 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 	var l query.Latency
 	l.Start = time.Now()
-	glog.Infof("parsing mutation object: %v", mu)
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err

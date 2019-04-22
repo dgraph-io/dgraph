@@ -397,11 +397,12 @@ forLoop:
 			}
 			l.Emit(itemText)
 		default:
-			// backup to ensure the rune conusem before the switch block is a valid facet rune
+			// backup to ensure the rune consumed before the switch block is a valid facet rune
 			l.Backup()
-			lastRune, valid := l.AcceptRun(isFacetAllowedRune)
+			_, valid := l.AcceptRun(isFacetAllowedRune)
 			if !valid {
-				return l.Errorf("unrecognized character while lexing facet: %v", lastRune)
+				return l.Errorf("unrecognized character while lexing facet at pos: %d",
+					l.Pos)
 			}
 			l.Emit(itemText)
 		}
@@ -411,15 +412,16 @@ forLoop:
 
 func isFacetAllowedRune(r rune) bool {
 
-	return isAlphaNumeric(r) ||
-		r == ':' || r == '-' || // : and - can show up in timestamps
+	return isSymbolAllowedRune(r) ||
+		r == ':' || r == '-' || r == '+' || // : - and + can show up in timestamps
 		r == '.' // . can appear as the decimal point of a number
 }
 
-func isAlphaNumeric(r rune) bool {
+func isSymbolAllowedRune(r rune) bool {
 	return (r >= 'a' && r <= 'z') ||
 		(r >= 'A' && r <= 'Z') ||
-		(r >= '0' && r <= '9')
+		(r >= '0' && r <= '9') ||
+		r == '_'
 }
 
 // lexComment lexes a comment text.

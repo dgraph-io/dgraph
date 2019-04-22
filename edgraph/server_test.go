@@ -65,6 +65,12 @@ func TestParseNQuads(t *testing.T) {
 	}, nqs)
 }
 
+func TestParseNQuads3(t *testing.T) {
+	nquads := `<2> <best_friend> <64> (since=2019-03-28T14:41:57+30:00) .`
+	_, err := parseNQuads([]byte(nquads))
+	require.NoError(t, err)
+}
+
 func TestParseNQuadsWindowsNewline(t *testing.T) {
 	nquads := "_:a <predA> \"A\" .\r\n_:b <predB> \"B\" ."
 	nqs, err := parseNQuads([]byte(nquads))
