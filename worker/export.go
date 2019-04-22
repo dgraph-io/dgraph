@@ -224,70 +224,51 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
 			fmt.Fprint(bp, fmt.Sprintf(uidFmtStrRdf, p.Uid))
-
 		} else {
-			// Value posting
-			// Convert to appropriate type
-			vID := types.TypeID(p.ValType)
-			src := types.ValueForType(vID)
-			src.Value = p.Value
-			str, err := types.Convert(src, types.StringID)
+			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
+			str, err := valToStr(val)
 			if err != nil {
-				glog.Errorf("While converting %v to string. Err=%v. Ignoring.\n", src, err)
+				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
+			fmt.Fprintf(bp, "%q", str)
 
-			// trim null character at end
-			trimmed := strings.TrimRight(str.Value.(string), "\x00")
-			fmt.Fprint(bp, strconv.Quote(trimmed))
+			tid := types.TypeID(p.ValType)
 			if p.PostingType == pb.Posting_VALUE_LANG {
-				fmt.Fprint(bp, "@")
-				fmt.Fprint(bp, string(p.LangTag))
-
-			} else if vID != types.DefaultID {
-				rdfType, ok := rdfTypeMap[vID]
-				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
-				fmt.Fprint(bp, "^^<")
-				fmt.Fprint(bp, rdfType)
-				fmt.Fprint(bp, ">")
+				fmt.Fprint(bp, "@"+string(p.LangTag))
+			} else if tid != types.DefaultID {
+				rdfType, ok := rdfTypeMap[tid]
+				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", tid.Name())
+				fmt.Fprint(bp, "^^<"+rdfType+">")
 			}
 		}
 		// Let's skip labels. Dgraph doesn't support them for any functionality.
 
 		// Facets.
-		fcs := p.Facets
-		if len(fcs) != 0 {
+		if len(p.Facets) != 0 {
 			fmt.Fprint(bp, " (")
-			for i, f := range fcs {
+			for i, fct := range p.Facets {
 				if i != 0 {
 					fmt.Fprint(bp, ",")
 				}
-				fmt.Fprint(bp, f.Key)
-				fmt.Fprint(bp, "=")
+				fmt.Fprint(bp, fct.Key+"=")
 
-				fVal, err := facets.ValFor(f)
+				str, err := fctToStr(fct)
 				if err != nil {
-					glog.Errorf("Error getting value from facet %#v:%v", f, err)
-					continue
+					glog.Errorf("Ignoring error: %+v", err)
+					return nil
 				}
 
-				fStringVal := &types.Val{Tid: types.StringID}
-				if err = types.Marshal(fVal, fStringVal); err != nil {
-					glog.Errorf("Error while marshaling facet value %v to string: %v",
-						fVal, err)
-					continue
-				}
-				facetTid, err := facets.TypeIDFor(f)
+				tid, err := facets.TypeIDFor(fct)
 				if err != nil {
-					glog.Errorf("Error getting type id from facet %#v:%v", f, err)
+					glog.Errorf("Error getting type id from facet %#v: %v", fct, err)
 					continue
 				}
 
-				if facetTid == types.StringID {
-					fmt.Fprint(bp, strconv.Quote(fStringVal.Value.(string)))
-				} else {
-					fmt.Fprint(bp, fStringVal.Value.(string))
+				if tid == types.StringID {
+					str = strconv.Quote(str)
 				}
+				fmt.Fprint(bp, str)
 			}
 			fmt.Fprint(bp, ")")
 		}
