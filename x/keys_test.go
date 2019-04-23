@@ -18,6 +18,7 @@ package x
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestDataKey(t *testing.T) {
 
 func TestParseDataKeysWithStartUid(t *testing.T) {
 	var uid uint64
-	startUid := uint64(1024)
+	startUid := uint64(math.MaxUint64)
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		key := DataKey(sattr, uid)
@@ -85,7 +86,7 @@ func TestIndexKey(t *testing.T) {
 
 func TestIndexKeyWithStartUid(t *testing.T) {
 	var uid uint64
-	startUid := uint64(1024)
+	startUid := uint64(math.MaxUint64)
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
@@ -118,7 +119,7 @@ func TestReverseKey(t *testing.T) {
 
 func TestReverseKeyWithStartUid(t *testing.T) {
 	var uid uint64
-	startUid := uint64(1024)
+	startUid := uint64(math.MaxUint64)
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
@@ -150,7 +151,7 @@ func TestCountKey(t *testing.T) {
 
 func TestCountKeyWithStartUid(t *testing.T) {
 	var count uint32
-	startUid := uint64(1024)
+	startUid := uint64(math.MaxUint64)
 	for count = 0; count < 1001; count++ {
 		sattr := fmt.Sprintf("attr:%d", count)
 
