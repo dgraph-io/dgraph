@@ -103,7 +103,7 @@ func DataKey(attr string, uid uint64) []byte {
 	rest = writeAttr(rest, attr)
 	rest[0] = ByteData
 
-	// By default, mark this key as corresponding to a list that has not been split.
+	// By default, this key does not correspond to a part of a split key.
 	rest = rest[1:]
 	rest[0] = 0
 
@@ -132,7 +132,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 	rest = writeAttr(rest, attr)
 	rest[0] = ByteReverse
 
-	// By default, mark this key as corresponding to a list that has not been split.
+	// By default, this key does not correspond to a part of a split key.
 	rest = rest[1:]
 	rest[0] = 0
 
@@ -161,7 +161,7 @@ func IndexKey(attr, term string) []byte {
 	rest = writeAttr(rest, attr)
 	rest[0] = ByteIndex
 
-	// By default, mark this key as corresponding to a list that has not been split.
+	// By default, this key does not correspond to a part of a split key.
 	rest = rest[1:]
 	rest[0] = 0
 
@@ -179,7 +179,7 @@ func IndexKey(attr, term string) []byte {
 // next byte: data type prefix (set to ByteCount or ByteCountRev)
 // next byte: byte to determine if this key corresponds to a list that has been split
 //   into multiple parts
-// next len(term) bytes: value of uid
+// next four bytes: value of count.
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func CountKey(attr string, count uint32, reverse bool) []byte {
@@ -194,7 +194,7 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 		rest[0] = ByteCount
 	}
 
-	// By default, mark this key as corresponding to a list that has not been split.
+	// By default, this key does not correspond to a part of a split key.
 	rest = rest[1:]
 	rest[0] = 0
 
