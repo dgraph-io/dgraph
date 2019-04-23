@@ -61,7 +61,7 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		x.SetStatus(w, err.Error(), "Parse of export request failed.")
+		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
 		return
 	}
 
