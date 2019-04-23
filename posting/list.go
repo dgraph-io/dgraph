@@ -1319,3 +1319,17 @@ func sortSplits(splits []uint64) {
 		return splits[i] < splits[j]
 	})
 }
+
+// IsMultiPart returns true if the list has been split into multiple parts.
+func (l *List) IsMultiPart() bool {
+	return len(l.plist.Splits) > 0
+}
+
+// PartSplits returns an empty array if the list has not been split into multiple parts.
+// Otherwise, it returns an array  containing the start UID of each part.
+func (l *List) PartSplits() []uint64 {
+	if len(l.plist.Splits) == 0 {
+		return nil
+	}
+	return l.plist.Splits
+}

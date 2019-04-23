@@ -443,6 +443,13 @@ func lookup(db *badger.DB) {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, " Key: %x", item.Key())
 	fmt.Fprintf(&buf, " Length: %d\n", pl.Length(math.MaxUint64, 0))
+
+	isMultiPart := pl.IsMultiPart()
+	fmt.Fprintf(&buf, " Is multipart list?: %v\n", isMultiPart)
+	if isMultiPart {
+		fmt.Fprintf(&buf, " Start UIDs of each part: %v\n", pl.PartSplits())
+	}
+
 	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
 		appendPosting(&buf, o)
 		return nil
