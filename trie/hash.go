@@ -24,6 +24,7 @@ import (
 	"golang.org/x/crypto/blake2s"
 )
 
+// Hasher is a wrapper around a hash function
 type Hasher struct {
 	hash hash.Hash
 }

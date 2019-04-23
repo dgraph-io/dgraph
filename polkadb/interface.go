@@ -28,6 +28,7 @@ type Database interface {
 	Has(key []byte) (bool, error)
 	Del(key []byte) error
 	NewBatch() Batch
+	Close()
 }
 
 // Batch is a write-only operation
@@ -50,5 +51,5 @@ type Iterator interface {
 
 // Iteratee wraps the NewIterator methods of BadgerDB
 type Iteratee interface {
-	NewIterator() Iterate
+	NewIterator() Iterable
 }

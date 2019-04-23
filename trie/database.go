@@ -18,11 +18,75 @@ package trie
 
 import (
 	"github.com/ChainSafe/gossamer/polkadb"
-	//"sync"
+	"sync"
 )
 
 // Database is a wrapper around a polkadb
 type Database struct {
-	db polkadb.Database
-	//lock sync.RWMutex
+	db     polkadb.Database
+	batch  polkadb.Batch
+	lock   sync.RWMutex
+	hasher *Hasher
+}
+
+// WriteToDB writes the trie to the underlying database batch writer
+// Stores the merkle value of the node as the key and the encoded node as the value
+// This does not actually write to the db, just to the batch writer
+// Commit must be called afterwards to finish writing to the db
+func (t *Trie) WriteToDB() error {
+	t.db.batch = t.db.db.NewBatch()
+	return t.writeToDB(t.root)
+}
+
+// writeToDB recursively attempts to write each node in the trie to the db batch writer
+func (t *Trie) writeToDB(n node) error {
+	_, err := t.writeNodeToDB(n)
+	if err != nil {
+		return err
+	}
+
+	switch n := n.(type) {
+	case *branch:
+		for _, child := range n.children {
+			if child != nil {
+				err = t.writeToDB(child)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// writeNodeToDB returns true if node is written to db batch writer, false otherwise
+// if node is clean, it will not attempt to be written to the db
+// otherwise if it's dirty, try to write it to db
+func (t *Trie) writeNodeToDB(n node) (bool, error) {
+	if !n.isDirty() {
+		return false, nil
+	}
+
+	encRoot, err := Encode(n)
+	if err != nil {
+		return false, err
+	}
+
+	hash, err := t.db.hasher.Hash(n)
+	if err != nil {
+		return false, err
+	}
+
+	t.db.lock.Lock()
+	err = t.db.batch.Put(hash, encRoot)
+	t.db.lock.Unlock()
+
+	n.setDirty(false)
+	return true, err
+}
+
+// Commit writes the contents of the db's batch writer to the db
+func (t *Trie) Commit() error {
+	return t.db.batch.Write()
 }

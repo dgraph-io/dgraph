@@ -24,4 +24,6 @@
 # Sublime
 *.sublime*
 
+trie/gossamer_data
+
 /bin

@@ -59,7 +59,7 @@ func (t *Trie) tryPut(key, value []byte) (err error) {
 	var n node
 
 	if len(value) > 0 {
-		_, n, err = t.insert(t.root, k, &leaf{key: nil, value: value})
+		_, n, err = t.insert(t.root, k, &leaf{key: nil, value: value, dirty: true})
 	} else {
 		_, n, err = t.delete(t.root, k)
 	}
@@ -90,9 +90,8 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 		}
 	case *leaf:
 		// need to convert this into a branch
-		br := new(branch)
+		br := &branch{dirty: true}
 		length := lenCommonPrefix(key, p.key)
-		br.key = key[:length]
 
 		if len(key) < length {
 			br.key = nil
@@ -100,6 +99,8 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 			br.children[p.key[0]] = parent
 			return true, br, nil
 		}
+
+		br.key = key[:length]
 
 		switch v := value.(type) {
 		case *leaf:
@@ -164,10 +165,8 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 	}
 
 	// we need to branch out at the point where the keys diverge
-	br := new(branch)
-
 	// update partial keys, new branch has key up to matching length
-	br.key = key[:length]
+	br := &branch{key: key[:length], dirty: true}
 
 	parentIndex := p.key[length]
 	_, br.children[parentIndex], err = t.insert(nil, p.key[length+1:], p)
@@ -198,7 +197,7 @@ func (t *Trie) Get(key []byte) (value []byte, err error) {
 }
 
 // getLeaf returns the leaf node stored in the trie at the corresponding key
-// leaf includes both partial key and value
+// leaf includes both partial key and value, need the partial key for encoding
 func (t *Trie) getLeaf(key []byte) (value *leaf, err error) {
 	l, err := t.tryGet(key)
 	return l, err
@@ -218,7 +217,7 @@ func (t *Trie) retrieve(parent node, key []byte) (value *leaf, err error) {
 
 		// found the value at this node
 		if bytes.Equal(p.key, key) || len(key) == 0 {
-			return &leaf{key: p.key, value: p.value}, nil
+			return &leaf{key: p.key, value: p.value, dirty: true}, nil
 		}
 
 		// if branch's child at the key is a leaf, return it if the key matches

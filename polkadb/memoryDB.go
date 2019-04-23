@@ -75,13 +75,18 @@ func (db *MemDatabase) Keys() [][]byte {
 	return keys
 }
 
-// Delete removes the key from the mapping
+// Del removes the key from the mapping
 func (db *MemDatabase) Del(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	delete(db.db, string(key))
 	return nil
+}
+
+// Close ...
+func (db *MemDatabase) Close() {
+	// do nothing
 }
 
 // NewBatch ...

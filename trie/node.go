@@ -25,6 +25,8 @@ import (
 
 type node interface {
 	Encode() ([]byte, error)
+	isDirty() bool
+	setDirty(dirty bool)
 }
 
 type (
@@ -32,10 +34,12 @@ type (
 		key      []byte // partial key
 		children [16]node
 		value    []byte
+		dirty    bool
 	}
 	leaf struct {
 		key   []byte // partial key
 		value []byte
+		dirty bool
 	}
 )
 
@@ -48,6 +52,22 @@ func (b *branch) childrenBitmap() uint16 {
 		}
 	}
 	return bitmap
+}
+
+func (l *leaf) isDirty() bool {
+	return l.dirty
+}
+
+func (b *branch) isDirty() bool {
+	return b.dirty
+}
+
+func (l *leaf) setDirty(dirty bool) {
+	l.dirty = dirty
+}
+
+func (b *branch) setDirty(dirty bool) {
+	b.dirty = dirty
 }
 
 // Encode is the high-level function wrapping the encoding for different node types
