@@ -79,7 +79,7 @@ type loader struct {
 	// To get time elapsed
 	start time.Time
 
-	nreqs    uint64
+	reqNum   uint64
 	reqs     chan api.Mutation
 	zeroconn *grpc.ClientConn
 }
@@ -193,7 +193,7 @@ func (l *loader) request(req api.Mutation, nreq uint64) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 	for req := range l.reqs {
-		nreq := atomic.AddUint64(&l.nreqs, 1)
+		nreq := atomic.AddUint64(&l.reqNum, 1)
 		l.request(req, nreq)
 	}
 }
