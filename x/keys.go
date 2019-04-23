@@ -53,7 +53,7 @@ func writeAttr(buf []byte, attr string) []byte {
 
 // SchemaKey returns schema key for given attribute. Schema keys are stored
 // separately with unique prefix, since we need to iterate over all schema keys.
-// The structure of a data key is as follows:
+// The structure of a schema key is as follows:
 //
 // byte 0: key type prefix (set to byteSchema)
 // byte 1-2: length of attr
@@ -68,8 +68,8 @@ func SchemaKey(attr string) []byte {
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
-// with unique prefix, since we need to iterate over all type keys.
-// The structure of a data key is as follows:
+// with a unique prefix, since we need to iterate over all type keys.
+// The structure of a type key is as follows:
 //
 // byte 0: key type prefix (set to byteType)
 // byte 1-2: length of typeName
@@ -352,8 +352,7 @@ func TypePrefix() []byte {
 	return buf[:]
 }
 
-// PredicatePrefix returns the prefix for all keys belonging
-// to this predicate except schema key.
+// PredicatePrefix returns the prefix for all keys belonging to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
 	buf := make([]byte, 1+2+len(predicate))
 	buf[0] = DefaultPrefix
@@ -362,8 +361,7 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
-// GetSplitKey takes a data key baseKey and generates the key of the list split
-// that starts at startUid.
+// GetSplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
 func GetSplitKey(baseKey []byte, startUid uint64) []byte {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
