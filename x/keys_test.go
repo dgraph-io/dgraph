@@ -51,7 +51,7 @@ func TestDataKey(t *testing.T) {
 	}
 }
 
-func TestParseKeysWithStartUid(t *testing.T) {
+func TestParseDataKeysWithStartUid(t *testing.T) {
 	var uid uint64
 	startUid := uint64(1024)
 	for uid = 0; uid < 1001; uid++ {
@@ -63,6 +63,7 @@ func TestParseKeysWithStartUid(t *testing.T) {
 		require.True(t, pk.IsData())
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, uid, pk.Uid)
+		require.Equal(t, pk.HasStartUid, true)
 		require.Equal(t, startUid, pk.StartUid)
 	}
 }
@@ -82,6 +83,25 @@ func TestIndexKey(t *testing.T) {
 	}
 }
 
+func TestIndexKeyWithStartUid(t *testing.T) {
+	var uid uint64
+	startUid := uint64(1024)
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+		sterm := fmt.Sprintf("term:%d", uid)
+
+		key := IndexKey(sattr, sterm)
+		key = GetSplitKey(key, startUid)
+		pk := Parse(key)
+
+		require.True(t, pk.IsIndex())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, sterm, pk.Term)
+		require.Equal(t, pk.HasStartUid, true)
+		require.Equal(t, startUid, pk.StartUid)
+	}
+}
+
 func TestReverseKey(t *testing.T) {
 	var uid uint64
 	for uid = 0; uid < 1001; uid++ {
@@ -93,6 +113,56 @@ func TestReverseKey(t *testing.T) {
 		require.True(t, pk.IsReverse())
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, uid, pk.Uid)
+	}
+}
+
+func TestReverseKeyWithStartUid(t *testing.T) {
+	var uid uint64
+	startUid := uint64(1024)
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+
+		key := ReverseKey(sattr, uid)
+		key = GetSplitKey(key, startUid)
+		pk := Parse(key)
+
+		require.True(t, pk.IsReverse())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, uid, pk.Uid)
+		require.Equal(t, pk.HasStartUid, true)
+		require.Equal(t, startUid, pk.StartUid)
+	}
+}
+
+func TestCountKey(t *testing.T) {
+	var count uint32
+	for count = 0; count < 1001; count++ {
+		sattr := fmt.Sprintf("attr:%d", count)
+
+		key := CountKey(sattr, count, true)
+		pk := Parse(key)
+
+		require.True(t, pk.IsCount())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, count, pk.Count)
+	}
+}
+
+func TestCountKeyWithStartUid(t *testing.T) {
+	var count uint32
+	startUid := uint64(1024)
+	for count = 0; count < 1001; count++ {
+		sattr := fmt.Sprintf("attr:%d", count)
+
+		key := CountKey(sattr, count, true)
+		key = GetSplitKey(key, startUid)
+		pk := Parse(key)
+
+		require.True(t, pk.IsCount())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, count, pk.Count)
+		require.Equal(t, pk.HasStartUid, true)
+		require.Equal(t, startUid, pk.StartUid)
 	}
 }
 
