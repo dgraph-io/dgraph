@@ -38,7 +38,7 @@ const (
 	byteType      = byte(0x02)
 
 	// Constant to specify a given key corresponds to a posting list split into multiple parts.
-	byteSplit = byte(0x01)
+	ByteSplit = byte(0x01)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -313,12 +313,13 @@ func (p ParsedKey) IndexPrefix() []byte {
 
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
+	buf := make([]byte, 1+2+len(p.Attr)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
+	AssertTrue(len(k) == 2)
 	k[0] = ByteReverse
+	k[1] = 0
 	return buf
 }
 
@@ -368,7 +369,7 @@ func GetSplitKey(baseKey []byte, startUid uint64) []byte {
 
 	p := Parse(baseKey)
 	index := 1 + 2 + len(p.Attr) + 1
-	keyCopy[index] = byteSplit
+	keyCopy[index] = ByteSplit
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
 
 	return keyCopy
@@ -395,7 +396,7 @@ func Parse(key []byte) *ParsedKey {
 	p.byteType = k[0]
 	k = k[1:]
 
-	p.HasStartUid = k[0] == byteSplit
+	p.HasStartUid = k[0] == ByteSplit
 	k = k[1:]
 
 	switch p.byteType {
