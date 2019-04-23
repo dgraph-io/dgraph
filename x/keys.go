@@ -458,6 +458,7 @@ func Parse(key []byte) *ParsedKey {
 			}
 			return nil
 		}
+
 		k = k[4:]
 		p.StartUid = binary.BigEndian.Uint64(k)
 	default:
