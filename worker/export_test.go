@@ -22,6 +22,7 @@ import (
 	"context"
 	"io/ioutil"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,11 +32,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/z"
 
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -284,6 +287,26 @@ func TestExportJson(t *testing.T) {
 	require.JSONEq(t, wantJson, string(gotJson))
 
 	checkExportSchema(t, schemaFileList)
+}
+
+func TestExportFormat(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "export")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	resp, err := http.Get("http://" + z.SockAddrHttp + "/admin/export?format=json")
+	require.NoError(t, err)
+
+	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?format=rdf")
+	require.NoError(t, err)
+
+	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?format=xml")
+	require.NoError(t, err)
+	require.NotEqual(t, resp.StatusCode, http.StatusOK)
+
+	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?output=rdf")
+	require.NoError(t, err)
+	require.NotEqual(t, resp.StatusCode, http.StatusOK)
 }
 
 type skv struct {

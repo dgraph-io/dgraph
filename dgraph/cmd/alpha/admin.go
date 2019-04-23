@@ -70,16 +70,16 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		switch key {
 		case "format":
 			if len(vals) > 1 {
-				x.SetStatus(w, "Invalid", "Only one export format may be specified.")
+				x.SetHttpStatus(w, http.StatusBadRequest, "Only one export format may be specified.")
 				return
 			}
 			format = worker.NormalizeExportFormat(vals[0])
 			if format == "" {
-				x.SetStatus(w, "Invalid", "Invalid export format.")
+				x.SetHttpStatus(w, http.StatusBadRequest, "Invalid export format.")
 				return
 			}
 		default:
-			x.SetStatus(w, "Invalid", "Invalid export argument.")
+			x.SetHttpStatus(w, http.StatusBadRequest, "Invalid export argument.")
 			return
 		}
 	}
