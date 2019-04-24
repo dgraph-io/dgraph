@@ -40,15 +40,6 @@ func makeNquadEdge(sub, pred, obj string) *api.NQuad {
 	}
 }
 
-func TestParseNQuads2(t *testing.T) {
-	nquads := `_:alice <name> "Bob" .
-_:alice <balance> "110" .
-_:bob <balance> "60" .
-`
-	_, err := parseNQuads([]byte(nquads))
-	require.NoError(t, err)
-}
-
 func TestParseNQuads(t *testing.T) {
 	nquads := `
 		_:a <predA> "A" .
@@ -63,12 +54,6 @@ func TestParseNQuads(t *testing.T) {
 		makeNquad("_:b", "predB", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "B"}}),
 		makeNquadEdge("_:a", "join", "_:b"),
 	}, nqs)
-}
-
-func TestParseNQuads3(t *testing.T) {
-	nquads := `<2> <best_friend> <64> (since=2019-03-28T14:41:57+30:00) .`
-	_, err := parseNQuads([]byte(nquads))
-	require.NoError(t, err)
 }
 
 func TestParseNQuadsWindowsNewline(t *testing.T) {

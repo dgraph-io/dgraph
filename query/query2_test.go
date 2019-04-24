@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1135,10 +1134,8 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
 			}
     }
   `
-
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
-
 }
 
 func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
@@ -1168,23 +1165,6 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
   `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
-}
-
-func TestParseQuery(t *testing.T) {
-	query := `
-    {
-			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
-        name
-      }
-			me(func: uid(L), orderasc: dob, offset:2) {
-        name
-      }
-    }
-  `
-	_, err := gql.Parse(gql.Request{
-		Str: query,
-	})
-	require.NoError(t, err)
 }
 
 func TestGeneratorMultiRootOrderdesc(t *testing.T) {

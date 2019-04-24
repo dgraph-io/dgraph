@@ -3829,7 +3829,6 @@ func TestParserFuzz(t *testing.T) {
 		{"test009", "{e(){@filter(p(/\\"},
 		{"test010", "{m(func:0(0(0(0,/"},
 		{"test011", "{e(){@filter(0(%0"},
-
 		{"test012", "{e(func:uid()){@filter(p(%"},
 		{"test013", "{e(orderasc:val(0)){{min(val(0)0("},
 		{"test014", "query{e(func:uid(val(0)"},
@@ -4357,23 +4356,22 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
 		m      string
 		errStr string
 	}{
-
 		{m: `
-				{
-					set { _:a1 <reg> "a1 content" . }
-				}{
-					set { _:b2 <reg> "b2 content" . }
-				}`,
+         {
+           set { _:a1 <reg> "a1 content" . }
+         }{
+		   set { _:b2 <reg> "b2 content" . }
+		 }`,
 			errStr: "Unexpected { after the end of the block.",
 		},
 		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
 			errStr: "Invalid operation type: something after the end of the block",
 		},
 		{m: `
-				# comments are ok
-				{
-					set { _:a1 <reg> "a1 content" . } # comments are ok
-				} # comments are ok`,
+          # comments are ok
+		  {
+		    set { _:a1 <reg> "a1 content" . } # comments are ok
+          } # comments are ok`,
 		},
 	}
 	for _, tc := range tests {

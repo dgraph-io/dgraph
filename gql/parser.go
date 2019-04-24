@@ -1124,7 +1124,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			expectArg = true
 			continue
 		} else {
-			return result, item.Errorf("1 Expecting argument name. Got: %v", item)
+			return result, item.Errorf("Expecting argument name. Got: %v", item)
 		}
 
 		it.Next()

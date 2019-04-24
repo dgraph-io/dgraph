@@ -225,9 +225,6 @@ func (l *Lexer) Emit(t ItemType) {
 		line:   l.Line,
 		column: l.Column,
 	})
-	if l.Input[l.Start:l.Pos] == "func:" {
-		fmt.Printf("func:")
-	}
 	l.moveStartToPos()
 }
 
