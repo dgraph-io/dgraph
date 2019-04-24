@@ -54,6 +54,7 @@ func TestQueries(t *testing.T) {
 	x.CheckfNoTrace(err)
 
 	savepath := ""
+	diffs := 0
 	for _, file := range files {
 		filename := path.Join(queryDir, file.Name())
 
@@ -81,10 +82,12 @@ func TestQueries(t *testing.T) {
 			savepath = path.Join(*savedir, file.Name())
 		}
 
-		z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet)
+		if ! z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
+			diffs++
+		}
 	}
 
-	if *savedir != "" {
+	if *savedir != "" && diffs > 0 {
 		t.Logf("test json saved in directory: %s", *savedir)
 	}
 }
