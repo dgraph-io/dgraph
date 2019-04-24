@@ -734,7 +734,6 @@ func isAlterAllowed(ctx context.Context) error {
 }
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
-	glog.Infof("parsing N quads: %v", string(b))
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		nq, err := rdf.Parse(string(line))

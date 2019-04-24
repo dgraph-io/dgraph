@@ -264,265 +264,265 @@ func populateCluster() {
 	assignUids(100000)
 
 	addTriplesToCluster(`
-			<1> <name> "Michonne" .
-			<2> <name> "King Lear" .
-			<3> <name> "Margaret" .
-			<4> <name> "Leonard" .
-			<5> <name> "Garfield" .
-			<6> <name> "Bear" .
-			<7> <name> "Nemo" .
-			<23> <name> "Rick Grimes" .
-			<24> <name> "Glenn Rhee" .
-			<25> <name> "Daryl Dixon" .
-			<31> <name> "Andrea" .
-			<33> <name> "San Mateo High School" .
-			<34> <name> "San Mateo School District" .
-			<35> <name> "San Mateo County" .
-			<36> <name> "California" .
-			<110> <name> "Alice" .
-			<240> <name> "Andrea With no friends" .
-			<1000> <name> "Alice" .
-			<1001> <name> "Bob" .
-			<1002> <name> "Matt" .
-			<1003> <name> "John" .
-			<2300> <name> "Andre" .
-			<2301> <name> "Alice\"" .
-			<2333> <name> "Helmut" .
-			<3500> <name> "" .
-			<3500> <name> "상현"@ko .
-			<3501> <name> "Alex" .
-			<3501> <name> "Alex"@en .
-			<3502> <name> "" .
-			<3502> <name> "Amit"@en .
-			<3502> <name> "अमित"@hi .
-			<3503> <name> "Andrew"@en .
-			<3503> <name> ""@hi .
-			<4097> <name> "Badger" .
-			<4097> <name> "European badger"@en .
-			<4097> <name> "European badger barger European"@xx .
-			<4097> <name> "Borsuk europejski"@pl .
-			<4097> <name> "Europäischer Dachs"@de .
-			<4097> <name> "Барсук"@ru .
-			<4097> <name> "Blaireau européen"@fr .
-			<4098> <name> "Honey badger"@en .
-			<4099> <name> "Honey bee"@en .
-			<4100> <name> "Artem Tkachenko"@en .
-			<4100> <name> "Артём Ткаченко"@ru .
-			<5000> <name> "School A" .
-			<5001> <name> "School B" .
-			<5101> <name> "Googleplex" .
-			<5102> <name> "Shoreline Amphitheater" .
-			<5103> <name> "San Carlos Airport" .
-			<5104> <name> "SF Bay area" .
-			<5105> <name> "Mountain View" .
-			<5106> <name> "San Carlos" .
-			<5107> <name> "New York" .
-			<8192> <name> "Regex Master" .
-			<10000> <name> "Alice" .
-			<10001> <name> "Elizabeth" .
-			<10002> <name> "Alice" .
-			<10003> <name> "Bob" .
-			<10004> <name> "Alice" .
-			<10005> <name> "Bob" .
-			<10006> <name> "Colin" .
-			<10007> <name> "Elizabeth" .
+		<1> <name> "Michonne" .
+		<2> <name> "King Lear" .
+		<3> <name> "Margaret" .
+		<4> <name> "Leonard" .
+		<5> <name> "Garfield" .
+		<6> <name> "Bear" .
+		<7> <name> "Nemo" .
+		<23> <name> "Rick Grimes" .
+		<24> <name> "Glenn Rhee" .
+		<25> <name> "Daryl Dixon" .
+		<31> <name> "Andrea" .
+		<33> <name> "San Mateo High School" .
+		<34> <name> "San Mateo School District" .
+		<35> <name> "San Mateo County" .
+		<36> <name> "California" .
+		<110> <name> "Alice" .
+		<240> <name> "Andrea With no friends" .
+		<1000> <name> "Alice" .
+		<1001> <name> "Bob" .
+		<1002> <name> "Matt" .
+		<1003> <name> "John" .
+		<2300> <name> "Andre" .
+		<2301> <name> "Alice\"" .
+		<2333> <name> "Helmut" .
+		<3500> <name> "" .
+		<3500> <name> "상현"@ko .
+		<3501> <name> "Alex" .
+		<3501> <name> "Alex"@en .
+		<3502> <name> "" .
+		<3502> <name> "Amit"@en .
+		<3502> <name> "अमित"@hi .
+		<3503> <name> "Andrew"@en .
+		<3503> <name> ""@hi .
+		<4097> <name> "Badger" .
+		<4097> <name> "European badger"@en .
+		<4097> <name> "European badger barger European"@xx .
+		<4097> <name> "Borsuk europejski"@pl .
+		<4097> <name> "Europäischer Dachs"@de .
+		<4097> <name> "Барсук"@ru .
+		<4097> <name> "Blaireau européen"@fr .
+		<4098> <name> "Honey badger"@en .
+		<4099> <name> "Honey bee"@en .
+		<4100> <name> "Artem Tkachenko"@en .
+		<4100> <name> "Артём Ткаченко"@ru .
+		<5000> <name> "School A" .
+		<5001> <name> "School B" .
+		<5101> <name> "Googleplex" .
+		<5102> <name> "Shoreline Amphitheater" .
+		<5103> <name> "San Carlos Airport" .
+		<5104> <name> "SF Bay area" .
+		<5105> <name> "Mountain View" .
+		<5106> <name> "San Carlos" .
+		<5107> <name> "New York" .
+		<8192> <name> "Regex Master" .
+		<10000> <name> "Alice" .
+		<10001> <name> "Elizabeth" .
+		<10002> <name> "Alice" .
+		<10003> <name> "Bob" .
+		<10004> <name> "Alice" .
+		<10005> <name> "Bob" .
+		<10006> <name> "Colin" .
+		<10007> <name> "Elizabeth" .
 
-			<11000> <name> "Baz Luhrmann"@en .
-			<11001> <name> "Strictly Ballroom"@en .
-			<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .
-			<11003> <name> "No. 5 the film"@en .
-			<11100> <name> "expand" .
+		<11000> <name> "Baz Luhrmann"@en .
+		<11001> <name> "Strictly Ballroom"@en .
+		<11002> <name> "Puccini: La boheme (Sydney Opera)"@en .
+		<11003> <name> "No. 5 the film"@en .
+		<11100> <name> "expand" .
 
-			<1> <full_name> "Michonne's large name for hashing" .
+		<1> <full_name> "Michonne's large name for hashing" .
 
-			<1> <noindex_name> "Michonne's name not indexed" .
+		<1> <noindex_name> "Michonne's name not indexed" .
 
-			<1> <friend> <23> .
-			<1> <friend> <24> .
-			<1> <friend> <25> .
-			<1> <friend> <31> .
-			<1> <friend> <101> .
-			<31> <friend> <24> .
-			<23> <friend> <1> .
+		<1> <friend> <23> .
+		<1> <friend> <24> .
+		<1> <friend> <25> .
+		<1> <friend> <31> .
+		<1> <friend> <101> .
+		<31> <friend> <24> .
+		<23> <friend> <1> .
 
-			<2> <best_friend> <64> (since=2019-03-28T14:41:57+30:00) .
-			<3> <best_friend> <64> (since=2018-03-24T14:41:57+05:30) .
-			<4> <best_friend> <64> (since=2019-03-27) .
+		<2> <best_friend> <64> (since=2019-03-28T14:41:57+30:00) .
+		<3> <best_friend> <64> (since=2018-03-24T14:41:57+05:30) .
+		<4> <best_friend> <64> (since=2019-03-27) .
 
-			<1> <age> "38" .
-			<23> <age> "15" .
-			<24> <age> "15" .
-			<25> <age> "17" .
-			<31> <age> "19" .
-			<10000> <age> "25" .
-			<10001> <age> "75" .
-			<10002> <age> "75" .
-			<10003> <age> "75" .
-			<10004> <age> "75" .
-			<10005> <age> "25" .
-			<10006> <age> "25" .
-			<10007> <age> "25" .
+		<1> <age> "38" .
+		<23> <age> "15" .
+		<24> <age> "15" .
+		<25> <age> "17" .
+		<31> <age> "19" .
+		<10000> <age> "25" .
+		<10001> <age> "75" .
+		<10002> <age> "75" .
+		<10003> <age> "75" .
+		<10004> <age> "75" .
+		<10005> <age> "25" .
+		<10006> <age> "25" .
+		<10007> <age> "25" .
 
-			<1> <alive> "true" .
-			<23> <alive> "true" .
-			<25> <alive> "false" .
-			<31> <alive> "false" .
+		<1> <alive> "true" .
+		<23> <alive> "true" .
+		<25> <alive> "false" .
+		<31> <alive> "false" .
 
-			<1> <gender> "female" .
-			<23> <gender> "male" .
+		<1> <gender> "female" .
+		<23> <gender> "male" .
 
-			<4001> <office> "office 1" .
-			<4002> <room> "room 1" .
-			<4003> <room> "room 2" .
-			<4004> <room> "" .
-			<4001> <office.room> <4002> .
-			<4001> <office.room> <4003> .
-			<4001> <office.room> <4004> .
+		<4001> <office> "office 1" .
+		<4002> <room> "room 1" .
+		<4003> <room> "room 2" .
+		<4004> <room> "" .
+		<4001> <office.room> <4002> .
+		<4001> <office.room> <4003> .
+		<4001> <office.room> <4004> .
 
-			<3001> <symbol> "AAPL" .
-			<3002> <symbol> "AMZN" .
-			<3003> <symbol> "AMD" .
-			<3004> <symbol> "FB" .
-			<3005> <symbol> "GOOG" .
-			<3006> <symbol> "MSFT" .
+		<3001> <symbol> "AAPL" .
+		<3002> <symbol> "AMZN" .
+		<3003> <symbol> "AMD" .
+		<3004> <symbol> "FB" .
+		<3005> <symbol> "GOOG" .
+		<3006> <symbol> "MSFT" .
 
-			<1> <dob> "1910-01-01" .
-			<23> <dob> "1910-01-02" .
-			<24> <dob> "1909-05-05" .
-			<25> <dob> "1909-01-10" .
-			<31> <dob> "1901-01-15" .
+		<1> <dob> "1910-01-01" .
+		<23> <dob> "1910-01-02" .
+		<24> <dob> "1909-05-05" .
+		<25> <dob> "1909-01-10" .
+		<31> <dob> "1901-01-15" .
 
-			<1> <path> <31> (weight = 0.1, weight1 = 0.2) .
-			<1> <path> <24> (weight = 0.2) .
-			<31> <path> <1000> (weight = 0.1) .
-			<1000> <path> <1001> (weight = 0.1) .
-			<1000> <path> <1002> (weight = 0.7) .
-			<1001> <path> <1002> (weight = 0.1) .
-			<1002> <path> <1003> (weight = 0.6) .
-			<1001> <path> <1003> (weight = 1.5) .
-			<1003> <path> <1001> .
+		<1> <path> <31> (weight = 0.1, weight1 = 0.2) .
+		<1> <path> <24> (weight = 0.2) .
+		<31> <path> <1000> (weight = 0.1) .
+		<1000> <path> <1001> (weight = 0.1) .
+		<1000> <path> <1002> (weight = 0.7) .
+		<1001> <path> <1002> (weight = 0.1) .
+		<1002> <path> <1003> (weight = 0.6) .
+		<1001> <path> <1003> (weight = 1.5) .
+		<1003> <path> <1001> .
 
-			<1> <follow> <31> .
-			<1> <follow> <24> .
-			<31> <follow> <1001> .
-			<1001> <follow> <1000> .
-			<1002> <follow> <1000> .
-			<1001> <follow> <1003> .
-			<1003> <follow> <1002> .
+		<1> <follow> <31> .
+		<1> <follow> <24> .
+		<31> <follow> <1001> .
+		<1001> <follow> <1000> .
+		<1002> <follow> <1000> .
+		<1001> <follow> <1003> .
+		<1003> <follow> <1002> .
 
-			<1> <survival_rate> "98.99" .
-			<23> <survival_rate> "1.6" .
-			<24> <survival_rate> "1.6" .
-			<25> <survival_rate> "1.6" .
-			<31> <survival_rate> "1.6" .
+		<1> <survival_rate> "98.99" .
+		<23> <survival_rate> "1.6" .
+		<24> <survival_rate> "1.6" .
+		<25> <survival_rate> "1.6" .
+		<31> <survival_rate> "1.6" .
 
-			<1> <school> <5000> .
-			<23> <school> <5001> .
-			<24> <school> <5000> .
-			<25> <school> <5000> .
-			<31> <school> <5001> .
-			<101> <school> <5001> .
+		<1> <school> <5000> .
+		<23> <school> <5001> .
+		<24> <school> <5000> .
+		<25> <school> <5000> .
+		<31> <school> <5001> .
+		<101> <school> <5001> .
 
-			<1> <_xid_> "mich" .
-			<24> <_xid_> "g\"lenn" .
-			<110> <_xid_> "a.bc" .
+		<1> <_xid_> "mich" .
+		<24> <_xid_> "g\"lenn" .
+		<110> <_xid_> "a.bc" .
 
-			<23> <alias> "Zambo Alice" .
-			<24> <alias> "John Alice" .
-			<25> <alias> "Bob Joe" .
-			<31> <alias> "Allan Matt" .
-			<101> <alias> "John Oliver" .
+		<23> <alias> "Zambo Alice" .
+		<24> <alias> "John Alice" .
+		<25> <alias> "Bob Joe" .
+		<31> <alias> "Allan Matt" .
+		<101> <alias> "John Oliver" .
 
-			<1> <bin_data> "YmluLWRhdGE=" .
+		<1> <bin_data> "YmluLWRhdGE=" .
 
-			<1> <graduation> "1932-01-01" .
-			<31> <graduation> "1933-01-01" .
-			<31> <graduation> "1935-01-01" .
+		<1> <graduation> "1932-01-01" .
+		<31> <graduation> "1933-01-01" .
+		<31> <graduation> "1935-01-01" .
 
-			<10000> <salary> "10000" .
-			<10002> <salary> "10002" .
+		<10000> <salary> "10000" .
+		<10002> <salary> "10002" .
 
-			<1> <address> "31, 32 street, Jupiter" .
-			<23> <address> "21, mark street, Mars" .
+		<1> <address> "31, 32 street, Jupiter" .
+		<23> <address> "21, mark street, Mars" .
 
-			<1> <dob_day> "1910-01-01" .
-			<23> <dob_day> "1910-01-02" .
-			<24> <dob_day> "1909-05-05" .
-			<25> <dob_day> "1909-01-10" .
-			<31> <dob_day> "1901-01-15" .
+		<1> <dob_day> "1910-01-01" .
+		<23> <dob_day> "1910-01-02" .
+		<24> <dob_day> "1909-05-05" .
+		<25> <dob_day> "1909-01-10" .
+		<31> <dob_day> "1901-01-15" .
 
-			<1> <power> "13.25"^^<xs:float> .
+		<1> <power> "13.25"^^<xs:float> .
 
-			<1> <sword_present> "true" .
+		<1> <sword_present> "true" .
 
-			<1> <son> <2300> .
-			<1> <son> <2333> .
+		<1> <son> <2300> .
+		<1> <son> <2333> .
 
-			<5010> <nick_name> "Two Terms" .
+		<5010> <nick_name> "Two Terms" .
 
-			<4097> <lossy> "Badger" .
-			<4097> <lossy> "European badger"@en .
-			<4097> <lossy> "European badger barger European"@xx .
-			<4097> <lossy> "Borsuk europejski"@pl .
-			<4097> <lossy> "Europäischer Dachs"@de .
-			<4097> <lossy> "Барсук"@ru .
-			<4097> <lossy> "Blaireau européen"@fr .
-			<4098> <lossy> "Honey badger"@en .
+		<4097> <lossy> "Badger" .
+		<4097> <lossy> "European badger"@en .
+		<4097> <lossy> "European badger barger European"@xx .
+		<4097> <lossy> "Borsuk europejski"@pl .
+		<4097> <lossy> "Europäischer Dachs"@de .
+		<4097> <lossy> "Барсук"@ru .
+		<4097> <lossy> "Blaireau européen"@fr .
+		<4098> <lossy> "Honey badger"@en .
 
-			<23> <film.film.initial_release_date> "1900-01-02" .
-			<24> <film.film.initial_release_date> "1909-05-05" .
-			<25> <film.film.initial_release_date> "1929-01-10" .
-			<31> <film.film.initial_release_date> "1801-01-15" .
+		<23> <film.film.initial_release_date> "1900-01-02" .
+		<24> <film.film.initial_release_date> "1909-05-05" .
+		<25> <film.film.initial_release_date> "1929-01-10" .
+		<31> <film.film.initial_release_date> "1801-01-15" .
 
-			<0x10000> <royal_title> "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"@en .
-			<0x10000> <royal_title> "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi"@fr .
+		<0x10000> <royal_title> "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"@en .
+		<0x10000> <royal_title> "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi"@fr .
 
-			<32> <school> <33> .
-			<33> <district> <34> .
-			<34> <county> <35> .
-			<35> <state> <36> .
+		<32> <school> <33> .
+		<33> <district> <34> .
+		<34> <county> <35> .
+		<35> <state> <36> .
 
-			<36> <abbr> "CA" .
+		<36> <abbr> "CA" .
 
-			<1> <password> "123456" .
-			<32> <password> "123456" .
-			<23> <pass> "654321" .
+		<1> <password> "123456" .
+		<32> <password> "123456" .
+		<23> <pass> "654321" .
 
-			<23> <shadow_deep> "4" .
-			<24> <shadow_deep> "14" .
+		<23> <shadow_deep> "4" .
+		<24> <shadow_deep> "14" .
 
-			<2> <dgraph.type> "Person" .
-			<3> <dgraph.type> "Person" .
-			<4> <dgraph.type> "Person" .
-			<5> <dgraph.type> "Animal" .
-			<5> <dgraph.type> "Pet" .
-			<6> <dgraph.type> "Animal" .
-			<6> <dgraph.type> "Pet" .
+		<2> <dgraph.type> "Person" .
+		<3> <dgraph.type> "Person" .
+		<4> <dgraph.type> "Person" .
+		<5> <dgraph.type> "Animal" .
+		<5> <dgraph.type> "Pet" .
+		<6> <dgraph.type> "Animal" .
+		<6> <dgraph.type> "Pet" .
 
-			<2> <pet> <5> .
-			<3> <pet> <6> .
-			<4> <pet> <7> .
+		<2> <pet> <5> .
+		<3> <pet> <6> .
+		<4> <pet> <7> .
 
-			<2> <enemy> <3> .
-			<2> <enemy> <4> .
+		<2> <enemy> <3> .
+		<2> <enemy> <4> .
 
-			<11000> <director.film> <11001> .
-			<11000> <director.film> <11002> .
-			<11000> <director.film> <11003> .
+		<11000> <director.film> <11001> .
+		<11000> <director.film> <11002> .
+		<11000> <director.film> <11003> .
 
-			<11100> <node> <11100> .
+		<11100> <node> <11100> .
 
-			<200> <make> "Ford" .
-			<200> <model> "Focus" .
-			<200> <year> "2008" .
-			<200> <dgraph.type> "CarModel" .
+		<200> <make> "Ford" .
+		<200> <model> "Focus" .
+		<200> <year> "2008" .
+		<200> <dgraph.type> "CarModel" .
 
-			<201> <make> "Ford" .
-			<201> <model> "Focus" .
-			<201> <year> "2009" .
-			<201> <dgraph.type> "CarModel" .
-			<201> <previous_model> <200> .
-		`)
+		<201> <make> "Ford" .
+		<201> <model> "Focus" .
+		<201> <year> "2009" .
+		<201> <dgraph.type> "CarModel" .
+		<201> <previous_model> <200> .
+	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
 	addGeoPointToCluster(24, "loc", []float64{1.10001, 2.000001})

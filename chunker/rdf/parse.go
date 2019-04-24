@@ -155,7 +155,7 @@ L:
 		case itemValidEnd:
 			vend = true
 			if !it.Next() {
-				return rnq, x.Errorf("1 Invalid end of input. Input: [%s]", line)
+				return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 			}
 			// RDF spec says N-Quads should be terminated with a newline. Since we break the input
 			// by newline already. We should get EOF or # after dot(.)
@@ -178,7 +178,7 @@ L:
 	}
 
 	if !vend {
-		return rnq, x.Errorf("2 Invalid end of input. Input: [%s]", line)
+		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if isCommentLine {
 		return rnq, ErrEmpty
