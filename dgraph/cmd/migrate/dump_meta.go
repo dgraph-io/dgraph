@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,13 +95,11 @@ func (m *DumpMeta) dumpTable(table string) error {
 	}
 	defer rows.Close()
 
-	var columnNames []string
-	var columnTypes []*sql.ColumnType
-	var columnPredNames []string
+	//rowMetaInfo := &RowMetaInfo{}
+	var rowMetaInfo *RowMetaInfo
 	for rows.Next() {
-		if columnNames == nil {
-			columnNames, columnTypes, columnPredNames, err = getColumnTypesAndPredNames(rows,
-				tableGuide, tableInfo)
+		if rowMetaInfo == nil {
+			rowMetaInfo, err = getRowMetaInfo(rows, tableGuide, tableInfo)
 			if err != nil {
 				return fmt.Errorf("unable to get column types and pred names: %v", err)
 			}
@@ -130,22 +128,22 @@ func (m *DumpMeta) dumpTable(table string) error {
 	return nil
 }
 
-// getColumnTypesAndPredNames returns a SQL row's column names, column types, and
+// getRowMetaInfo returns a SQL row's column names, column types, and
 // the predicate names that the column values should be stored at.
 // For example, given the table person with the following schema
 // fname varchar(50)
 // lname varchar(50)
 // this function will return the following tuple
 // ([fname, lname], [VARCHAR, VARCHAR], [person_fname, person_lname])
-func getColumnTypesAndPredNames(rows *sql.Rows, tableGuide *TableGuide,
-	tableInfo *TableInfo) ([]string, []*sql.ColumnType, []string, error) {
+func getRowMetaInfo(rows *sql.Rows, tableGuide *TableGuide,
+	tableInfo *TableInfo) (*RowMetaInfo, error) {
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	// initialize the columnPredicateNames
 	var columnPredicateNames []string
@@ -153,7 +151,12 @@ func getColumnTypesAndPredNames(rows *sql.Rows, tableGuide *TableGuide,
 		columnPredicateNames = append(columnPredicateNames,
 			tableGuide.predNameGenerator.generatePredicateName(tableInfo, column))
 	}
-	return columns, columnTypes, columnPredicateNames, nil
+	return &RowMetaInfo{
+		columnNames:     columns,
+		columnTypes:     columnTypes,
+		columnPredNames: columnPredicateNames,
+	}, nil
+	//columns, columnTypes, columnPredicateNames, nil
 }
 
 // outputColumnValues takes a row with its metadata as well as the table metadata, and
