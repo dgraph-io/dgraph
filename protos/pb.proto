@@ -195,13 +195,18 @@ message DirectedEdge {
 }
 
 message Mutations {
-	uint32 group_id              = 1;
-	uint64 start_ts              = 2;
-	repeated DirectedEdge edges  = 3;
+	uint32 group_id	= 1;
+	uint64 start_ts	= 2;
+	repeated DirectedEdge edges	= 3;
 	repeated SchemaUpdate schema = 4;
-	bool drop_all                = 5;
-	bool ignore_index_conflict   = 6;
-	repeated TypeUpdate types    = 7;
+	bool ignore_index_conflict = 5;
+	repeated TypeUpdate types	= 6;
+	enum DropOp {
+		NONE = 0;
+		ALL = 1;
+		DATA = 2;
+	}
+	DropOp drop_op = 7;
 }
 
 message Snapshot {
@@ -280,6 +285,8 @@ message PostingList {
 	UidPack pack = 1; // Encoded list of uids in this posting list.
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
+
+  repeated uint64 splits = 4;
 }
 
 message FacetParam {
@@ -463,12 +470,19 @@ message Status {
 }
 
 message BackupRequest {
-	uint64 read_ts      = 1;
-	uint32 group_id     = 2;
-	string unix_ts      = 3;
-	string location     = 4;
-	uint64 since        = 5;
-	uint64 snapshot_ts  = 6;
+	uint64 read_ts = 1;
+	uint32 group_id = 2;
+	string unix_ts = 3;
+	string location = 4;
+	uint64 since = 5;
+	uint64 snapshot_ts = 6;
+	string access_key = 7;
+	string secret_key = 8;
+	string session_token = 9;
+
+  // True if no credentials should be used to access the S3 or minio bucket.
+  // For example, when using a bucket with a public policy.
+  bool anonymous = 10;
 }
 
 message ExportRequest {

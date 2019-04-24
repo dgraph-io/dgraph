@@ -112,6 +112,11 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		if pk.IsSchema() {
 			continue
 		}
+		if pk.StartUid > 0 {
+			// This key is part of a multi-part posting list. Skip it and only read
+			// the main key, which is the entry point to read the whole list.
+			continue
+		}
 
 		pl, err := posting.ReadPostingList(item.KeyCopy(nil), itr)
 		if err != nil {
@@ -376,7 +381,7 @@ func history(lookup []byte, itr *badger.Iterator) {
 			fmt.Fprintf(&buf, " Num uids = %d. Size = %d\n",
 				codec.ExactLen(plist.Pack), plist.Pack.Size())
 			dec := codec.Decoder{Pack: plist.Pack}
-			for uids := dec.Seek(0); len(uids) > 0; uids = dec.Next() {
+			for uids := dec.Seek(0, codec.SeekStart); len(uids) > 0; uids = dec.Next() {
 				for _, uid := range uids {
 					fmt.Fprintf(&buf, " Uid = %d\n", uid)
 				}
@@ -437,7 +442,15 @@ func lookup(db *badger.DB) {
 	}
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, " Key: %x", item.Key())
-	fmt.Fprintf(&buf, " Length: %d\n", pl.Length(math.MaxUint64, 0))
+	fmt.Fprintf(&buf, " Length: %d", pl.Length(math.MaxUint64, 0))
+
+	splits := pl.PartSplits()
+	isMultiPart := len(splits) > 0
+	fmt.Fprintf(&buf, " Is multi-part list? %v", isMultiPart)
+	if isMultiPart {
+		fmt.Fprintf(&buf, " Start UID of parts: %v\n", splits)
+	}
+
 	err = pl.Iterate(math.MaxUint64, 0, func(o *pb.Posting) error {
 		appendPosting(&buf, o)
 		return nil
@@ -500,6 +513,9 @@ func printKeys(db *badger.DB) {
 		}
 		if pk.Uid > 0 {
 			fmt.Fprintf(&buf, " uid: %d ", pk.Uid)
+		}
+		if pk.StartUid > 0 {
+			fmt.Fprintf(&buf, " startUid: %d ", pk.StartUid)
 		}
 		fmt.Fprintf(&buf, " key: %s", hex.EncodeToString(item.Key()))
 		if opt.itemMeta {

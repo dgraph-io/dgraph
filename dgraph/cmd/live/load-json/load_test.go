@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/z"
 )
 
-const alphaService = ":9180"
+var alphaService = z.SockAddr
 
 var (
 	testDataDir string
@@ -93,10 +93,10 @@ func TestLiveLoadJSONFile(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON file ran successfully")
+	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t)
 }
@@ -108,10 +108,10 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 		{"gzip", "-c", testDataDir + "/family.json"},
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading JSON stream ran successfully")
+	require.NoError(t, err, "live loading JSON stream exited with error")
 
 	checkLoadedData(t)
 }
@@ -129,10 +129,10 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", fileList,
-			"--dgraph", alphaService},
+			"--alpha", alphaService},
 	}
 	err := z.Pipeline(pipeline)
-	require.NoError(t, err, "live loading multiple JSON files ran successfully")
+	require.NoError(t, err, "live loading multiple JSON files exited with error")
 
 	checkLoadedData(t)
 }
@@ -141,7 +141,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = z.DgraphClientWithGroot(":9180")
+	dg = z.DgraphClientWithGroot(z.SockAddr)
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.

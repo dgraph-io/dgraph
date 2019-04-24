@@ -50,7 +50,7 @@ type suite struct {
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
-	dg := z.DgraphClientWithGroot(":9180")
+	dg := z.DgraphClientWithGroot(z.SockAddr)
 	err := dg.Alter(context.Background(), &api.Operation{
 		DropAll: true,
 	})
@@ -111,7 +111,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", rdfFile,
 		"--schema", schemaFile,
-		"--dgraph", ":9180",
+		"--alpha", z.SockAddr,
 	)
 	liveCmd.Dir = liveDir
 	if err := liveCmd.Run(); err != nil {
@@ -135,7 +135,7 @@ func (s *suite) cleanup() {
 
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		dg := z.DgraphClientWithGroot(":9180")
+		dg := z.DgraphClientWithGroot(z.SockAddr)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 

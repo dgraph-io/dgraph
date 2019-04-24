@@ -44,7 +44,7 @@ Query Example: In the example dataset, edges that link movies to directors and a
 }
 {{< /runnable >}}
 
-The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
+The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equaling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
 Every node had a unique 64-bit identifier.  The `uid` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
@@ -622,6 +622,7 @@ Filters nodes at the current query level to only nodes in the given set of UIDs.
 
 For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For value variable `b`, `uid(b)` represents the UIDs from the UID to value map.  With two or more variables, `uid(a,b,...)` represents the union of all the variables.
 
+`uid(<uid>)`, like an identity function, will return the requested UID even if the node does not have any edges.
 
 Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
 
@@ -662,7 +663,7 @@ Query Example: The films of Taraji Henson by genre.
 
 
 
-Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
+Query Example: Taraji Henson films ordered by number of genres, with genres listed in order of how many films Taraji has made in each genre.
 {{< runnable >}}
 {
   var(func: allofterms(name@en, "Taraji Henson")) {
@@ -784,9 +785,9 @@ Schema Types: `geo`
 
 Index Required: `geo`
 
-Matches all entities where the location given by `predicate` is within `distance` metres of geojson coordinate `[long, lat]`.
+Matches all entities where the location given by `predicate` is within `distance` meters of geojson coordinate `[long, lat]`.
 
-Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within 1000 meters (1 kilometer) of a point in Golden Gate Park in San Francisco.
 
 {{< runnable >}}
 {
@@ -807,7 +808,7 @@ Index Required: `geo`
 
 Matches all entities where the location given by `predicate` lies within the polygon specified by the geojson coordinate array.
 
-Query Example: Tourist destinations within the specified area of Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within the specified area of Golden Gate Park, San Francisco.
 
 {{< runnable >}}
 {
@@ -828,7 +829,7 @@ Index Required: `geo`
 
 Matches all entities where the polygon describing the location given by `predicate` contains geojson coordinate `[long, lat]` or given geojson polygon.
 
-Query Example : All entities that contain a point in the flamingo enclosure of San Fransico Zoo.
+Query Example : All entities that contain a point in the flamingo enclosure of San Francisco Zoo.
 {{< runnable >}}
 {
   tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
@@ -1123,7 +1124,7 @@ Syntax Examples:
 
 Sortable Types: `int`, `float`, `String`, `dateTime`, `default`
 
-Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by a predicate or variable.
+Results can be sorted in ascending order (`orderasc`) or descending order (`orderdesc`) by a predicate or variable.
 
 For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
 
@@ -1644,7 +1645,7 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
 ## Math on value variables
 
-Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then be used to order or perform other operations, such as might be used in building newsfeeds, simple recommendation systems and the likes.
+Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then used to order or perform other operations, such as might be used in building news feeds, simple recommendation systems, and so on.
 
 Math statements must be enclosed within `math( <exp> )` and must be stored to a value variable.
 
@@ -1707,7 +1708,7 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
 {{< /runnable >}}
 
 
-Values calculated with math operations are stored to value variables and so can be aggreated.
+Values calculated with math operations are stored to value variables and so can be aggregated.
 
 Query Example: Compute a score for each Steven Spielberg movie and then aggregate the score.
 
@@ -1787,53 +1788,64 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 
 ## Expand Predicates
 
-Keyword `_predicate_` retrieves all predicates out of nodes at the level used.
+The `expand()` function can be used to expand the predicates in a node. Starting
+with version 1.1, the keyword `_predicate_` has been deprecated. Instead, to
+properly use the `expand()` function, the use of the type system is required.
+Refer to the section on the type system to check how to set the types of a given
+nodes. The rest of this section assumes familiarity with that section.
 
-Query Example: All predicates from actor Geoffrey Rush.
-{{< runnable >}}
-{
-  director(func: eq(name@en, "Geoffrey Rush")) {
-    _predicate_
-  }
+There are four ways to use the `expand` function.
+
+* Predicates can be stored in a variable and passed to `expand()` to expand all
+  the predicates in the variable.
+* If `_all_` is passed as an argument to `expand()`, all the predicates for each
+  node at that level are retrieved. More levels can be specified in a nested
+  fashion under `expand()`.
+* If `_forward_` is passed as an argument to `expand()`, all predicates for each
+  node at that level (minus any reverse predicates) are retrieved.
+* If `_reverse_` is passed as an argument to `expand()`, only the reverse
+  predicates at each node in that level are retrieved.
+
+The last three keywords require that the node's types have been set to properly
+work. Dgraph will look for all the types that have been assigned to this node,
+query the types to check which attributes they have, and use those to compute
+the list of predicates to expand.
+
+For example, consider a node that has the following types `Animal` and `Pet`, which have 
+the following definitions:
+
+```
+type Animal {
+	name: string
+    species: uid
+    dob: datetime
 }
-{{< /runnable >}}
 
-The number of predicates from a node can be counted and be aliased.
-
-Query Example: All predicates from actor Geoffrey Rush and the count of such predicates.
-{{< runnable >}}
-{
-  director(func: eq(name@en, "Geoffrey Rush")) {
-    num_predicates: count(_predicate_)
-    my_predicates: _predicate_
-  }
+type Pet {
+	owner: uid
+    veterinarian: uid
 }
-{{< /runnable >}}
+```
 
-Predicates can be stored in a variable and passed to `expand()` to expand all the predicates in the variable.
+When `expand(_all_)` is called on this node, Dgraph will first check which types
+the node has. Then it will query the definitions of the types and build a list.
+Finally, it will query the schema to check if any of those predicates have a
+reverse node. If, for example, there's a reverse node in the `owner` predicate,
+the final list of predicates to expand will be:
 
-If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specfied in a nested fashion under `expand()`.
-If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
-If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
+```
+name
+species
+dob
+owner
+~owner
+veterinarian
+```
 
-Query Example: Predicates saved to a variable and queried with `expand()`.
-{{< runnable >}}
-{
-  var(func: eq(name@en, "Lost in Translation")) {
-    pred as _predicate_
-    # expand(_all_) { expand(_all_)}
-  }
-
-  director(func: eq(name@en, "Lost in Translation")) {
-    name@.
-    expand(val(pred)) {
-      expand(_all_)
-    }
-  }
-}
-{{< /runnable >}}
-
-`_predicate_` returns string valued predicates as a name without language tag.  If the predicate has no string without a language tag, `expand()` won't expand it (see [language preference]({{< relref "#language-support" >}})).  For example, above `name` generally doesn't have strings without tags in the dataset, so `name@.` is required.
+If the predicate has no string without a language tag, `expand()` won't expand
+it (see [language preference]({{< relref "#language-support" >}})). For example,
+above `name` generally doesn't have strings without tags in the dataset, so
+`name@.` is required.
 
 ## Cascade Directive
 
@@ -1890,7 +1902,7 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
-Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
+Query Example: All the co-actors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
 
 {{< runnable >}}
 {
@@ -1910,7 +1922,12 @@ Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the r
 
 ## Debug
 
-For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` information.
+For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `uid` attribute for all the entities along with the `server_latency` and `start_ts` information under the `extensions` key of the response.
+
+- `parsing_ns`: Latency in nanoseconds to parse the query.
+- `processing_ns`: Latency in nanoseconds to process the query.
+- `encoding_ns`: Latency in nanoseconds to encode the JSON response.
+- `start_ts`: The logical start timestamp of the transaction.
 
 Query with debug as a query parameter
 ```
@@ -1943,11 +1960,15 @@ Returns `uid` and `server_latency`
         "name@en": "The Big Lebowski"
       }
     ],
-    "server_latency": {
-      "parsing": "101µs",
-      "processing": "802ms",
-      "json": "115µs",
-      "total": "802ms"
+    "extensions": {
+      "server_latency": {
+        "parsing_ns": 18559,
+        "processing_ns": 802990982,
+        "encoding_ns": 1177565
+      },
+      "txn": {
+        "start_ts": 40010
+      }
     }
   }
 }
@@ -1966,7 +1987,7 @@ If a schema type isn't specified before a mutation adds triples for a predicate,
 
 * type `uid`, if the first mutation for the predicate has nodes for the subject and object, or
 
-* derived from the [rdf type]({{< relref "#rdf-types" >}}), if the object is a literal and an rdf type is present in the first mutation, or
+* derived from the [RDF type]({{< relref "#rdf-types" >}}), if the object is a literal and an RDF type is present in the first mutation, or
 
 * `default` type, otherwise.
 
@@ -2032,6 +2053,123 @@ If data exists and new indices are specified in a schema mutation, any index not
 
 Reverse edges are also computed if specified by a schema mutation.
 
+### Type System
+
+Starting in version 1.1, Dgraph has support for a type system. At the moment,
+the type system is basic but can be used already to categorize nodes and query
+them based on their type. The type system is also used during expand queries.
+
+Keep in mind that the type system is a work in progress and more features will
+be added in coming versions.
+
+#### Type definition.
+
+Types are defined using the GraphQL standard. Here's an example of a basic type.
+
+```
+type Student {
+	name: string
+    dob: datetime
+    home_address: string
+    year: int
+}
+```
+
+Types are declared along with the schema using the Alter endpoint. In order to
+properly support the above type, we need a predicate for each of the attributes
+in the type as shown below:
+
+```
+name: string .
+dob: datetime .
+home_address: string .
+year: int .
+```
+
+To use the same attribute in multiple types, make sure the type and indexes
+required for both are the same. Otherwise, use separate attribute and predicate
+names for each type. Below there is a small example.
+
+```
+type Student {
+	student_name: string
+}
+
+type Textbook {
+	textbook_name: string
+}
+
+student_name: string @index(exact) .
+textbook_name: string @lang @index(fulltext) .
+```
+
+Types also support list attributes (i.e `friends: [uid]`) and non-nullable types
+(i.e `friends: [uid]!`). However, the type of the attributes are not being used
+right now, as the type system is still a work in progress. It's a good idea to
+properly think about how they should be setup to avoid any issues once the type
+system starts using them.
+
+#### Setting the type of a node.
+
+Scalar nodes cannot have types since they only have one attribute and its type
+is the type of the node. UID nodes can have a type. The type is set by setting
+the value of the `dgraph.type` predicate for that node. A node can have multiple
+types. Here's an example of how to set the types of a node:
+
+```
+{
+	set {
+    	_:a <name> "Garfield" .
+    	_:a <dgraph.type> "Pet" .
+    	_:a <dgraph.type> "Animal" .
+    }
+}
+```
+
+`dgraph.type` is a reserved predicate and cannot be removed or modified.
+
+#### Using types during queries.
+
+The type system can be used as a top level function in the query language. Here's an example:
+
+```
+{
+	q(func: type(Animal)) {
+    	uid
+    	name
+    }
+}
+```
+
+This query will only return nodes whose type has been previously set to `Animal`.
+
+The types can also be used to filter results inside the queries. For example:
+
+```
+{
+	q(func: has(parent)) {
+    	uid
+    	parent @type(Person) {
+        	uid
+            name
+        }
+    }
+}
+```
+
+This query will return the nodes that have a parent predicate but only if the
+type of the parent node has been previously set to `Person`.
+
+#### Deleting a type
+
+TODO
+
+#### Expand queries and types
+
+Queries using the `expand(_all_)`, `expand(_reverse_)`, or `expand(_forward_)`
+functions now require that the types of the nodes to expand have been properly
+set. Refer to that section for more information.
+
 ### Predicates i18n
 
 If your predicate is a URI or has language-specific characters, then enclose
@@ -2075,15 +2213,21 @@ Query:
 
 ### Upsert directive
 
-Predicates can specify the `@upsert` directive if you want to do upsert operations against it.
-If the `@upsert` directive is specified then the index key for the predicate would be checked for
-conflict while committing a transaction, which would allow upserts.
+Predicates can specify the `@upsert` directive in the schema if you want to do
+upsert operations against it. If the `@upsert` directive is specified then the
+index key for the predicate would be checked for conflict while committing a
+transaction. The `@upsert` directive helps enforce uniqueness constraints when
+running concurrent upserts.
 
-This is how you specify the upsert directive for a predicate. This replaces the `IgnoreIndexConflict`
-field which was part of the mutation object in previous releases.
+This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
 ```
+
+{{% notice "note" %}}
+This replaces the `IgnoreIndexConflict` field which was part of the mutation
+object in previous releases.
+{{% /notice %}}
 
 ### RDF Types
 
@@ -2711,7 +2855,7 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 ## K-Shortest Path Queries
 
-The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
@@ -2999,7 +3143,7 @@ This brings some restrictions to how plugins can be used.
 - Plugins must be written in Go.
 
 - As of Go 1.9, `pkg/plugin` only works on Linux. Therefore, plugins will only
-  work on dgraph instances deployed in a Linux environment.
+  work on Dgraph instances deployed in a Linux environment.
 
 - The version of Go used to compile the plugin should be the same as the version
   of Go used to compile Dgraph itself. Dgraph always uses the latest version of
@@ -3068,7 +3212,7 @@ go build -buildmode=plugin -o myplugin.so ~/go/src/myplugin/main.go
 
 ### Running Dgraph with plugins
 
-When starting Dgraph, use the `--custom_tokenizers` flag to tell dgraph which
+When starting Dgraph, use the `--custom_tokenizers` flag to tell Dgraph which
 tokenizers to load. It accepts a comma separated list of plugins. E.g.
 
 ```sh
@@ -3545,3 +3689,4 @@ num: int @index(factor) .
   }
 }
 ```
+

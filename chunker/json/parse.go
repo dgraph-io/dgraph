@@ -254,9 +254,9 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			continue
 		}
 
-		if op == DeleteNquads {
-			// This corresponds to edge deletion.
-			if v == nil {
+		if v == nil {
+			if op == DeleteNquads {
+				// This corresponds to edge deletion.
 				nq := &api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
@@ -269,6 +269,9 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				mr.nquads = append(mr.nquads, nq)
 				continue
 			}
+
+			// If op is SetNquads, ignore this triplet and continue.
+			continue
 		}
 
 		prefix := pred + query.FacetDelimeter

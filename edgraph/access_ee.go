@@ -296,7 +296,8 @@ func RefreshAcls(closer *y.Closer) {
 	retrieveAcls := func() error {
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
-			Query: queryAcls,
+			Query:    queryAcls,
+			ReadOnly: true,
 		}
 
 		ctx := context.Background()
@@ -458,7 +459,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 
 		// if we get here, we know the user is not Groot.
-		if op.DropAll {
+		if isDropAll(op) || op.DropOp == api.Operation_DATA {
 			return fmt.Errorf("only Groot is allowed to drop all data, but the current user is %s",
 				userId)
 		}

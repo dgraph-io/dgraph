@@ -76,10 +76,11 @@ The client can be configured to use gRPC compression:
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
-	dialOpts := append([]grpc.CallOption{},
+	dialOpts := append([]grpc.DialOption{},
 		grpc.WithInsecure(),
-		grpc.UseCompressor("gzip"))
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)))
 	d, err := grpc.Dial("localhost:9080", dialOpts...)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,6 +89,7 @@ func newClient() *dgo.Dgraph {
 		api.NewDgraphClient(d),
 	)
 }
+
 ```
 
 ### Alter the database
@@ -107,15 +109,36 @@ func setup(c *dgo.Dgraph) {
 }
 ```
 
-`api.Operation` contains other fields as well, including drop predicate and
-drop all. Drop all is useful if you wish to discard all the data, and start from
-a clean slate, without bringing the instance down.
+`api.Operation` contains other fields as well, including drop predicate and drop
+all. Drop all is useful if you wish to discard all the data, and start from a
+clean slate, without bringing the instance down.
+
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(context.Background(), &api.Operation{DropOp: api.Operation_ALL})
+```
+
+The old way to send a drop all operation is still supported but will be eventually
+deprecated. It's shown below for reference.
 
 ```go
 	// Drop all data including schema from the dgraph instance. This is useful
 	// for small examples such as this, since it puts dgraph into a clean
 	// state.
 	err := c.Alter(context.Background(), &api.Operation{DropAll: true})
+```
+
+Starting with version 1.1, `api.Operation` also supports a drop data operation.
+This operation drops all the data but preserves the schema. This is useful when
+the schema is large and needs to be reused, such as in between unit tests.
+
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA})
 ```
 
 ### Create a transaction
@@ -134,11 +157,19 @@ func runTxn(c *dgo.Dgraph) {
 }
 ```
 
+#### Read-Only Transactions
+
 Read-only transactions can be created by calling `c.NewReadOnlyTxn()`. Read-only
 transactions are useful to increase read speed because they can circumvent the
 usual consensus protocol. Read-only transactions cannot contain mutations and
 trying to call `txn.Commit()` will result in an error. Calling `txn.Discard()`
 will be a no-op.
+
+Read-only queries can optionally be set as best-effort. Using this flag will ask
+the Dgraph Alpha to try to get timestamps from memory on a best-effort basis to
+reduce the number of outbound requests to Zero. This may yield improved
+latencies in read-bound workloads where linearizable reads are not strictly
+needed.
 
 ### Run a query
 

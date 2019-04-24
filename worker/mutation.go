@@ -162,7 +162,7 @@ func updateSchema(attr string, s pb.SchemaUpdate) error {
 	return txn.CommitAt(1, nil)
 }
 
-func updateSchemaType(attr string, typ types.TypeID, index uint64) {
+func createSchema(attr string, typ types.TypeID) {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -475,14 +475,14 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		mu.Schema = append(mu.Schema, schema)
 	}
 
-	if src.DropAll {
+	if src.DropOp == pb.Mutations_ALL || src.DropOp == pb.Mutations_DATA {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
 				mu = &pb.Mutations{GroupId: gid}
 				mm[gid] = mu
 			}
-			mu.DropAll = true
+			mu.DropOp = src.DropOp
 		}
 	}
 

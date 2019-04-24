@@ -31,11 +31,11 @@ import (
 type DgraphCluster struct {
 	TokenizerPluginsArg string
 
-	dgraphPort string
-	zeroPort   string
+	alphaPort string
+	zeroPort  string
 
-	dgraphPortOffset int
-	zeroPortOffset   int
+	alphaPortOffset int
+	zeroPortOffset  int
 
 	dir    string
 	zero   *exec.Cmd
@@ -48,11 +48,11 @@ func NewDgraphCluster(dir string) *DgraphCluster {
 	do := freePort(x.PortGrpc)
 	zo := freePort(x.PortZeroGrpc)
 	return &DgraphCluster{
-		dgraphPort:       strconv.Itoa(do + x.PortGrpc),
-		zeroPort:         strconv.Itoa(zo + x.PortZeroGrpc),
-		dgraphPortOffset: do,
-		zeroPortOffset:   zo,
-		dir:              dir,
+		alphaPort:       strconv.Itoa(do + x.PortGrpc),
+		zeroPort:        strconv.Itoa(zo + x.PortZeroGrpc),
+		alphaPortOffset: do,
+		zeroPortOffset:  zo,
+		dir:             dir,
 	}
 }
 
@@ -85,7 +85,7 @@ func (d *DgraphCluster) Start() error {
 		"alpha",
 		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
-		"--port_offset", strconv.Itoa(d.dgraphPortOffset),
+		"--port_offset", strconv.Itoa(d.alphaPortOffset),
 		"--custom_tokenizers", d.TokenizerPluginsArg,
 	)
 	d.dgraph.Dir = d.dir
@@ -93,7 +93,7 @@ func (d *DgraphCluster) Start() error {
 		return err
 	}
 
-	dgConn, err := grpc.Dial(":"+d.dgraphPort, grpc.WithInsecure())
+	dgConn, err := grpc.Dial(":"+d.alphaPort, grpc.WithInsecure())
 	if err != nil {
 		return err
 	}

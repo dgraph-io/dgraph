@@ -574,9 +574,8 @@ func (qs *queryState) handleUidPostings(
 				} else {
 					key = x.DataKey(q.Attr, q.UidList.Uids[i])
 				}
-			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn:
-				key = x.IndexKey(q.Attr, srcFn.tokens[i])
-			case CompareAttrFn:
+			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn,
+				CompareAttrFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			default:
 				return x.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
@@ -807,7 +806,7 @@ func (qs *queryState) helpProcessTask(
 
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
-		AfterUID: uint64(q.AfterUid),
+		AfterUID: q.AfterUid,
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
