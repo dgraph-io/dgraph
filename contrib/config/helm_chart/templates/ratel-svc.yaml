@@ -6,8 +6,8 @@ metadata:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
     component: {{ .Values.ratel.name }}
-    release: {{ .Release.Name | quote }}
-    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   type: {{ .Values.ratel.service.type }}
   ports:
@@ -18,4 +18,4 @@ spec:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
     component: {{ .Values.ratel.name }}
-    release: {{ .Release.Name | quote }}
+    release: {{ .Release.Name }}

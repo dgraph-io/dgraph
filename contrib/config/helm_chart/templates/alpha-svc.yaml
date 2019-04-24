@@ -6,8 +6,8 @@ metadata:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
     component: {{ .Values.alpha.name }}
-    release: {{ .Release.Name | quote }}
-    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   type: {{ .Values.alpha.service.type }}
   ports:
@@ -21,4 +21,4 @@ spec:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
     component: {{ .Values.alpha.name }}
-    release: {{ .Release.Name | quote }}
+    release: {{ .Release.Name }}

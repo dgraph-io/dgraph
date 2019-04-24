@@ -6,8 +6,8 @@ metadata:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
     component: {{ .Values.zero.name }}
-    release: {{ .Release.Name | quote }}
-    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   type: ClusterIP
   clusterIP: None
@@ -18,5 +18,5 @@ spec:
   selector:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
-    release: {{ .Release.Name | quote }}
-    component: {{ .Values.zero.name | quote }}
+    release: {{ .Release.Name }}
+    component: {{ .Values.zero.name }}

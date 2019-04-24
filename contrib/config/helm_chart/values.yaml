@@ -55,7 +55,7 @@ zero:
 
   ## Hard means that by default pods will only be scheduled if there are enough nodes for them
   ## and that they will never end up on the same node. Setting this to soft will do this "best effort"
-  antiAffinity: "soft"
+  antiAffinity: soft
 
   # By default this will make sure two pods don't end up on the same node
   # Changing this to a region would allow you to spread pods across regions
@@ -98,14 +98,12 @@ zero:
   nodeSelector: {}
   tolerations: []
 
-  ## Configure resource requests and limits
+  ## Configure resource requests 
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
   resources:
     requests:
       memory: 100Mi
-    limits:
-      memory: 1Gi
 
   ## Configure extra options for liveness and readiness probes
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
@@ -157,7 +155,7 @@ alpha:
 
   ## Hard means that by default pods will only be scheduled if there are enough nodes for them
   ## and that they will never end up on the same node. Setting this to soft will do this "best effort"
-  antiAffinity: "soft"
+  antiAffinity: soft
 
   # By default this will make sure two pods don't end up on the same node
   # Changing this to a region would allow you to spread pods across regions
@@ -191,7 +189,7 @@ alpha:
     # storageClass: "-"
     accessModes:
       - ReadWriteOnce
-    size: 16Gi
+    size: 100Gi
     annotations: {}
 
   ## Node labels and tolerations for pod assignment
@@ -201,14 +199,12 @@ alpha:
   nodeSelector: {}
   tolerations: []
 
-  ## Configure resource requests and limits
+  ## Configure resource requests 
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
   resources:
     requests:
       memory: 100Mi
-    limits:
-      memory: 1Gi
 
   ## Configure extra options for liveness and readiness probes
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
@@ -251,7 +247,7 @@ ratel:
     fsGroup: 1001
     runAsUser: 1001
 
-  ## Configure resource requests and limits
+  ## Configure resource requests 
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
   ##
   ## resources:

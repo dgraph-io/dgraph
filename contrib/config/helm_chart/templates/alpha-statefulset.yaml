@@ -5,9 +5,9 @@ metadata:
   labels:
     app: {{ template "dgraph.name" . }}
     chart: {{ template "dgraph.chart" . }}
-    component: {{ .Values.alpha.name | quote }}
-    release: {{ .Release.Name | quote }}
-    heritage: {{ .Release.Service | quote }}
+    component: {{ .Values.alpha.name }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   serviceName: {{ template "dgraph.alpha.fullname" . }}-headless
   replicas: {{ .Values.alpha.replicaCount }}
@@ -24,16 +24,16 @@ spec:
     matchLabels:
       app: {{ template "dgraph.name" . }}
       chart: {{ template "dgraph.chart" . }}
-      release: {{ .Release.Name | quote }}
-      component: {{ .Values.alpha.name | quote }}
+      release: {{ .Release.Name }}
+      component: {{ .Values.alpha.name }}
   template:
     metadata:
       name: "{{ template "dgraph.alpha.fullname" . }}"
       labels:
         app: {{ template "dgraph.name" . }}
         chart: {{ template "dgraph.chart" . }}
-        release: {{ .Release.Name | quote }}
-        component: {{ .Values.alpha.name | quote }}
+        release: {{ .Release.Name }}
+        component: {{ .Values.alpha.name }}
     spec:
       {{- if or (eq .Values.alpha.antiAffinity "hard") (eq .Values.alpha.antiAffinity "soft") .Values.alpha.nodeAffinity }}
       affinity:
@@ -46,7 +46,7 @@ spec:
               - key: component
                 operator: In
                 values:
-                - {{ .Values.alpha.name | quote }}
+                - {{ .Values.alpha.name }}
             topologyKey: {{ .Values.alpha.podAntiAffinitytopologyKey }}
       {{- else if eq .Values.alpha.antiAffinity "soft" }}
         podAntiAffinity:
@@ -58,7 +58,7 @@ spec:
                 - key: component
                   operator: In
                   values:
-                  - {{ .Values.alpha.name | quote }}
+                  - {{ .Values.alpha.name }}
               topologyKey: {{ .Values.alpha.podAntiAffinitytopologyKey }}
       {{- end }}
       {{- with .Values.alpha.nodeAffinity }}
