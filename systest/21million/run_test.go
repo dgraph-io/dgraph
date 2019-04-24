@@ -26,10 +26,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +65,15 @@ func TestQueries(t *testing.T) {
 
 		// The test query and expected result are separated by a delimiter.
 		bodies := strings.SplitN(contents, "\n---\n", 2)
-		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
+
+		// If a query takes too long to run, it probably means dgraph is stuck and there's
+		// no point in waiting longer or trying more tests.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		resp, err := dg.NewTxn().Query(ctx, bodies[0])
+		cancel()
+		if ctx.Err() == context.DeadlineExceeded {
+			t.Fatal("aborting test due to query timeout")
+		}
 		require.NoError(t, err)
 
 		t.Logf("running %s", file.Name())

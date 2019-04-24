@@ -527,15 +527,18 @@ func (r *rebuild) Run(ctx context.Context) error {
 		if le == 0 {
 			continue
 		}
-		kv, err := pl.MarshalToKv()
+		kvs, err := pl.Rollup()
 		if err != nil {
 			return err
 		}
-		// We choose to write the PL at r.startTs, so it won't be read by txns,
-		// which occurred before this schema mutation. Typically, we use
-		// kv.Version as the timestamp.
-		if err = writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], r.startTs); err != nil {
-			return err
+
+		for _, kv := range kvs {
+			// We choose to write the PL at r.startTs, so it won't be read by txns,
+			// which occurred before this schema mutation. Typically, we use
+			// kv.Version as the timestamp.
+			if err = writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], r.startTs); err != nil {
+				return err
+			}
 		}
 		// This locking is just to catch any future issues.  We shouldn't need
 		// to release this lock, because each posting list must only be accessed
@@ -946,6 +949,11 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 // DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
 	return pstore.DropAll()
+}
+
+// DeleteData deletes all data but leaves types and schema intact.
+func DeleteData() error {
+	return pstore.DropPrefix([]byte{x.DefaultPrefix})
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.

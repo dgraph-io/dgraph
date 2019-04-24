@@ -284,7 +284,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Received ALTER op: %+v", op)
 
 	// The following code block checks if the operation should run or not.
-	if op.Schema == "" && op.DropAttr == "" && !op.DropAll {
+	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
 		return nil, x.Errorf("Operation must have at least one field set")
@@ -292,6 +292,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
 		return empty, err
+	}
+
+	if isDropAll(op) && op.DropOp == api.Operation_DATA {
+		return nil, x.Errorf("Only one of DropAll and DropData can be true")
 	}
 
 	if !isMutationAllowed(ctx) {
@@ -312,11 +316,20 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
-	if op.DropAll {
-		m.DropAll = true
+	if isDropAll(op) {
+		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
+		ResetAcl()
+		return empty, err
+	}
+
+	if op.DropOp == api.Operation_DATA {
+		m.DropOp = pb.Mutations_DATA
+		_, err := query.ApplyMutations(ctx, m)
+
+		// recreate the admin account after a drop data operation
 		ResetAcl()
 		return empty, err
 	}
@@ -942,4 +955,11 @@ func formatTypes(types []*pb.TypeUpdate) []map[string]interface{} {
 		res = append(res, typeMap)
 	}
 	return res
+}
+
+func isDropAll(op *api.Operation) bool {
+	if op.DropAll || op.DropOp == api.Operation_ALL {
+		return true
+	}
+	return false
 }
