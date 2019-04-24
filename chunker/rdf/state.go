@@ -397,26 +397,13 @@ forLoop:
 			}
 			l.Emit(itemText)
 		default:
-			// backup to ensure the rune consumed before the switch block is a valid facet rune
-			l.Backup()
-			_, valid := l.AcceptRun(isFacetAllowedRune)
-			if !valid {
-				return l.Errorf("unrecognized character while lexing facet at pos: %d",
-					l.Pos)
-			}
+			l.AcceptRun(func(r rune) bool {
+				return r != equal && !isSpace(r) && r != rightRound && r != comma
+			})
 			l.Emit(itemText)
 		}
 	}
 	return lexText
-}
-
-func isFacetAllowedRune(r rune) bool {
-	return (r >= 'a' && r <= 'z') ||
-		(r >= 'A' && r <= 'Z') ||
-		(r >= '0' && r <= '9') ||
-		r == '_' ||
-		r == ':' || r == '-' || r == '+' || // : - and + can show up in timestamps
-		r == '.' // . can appear as the decimal point of a number
 }
 
 // lexComment lexes a comment text.

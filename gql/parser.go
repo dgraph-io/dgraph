@@ -2440,8 +2440,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, it.Errorf("unable to get value when parsing key value pairs")
 				}
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
-				// Right now we only allow one sort by a variable and it has to be at the first
-				// position.
+				// Right now we only allow one sort by a variable
 				if len(gq.Order) > 0 && isSortkey(key) {
 					return nil, it.Errorf("Multiple sorting only allowed by predicates. "+
 						"Got: %+v", val)
