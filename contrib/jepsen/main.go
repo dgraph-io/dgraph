@@ -190,6 +190,7 @@ func runJepsenTest(test *JepsenTest) int {
 	}
 	if *jaeger != "" {
 		testCmd = append(testCmd, "--dgraph-jaeger-collector", *jaeger)
+		testCmd = append(testCmd, "--tracing", *jaeger+"/api/traces")
 	}
 	command := append(dockerCmd, strings.Join(testCmd, " "))
 
