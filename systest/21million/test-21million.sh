@@ -75,6 +75,11 @@ elif [[ $CLEANUP != all && $CLEANUP != servers && $CLEANUP != none ]]; then
     exit 1
 fi
 
+# default to quiet mode if diffs are being saved in a directory
+if [[ -n $SAVEDIR ]]; then
+    QUIET=yes
+fi
+
 Info "entering directory $SRCDIR"
 cd $SRCDIR
 
