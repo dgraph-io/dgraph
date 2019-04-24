@@ -475,8 +475,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		mu.Schema = append(mu.Schema, schema)
 	}
 
-	if src.DropOp == pb.Mutations_ALL || src.DropOp == pb.Mutations_DATA ||
-		src.DropOp == pb.Mutations_TYPE {
+	if src.DropOp > 0 {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
