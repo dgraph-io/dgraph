@@ -52,7 +52,7 @@ type RowMetaInfo struct {
 func (m *DumpMeta) dumpSchema() error {
 	for table, guide := range m.tableGuides {
 		tableInfo := m.tableInfos[table]
-		for _, index := range guide.indexGenerator.generateDgraphIndices(tableInfo) {
+		for _, index := range guide.indexG.genDgraphIndices(tableInfo) {
 			_, err := m.schemaWriter.WriteString(index)
 			if err != nil {
 				return fmt.Errorf("error while writing schema: %v", err)
@@ -95,35 +95,30 @@ func (m *DumpMeta) dumpTable(table string) error {
 	}
 	defer rows.Close()
 
-	//rowMetaInfo := &RowMetaInfo{}
-	var rowMetaInfo *RowMetaInfo
+	var rmi *RowMetaInfo
 	for rows.Next() {
-		if rowMetaInfo == nil {
-			rowMetaInfo, err = getRowMetaInfo(rows, tableGuide, tableInfo)
+		if rmi == nil {
+			rmi, err = getRowMetaInfo(rows, tableGuide, tableInfo)
 			if err != nil {
 				return fmt.Errorf("unable to get column types and pred names: %v", err)
 			}
 		}
 
 		// step 1: read the row's column values
-		colValues, err := getColumnValues(columnNames, columnTypes, rows)
+		colValues, err := getColumnValues(rmi.columnNames, rmi.columnTypes, rows)
 		if err != nil {
 			return err
 		}
+		rmi.colValues = colValues
 
 		// step 2: output the column values in RDF format
-		blankNodeLabel := tableGuide.blankNodeGenerator.generateBlankNode(tableInfo, colValues)
-		m.outputColumnValues(&RowMetaInfo{
-			colValues:       colValues,
-			columnPredNames: columnPredNames,
-			columnNames:     columnNames,
-			blankNodeLabel:  blankNodeLabel,
-			columnTypes:     columnTypes,
-		}, tableInfo)
+		rmi.blankNodeLabel = tableGuide.blankNodeG.genBlankNode(tableInfo, colValues)
+
+		m.outputRow(rmi, tableInfo)
 
 		// step 3: record mappings to the blankNodeLabel so that future tables can look up the
 		// blankNodeLabel
-		tableGuide.valuesRecorder.record(tableInfo, colValues, blankNodeLabel)
+		tableGuide.valuesRecorder.record(tableInfo, colValues, rmi.blankNodeLabel)
 	}
 	return nil
 }
@@ -149,7 +144,7 @@ func getRowMetaInfo(rows *sql.Rows, tableGuide *TableGuide,
 	var columnPredicateNames []string
 	for _, column := range columns {
 		columnPredicateNames = append(columnPredicateNames,
-			tableGuide.predNameGenerator.generatePredicateName(tableInfo, column))
+			tableGuide.predNameG.genPredicateName(tableInfo, column))
 	}
 	return &RowMetaInfo{
 		columnNames:     columns,
@@ -159,7 +154,7 @@ func getRowMetaInfo(rows *sql.Rows, tableGuide *TableGuide,
 	//columns, columnTypes, columnPredicateNames, nil
 }
 
-// outputColumnValues takes a row with its metadata as well as the table metadata, and
+// outputRow takes a row with its metadata as well as the table metadata, and
 // spits out one or more RDF entries to the DumpMeta's dataWriter.
 // Consider the following table "salary"
 // person_company varchar (50)
@@ -186,7 +181,7 @@ func getRowMetaInfo(rows *sql.Rows, tableGuide *TableGuide,
 // _:person_company_Google_employee_id_100. The mapping from the ref label
 // _:person_company_Google_employee_id_100 to the foreign blank node _:person_2
 // is recorded through the valuesRecorder when the person table is processed.
-func (m *DumpMeta) outputColumnValues(rowMetaInfo *RowMetaInfo, tableInfo *TableInfo) {
+func (m *DumpMeta) outputRow(rowMetaInfo *RowMetaInfo, tableInfo *TableInfo) {
 	for i, colValue := range rowMetaInfo.colValues {
 		predicate := rowMetaInfo.columnPredNames[i]
 		outputPlainCell(rowMetaInfo.blankNodeLabel, rowMetaInfo.columnTypes[i].DatabaseTypeName(),
@@ -204,10 +199,10 @@ func (m *DumpMeta) outputColumnValues(rowMetaInfo *RowMetaInfo, tableInfo *Table
 		refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo,
 			m.tableInfos[foreignTableName],
 			constraint)
-		foreignUidLabel := m.tableGuides[foreignTableName].valuesRecorder.getUidLabel(refLabel)
+		foreignBlankNode := m.tableGuides[foreignTableName].valuesRecorder.getBlankNode(refLabel)
 		outputPlainCell(rowMetaInfo.blankNodeLabel, "UID",
 			getPredFromConstraint(tableInfo.tableName, SEPERATOR, constraint),
-			foreignUidLabel, m.dataWriter)
+			foreignBlankNode, m.dataWriter)
 	}
 }
 
@@ -238,27 +233,27 @@ func outputPlainCell(uidLabel string, dbType string, predName string,
 // having the value of _:person_company_Google_employee_id_100
 func getRefLabelFromConstraint(rowMetaInfo *RowMetaInfo,
 	tableInfo *TableInfo, foreignTableInfo *TableInfo,
-	constraint *ForeignKeyConstraint) string {
+	constraint *FKConstraint) string {
 
-	if constraint.foreignColumnIndices == nil {
+	if constraint.foreignIndices == nil {
 		foreignKeyColumnNames := make(map[string]string)
 		for _, part := range constraint.parts {
 			foreignKeyColumnNames[part.columnName] = part.remoteColumnName
 		}
 
-		constraint.foreignColumnIndices = getColumnIndices(tableInfo,
+		constraint.foreignIndices = getColumnIndices(tableInfo,
 			func(info *TableInfo, column string) bool {
 				_, ok := foreignKeyColumnNames[column]
 				return ok
 			})
 
 		// replace the column names to be the foreign column names
-		for _, columnIdx := range constraint.foreignColumnIndices {
+		for _, columnIdx := range constraint.foreignIndices {
 			columnIdx.name = foreignKeyColumnNames[columnIdx.name]
 		}
 	}
 
 	return getAliasLabel(foreignTableInfo.columns, foreignTableInfo.tableName, SEPERATOR,
-		constraint.foreignColumnIndices,
+		constraint.foreignIndices,
 		rowMetaInfo.colValues)
 }

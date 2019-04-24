@@ -40,10 +40,11 @@ type ColumnInfo struct {
 	dataType DataType
 }
 
-type ForeignKeyConstraint struct {
+// FKConstraint represents a foreign key constraint
+type FKConstraint struct {
 	parts []*ConstraintPart
 	// the referenced column names and their indices in the foreign table
-	foreignColumnIndices []*ColumnIdx
+	foreignIndices []*ColumnIdx
 }
 
 type ConstraintPart struct {
@@ -65,10 +66,10 @@ type TableInfo struct {
 	referencedTables map[string]interface{}
 
 	// a map from constraint names to constraints
-	foreignKeyConstraints map[string]*ForeignKeyConstraint
+	foreignKeyConstraints map[string]*FKConstraint
 
 	// the list of foreign key constraints using this table as the target
-	constraintSources []*ForeignKeyConstraint
+	cstSources []*FKConstraint
 }
 
 type ColumnOutput struct {
@@ -103,7 +104,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 		tableName:             table,
 		columns:               make(map[string]*ColumnInfo),
 		referencedTables:      make(map[string]interface{}),
-		foreignKeyConstraints: make(map[string]*ForeignKeyConstraint),
+		foreignKeyConstraints: make(map[string]*FKConstraint),
 	}
 
 	for columnRows.Next() {
@@ -180,10 +181,10 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 		}
 
 		tableInfo.referencedTables[referencedTableName] = struct{}{}
-		var constraint *ForeignKeyConstraint
+		var constraint *FKConstraint
 		var ok bool
 		if constraint, ok = tableInfo.foreignKeyConstraints[constraintName]; !ok {
-			constraint = &ForeignKeyConstraint{
+			constraint = &FKConstraint{
 				parts: make([]*ConstraintPart, 0),
 			}
 			tableInfo.foreignKeyConstraints[constraintName] = constraint
@@ -204,7 +205,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 // then we return a reversed constraint whose local table name is B with local columns
 // col4, col5, col6, while the remote table name is A, and the remote columns are
 // col1, col2 and col3
-func validateAndGetReverse(constraint *ForeignKeyConstraint) (string, *ForeignKeyConstraint) {
+func validateAndGetReverse(constraint *FKConstraint) (string, *FKConstraint) {
 	reverseParts := make([]*ConstraintPart, 0)
 	// verify that within one constraint, the remote table names are the same
 	var remoteTableName string
@@ -221,7 +222,7 @@ func validateAndGetReverse(constraint *ForeignKeyConstraint) (string, *ForeignKe
 			remoteColumnName: part.columnName,
 		})
 	}
-	return remoteTableName, &ForeignKeyConstraint{
+	return remoteTableName, &FKConstraint{
 		parts: reverseParts,
 	}
 }
@@ -234,8 +235,8 @@ func populateReferencedByColumns(tables map[string]*TableInfo) {
 		for _, constraint := range tableInfo.foreignKeyConstraints {
 			reverseTable, reverseConstraint := validateAndGetReverse(constraint)
 
-			tables[reverseTable].constraintSources = append(tables[reverseTable].
-				constraintSources, reverseConstraint)
+			tables[reverseTable].cstSources = append(tables[reverseTable].
+				cstSources, reverseConstraint)
 		}
 	}
 }
