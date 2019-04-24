@@ -199,8 +199,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
-		schema.State().DeleteType(proposal.Mutations.DropValue)
-		return nil
+		return schema.State().DeleteType(proposal.Mutations.DropValue)
 	}
 
 	if proposal.Mutations.StartTs == 0 {
