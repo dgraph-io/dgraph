@@ -1821,15 +1821,22 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
-func uniqueValues(vl []*pb.ValueList) []string {
-	predMap := make(map[string]struct{})
-
+func getPredsFromVals(vl []*pb.ValueList) []string {
+	preds := make([]string, 0)
 	for _, l := range vl {
 		for _, v := range l.Values {
 			if len(v.Val) > 0 {
-				predMap[string(v.Val)] = struct{}{}
+				preds = append(preds, string(v.Val))
 			}
 		}
+	}
+	return preds
+}
+
+func uniquePreds(list []string) []string {
+	predMap := make(map[string]struct{})
+	for _, item := range list {
+		predMap[item] = struct{}{}
 	}
 
 	preds := make([]string, 0, len(predMap))
@@ -1913,8 +1920,9 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		default:
 			span.Annotate(nil, "expand default")
 			// We already have the predicates populated from the var.
-			preds = uniqueValues(child.ExpandPreds)
+			preds = getPredsFromVals(child.ExpandPreds)
 		}
+		preds = uniquePreds(preds)
 
 		for _, pred := range preds {
 			temp := &SubGraph{
@@ -2492,7 +2500,7 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return uniqueValues(result.ValueMatrix), nil
+	return getPredsFromVals(result.ValueMatrix), nil
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
