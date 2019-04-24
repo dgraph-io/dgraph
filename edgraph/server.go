@@ -608,6 +608,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	// Core processing happens here.
 	var er query.ExecutionResult
 	if er, err = queryRequest.Process(ctx); err != nil {
+		glog.Errorf("error from queryRequest.Process: %v", err)
 		return resp, x.Wrap(err)
 	}
 	var js []byte

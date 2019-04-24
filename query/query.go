@@ -818,6 +818,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
+	glog.Infof("args: %+v", gq.Args)
 	if v, ok := gq.Args["offset"]; ok {
 		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -971,7 +972,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 	if err := args.fill(gq); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error while filling args: %v", err)
 	}
 
 	sg := &SubGraph{Params: args}
@@ -995,7 +996,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	if isUidFnWithoutVar(gq.Func) && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error while populating UIDs: %v", err)
 		}
 	}
 
@@ -1003,14 +1004,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
 		if err := filterCopy(sgf, gq.Filter); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error while copying filter: %v", err)
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
 	if gq.FacetsFilter != nil {
 		facetsFilter, err := toFacetsFilter(gq.FacetsFilter)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error while converting to facets filter: %v", err)
 		}
 		sg.facetsFilter = facetsFilter
 	}
@@ -2681,7 +2682,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return err
+			return fmt.Errorf("error while converting to subgraph: %v", err)
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
