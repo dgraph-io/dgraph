@@ -198,6 +198,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 	}
 
+	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
+		return schema.State().DeleteType(proposal.Mutations.DropValue)
+	}
+
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided")
 	}
@@ -216,7 +220,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
-			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
+			if err := runTypeMutation(ctx, tupdate); err != nil {
 				return err
 			}
 		}
