@@ -40,11 +40,12 @@ type DumpMeta struct {
 // RowMetaInfo captures values in a SQL table row, as well as the metadata associated
 // with the row
 type RowMetaInfo struct {
-	colValues       []interface{}
-	columnPredNames []string
-	columnNames     []string
-	blankNodeLabel  string
-	columnTypes     []*sql.ColumnType
+	colValues      []interface{}
+	predNames      []string
+	columnNames    []string
+	blankNodeLabel string
+	columnTypes    []*sql.ColumnType
+	tableInfo      *TableInfo
 }
 
 // dumpSchema generates the Dgraph schema based on m.tableGuides
@@ -140,18 +141,19 @@ func getRowMetaInfo(rows *sql.Rows, tableGuide *TableGuide,
 	if err != nil {
 		return nil, err
 	}
-	// initialize the columnPredicateNames
-	var columnPredicateNames []string
+	// initialize the predNames
+	var columnPredNames []string
 	for _, column := range columns {
-		columnPredicateNames = append(columnPredicateNames,
+		columnPredNames = append(columnPredNames,
 			tableGuide.predNameG.genPredicateName(tableInfo, column))
 	}
 	return &RowMetaInfo{
-		columnNames:     columns,
-		columnTypes:     columnTypes,
-		columnPredNames: columnPredicateNames,
+		columnNames: columns,
+		columnTypes: columnTypes,
+		predNames:   columnPredNames,
+		tableInfo:   tableInfo,
 	}, nil
-	//columns, columnTypes, columnPredicateNames, nil
+	//columns, columnTypes, predNames, nil
 }
 
 // outputRow takes a row with its metadata as well as the table metadata, and
@@ -181,10 +183,10 @@ func getRowMetaInfo(rows *sql.Rows, tableGuide *TableGuide,
 // _:person_company_Google_employee_id_100. The mapping from the ref label
 // _:person_company_Google_employee_id_100 to the foreign blank node _:person_2
 // is recorded through the valuesRecorder when the person table is processed.
-func (m *DumpMeta) outputRow(rowMetaInfo *RowMetaInfo, tableInfo *TableInfo) {
-	for i, colValue := range rowMetaInfo.colValues {
-		predicate := rowMetaInfo.columnPredNames[i]
-		outputPlainCell(rowMetaInfo.blankNodeLabel, rowMetaInfo.columnTypes[i].DatabaseTypeName(),
+func (m *DumpMeta) outputRow(rmi *RowMetaInfo, tableInfo *TableInfo) {
+	for i, colValue := range rmi.colValues {
+		predicate := rmi.predNames[i]
+		outputPlainCell(rmi.blankNodeLabel, rmi.columnTypes[i].DatabaseTypeName(),
 			predicate,
 			colValue, m.dataWriter)
 	}
@@ -196,11 +198,9 @@ func (m *DumpMeta) outputRow(rowMetaInfo *RowMetaInfo, tableInfo *TableInfo) {
 
 		foreignTableName := constraint.parts[0].remoteTableName
 
-		refLabel := getRefLabelFromConstraint(rowMetaInfo, tableInfo,
-			m.tableInfos[foreignTableName],
-			constraint)
+		refLabel := rmi.getRefLabelFromConstraint(m.tableInfos[foreignTableName], constraint)
 		foreignBlankNode := m.tableGuides[foreignTableName].valuesRecorder.getBlankNode(refLabel)
-		outputPlainCell(rowMetaInfo.blankNodeLabel, "UID",
+		outputPlainCell(rmi.blankNodeLabel, "UID",
 			getPredFromConstraint(tableInfo.tableName, SEPERATOR, constraint),
 			foreignBlankNode, m.dataWriter)
 	}
@@ -231,17 +231,15 @@ func outputPlainCell(uidLabel string, dbType string, predName string,
 // where Google is the person_company, 100 is the employee id, and 50.0 is the salary rate
 // the refLabel will use the foreign table name, foreign column names and the local row's values,
 // having the value of _:person_company_Google_employee_id_100
-func getRefLabelFromConstraint(rowMetaInfo *RowMetaInfo,
-	tableInfo *TableInfo, foreignTableInfo *TableInfo,
+func (rmi *RowMetaInfo) getRefLabelFromConstraint(foreignTableInfo *TableInfo,
 	constraint *FKConstraint) string {
-
 	if constraint.foreignIndices == nil {
 		foreignKeyColumnNames := make(map[string]string)
 		for _, part := range constraint.parts {
 			foreignKeyColumnNames[part.columnName] = part.remoteColumnName
 		}
 
-		constraint.foreignIndices = getColumnIndices(tableInfo,
+		constraint.foreignIndices = getColumnIndices(rmi.tableInfo,
 			func(info *TableInfo, column string) bool {
 				_, ok := foreignKeyColumnNames[column]
 				return ok
@@ -253,7 +251,11 @@ func getRefLabelFromConstraint(rowMetaInfo *RowMetaInfo,
 		}
 	}
 
-	return getAliasLabel(foreignTableInfo.columns, foreignTableInfo.tableName, SEPERATOR,
-		constraint.foreignIndices,
-		rowMetaInfo.colValues)
+	return getAliasLabel(&Alias{
+		allColumns:         foreignTableInfo.columns,
+		aliasColumnIndices: constraint.foreignIndices,
+		tableName:          foreignTableInfo.tableName,
+		separator:          SEPERATOR,
+		colValues:          rmi.colValues,
+	})
 }

@@ -17,7 +17,6 @@
 package migrate
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -103,14 +102,17 @@ func run(conf *viper.Viper) error {
 
 	tableGuides := getTableGuides(tableInfos)
 
-	return generateSchemaAndData(schemaOutput, dataOutput, tableInfos, tableGuides, pool)
+	return generateSchemaAndData(&DumpMeta{
+		tableInfos:  tableInfos,
+		tableGuides: tableGuides,
+		sqlPool:     pool,
+	}, schemaOutput, dataOutput)
 }
 
 // generateSchemaAndData opens the two files schemaOutput and dataOutput,
 // then it dumps schema to the writer backed by schemaOutput, and data in RDF format
 // to the writer backed by dataOutput
-func generateSchemaAndData(schemaOutput string, dataOutput string,
-	tableInfos map[string]*TableInfo, tableGuides map[string]*TableGuide, pool *sql.DB) error {
+func generateSchemaAndData(dumpMeta *DumpMeta, schemaOutput string, dataOutput string) error {
 	schemaWriter, schemaCancelFunc, err := getFileWriter(schemaOutput)
 	if err != nil {
 		return err
@@ -121,18 +123,14 @@ func generateSchemaAndData(schemaOutput string, dataOutput string,
 		return err
 	}
 	defer dataCancelFunc()
-	m := DumpMeta{
-		tableInfos:   tableInfos,
-		tableGuides:  tableGuides,
-		dataWriter:   dataWriter,
-		schemaWriter: schemaWriter,
-		sqlPool:      pool,
-	}
 
-	if err := m.dumpSchema(); err != nil {
+	dumpMeta.dataWriter = dataWriter
+	dumpMeta.schemaWriter = schemaWriter
+
+	if err := dumpMeta.dumpSchema(); err != nil {
 		return fmt.Errorf("error while writing schema file: %v", err)
 	}
-	if err := m.dumpTables(); err != nil {
+	if err := dumpMeta.dumpTables(); err != nil {
 		return fmt.Errorf("error while writeng data file: %v", err)
 	}
 	return nil

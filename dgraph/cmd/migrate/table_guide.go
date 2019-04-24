@@ -130,8 +130,13 @@ func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
 				return ok
 			})
 
-		aliasLabel := getAliasLabel(info.columns, info.tableName, r.separator,
-			cstColumnIndices, values)
+		aliasLabel := getAliasLabel(&Alias{
+			allColumns:         info.columns,
+			aliasColumnIndices: cstColumnIndices,
+			tableName:          info.tableName,
+			separator:          r.separator,
+			colValues:          values,
+		})
 		r.refToBlank[aliasLabel] = blankNode
 	}
 }
@@ -153,29 +158,36 @@ func getValue(dataType DataType, value interface{}) string {
 	}
 }
 
-func getAliasLabel(columnMaps map[string]*ColumnInfo, tableName string, separator string,
-	columnIndices []*ColumnIdx,
-	values []interface{}) string {
+type Alias struct {
+	allColumns         map[string]*ColumnInfo
+	aliasColumnIndices []*ColumnIdx
+	tableName          string
+	separator          string
+	colValues          []interface{}
+}
+
+func getAliasLabel(alias *Alias) string {
 
 	columnNameAndValues := make([]string, 0)
-	for _, columnIdx := range columnIndices {
+	for _, columnIdx := range alias.aliasColumnIndices {
 		nameAndValue := fmt.Sprintf("%s%s%s", columnIdx.name,
-			separator,
-			getValue(columnMaps[columnIdx.name].dataType, values[columnIdx.index]))
+			alias.separator,
+			getValue(alias.allColumns[columnIdx.name].dataType,
+				alias.colValues[columnIdx.index]))
 
 		columnNameAndValues = append(columnNameAndValues,
 			nameAndValue)
 	}
 
-	return fmt.Sprintf("_:%s%s%s", tableName, separator, strings.Join(columnNameAndValues,
-		separator))
+	return fmt.Sprintf("_:%s%s%s", alias.tableName, alias.separator,
+		strings.Join(columnNameAndValues, alias.separator))
 }
 
-func (r *FKValuesRecorder) getUidLabel(indexLabel string) string {
+func (r *FKValuesRecorder) getBlankNode(indexLabel string) string {
 	return r.refToBlank[indexLabel]
 }
 
-// an IdxG is reponsible for generating Dgraph indices
+// an IdxG is responsible for generating Dgraph indices
 type IdxG interface {
 	genDgraphIndices(info *TableInfo) []string
 }
@@ -245,7 +257,7 @@ type TableGuide struct {
 	predNameG      PredNameG
 }
 
-func getKeyGenerator(tableInfo *TableInfo) BlankNodeG {
+func getBlankNodeG(tableInfo *TableInfo) BlankNodeG {
 	// check if the table has primary keys
 	primaryKeyIndices := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType == PRIMARY
@@ -266,7 +278,7 @@ func getTableGuides(tables map[string]*TableInfo) map[string]*TableGuide {
 	tableGuides := make(map[string]*TableGuide)
 	for table, tableInfo := range tables {
 		guide := &TableGuide{
-			blankNodeG: getKeyGenerator(tableInfo),
+			blankNodeG: getBlankNodeG(tableInfo),
 			valuesRecorder: &FKValuesRecorder{
 				refToBlank: make(map[string]string),
 				separator:  SEPERATOR,
