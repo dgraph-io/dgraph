@@ -574,9 +574,8 @@ func (qs *queryState) handleUidPostings(
 				} else {
 					key = x.DataKey(q.Attr, q.UidList.Uids[i])
 				}
-			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn:
-				key = x.IndexKey(q.Attr, srcFn.tokens[i])
-			case CompareAttrFn:
+			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn,
+				CompareAttrFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			default:
 				return x.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)

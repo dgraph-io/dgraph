@@ -34,6 +34,7 @@ func TestDataKey(t *testing.T) {
 		require.True(t, pk.IsData())
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, uid, pk.Uid)
+		require.Equal(t, uint64(0), pk.StartUid)
 	}
 
 	keys := make([]string, 0, 1024)
@@ -47,6 +48,22 @@ func TestDataKey(t *testing.T) {
 	for i, key := range keys {
 		exp := DataKey("testing.key", uint64(i+1))
 		require.Equal(t, string(exp), key)
+	}
+}
+
+func TestParseKeysWithStartUid(t *testing.T) {
+	var uid uint64
+	startUid := uint64(1024)
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+		key := DataKey(sattr, uid)
+		key = GetSplitKey(key, startUid)
+		pk := Parse(key)
+
+		require.True(t, pk.IsData())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, uid, pk.Uid)
+		require.Equal(t, startUid, pk.StartUid)
 	}
 }
 

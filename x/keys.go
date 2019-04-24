@@ -130,6 +130,7 @@ type ParsedKey struct {
 	byteType   byte
 	Attr       string
 	Uid        uint64
+	StartUid   uint64
 	Term       string
 	Count      uint32
 	bytePrefix byte
@@ -279,6 +280,15 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
+// GetSplitKey takes a data key baseKey and generates the key of the list split
+// that starts at startUid.
+func GetSplitKey(baseKey []byte, startUid uint64) []byte {
+	keyCopy := make([]byte, len(baseKey)+8)
+	copy(keyCopy, baseKey)
+	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
+	return keyCopy
+}
+
 // Parse would parse the key. ParsedKey does not reuse the key slice, so the key slice can change
 // without affecting the contents of ParsedKey.
 func Parse(key []byte) *ParsedKey {
@@ -309,6 +319,25 @@ func Parse(key []byte) *ParsedKey {
 			return nil
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
+
+		if len(k) == 8 {
+			return p
+		}
+		k = k[8:]
+		if len(k) < 8 {
+			if Config.DebugMode {
+				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			}
+			return nil
+		}
+		p.StartUid = binary.BigEndian.Uint64(k)
+		if p.StartUid == 0 {
+			if Config.DebugMode {
+				fmt.Printf("Error: StartUid must be greater than 0 for key %q, parsed key: %+v\n",
+					key, p)
+			}
+			return nil
+		}
 	case ByteIndex:
 		p.Term = string(k)
 	case ByteCount, ByteCountRev:

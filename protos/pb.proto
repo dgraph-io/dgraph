@@ -287,6 +287,8 @@ message PostingList {
 	UidPack pack = 1; // Encoded list of uids in this posting list.
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
+
+  repeated uint64 splits = 4;
 }
 
 message FacetParam {

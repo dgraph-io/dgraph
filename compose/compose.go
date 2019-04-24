@@ -204,7 +204,7 @@ func getAlpha(idx int) Service {
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
 	svc.Command += fmt.Sprintf(" --my=%s:%d", svc.name, internalPort)
 	svc.Command += fmt.Sprintf(" --lru_mb=%d", opts.LruSizeMB)
-	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort + opts.PortOffset)
+	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort+opts.PortOffset)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

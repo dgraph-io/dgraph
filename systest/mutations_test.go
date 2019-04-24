@@ -1752,6 +1752,7 @@ func DropData(t *testing.T, c *dgo.Dgraph) {
 			_:bob <follow> _:carol .
 		`),
 	})
+	require.NoError(t, err)
 
 	err = c.Alter(ctx, &api.Operation{
 		DropOp: api.Operation_DATA,

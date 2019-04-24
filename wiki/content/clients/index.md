@@ -109,15 +109,36 @@ func setup(c *dgo.Dgraph) {
 }
 ```
 
-`api.Operation` contains other fields as well, including drop predicate and
-drop all. Drop all is useful if you wish to discard all the data, and start from
-a clean slate, without bringing the instance down.
+`api.Operation` contains other fields as well, including drop predicate and drop
+all. Drop all is useful if you wish to discard all the data, and start from a
+clean slate, without bringing the instance down.
+
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(context.Background(), &api.Operation{DropOp: api.Operation_ALL})
+```
+
+The old way to send a drop all operation is still supported but will be eventually
+deprecated. It's shown below for reference.
 
 ```go
 	// Drop all data including schema from the dgraph instance. This is useful
 	// for small examples such as this, since it puts dgraph into a clean
 	// state.
 	err := c.Alter(context.Background(), &api.Operation{DropAll: true})
+```
+
+Starting with version 1.1, `api.Operation` also supports a drop data operation.
+This operation drops all the data but preserves the schema. This is useful when
+the schema is large and needs to be reused, such as in between unit tests.
+
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA})
 ```
 
 ### Create a transaction
