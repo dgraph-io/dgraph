@@ -245,6 +245,7 @@ func (l *Lexer) pushWidth(width int) {
 // Next reads the next rune from the Input, sets the Width and advances Pos.
 func (l *Lexer) Next() (result rune) {
 	if l.Pos >= len(l.Input) {
+		l.pushWidth(0)
 		return EOF
 	}
 	r, w := utf8.DecodeRuneInString(l.Input[l.Pos:])
@@ -302,21 +303,15 @@ type CheckRuneRec func(r rune, l *Lexer) bool
 // Returns last rune accepted and valid flag for rune.
 func (l *Lexer) AcceptRun(c CheckRune) (lastr rune, validr bool) {
 	validr = false
-	eof := false
 	for {
 		r := l.Next()
-		if r == EOF {
-			eof = true
-		}
 		if r == EOF || !c(r) {
 			break
 		}
 		validr = true
 		lastr = r
 	}
-	if !eof { // we should not backup in the EOF case
-		l.Backup()
-	}
+	l.Backup()
 	return lastr, validr
 }
 

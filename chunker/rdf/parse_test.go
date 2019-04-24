@@ -19,11 +19,10 @@ package rdf
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 )
 
 var testNQuads = []struct {
@@ -898,15 +897,9 @@ var testNQuads = []struct {
 	},
 }
 
-type TestStruct struct {
-	input        string
-	nq           api.NQuad
-	expectedErr  bool
-	shouldIgnore bool
-}
-
 func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
+		t.Logf("Testing %v", test.input)
 		rnq, err := Parse(test.input)
 		if test.expectedErr && test.shouldIgnore {
 			require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",

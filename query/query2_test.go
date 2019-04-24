@@ -1135,8 +1135,10 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
 			}
     }
   `
+
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
+
 }
 
 func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
@@ -1233,19 +1235,21 @@ func TestGeneratorMultiRoot(t *testing.T) {
       }
     }
   `
+
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},
+		{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestRootList(t *testing.T) {
-
 	query := `{
 	me(func: uid(1, 23, 24)) {
 		name
 	}
 }`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestRootList1(t *testing.T) {
@@ -1256,7 +1260,9 @@ func TestRootList1(t *testing.T) {
 	}
 }`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"}`+
+			`,{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
 }
 
 func TestRootList2(t *testing.T) {
@@ -1267,7 +1273,8 @@ func TestRootList2(t *testing.T) {
 	}
 }`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"}`+
+		`,{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
@@ -1293,14 +1300,15 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
     }
   `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"}`+
+		`,{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestGeneratorMultiRootFilter3(t *testing.T) {
 
 	query := `
     {
-			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and ge(dob, "1909-01-10")) {
+		me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and ge(dob, "1909-01-10")) {
         name
       }
     }
