@@ -4,9 +4,9 @@ readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
 QUERY_DIR=$SRCDIR/queries
-BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
-SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
-DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
+BENCHMARKS_REPO="https://raw.githubusercontent.com/dgraph-io/benchmarks"
+SCHEMA_URL="$BENCHMARKS_REPO/master/data/21million.schema"
+DATA_URL="$BENCHMARKS_REPO/master/data/21million.rdf.gz"
 
 # this may be used to load a smaller data set when testing the test itself
 #DATA_URL="$BENCHMARKS_REPO/blob/master/data/goldendata.rdf.gz?raw=true"
