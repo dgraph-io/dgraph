@@ -116,7 +116,7 @@ func populateSchema(attr string, fields []string) *api.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaRequest) error {
 	for _, attr := range schema.Predicates {
-		gid, err := groups().BelongsTo(attr)
+		gid, err := groups().BelongsToReadOnly(attr)
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api
 
 	for gid, s := range schemaMap {
 		if gid == 0 {
-			return schemaNodes, errUnservedTablet
+			return schemaNodes, errNonexistentTablet
 		}
 		go getSchemaOverNetwork(ctx, gid, s, results)
 	}
