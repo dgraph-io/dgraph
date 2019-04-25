@@ -44,7 +44,9 @@ type DiskStorage struct {
 
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map)}
-	x.Check(w.StoreRaftId(id))
+	if prev, err := RaftId(db); err != nil || prev != id {
+		x.Check(w.StoreRaftId(id))
+	}
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.Snapshot()

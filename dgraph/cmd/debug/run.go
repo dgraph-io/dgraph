@@ -24,6 +24,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -32,9 +33,12 @@ import (
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
+	"go.etcd.io/etcd/raft/raftpb"
 )
 
 var (
@@ -653,29 +657,143 @@ func sizeHistogram(db *badger.DB) {
 }
 
 func parseWal(db *badger.DB) error {
-	printKey := func(buf *bytes.Buffer, key []byte) {
-		if len(key) < 14 {
-			fmt.Fprintf(buf, "key = %s\n", hex.Dump(key))
-		}
-		id := binary.BigEndian.Uint64(key[0:8])
-		fmt.Fprintf(buf, " id: %d ", id)
-		switch len(key) {
-		case 14:
-			fmt.Fprintf(buf, " %s %d", key[8:10], binary.BigEndian.U
-		if len(key) < 10 {
+	rids := make(map[uint64]bool)
+	gids := make(map[uint32]bool)
+
+	parseIds := func(item *badger.Item) {
+		key := item.Key()
+		switch {
+		case len(key) == 14:
+			// hard state and snapshot key.
+			rid := binary.BigEndian.Uint64(key[0:8])
+			rids[rid] = true
+
+			gid := binary.BigEndian.Uint32(key[10:14])
+			gids[gid] = true
+		case len(key) == 20:
+			// entry key.
+			rid := binary.BigEndian.Uint64(key[0:8])
+			rids[rid] = true
+
+			gid := binary.BigEndian.Uint32(key[8:12])
+			gids[gid] = true
 		}
 	}
 
-	return db.View(func(txn *badger.Txn) error {
-		itr := txn.NewIterator(badger.DefaultIteratorOptions)
+	err := db.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchValues = false
+		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
 		for itr.Rewind(); itr.Valid(); itr.Next() {
-			item := itr.Item()
-			var buf bytes.Buffer
-
+			parseIds(itr.Item())
 		}
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("rids: %v\n", rids)
+	fmt.Printf("gids: %v\n", gids)
+
+	pending := make(map[uint64]bool)
+	printEntry := func(es raftpb.Entry) {
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "%d . %d . %v . %-6s . ", es.Term, es.Index, es.Type,
+			humanize.Bytes(uint64(es.Size())))
+		if es.Type == raftpb.EntryConfChange {
+			fmt.Printf("%s\n", buf.Bytes())
+			return
+		}
+		var pr pb.Proposal
+		if err := pr.Unmarshal(es.Data); err != nil {
+			fmt.Printf("%s Unable to parse Proposal: %v\n", buf.Bytes(), err)
+			return
+		}
+		switch {
+		case pr.Mutations != nil:
+			fmt.Fprintf(&buf, "Mutation . StartTs: %d . Edges: %d .",
+				pr.Mutations.StartTs, len(pr.Mutations.Edges))
+			if len(pr.Mutations.Edges) > 0 {
+				pending[pr.Mutations.StartTs] = true
+			}
+			fmt.Fprintf(&buf, " Pending txns: %d .", len(pending))
+		case len(pr.Kv) > 0:
+			fmt.Fprintf(&buf, "KV . Size: %d ", len(pr.Kv))
+		case pr.State != nil:
+			fmt.Fprintf(&buf, "State . %+v ", pr.State)
+		case pr.Delta != nil:
+			fmt.Fprintf(&buf, "Delta .")
+			sort.Slice(pr.Delta.Txns, func(i, j int) bool {
+				ti := pr.Delta.Txns[i]
+				tj := pr.Delta.Txns[j]
+				return ti.StartTs < tj.StartTs
+			})
+			fmt.Fprintf(&buf, " Max: %d .", pr.Delta.GetMaxAssigned())
+			for _, txn := range pr.Delta.Txns {
+				fmt.Fprintf(&buf, " %d → %d .", txn.StartTs, txn.CommitTs)
+				delete(pending, txn.StartTs)
+			}
+			fmt.Fprintf(&buf, " Pending txns: %d .", len(pending))
+		case pr.Snapshot != nil:
+			fmt.Fprintf(&buf, "Snapshot . %+v ", pr.Snapshot)
+		}
+		fmt.Printf("%s\n", buf.Bytes())
+	}
+
+	printRaft := func(store *raftwal.DiskStorage) {
+		fmt.Println()
+		snap, err := store.Snapshot()
+		if err != nil {
+			fmt.Printf("Got error while retrieving snapshot: %v\n", err)
+		} else {
+			fmt.Printf("Snapshot Metadata: %+v\n", snap.Metadata)
+			var ds pb.Snapshot
+			if err := ds.Unmarshal(snap.Data); err != nil {
+				fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
+			} else {
+				fmt.Printf("Snapshot Dgraph: %+v\n", ds)
+			}
+		}
+		fmt.Println()
+
+		if hs, err := store.HardState(); err != nil {
+			fmt.Printf("Got error while retrieving hardstate: %v\n", err)
+		} else {
+			fmt.Printf("Hardstate: %+v\n", hs)
+		}
+
+		lastIdx, err := store.LastIndex()
+		if err != nil {
+			fmt.Printf("Got error while retrieving last index: %v\n", err)
+			return
+		}
+		fmt.Printf("Last Index: %d\n\n", lastIdx)
+
+		startIdx := snap.Metadata.Index + 1
+		pending = make(map[uint64]bool)
+		for startIdx < lastIdx-1 {
+			entries, err := store.Entries(startIdx, lastIdx, 64<<20)
+			if err != nil {
+				fmt.Printf("Got error while retrieving entries: %v\n", err)
+				return
+			}
+			for _, ent := range entries {
+				printEntry(ent)
+				startIdx = x.Max(startIdx, ent.Index)
+			}
+		}
+	}
+
+	for rid, _ := range rids {
+		for gid, _ := range gids {
+			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
+			store := raftwal.Init(db, rid, gid)
+			printRaft(store)
+		}
+	}
+	return nil
 }
 
 func run() {
@@ -699,17 +817,24 @@ func run() {
 	if isWal {
 		db, err = badger.Open(bopts)
 	} else {
-		db, err := badger.OpenManaged(bopts)
+		db, err = badger.OpenManaged(bopts)
 	}
 	x.Check(err)
 	defer db.Close()
 
+	if isWal {
+		if err := parseWal(db); err != nil {
+			fmt.Printf("\nGot error while parsing WAL: %v\n", err)
+		}
+		fmt.Println("Done")
+		return
+	}
+
+	// WAL can't execute this following function.
 	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
 	switch {
-	case isWal:
-		parseWal(db)
 	case len(opt.keyLookup) > 0:
 		lookup(db)
 	case len(opt.jepsen) > 0:
