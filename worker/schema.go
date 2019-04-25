@@ -120,6 +120,9 @@ func addToSchemaMap(schemaMap map[uint32]*pb.SchemaRequest, schema *pb.SchemaReq
 		if err != nil {
 			return err
 		}
+		if gid == 0 {
+			continue
+		}
 
 		s := schemaMap[gid]
 		if s == nil {
@@ -194,9 +197,6 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api
 	var schemaNodes []*api.SchemaNode
 
 	for gid, s := range schemaMap {
-		if gid == 0 {
-			continue
-		}
 		go getSchemaOverNetwork(ctx, gid, s, results)
 	}
 
