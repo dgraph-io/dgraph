@@ -2435,7 +2435,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			// TODO - Allow only order by one of variable/predicate for now.
 			if val == "" {
-				// this should only happen in cases like: orderasc: val(c)
+				// This should only happen in cases like: orderasc: val(c)
 				if len(gq.NeedsVar) == 0 {
 					return nil, it.Errorf("unable to get value when parsing key value pairs")
 				}

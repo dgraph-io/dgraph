@@ -137,14 +137,14 @@ func (p *ItemIterator) PeekOne() (Item, bool) {
 }
 
 // A RuneWidth represents a consecutive string of runes with the same width
-// and the number of runes is stored in count
-// The reason we maintain this information is to properly backup when multiple look aheads happen.
+// and the number of runes is stored in count.
+// The reason we maintain this information is to properly backup when multiple look-aheads happen.
 // For example, if the following sequence of events happen
 // 1. Lexer.Next() consumes 1 byte
 // 2. Lexer.Next() consumes 1 byte
 // 3. Lexer.Next() consumes 3 bytes
 // we would create two RunWidthTrackers, the 1st having width 1 and count 2, while the 2nd having
-// width 3 and count 1, then the following backups can be done properly
+// width 3 and count 1, then the following backups can be done properly:
 // 4. Lexer.Backup() should decrement the pos by 3
 // 5. Lexer.Backup() should decrement the pos by 1
 // 6. Lexer.Backup() should decrement the pos by 1
