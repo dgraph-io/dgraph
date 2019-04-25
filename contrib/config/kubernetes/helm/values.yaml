@@ -89,7 +89,7 @@ zero:
     # storageClass: "-"
     accessModes:
       - ReadWriteOnce
-    size: 1.5Gi
+    size: 32Gi
 
   ## Node labels and tolerations for pod assignment
   ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
@@ -205,6 +205,9 @@ alpha:
   resources:
     requests:
       memory: 100Mi
+  ## Configure value for lru_mb flag
+  ## Typically a third of available memory is recommended, keeping the default value to 2048mb
+  lru_mb: 2048
 
   ## Configure extra options for liveness and readiness probes
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
