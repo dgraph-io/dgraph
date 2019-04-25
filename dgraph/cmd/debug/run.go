@@ -732,6 +732,8 @@ func parseWal(db *badger.DB) error {
 
 			gid := binary.BigEndian.Uint32(key[8:12])
 			gids[gid] = true
+		default:
+			// Ignore other keys.
 		}
 	}
 
@@ -809,7 +811,7 @@ func parseWal(db *badger.DB) error {
 
 		pending = make(map[uint64]bool)
 		for startIdx < lastIdx-1 {
-			entries, err := store.Entries(startIdx, lastIdx, 64<<20)
+			entries, err := store.Entries(startIdx, lastIdx, 64<<20 /* 64 MB Max Size */)
 			if err != nil {
 				fmt.Printf("Got error while retrieving entries: %v\n", err)
 				return
@@ -862,10 +864,11 @@ func run() {
 			fmt.Printf("\nGot error while parsing WAL: %v\n", err)
 		}
 		fmt.Println("Done")
+		// WAL can't execute the getMinMax function, so we need to deal with it
+		// here, instead of in the select case below.
 		return
 	}
 
-	// WAL can't execute the following function.
 	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
