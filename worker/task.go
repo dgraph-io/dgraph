@@ -160,11 +160,11 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 
-	if err == errUnservedTablet {
+	if err != nil && strings.Contains(err.Error(), ErrUnservedTabletMessage) {
 		return &emptyResult, errUnservedTablet
 	}
 	if err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
 	reply := result.(*pb.Result)
 	if span != nil {
