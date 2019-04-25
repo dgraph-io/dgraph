@@ -788,7 +788,20 @@ func parseWal(db *badger.DB) error {
 			if err := ds.Unmarshal(snap.Data); err == nil {
 				fmt.Printf("Snapshot Alpha: %+v\n", ds)
 			} else if err := ms.Unmarshal(snap.Data); err == nil {
-				fmt.Printf("Snapshot Zero: %+v\n", ms)
+				for gid, group := range ms.GetGroups() {
+					fmt.Printf("\nGROUP: %d\n", gid)
+					for _, member := range group.GetMembers() {
+						fmt.Printf("Member: %+v .\n", member)
+					}
+					for _, tablet := range group.GetTablets() {
+						fmt.Printf("Tablet: %+v .\n", tablet)
+					}
+					group.Members = nil
+					group.Tablets = nil
+					fmt.Printf("Group: %d %+v .\n", gid, group)
+				}
+				ms.Groups = nil
+				fmt.Printf("\nSnapshot Zero: %+v\n", ms)
 			} else {
 				fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
 			}
