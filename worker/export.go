@@ -116,8 +116,8 @@ func valToStr(v types.Val) (string, error) {
 	return strings.TrimRight(v2.Value.(string), "\x00"), nil
 }
 
-// fctToString convert a facet value to a string.
-func fctToStr(fct *api.Facet) (string, error) {
+// facetToString convert a facet value to a string.
+func facetToString(fct *api.Facet) (string, error) {
 	v1, err := facets.ValFor(fct)
 	if err != nil {
 		return "", fmt.Errorf("getting value from facet %#v: %v", fct, err)
@@ -132,10 +132,7 @@ func fctToStr(fct *api.Facet) (string, error) {
 }
 
 func (e *exporter) toJSON() (*bpb.KVList, error) {
-	var err error
-	var buf bytes.Buffer
-
-	bp := &buf
+	bp := new(bytes.Buffer)
 
 	if e.counter != 1 {
 		fmt.Fprint(bp, ",\n")
@@ -146,7 +143,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 
 	continuing := false
 	mapStart := fmt.Sprintf("  {\"uid\":"+uidFmtStrJson, e.uid)
-	err = e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
+	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
 		if continuing {
 			fmt.Fprint(bp, ",\n")
 		} else {
@@ -159,17 +156,18 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			fmt.Fprintf(bp, "{\"uid\":"+uidFmtStrJson+"}", p.Uid)
 			fmt.Fprint(bp, "]")
 		} else {
-			if p.PostingType != pb.Posting_VALUE_LANG {
-				fmt.Fprintf(bp, `,"%s":`, e.attr)
-			} else {
+			if p.PostingType == pb.Posting_VALUE_LANG {
 				fmt.Fprintf(bp, `,"%s@%s":`, e.attr, string(p.LangTag))
+			} else {
+				fmt.Fprintf(bp, `,"%s":`, e.attr)
 			}
 
 			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
 			str, err := valToStr(val)
 			if err != nil {
-				// Copying this behavior from RDF exporter,
-				// but how is this not data loss?
+				// Copying this behavior from RDF exporter.
+				// TODO Investigate why returning here before before completely
+				//      exporting this posting is not considered data loss.
 				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
@@ -184,7 +182,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 		for _, fct := range p.Facets {
 			fmt.Fprintf(bp, `,"%s|%s":`, e.attr, fct.Key)
 
-			str, err := fctToStr(fct)
+			str, err := facetToString(fct)
 			if err != nil {
 				glog.Errorf("Ignoring error: %+v", err)
 				return nil
@@ -208,16 +206,14 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 	})
 
 	kv := &bpb.KV{
-		Value:   buf.Bytes(),
+		Value:   bp.Bytes(),
 		Version: 1,
 	}
 	return listWrap(kv), err
 }
 
 func (e *exporter) toRDF() (*bpb.KVList, error) {
-	var buf bytes.Buffer
-
-	bp := &buf
+	bp := new(bytes.Buffer)
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
@@ -253,7 +249,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 				fmt.Fprint(bp, fct.Key+"=")
 
-				str, err := fctToStr(fct)
+				str, err := facetToString(fct)
 				if err != nil {
 					glog.Errorf("Ignoring error: %+v", err)
 					return nil
@@ -278,7 +274,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 	})
 
 	kv := &bpb.KV{
-		Value:   buf.Bytes(),
+		Value:   bp.Bytes(),
 		Version: 1,
 	}
 	return listWrap(kv), err

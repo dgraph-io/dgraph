@@ -306,7 +306,7 @@ func TestExportFormat(t *testing.T) {
 
 	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?output=rdf")
 	require.NoError(t, err)
-	require.NotEqual(t, resp.StatusCode, http.StatusOK)
+	require.Equal(t, resp.StatusCode, http.StatusOK)
 }
 
 type skv struct {
