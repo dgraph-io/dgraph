@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"go.opencensus.io/exporter/jaeger"
+	"contrib.go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"

@@ -159,13 +159,10 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 			return c.ServeTask(ctx, q)
 		})
-
-	if err == errUnservedTablet {
-		return &emptyResult, errUnservedTablet
-	}
 	if err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
+
 	reply := result.(*pb.Result)
 	if span != nil {
 		span.Annotatef(nil, "Reply from server. len: %v gid: %v Attr: %v",
