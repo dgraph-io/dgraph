@@ -36,6 +36,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -107,6 +108,7 @@ var (
 	doDown     = flag.Bool("down", false, "Stop the Jepsen cluster after tests run.")
 	doDownOnly = flag.Bool("down-only", false, "Stop the Jepsen cluster and exit.")
 	doServe    = flag.Bool("serve", true, "Serve the test results page (lein run serve).")
+	web        = flag.Bool("web", true, "Open the test results page in the browser.")
 
 	// Debug flags
 	dryRun = flag.Bool("dry-run", false, "Echo commands that would run, but don't execute them.")
@@ -163,6 +165,77 @@ func jepsenServe() {
 		"lein", "run", "serve")
 	// Ignore output and errors. It's okay if "lein run serve" already ran before.
 	_ = cmd.Run()
+}
+
+func openJepsenBrowser() {
+	cmd := Command(
+		"docker", "inspect", "--format",
+		`{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}`,
+		"jepsen-control")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+	port := strings.TrimSpace(out.String())
+	jepsenUrl := "http://localhost:" + port
+	BrowserOpen(jepsenUrl)
+}
+
+// Copied from $GOROOT/src/cmd/internal/browser/browser.go
+
+// Commands returns a list of possible commands to use to open a url.
+func BrowserCommands() [][]string {
+	var cmds [][]string
+	if exe := os.Getenv("BROWSER"); exe != "" {
+		cmds = append(cmds, []string{exe})
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		cmds = append(cmds, []string{"/usr/bin/open"})
+	case "windows":
+		cmds = append(cmds, []string{"cmd", "/c", "start"})
+	default:
+		if os.Getenv("DISPLAY") != "" {
+			// xdg-open is only for use in a desktop environment.
+			cmds = append(cmds, []string{"xdg-open"})
+		}
+	}
+	cmds = append(cmds,
+		[]string{"chrome"},
+		[]string{"google-chrome"},
+		[]string{"chromium"},
+		[]string{"firefox"},
+	)
+	return cmds
+}
+
+// Open tries to open url in a browser and reports whether it succeeded.
+func BrowserOpen(url string) bool {
+	for _, args := range BrowserCommands() {
+		cmd := exec.Command(args[0], append(args[1:], url)...)
+		if cmd.Start() == nil && appearsSuccessful(cmd, 3*time.Second) {
+			return true
+		}
+	}
+	return false
+}
+
+// appearsSuccessful reports whether the command appears to have run successfully.
+// If the command runs longer than the timeout, it's deemed successful.
+// If the command runs within the timeout, it's deemed successful if it exited cleanly.
+func appearsSuccessful(cmd *exec.Cmd, timeout time.Duration) bool {
+	errc := make(chan error, 1)
+	go func() {
+		errc <- cmd.Wait()
+	}()
+
+	select {
+	case <-time.After(timeout):
+		return true
+	case err := <-errc:
+		return err == nil
+	}
 }
 
 func runJepsenTest(test *JepsenTest) int {
@@ -278,6 +351,9 @@ func main() {
 	}
 	if *doServe {
 		go jepsenServe()
+		if *web && !*dryRun {
+			openJepsenBrowser()
+		}
 	}
 
 	workloads := strings.Split(*workload, ",")
