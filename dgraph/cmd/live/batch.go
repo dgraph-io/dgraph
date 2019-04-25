@@ -127,7 +127,7 @@ type Counter struct {
 // server expects TLS and our certificate does not match or the host name is not verified. When
 // the node certificate is created the name much match the request host name. e.g., localhost not
 // 127.0.0.1.
-func handleError(err error, nreq uint64, isRetry bool) {
+func handleError(err error, reqNum uint64, isRetry bool) {
 	s := status.Convert(err)
 	switch {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
@@ -136,7 +136,7 @@ func handleError(err error, nreq uint64, isRetry bool) {
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
 		if !isRetry {
-			fmt.Printf("Transaction #%d aborted. Will retry in background.\n", nreq)
+			fmt.Printf("Transaction #%d aborted. Will retry in background.\n", reqNum)
 		}
 	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
@@ -147,7 +147,7 @@ func handleError(err error, nreq uint64, isRetry bool) {
 	}
 }
 
-func (l *loader) infinitelyRetry(req api.Mutation, nreq uint64) {
+func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 	defer l.retryRequestsWg.Done()
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
@@ -156,13 +156,13 @@ func (l *loader) infinitelyRetry(req api.Mutation, nreq uint64) {
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
 			fmt.Printf("Transaction #%d succeeded after %s.\n",
-				nreq, english.Plural(nretries, "retry", "retries"))
+				reqNum, english.Plural(nretries, "retry", "retries"))
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
 			return
 		}
 		nretries++
-		handleError(err, nreq, true)
+		handleError(err, reqNum, true)
 		atomic.AddUint64(&l.aborts, 1)
 		if i >= 10*time.Second {
 			i = 10 * time.Second
@@ -171,7 +171,7 @@ func (l *loader) infinitelyRetry(req api.Mutation, nreq uint64) {
 	}
 }
 
-func (l *loader) request(req api.Mutation, nreq uint64) {
+func (l *loader) request(req api.Mutation, reqNum uint64) {
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
 	_, err := txn.Mutate(l.opts.Ctx, &req)
@@ -181,10 +181,10 @@ func (l *loader) request(req api.Mutation, nreq uint64) {
 		atomic.AddUint64(&l.txns, 1)
 		return
 	}
-	handleError(err, nreq, false)
+	handleError(err, reqNum, false)
 	atomic.AddUint64(&l.aborts, 1)
 	l.retryRequestsWg.Add(1)
-	go l.infinitelyRetry(req, nreq)
+	go l.infinitelyRetry(req, reqNum)
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
@@ -193,8 +193,8 @@ func (l *loader) request(req api.Mutation, nreq uint64) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 	for req := range l.reqs {
-		nreq := atomic.AddUint64(&l.reqNum, 1)
-		l.request(req, nreq)
+		reqNum := atomic.AddUint64(&l.reqNum, 1)
+		l.request(req, reqNum)
 	}
 }
 
