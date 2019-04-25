@@ -345,7 +345,7 @@ func main() {
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
 	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
-		"port offset for alpha and, if not 100, zero as well")
+		"port offset for alpha and zero")
 	cmd.PersistentFlags().IntVarP(&opts.Verbosity, "verbosity", "v", 2,
 		"glog verbosity level")
 	cmd.PersistentFlags().StringVarP(&opts.OutFile, "out", "O",
