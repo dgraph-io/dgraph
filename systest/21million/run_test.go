@@ -56,8 +56,11 @@ func TestQueries(t *testing.T) {
 	savepath := ""
 	diffs := 0
 	for _, file := range files {
-		filename := path.Join(queryDir, file.Name())
+		if ! strings.HasPrefix(file.Name(),"query-") {
+			continue
+		}
 
+		filename := path.Join(queryDir, file.Name())
 		reader, cleanup := chunker.FileReader(filename)
 		bytes, err := ioutil.ReadAll(reader)
 		x.CheckfNoTrace(err)
