@@ -189,7 +189,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if gid, err := groups().BelongsTo(in.Predicate); err != nil {
 		return &emptyPayload, err
 	} else if gid == 0 {
-		return &emptyPayload, errNonexistentTablet
+		return &emptyPayload, errNonExistentTablet
 	} else if gid != groups().groupId() {
 		return &emptyPayload, errUnservedTablet
 	}

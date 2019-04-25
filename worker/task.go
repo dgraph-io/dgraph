@@ -141,7 +141,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	if err != nil {
 		return &emptyResult, err
 	} else if gid == 0 {
-		return &emptyResult, errNonexistentTablet
+		return &emptyResult, errNonExistentTablet
 	}
 
 	span := otrace.FromContext(ctx)
@@ -739,7 +739,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if gid, err := groups().BelongsToReadOnly(q.Attr); err != nil {
 		return &emptyResult, err
 	} else if gid == 0 {
-		return &emptyResult, errNonexistentTablet
+		return &emptyResult, errNonExistentTablet
 	} else if gid != groups().groupId() {
 		return &emptyResult, errUnservedTablet
 	}
@@ -1632,7 +1632,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	if err != nil {
 		return &emptyResult, err
 	} else if gid == 0 {
-		return &emptyResult, errNonexistentTablet
+		return &emptyResult, errNonExistentTablet
 	} else if gid != groups().groupId() {
 		return &emptyResult, errUnservedTablet
 	}

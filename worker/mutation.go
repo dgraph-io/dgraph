@@ -41,7 +41,7 @@ import (
 var (
 	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
 	errUnservedTablet           = x.Errorf("Tablet isn't being served by this instance")
-	errNonexistentTablet        = x.Errorf(ErrNonExistentTabletMessage)
+	errNonExistentTablet        = x.Errorf(ErrNonExistentTabletMessage)
 )
 
 func isStarAll(v []byte) bool {
@@ -534,7 +534,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 		if gid == 0 {
 			span.Annotatef(nil, "state: %+v", groups().state)
 			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
-			return tctx, errNonexistentTablet
+			return tctx, errNonExistentTablet
 		}
 		mu.StartTs = m.StartTs
 		go proposeOrSend(ctx, gid, mu, resCh)
