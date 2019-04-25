@@ -40,8 +40,8 @@ import (
 
 var (
 	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
-	errUnservedTablet           = x.Errorf("Tablet isn't being served by this instance")
 	errNonExistentTablet        = x.Errorf(ErrNonExistentTabletMessage)
+	errUnservedTablet           = x.Errorf("Tablet isn't being served by this instance")
 )
 
 func isStarAll(v []byte) bool {
