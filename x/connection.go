@@ -17,17 +17,12 @@
 package x
 
 import (
-	"crypto/tls"
-	"time"
+	"strings"
 
+	"github.com/golang/glog"
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
-
-type ConnConf struct {
-	tlsConfig *tls.Config
-	useGz     bool
-	timeout   time.Duration
-}
 
 var tlsDir = "./tls"
 
@@ -42,7 +37,12 @@ const (
 var TlsAuthLevelStr = map[string]TlsAuthLevel{
 	"none":   TlsAuthNone,
 	"server": TlsAuthServer,
-	"mutal":  TlsAuthMutual,
+	"mutual": TlsAuthMutual,
+}
+
+type TlsConfig struct {
+	AuthLevel TlsAuthLevel
+	CertDir   string
 }
 
 func AddClientTlsOptions(flag *pflag.FlagSet) {
@@ -54,6 +54,27 @@ func AddServerTlsOptions(flag *pflag.FlagSet) {
 		"Required authentication level. One of: none, server, or mutual")
 	flag.String("tls_dir", tlsDir,
 		"Path to directory containing keys and certificates.")
+}
+
+func CreateConnConf(v *viper.Viper) TlsConfig {
+	conf := TlsConfig{}
+
+	return conf
+}
+
+func ConfigureConnection(v *viper.Viper) TlsConfig {
+	conf := TlsConfig{}
+
+	switch auth := strings.ToLower(v.GetString("tls_auth")); auth {
+	case "none":
+		glog.V(2).Info("not using TLS authentication")
+	case "server":
+		glog.V(2).Info("using server authentication only")
+	case "mutual":
+		glog.V(2).Info("using client and server authentication")
+	}
+
+	return conf
 }
 
 //func GrpcConnect(addr string, conf *ConnConf) (*grpc.ClientConn, error) {
