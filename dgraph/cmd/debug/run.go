@@ -832,7 +832,7 @@ func run() {
 		return
 	}
 
-	// WAL can't execute this following function.
+	// WAL can't execute the following function.
 	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)
 
