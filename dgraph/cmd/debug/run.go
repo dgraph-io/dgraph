@@ -769,9 +769,9 @@ func parseWal(db *badger.DB) error {
 			fmt.Printf("Got error while retrieving last index: %v\n", err)
 			return
 		}
-		fmt.Printf("Last Index: %d\n\n", lastIdx)
-
 		startIdx := snap.Metadata.Index + 1
+		fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
+
 		pending = make(map[uint64]bool)
 		for startIdx < lastIdx-1 {
 			entries, err := store.Entries(startIdx, lastIdx, 64<<20)
