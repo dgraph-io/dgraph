@@ -656,6 +656,61 @@ func sizeHistogram(db *badger.DB) {
 	valueSizeHistogram.PrintHistogram()
 }
 
+func printAlphaProposal(buf *bytes.Buffer, pr pb.Proposal, pending map[uint64]bool) {
+	switch {
+	case pr.Mutations != nil:
+		fmt.Fprintf(buf, " Mutation . StartTs: %d . Edges: %d .",
+			pr.Mutations.StartTs, len(pr.Mutations.Edges))
+		if len(pr.Mutations.Edges) > 0 {
+			pending[pr.Mutations.StartTs] = true
+		} else {
+			fmt.Fprintf(buf, " Mutation: %+v .", pr.Mutations)
+		}
+		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
+	case len(pr.Kv) > 0:
+		fmt.Fprintf(buf, " KV . Size: %d ", len(pr.Kv))
+	case pr.State != nil:
+		fmt.Fprintf(buf, " State . %+v ", pr.State)
+	case pr.Delta != nil:
+		fmt.Fprintf(buf, " Delta .")
+		sort.Slice(pr.Delta.Txns, func(i, j int) bool {
+			ti := pr.Delta.Txns[i]
+			tj := pr.Delta.Txns[j]
+			return ti.StartTs < tj.StartTs
+		})
+		fmt.Fprintf(buf, " Max: %d .", pr.Delta.GetMaxAssigned())
+		for _, txn := range pr.Delta.Txns {
+			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
+			delete(pending, txn.StartTs)
+		}
+		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
+	case pr.Snapshot != nil:
+		fmt.Fprintf(buf, " Snapshot . %+v ", pr.Snapshot)
+	}
+}
+
+func printZeroProposal(buf *bytes.Buffer, zpr pb.ZeroProposal) {
+	switch {
+	case len(zpr.SnapshotTs) > 0:
+		fmt.Fprintf(buf, " Snapshot: %+v .", zpr.SnapshotTs)
+	case zpr.Member != nil:
+		fmt.Fprintf(buf, " Member: %+v .", zpr.Member)
+	case zpr.Tablet != nil:
+		fmt.Fprintf(buf, " Tablet: %+v .", zpr.Tablet)
+	case zpr.MaxLeaseId > 0:
+		fmt.Fprintf(buf, " MaxLeaseId: %d .", zpr.MaxLeaseId)
+	case zpr.MaxRaftId > 0:
+		fmt.Fprintf(buf, " MaxRaftId: %d .", zpr.MaxRaftId)
+	case zpr.MaxTxnTs > 0:
+		fmt.Fprintf(buf, " MaxTxnTs: %d .", zpr.MaxTxnTs)
+	case zpr.Txn != nil:
+		txn := zpr.Txn
+		fmt.Fprintf(buf, " Txn %d → %d .", txn.StartTs, txn.CommitTs)
+	default:
+		fmt.Fprintf(buf, " Proposal: %+v .", zpr)
+	}
+}
+
 func parseWal(db *badger.DB) error {
 	rids := make(map[uint64]bool)
 	gids := make(map[uint32]bool)
@@ -700,46 +755,21 @@ func parseWal(db *badger.DB) error {
 	pending := make(map[uint64]bool)
 	printEntry := func(es raftpb.Entry) {
 		var buf bytes.Buffer
-		fmt.Fprintf(&buf, "%d . %d . %v . %-6s . ", es.Term, es.Index, es.Type,
+		fmt.Fprintf(&buf, "%d . %d . %v . %-6s .", es.Term, es.Index, es.Type,
 			humanize.Bytes(uint64(es.Size())))
 		if es.Type == raftpb.EntryConfChange {
 			fmt.Printf("%s\n", buf.Bytes())
 			return
 		}
 		var pr pb.Proposal
-		if err := pr.Unmarshal(es.Data); err != nil {
+		var zpr pb.ZeroProposal
+		if err := pr.Unmarshal(es.Data); err == nil {
+			printAlphaProposal(&buf, pr, pending)
+		} else if err := zpr.Unmarshal(es.Data); err == nil {
+			printZeroProposal(&buf, zpr)
+		} else {
 			fmt.Printf("%s Unable to parse Proposal: %v\n", buf.Bytes(), err)
 			return
-		}
-		switch {
-		case pr.Mutations != nil:
-			fmt.Fprintf(&buf, "Mutation . StartTs: %d . Edges: %d .",
-				pr.Mutations.StartTs, len(pr.Mutations.Edges))
-			if len(pr.Mutations.Edges) > 0 {
-				pending[pr.Mutations.StartTs] = true
-			} else {
-				fmt.Fprintf(&buf, " Mutation: %+v .", pr.Mutations)
-			}
-			fmt.Fprintf(&buf, " Pending txns: %d .", len(pending))
-		case len(pr.Kv) > 0:
-			fmt.Fprintf(&buf, "KV . Size: %d ", len(pr.Kv))
-		case pr.State != nil:
-			fmt.Fprintf(&buf, "State . %+v ", pr.State)
-		case pr.Delta != nil:
-			fmt.Fprintf(&buf, "Delta .")
-			sort.Slice(pr.Delta.Txns, func(i, j int) bool {
-				ti := pr.Delta.Txns[i]
-				tj := pr.Delta.Txns[j]
-				return ti.StartTs < tj.StartTs
-			})
-			fmt.Fprintf(&buf, " Max: %d .", pr.Delta.GetMaxAssigned())
-			for _, txn := range pr.Delta.Txns {
-				fmt.Fprintf(&buf, " %d → %d .", txn.StartTs, txn.CommitTs)
-				delete(pending, txn.StartTs)
-			}
-			fmt.Fprintf(&buf, " Pending txns: %d .", len(pending))
-		case pr.Snapshot != nil:
-			fmt.Fprintf(&buf, "Snapshot . %+v ", pr.Snapshot)
 		}
 		fmt.Printf("%s\n", buf.Bytes())
 	}
@@ -752,10 +782,13 @@ func parseWal(db *badger.DB) error {
 		} else {
 			fmt.Printf("Snapshot Metadata: %+v\n", snap.Metadata)
 			var ds pb.Snapshot
-			if err := ds.Unmarshal(snap.Data); err != nil {
-				fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
+			var ms pb.MembershipState
+			if err := ds.Unmarshal(snap.Data); err == nil {
+				fmt.Printf("Snapshot Alpha: %+v\n", ds)
+			} else if err := ms.Unmarshal(snap.Data); err == nil {
+				fmt.Printf("Snapshot Zero: %+v\n", ms)
 			} else {
-				fmt.Printf("Snapshot Dgraph: %+v\n", ds)
+				fmt.Printf("Unable to unmarshal Dgraph snapshot: %v", err)
 			}
 		}
 		fmt.Println()
