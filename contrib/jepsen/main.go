@@ -62,7 +62,7 @@ const (
 
 var (
 	// Comma-separated arguments
-	defaultWorkloads = []string{
+	availableWorkloads = []string{
 		"bank",
 		"delete",
 		"long-fork",
@@ -74,9 +74,10 @@ var (
 		"sequential",
 	}
 	// Space-separated arguments
-	defaultNemeses = []string{
+	availableNemeses = []string{
 		"none",
-		"kill-alpha,kill-zero",
+		"kill-alpha",
+		"kill-zero",
 		"partition-ring",
 		"move-tablet",
 	}
@@ -89,9 +90,9 @@ var (
 	timeLimit   = flag.Int("jepsen.time-limit", 600, "Time limit per Jepsen test in seconds.")
 	nodes       = flag.String("jepsen.nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
 	concurrency = flag.String("jepsen.concurrency", "6n", "Number of concurrent workers.")
-	workload    = flag.String("jepsen.workload", strings.Join(defaultWorkloads, ","),
+	workload    = flag.String("jepsen.workload", "",
 		"Test workload to run.")
-	nemesis = flag.String("jepsen.nemesis", strings.Join(defaultNemeses, " "),
+	nemesis = flag.String("jepsen.nemesis", "",
 		"A space-separated, comma-separated list of nemesis types.")
 	localBinary = flag.String("jepsen.local-binary", "/gobin/dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
@@ -335,6 +336,21 @@ func main() {
 	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH must be set.")
 	}
+
+	if *workload == "" || *nemesis == "" {
+		fmt.Printf("You must specify a workload and a nemesis.\n")
+
+		fmt.Printf("Available workloads:\n")
+		for _, w := range availableWorkloads {
+			fmt.Printf("\t%v\n", w)
+		}
+		fmt.Printf("Available nemeses:\n")
+		for _, n := range availableNemeses {
+			fmt.Printf("\t%v\n", n)
+		}
+		os.Exit(1)
+	}
+
 	if strings.Contains(*nemesis, "skew-clock") && *skew == "" {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
