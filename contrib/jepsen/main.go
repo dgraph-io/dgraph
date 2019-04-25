@@ -20,7 +20,7 @@
 // Example usage:
 //
 // Runs all test and nemesis combinations (36 total)
-//     ./jepsen
+//     ./jepsen --test-all
 //
 // Runs bank test with partition-ring nemesis for 10 minutes
 //     ./jepsen --jepsen.workload bank --jepsen.nemesis partition-ring
@@ -61,7 +61,6 @@ const (
 )
 
 var (
-	// Comma-separated arguments
 	availableWorkloads = []string{
 		"bank",
 		"delete",
@@ -73,11 +72,9 @@ var (
 		"uid-set",
 		"sequential",
 	}
-	// Space-separated arguments
 	availableNemeses = []string{
 		"none",
-		"kill-alpha",
-		"kill-zero",
+		"kill-alpha,kill-zero",
 		"partition-ring",
 		"move-tablet",
 	}
@@ -102,6 +99,7 @@ var (
 	jaeger = flag.String("jepsen.dgraph-jaeger-collector", "http://jaeger:14268",
 		"Run with Jaeger collector. Set to empty string to disable.")
 	testCount = flag.Int("jepsen.test-count", 1, "Test count per Jepsen test.")
+	testAll   = flag.Bool("test-all", false, "Run all workload and nemesis combinations.")
 
 	// Jepsen control flags
 	doUp       = flag.Bool("up", true, "Run Jepsen ./up.sh.")
@@ -111,7 +109,7 @@ var (
 	doServe    = flag.Bool("serve", true, "Serve the test results page (lein run serve).")
 	web        = flag.Bool("web", true, "Open the test results page in the browser.")
 
-	// Debug flags
+	// Script flags
 	dryRun = flag.Bool("dry-run", false, "Echo commands that would run, but don't execute them.")
 )
 
@@ -337,6 +335,11 @@ func main() {
 		log.Fatal("GOPATH must be set.")
 	}
 
+	if *testAll {
+		*workload = strings.Join(availableWorkloads, " ")
+		*nemesis = strings.Join(availableNemeses, " ")
+	}
+
 	if *workload == "" || *nemesis == "" {
 		fmt.Printf("You must specify a workload and a nemesis.\n")
 
@@ -376,7 +379,7 @@ func main() {
 		BrowserOpen("http://localhost:16686")
 	}
 
-	workloads := strings.Split(*workload, ",")
+	workloads := strings.Split(*workload, " ")
 	nemeses := strings.Split(*nemesis, " ")
 
 	numTests := len(workloads) * len(nemeses)
