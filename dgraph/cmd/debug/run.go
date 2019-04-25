@@ -717,6 +717,8 @@ func parseWal(db *badger.DB) error {
 				pr.Mutations.StartTs, len(pr.Mutations.Edges))
 			if len(pr.Mutations.Edges) > 0 {
 				pending[pr.Mutations.StartTs] = true
+			} else {
+				fmt.Fprintf(&buf, " Mutation: %+v .", pr.Mutations)
 			}
 			fmt.Fprintf(&buf, " Pending txns: %d .", len(pending))
 		case len(pr.Kv) > 0:
