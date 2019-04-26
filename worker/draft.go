@@ -198,6 +198,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 	}
 
+	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
+		return schema.State().DeleteType(proposal.Mutations.DropValue)
+	}
+
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided")
 	}
@@ -216,7 +220,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
-			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
+			if err := runTypeMutation(ctx, tupdate); err != nil {
 				return err
 			}
 		}
@@ -626,8 +630,12 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 
 func (n *node) proposeSnapshot(discardN int) error {
 	snap, err := n.calculateSnapshot(discardN)
-	if err != nil || snap == nil {
+	if err != nil {
+		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
+	}
+	if snap == nil {
+		return nil
 	}
 	proposal := &pb.Proposal{
 		Snapshot: snap,
@@ -1048,7 +1056,7 @@ func (n *node) abortOldTransactions() {
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
 func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
-	_, span := otrace.StartSpan(n.ctx, "Propose.Snapshot")
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot")
 	defer span.End()
 
 	if atomic.LoadInt32(&n.streaming) > 0 {
@@ -1062,6 +1070,18 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 	span.Annotatef(nil, "First index: %d", first)
+
+	rsnap, err := n.Store.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	var snap pb.Snapshot
+	if len(rsnap.Data) > 0 {
+		if err := snap.Unmarshal(rsnap.Data); err != nil {
+			return nil, err
+		}
+	}
+	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
 	last := n.Applied.DoneUntil()
 	if int(last-first) < discardN {
@@ -1088,7 +1108,8 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
 	minPendingStart := posting.Oracle().MinPendingStartTs()
-	var maxCommitTs, snapshotIdx, maxCommitIdx uint64
+	maxCommitTs := snap.ReadTs
+	var snapshotIdx uint64
 	for _, entry := range entries {
 		if entry.Type != raftpb.EntryNormal {
 			continue
@@ -1108,7 +1129,6 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 			for _, txn := range proposal.Delta.GetTxns() {
 				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 			}
-			maxCommitIdx = entry.Index
 		}
 	}
 	if maxCommitTs == 0 {
@@ -1118,8 +1138,10 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		span.Annotatef(nil, "Using maxCommitIdx as snapshotIdx: %d", maxCommitIdx)
-		snapshotIdx = maxCommitIdx
+		if len(entries) > 0 {
+			snapshotIdx = entries[len(entries)-1].Index
+		}
+		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
 
 	numDiscarding := snapshotIdx - first + 1
@@ -1134,13 +1156,13 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, nil
 	}
 
-	snap := &pb.Snapshot{
+	result := &pb.Snapshot{
 		Context: n.RaftContext,
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
-	span.Annotatef(nil, "Got snapshot: %+v", snap)
-	return snap, nil
+	span.Annotatef(nil, "Got snapshot: %+v", result)
+	return result, nil
 }
 
 func (n *node) joinPeers() error {

@@ -141,7 +141,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	if err != nil {
 		return &emptyResult, err
 	} else if gid == 0 {
-		return &emptyResult, errUnservedTablet
+		return &emptyResult, errNonExistentTablet
 	}
 
 	span := otrace.FromContext(ctx)
@@ -159,13 +159,10 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 			return c.ServeTask(ctx, q)
 		})
-
-	if err == errUnservedTablet {
-		return &emptyResult, errUnservedTablet
-	}
 	if err != nil {
-		return nil, err
+		return &emptyResult, err
 	}
+
 	reply := result.(*pb.Result)
 	if span != nil {
 		span.Annotatef(nil, "Reply from server. len: %v gid: %v Attr: %v",
@@ -737,13 +734,16 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// zero, then it wouldn't know that this group is no longer serving this
 	// predicate. There's no issue if a we are serving a particular tablet and
 	// we get partitioned away from group zero as long as it's not removed.
-	// ServesTabletReadOnly is called instead of ServesTablet to prevent this
-	// alpha from requesting to serve this tablet.
-	if servesTablet, err := groups().ServesTabletReadOnly(q.Attr); err != nil {
+	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
+	// from requesting to serve this tablet.
+	if gid, err := groups().BelongsToReadOnly(q.Attr); err != nil {
 		return &emptyResult, err
-	} else if !servesTablet {
+	} else if gid == 0 {
+		return &emptyResult, errNonExistentTablet
+	} else if gid != groups().groupId() {
 		return &emptyResult, errUnservedTablet
 	}
+
 	var qs queryState
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
@@ -1632,6 +1632,8 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	if err != nil {
 		return &emptyResult, err
 	} else if gid == 0 {
+		return &emptyResult, errNonExistentTablet
+	} else if gid != groups().groupId() {
 		return &emptyResult, errUnservedTablet
 	}
 
