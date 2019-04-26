@@ -140,7 +140,7 @@ func run(conf *viper.Viper) {
 	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	x.CheckfNoTrace(err)
 
-	conn, err := x.SetupConnection(alpha, tlsCfg, false)
+	conn, err := x.StartConnection(alpha, tlsCfg, false)
 	if err != nil {
 		log.Fatal(err)
 	}

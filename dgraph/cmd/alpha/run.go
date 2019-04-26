@@ -158,8 +158,12 @@ they form a Raft group and provide synchronous replication.
 	//flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
 	//flag.Bool("tls_use_system_ca", true, "Include System CA into CA Certs.")
 	//flag.String("tls_client_auth", "VERIFYIFGIVEN", "Enable TLS client authentication")
+        flag.String("tls_auth", "none",
+                "Required authentication level. One of: none, server, or mutual")
+        flag.String("tls_dir", "",
+                "Path to directory containing keys and certificates.")
 
-	x.AddServerTlsOptions(flag)
+	//x.AddServerTlsOptions(flag)
 
 	//Custom plugins.
 	flag.String("custom_tokenizers", "",
@@ -449,8 +453,8 @@ func run() {
 	}
 
 	//connConf := x.ConnConf{TlsConf: nil, UseGz: false, Timeout: 10*time.Second}
-	connConf := x.ConfigureConnection(Alpha.Conf)
-	_ = connConf
+	//connConf := x.ConfigureConnection(Alpha.Conf)
+	//_ = connConf
 
 	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {
 	case "allow":
