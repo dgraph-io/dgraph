@@ -62,7 +62,7 @@ type TableInfo struct {
 	tableName string
 	columns   map[string]*ColumnInfo
 
-	// the referenced tables by the current table through foreign keys
+	// the referenced tables by the current table through foreign key constraints
 	referencedTables map[string]interface{}
 
 	// a map from constraint names to constraints
@@ -202,7 +202,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 // For example, if the constraint's local table name is A, and it has 3 columns
 // col1, col2, col3 that references a remote table B's 3 columns col4, col5, col6,
 // then we return a reversed constraint whose local table name is B with local columns
-// col4, col5, col6, while the remote table name is A, and the remote columns are
+// col4, col5, col6 whose remote table name is A, and remote columns are
 // col1, col2 and col3
 func validateAndGetReverse(constraint *FKConstraint) (string, *FKConstraint) {
 	reverseParts := make([]*ConstraintPart, 0)

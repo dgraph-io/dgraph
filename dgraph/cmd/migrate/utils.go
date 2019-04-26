@@ -71,6 +71,8 @@ func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
 	return tables, nil
 }
 
+type criteriaFunc func(info *TableInfo, column string) bool
+
 // getColumnIndices first sort the columns in the table alphabetically, and then
 // returns the indices of the columns satisfying the criteria function
 func getColumnIndices(info *TableInfo,

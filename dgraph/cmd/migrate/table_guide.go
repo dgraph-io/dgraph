@@ -30,21 +30,18 @@ type BlankNodeG interface {
 	genBlankNode(info *TableInfo, values []interface{}) string
 }
 
-// ColumnKG represent a key generator that generate blank node labels using values in the primary
-// key columns
-type ColumnKG struct {
+// ColumnBNG generates blank node labels using values in the primary key columns
+type ColumnBNG struct {
 	primaryKeyIndices []*ColumnIdx
 	separator         string
 }
 
-type criteriaFunc func(info *TableInfo, column string) bool
-
-// For example, if the employee table has 3 columns (f_name, l_name, and title),
+// As an example, if the employee table has 3 columns (f_name, l_name, and title),
 // where f_name and l_name together form the primary key.
 // Then a row with values John (f_name), Doe (l_name), Software Engineer (title)
-// would generate a blank node label _:person_John_Doe using values from the columns
-// of the primary key in the alphabetic order, i.e. f_name, l_name in this case.
-func (g *ColumnKG) genBlankNode(info *TableInfo, values []interface{}) string {
+// would generate a blank node label _:person_John_Doe using values from the primary key columns
+// in the alphabetic order, that is f_name, l_name in this case.
+func (g *ColumnBNG) genBlankNode(info *TableInfo, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
 		g.primaryKeyIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
 			return info.columns[column].keyType == PRIMARY
@@ -63,27 +60,27 @@ func (g *ColumnKG) genBlankNode(info *TableInfo, values []interface{}) string {
 		strings.Join(valuesForKey, g.separator))
 }
 
-// generate blank node labels using a row counter
-type CounterKG struct {
+// A CounterBNG generates blank node labels using a row counter
+type CounterBNG struct {
 	rowCounter int
 	separator  string
 }
 
-func (g *CounterKG) genBlankNode(info *TableInfo, values []interface{}) string {
+func (g *CounterBNG) genBlankNode(info *TableInfo, values []interface{}) string {
 	g.rowCounter++
 	return fmt.Sprintf("_:%s%s%d", info.tableName, g.separator, g.rowCounter)
 }
 
-// a ValuesRecorder remembers the mapping between an alias and its blank node label
+// a ValuesRecorder remembers the mapping between an ref label and its blank node label
 // For example, if the person table has the (fname, lname) as the primary key,
-// and hence the blank node labels are like _:person_<first name value>_<last name value>,
-// there are two unique indices on the columns license, and (ssn) respectively.
+// and there are two unique indices on the columns "license" and "ssn" respectively.
 // For the row fname (John), lname (Doe), license(101), ssn (999-999-9999)
 // the Value recorder would remember the following mappings
 // _:person_license_101 -> _:person_John_Doe
 // _:person_ssn_999-999-9999 -> _:person_John_Doe
 // It remembers these mapping so that if another table references the person table through foreign
-// keys, it will be able to look up the blank node labels and use it to establish links in Dgraph
+// key constraints, there is a way to look up the blank node labels and use it to create
+// a Dgraph link between the two rows in the two different tables.
 type ValuesRecorder interface {
 	record(info *TableInfo, values []interface{}, blankNodeLabel string)
 	getBlankNode(indexLabel string) string
@@ -111,13 +108,13 @@ type FKValuesRecorder struct {
 // salary float
 // foreign key (person_company, person_employee_id) references person (company, employee_id)
 
-// then the following row in the person table will have blankNodeLabel _:person_John_Doe
+// Then the person table will have blank node label _:person_John_Doe for the row:
 // John (fname), Doe (lname), Google (company), 100 (employee_id)
 //
-// and we need to record the mapping from the refLabel to the blank node label
+// And we need to record the mapping from the refLabel to the blank node label
 // _:person_company_Google_employee_id_100 -> _:person_John_Doe
-// this mapping will be used later when processing the salary table to find the blank node label
-// _:person_John_Doe, which is used further to create the Dgraph edge between a salary row
+// This mapping will be used later, when processing the salary table, to find the blank node label
+// _:person_John_Doe, which is used further to create the Dgraph link between a salary row
 // and the person row
 func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
 	blankNode string) {
@@ -130,14 +127,14 @@ func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
 				return ok
 			})
 
-		aliasLabel := getAliasLabel(&Alias{
-			allColumns:         info.columns,
-			aliasColumnIndices: cstColumnIndices,
-			tableName:          info.tableName,
-			separator:          r.separator,
-			colValues:          values,
+		refLabel := getRefLabel(&Ref{
+			allColumns:       info.columns,
+			refColumnIndices: cstColumnIndices,
+			tableName:        info.tableName,
+			separator:        r.separator,
+			colValues:        values,
 		})
-		r.refToBlank[aliasLabel] = blankNode
+		r.refToBlank[refLabel] = blankNode
 	}
 }
 
@@ -158,29 +155,29 @@ func getValue(dataType DataType, value interface{}) string {
 	}
 }
 
-type Alias struct {
-	allColumns         map[string]*ColumnInfo
-	aliasColumnIndices []*ColumnIdx
-	tableName          string
-	separator          string
-	colValues          []interface{}
+type Ref struct {
+	allColumns       map[string]*ColumnInfo
+	refColumnIndices []*ColumnIdx
+	tableName        string
+	separator        string
+	colValues        []interface{}
 }
 
-func getAliasLabel(alias *Alias) string {
+func getRefLabel(ref *Ref) string {
 
 	columnNameAndValues := make([]string, 0)
-	for _, columnIdx := range alias.aliasColumnIndices {
+	for _, columnIdx := range ref.refColumnIndices {
 		nameAndValue := fmt.Sprintf("%s%s%s", columnIdx.name,
-			alias.separator,
-			getValue(alias.allColumns[columnIdx.name].dataType,
-				alias.colValues[columnIdx.index]))
+			ref.separator,
+			getValue(ref.allColumns[columnIdx.name].dataType,
+				ref.colValues[columnIdx.index]))
 
 		columnNameAndValues = append(columnNameAndValues,
 			nameAndValue)
 	}
 
-	return fmt.Sprintf("_:%s%s%s", alias.tableName, alias.separator,
-		strings.Join(columnNameAndValues, alias.separator))
+	return fmt.Sprintf("_:%s%s%s", ref.tableName, ref.separator,
+		strings.Join(columnNameAndValues, ref.separator))
 }
 
 func (r *FKValuesRecorder) getBlankNode(indexLabel string) string {
@@ -193,7 +190,11 @@ type IdxG interface {
 }
 
 // CompositeIdxG generates one Dgraph index per SQL table primary key
-// or index, where only the first column in the primary key or index will be used
+// or index. For a composite index in SQL, e.g. (fname, lname) in the person table, we will create
+// separate indices for each individual column within Dgraph, e.g.
+// person_fname: string @index(exact) .
+// person_lname: string @index(exact) .
+// The reason is that Dgraph does not support composite indices as of now.
 type CompositeIdxG struct {
 	separator string
 }
@@ -258,18 +259,17 @@ type TableGuide struct {
 }
 
 func getBlankNodeG(tableInfo *TableInfo) BlankNodeG {
-	// check if the table has primary keys
 	primaryKeyIndices := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
 		return info.columns[column].keyType == PRIMARY
 	})
 
 	if len(primaryKeyIndices) > 0 {
-		return &ColumnKG{
+		return &ColumnBNG{
 			separator: SEPERATOR,
 		}
 	}
 
-	return &CounterKG{
+	return &CounterBNG{
 		separator: SEPERATOR,
 	}
 }
