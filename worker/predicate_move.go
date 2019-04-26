@@ -186,9 +186,11 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
 		return &emptyPayload, x.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
-	if servesTablet, err := groups().ServesTablet(in.Predicate); err != nil {
+	if gid, err := groups().BelongsTo(in.Predicate); err != nil {
 		return &emptyPayload, err
-	} else if !servesTablet {
+	} else if gid == 0 {
+		return &emptyPayload, errNonExistentTablet
+	} else if gid != groups().groupId() {
 		return &emptyPayload, errUnservedTablet
 	}
 
@@ -259,12 +261,12 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return nil, err
 		}
-		kv, err := l.MarshalToKv()
-		if kv != nil {
+		kvs, err := l.Rollup()
+		for _, kv := range kvs {
 			// Let's set all of them at this move timestamp.
 			kv.Version = in.TxnTs
 		}
-		return listWrap(kv), err
+		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
 		return s.Send(&pb.KVS{Kv: list.Kv})
