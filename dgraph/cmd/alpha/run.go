@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -43,7 +44,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
-	"go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
