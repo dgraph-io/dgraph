@@ -1261,8 +1261,11 @@ You should not use the same `idx` of a node that was removed earlier.
 This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
 {{% /notice %}}
 
+Connections between dgraph client and server can be secured with TLS.
 
-Connections between client and server can be secured with TLS. Password protected private keys are **not supported**.
+{{% notice "warning" %}}
+Password-protected private key files are **not supported**. Encrypted key files must be decrypted before being passed in to `dgraph`.
+{{% /notice %}}
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
@@ -1374,7 +1377,25 @@ Important points:
 
 ### TLS options
 
-The following configuration options are available for Alpha:
+The following configuration options are available for Alpha server:
+
+XXX NEW:
+
+* `--tls_auth=string` - The level of authentication the server should use. See table below for
+possible values.
+
+| Value | Description |
+|-------|-------------|
+| none | (Default) Server does not require any require any authentication. Any client can connect and connections are insecure. Analogous to http connections. |
+| server | Server authentication only. Any client can establish a secure connection. Clients *should* verify server's certificate. Analogous to https connections. |
+| mutual | Server and client authentication. Only clients presenting a certificate acceptable to the server can establish a secure connection. Clients with no or invalid certificates are rejected. |
+
+{{% notice "note" %}}Mutual authentication is the most secure but also requires the most work
+managing keys and certificates.{{% /notice %}}
+
+* `--tls_dir=string` - The directory containing TLS keys and certificates. Defaults to "./tls" if not specified.
+
+XXX OLD:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
@@ -1385,8 +1406,16 @@ The following configuration options are available for Alpha:
 $ dgraph alpha --tls_dir tls
 ```
 
-Dgraph Live Loader can be configured with following options:
+The following configuration options are available for Live client:
 
+XXX NEW:
+FIXME still thinking about these...
+* `--tls_cert=string` - File containing client certificate to present to the server. Required if
+server is running with `--tls_auth=mutual`.
+* `--tls_dir=string` - The directory containing TLS keys and certificates.
+ Defaults to "./tls" if not specified.
+
+XXX OLD:
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
 * `--tls_server_name string` - Server name, used for validating the server's TLS host name.
