@@ -1295,7 +1295,7 @@ func (out *rollupOutput) removeEmptySplits() {
 // safer than using out.plist.Splits directly.
 func (out *rollupOutput) splits() []uint64 {
 	var splits []uint64
-	for startUid, _ := range out.parts {
+	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
 	sortSplits(splits)
