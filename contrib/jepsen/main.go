@@ -355,6 +355,10 @@ func main() {
 			openJepsenBrowser()
 		}
 	}
+	if *web && !*dryRun {
+		// Open Jaeger UI
+		BrowserOpen("http://localhost:16686")
+	}
 
 	workloads := strings.Split(*workload, ",")
 	nemeses := strings.Split(*nemesis, " ")
