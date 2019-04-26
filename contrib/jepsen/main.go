@@ -30,7 +30,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -41,6 +40,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
+	flag "github.com/spf13/pflag"
 )
 
 type JepsenTest struct {
@@ -85,33 +85,38 @@ var (
 	ctxb = context.Background()
 
 	// Jepsen test flags
-	timeLimit   = flag.Int("jepsen.time-limit", 600, "Time limit per Jepsen test in seconds.")
-	nodes       = flag.String("jepsen.nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
-	concurrency = flag.String("jepsen.concurrency", "6n", "Number of concurrent workers.")
-	workload    = flag.String("jepsen.workload", "",
+	workload = flag.StringP("workload", "w", "",
 		"Test workload to run.")
-	nemesis = flag.String("jepsen.nemesis", "",
+	nemesis = flag.StringP("nemesis", "n", "",
 		"A space-separated, comma-separated list of nemesis types.")
-	localBinary = flag.String("jepsen.local-binary", "/gobin/dgraph",
-		"Path to Dgraph binary within the Jepsen control node.")
-	rebalanceInterval = flag.String("jepsen.rebalance-interval", "10h",
+	timeLimit = flag.IntP("time-limit", "l", 600,
+		"Time limit per Jepsen test in seconds.")
+	concurrency = flag.String("concurrency", "6n",
+		"Number of concurrent workers. \"6n\" means 6 workers per node.")
+	rebalanceInterval = flag.String("rebalance-interval", "10h",
 		"Interval of Dgraph's tablet rebalancing.")
-	skew   = flag.String("jepsen.skew", "", "Skew clock amount. (tiny, small, big, huge)")
-	jaeger = flag.String("jepsen.dgraph-jaeger-collector", "http://jaeger:14268",
-		"Run with Jaeger collector. Set to empty string to disable.")
-	testCount = flag.Int("jepsen.test-count", 1, "Test count per Jepsen test.")
-	testAll   = flag.Bool("test-all", false, "Run all workload and nemesis combinations.")
+	localBinary = flag.StringP("local-binary", "b", "/gobin/dgraph",
+		"Path to Dgraph binary within the Jepsen control node.")
+	nodes     = flag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
+	skew      = flag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
+	testCount = flag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
+	jaeger    = flag.StringP("jaeger", "j", "http://jaeger:14268",
+		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
 
 	// Jepsen control flags
-	doUp       = flag.Bool("up", true, "Run Jepsen ./up.sh.")
-	doUpOnly   = flag.Bool("up-only", false, "Do --up and exit.")
-	doDown     = flag.Bool("down", false, "Stop the Jepsen cluster after tests run.")
-	doDownOnly = flag.Bool("down-only", false, "Stop the Jepsen cluster and exit.")
+	doUp       = flag.BoolP("up", "u", true, "Run Jepsen ./up.sh.")
+	doUpOnly   = flag.BoolP("up-only", "U", false, "Do --up and exit.")
+	doDown     = flag.BoolP("down", "d", false, "Stop the Jepsen cluster after tests run.")
+	doDownOnly = flag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
 	doServe    = flag.Bool("serve", true, "Serve the test results page (lein run serve).")
 	web        = flag.Bool("web", true, "Open the test results page in the browser.")
 
 	// Script flags
-	dryRun = flag.Bool("dry-run", false, "Echo commands that would run, but don't execute them.")
+	dryRun = flag.BoolP("dry-run", "y", false,
+		"Echo commands that would run, but don't execute them.")
+	ciOutput = flag.BoolP("ci-output", "q", false,
+		"Output TeamCity test result directives instead of Jepsen test output.")
+	testAll = flag.Bool("test-all", false, "Run all workload and nemesis combinations.")
 )
 
 func Command(command ...string) *exec.Cmd {
@@ -247,7 +252,7 @@ func runJepsenTest(test *JepsenTest) int {
 }
 
 func inCi() bool {
-	return os.Getenv("TEAMCITY_VERSION") != ""
+	return *ciOutput || os.Getenv("TEAMCITY_VERSION") != ""
 }
 
 func tcStart(testName string) func(pass int) {
@@ -305,6 +310,10 @@ func main() {
 		for _, n := range availableNemeses {
 			fmt.Printf("\t%v\n", n)
 		}
+		fmt.Printf("Example commands:\n")
+		fmt.Printf("$ %v -w bank -n none\n", os.Args[0])
+		fmt.Printf("$ %v -w 'bank delete' -n 'none kill-alpha,kill-zero move-tablet'\n", os.Args[0])
+		fmt.Printf("$ %v --test-all\n", os.Args[0])
 		os.Exit(1)
 	}
 
