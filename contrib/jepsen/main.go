@@ -280,6 +280,15 @@ func main() {
 		log.Fatal("GOPATH must be set.")
 	}
 
+	if *doDownOnly {
+		jepsenDown()
+		os.Exit(0)
+	}
+	if *doUpOnly {
+		jepsenUp()
+		os.Exit(0)
+	}
+
 	if *testAll {
 		*workload = strings.Join(availableWorkloads, " ")
 		*nemesis = strings.Join(availableNemeses, " ")
@@ -303,15 +312,8 @@ func main() {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
 
-	if *doDownOnly {
-		jepsenDown()
-		os.Exit(0)
-	}
 	if *doUp {
 		jepsenUp()
-		if *doUpOnly {
-			os.Exit(0)
-		}
 	}
 	if *doServe {
 		go jepsenServe()
@@ -319,21 +321,18 @@ func main() {
 			openJepsenBrowser()
 		}
 	}
-	if *web && !*dryRun {
+	if *web && !*dryRun && *jaeger != "" {
 		// Open Jaeger UI
 		browser.Open("http://localhost:16686")
 	}
 
 	workloads := strings.Split(*workload, " ")
 	nemeses := strings.Split(*nemesis, " ")
-
-	numTests := len(workloads) * len(nemeses)
-	fmt.Printf("Num tests: %v\n", numTests)
-
+	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
 			tcEnd := tcStart(fmt.Sprintf("Workload:%v,Nemeses:%v", w, n))
-			pass := runJepsenTest(&JepsenTest{
+			status := runJepsenTest(&JepsenTest{
 				workload:          w,
 				nemesis:           n,
 				timeLimit:         *timeLimit,
@@ -344,7 +343,7 @@ func main() {
 				skew:              *skew,
 				testCount:         *testCount,
 			})
-			tcEnd(pass)
+			tcEnd(status)
 		}
 	}
 
