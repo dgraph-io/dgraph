@@ -1058,7 +1058,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 
 	require.NoError(t, writePostingListToDisk(kvs))
 	newList, err := getNew(kvs[0].Key, ps)
-	require.NoError(err)
+	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: uint64(size) + 1}
 	originalUids, err := originalList.Uids(opt)
