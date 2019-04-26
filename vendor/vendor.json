@@ -3,6 +3,24 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "tI/c5HKXwzQ2Wm9VGfKuGHCDDCg=",
+			"path": "contrib.go.opencensus.io/exporter/jaeger",
+			"revision": "f3684086370a4b70671b0611a7d4ffd560eb3b54",
+			"revisionTime": "2019-04-25T16:23:33Z"
+		},
+		{
+			"checksumSHA1": "dEUYUtCJR6KpoJOw0JT2NB+bs50=",
+			"path": "contrib.go.opencensus.io/exporter/jaeger/internal/gen-go/jaeger",
+			"revision": "f3684086370a4b70671b0611a7d4ffd560eb3b54",
+			"revisionTime": "2019-04-25T16:23:33Z"
+		},
+		{
+			"checksumSHA1": "yMN3vmwcSnEj00YLRGiJ/aGWD0E=",
+			"path": "contrib.go.opencensus.io/exporter/prometheus",
+			"revision": "6bf73eaafbe93d92627ebdee2da6631ba481710e",
+			"revisionTime": "2019-04-25T16:57:51Z"
+		},
+		{
 			"checksumSHA1": "+Bo3QheGAtKFk7QPb+pdIEZNiYI=",
 			"path": "github.com/AndreasBriese/bbloom",
 			"revision": "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e",
@@ -463,26 +481,26 @@
 		{
 			"checksumSHA1": "0hrzVs4TUnFfydHG0QidJYURqfg=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
-			"revisionTime": "2019-04-17T18:34:19Z"
+			"revision": "51bc5c288428060f8ae8667eeeee65441acde52c",
+			"revisionTime": "2019-04-24T22:18:08Z"
 		},
 		{
-			"checksumSHA1": "YJWFJlDmDGChkem2kWswwyOU0S4=",
+			"checksumSHA1": "miW5fP32hjxBU6iAL/EMXrqm188=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
-			"revisionTime": "2019-04-17T18:34:19Z"
+			"revision": "51bc5c288428060f8ae8667eeeee65441acde52c",
+			"revisionTime": "2019-04-24T22:18:08Z"
 		},
 		{
 			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
 			"path": "github.com/dgraph-io/dgo/x",
-			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
-			"revisionTime": "2019-04-17T18:34:19Z"
+			"revision": "51bc5c288428060f8ae8667eeeee65441acde52c",
+			"revisionTime": "2019-04-24T22:18:08Z"
 		},
 		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
-			"revision": "087e431c0fdacdee2992b1464176608b8c0a56d7",
-			"revisionTime": "2019-04-17T18:34:19Z"
+			"revision": "51bc5c288428060f8ae8667eeeee65441acde52c",
+			"revisionTime": "2019-04-24T22:18:08Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",

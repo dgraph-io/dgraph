@@ -1319,3 +1319,11 @@ func sortSplits(splits []uint64) {
 		return splits[i] < splits[j]
 	})
 }
+
+// PartSplits returns an empty array if the list has not been split into multiple parts.
+// Otherwise, it returns an array containing the start UID of each part.
+func (l *List) PartSplits() []uint64 {
+	splits := make([]uint64, len(l.plist.Splits))
+	copy(splits, l.plist.Splits)
+	return splits
+}

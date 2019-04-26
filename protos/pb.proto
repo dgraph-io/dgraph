@@ -205,8 +205,10 @@ message Mutations {
 		NONE = 0;
 		ALL = 1;
 		DATA = 2;
+		TYPE = 3;
 	}
 	DropOp drop_op = 7;
+	string drop_value = 8;
 }
 
 message Snapshot {
