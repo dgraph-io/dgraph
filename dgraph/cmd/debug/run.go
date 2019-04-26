@@ -844,8 +844,8 @@ func parseWal(db *badger.DB) error {
 		}
 	}
 
-	for rid, _ := range rids {
-		for gid, _ := range gids {
+	for rid := range rids {
+		for gid := range gids {
 			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
 			store := raftwal.Init(db, rid, gid)
 			printRaft(store)
