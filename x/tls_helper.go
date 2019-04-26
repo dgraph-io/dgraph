@@ -24,6 +24,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -36,7 +37,18 @@ const (
 )
 
 const (
-	tlsRootCert = "ca.crt"
+	tlsDefaultDir = "./tls"
+	tlsRootCert   = "ca.crt"
+	tlsServerCert = "node.crt"
+	tlsServerKey  = "node.key"
+)
+
+type TlsAuthLevel int
+
+const (
+	TlsAuthNone   TlsAuthLevel = iota // No authentication.
+	TlsAuthServer                     // Client authenticates server only (similar to https).
+	TlsAuthMutual                     // Client and server authenticate each other.
 )
 
 // TLSHelperConfig define params used to create a tls.Config
@@ -62,7 +74,7 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
-func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
+func LoadServerTLSConfigOld(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
 	error) {
 	conf := TLSHelperConfig{}
 	conf.CertDir = v.GetString("tls_dir")
@@ -76,6 +88,65 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 	conf.UseSystemCACerts = v.GetBool("tls_use_system_ca")
 
 	return GenerateServerTLSConfig(&conf)
+}
+
+func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
+	error) {
+	conf := TLSHelperConfig{}
+
+	auth := TlsAuthNone
+	authStr := strings.ToLower(v.GetString("tls_auth"))
+	switch authStr {
+	case "none":
+		glog.V(2).Info("Not authenticating connections")
+	case "server":
+		glog.V(2).Info("Authenticating server only")
+		auth = TlsAuthServer
+	case "mutual":
+		glog.V(2).Info("Authenticating server and clients")
+		auth = TlsAuthMutual
+	default:
+		return nil, fmt.Errorf("invalid authentication level: %s", authStr)
+	}
+
+	conf.CertDir = v.GetString("tls_dir")
+	if conf.CertDir == "" && auth != TlsAuthNone {
+		conf.CertDir = tlsDefaultDir
+	} else if conf.CertDir != "" && auth == TlsAuthNone {
+		return nil, fmt.Errorf("authentication must be enabled to use --tls_dir")
+	}
+
+	// Nothing else to do if authentication is not enabled.
+	if auth == TlsAuthNone {
+		return nil, nil
+	}
+
+	conf.Cert = path.Join(conf.CertDir, tlsServerCert)
+	conf.Key = path.Join(conf.CertDir, tlsServerKey)
+
+	tlsCfg := new(tls.Config)
+	cert, err := tls.LoadX509KeyPair(conf.Cert, conf.Key)
+	if err != nil {
+		return nil, err
+	}
+	tlsCfg.Certificates = []tls.Certificate{cert}
+
+	//pool, err := generateCertPool(conf.RootCACert, conf.UseSystemCACerts)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//tlsCfg.ClientCAs = pool
+	//
+	//auth, err := setupClientAuth(conf.ClientAuth)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//tlsCfg.ClientAuth = auth
+
+	tlsCfg.MinVersion = tls.VersionTLS11
+	tlsCfg.MaxVersion = tls.VersionTLS12
+
+	return tlsCfg, nil
 }
 
 func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {

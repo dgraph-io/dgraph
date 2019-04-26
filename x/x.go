@@ -420,7 +420,16 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
+func StartConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
+	return setupConnection(host, tlsCfg, useGz, 0)
+}
+
 func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
+	return setupConnection(host, tlsCfg, useGz, 10*time.Second)
+}
+
+func setupConnection(host string, tlsCfg *tls.Config, useGz bool, timeout time.Duration) (
+	*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
 		grpc.MaxCallSendMsgSize(GrpcMaxSize))
@@ -440,8 +449,14 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
 
 	return grpc.DialContext(ctx, host, dialOpts...)
 }
