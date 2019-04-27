@@ -517,12 +517,7 @@ func (r *rebuild) Run(ctx context.Context) error {
 
 	// Now we write all the created posting lists to disk.
 	writer := NewTxnWriter(pstore)
-	for key := range txn.deltas {
-		pl, err := txn.Get([]byte(key))
-		if err != nil {
-			return err
-		}
-
+	for _, pl := range txn.cache.plists {
 		le := pl.Length(r.startTs, 0)
 		if le == 0 {
 			continue

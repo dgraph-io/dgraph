@@ -47,11 +47,7 @@ type Txn struct {
 	// atomic
 	shouldAbort uint32
 	// Fields which can changed after init
-	sync.Mutex
-	// Deltas keeps track of the posting list keys, and whether they should be considered for
-	// conflict detection or not. When a txn is marked committed or aborted, we use the keys stored
-	// here to determine which posting lists to get and update.
-	deltas map[string]struct{}
+	sync.RWMutex
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
@@ -67,7 +63,7 @@ type Txn struct {
 func NewTxn(startTs uint64) *Txn {
 	return &Txn{
 		StartTs:    startTs,
-		cache:      NewLocalCache(),
+		cache:      NewLocalCache(startTs),
 		lastUpdate: time.Now(),
 	}
 }
@@ -75,10 +71,21 @@ func NewTxn(startTs uint64) *Txn {
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
-
-func (txn *Txn) Store(pl *List) *List {
-	return txn.cache.Set(string(pl.key), pl)
+func (txn *Txn) Update() {
+	txn.cache.UpdateDeltasAndDiscardLists()
 }
+
+// func (txn *Txn) Keys() []string {
+// 	var keys []string
+// 	for key := range txn.cache.plists {
+// 	}
+// 	txn.Lock()
+// 	defer txn.Unlock()
+// 	for key := range txn.deltas {
+// 		keys = append(keys, key)
+// 	}
+// 	return keys
+// }
 
 type oracle struct {
 	x.SafeMutex
@@ -101,6 +108,16 @@ type oracle struct {
 func (o *oracle) init() {
 	o.waiters = make(map[uint64][]chan struct{})
 	o.pendingTxns = make(map[uint64]*Txn)
+
+	go func() {
+		tick := time.NewTicker(5 * time.Second)
+		defer tick.Stop()
+		for range tick.C {
+			o.Lock()
+			glog.Infof("Num pending txns: %d", len(o.pendingTxns))
+			o.Unlock()
+		}
+	}()
 }
 
 func (o *oracle) RegisterStartTs(ts uint64) *Txn {
@@ -237,7 +254,7 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
 	txn.Lock()
 	defer txn.Unlock()
-	for key := range txn.deltas {
+	for key := range txn.cache.deltas {
 		if ok([]byte(key)) {
 			return true
 		}

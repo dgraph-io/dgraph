@@ -48,14 +48,12 @@ func (txn *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&txn.shouldAbort) > 0
 }
 
-func (txn *Txn) AddKeys(key, conflictKey string) {
+func (txn *Txn) AddKeys(conflictKey string) {
 	txn.Lock()
 	defer txn.Unlock()
-	if txn.deltas == nil || txn.conflicts == nil {
-		txn.deltas = make(map[string]struct{})
+	if txn.conflicts == nil {
 		txn.conflicts = make(map[string]struct{})
 	}
-	txn.deltas[key] = struct{}{}
 	if len(conflictKey) > 0 {
 		txn.conflicts[conflictKey] = struct{}{}
 	}
@@ -74,7 +72,7 @@ func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 			ctx.Keys = append(ctx.Keys, fps)
 		}
 	}
-	for key := range txn.deltas {
+	for key := range txn.cache.deltas {
 		pk := x.Parse([]byte(key))
 		// Also send the group id that the predicate was being served by. This is useful when
 		// checking if Zero should allow a commit during a predicate move.
@@ -92,13 +90,20 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	if commitTs == 0 {
 		return nil
 	}
+
+	txn.RLock()
+	defer txn.RUnlock()
+
 	var keys []string
-	txn.Lock()
-	// TODO: We can remove the deltas here. Now that we're using txn local cache.
-	for key := range txn.deltas {
+	for key := range txn.cache.deltas {
 		keys = append(keys, key)
 	}
-	txn.Unlock()
+	// txn.Lock()
+	// // TODO: We can remove the deltas here. Now that we're using txn local cache.
+	// for key := range txn.deltas {
+	// 	keys = append(keys, key)
+	// }
+	// txn.Unlock()
 
 	var idx int
 	for idx < len(keys) {
@@ -108,20 +113,17 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		err := writer.Update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
-				plist, err := txn.Get([]byte(key))
-				if err != nil {
-					return err
-				}
-				data := plist.GetMutation(txn.StartTs)
-				if data == nil {
+				data := txn.cache.deltas[key]
+				if len(data) == 0 {
 					continue
 				}
-				if plist.maxVersion() >= commitTs {
-					pk := x.Parse([]byte(key))
-					glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
-						plist.maxVersion(), commitTs, pk)
-					continue
-				}
+				// TODO: Bring this back. HACK HACK HACK.
+				// if plist.maxVersion() >= commitTs {
+				// 	pk := x.Parse([]byte(key))
+				// 	glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
+				// 		plist.maxVersion(), commitTs, pk)
+				// 	continue
+				// }
 				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
 					return err
 				}
@@ -143,7 +145,7 @@ func (txn *Txn) CommitToMemory(commitTs uint64) error {
 	// defer func() {
 	// 	atomic.StoreUint32(&txn.shouldAbort, 1)
 	// }()
-	for key := range txn.deltas {
+	for key := range txn.cache.plists {
 	inner:
 		for {
 			plist, err := txn.Get([]byte(key))

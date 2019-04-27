@@ -280,6 +280,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return dy.ErrConflict
 	}
 
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
+
 	sort.Slice(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
