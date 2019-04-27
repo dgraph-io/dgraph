@@ -40,7 +40,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/contrib/jepsen/browser"
-	flag "github.com/spf13/pflag"
+	"github.com/spf13/pflag"
 )
 
 type JepsenTest struct {
@@ -85,38 +85,38 @@ var (
 	ctxb = context.Background()
 
 	// Jepsen test flags
-	workload = flag.StringP("workload", "w", "",
+	workload = pflag.StringP("workload", "w", "",
 		"Test workload to run.")
-	nemesis = flag.StringP("nemesis", "n", "",
+	nemesis = pflag.StringP("nemesis", "n", "",
 		"A space-separated, comma-separated list of nemesis types.")
-	timeLimit = flag.IntP("time-limit", "l", 600,
+	timeLimit = pflag.IntP("time-limit", "l", 600,
 		"Time limit per Jepsen test in seconds.")
-	concurrency = flag.String("concurrency", "6n",
+	concurrency = pflag.String("concurrency", "6n",
 		"Number of concurrent workers. \"6n\" means 6 workers per node.")
-	rebalanceInterval = flag.String("rebalance-interval", "10h",
+	rebalanceInterval = pflag.String("rebalance-interval", "10h",
 		"Interval of Dgraph's tablet rebalancing.")
-	localBinary = flag.StringP("local-binary", "b", "/gobin/dgraph",
+	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
 		"Path to Dgraph binary within the Jepsen control node.")
-	nodes     = flag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
-	skew      = flag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
-	testCount = flag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
-	jaeger    = flag.StringP("jaeger", "j", "http://jaeger:14268",
+	nodes     = pflag.String("nodes", "n1,n2,n3,n4,n5", "Nodes to run on.")
+	skew      = pflag.String("skew", "", "Skew clock amount. (tiny, small, big, huge)")
+	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
+	jaeger    = pflag.StringP("jaeger", "j", "http://jaeger:14268",
 		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger.")
 
 	// Jepsen control flags
-	doUp       = flag.BoolP("up", "u", true, "Run Jepsen ./up.sh.")
-	doUpOnly   = flag.BoolP("up-only", "U", false, "Do --up and exit.")
-	doDown     = flag.BoolP("down", "d", false, "Stop the Jepsen cluster after tests run.")
-	doDownOnly = flag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
-	doServe    = flag.Bool("serve", true, "Serve the test results page (lein run serve).")
-	web        = flag.Bool("web", true, "Open the test results page in the browser.")
+	doUp       = pflag.BoolP("up", "u", true, "Run Jepsen ./up.sh.")
+	doUpOnly   = pflag.BoolP("up-only", "U", false, "Do --up and exit.")
+	doDown     = pflag.BoolP("down", "d", false, "Stop the Jepsen cluster after tests run.")
+	doDownOnly = pflag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
+	doServe    = pflag.Bool("serve", true, "Serve the test results page (lein run serve).")
+	web        = pflag.Bool("web", true, "Open the test results page in the browser.")
 
 	// Script flags
-	dryRun = flag.BoolP("dry-run", "y", false,
+	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
-	ciOutput = flag.BoolP("ci-output", "q", false,
+	ciOutput = pflag.BoolP("ci-output", "q", false,
 		"Output TeamCity test result directives instead of Jepsen test output.")
-	testAll = flag.Bool("test-all", false, "Run all workload and nemesis combinations.")
+	testAll = pflag.Bool("test-all", false, "Run all workload and nemesis combinations.")
 )
 
 func Command(command ...string) *exec.Cmd {
@@ -276,7 +276,7 @@ func tcStart(testName string) func(pass int) {
 }
 
 func main() {
-	flag.Parse()
+	pflag.Parse()
 
 	if os.Getenv("JEPSEN_ROOT") == "" {
 		log.Fatal("JEPSEN_ROOT must be set.")
