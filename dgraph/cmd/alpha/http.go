@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/jsonpb"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -460,7 +461,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := json.Unmarshal(b, &op)
+	err := jsonpb.UnmarshalString(string(b), op)
 	if err != nil {
 		op.Schema = string(b)
 	}

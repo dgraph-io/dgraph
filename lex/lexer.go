@@ -136,20 +136,40 @@ func (p *ItemIterator) PeekOne() (Item, bool) {
 	return p.l.items[p.idx+1], true
 }
 
+// A RuneWidth represents a consecutive string of runes with the same width
+// and the number of runes is stored in count.
+// The reason we maintain this information is to properly backup when multiple look-aheads happen.
+// For example, if the following sequence of events happen
+// 1. Lexer.Next() consumes 1 byte
+// 2. Lexer.Next() consumes 1 byte
+// 3. Lexer.Next() consumes 3 bytes
+// we would create two RunWidthTrackers, the 1st having width 1 and count 2, while the 2nd having
+// width 3 and count 1, then the following backups can be done properly:
+// 4. Lexer.Backup() should decrement the pos by 3
+// 5. Lexer.Backup() should decrement the pos by 1
+// 6. Lexer.Backup() should decrement the pos by 1
+type RuneWidth struct {
+	width int
+	// count should be always greater than or equal to 1, because we pop a tracker item
+	// from the stack when count is about to reach 0
+	count int
+}
+
 type Lexer struct {
 	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
 	// Golang. It won't keep track of Start Position, or allow us to retrieve
 	// slice from [Start:Pos]. Better to just use normal string.
-	Input    string  // string being scanned.
-	Start    int     // Start Position of this item.
-	Pos      int     // current Position of this item.
-	Width    int     // Width of last rune read from input.
-	items    []Item  // channel of scanned items.
-	Depth    int     // nesting of {}
-	ArgDepth int     // nesting of ()
-	Mode     StateFn // Default state to go back to after reading a token.
-	Line     int     // the current line number corresponding to Start
-	Column   int     // the current column number corresponding to Start
+	Input      string // string being scanned.
+	Start      int    // Start Position of this item.
+	Pos        int    // current Position of this item.
+	Width      int    // Width of last rune read from input.
+	widthStack []*RuneWidth
+	items      []Item  // channel of scanned items.
+	Depth      int     // nesting of {}
+	ArgDepth   int     // nesting of ()
+	Mode       StateFn // Default state to go back to after reading a token.
+	Line       int     // the current line number corresponding to Start
+	Column     int     // the current column number corresponding to Start
 }
 
 func NewLexer(input string) *Lexer {
@@ -174,7 +194,7 @@ func (l *Lexer) ValidateResult() error {
 func (l *Lexer) Run(f StateFn) *Lexer {
 	for state := f; state != nil; {
 		// The following statement is useful for debugging.
-		// fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
+		//fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
 		state = state(l)
 	}
 	return l
@@ -207,20 +227,41 @@ func (l *Lexer) Emit(t ItemType) {
 	l.moveStartToPos()
 }
 
+func (l *Lexer) pushWidth(width int) {
+	wl := len(l.widthStack)
+	if wl == 0 || l.widthStack[wl-1].width != width {
+		l.widthStack = append(l.widthStack, &RuneWidth{
+			count: 1,
+			width: width,
+		})
+	} else {
+		l.widthStack[wl-1].count++
+	}
+}
+
 // Next reads the next rune from the Input, sets the Width and advances Pos.
 func (l *Lexer) Next() (result rune) {
 	if l.Pos >= len(l.Input) {
-		l.Width = 0
+		l.pushWidth(0)
 		return EOF
 	}
 	r, w := utf8.DecodeRuneInString(l.Input[l.Pos:])
-	l.Width = w
-	l.Pos += l.Width
+	l.pushWidth(w)
+	l.Pos += w
 	return r
 }
 
 func (l *Lexer) Backup() {
-	l.Pos -= l.Width
+	wl := len(l.widthStack)
+	x.AssertTruef(wl > 0,
+		"Backup should not be called when the width tracker stack is empty")
+	rw := l.widthStack[wl-1]
+	if rw.count == 1 {
+		l.widthStack = l.widthStack[:wl-1] // pop the item from the stack
+	} else {
+		rw.count--
+	}
+	l.Pos -= rw.width
 }
 
 func (l *Lexer) Peek() rune {

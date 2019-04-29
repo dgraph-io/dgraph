@@ -117,7 +117,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 			x.Check(err)
 		}
 
-		nq, err := rdf.Parse(strings.TrimSpace(str))
+		nq, err := rdf.Parse(str)
 		if err == rdf.ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {

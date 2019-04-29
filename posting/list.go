@@ -1295,7 +1295,7 @@ func (out *rollupOutput) removeEmptySplits() {
 // safer than using out.plist.Splits directly.
 func (out *rollupOutput) splits() []uint64 {
 	var splits []uint64
-	for startUid, _ := range out.parts {
+	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
 	sortSplits(splits)
@@ -1318,4 +1318,12 @@ func sortSplits(splits []uint64) {
 	sort.Slice(splits, func(i, j int) bool {
 		return splits[i] < splits[j]
 	})
+}
+
+// PartSplits returns an empty array if the list has not been split into multiple parts.
+// Otherwise, it returns an array containing the start UID of each part.
+func (l *List) PartSplits() []uint64 {
+	splits := make([]uint64, len(l.plist.Splits))
+	copy(splits, l.plist.Splits)
+	return splits
 }
