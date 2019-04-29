@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -45,6 +46,15 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *sche
 		},
 		state: state,
 	}
+
+	// Load all initial predicates. Some predicates that might not be used when
+	// the alpha is started (e.g ACL predicates) might be included but it's
+	// better to include them in case the input data contains triples with these
+	// predicates.
+	for _, update := range schema.CompleteInitialSchema() {
+		s.m[update.Predicate] = update
+	}
+
 	if opt.StoreXids {
 		s.m["xid"] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
