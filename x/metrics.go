@@ -57,6 +57,8 @@ var (
 		"Number of active mutations", stats.UnitDimensionless)
 	AlphaHealth = stats.Int64("alpha_health_status",
 		"Status of the alphas", stats.UnitDimensionless)
+	RaftAppliedIndex = stats.Int64("raft_applied_index",
+		"Latest applied Raft index", stats.UnitDimensionless)
 
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
@@ -159,6 +161,13 @@ var allViews = []*view.View{
 		Name:        AlphaHealth.Name(),
 		Measure:     AlphaHealth,
 		Description: AlphaHealth.Description(),
+		Aggregation: view.LastValue(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        RaftAppliedIndex.Name(),
+		Measure:     RaftAppliedIndex,
+		Description: RaftAppliedIndex.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},

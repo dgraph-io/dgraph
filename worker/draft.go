@@ -482,6 +482,7 @@ func (n *node) processApplyCh() {
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
 		}
+		ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 	}
 
 	maxAge := 10 * time.Minute
