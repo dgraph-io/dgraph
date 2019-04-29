@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize/english"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
@@ -317,7 +318,9 @@ func run() error {
 		return err
 	}
 
+	// Enable profiling with go tool pprof
 	go http.ListenAndServe("localhost:6060", nil)
+
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,
@@ -342,7 +345,7 @@ func run() error {
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
 
-	if len(opt.schemaFile) > 0 {
+	if opt.schemaFile != "" {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
@@ -362,8 +365,10 @@ func run() error {
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return fmt.Errorf("No data files found in %s", opt.dataFiles)
+	} else {
+		fmt.Printf("Found %d data %s to process\n", totalFiles,
+			english.PluralWord(totalFiles, "file", ""))
 	}
-	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
