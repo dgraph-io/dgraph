@@ -108,6 +108,20 @@ var allViews = []*view.View{
 		Aggregation: view.Count(),
 		TagKeys:     allTagKeys,
 	},
+	{
+		Name:        RaftAppliedIndex.Name(),
+		Measure:     RaftAppliedIndex,
+		Description: RaftAppliedIndex.Description(),
+		Aggregation: view.Count(),
+		TagKeys:     allTagKeys,
+	},
+	{
+		Name:        MaxAssignedTs.Name(),
+		Measure:     MaxAssignedTs,
+		Description: MaxAssignedTs.Description(),
+		Aggregation: view.Count(),
+		TagKeys:     allTagKeys,
+	},
 
 	// Last value aggregations
 	{
@@ -163,20 +177,6 @@ var allViews = []*view.View{
 		Name:        AlphaHealth.Name(),
 		Measure:     AlphaHealth,
 		Description: AlphaHealth.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        RaftAppliedIndex.Name(),
-		Measure:     RaftAppliedIndex,
-		Description: RaftAppliedIndex.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MaxAssignedTs.Name(),
-		Measure:     MaxAssignedTs,
-		Description: MaxAssignedTs.Description(),
 		Aggregation: view.LastValue(),
 		TagKeys:     allTagKeys,
 	},
