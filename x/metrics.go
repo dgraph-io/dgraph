@@ -44,7 +44,7 @@ var (
 	AlphaHealth      *expvar.Int
 	MaxPlSize        *expvar.Int
 	MaxPlLength      *expvar.Int
-	WatermarkIndex   *expvar.Int
+	RaftAppliedIndex *expvar.Int
 
 	PredicateStats *expvar.Map
 	Conf           *expvar.Map
@@ -73,7 +73,7 @@ func init() {
 	Conf = expvar.NewMap("dgraph_config")
 	MaxPlSize = expvar.NewInt("dgraph_max_list_bytes")
 	MaxPlLength = expvar.NewInt("dgraph_max_list_length")
-	WatermarkIndex = expvar.NewInt("dgraph_watermark_done_index")
+	RaftAppliedIndex = expvar.NewInt("dgraph_raft_applied_index")
 
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
@@ -148,9 +148,9 @@ func init() {
 			"dgraph_max_list_length",
 			nil, nil,
 		),
-		"dgraph_watermark_done_index": prometheus.NewDesc(
-			"dgraph_watermark_done_index",
-			"dgraph_watermark_done_index",
+		"dgraph_raft_applied_index": prometheus.NewDesc(
+			"dgraph_raft_applied_index",
+			"dgraph_raft_applied_index",
 			nil, nil,
 		),
 		"dgraph_pending_proposals_total": prometheus.NewDesc(
