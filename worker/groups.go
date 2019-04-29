@@ -881,12 +881,16 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 			for {
-				// Block forever trying to propose this.
-				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
+				// Block forever trying to propose this. Also set the Important bit to allow this
+				// proposal to not be counted towards num pending proposals and be proposed right
+				// away.
+				err := g.Node.proposeAndWait(context.Background(),
+					&pb.Proposal{Delta: delta, Important: true})
 				if err == nil {
 					break
 				}
-				glog.Errorf("While proposing delta: %v. Error=%v. Retrying...\n", delta, err)
+				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
+					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
 		}
 	}

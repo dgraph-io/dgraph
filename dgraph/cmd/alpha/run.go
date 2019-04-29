@@ -483,6 +483,11 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()
+
+	glog.Infof("x.Config: %+v", x.Config)
+	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
+	glog.Infof("edgraph.Config: %+v", edgraph.Config)
+
 	edgraph.InitServerState()
 	defer func() {
 		edgraph.State.Dispose()
