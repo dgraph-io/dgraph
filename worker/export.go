@@ -399,7 +399,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	// Open schema file now.
-	schemaPath, err := path("schema.gz")
+	schemaPath, err := path(".schema.gz")
 	if err != nil {
 		return err
 	}
