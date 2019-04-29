@@ -30,12 +30,22 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/errors"
 )
+
+// chunk.Reader wraps a bufio.Reader to hold additional information
+// about the file being read.
+type Reader struct {
+	bufio.Reader
+	offset     uint64
+	lineNum    uint32
+	compressed bool
+	filename   string
+}
 
 type Chunker interface {
 	Begin(r *bufio.Reader) error
@@ -75,8 +85,8 @@ func (rdfChunker) Begin(r *bufio.Reader) error {
 // 3) some unexpected error happened
 func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
-	batch.Grow(1 << 20)
-	for lineCount := 0; lineCount < 1e5; lineCount++ {
+	batch.Grow(1 * x.MiB)
+	for lineCount := 0; lineCount < 10*x.Thousand; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
 			batch.Write(slc)
@@ -154,7 +164,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 
 func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
-	out.Grow(1 << 20)
+	out.Grow(1 * x.MiB)
 
 	// For RDF, the loader just reads the input and the mapper parses it into nquads,
 	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
