@@ -47,19 +47,22 @@ func checkLoadedData(t *testing.T) {
 			q(func: anyofterms(name, "Homer")) {
 				name
 				age
-				role
+				role @facets(gender,generation)
+				role@es
 			}
 		}
 	`)
 	require.NoError(t, err)
 	z.CompareJSON(t, `
 		{
-		    "q": [
+			"q": [
 					{
 					"name": "Homer",
 					"age": 38,
-					"role": "father"
-			    }
+					"role": "father",
+					"role@es": "padre",
+					"role|gender": "male"
+				}
 			]
 		}
 	`, string(resp.GetJson()))
@@ -68,7 +71,8 @@ func checkLoadedData(t *testing.T) {
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				name
-				role
+				role @facets(gender,generation)
+				role@es
 				carries
 			}
 		}
@@ -76,15 +80,31 @@ func checkLoadedData(t *testing.T) {
 	require.NoError(t, err)
 	z.CompareJSON(t, `
 		{
-		    "q": [
+			"q": [
 				{
 					"name": "Maggie",
 					"role": "daughter",
-					"carries": "pacifier"
-			    }
+					"role@es": "hija",
+					"carries": "pacifier",
+					"role|gender": "female",
+					"role|generation": 3
+				}
 			]
 		}
 	`, string(resp.GetJson()))
+}
+
+func TestLiveLoadJSONFileEmpty(t *testing.T) {
+	z.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{"echo", "[]"},
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
+			"--alpha", alphaService},
+	}
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file ran successfully")
 }
 
 func TestLiveLoadJSONFile(t *testing.T) {
