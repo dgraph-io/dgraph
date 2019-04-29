@@ -220,6 +220,7 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		delete(o.waiters, startTs)
 	}
 	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
+	x.MaxAssignedTs.Set(int64(o.MaxAssigned()))
 }
 
 func (o *oracle) ResetTxns() {
