@@ -53,12 +53,15 @@ type flagOptions struct {
 	predicate     string
 	readOnly      bool
 	pdir          string
-	wdir          string
 	itemMeta      bool
 	jepsen        string
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
+
+	// Options related to the WAL.
+	wdir           string
+	wtruncateUntil uint64
 }
 
 func init() {
@@ -82,9 +85,11 @@ func init() {
 	flag.StringVarP(&opt.keyLookup, "lookup", "l", "", "Hex of key to lookup.")
 	flag.BoolVarP(&opt.keyHistory, "history", "y", false, "Show all versions of a key.")
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
-	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
+
+	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
+	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0, "Remove data from Raft entries up until this index.")
 }
 
 func toInt(o *pb.Posting) int {
@@ -830,6 +835,11 @@ func parseWal(db *badger.DB) error {
 		startIdx := snap.Metadata.Index + 1
 		fmt.Printf("Last Index: %d . Num Entries: %d .\n\n", lastIdx, lastIdx-startIdx)
 
+		// In case we need to truncate raft entries.
+		batch := db.NewWriteBatch()
+		defer batch.Cancel()
+		var numTruncates int
+
 		pending = make(map[uint64]bool)
 		for startIdx < lastIdx-1 {
 			entries, err := store.Entries(startIdx, lastIdx, 64<<20 /* 64 MB Max Size */)
@@ -838,9 +848,36 @@ func parseWal(db *badger.DB) error {
 				return
 			}
 			for _, ent := range entries {
-				printEntry(ent)
+				switch {
+				case ent.Index < opt.wtruncateUntil:
+					if len(ent.Data) == 0 {
+						continue
+					}
+					ent.Data = nil
+					numTruncates++
+					k := store.EntryKey(ent.Index)
+					data, err := ent.Marshal()
+					if err != nil {
+						log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
+					}
+					if err := batch.Set(k, data, 0); err != nil {
+						log.Fatalf("Unable to set data: %+v", err)
+					}
+					if numTruncates%100 == 0 {
+						fmt.Printf("Log entries truncated so far: %d\n", numTruncates)
+					}
+				default:
+					printEntry(ent)
+				}
 				startIdx = x.Max(startIdx, ent.Index)
 			}
+		}
+		if err := batch.Flush(); err != nil {
+			fmt.Printf("Got error while flushing batch: %v\n", err)
+		}
+		if numTruncates > 0 {
+			err := db.Flatten(1)
+			fmt.Printf("Flatten done with error: %v\n", err)
 		}
 	}
 
