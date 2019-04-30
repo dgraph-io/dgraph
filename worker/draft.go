@@ -1000,10 +1000,12 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot")
 	defer span.End()
 
-	if atomic.LoadInt32(&n.streaming) > 0 {
-		span.Annotate(nil, "Skipping calculateSnapshot due to streaming")
-		return nil, nil
-	}
+	// We do not need to block snapshot calculation because of a pending stream. Badger would have
+	// pending iterators which would ensure that the data above their read ts would not be
+	// discarded. Secondly, if a new snapshot does get calculated and applied, the follower can just
+	// ask for the new snapshot. Blocking snapshot calculation has caused us issues when a follower
+	// somehow kept streaming forever. Then, the leader didn't calculate snapshot, instead it
+	// kept appending to Raft logs forever causing group wide issues.
 
 	first, err := n.Store.FirstIndex()
 	if err != nil {
