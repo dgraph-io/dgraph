@@ -77,12 +77,12 @@ type ColumnOutput struct {
 	dataType  string
 }
 
-func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
+func getColumnInfo(fieldName string, dataType string) *ColumnInfo {
 	columnInfo := ColumnInfo{}
-	columnInfo.name = columnOutput.fieldName
+	columnInfo.name = fieldName
 
 	for prefix, goType := range mysqlTypePrefixToGoType {
-		if strings.HasPrefix(columnOutput.dataType, prefix) {
+		if strings.HasPrefix(dataType, prefix) {
 			columnInfo.dataType = goType
 			break
 		}
@@ -92,8 +92,7 @@ func getColumnInfo(columnOutput *ColumnOutput) *ColumnInfo {
 
 func getTableInfo(table string, database string, pool *sql.DB) (*TableInfo, error) {
 	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE from INFORMATION_SCHEMA.
-COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
-		database)
+COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table, database)
 	columnRows, err := pool.Query(query)
 	if err != nil {
 		return nil, err
@@ -120,14 +119,14 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table,
 			| title         | varchar   |
 			+---------------+-----------+
 		*/
-		columnOutput := ColumnOutput{}
-		err := columnRows.Scan(&columnOutput.fieldName, &columnOutput.dataType)
+		var fieldName, dataType string
+		err := columnRows.Scan(&fieldName, &dataType)
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan table description result for table %s: %v",
 				table, err)
 		}
 
-		tableInfo.columns[columnOutput.fieldName] = getColumnInfo(&columnOutput)
+		tableInfo.columns[fieldName] = getColumnInfo(fieldName, dataType)
 	}
 
 	// query indices
@@ -234,8 +233,8 @@ func populateReferencedByColumns(tables map[string]*TableInfo) {
 		for _, constraint := range tableInfo.foreignKeyConstraints {
 			reverseTable, reverseConstraint := validateAndGetReverse(constraint)
 
-			tables[reverseTable].cstSources = append(tables[reverseTable].
-				cstSources, reverseConstraint)
+			tables[reverseTable].cstSources = append(tables[reverseTable].cstSources,
+				reverseConstraint)
 		}
 	}
 }

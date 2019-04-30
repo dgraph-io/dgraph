@@ -28,19 +28,14 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-type CancelFunc func()
-
-func getMySQLPool(mysqlUser string, mysqlDB string, password string) (*sql.DB, CancelFunc,
+func getMySQLPool(mysqlUser string, mysqlDB string, password string) (*sql.DB,
 	error) {
 	pool, err := sql.Open("mysql",
 		fmt.Sprintf("%s:%s@/%s", mysqlUser, password, mysqlDB))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	cancelFunc := func() {
-		pool.Close()
-	}
-	return pool, cancelFunc, nil
+	return pool, nil
 }
 
 // readMySqlTables will return a slice of table names using one of the following logic
@@ -48,7 +43,7 @@ func getMySQLPool(mysqlUser string, mysqlDB string, password string) (*sql.DB, C
 // by splitting the parameter with the separate comma
 // 2) if the parameter is empty, this function will read all the tables under the given
 // database from MySQL and then return the result
-func readMySqlTables(mysqlTables string, pool *sql.DB) ([]string, error) {
+func readMySqlTables(pool *sql.DB, mysqlTables string) ([]string, error) {
 	if len(mysqlTables) > 0 {
 		return strings.Split(mysqlTables, ","), nil
 	}

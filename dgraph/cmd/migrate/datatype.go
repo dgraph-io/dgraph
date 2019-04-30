@@ -29,7 +29,7 @@ const (
 var typeToString map[DataType]string
 var mysqlTypePrefixToGoType map[string]DataType
 
-func init() {
+func initDataTypes() {
 	typeToString = make(map[DataType]string)
 	typeToString[UNKNOWN] = "unknown"
 	typeToString[INT] = "int"

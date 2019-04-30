@@ -186,8 +186,7 @@ func (m *DumpMeta) outputRow(rmi *RowMetaInfo, tableInfo *TableInfo) {
 	for i, colValue := range rmi.colValues {
 		predicate := rmi.predNames[i]
 		outputPlainCell(rmi.blankNodeLabel, rmi.columnTypes[i].DatabaseTypeName(),
-			predicate,
-			colValue, m.dataWriter)
+			predicate, colValue, m.dataWriter)
 	}
 
 	for _, constraint := range tableInfo.foreignKeyConstraints {

@@ -49,8 +49,8 @@ func init() {
 	flag.StringP("mysql_password", "", "",
 		"The MySQL password used for logging in")
 	flag.StringP("mysql_db", "", "", "The MySQL database to import")
-	flag.StringP("mysql_tables", "", "", "The MySQL tables to import, "+
-		"an empty string means all tables in the database")
+	flag.StringP("mysql_tables", "", "", "The comma separated list of "+
+		"MySQL tables to import, an empty string means importing all tables in the database")
 	flag.StringP("output_schema", "s", "", "The schema output file")
 	flag.StringP("output_data", "o", "", "The data output file")
 }
@@ -73,19 +73,22 @@ func run(conf *viper.Viper) error {
 		logger.Fatalf("the mysql_password property should not be empty")
 	}
 	if len(schemaOutput) == 0 {
-		logger.Fatalf("the schema output file should not be empty")
+		logger.Fatalf("please use the --output_schema option to " +
+			"provide the schema output file")
 	}
 	if len(dataOutput) == 0 {
-		logger.Fatalf("the data output file should not be empty")
+		logger.Fatalf("please use the --output_data option to provide the data output file")
 	}
 
-	pool, cancelFunc, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
+	initDataTypes()
+
+	pool, err := getMySQLPool(mysqlUser, mysqlDB, mysqlPassword)
 	if err != nil {
 		return err
 	}
-	defer cancelFunc()
+	defer pool.Close()
 
-	tablesToRead, err := readMySqlTables(mysqlTables, pool)
+	tablesToRead, err := readMySqlTables(pool, mysqlTables)
 	if err != nil {
 		return err
 	}
@@ -131,7 +134,7 @@ func generateSchemaAndData(dumpMeta *DumpMeta, schemaOutput string, dataOutput s
 		return fmt.Errorf("error while writing schema file: %v", err)
 	}
 	if err := dumpMeta.dumpTables(); err != nil {
-		return fmt.Errorf("error while writeng data file: %v", err)
+		return fmt.Errorf("error while writing data file: %v", err)
 	}
 	return nil
 }

@@ -235,7 +235,7 @@ func getPredFromConstraint(
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
 	}
-	return fmt.Sprintf("%s%s%s", tableName, separator, strings.Join(columnNames, separator))
+	return fmt.Sprintf("%s%s%s_", tableName, separator, strings.Join(columnNames, separator))
 }
 
 // a PredNameG is responsible for generating pred names based on a table's info and a column name
