@@ -781,6 +781,7 @@ func (n *node) Run() {
 					if currSnap, err := n.Snapshot(); err != nil {
 						// Retrieve entire snapshot from leader if node does not have
 						// a current snapshot.
+						glog.Errorf("Could not retrieve previous snapshot. Setting SinceTs to 0.")
 						snap.SinceTs = 0
 					} else {
 						snap.SinceTs = currSnap.ReadTs
