@@ -1,7 +1,3 @@
-# Docker compose file for testing. Use it with:
-# ./run.sh
-# This would pick up dgraph binary from $GOPATH.
-
 version: "3.5"
 services:
   zero1:
