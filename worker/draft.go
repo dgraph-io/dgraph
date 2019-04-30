@@ -853,7 +853,9 @@ func (n *node) Run() {
 				for _, p := range proposals {
 					pendingSize += int64(p.Size())
 				}
-				atomic.AddInt64(&n.pendingSize, pendingSize)
+				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
+					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
+				}
 				n.applyCh <- proposals
 			}
 
