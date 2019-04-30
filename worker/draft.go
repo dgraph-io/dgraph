@@ -196,6 +196,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				}
 			}
 		}
+
+		return nil
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
@@ -740,9 +742,9 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var snap pb.Snapshot
-				x.Check(snap.Unmarshal(rd.Snapshot.Data))
-				rc := snap.GetContext()
+				var newSnap pb.Snapshot
+				x.Check(newSnap.Unmarshal(rd.Snapshot.Data))
+				rc := newSnap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
 					// We are getting a new snapshot from leader. We need to wait for the applyCh to
@@ -754,9 +756,19 @@ func (n *node) Run() {
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n", snap, n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
+						newSnap, n.gid, rc.Id)
+
+					if currSnap, err := n.Snapshot(); err != nil {
+						x.Fatalf("Unable to retrieve the current snapshot")
+					} else {
+						glog.Infof("---> SNAPSHOT: %+v. Group %d. Current snapshot readTs %v",
+							newSnap, n.gid, currSnap.ReadTs)
+						newSnap.SinceTs = currSnap.ReadTs
+					}
+
 					for {
-						err := n.retrieveSnapshot(snap)
+						err := n.retrieveSnapshot(newSnap)
 						if err == nil {
 							glog.Infoln("---> Retrieve snapshot: OK.")
 							break
@@ -764,10 +776,10 @@ func (n *node) Run() {
 						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
 						time.Sleep(100 * time.Millisecond) // Wait for a bit.
 					}
-					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", newSnap, n.gid)
 				} else {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x [SELF]. Ignoring.\n",
-						snap, n.gid, rc.Id)
+						newSnap, n.gid, rc.Id)
 				}
 				if span != nil {
 					span.Annotate(nil, "Applied or retrieved snapshot.")
