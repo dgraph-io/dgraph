@@ -881,11 +881,9 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 			for {
-				// Block forever trying to propose this. Also set the Important bit to allow this
-				// proposal to not be counted towards num pending proposals and be proposed right
-				// away.
-				err := g.Node.proposeAndWait(context.Background(),
-					&pb.Proposal{Delta: delta, Important: true})
+				// Block forever trying to propose this. Also this proposal should not be counted
+				// towards num pending proposals and be proposed right away.
+				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
 				if err == nil {
 					break
 				}

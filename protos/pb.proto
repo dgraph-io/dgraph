@@ -228,7 +228,6 @@ message Proposal {
 	OracleDelta delta      = 8;
 	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
 	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
-	bool important         = 11; // Used to identify an important proposal, so it never gets throttled.
 }
 
 message KVS {

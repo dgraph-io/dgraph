@@ -240,7 +240,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	//
 	// If a proposal is important (like delta updates), let's not run it via the limiter below. We
 	// should always propose it irrespective of how many pending proposals there might be.
-	if noTimeout || proposal.Important {
+	if noTimeout || proposal.Delta != nil {
 		return propose(3 * time.Minute)
 	}
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
