@@ -90,7 +90,7 @@ func init() {
 
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
-		"Remove data from Raft entries up until this index.")
+		"Remove data from Raft entries until but not including this index.")
 }
 
 func toInt(o *pb.Posting) int {
