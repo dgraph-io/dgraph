@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -22,10 +21,11 @@ func run(ctx context.Context, command string) error {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("ERROR. Command %q. Error: %v. Output:\n%s\n", command, err, out.String())
+		fmt.Printf("[%v] ERROR. Command %q. Error: %v. Output:\n%s\n",
+			time.Now().UTC(), command, err, out.String())
 		return err
 	}
-	fmt.Printf("Command %q. Output:\n%s\n", command, out.String())
+	fmt.Printf("[%v] Command %q. Output:\n%s\n", time.Now().UTC(), command, out.String())
 	return nil
 }
 
@@ -45,14 +45,20 @@ func increment(atLeast int) error {
 		}(addr)
 	}
 	start := time.Now()
-	for i := 0; i < atLeast; i++ {
-		if err := <-errCh; err != nil {
-			fmt.Printf("Got error during increment: %v\n", err)
-			return err
+	var ok int
+	for i := 0; i < len(addrs) && ok < atLeast; i++ {
+		if err := <-errCh; err == nil {
+			ok++
+		} else {
+			fmt.Printf("[%v] Got error during increment: %v\n", time.Now().UTC(), err)
 		}
 	}
+	if ok < atLeast {
+		return fmt.Errorf("Increment with atLeast=%d failed. OK: %d", atLeast, ok)
+	}
 	dur := time.Since(start).Round(time.Millisecond)
-	fmt.Printf("\n===> TIME taken to converge %d alphas: %s\n\n", atLeast, dur)
+	fmt.Printf("\n[%v] ===> TIME taken to converge %d alphas: %s\n\n",
+		time.Now().UTC(), atLeast, dur)
 	return nil
 }
 
@@ -70,15 +76,15 @@ func getStatus(zero string) error {
 		fmt.Printf("ERROR. Status at %s. Output:\n%s\n", zero, output)
 		return fmt.Errorf(output)
 	}
-	var m map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &m); err != nil {
-		return err
-	}
-	pretty, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Status at %s:\n%s\n", zero, pretty)
+	// var m map[string]interface{}
+	// if err := json.Unmarshal([]byte(output), &m); err != nil {
+	// 	return err
+	// }
+	// pretty, err := json.MarshalIndent(m, "", "  ")
+	// if err != nil {
+	// 	return err
+	// }
+	fmt.Printf("Status at %s:\n%s\n", zero, output)
 	return nil
 }
 
@@ -158,16 +164,16 @@ func runTests() error {
 	fmt.Println("===> Slow TEST: OK")
 
 	if err := testCommon("blockade stop", "blockade start --all", 2); err != nil {
-		fmt.Printf("Error testRestart with stop: %v\n", err)
+		fmt.Printf("Error testStop: %v\n", err)
 		return err
 	}
-	fmt.Println("===> Restart TEST1: OK")
+	fmt.Println("===> Stop TEST: OK")
 
 	if err := testCommon("blockade restart", "", 3); err != nil {
 		fmt.Printf("Error testRestart with restart: %v\n", err)
 		return err
 	}
-	fmt.Println("===> Restart TEST2: OK")
+	fmt.Println("===> Restart TEST: OK")
 
 	if err := testCommon("blockade partition", "blockade join", 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
