@@ -119,6 +119,9 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				}
 				if ts, ok := txn.cache.maxVersions[key]; ok {
 					if ts >= commitTs {
+						// Skip write because we already have a write at a higher ts.
+						// Logging here can cause a lot of output when doing Raft log replay. So, let's
+						// not output anything here.
 						continue
 					}
 				}
