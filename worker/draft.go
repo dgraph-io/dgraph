@@ -845,12 +845,15 @@ func (n *node) Run() {
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
 			if len(proposals) > 0 {
+				// Apply the meter this before adding size to pending size so some crazy big
+				// proposal can be pushed to applyCh. If this do this after adding its size to
+				// pending size, we could block forever in rampMeter.
+				n.rampMeter()
 				var pendingSize int64
 				for _, p := range proposals {
 					pendingSize += int64(p.Size())
 				}
 				atomic.AddInt64(&n.pendingSize, pendingSize)
-				n.rampMeter()
 				n.applyCh <- proposals
 			}
 
