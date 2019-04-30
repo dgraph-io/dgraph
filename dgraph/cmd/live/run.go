@@ -260,7 +260,7 @@ func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	var db *badger.DB
-	if len(opt.clientDir) > 0 {
+	if opt.clientDir != "" {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
 		o := badger.DefaultOptions
 		o.Dir = opt.clientDir
