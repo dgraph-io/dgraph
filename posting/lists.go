@@ -185,15 +185,19 @@ type LocalCache struct {
 	// during commit.
 	deltas map[string][]byte
 
+	// max committed timestamp of the read posting lists.
+	maxVersions map[string]uint64
+
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
 }
 
 func NewLocalCache(startTs uint64) *LocalCache {
 	return &LocalCache{
-		startTs: startTs,
-		deltas:  make(map[string][]byte),
-		plists:  make(map[string]*List),
+		startTs:     startTs,
+		deltas:      make(map[string][]byte),
+		plists:      make(map[string]*List),
+		maxVersions: make(map[string]uint64),
 	}
 }
 
@@ -249,6 +253,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 		if len(data) > 0 {
 			lc.deltas[key] = data
 		}
+		lc.maxVersions[key] = pl.maxVersion()
 	}
 	lc.plists = make(map[string]*List)
 }

@@ -117,13 +117,11 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				if len(data) == 0 {
 					continue
 				}
-				// TODO: Bring this back. HACK HACK HACK.
-				// if plist.maxVersion() >= commitTs {
-				// 	pk := x.Parse([]byte(key))
-				// 	glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
-				// 		plist.maxVersion(), commitTs, pk)
-				// 	continue
-				// }
+				if ts, ok := txn.cache.maxVersions[key]; ok {
+					if ts >= commitTs {
+						continue
+					}
+				}
 				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
 					return err
 				}
