@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -261,6 +262,15 @@ func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	var db *badger.DB
 	if opt.clientDir != "" {
+		var err error
+
+		_, err = os.Stat(opt.clientDir)
+		if os.IsNotExist(err) {
+			log.Printf("Saving xid to uid mappings in %s", opt.clientDir)
+		} else {
+			log.Printf("Loading xid to uid mappings from %s", opt.clientDir)
+		}
+
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
 		o := badger.DefaultOptions
 		o.Dir = opt.clientDir
@@ -268,7 +278,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		o.TableLoadingMode = bopt.MemoryMap
 		o.SyncWrites = false
 
-		var err error
 		db, err = badger.Open(o)
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}

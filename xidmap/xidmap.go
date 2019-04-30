@@ -108,7 +108,11 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 				}
 				count++
 			}
-			glog.Infof("Loaded up %d xid to uid mappings", count)
+
+			// don't output message on newly created map
+			if count > 0 {
+				glog.Infof("Loaded up %d xid to uid mappings", count)
+			}
 			return nil
 		})
 		x.Check(err)
