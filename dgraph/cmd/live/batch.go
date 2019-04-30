@@ -56,6 +56,16 @@ type batchMutationOptions struct {
 	Ctx context.Context
 }
 
+// checkPoint records points in a data file from which an interrupted load could be resumed.
+type checkPoint struct {
+	seqnum   uint32
+	checksum []byte
+}
+
+// checkPoints holds, for each data file being loaded, a list of checkpoints sorted by their
+// seqnum value. The first checkpoint on the list has the lowest seqnum
+//type checkPoints map[string][]checkPoint
+
 // loader is the data structure held by the user program for all interactions with the Dgraph
 // server.  After making grpc connection a new Dgraph is created by function NewDgraphClient.
 type loader struct {
@@ -68,6 +78,8 @@ type loader struct {
 	requestsWg sync.WaitGroup
 	// If we retry a request, we add one to retryRequestsWg.
 	retryRequestsWg sync.WaitGroup
+
+	checkPoints map[string][]checkPoint
 
 	// Miscellaneous information to print counters.
 	// Num of N-Quads sent
@@ -187,9 +199,8 @@ func (l *loader) request(req api.Mutation, reqNum uint64) {
 	go l.infinitelyRetry(req, reqNum)
 }
 
-// makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
-// It doesn't need to batch the requests anymore. Batching is already done for it by the
-// caller functions.
+// makeRequests doesn't need to batch the requests anymore.
+// Batching is already done for it by the caller functions.
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 	for req := range l.reqs {
