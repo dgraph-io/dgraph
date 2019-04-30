@@ -22,7 +22,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -99,11 +98,6 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 
 		} else if item.Version() >= ts {
 			// Found an existing commit at an equal or higher timestamp. So, skip writing.
-			if glog.V(2) {
-				pk := x.Parse(key)
-				glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
-					item.Version(), ts, pk)
-			}
 			return nil
 		}
 	}
