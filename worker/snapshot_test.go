@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package main
+package worker
 
 import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -31,10 +30,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-)
-
-var (
-	statePattern = `"snapshotTs":"([0-9]*)"`
 )
 
 func TestSnapshot(t *testing.T) {
@@ -49,20 +44,18 @@ func TestSnapshot(t *testing.T) {
 	})
 
 	for i := 1; i <= 10; i++ {
-		log.Println(i)
 		dg1.NewTxn().Mutate(context.Background(),
 			&api.Mutation{
 				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 				CommitNow: true,
 			})
 	}
-	doQuery(t, dg1, 55)
+	doQuery(t, dg1, 11*10/2)
 
 	err := z.DockerStop("alpha2")
 	require.NoError(t, err)
 
 	for i := 11; i <= 600; i++ {
-		log.Println(i)
 		dg1.NewTxn().Mutate(context.Background(),
 			&api.Mutation{
 				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
@@ -75,13 +68,12 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	dg2 := z.DgraphClient("localhost:9182")
-	doQuery(t, dg2, 180300)
+	doQuery(t, dg2, 601*600/2)
 
 	err = z.DockerStop("alpha2")
 	require.NoError(t, err)
 
 	for i := 601; i <= 1200; i++ {
-		log.Println(i)
 		dg1.NewTxn().Mutate(context.Background(),
 			&api.Mutation{
 				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
@@ -94,7 +86,7 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	dg2 = z.DgraphClient("localhost:9182")
-	doQuery(t, dg2, 720600)
+	doQuery(t, dg2, 1201*1200/2)
 }
 
 func doQuery(t *testing.T, dg *dgo.Dgraph, total int) {
@@ -114,6 +106,7 @@ func doQuery(t *testing.T, dg *dgo.Dgraph, total int) {
 }
 
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
+	snapPattern := `"snapshotTs":"([0-9]*)"`
 	for {
 		res, err := http.Get("http://localhost:6180/state")
 		require.NoError(t, err)
@@ -121,7 +114,7 @@ func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 		res.Body.Close()
 		require.NoError(t, err)
 
-		regex, err := regexp.Compile(statePattern)
+		regex, err := regexp.Compile(snapPattern)
 		require.NoError(t, err)
 
 		matches := regex.FindAllStringSubmatch(string(body), 1)
@@ -131,7 +124,6 @@ func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 		}
 
 		snapshotTs, err := strconv.ParseUint(matches[0][1], 10, 64)
-		log.Printf("last snapshot %d. snapshot from zero %d\n", prevSnapTs, snapshotTs)
 		require.NoError(t, err)
 		if snapshotTs > prevSnapTs {
 			return snapshotTs

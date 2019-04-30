@@ -742,9 +742,9 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var newSnap pb.Snapshot
-				x.Check(newSnap.Unmarshal(rd.Snapshot.Data))
-				rc := newSnap.GetContext()
+				var snap pb.Snapshot
+				x.Check(snap.Unmarshal(rd.Snapshot.Data))
+				rc := snap.GetContext()
 				x.AssertTrue(rc.GetGroup() == n.gid)
 				if rc.Id != n.Id {
 					// We are getting a new snapshot from leader. We need to wait for the applyCh to
@@ -755,20 +755,20 @@ func (n *node) Run() {
 						" retrieving snapshot\n", maxIndex)
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
-					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
-						newSnap, n.gid, rc.Id)
-
 					if currSnap, err := n.Snapshot(); err != nil {
-						x.Fatalf("Unable to retrieve the current snapshot")
+						// Retrieve entire snapshot from leader if node does not have
+						// a current snapshot.
+						snap.SinceTs = 0
 					} else {
-						glog.Infof("---> SNAPSHOT: %+v. Group %d. Current snapshot readTs %v",
-							newSnap, n.gid, currSnap.ReadTs)
-						newSnap.SinceTs = currSnap.ReadTs
+						snap.SinceTs = currSnap.ReadTs
 					}
 
+					// It's ok to block ticks while retrieving snapshot, since it's a follower.
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
+						snap, n.gid, rc.Id)
+
 					for {
-						err := n.retrieveSnapshot(newSnap)
+						err := n.retrieveSnapshot(snap)
 						if err == nil {
 							glog.Infoln("---> Retrieve snapshot: OK.")
 							break
@@ -776,10 +776,10 @@ func (n *node) Run() {
 						glog.Errorf("While retrieving snapshot, error: %v. Retrying...", err)
 						time.Sleep(100 * time.Millisecond) // Wait for a bit.
 					}
-					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", newSnap, n.gid)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d. DONE.\n", snap, n.gid)
 				} else {
 					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x [SELF]. Ignoring.\n",
-						newSnap, n.gid, rc.Id)
+						snap, n.gid, rc.Id)
 				}
 				if span != nil {
 					span.Annotate(nil, "Applied or retrieved snapshot.")

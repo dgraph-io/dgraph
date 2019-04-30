@@ -39,16 +39,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	conn := pl.Get()
 	c := pb.NewWorkerClient(conn)
 
-	// Check whether the max version of any key in the db is greater than or equal to
-	// the timestamp of the last snapshot. if that's the case, perform a diff snapshot,
-	// otherwise force a full one.
-	maxVersion := getMaxVersion(&snap)
-	dropAll := false
-	if maxVersion < snap.SinceTs {
-		snap.SinceTs = 0
-		dropAll = true
-	}
-
 	// Set my RaftContext on the snapshot, so it's easier to locate me.
 	ctx := n.ctx
 	snap.Context = n.RaftContext
@@ -61,7 +51,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
-	if dropAll {
+	if snap.SinceTs == 0 {
 		// Before we write anything, we should drop all the data stored in ps.
 		if err := pstore.DropAll(); err != nil {
 			return 0, err
@@ -142,10 +132,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return out.Send(kvs)
 	}
 	stream.ChooseKey = func(item *badger.Item) bool {
-		if item.Version() >= snap.SinceTs {
-			return true
-		}
-		return false
+		return item.Version() >= snap.SinceTs
 	}
 
 	if err := stream.Orchestrate(out.Context()); err != nil {
@@ -164,26 +151,6 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	}
 	glog.Infof("Received ACK with done: %v\n", ack.Done)
 	return nil
-}
-
-func getMaxVersion(snap *pb.Snapshot) uint64 {
-	txn := pstore.NewTransactionAt(snap.ReadTs, false)
-	defer txn.Discard()
-
-	iopts := badger.DefaultIteratorOptions
-	iopts.PrefetchValues = false
-	itr := txn.NewIterator(iopts)
-	defer itr.Close()
-
-	var maxVersion uint64
-	for itr.Rewind(); itr.Valid(); itr.Next() {
-		item := itr.Item()
-		if item.Version() > maxVersion {
-			maxVersion = item.Version()
-		}
-	}
-
-	return maxVersion
 }
 
 func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error {
