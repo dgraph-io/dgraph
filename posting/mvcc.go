@@ -117,9 +117,9 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					continue
 				}
 				if plist.maxVersion() >= commitTs {
-					pk := x.Parse([]byte(key))
-					glog.Warningf("Existing >= Commit [%d >= %d]. Skipping write: %v",
-						plist.maxVersion(), commitTs, pk)
+					// Skip write because we already have a write at a higher ts.
+					// Logging here can cause a lot of output when doing Raft log replay. So, let's
+					// not output anything here.
 					continue
 				}
 				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
