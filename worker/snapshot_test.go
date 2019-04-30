@@ -35,20 +35,21 @@ import (
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1 := z.DgraphClient("localhost:9180")
-	dg1.Alter(context.Background(), &api.Operation{
+	dg1 := z.DgraphClientWithGroot("localhost:9180")
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
-	})
-	dg1.Alter(context.Background(), &api.Operation{
+	}))
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		Schema: "value: int .",
-	})
+	}))
 
 	for i := 1; i <= 10; i++ {
-		dg1.NewTxn().Mutate(context.Background(),
+		_, err := dg1.NewTxn().Mutate(context.Background(),
 			&api.Mutation{
 				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 				CommitNow: true,
 			})
+		require.NoError(t, err)
 	}
 	doQuery(t, dg1, 11*10/2)
 
@@ -56,36 +57,38 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 11; i <= 600; i++ {
-		dg1.NewTxn().Mutate(context.Background(),
+		_, err := dg1.NewTxn().Mutate(context.Background(),
 			&api.Mutation{
 				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 				CommitNow: true,
 			})
+		require.NoError(t, err)
 	}
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
 	err = z.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 := z.DgraphClient("localhost:9182")
+	dg2 := z.DgraphClientWithGroot("localhost:9182")
 	doQuery(t, dg2, 601*600/2)
 
 	err = z.DockerStop("alpha2")
 	require.NoError(t, err)
 
 	for i := 601; i <= 1200; i++ {
-		dg1.NewTxn().Mutate(context.Background(),
+		_, err := dg1.NewTxn().Mutate(context.Background(),
 			&api.Mutation{
 				SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 				CommitNow: true,
 			})
+		require.NoError(t, err)
 	}
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
 	err = z.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 = z.DgraphClient("localhost:9182")
+	dg2 = z.DgraphClientWithGroot("localhost:9182")
 	doQuery(t, dg2, 1201*1200/2)
 }
 
@@ -108,7 +111,7 @@ func doQuery(t *testing.T, dg *dgo.Dgraph, total int) {
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	snapPattern := `"snapshotTs":"([0-9]*)"`
 	for {
-		res, err := http.Get("http://localhost:6180/state")
+		res, err := http.Get("http://localhost:6080/state")
 		require.NoError(t, err)
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()
