@@ -68,6 +68,8 @@ type node struct {
 
 	canCampaign bool
 	elog        trace.EventLog
+
+	pendingSize int64
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -442,10 +444,12 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(proposals []*pb.Proposal) {
+		var totalSize int64
 		for _, proposal := range proposals {
 			// We use the size as a double check to ensure that we're
 			// working with the same proposal as before.
 			psz := proposal.Size()
+			totalSize += int64(psz)
 
 			var perr error
 			p, ok := previous[proposal.Key]
@@ -481,6 +485,9 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+		}
+		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
+			glog.Warningf("Pending size should remain above zero: %d", sz)
 		}
 	}
 
@@ -646,6 +653,22 @@ func (n *node) proposeSnapshot(discardN int) error {
 	return n.Raft().Propose(n.ctx, data)
 }
 
+const maxPendingSize int64 = 64 << 20 // in bytes.
+
+func (n *node) rampMeter() {
+	start := time.Now()
+	defer func() {
+		if dur := time.Since(start); dur > time.Second {
+			glog.Infof("Blocked pushing to applyCh for %v", dur.Round(time.Millisecond))
+		}
+	}()
+	for {
+		if atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
+			return
+		}
+		time.Sleep(3 * time.Millisecond)
+	}
+}
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -822,6 +845,12 @@ func (n *node) Run() {
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
 			if len(proposals) > 0 {
+				var pendingSize int64
+				for _, p := range proposals {
+					pendingSize += int64(p.Size())
+				}
+				atomic.AddInt64(&n.pendingSize, pendingSize)
+				n.rampMeter()
 				n.applyCh <- proposals
 			}
 
