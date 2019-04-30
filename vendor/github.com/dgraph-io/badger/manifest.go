@@ -42,7 +42,7 @@ import (
 // reconstruct the manifest at startup.
 type Manifest struct {
 	Levels []levelManifest
-	Tables map[uint64]tableManifest
+	Tables map[uint64]TableManifest
 
 	// Contains total number of creation and deletion changes in the manifest -- used to compute
 	// whether it'd be useful to rewrite the manifest.
@@ -54,7 +54,7 @@ func createManifest() Manifest {
 	levels := make([]levelManifest, 0)
 	return Manifest{
 		Levels: levels,
-		Tables: make(map[uint64]tableManifest),
+		Tables: make(map[uint64]TableManifest),
 	}
 }
 
@@ -64,10 +64,11 @@ type levelManifest struct {
 	Tables map[uint64]struct{} // Set of table id's
 }
 
-// tableManifest contains information about a specific level
+// TableManifest contains information about a specific level
 // in the LSM tree.
-type tableManifest struct {
-	Level uint8
+type TableManifest struct {
+	Level    uint8
+	Checksum []byte
 }
 
 // manifestFile holds the file pointer (and other info) about the manifest file, which is a log
@@ -98,7 +99,7 @@ const (
 func (m *Manifest) asChanges() []*pb.ManifestChange {
 	changes := make([]*pb.ManifestChange, 0, len(m.Tables))
 	for id, tm := range m.Tables {
-		changes = append(changes, makeTableCreateChange(id, int(tm.Level)))
+		changes = append(changes, newCreateChange(id, int(tm.Level), tm.Checksum))
 	}
 	return changes
 }
@@ -384,8 +385,9 @@ func applyManifestChange(build *Manifest, tc *pb.ManifestChange) error {
 		if _, ok := build.Tables[tc.Id]; ok {
 			return fmt.Errorf("MANIFEST invalid, table %d exists", tc.Id)
 		}
-		build.Tables[tc.Id] = tableManifest{
-			Level: uint8(tc.Level),
+		build.Tables[tc.Id] = TableManifest{
+			Level:    uint8(tc.Level),
+			Checksum: append([]byte{}, tc.Checksum...),
 		}
 		for len(build.Levels) <= int(tc.Level) {
 			build.Levels = append(build.Levels, levelManifest{make(map[uint64]struct{})})
@@ -417,15 +419,16 @@ func applyChangeSet(build *Manifest, changeSet *pb.ManifestChangeSet) error {
 	return nil
 }
 
-func makeTableCreateChange(id uint64, level int) *pb.ManifestChange {
+func newCreateChange(id uint64, level int, checksum []byte) *pb.ManifestChange {
 	return &pb.ManifestChange{
-		Id:    id,
-		Op:    pb.ManifestChange_CREATE,
-		Level: uint32(level),
+		Id:       id,
+		Op:       pb.ManifestChange_CREATE,
+		Level:    uint32(level),
+		Checksum: checksum,
 	}
 }
 
-func makeTableDeleteChange(id uint64) *pb.ManifestChange {
+func newDeleteChange(id uint64) *pb.ManifestChange {
 	return &pb.ManifestChange{
 		Id: id,
 		Op: pb.ManifestChange_DELETE,
