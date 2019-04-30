@@ -849,7 +849,7 @@ func parseWal(db *badger.DB) error {
 			}
 			for _, ent := range entries {
 				switch {
-				case ent.Index < opt.wtruncateUntil:
+				case ent.Type == raftpb.EntryNormal && ent.Index < opt.wtruncateUntil:
 					if len(ent.Data) == 0 {
 						continue
 					}
@@ -863,9 +863,6 @@ func parseWal(db *badger.DB) error {
 					if err := batch.Set(k, data, 0); err != nil {
 						log.Fatalf("Unable to set data: %+v", err)
 					}
-					if numTruncates%100 == 0 {
-						fmt.Printf("Log entries truncated so far: %d\n", numTruncates)
-					}
 				default:
 					printEntry(ent)
 				}
@@ -876,6 +873,7 @@ func parseWal(db *badger.DB) error {
 			fmt.Printf("Got error while flushing batch: %v\n", err)
 		}
 		if numTruncates > 0 {
+			fmt.Printf("==> Log entries truncated: %d\n\n", numTruncates)
 			err := db.Flatten(1)
 			fmt.Printf("Flatten done with error: %v\n", err)
 		}
