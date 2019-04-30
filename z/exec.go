@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -31,6 +32,16 @@ var (
 	ShowError   bool = os.Getenv("DEBUG_SHOW_ERROR") != ""
 	ShowCommand bool = os.Getenv("DEBUG_SHOW_COMMAND") != ""
 )
+
+// RepoPath converts a path relative to the root of the repo into an absolute path.
+func RepoPath(p string) string {
+	return path.Join(os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph"), p)
+}
+
+// Exec runs a single external command.
+func Exec(argv ...string) error {
+	return Pipeline([][]string{argv})
+}
 
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.

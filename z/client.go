@@ -53,12 +53,12 @@ func init() {
 	var grpcPort int
 
 	getPort := func(envVar string, dfault int) int {
-		if p := os.Getenv(envVar); p == "" {
+		p := os.Getenv(envVar)
+		if p == "" {
 			return dfault
-		} else {
-			port, _ := strconv.Atoi(p)
-			return port
 		}
+		port, _ := strconv.Atoi(p)
+		return port
 	}
 
 	grpcPort = getPort("TEST_PORT_ALPHA", 9180)

@@ -75,6 +75,22 @@ elif [[ $CLEANUP != all && $CLEANUP != servers && $CLEANUP != none ]]; then
     exit 1
 fi
 
+# default to quiet mode if diffs are being saved in a directory
+if [[ -n $SAVEDIR ]]; then
+    QUIET=yes
+fi
+
+# check data version to help distinguish diffs due to a change in the data
+# rather than a change in the code
+if [[ $LOADER != none ]]; then
+    Info "checking data set version"
+    VERSION_FILE=$(mktemp --tmpdir)
+    trap "rm -f $VERSION_FILE" EXIT
+    curl -LSs --head $SCHEMA_URL | awk 'toupper($0)~/^ETAG:/ {print "Schema:"$2}' >> $VERSION_FILE
+    curl -LSs --head $DATA_URL | awk 'toupper($0)~/^ETAG:/ {print "Data:"$2}' >> $VERSION_FILE
+    diff -bi $VERSION_FILE queries/data-version || true
+fi
+
 Info "entering directory $SRCDIR"
 cd $SRCDIR
 
