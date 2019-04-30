@@ -199,7 +199,7 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
 }
 
-func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
+func (l *loader) processLoadFile(ctx context.Context, rd *chunker.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
 	for {

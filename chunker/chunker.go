@@ -40,7 +40,7 @@ import (
 // chunk.Reader wraps a bufio.Reader to hold additional information
 // about the file being read.
 type Reader struct {
-	bufio.Reader
+	*bufio.Reader
 	offset     uint64
 	lineNum    uint32
 	compressed bool
@@ -48,9 +48,9 @@ type Reader struct {
 }
 
 type Chunker interface {
-	Begin(r *bufio.Reader) error
-	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
-	End(r *bufio.Reader) error
+	Begin(r *Reader) error
+	Chunk(r *Reader) (*bytes.Buffer, error)
+	End(r *Reader) error
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
 }
 
@@ -75,7 +75,7 @@ func NewChunker(inputFormat int) Chunker {
 }
 
 // RDF files don't require any special processing at the beginning of the file.
-func (rdfChunker) Begin(r *bufio.Reader) error {
+func (rdfChunker) Begin(r *Reader) error {
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (rdfChunker) Begin(r *bufio.Reader) error {
 // 1) the EOF is reached
 // 2) 1e5 lines have been read
 // 3) some unexpected error happened
-func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (rdfChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 * x.MiB)
 	for lineCount := 0; lineCount < 10*x.Thousand; lineCount++ {
@@ -140,11 +140,11 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 }
 
 // RDF files don't require any special processing at the end of the file.
-func (rdfChunker) End(r *bufio.Reader) error {
+func (rdfChunker) End(r *Reader) error {
 	return nil
 }
 
-func (jsonChunker) Begin(r *bufio.Reader) error {
+func (jsonChunker) Begin(r *Reader) error {
 	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
@@ -162,7 +162,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (jsonChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.Grow(1 * x.MiB)
 
@@ -243,14 +243,14 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func (jsonChunker) End(r *bufio.Reader) error {
+func (jsonChunker) End(r *Reader) error {
 	if slurpSpace(r) == io.EOF {
 		return nil
 	}
 	return errors.New("Not all of JSON file consumed")
 }
 
-func slurpSpace(r *bufio.Reader) error {
+func slurpSpace(r *Reader) error {
 	for {
 		ch, _, err := r.ReadRune()
 		if err != nil {
@@ -263,7 +263,7 @@ func slurpSpace(r *bufio.Reader) error {
 	}
 }
 
-func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
+func slurpQuoted(r *Reader, out *bytes.Buffer) error {
 	for {
 		ch, _, err := r.ReadRune()
 		if err != nil {
@@ -289,7 +289,7 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 // FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
 // and decompressed automatically even without the gz extension. The caller is responsible for
 // calling the returned cleanup function when done with the reader.
-func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
+func FileReader(file string) (*Reader, func()) {
 	var f *os.File
 	var err error
 	if file == "-" {
@@ -300,33 +300,36 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 
 	x.Check(err)
 
-	cleanup = func() { f.Close() }
+	var rd = Reader{filename: file}
+	var cleanup = func() { f.Close() }
 
 	if filepath.Ext(file) == ".gz" {
 		gzr, err := gzip.NewReader(f)
-		x.Check(err)
-		rd = bufio.NewReader(gzr)
+		x.CheckfNoTrace(err)
+		rd.Reader = bufio.NewReader(gzr)
+		rd.compressed = true
 		cleanup = func() { f.Close(); gzr.Close() }
 	} else {
-		rd = bufio.NewReader(f)
+		rd.Reader = bufio.NewReader(f)
 		buf, _ := rd.Peek(512)
 
 		typ := http.DetectContentType(buf)
 		if typ == "application/x-gzip" {
 			gzr, err := gzip.NewReader(rd)
 			x.Check(err)
-			rd = bufio.NewReader(gzr)
+			rd.Reader = bufio.NewReader(gzr)
+			rd.compressed = true
 			cleanup = func() { f.Close(); gzr.Close() }
 		}
 	}
 
-	return rd, cleanup
+	return &rd, cleanup
 }
 
 // IsJSONData returns true if the reader, which should be at the start of the stream, is reading
 // a JSON stream, false otherwise.
-func IsJSONData(r *bufio.Reader) (bool, error) {
-	buf, err := r.Peek(512)
+func IsJSONData(r *Reader) (bool, error) {
+	buf, err := r.Reader.Peek(512)
 	if err != nil && err != io.EOF {
 		return false, err
 	}
