@@ -61,7 +61,7 @@ func TestQueries(t *testing.T) {
 		}
 
 		filename := path.Join(queryDir, file.Name())
-		reader, cleanup := chunker.FileReader(filename)
+		reader, cleanup := chunker.NewReader(filename)
 		bytes, err := ioutil.ReadAll(reader)
 		x.CheckfNoTrace(err)
 		contents := string(bytes[:])

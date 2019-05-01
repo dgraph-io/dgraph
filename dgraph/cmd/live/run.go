@@ -182,7 +182,7 @@ func (l *loader) uid(val string) string {
 func (l *loader) processFile(ctx context.Context, filename string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename)
+	rd, cleanup := chunker.NewReader(filename)
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
