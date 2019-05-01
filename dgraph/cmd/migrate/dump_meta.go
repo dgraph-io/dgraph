@@ -237,8 +237,8 @@ func (m *DumpMeta) outputConstraints(rmi *RowMetaInfo, tableInfo *TableInfo) {
 
 		refLabel, err := rmi.getRefLabelFromConstraint(m.tableInfos[foreignTableName], constraint)
 		if err != nil {
-			logger.Printf("ignoring the constraint because of error when getting ref label: %+v\n",
-				err)
+			//logger.Printf("ignoring the constraint because of error when getting ref label: %+v\n",
+			//err)
 			return
 		}
 		foreignBlankNode := m.tableGuides[foreignTableName].valuesRecorder.getBlankNode(refLabel)
@@ -266,8 +266,8 @@ func outputPlainCell(blankNode string, dataType DataType, predName string,
 	default:
 		objectVal, err := getValue(dataType, colValue)
 		if err != nil {
-			logger.Printf("ignoring object %v because of error when getting value: %v", colValue,
-				err)
+			//logger.Printf("ignoring object %v because of error when getting value: %v", colValue,
+			//err)
 			return
 		}
 

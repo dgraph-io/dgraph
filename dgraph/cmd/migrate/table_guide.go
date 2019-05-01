@@ -141,8 +141,8 @@ func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
 			colValues:        values,
 		})
 		if err != nil {
-			logger.Printf("ignoring the constraint because of error when getting ref label: %+v",
-				cst)
+			//logger.Printf("ignoring the constraint because of error when getting ref label: %+v",
+			//cst)
 			continue
 		}
 		r.refToBlank[refLabel] = blankNode
@@ -158,20 +158,24 @@ func getCstColumns(cst *FKConstraint) map[string]interface{} {
 }
 
 func getValue(dataType DataType, value interface{}) (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("nil value found")
+	}
+
 	switch dataType {
 	case STRING:
 		return fmt.Sprintf("%s", value), nil
 	case INT:
-		intVal, err := value.(sql.NullInt64).Value()
-		if err != nil {
-			return "", err
+		if !value.(sql.NullInt64).Valid {
+			return "", fmt.Errorf("found invalid nullint")
 		}
+		intVal, _ := value.(sql.NullInt64).Value()
 		return fmt.Sprintf("%v", intVal), nil
 	case DATETIME:
-		dateVal, err := value.(mysql.NullTime).Value()
-		if err != nil {
-			return "", err
+		if !value.(mysql.NullTime).Valid {
+			return "", fmt.Errorf("found invalid nulltime")
 		}
+		dateVal, _ := value.(mysql.NullTime).Value()
 		return fmt.Sprintf("%v", dateVal), nil
 	default:
 		return fmt.Sprintf("%v", value), nil
