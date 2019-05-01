@@ -376,7 +376,9 @@ func (n *Node) streamMessages(to uint64, stream *Stream) {
 	defer atomic.StoreInt32(&stream.alive, 0)
 
 	// Exit after this deadline. Let BatchAndSendMessages create another goroutine, if needed.
-	deadline := time.Now().Add(60 * time.Second)
+	// Let's set the deadline to 10s because if we increase it, then it takes longer to recover from
+	// a partition and get a new leader.
+	deadline := time.Now().Add(10 * time.Second)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
