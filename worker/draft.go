@@ -528,6 +528,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})

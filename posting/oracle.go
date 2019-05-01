@@ -57,7 +57,7 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	cache *LocalCache
+	cache *LocalCache // This pointer does not get modified.
 }
 
 func NewTxn(startTs uint64) *Txn {
