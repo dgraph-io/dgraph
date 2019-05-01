@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -181,7 +182,7 @@ func (l *loader) uid(val string) string {
 func (l *loader) processFile(ctx context.Context, filename string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename)
+	rd, cleanup := chunker.NewReader(filename)
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
@@ -198,7 +199,7 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
 }
 
-func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
+func (l *loader) processLoadFile(ctx context.Context, rd *chunker.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
 	for {
@@ -208,8 +209,13 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		default:
 		}
 
-		chunkBuf, err := ck.Chunk(rd)
-		l.processChunk(chunkBuf, ck)
+		chunk, err := ck.ChunkNew(rd)
+		if err == nil || err == io.EOF {
+			err = l.processChunk(chunk)
+			if err != nil {
+				return err
+			}
+		}
 		if err == io.EOF {
 			break
 		} else {
@@ -224,13 +230,15 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 // processChunk parses the rdf entries from the chunk, and group them into
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil || chunkBuf.Len() == 0 {
-		return
+func (l *loader) processChunk(chunk *chunker.Chunk) error {
+	if chunk == nil || chunk.Len() == 0 {
+		return nil
 	}
 
-	nqs, err := ck.Parse(chunkBuf)
-	x.CheckfNoTrace(err)
+	nqs, err := chunk.Parse()
+	if err != nil {
+		return err
+	}
 
 	batch := make([]*api.NQuad, 0, opt.batchSize)
 	for _, nq := range nqs {
@@ -256,11 +264,22 @@ func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
 	if len(batch) > 0 {
 		l.reqs <- api.Mutation{Set: batch}
 	}
+
+	return nil
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	var db *badger.DB
-	if len(opt.clientDir) > 0 {
+	if opt.clientDir != "" {
+		var err error
+
+		_, err = os.Stat(opt.clientDir)
+		if os.IsNotExist(err) {
+			log.Printf("Saving xid to uid mappings in %s", opt.clientDir)
+		} else {
+			log.Printf("Loading xid to uid mappings from %s", opt.clientDir)
+		}
+
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
 		o := badger.DefaultOptions
 		o.Dir = opt.clientDir
@@ -268,7 +287,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		o.TableLoadingMode = bopt.MemoryMap
 		o.SyncWrites = false
 
-		var err error
 		db, err = badger.Open(o)
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}

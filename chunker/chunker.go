@@ -19,28 +19,34 @@ package chunker
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	encjson "encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/errors"
 )
 
+type Chunk struct {
+	*bytes.Buffer
+	Offset    uint64
+	LineCount uint32
+
+	// internal
+	ck Chunker
+}
+
 type Chunker interface {
-	Begin(r *bufio.Reader) error
-	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
-	End(r *bufio.Reader) error
+	Begin(r *Reader) error
+	Chunk(r *Reader) (*bytes.Buffer, error)
+	ChunkNew(r *Reader) (*Chunk, error)
+	End(r *Reader) error
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
 }
 
@@ -65,18 +71,18 @@ func NewChunker(inputFormat int) Chunker {
 }
 
 // RDF files don't require any special processing at the beginning of the file.
-func (rdfChunker) Begin(r *bufio.Reader) error {
+func (rdfChunker) Begin(r *Reader) error {
 	return nil
 }
 
 // Chunk reads the input line by line until one of the following 3 conditions happens
 // 1) the EOF is reached
-// 2) 1e5 lines have been read
+// 2) 10K lines have been read
 // 3) some unexpected error happened
-func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (rdfChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
-	for lineCount := 0; lineCount < 1e5; lineCount++ {
+	for lineCount := 0; lineCount < 10000; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
 			batch.Write(slc)
@@ -105,6 +111,13 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
+func (c rdfChunker) ChunkNew(r *Reader) (*Chunk, error) {
+	chunk := Chunk{ck: c, Offset: r.Offset(), LineCount: r.LineCount()}
+	buf, err := c.Chunk(r)
+	chunk.Buffer = buf
+	return &chunk, err
+}
+
 func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
@@ -129,12 +142,38 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, nil
 }
 
+func (chunk *Chunk) Parse() ([]*api.NQuad, error) {
+	if chunk.Len() == 0 {
+		return nil, io.EOF
+	}
+
+	nqs := make([]*api.NQuad, 0)
+	line := chunk.LineCount
+	for chunk.Len() > 0 {
+		str, err := chunk.ReadString('\n')
+		if err != nil && err != io.EOF {
+			x.Check(err)
+		}
+		line++
+
+		nq, err := rdf.Parse(str)
+		if err == rdf.ErrEmpty {
+			continue // blank line or comment
+		} else if err != nil {
+			return nil, fmt.Errorf("parsing line %d: %s", line, str)
+		}
+		nqs = append(nqs, &nq)
+	}
+
+	return nqs, nil
+}
+
 // RDF files don't require any special processing at the end of the file.
-func (rdfChunker) End(r *bufio.Reader) error {
+func (rdfChunker) End(r *Reader) error {
 	return nil
 }
 
-func (jsonChunker) Begin(r *bufio.Reader) error {
+func (jsonChunker) Begin(r *Reader) error {
 	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
@@ -152,7 +191,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (jsonChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.Grow(1 << 20)
 
@@ -219,6 +258,13 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
+func (c jsonChunker) ChunkNew(r *Reader) (*Chunk, error) {
+	chunk := Chunk{Offset: r.Offset(), LineCount: r.LineCount()}
+	buf, err := c.Chunk(r)
+	chunk.Buffer = buf
+	return &chunk, err
+}
+
 func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
@@ -233,14 +279,18 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func (jsonChunker) End(r *bufio.Reader) error {
+func (jsonChunker) ParseNew(chunk *Chunk) ([]*api.NQuad, error) {
+	return nil, nil
+}
+
+func (jsonChunker) End(r *Reader) error {
 	if slurpSpace(r) == io.EOF {
 		return nil
 	}
 	return errors.New("Not all of JSON file consumed")
 }
 
-func slurpSpace(r *bufio.Reader) error {
+func slurpSpace(r *Reader) error {
 	for {
 		ch, _, err := r.ReadRune()
 		if err != nil {
@@ -253,7 +303,7 @@ func slurpSpace(r *bufio.Reader) error {
 	}
 }
 
-func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
+func slurpQuoted(r *Reader, out *bytes.Buffer) error {
 	for {
 		ch, _, err := r.ReadRune()
 		if err != nil {
@@ -276,47 +326,10 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 	}
 }
 
-// FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension. The caller is responsible for
-// calling the returned cleanup function when done with the reader.
-func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
-	var f *os.File
-	var err error
-	if file == "-" {
-		f = os.Stdin
-	} else {
-		f, err = os.Open(file)
-	}
-
-	x.Check(err)
-
-	cleanup = func() { f.Close() }
-
-	if filepath.Ext(file) == ".gz" {
-		gzr, err := gzip.NewReader(f)
-		x.Check(err)
-		rd = bufio.NewReader(gzr)
-		cleanup = func() { f.Close(); gzr.Close() }
-	} else {
-		rd = bufio.NewReader(f)
-		buf, _ := rd.Peek(512)
-
-		typ := http.DetectContentType(buf)
-		if typ == "application/x-gzip" {
-			gzr, err := gzip.NewReader(rd)
-			x.Check(err)
-			rd = bufio.NewReader(gzr)
-			cleanup = func() { f.Close(); gzr.Close() }
-		}
-	}
-
-	return rd, cleanup
-}
-
 // IsJSONData returns true if the reader, which should be at the start of the stream, is reading
 // a JSON stream, false otherwise.
-func IsJSONData(r *bufio.Reader) (bool, error) {
-	buf, err := r.Peek(512)
+func IsJSONData(r *Reader) (bool, error) {
+	buf, err := r.reader.Peek(512)
 	if err != nil && err != io.EOF {
 		return false, err
 	}

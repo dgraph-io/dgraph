@@ -187,7 +187,7 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done()
 
-			r, cleanup := chunker.FileReader(file)
+			r, cleanup := chunker.NewReader(file)
 			defer cleanup()
 
 			chunker := chunker.NewChunker(loadType)
