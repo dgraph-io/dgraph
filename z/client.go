@@ -53,12 +53,12 @@ func init() {
 	var grpcPort int
 
 	getPort := func(envVar string, dfault int) int {
-		if p := os.Getenv(envVar); p == "" {
+		p := os.Getenv(envVar)
+		if p == "" {
 			return dfault
-		} else {
-			port, _ := strconv.Atoi(p)
-			return port
 		}
+		port, _ := strconv.Atoi(p)
+		return port
 	}
 
 	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
@@ -168,6 +168,17 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	require.NoError(t, err)
 
 	return response.Q[0].Count
+}
+
+func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		resp, err := dg.NewTxn().Query(context.Background(), q)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return resp, err
+	}
 }
 
 type LoginParams struct {

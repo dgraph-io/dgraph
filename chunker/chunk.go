@@ -117,7 +117,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 			x.Check(err)
 		}
 
-		nq, err := rdf.Parse(strings.TrimSpace(str))
+		nq, err := rdf.Parse(str)
 		if err == rdf.ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
@@ -166,7 +166,10 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	if err != nil {
 		return out, err
 	}
-	if ch != '{' {
+	if ch == ']' {
+		// Handle loading an empty JSON array ("[]") without error.
+		return nil, io.EOF
+	} else if ch != '{' {
 		return nil, fmt.Errorf("Expected JSON map start. Found: %v", string(ch))
 	}
 	x.Check2(out.WriteRune(ch))

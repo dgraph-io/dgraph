@@ -224,7 +224,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
 func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil && chunkBuf.Len() == 0 {
+	if chunkBuf == nil || chunkBuf.Len() == 0 {
 		return
 	}
 
@@ -362,9 +362,8 @@ func run() error {
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return fmt.Errorf("No data files found in %s", opt.dataFiles)
-	} else {
-		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
+	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)

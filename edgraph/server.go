@@ -766,7 +766,6 @@ func isAlterAllowed(ctx context.Context) error {
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		line = bytes.TrimSpace(line)
 		nq, err := rdf.Parse(string(line))
 		if err == rdf.ErrEmpty {
 			continue

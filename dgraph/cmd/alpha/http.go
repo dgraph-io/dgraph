@@ -213,6 +213,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
+
 	out.WriteRune('{')
 	writeEntry("data", resp.Json)
 	out.WriteRune(',')

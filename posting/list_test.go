@@ -1058,6 +1058,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 
 	require.NoError(t, writePostingListToDisk(kvs))
 	newList, err := getNew(kvs[0].Key, ps)
+	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: uint64(size) + 1}
 	originalUids, err := originalList.Uids(opt)
@@ -1066,7 +1067,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, commits, len(originalUids.Uids))
 	require.Equal(t, len(originalUids.Uids), len(newUids.Uids))
-	for i, _ := range originalUids.Uids {
+	for i := range originalUids.Uids {
 		require.Equal(t, originalUids.Uids[i], newUids.Uids[i])
 	}
 }

@@ -230,10 +230,18 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	}
 
 	// Some proposals, like schema updates can take a long time to apply. Let's
-	// not do the retry mechanism on them. Instead, we can set a long timeout of
-	// 20 minutes.
-	if noTimeout {
-		return propose(20 * time.Minute)
+	// not do the retry mechanism on them. Instead, we can set a long timeout.
+	//
+	// Note that timeout only affects how long it takes us to find the proposal back via Raft logs.
+	// It does not consider the amount of time it takes to actually apply the proposal.
+	//
+	// Based on updated logic, once we find the proposal in the raft log, we would not cancel it
+	// anyways. Instead, we'd let the proposal run its course.
+	//
+	// If a proposal is important (like delta updates), let's not run it via the limiter below. We
+	// should always propose it irrespective of how many pending proposals there might be.
+	if noTimeout || proposal.Delta != nil {
+		return propose(3 * time.Minute)
 	}
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.

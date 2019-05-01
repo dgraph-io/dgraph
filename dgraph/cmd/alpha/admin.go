@@ -60,8 +60,25 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
-	// Export logic can be moved to dgraphzero.
-	if err := worker.ExportOverNetwork(context.Background()); err != nil {
+	if err := r.ParseForm(); err != nil {
+		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
+		return
+	}
+
+	format := worker.DefaultExportFormat
+	if vals, ok := r.Form["format"]; ok {
+		if len(vals) > 1 {
+			x.SetHttpStatus(w, http.StatusBadRequest,
+				"Only one export format may be specified.")
+			return
+		}
+		format = worker.NormalizeExportFormat(vals[0])
+		if format == "" {
+			x.SetHttpStatus(w, http.StatusBadRequest, "Invalid export format.")
+			return
+		}
+	}
+	if err := worker.ExportOverNetwork(context.Background(), format); err != nil {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
