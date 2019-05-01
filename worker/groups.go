@@ -796,12 +796,14 @@ func (g *groupi) processOracleDeltaStream() {
 			defer close(deltaCh)
 
 			for {
+				glog.V(3).Infof("Waiting to RECV something from ZERO")
 				delta, err := stream.Recv()
 				if err != nil || delta == nil {
 					glog.Errorf("Error in oracle delta stream. Error: %v", err)
 					return
 				}
 
+				glog.V(3).Infof("RECVed something from ZERO")
 				select {
 				case deltaCh <- delta:
 				case <-ctx.Done():

@@ -431,6 +431,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 	}
 	ch, id := s.orc.newSubscriber()
 	defer s.orc.removeSubscriber(id)
+	glog.V(3).Infof("NEW SUBSCRIBER: %d", id)
 
 	ctx := server.Context()
 	leaderChangeCh := s.leaderChangeChannel()
@@ -445,6 +446,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			// Pass in the latest group checksum as well, so the Alpha can use that to determine
 			// when not to service a read.
 			delta.GroupChecksums = s.groupChecksums()
+			glog.V(3).Infof("SENDing something to SUBSCRIBER: %v", id)
 			if err := server.Send(delta); err != nil {
 				return err
 			}
