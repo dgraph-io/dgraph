@@ -423,10 +423,10 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "++aw9eEb5jVEPXjHH2V2MdPzk7s=",
+			"checksumSHA1": "z3e8O0yprygNDdmRVXdZrpy16gc=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "ff2b7fe72292c0c971de7c8659b13542aa71a5c0",
-			"revisionTime": "2019-04-26T01:42:04Z",
+			"revision": "b9e379e59eac9b828431a6c8f7a553ae38ab88eb",
+			"revisionTime": "2019-01-17T00:16:07Z",
 			"version": "HEAD",
 			"versionExact": "HEAD"
 		},

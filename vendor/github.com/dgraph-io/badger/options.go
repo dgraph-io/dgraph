@@ -31,11 +31,10 @@ import (
 type Options struct {
 	// 1. Mandatory flags
 	// -------------------
-	// Directory to store the data in. If it doesn't exist, Badger will
-	// try to create it for you.
+	// Directory to store the data in. Should exist and be writable.
 	Dir string
-	// Directory to store the value log in. Can be the same as Dir. If it
-	// doesn't exist, Badger will try to create it for you.
+	// Directory to store the value log in. Can be the same as Dir. Should
+	// exist and be writable.
 	ValueDir string
 
 	// 2. Frequently modified flags
@@ -117,7 +116,7 @@ type Options struct {
 var DefaultOptions = Options{
 	LevelOneSize:        256 << 20,
 	LevelSizeMultiplier: 10,
-	TableLoadingMode:    options.MemoryMap,
+	TableLoadingMode:    options.LoadToRAM,
 	ValueLogLoadingMode: options.MemoryMap,
 	// table.MemoryMap to mmap() the tables.
 	// table.Nothing to not preload the tables.

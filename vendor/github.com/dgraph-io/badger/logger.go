@@ -24,42 +24,56 @@ import (
 // Logger is implemented by any logging system that is used for standard logs.
 type Logger interface {
 	Errorf(string, ...interface{})
-	Warningf(string, ...interface{})
 	Infof(string, ...interface{})
-	Debugf(string, ...interface{})
+	Warningf(string, ...interface{})
+}
+
+var badgerLogger Logger
+
+// SetLogger sets the global logger.
+func SetLogger(l Logger) { badgerLogger = l }
+
+// Errorf logs an ERROR message to the global logger.
+func Errorf(format string, v ...interface{}) {
+	badgerLogger.Errorf(format, v...)
 }
 
 // Errorf logs an ERROR log message to the logger specified in opts or to the
 // global logger if no logger is specified in opts.
 func (opt *Options) Errorf(format string, v ...interface{}) {
-	if opt.Logger == nil {
+	if opt.Logger != nil {
+		opt.Logger.Errorf(format, v...)
 		return
 	}
-	opt.Logger.Errorf(format, v...)
+	Errorf(format, v...)
 }
 
-// Infof logs an INFO message to the logger specified in opts.
+// Infof logs an INFO message to the global logger.
+func Infof(format string, v ...interface{}) {
+	badgerLogger.Infof(format, v...)
+}
+
+// Infof is like Errorf but for INFO messages.
 func (opt *Options) Infof(format string, v ...interface{}) {
-	if opt.Logger == nil {
+	if opt.Logger != nil {
+		opt.Logger.Infof(format, v...)
 		return
 	}
-	opt.Logger.Infof(format, v...)
+	Infof(format, v...)
 }
 
-// Warningf logs a WARNING message to the logger specified in opts.
+// Warningf logs a WARNING message to the global logger.
+func Warningf(format string, v ...interface{}) {
+	badgerLogger.Warningf(format, v...)
+}
+
+// Warningf is like Errorf but for WARNING messages.
 func (opt *Options) Warningf(format string, v ...interface{}) {
-	if opt.Logger == nil {
+	if opt.Logger != nil {
+		opt.Logger.Warningf(format, v...)
 		return
 	}
-	opt.Logger.Warningf(format, v...)
-}
-
-// Warningf logs a WARNING message to the logger specified in opts.
-func (opt *Options) Debugf(format string, v ...interface{}) {
-	if opt.Logger == nil {
-		return
-	}
-	opt.Logger.Debugf(format, v...)
+	Warningf(format, v...)
 }
 
 type defaultLog struct {
@@ -68,18 +82,21 @@ type defaultLog struct {
 
 var defaultLogger = &defaultLog{Logger: log.New(os.Stderr, "badger ", log.LstdFlags)}
 
+// UseDefaultLogger sets the global logger to the default logger.
+func UseDefaultLogger() { SetLogger(defaultLogger) }
+
 func (l *defaultLog) Errorf(f string, v ...interface{}) {
 	l.Printf("ERROR: "+f, v...)
-}
-
-func (l *defaultLog) Warningf(f string, v ...interface{}) {
-	l.Printf("WARNING: "+f, v...)
 }
 
 func (l *defaultLog) Infof(f string, v ...interface{}) {
 	l.Printf("INFO: "+f, v...)
 }
 
-func (l *defaultLog) Debugf(f string, v ...interface{}) {
-	l.Printf("DEBUG: "+f, v...)
+func (l *defaultLog) Warningf(f string, v ...interface{}) {
+	l.Printf("WARNING: "+f, v...)
+}
+
+func init() {
+	UseDefaultLogger()
 }
