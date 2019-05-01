@@ -225,6 +225,30 @@ func getAlpha(idx int) Service {
 	return svc
 }
 
+func addJaeger(cfg *ComposeConfig) {
+	cfg.Volumes["jaeger-volume"] = StringMap{}
+
+	cfg.Services["jaeger"] = Service{
+		Image:         "jaegertracing/all-in-one:latest",
+		ContainerName: "jaeger",
+		WorkingDir:    "/working/jaeger",
+		Ports: []string{
+			toExposedPort(14268),
+			toExposedPort(16686),
+		},
+		Environment: []string{
+			"SPAN_STORAGE_TYPE=badger",
+		},
+		Volumes: []Volume{{
+			Type:   "volume",
+			Source: "jaeger-volume",
+			Target: "/go/bin/data",
+		}},
+		Command: "--badger.ephemeral=false",
+	}
+
+}
+
 func getJaeger() Service {
 	svc := Service{
 		Image:         "jaegertracing/all-in-one:latest",
@@ -411,7 +435,7 @@ func main() {
 	}
 
 	if opts.Jaeger {
-		services["jaeger"] = getJaeger()
+		addJaeger(&cfg)
 	}
 
 	if opts.Metrics {
