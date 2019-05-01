@@ -25,13 +25,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 )
 
 func getMySQLPool(mysqlUser string, mysqlDB string, password string) (*sql.DB,
 	error) {
 	pool, err := sql.Open("mysql",
-		fmt.Sprintf("%s:%s@/%s", mysqlUser, password, mysqlDB))
+		fmt.Sprintf("%s:%s@/%s?parseTime=true", mysqlUser, password, mysqlDB))
 	if err != nil {
 		return nil, err
 	}
@@ -117,15 +118,19 @@ func getColumnValues(columns []string, columnTypes []*sql.ColumnType,
 	colValuePtrs := make([]interface{}, 0, len(columns))
 	for i := 0; i < len(columns); i++ {
 		switch columnTypes[i].DatabaseTypeName() {
+		case "TEXT":
+			fallthrough
 		case "VARCHAR":
 			colValuePtrs = append(colValuePtrs, new([]byte)) // the value can be nil
 		case "INT":
-			colValuePtrs = append(colValuePtrs, new(int))
+			colValuePtrs = append(colValuePtrs, new(sql.NullInt64))
 		case "FLOAT":
-			colValuePtrs = append(colValuePtrs, new(float64))
+			colValuePtrs = append(colValuePtrs, new(sql.NullFloat64))
+		case "DATETIME":
+			colValuePtrs = append(colValuePtrs, new(mysql.NullTime))
 		default:
-			panic(fmt.Sprintf("unknown type %v at index %d",
-				columnTypes[i].ScanType().Kind(), i))
+			panic(fmt.Sprintf("detected unsupported type %s on column %s",
+				columnTypes[i].DatabaseTypeName(), columns[i]))
 		}
 	}
 	if err := rows.Scan(colValuePtrs...); err != nil {

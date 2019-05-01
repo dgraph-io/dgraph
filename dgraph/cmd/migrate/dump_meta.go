@@ -68,14 +68,16 @@ func (m *DumpMeta) dumpSchema() error {
 // the most deeply referenced tables are processed first, and the non-referenced tables
 // are processed later
 func (m *DumpMeta) dumpTables() error {
-	tablesSorted, err := topoSortTables(m.tableInfos)
-	if err != nil {
-		return err
-	}
-
-	for _, table := range tablesSorted {
+	for table := range m.tableInfos {
 		fmt.Printf("Dumping table %s\n", table)
 		if err := m.dumpTable(table); err != nil {
+			return fmt.Errorf("error while dumping table %s: %v", table, err)
+		}
+	}
+
+	for table := range m.tableInfos {
+		fmt.Printf("Dumping table constraints %s\n", table)
+		if err := m.dumpTableConstraints(table); err != nil {
 			return fmt.Errorf("error while dumping table %s: %v", table, err)
 		}
 	}
@@ -121,6 +123,45 @@ func (m *DumpMeta) dumpTable(table string) error {
 		// blankNodeLabel
 		tableGuide.valuesRecorder.record(tableInfo, colValues, rmi.blankNodeLabel)
 	}
+
+	return nil
+}
+
+// dumpTable reads data from a table and sends generated RDF entries to the m.dataWriter
+func (m *DumpMeta) dumpTableConstraints(table string) error {
+	tableGuide := m.tableGuides[table]
+	tableInfo := m.tableInfos[table]
+	sortedColumns := getSortedColumns(tableInfo)
+
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(sortedColumns, ","), table)
+	rows, err := m.sqlPool.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var rmi *RowMetaInfo
+	for rows.Next() {
+		if rmi == nil {
+			rmi, err = getRowMetaInfo(rows, tableGuide, tableInfo)
+			if err != nil {
+				return fmt.Errorf("unable to get column types and pred names: %v", err)
+			}
+		}
+
+		// step 1: read the row's column values
+		colValues, err := getColumnValues(rmi.columnNames, rmi.columnTypes, rows)
+		if err != nil {
+			return err
+		}
+		rmi.colValues = colValues
+
+		// step 2: output the constraints in RDF format
+		rmi.blankNodeLabel = tableGuide.blankNodeG.genBlankNode(tableInfo, colValues)
+
+		m.outputConstraints(rmi, tableInfo)
+	}
+
 	return nil
 }
 
@@ -188,7 +229,9 @@ func (m *DumpMeta) outputRow(rmi *RowMetaInfo, tableInfo *TableInfo) {
 		outputPlainCell(rmi.blankNodeLabel, rmi.columnTypes[i].DatabaseTypeName(),
 			predicate, colValue, m.dataWriter)
 	}
+}
 
+func (m *DumpMeta) outputConstraints(rmi *RowMetaInfo, tableInfo *TableInfo) {
 	for _, constraint := range tableInfo.foreignKeyConstraints {
 		if len(constraint.parts) == 0 {
 			logger.Fatalf("The constraint should have at least one part: %v", constraint)
