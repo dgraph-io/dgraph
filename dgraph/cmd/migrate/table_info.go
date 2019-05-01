@@ -74,11 +74,6 @@ type TableInfo struct {
 	cstSources []*FKConstraint
 }
 
-type ColumnOutput struct {
-	fieldName string
-	dataType  string
-}
-
 func getDataType(dbType string) DataType {
 	for prefix, goType := range mysqlTypePrefixToGoType {
 		if strings.HasPrefix(dbType, prefix) {
