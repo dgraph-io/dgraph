@@ -170,6 +170,17 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	return response.Q[0].Count
 }
 
+func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		resp, err := dg.NewTxn().Query(context.Background(), q)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return resp, err
+	}
+}
+
 type LoginParams struct {
 	Endpoint   string
 	UserID     string
