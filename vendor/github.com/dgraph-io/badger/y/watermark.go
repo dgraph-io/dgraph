@@ -26,10 +26,10 @@ import (
 
 type uint64Heap []uint64
 
-func (u uint64Heap) Len() int               { return len(u) }
-func (u uint64Heap) Less(i int, j int) bool { return u[i] < u[j] }
-func (u uint64Heap) Swap(i int, j int)      { u[i], u[j] = u[j], u[i] }
-func (u *uint64Heap) Push(x interface{})    { *u = append(*u, x.(uint64)) }
+func (u uint64Heap) Len() int            { return len(u) }
+func (u uint64Heap) Less(i, j int) bool  { return u[i] < u[j] }
+func (u uint64Heap) Swap(i, j int)       { u[i], u[j] = u[j], u[i] }
+func (u *uint64Heap) Push(x interface{}) { *u = append(*u, x.(uint64)) }
 func (u *uint64Heap) Pop() interface{} {
 	old := *u
 	n := len(old)
@@ -38,14 +38,15 @@ func (u *uint64Heap) Pop() interface{} {
 	return x
 }
 
-// mark contains raft proposal id and a done boolean. It is used to
-// update the WaterMark struct about the status of a proposal.
+// mark contains one of more indices, along with a done boolean to indicate the
+// status of the index: begin or done. It also contains waiters, who could be
+// waiting for the watermark to reach >= a certain index.
 type mark struct {
 	// Either this is an (index, waiter) pair or (index, done) or (indices, done).
 	index   uint64
 	waiter  chan struct{}
 	indices []uint64
-	done    bool // Set to true if the pending mutation is done.
+	done    bool // Set to true if the index is done.
 }
 
 // WaterMark is used to keep track of the minimum un-finished index.  Typically, an index k becomes
@@ -67,10 +68,10 @@ type WaterMark struct {
 }
 
 // Init initializes a WaterMark struct. MUST be called before using it.
-func (w *WaterMark) Init() {
+func (w *WaterMark) Init(closer *Closer) {
 	w.markCh = make(chan mark, 100)
 	w.elog = trace.NewEventLog("Watermark", w.Name)
-	go w.process()
+	go w.process(closer)
 }
 
 // Begin sets the last index to the given value.
@@ -136,7 +137,9 @@ func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 // if no watermark is emitted at index 101 then waiter would get stuck indefinitely as it
 // can't decide whether the task at 101 has decided not to emit watermark or it didn't get
 // scheduled yet.
-func (w *WaterMark) process() {
+func (w *WaterMark) process(closer *Closer) {
+	defer closer.Done()
+
 	var indices uint64Heap
 	// pending maps raft proposal index to the number of pending mutations for this proposal.
 	pending := make(map[uint64]int)
@@ -200,25 +203,30 @@ func (w *WaterMark) process() {
 		}
 	}
 
-	for mark := range w.markCh {
-		if mark.waiter != nil {
-			doneUntil := atomic.LoadUint64(&w.doneUntil)
-			if doneUntil >= mark.index {
-				close(mark.waiter)
-			} else {
-				ws, ok := waiters[mark.index]
-				if !ok {
-					waiters[mark.index] = []chan struct{}{mark.waiter}
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case mark := <-w.markCh:
+			if mark.waiter != nil {
+				doneUntil := atomic.LoadUint64(&w.doneUntil)
+				if doneUntil >= mark.index {
+					close(mark.waiter)
 				} else {
-					waiters[mark.index] = append(ws, mark.waiter)
+					ws, ok := waiters[mark.index]
+					if !ok {
+						waiters[mark.index] = []chan struct{}{mark.waiter}
+					} else {
+						waiters[mark.index] = append(ws, mark.waiter)
+					}
 				}
-			}
-		} else {
-			if mark.index > 0 {
-				processOne(mark.index, mark.done)
-			}
-			for _, index := range mark.indices {
-				processOne(index, mark.done)
+			} else {
+				if mark.index > 0 {
+					processOne(mark.index, mark.done)
+				}
+				for _, index := range mark.indices {
+					processOne(index, mark.done)
+				}
 			}
 		}
 	}
