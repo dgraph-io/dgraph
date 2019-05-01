@@ -23,14 +23,12 @@ import (
 	"math"
 	"strconv"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	"github.com/golang/glog"
 )
 
 var (
@@ -129,36 +127,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		})
 		if err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-func (txn *Txn) CommitToMemory(commitTs uint64) error {
-	txn.Lock()
-	defer txn.Unlock()
-	// TODO: Figure out what shouldAbort is for, and use it correctly. This should really be
-	// shouldDiscard.
-	// defer func() {
-	// 	atomic.StoreUint32(&txn.shouldAbort, 1)
-	// }()
-	for key := range txn.cache.plists {
-	inner:
-		for {
-			plist, err := txn.Get([]byte(key))
-			if err != nil {
-				return err
-			}
-			err = plist.CommitMutation(txn.StartTs, commitTs)
-			switch err {
-			case nil:
-				break inner
-			case ErrRetry:
-				time.Sleep(5 * time.Millisecond)
-			default:
-				glog.Warningf("Error while committing to memory: %v\n", err)
-				return err
-			}
 		}
 	}
 	return nil
