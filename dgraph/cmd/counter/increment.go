@@ -93,17 +93,6 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	return counter, nil
 }
 
-func newMutation(counter Counter, pred string) *api.Mutation {
-	counter.Val++
-	if len(counter.Uid) == 0 {
-		counter.Uid = "_:new"
-	}
-	return &api.Mutation{
-		SetNquads: []byte(fmt.Sprintf(
-			`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val)),
-	}
-}
-
 func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	ro := conf.GetBool("ro")
 	be := conf.GetBool("be")
@@ -128,21 +117,18 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 		return counter, nil
 	}
 
+	counter.Val++
+	var mu api.Mutation
+	if len(counter.Uid) == 0 {
+		counter.Uid = "_:new"
+	}
+	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val))
+
 	// Don't put any timeout for mutation.
-	_, err = txn.Mutate(context.Background(), newMutation(counter, pred))
+	_, err = txn.Mutate(context.Background(), &mu)
 	if err != nil {
 		return Counter{}, err
 	}
-
-	counter, err = queryCounter(txn, pred)
-	if err != nil {
-		return Counter{}, err
-	}
-	_, err = txn.Mutate(context.Background(), newMutation(counter, pred))
-	if err != nil {
-		return Counter{}, err
-	}
-
 	return counter, txn.Commit(context.Background())
 }
 
