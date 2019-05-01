@@ -98,7 +98,7 @@ func ptrToValues(ptrs []interface{}) []interface{} {
 	values := make([]interface{}, 0, len(ptrs))
 	for _, ptr := range ptrs {
 		// dereference the pointer to get the actual value
-		v := reflect.ValueOf(ptr).Elem()
+		v := reflect.ValueOf(ptr).Elem().Interface()
 		values = append(values, v)
 	}
 	return values
@@ -113,24 +113,23 @@ func getFileWriter(filename string) (*bufio.Writer, func(), error) {
 	return bufio.NewWriter(output), func() { output.Close() }, nil
 }
 
-func getColumnValues(columns []string, columnTypes []*sql.ColumnType,
+func getColumnValues(columns []string, dataTypes []DataType,
 	rows *sql.Rows) ([]interface{}, error) {
 	colValuePtrs := make([]interface{}, 0, len(columns))
+
 	for i := 0; i < len(columns); i++ {
-		switch columnTypes[i].DatabaseTypeName() {
-		case "TEXT":
-			fallthrough
-		case "VARCHAR":
+		switch dataTypes[i] {
+		case STRING:
 			colValuePtrs = append(colValuePtrs, new([]byte)) // the value can be nil
-		case "INT":
+		case INT:
 			colValuePtrs = append(colValuePtrs, new(sql.NullInt64))
-		case "FLOAT":
+		case FLOAT:
 			colValuePtrs = append(colValuePtrs, new(sql.NullFloat64))
-		case "DATETIME":
+		case DATETIME:
 			colValuePtrs = append(colValuePtrs, new(mysql.NullTime))
 		default:
 			panic(fmt.Sprintf("detected unsupported type %s on column %s",
-				columnTypes[i].DatabaseTypeName(), columns[i]))
+				dataTypes[i], columns[i]))
 		}
 	}
 	if err := rows.Scan(colValuePtrs...); err != nil {

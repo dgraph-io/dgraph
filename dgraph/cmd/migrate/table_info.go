@@ -62,6 +62,8 @@ type TableInfo struct {
 	tableName string
 	columns   map[string]*ColumnInfo
 
+	columnDataTypes []DataType // used by the RowMetaInfo when outputing rows
+
 	// the referenced tables by the current table through foreign key constraints
 	referencedTables map[string]interface{}
 
@@ -77,22 +79,25 @@ type ColumnOutput struct {
 	dataType  string
 }
 
-func getColumnInfo(fieldName string, dataType string) *ColumnInfo {
-	columnInfo := ColumnInfo{}
-	columnInfo.name = fieldName
-
+func getDataType(dbType string) DataType {
 	for prefix, goType := range mysqlTypePrefixToGoType {
-		if strings.HasPrefix(dataType, prefix) {
-			columnInfo.dataType = goType
-			break
+		if strings.HasPrefix(dbType, prefix) {
+			return goType
 		}
 	}
+	return UNKNOWN
+}
+
+func getColumnInfo(fieldName string, dbType string) *ColumnInfo {
+	columnInfo := ColumnInfo{}
+	columnInfo.name = fieldName
+	columnInfo.dataType = getDataType(dbType)
 	return &columnInfo
 }
 
 func getTableInfo(table string, database string, pool *sql.DB) (*TableInfo, error) {
 	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE from INFORMATION_SCHEMA.
-COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table, database)
+COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, table, database)
 	columnRows, err := pool.Query(query)
 	if err != nil {
 		return nil, err
@@ -102,6 +107,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table, database)
 	tableInfo := &TableInfo{
 		tableName:             table,
 		columns:               make(map[string]*ColumnInfo),
+		columnDataTypes:       make([]DataType, 0),
 		referencedTables:      make(map[string]interface{}),
 		foreignKeyConstraints: make(map[string]*FKConstraint),
 	}
@@ -119,14 +125,17 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s"`, table, database)
 			| title         | varchar   |
 			+---------------+-----------+
 		*/
-		var fieldName, dataType string
-		err := columnRows.Scan(&fieldName, &dataType)
+		var fieldName, dbType string
+		err := columnRows.Scan(&fieldName, &dbType)
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan table description result for table %s: %v",
 				table, err)
 		}
 
-		tableInfo.columns[fieldName] = getColumnInfo(fieldName, dataType)
+		// TODO, should store the column data types into the table info as an array
+		// and the RMI should simply get the data types from the table info
+		tableInfo.columns[fieldName] = getColumnInfo(fieldName, dbType)
+		tableInfo.columnDataTypes = append(tableInfo.columnDataTypes, getDataType(dbType))
 	}
 
 	// query indices

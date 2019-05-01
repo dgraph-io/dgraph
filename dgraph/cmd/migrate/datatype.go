@@ -42,6 +42,7 @@ func initDataTypes() {
 	mysqlTypePrefixToGoType = make(map[string]DataType)
 	mysqlTypePrefixToGoType["int"] = INT
 	mysqlTypePrefixToGoType["varchar"] = STRING
+	mysqlTypePrefixToGoType["text"] = STRING
 	mysqlTypePrefixToGoType["date"] = DATETIME
 	mysqlTypePrefixToGoType["time"] = DATETIME
 	mysqlTypePrefixToGoType["datetime"] = DATETIME

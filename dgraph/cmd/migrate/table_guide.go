@@ -16,6 +16,7 @@
 package migrate
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 )
@@ -51,9 +52,12 @@ func (g *ColumnBNG) genBlankNode(info *TableInfo, values []interface{}) string {
 	// use the primary key indices to retrieve values in the current row
 	valuesForKey := make([]string, 0)
 	for _, columnIndex := range g.primaryKeyIndices {
-		valuesForKey = append(valuesForKey,
-			getValue(info.columns[columnIndex.name].dataType,
-				values[columnIndex.index]))
+		strVal, err := getValue(info.columns[columnIndex.name].dataType,
+			values[columnIndex.index])
+		if err != nil {
+			logger.Fatalf("unable to get string value from primary key column %s", columnIndex.name)
+		}
+		valuesForKey = append(valuesForKey, strVal)
 	}
 
 	return fmt.Sprintf("_:%s%s%s", info.tableName, g.separator,
@@ -127,13 +131,18 @@ func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
 				return ok
 			})
 
-		refLabel := getRefLabel(&Ref{
+		refLabel, err := getRefLabel(&Ref{
 			allColumns:       info.columns,
 			refColumnIndices: cstColumnIndices,
 			tableName:        info.tableName,
 			separator:        r.separator,
 			colValues:        values,
 		})
+		if err != nil {
+			logger.Printf("ignoring the constraint because of error when getting ref label: %+v",
+				cst)
+			continue
+		}
 		r.refToBlank[refLabel] = blankNode
 	}
 }
@@ -146,12 +155,21 @@ func getCstColumns(cst *FKConstraint) map[string]interface{} {
 	return columnNames
 }
 
-func getValue(dataType DataType, value interface{}) string {
+func getValue(dataType DataType, value interface{}) (string, error) {
 	switch dataType {
 	case STRING:
-		return fmt.Sprintf("%s", value)
+		return fmt.Sprintf("%s", value), nil
+	case INT:
+		//fmt.Printf("%+v %v -> NullInt64\n", value, value.(reflect.Value).Interface().(sql.NullInt64))
+		intVal, err := value.(sql.NullInt64).Value()
+		if err == nil {
+			return fmt.Sprintf("%v", intVal), nil
+		} else {
+			return "", err
+		}
+		return fmt.Sprintf("%v", intVal), nil
 	default:
-		return fmt.Sprintf("%v", value)
+		return fmt.Sprintf("%v", value), nil
 	}
 }
 
@@ -163,21 +181,23 @@ type Ref struct {
 	colValues        []interface{}
 }
 
-func getRefLabel(ref *Ref) string {
-
+func getRefLabel(ref *Ref) (string, error) {
 	columnNameAndValues := make([]string, 0)
 	for _, columnIdx := range ref.refColumnIndices {
+		colVal, err := getValue(ref.allColumns[columnIdx.name].dataType,
+			ref.colValues[columnIdx.index])
+		if err != nil {
+			return "", err
+		}
 		nameAndValue := fmt.Sprintf("%s%s%s", columnIdx.name,
-			ref.separator,
-			getValue(ref.allColumns[columnIdx.name].dataType,
-				ref.colValues[columnIdx.index]))
+			ref.separator, colVal)
 
 		columnNameAndValues = append(columnNameAndValues,
 			nameAndValue)
 	}
 
 	return fmt.Sprintf("_:%s%s%s", ref.tableName, ref.separator,
-		strings.Join(columnNameAndValues, ref.separator))
+		strings.Join(columnNameAndValues, ref.separator)), nil
 }
 
 func (r *FKValuesRecorder) getBlankNode(indexLabel string) string {
