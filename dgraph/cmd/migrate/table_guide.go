@@ -19,6 +19,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -160,14 +162,17 @@ func getValue(dataType DataType, value interface{}) (string, error) {
 	case STRING:
 		return fmt.Sprintf("%s", value), nil
 	case INT:
-		//fmt.Printf("%+v %v -> NullInt64\n", value, value.(reflect.Value).Interface().(sql.NullInt64))
 		intVal, err := value.(sql.NullInt64).Value()
-		if err == nil {
-			return fmt.Sprintf("%v", intVal), nil
-		} else {
+		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("%v", intVal), nil
+	case DATETIME:
+		dateVal, err := value.(mysql.NullTime).Value()
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%v", dateVal), nil
 	default:
 		return fmt.Sprintf("%v", value), nil
 	}
