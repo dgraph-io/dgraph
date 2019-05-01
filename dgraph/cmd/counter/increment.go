@@ -128,9 +128,8 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 		return counter, nil
 	}
 
-	mu := newMutation(counter, pred)
 	// Don't put any timeout for mutation.
-	_, err = txn.Mutate(context.Background(), mu)
+	_, err = txn.Mutate(context.Background(), newMutation(counter, pred))
 	if err != nil {
 		return Counter{}, err
 	}

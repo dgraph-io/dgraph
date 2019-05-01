@@ -181,6 +181,7 @@ type LocalCache struct {
 
 	startTs uint64
 
+	// The keys for these maps is a string representation of the Badger key for the posting list.
 	// deltas keep track of the updates made by txn. These must be kept around until written to disk
 	// during commit.
 	deltas map[string][]byte

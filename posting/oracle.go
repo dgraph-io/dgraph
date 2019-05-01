@@ -47,7 +47,7 @@ type Txn struct {
 	// atomic
 	shouldAbort uint32
 	// Fields which can changed after init
-	sync.RWMutex
+	sync.Mutex
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
@@ -101,18 +101,6 @@ type oracle struct {
 func (o *oracle) init() {
 	o.waiters = make(map[uint64][]chan struct{})
 	o.pendingTxns = make(map[uint64]*Txn)
-
-	go func() {
-		tick := time.NewTicker(30 * time.Second)
-		defer tick.Stop()
-		for range tick.C {
-			o.Lock()
-			if len(o.pendingTxns) > 0 {
-				glog.V(1).Infof("Num pending txns: %d", len(o.pendingTxns))
-			}
-			o.Unlock()
-		}
-	}()
 }
 
 func (o *oracle) RegisterStartTs(ts uint64) *Txn {
@@ -149,6 +137,12 @@ func (o *oracle) MinPendingStartTs() uint64 {
 		}
 	}
 	return min
+}
+
+func (o *oracle) NumPendingTxns() int {
+	o.RLock()
+	defer o.RUnlock()
+	return len(o.pendingTxns)
 }
 
 func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {

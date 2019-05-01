@@ -91,19 +91,17 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		return nil
 	}
 
-	txn.RLock()
-	defer txn.RUnlock()
+	txn.Lock()
+	cache := txn.cache
+	txn.Unlock()
+
+	cache.Lock()
+	defer cache.Unlock()
 
 	var keys []string
-	for key := range txn.cache.deltas {
+	for key := range cache.deltas {
 		keys = append(keys, key)
 	}
-	// txn.Lock()
-	// // TODO: We can remove the deltas here. Now that we're using txn local cache.
-	// for key := range txn.deltas {
-	// 	keys = append(keys, key)
-	// }
-	// txn.Unlock()
 
 	var idx int
 	for idx < len(keys) {
@@ -113,17 +111,15 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		err := writer.Update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
-				data := txn.cache.deltas[key]
+				data := cache.deltas[key]
 				if len(data) == 0 {
 					continue
 				}
-				if ts, ok := txn.cache.maxVersions[key]; ok {
-					if ts >= commitTs {
-						// Skip write because we already have a write at a higher ts.
-						// Logging here can cause a lot of output when doing Raft log replay. So, let's
-						// not output anything here.
-						continue
-					}
+				if ts, ok := cache.maxVersions[key]; ok && ts >= commitTs {
+					// Skip write because we already have a write at a higher ts.
+					// Logging here can cause a lot of output when doing Raft log replay. So, let's
+					// not output anything here.
+					continue
 				}
 				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
 					return err
