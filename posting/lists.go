@@ -236,11 +236,10 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
 	lc.RLock()
-	delta, ok := lc.deltas[skey]
-	lc.RUnlock()
-	if ok && len(delta) > 0 {
+	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
 		pl.SetMutation(lc.startTs, delta)
 	}
+	lc.RUnlock()
 	return lc.Set(skey, pl), nil
 }
 

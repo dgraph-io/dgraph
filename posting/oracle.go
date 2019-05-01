@@ -75,17 +75,10 @@ func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
 }
 
-// func (txn *Txn) Keys() []string {
-// 	var keys []string
-// 	for key := range txn.cache.plists {
-// 	}
-// 	txn.Lock()
-// 	defer txn.Unlock()
-// 	for key := range txn.deltas {
-// 		keys = append(keys, key)
-// 	}
-// 	return keys
-// }
+// Store is used by tests.
+func (txn *Txn) Store(pl *List) *List {
+	return txn.cache.Set(string(pl.key), pl)
+}
 
 type oracle struct {
 	x.SafeMutex
@@ -110,11 +103,13 @@ func (o *oracle) init() {
 	o.pendingTxns = make(map[uint64]*Txn)
 
 	go func() {
-		tick := time.NewTicker(5 * time.Second)
+		tick := time.NewTicker(30 * time.Second)
 		defer tick.Stop()
 		for range tick.C {
 			o.Lock()
-			glog.Infof("Num pending txns: %d", len(o.pendingTxns))
+			if len(o.pendingTxns) > 0 {
+				glog.V(1).Infof("Num pending txns: %d", len(o.pendingTxns))
+			}
 			o.Unlock()
 		}
 	}()

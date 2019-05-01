@@ -48,7 +48,7 @@ func (txn *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&txn.shouldAbort) > 0
 }
 
-func (txn *Txn) AddKeys(conflictKey string) {
+func (txn *Txn) AddConflictKey(conflictKey string) {
 	txn.Lock()
 	defer txn.Unlock()
 	if txn.conflicts == nil {
