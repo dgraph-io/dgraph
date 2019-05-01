@@ -198,6 +198,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				}
 			}
 		}
+
+		return nil
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
@@ -779,8 +781,19 @@ func (n *node) Run() {
 						" retrieving snapshot\n", maxIndex)
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
+					if currSnap, err := n.Snapshot(); err != nil {
+						// Retrieve entire snapshot from leader if node does not have
+						// a current snapshot.
+						glog.Errorf("Could not retrieve previous snapshot. Setting SinceTs to 0.")
+						snap.SinceTs = 0
+					} else {
+						snap.SinceTs = currSnap.ReadTs
+					}
+
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n", snap, n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
+						snap, n.gid, rc.Id)
+
 					for {
 						err := n.retrieveSnapshot(snap)
 						if err == nil {
