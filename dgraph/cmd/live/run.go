@@ -209,8 +209,13 @@ func (l *loader) processLoadFile(ctx context.Context, rd *chunker.Reader, ck chu
 		default:
 		}
 
-		chunkBuf, err := ck.Chunk(rd)
-		l.processChunk(chunkBuf, ck)
+		chunk, err := ck.ChunkNew(rd)
+		if err == nil || err == io.EOF {
+			err = l.processChunk(chunk)
+			if err != nil {
+				return err
+			}
+		}
 		if err == io.EOF {
 			break
 		} else {
@@ -225,13 +230,15 @@ func (l *loader) processLoadFile(ctx context.Context, rd *chunker.Reader, ck chu
 // processChunk parses the rdf entries from the chunk, and group them into
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil || chunkBuf.Len() == 0 {
-		return
+func (l *loader) processChunk(chunk *chunker.Chunk) error {
+	if chunk == nil || chunk.Len() == 0 {
+		return nil
 	}
 
-	nqs, err := ck.Parse(chunkBuf)
-	x.CheckfNoTrace(err)
+	nqs, err := chunk.Parse()
+	if err != nil {
+		return err
+	}
 
 	batch := make([]*api.NQuad, 0, opt.batchSize)
 	for _, nq := range nqs {
@@ -257,6 +264,8 @@ func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
 	if len(batch) > 0 {
 		l.reqs <- api.Mutation{Set: batch}
 	}
+
+	return nil
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {

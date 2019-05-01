@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -91,8 +92,8 @@ func (r *Reader) Offset() uint64 {
 	return r.offset
 }
 
-// LineNumber returns the number of newlines that have been read.
-func (r *Reader) LineNumber() uint32 {
+// LineCount returns the number of newlines that have been read.
+func (r *Reader) LineCount() uint32 {
 	return r.line
 }
 
@@ -103,11 +104,15 @@ func (r *Reader) LineNumber() uint32 {
 func (r *Reader) ReadSlice(delim byte) ([]byte, error) {
 	r.prevOffset, r.prevLine = r.offset, r.line
 
-	line, err := r.reader.ReadSlice(delim)
-	r.offset += uint64(len(line))
-	r.line += 1
+	slc, err := r.reader.ReadSlice(delim)
+	r.offset += uint64(len(slc))
+	for _, b := range slc {
+		if b == '\n' {
+			r.line++
+		}
+	}
 
-	return line, err
+	return slc, err
 }
 
 func (r *Reader) ReadString(delim byte) (string, error) {
@@ -115,7 +120,7 @@ func (r *Reader) ReadString(delim byte) (string, error) {
 
 	str, err := r.reader.ReadString(delim)
 	r.offset += uint64(len(str))
-	r.line += 1
+	r.line += uint32(strings.Count(str, "\n"))
 
 	return str, err
 }

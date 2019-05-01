@@ -33,9 +33,19 @@ import (
 	"github.com/pkg/errors"
 )
 
+type Chunk struct {
+	*bytes.Buffer
+	Offset    uint64
+	LineCount uint32
+
+	// internal
+	ck Chunker
+}
+
 type Chunker interface {
 	Begin(r *Reader) error
 	Chunk(r *Reader) (*bytes.Buffer, error)
+	ChunkNew(r *Reader) (*Chunk, error)
 	End(r *Reader) error
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
 }
@@ -101,6 +111,13 @@ func (rdfChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
+func (c rdfChunker) ChunkNew(r *Reader) (*Chunk, error) {
+	chunk := Chunk{ck: c, Offset: r.Offset(), LineCount: r.LineCount()}
+	buf, err := c.Chunk(r)
+	chunk.Buffer = buf
+	return &chunk, err
+}
+
 func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
@@ -118,6 +135,32 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 			continue // blank line or comment
 		} else if err != nil {
 			return nil, errors.Wrapf(err, "while parsing line %q", str)
+		}
+		nqs = append(nqs, &nq)
+	}
+
+	return nqs, nil
+}
+
+func (chunk *Chunk) Parse() ([]*api.NQuad, error) {
+	if chunk.Len() == 0 {
+		return nil, io.EOF
+	}
+
+	nqs := make([]*api.NQuad, 0)
+	line := chunk.LineCount
+	for chunk.Len() > 0 {
+		str, err := chunk.ReadString('\n')
+		if err != nil && err != io.EOF {
+			x.Check(err)
+		}
+		line++
+
+		nq, err := rdf.Parse(str)
+		if err == rdf.ErrEmpty {
+			continue // blank line or comment
+		} else if err != nil {
+			return nil, fmt.Errorf("parsing line %d: %s", line, str)
 		}
 		nqs = append(nqs, &nq)
 	}
@@ -215,6 +258,13 @@ func (jsonChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
+func (c jsonChunker) ChunkNew(r *Reader) (*Chunk, error) {
+	chunk := Chunk{Offset: r.Offset(), LineCount: r.LineCount()}
+	buf, err := c.Chunk(r)
+	chunk.Buffer = buf
+	return &chunk, err
+}
+
 func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
@@ -227,6 +277,10 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	chunkBuf.Reset()
 
 	return nqs, err
+}
+
+func (jsonChunker) ParseNew(chunk *Chunk) ([]*api.NQuad, error) {
+	return nil, nil
 }
 
 func (jsonChunker) End(r *Reader) error {
