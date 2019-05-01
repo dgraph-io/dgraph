@@ -70,6 +70,8 @@ func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 			ctx.Keys = append(ctx.Keys, fps)
 		}
 	}
+
+	txn.Update()
 	for key := range txn.cache.deltas {
 		pk := x.Parse([]byte(key))
 		// Also send the group id that the predicate was being served by. This is useful when
@@ -89,10 +91,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		return nil
 	}
 
-	txn.Lock()
 	cache := txn.cache
-	txn.Unlock()
-
 	cache.Lock()
 	defer cache.Unlock()
 
@@ -113,7 +112,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				if len(data) == 0 {
 					continue
 				}
-				if ts, ok := cache.maxVersions[key]; ok && ts >= commitTs {
+				if ts := cache.maxVersions[key]; ts >= commitTs {
 					// Skip write because we already have a write at a higher ts.
 					// Logging here can cause a lot of output when doing Raft log replay. So, let's
 					// not output anything here.

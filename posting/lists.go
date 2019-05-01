@@ -247,6 +247,9 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.Lock()
 	defer lc.Unlock()
+	if len(lc.plists) == 0 {
+		return
+	}
 
 	for key, pl := range lc.plists {
 		data := pl.GetMutation(lc.startTs)
