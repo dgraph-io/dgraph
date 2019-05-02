@@ -63,10 +63,9 @@ func (m *DumpMeta) dumpSchema() error {
 	return m.schemaWriter.Flush()
 }
 
-// dumpTables runs a topological sort through all the tables in m.tableInfos,
-// then this method dumps all the tables following that topological order where
-// the most deeply referenced tables are processed first, and the non-referenced tables
-// are processed later
+// dumpTables goes through all the tables twice. In the first time it generates RDF entries for the
+// column values. In the second time, it follows the foreign key constraints in SQL tables, and
+// generate the corresponding Dgraph edges.
 func (m *DumpMeta) dumpTables() error {
 	for table := range m.tableInfos {
 		fmt.Printf("Dumping table %s\n", table)
