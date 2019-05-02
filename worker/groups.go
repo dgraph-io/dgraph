@@ -69,7 +69,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = &groupi{
 		blockDeletes: new(sync.Mutex),
-		tablets: make(map[string]*pb.Tablet),
+		tablets:      make(map[string]*pb.Tablet),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
