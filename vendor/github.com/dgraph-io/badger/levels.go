@@ -618,7 +618,7 @@ func (s *levelsController) compactBuildTables(
 	sort.Slice(newTables, func(i, j int) bool {
 		return y.CompareKeys(newTables[i].Biggest(), newTables[j].Biggest()) < 0
 	})
-	s.kv.vlog.updateGCStats(discardStats)
+	s.kv.vlog.updateDiscardStats(discardStats)
 	s.kv.opt.Debugf("Discard stats: %v", discardStats)
 	return newTables, func() error { return decrRefs(newTables) }, nil
 }
@@ -945,20 +945,27 @@ func (s *levelsController) appendIterators(
 
 // TableInfo represents the information about a table.
 type TableInfo struct {
-	ID    uint64
-	Level int
-	Left  []byte
-	Right []byte
+	ID       uint64
+	Level    int
+	Left     []byte
+	Right    []byte
+	KeyCount uint64 // Number of keys in the table
 }
 
 func (s *levelsController) getTableInfo() (result []TableInfo) {
 	for _, l := range s.levels {
 		for _, t := range l.tables {
+			it := t.NewIterator(false)
+			var count uint64
+			for it.Rewind(); it.Valid(); it.Next() {
+				count++
+			}
 			info := TableInfo{
-				ID:    t.ID(),
-				Level: l.level,
-				Left:  t.Smallest(),
-				Right: t.Biggest(),
+				ID:       t.ID(),
+				Level:    l.level,
+				Left:     t.Smallest(),
+				Right:    t.Biggest(),
+				KeyCount: count,
 			}
 			result = append(result, info)
 		}

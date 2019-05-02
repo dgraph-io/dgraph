@@ -23,14 +23,12 @@ import (
 	"math"
 	"strconv"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	"github.com/golang/glog"
 )
 
 var (
@@ -48,14 +46,12 @@ func (txn *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&txn.shouldAbort) > 0
 }
 
-func (txn *Txn) AddKeys(key, conflictKey string) {
+func (txn *Txn) AddConflictKey(conflictKey string) {
 	txn.Lock()
 	defer txn.Unlock()
-	if txn.deltas == nil || txn.conflicts == nil {
-		txn.deltas = make(map[string]struct{})
+	if txn.conflicts == nil {
 		txn.conflicts = make(map[string]struct{})
 	}
-	txn.deltas[key] = struct{}{}
 	if len(conflictKey) > 0 {
 		txn.conflicts[conflictKey] = struct{}{}
 	}
@@ -74,7 +70,9 @@ func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 			ctx.Keys = append(ctx.Keys, fps)
 		}
 	}
-	for key := range txn.deltas {
+
+	txn.Update()
+	for key := range txn.cache.deltas {
 		pk := x.Parse([]byte(key))
 		// Also send the group id that the predicate was being served by. This is useful when
 		// checking if Zero should allow a commit during a predicate move.
@@ -92,13 +90,15 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	if commitTs == 0 {
 		return nil
 	}
+
+	cache := txn.cache
+	cache.Lock()
+	defer cache.Unlock()
+
 	var keys []string
-	txn.Lock()
-	// TODO: We can remove the deltas here. Now that we're using txn local cache.
-	for key := range txn.deltas {
+	for key := range cache.deltas {
 		keys = append(keys, key)
 	}
-	txn.Unlock()
 
 	var idx int
 	for idx < len(keys) {
@@ -108,15 +108,11 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		err := writer.Update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
-				plist, err := txn.Get([]byte(key))
-				if err != nil {
-					return err
-				}
-				data := plist.GetMutation(txn.StartTs)
-				if data == nil {
+				data := cache.deltas[key]
+				if len(data) == 0 {
 					continue
 				}
-				if plist.maxVersion() >= commitTs {
+				if ts := cache.maxVersions[key]; ts >= commitTs {
 					// Skip write because we already have a write at a higher ts.
 					// Logging here can cause a lot of output when doing Raft log replay. So, let's
 					// not output anything here.
@@ -130,36 +126,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		})
 		if err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-func (txn *Txn) CommitToMemory(commitTs uint64) error {
-	txn.Lock()
-	defer txn.Unlock()
-	// TODO: Figure out what shouldAbort is for, and use it correctly. This should really be
-	// shouldDiscard.
-	// defer func() {
-	// 	atomic.StoreUint32(&txn.shouldAbort, 1)
-	// }()
-	for key := range txn.deltas {
-	inner:
-		for {
-			plist, err := txn.Get([]byte(key))
-			if err != nil {
-				return err
-			}
-			err = plist.CommitMutation(txn.StartTs, commitTs)
-			switch err {
-			case nil:
-				break inner
-			case ErrRetry:
-				time.Sleep(5 * time.Millisecond)
-			default:
-				glog.Warningf("Error while committing to memory: %v\n", err)
-				return err
-			}
 		}
 	}
 	return nil
