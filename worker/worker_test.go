@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync/atomic"
@@ -26,11 +27,13 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 var raftIndex uint64
@@ -56,6 +59,28 @@ func getOrCreate(key []byte) *posting.List {
 	return l
 }
 
+func populateGraph(t *testing.T) {
+	dg := z.DgraphClientWithGroot(z.SockAddr)
+	z.DropAll(t, dg)
+
+	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {25, 23}, {26, 23}, {10, 31}, {12, 31}}
+	for _, pair := range data1 {
+		rdf := fmt.Sprintf(`<0x%x> <neighbour> <0x%x> .`, pair[0], pair[1])
+		_, err := dg.NewTxn().Mutate(context.Background(),
+			&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
+		require.NoError(t, err)
+	}
+
+	data2 := map[int]string{12: "photon", 10: "photon"}
+	for key, val := range data2 {
+		rdf := fmt.Sprintf(`<0x%x> <friend> %q .`, key, val)
+		_, err := dg.NewTxn().Mutate(context.Background(),
+			&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
+		require.NoError(t, err)
+	}
+}
+
+/*
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
 	edge := &pb.DirectedEdge{
@@ -95,6 +120,7 @@ func populateGraph(t *testing.T) {
 	edge.Entity = 10
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
 }
+*/
 
 func taskValues(t *testing.T, v []*pb.TaskValue) []string {
 	out := make([]string, len(v))
