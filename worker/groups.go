@@ -796,14 +796,12 @@ func (g *groupi) processOracleDeltaStream() {
 			defer close(deltaCh)
 
 			for {
-				glog.V(3).Infof("Waiting to RECV something from ZERO")
 				delta, err := stream.Recv()
 				if err != nil || delta == nil {
 					glog.Errorf("Error in oracle delta stream. Error: %v", err)
 					return
 				}
 
-				glog.V(3).Infof("RECVed something from ZERO: %d", len(deltaCh))
 				select {
 				case deltaCh <- delta:
 				case <-ctx.Done():
@@ -820,7 +818,6 @@ func (g *groupi) processOracleDeltaStream() {
 				if delta == nil {
 					return
 				}
-				glog.V(3).Infof("Got a delta from channel")
 				batch++
 			case <-ticker.C:
 				newLead := g.Leader(0)
@@ -851,7 +848,6 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 
-			glog.V(3).Infof("Batched up: %d", batch)
 			// Only the leader needs to propose the oracleDelta retrieved from Zero.
 			// The leader and the followers would not directly apply or use the
 			// oracleDelta streaming in from Zero. They would wait for the proposal to
@@ -885,7 +881,6 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 			for {
-				glog.V(3).Infof("Proposing delta max: %d", delta.MaxAssigned)
 				// Block forever trying to propose this. Also this proposal should not be counted
 				// towards num pending proposals and be proposed right away.
 				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
