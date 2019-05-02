@@ -284,6 +284,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return dy.ErrConflict
 	}
 
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
+
 	sort.Slice(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
@@ -525,6 +528,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
@@ -1145,6 +1149,9 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 
+	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		glog.Infof("Num pending txns: %d", num)
+	}
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
