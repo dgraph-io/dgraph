@@ -78,6 +78,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *pb.DirectedEdge) {
 	// The following logic is based on node.commitOrAbort in worker/draft.go.
 	// We need to commit to disk, so secondary indices, particularly the ones
 	// which iterate over Badger, would work correctly.
+	txn.Update()
 	writer := posting.NewTxnWriter(ps)
 	require.NoError(t, txn.CommitToDisk(writer, commit))
 	require.NoError(t, writer.Flush())
