@@ -30,9 +30,11 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
 )
@@ -60,11 +62,50 @@ func getOrCreate(key []byte) *posting.List {
 	return l
 }
 
-func populateGraph(t *testing.T, dg *dgo.Dgraph) {
+func populateGraph(t *testing.T) {
+	// Add uid edges : predicate neightbour.
+	edge := &pb.DirectedEdge{
+		ValueId: 23,
+		Label:   "author0",
+		Attr:    "neighbour",
+	}
+	edge.Entity = 10
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 10)))
+
+	edge.Entity = 11
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 11)))
+
+	edge.Entity = 12
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+
+	edge.ValueId = 25
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+
+	edge.ValueId = 26
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+
+	edge.Entity = 10
+	edge.ValueId = 31
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 10)))
+
+	edge.Entity = 12
+	addEdge(t, edge, getOrCreate(x.DataKey("neighbour", 12)))
+
+	// add value edges: friend : with name
+	edge.Attr = "friend"
+	edge.Entity = 12
+	edge.Value = []byte("photon")
+	edge.ValueId = 0
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+
+	edge.Entity = 10
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+}
+
+func populateClusterGraph(t *testing.T, dg *dgo.Dgraph) {
 	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {12, 25}, {12, 26}, {10, 31}, {12, 31}}
 	for _, pair := range data1 {
 		rdf := fmt.Sprintf(`<0x%x> <neighbour> <0x%x> .`, pair[0], pair[1])
-		t.Logf("%s", rdf)
 		_, err := dg.NewTxn().Mutate(context.Background(),
 			&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 		require.NoError(t, err)
@@ -73,7 +114,6 @@ func populateGraph(t *testing.T, dg *dgo.Dgraph) {
 	data2 := map[int]string{12: "photon", 10: "photon"}
 	for key, val := range data2 {
 		rdf := fmt.Sprintf(`<0x%x> <friend> %q .`, key, val)
-		t.Logf("%s", rdf)
 		_, err := dg.NewTxn().Mutate(context.Background(),
 			&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 		require.NoError(t, err)
@@ -81,13 +121,18 @@ func populateGraph(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func initTest(t *testing.T, schemaStr string) {
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	require.NoError(t, err)
+	populateGraph(t)
+}
+
+func initClusterTest(t *testing.T, schemaStr string) {
 	dg := z.DgraphClientWithGroot(z.SockAddr)
 	z.DropAll(t, dg)
 
-	t.Logf("%s", schemaStr)
 	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
-	populateGraph(t, dg)
+	populateClusterGraph(t, dg)
 }
 
 func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
@@ -96,11 +141,10 @@ func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
 }
 
 func TestProcessTask(t *testing.T) {
-	initTest(t, `neighbour: [uid] .`)
+	initClusterTest(t, `neighbour: [uid] .`)
 
-	resp, query, err := runQuery("neighbour", []uint64{10, 11, 12}, nil)
+	resp, err := runQuery("neighbour", []uint64{10, 11, 12}, nil)
 	require.NoError(t, err)
-	t.Logf("%s\n%s", query, resp.Json)
 	require.JSONEq(t, `{
 		  "q": [
 		    {
@@ -150,7 +194,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *pb.Query {
 	return q
 }
 
-func runQuery(attr string, uids []uint64, srcFunc []string) (*api.Response, string, error) {
+func runQuery(attr string, uids []uint64, srcFunc []string) (*api.Response, error) {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 
 	var query string
@@ -183,7 +227,7 @@ func runQuery(attr string, uids []uint64, srcFunc []string) (*api.Response, stri
 	dg := z.DgraphClientWithGroot(z.SockAddr)
 	resp, err := z.RetryQuery(dg, query)
 
-	return resp, query, err
+	return resp, err
 }
 
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
