@@ -251,10 +251,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	for i := 0; i < 3; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
-		if proposal.Delta != nil {
+		switch {
+		case proposal.Delta != nil: // Is a delta.
 			// If a proposal is important (like delta updates), let's not run it via the limiter
 			// below. We should always propose it irrespective of how many pending proposals there
 			// might be.
+		default:
 			if err := limiter.incr(ctx, i); err != nil {
 				return err
 			}
