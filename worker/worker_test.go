@@ -21,17 +21,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
 )
@@ -59,13 +60,11 @@ func getOrCreate(key []byte) *posting.List {
 	return l
 }
 
-func populateGraph(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
-
-	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {25, 23}, {26, 23}, {10, 31}, {12, 31}}
+func populateGraph(t *testing.T, dg *dgo.Dgraph) {
+	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {12, 25}, {12, 26}, {10, 31}, {12, 31}}
 	for _, pair := range data1 {
 		rdf := fmt.Sprintf(`<0x%x> <neighbour> <0x%x> .`, pair[0], pair[1])
+		t.Logf("%s", rdf)
 		_, err := dg.NewTxn().Mutate(context.Background(),
 			&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 		require.NoError(t, err)
@@ -74,6 +73,7 @@ func populateGraph(t *testing.T) {
 	data2 := map[int]string{12: "photon", 10: "photon"}
 	for key, val := range data2 {
 		rdf := fmt.Sprintf(`<0x%x> <friend> %q .`, key, val)
+		t.Logf("%s", rdf)
 		_, err := dg.NewTxn().Mutate(context.Background(),
 			&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 		require.NoError(t, err)
@@ -81,9 +81,13 @@ func populateGraph(t *testing.T) {
 }
 
 func initTest(t *testing.T, schemaStr string) {
-	err := schema.ParseBytes([]byte(schemaStr), 1)
+	dg := z.DgraphClientWithGroot(z.SockAddr)
+	z.DropAll(t, dg)
+
+	t.Logf("%s", schemaStr)
+	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
-	populateGraph(t)
+	populateGraph(t, dg)
 }
 
 func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
@@ -94,15 +98,33 @@ func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
 func TestProcessTask(t *testing.T) {
 	initTest(t, `neighbour: [uid] .`)
 
-	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
-	r, err := helpProcessTask(query, 1)
+	resp, query, err := runQuery("neighbour", []uint64{10, 11, 12}, nil)
 	require.NoError(t, err)
-	require.EqualValues(t,
-		[][]uint64{
-			{23, 31},
-			{23},
-			{23, 25, 26, 31},
-		}, algo.ToUintsListForTest(r.UidMatrix))
+	t.Logf("%s\n%s", query, resp.Json)
+	require.JSONEq(t, `{
+		  "q": [
+		    {
+		      "neighbour": [
+		        { "uid": "0x17" },
+		        { "uid": "0x1f" }
+		      ]
+		    },
+		    {
+		      "neighbour": [
+		        { "uid": "0x17" }
+		      ]
+		    },
+		    {
+		      "neighbour": [
+		        { "uid": "0x17" },
+		        { "uid": "0x19" },
+		        { "uid": "0x1a" },
+		        { "uid": "0x1f" }
+		      ]
+		    }
+		  ]
+		}`,
+		string(resp.Json))
 }
 
 // newQuery creates a Query task and returns it.
@@ -126,6 +148,42 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *pb.Query {
 		q.Langs = []string{srcFunc[1]}
 	}
 	return q
+}
+
+func runQuery(attr string, uids []uint64, srcFunc []string) (*api.Response, string, error) {
+	x.AssertTrue(uids == nil || srcFunc == nil)
+
+	var query string
+	if uids != nil {
+		var uidv []string
+		for _, uid := range uids {
+			uidv = append(uidv, fmt.Sprintf("0x%x", uid))
+		}
+		query = fmt.Sprintf(`
+			{
+				q(func: uid(%s)) {
+					%s { uid }
+				}
+			}`, strings.Join(uidv, ","), attr,
+		)
+	} else {
+		var langs, args string
+		if srcFunc[1] != "" {
+			langs = "@" + srcFunc[1]
+		}
+		args = strings.Join(srcFunc[2:], " ")
+		query = fmt.Sprintf(`
+			{
+				q(func: %s(%s%s, %q)) {
+					uid
+				}
+			}`, srcFunc[0], attr, langs, args)
+	}
+
+	dg := z.DgraphClientWithGroot(z.SockAddr)
+	resp, err := z.RetryQuery(dg, query)
+
+	return resp, query, err
 }
 
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
