@@ -198,6 +198,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				}
 			}
 		}
+
+		return nil
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
@@ -281,6 +283,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
+
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
 
 	sort.Slice(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
@@ -523,6 +528,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
@@ -776,8 +782,19 @@ func (n *node) Run() {
 						" retrieving snapshot\n", maxIndex)
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
+					if currSnap, err := n.Snapshot(); err != nil {
+						// Retrieve entire snapshot from leader if node does not have
+						// a current snapshot.
+						glog.Errorf("Could not retrieve previous snapshot. Setting SinceTs to 0.")
+						snap.SinceTs = 0
+					} else {
+						snap.SinceTs = currSnap.ReadTs
+					}
+
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n", snap, n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
+						snap, n.gid, rc.Id)
+
 					for {
 						err := n.retrieveSnapshot(snap)
 						if err == nil {
@@ -1132,6 +1149,9 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 
+	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		glog.Infof("Num pending txns: %d", num)
+	}
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
