@@ -305,6 +305,11 @@ func VerifyCurlCmd(t *testing.T, args []string,
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code
 		require.Error(t, err, "the curl command should have failed")
+		if ee, ok := err.(*exec.ExitError); ok {
+			//ee.Stderr = c.Stderr.(*prefixSuffixSaver).Bytes()
+			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+				"the curl output does not contain the expected output")
+		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
 		verifyOutput(t, output, failureConfig)
