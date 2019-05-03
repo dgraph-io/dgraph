@@ -127,7 +127,7 @@ func queryWithGz(q string, gzReq bool, gzResp bool, timeout string) (
 func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	url := addr + "/query"
 	if ts != 0 {
-		url += "/" + strconv.FormatUint(ts, 10)
+		url += "?startTs=" + strconv.FormatUint(ts, 10)
 	}
 
 	_, body, err := runWithRetries("POST", url, q, nil)

@@ -112,6 +112,48 @@ func readRequest(w http.ResponseWriter, r *http.Request) []byte {
 	return body
 }
 
+// parseUint64 parses string into uint64, empty string is converted into zero value
+func parseUint64(value, name string) (uint64, error) {
+	if value == "" {
+		return 0, nil
+	}
+
+	uintVal, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("Error: %+v while parsing %s as uint64", err, value)
+	}
+
+	return uintVal, nil
+}
+
+// parseBool parses string into bool, empty string is converted into zero value
+func parseBool(value, name string) (bool, error) {
+	if value == "" {
+		return false, nil
+	}
+
+	boolval, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("Error: %+v while parsing %s as bool", err, value)
+	}
+
+	return boolval, nil
+}
+
+// parseDuration parses string into time.Duration, empty string is converted into zero value
+func parseDuration(value, name string) (time.Duration, error) {
+	if value == "" {
+		return 0, nil
+	}
+
+	durationValue, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("Error: %+v while parsing %s as time.Duration", err, value)
+	}
+
+	return durationValue, nil
+}
+
 // Write response body, transparently compressing if necessary.
 func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w
@@ -133,63 +175,94 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := api.Request{}
-	ts, err := extractStartTs(r.URL.Path)
-	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
-		return
-	}
-	req.StartTs = ts
-
-	if vars := r.Header.Get("X-Dgraph-Vars"); vars != "" {
-		req.Vars = map[string]string{}
-		if err := json.Unmarshal([]byte(vars), &req.Vars); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while unmarshalling Vars header into map")
-			return
-		}
-	}
-
 	body := readRequest(w, r)
 	if body == nil {
 		return
 	}
-	req.Query = string(body)
 
-	d := r.URL.Query().Get("debug")
-	ctx := context.WithValue(context.Background(), query.DebugKey, d)
-	ctx = attachAccessJwt(ctx, r)
+	// read parameters from body or URL
+	var params struct {
+		Variables    map[string]string `json:"variables"`
+		StartTs      uint64            `json:"startTs"`
+		Debug        bool              `json:"debug"`
+		Query        string            `json:"query"`
+		Timeout      time.Duration     `json:"timeout"`
+		IsBestEffort bool              `json:"be"`
+		IsReadOnly   bool              `json:"ro"`
+	}
 
-	// Timeout is expected to be in millisecond
-	paramTimeout := r.URL.Query().Get("timeout")
-	if paramTimeout != "" {
-		timeout, err := time.ParseDuration(paramTimeout)
-		if err != nil {
-			x.SetStatusWithData(w, x.Error, err.Error())
+	contentType := r.Header.Get("Content-Type")
+	switch strings.ToLower(contentType) {
+	case "application/json":
+		if err := json.Unmarshal(body, &params); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while unmarshalling body into json object")
 			return
 		}
 
+	// when content type is marked as application/graphql
+	default:
+		// We do not allow any query variables in this case because the body contains the
+		// GraphQL query. And it is not pretty to encode the variables in the URL.
+
+		var err error
+		params.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		params.Debug, err = parseBool(r.URL.Query().Get("debug"), "debug")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		params.Query = string(body)
+		params.Timeout, err = parseDuration(r.URL.Query().Get("timeout"), "timeout")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		params.IsBestEffort, err = parseBool(r.URL.Query().Get("be"), "be")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		params.IsReadOnly, err = parseBool(r.URL.Query().Get("ro"), "ro")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+	}
+
+	// setup context
+	ctx := context.WithValue(context.Background(), query.DebugKey, params.Debug)
+	ctx = attachAccessJwt(ctx, r)
+	if params.Timeout != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
+		ctx, cancel = context.WithTimeout(ctx, params.Timeout)
 		defer cancel()
 	}
 
-	if req.StartTs == 0 {
+	// Setup query request
+	queryReq := api.Request{
+		Vars:    params.Variables,
+		StartTs: params.StartTs,
+		Query:   params.Query,
+	}
+	if queryReq.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
-		be, _ := strconv.ParseBool(r.URL.Query().Get("be"))
-		if be {
-			req.BestEffort = true
-			req.ReadOnly = true
+		if params.IsBestEffort {
+			queryReq.BestEffort = true
+			queryReq.ReadOnly = true
 		}
 		// If ro is set, run this as a readonly query.
-		ro, _ := strconv.ParseBool(r.URL.Query().Get("ro"))
-		if ro {
-			req.ReadOnly = true
+		if params.IsReadOnly {
+			queryReq.ReadOnly = true
 		}
 	}
 
 	// Core processing happens here.
-	resp, err := (&edgraph.Server{}).Query(ctx, &req)
+	resp, err := (&edgraph.Server{}).Query(ctx, &queryReq)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
