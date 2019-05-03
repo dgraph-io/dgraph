@@ -990,19 +990,11 @@ func (n *node) rollupLists(readTs uint64) error {
 	amLeader := n.AmLeader()
 	m := new(sync.Map)
 
-	addTo := func(key []byte, delta int64) {
-		if !amLeader {
-			// Only leader needs to calculate the tablet sizes.
-			return
-		}
-		pk := x.Parse(key)
-		if pk == nil {
-			return
-		}
-		val, ok := m.Load(pk.Attr)
+	addTo := func(attr string, delta int64) {
+		val, ok := m.Load(attr)
 		if !ok {
 			sz := new(int64)
-			val, _ = m.LoadOrStore(pk.Attr, sz)
+			val, _ = m.LoadOrStore(attr, sz)
 		}
 		size := val.(*int64)
 		atomic.AddInt64(size, delta)
@@ -1011,9 +1003,16 @@ func (n *node) rollupLists(readTs uint64) error {
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
+		pk := x.Parse(item.Key())
+		if pk == nil || len(pk.Attr) == 0 {
+			return false
+		}
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
-			addTo(item.Key(), item.EstimatedSize())
+			if amLeader {
+				// Only leader needs to calculate the tablet sizes.
+				addTo(pk.Attr, item.EstimatedSize())
+			}
 			return false
 		default:
 			return true
@@ -1031,8 +1030,13 @@ func (n *node) rollupLists(readTs uint64) error {
 		// If there are multiple keys, the posting list was split into multiple
 		// parts. The key of the first part is the right key to use for tablet
 		// size calculations.
-		for _, kv := range kvs {
-			addTo(kvs[0].Key, int64(kv.Size()))
+		if amLeader && len(kvs) > 0 {
+			pk := x.Parse(kvs[0].Key)
+			if pk != nil && len(pk.Attr) > 0 {
+				for _, kv := range kvs {
+					addTo(pk.Attr, int64(kv.Size()))
+				}
+			}
 		}
 
 		return &bpb.KVList{Kv: kvs}, err
@@ -1211,9 +1215,6 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 
-	if num := posting.Oracle().NumPendingTxns(); num > 0 {
-		glog.Infof("Num pending txns: %d", num)
-	}
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
