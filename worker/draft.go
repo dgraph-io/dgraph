@@ -62,8 +62,6 @@ type node struct {
 	gid      uint32
 	closer   *y.Closer
 
-	lastCommitTs uint64 // Only used to ensure that our commit Ts is monotonically increasing.
-
 	streaming int32 // Used to avoid calculating snapshot
 
 	canCampaign bool
@@ -540,12 +538,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	for _, status := range delta.Txns {
-		if status.CommitTs > 0 && status.CommitTs < n.lastCommitTs {
-			glog.Errorf("Lastcommit %d > current %d. This would cause some commits to be lost.",
-				n.lastCommitTs, status.CommitTs)
-		}
 		toDisk(status.StartTs, status.CommitTs)
-		n.lastCommitTs = status.CommitTs
 	}
 	if err := writer.Flush(); err != nil {
 		return x.Errorf("Error while flushing to disk: %v", err)
@@ -675,6 +668,65 @@ func (n *node) rampMeter() {
 		time.Sleep(3 * time.Millisecond)
 	}
 }
+
+func (n *node) findRaftProgress() (uint64, error) {
+	var applied uint64
+	err := pstore.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(x.RaftKey())
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			var snap pb.Snapshot
+			if err := snap.Unmarshal(val); err != nil {
+				return err
+			}
+			applied = snap.Index
+			return nil
+		})
+	})
+	return applied, err
+}
+
+func (n *node) updateRaftProgress() error {
+	// Both leader and followers can independently update their Raft progress. We don't store
+	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
+	// has already applied, to speed up things on a restart.
+	snap, err := n.calculateSnapshot(10)
+	if err != nil {
+		return err
+	}
+	if snap == nil {
+		glog.V(1).Infof("No new Raft progress calculated. Done until: %d",
+			n.Applied.DoneUntil())
+		return nil
+	}
+
+	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
+	// stored applied.
+	applied, err := n.findRaftProgress()
+	if err != nil {
+		return err
+	}
+	if snap.Index <= applied {
+		return nil
+	}
+
+	data, err := snap.Marshal()
+	x.Check(err)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+
+	if err := txn.Set(x.RaftKey(), data); err != nil {
+		return err
+	}
+	if err := txn.CommitAt(1, nil); err != nil {
+		return err
+	}
+	glog.V(1).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	return nil
+}
+
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -699,24 +751,11 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	var applied uint64
-	err := pstore.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(x.RaftKey())
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			var snap pb.Snapshot
-			if err := snap.Unmarshal(val); err != nil {
-				return err
-			}
-			glog.Infof("Found Raft progress in p directory: %+v", snap)
-			applied = snap.Index
-			return nil
-		})
-	})
+	applied, err := n.findRaftProgress()
 	if err != nil {
-		glog.Errorf("While looking for Raft progress in p directory: %v", err)
+		glog.Errorf("While trying to find raft progress: %v", err)
+	} else {
+		glog.Infof("Found Raft progress in p directory: %d", applied)
 	}
 
 	for {
@@ -731,23 +770,8 @@ func (n *node) Run() {
 
 		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-
-			// Both leader and followers can independently calculate this snapshot. We don't store
-			// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
-			// has already applied, to speed up things on a restart.
-			if snap, err := n.calculateSnapshot(10); err != nil {
-				x.Errorf("While calculating snapshot for applied index: %v", err)
-			} else {
-				data, err := snap.Marshal()
-				x.Check(err)
-				txn := pstore.NewTransactionAt(math.MaxUint64, true)
-				if err := txn.Set(x.RaftKey(), data); err != nil {
-					glog.Errorf("Error while setting raft progress: %v", err)
-				}
-				if err := txn.CommitAt(1, nil); err != nil {
-					glog.Errorf("Error while committing raft progress: %v", err)
-				}
-				glog.V(1).Infof("[%x] Set Raft progress to %d", n.Id, snap.Index)
+			if err := n.updateRaftProgress(); err != nil {
+				glog.Errorf("While updating Raft progress: %v", err)
 			}
 
 			if leader {
