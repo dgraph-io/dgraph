@@ -32,7 +32,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 
-	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/chunk"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -162,8 +162,8 @@ func (ld *loader) mapStage() {
 	// Because mappers must handle chunks that may be from different input files, they must all
 	// assume the same data format, either RDF or JSON. Use the one specified by the user or by
 	// the first load file.
-	loadType := chunker.DataFormat(files[0], ld.opt.DataFormat)
-	if loadType == chunker.UnknownFormat {
+	loadType := chunk.DataFormat(files[0], ld.opt.DataFormat)
+	if loadType == chunk.UnknownFormat {
 		// Dont't try to detect JSON input in bulk loader.
 		fmt.Printf("Need --format=rdf or --format=json to load %s", files[0])
 		os.Exit(1)
@@ -187,10 +187,10 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done()
 
-			r, cleanup := chunker.FileReader(file)
+			r, cleanup := chunk.NewReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType)
+			chunker := chunk.NewChunker(loadType)
 			x.Check(chunker.Begin(r))
 			for {
 				chunkBuf, err := chunker.Chunk(r)

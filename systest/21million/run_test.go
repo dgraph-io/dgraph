@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/chunk"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
 
@@ -61,7 +61,7 @@ func TestQueries(t *testing.T) {
 		}
 
 		filename := path.Join(queryDir, file.Name())
-		reader, cleanup := chunker.FileReader(filename)
+		reader, cleanup := chunk.NewReader(filename)
 		bytes, err := ioutil.ReadAll(reader)
 		x.CheckfNoTrace(err)
 		contents := string(bytes[:])

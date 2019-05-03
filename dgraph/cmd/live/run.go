@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize/english"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
@@ -42,7 +43,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 
-	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/chunk"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
@@ -180,24 +181,24 @@ func (l *loader) uid(val string) string {
 func (l *loader) processFile(ctx context.Context, filename string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename)
+	rd, cleanup := chunk.NewReader(filename)
 	defer cleanup()
 
-	loadType := chunker.DataFormat(filename, opt.dataFormat)
-	if loadType == chunker.UnknownFormat {
-		if isJson, err := chunker.IsJSONData(rd); err == nil {
+	loadType := chunk.DataFormat(filename, opt.dataFormat)
+	if loadType == chunk.UnknownFormat {
+		if isJson, err := chunk.IsJSONData(rd); err == nil {
 			if isJson {
-				loadType = chunker.JsonFormat
+				loadType = chunk.JsonFormat
 			} else {
 				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
 			}
 		}
 	}
 
-	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
+	return l.processLoadFile(ctx, rd, chunk.NewChunker(loadType))
 }
 
-func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
+func (l *loader) processLoadFile(ctx context.Context, rd *chunk.Reader, ck chunk.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
 	for {
@@ -207,8 +208,13 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		default:
 		}
 
-		chunkBuf, err := ck.Chunk(rd)
-		l.processChunk(chunkBuf, ck)
+		chunk, err := ck.ChunkNew(rd)
+		if err == nil || err == io.EOF {
+			err = l.processChunk(chunk)
+			if err != nil {
+				return err
+			}
+		}
 		if err == io.EOF {
 			break
 		} else {
@@ -223,13 +229,15 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 // processChunk parses the rdf entries from the chunk, and group them into
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil || chunkBuf.Len() == 0 {
-		return
+func (l *loader) processChunk(chunk *chunk.Chunk) error {
+	if chunk == nil || chunk.Len() == 0 {
+		return nil
 	}
 
-	nqs, err := ck.Parse(chunkBuf)
-	x.CheckfNoTrace(err)
+	nqs, err := chunk.Parse()
+	if err != nil {
+		return err
+	}
 
 	batch := make([]*api.NQuad, 0, opt.batchSize)
 	for _, nq := range nqs {
@@ -255,6 +263,8 @@ func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
 	if len(batch) > 0 {
 		l.reqs <- api.Mutation{Set: batch}
 	}
+
+	return nil
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
@@ -317,7 +327,9 @@ func run() error {
 		return err
 	}
 
+	// Enable profiling with go tool pprof
 	go http.ListenAndServe("localhost:6060", nil)
+
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,
@@ -342,7 +354,7 @@ func run() error {
 	l := setup(bmOpts, dgraphClient)
 	defer l.zeroconn.Close()
 
-	if len(opt.schemaFile) > 0 {
+	if opt.schemaFile != "" {
 		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
@@ -362,8 +374,10 @@ func run() error {
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return fmt.Errorf("No data files found in %s", opt.dataFiles)
+	} else {
+		fmt.Printf("Found %d data %s to process\n", totalFiles,
+			english.PluralWord(totalFiles, "file", ""))
 	}
-	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
