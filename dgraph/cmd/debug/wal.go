@@ -106,7 +106,7 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 
 	pending := make(map[uint64]bool)
 	for startIdx < lastIdx-1 {
-		entries, err := store.Entries(startIdx, lastIdx, 64<<20 /* 64 MB Max Size */)
+		entries, err := store.Entries(startIdx, lastIdx+1, 64<<20 /* 64 MB Max Size */)
 		if err != nil {
 			fmt.Printf("Got error while retrieving entries: %v\n", err)
 			return
