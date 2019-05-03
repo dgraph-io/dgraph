@@ -36,7 +36,7 @@ import (
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1 := z.DgraphClientWithGroot("localhost:9180")
+	dg1 := z.DgraphClient("localhost:9180")
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
 	}))
@@ -68,7 +68,7 @@ func TestSnapshot(t *testing.T) {
 	err = z.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 := z.DgraphClientWithGroot("localhost:9182")
+	dg2 := z.DgraphClient("localhost:9182")
 	verifySnapshot(t, dg2, 600)
 
 	err = z.DockerStop("alpha2")
@@ -86,7 +86,7 @@ func TestSnapshot(t *testing.T) {
 	err = z.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 = z.DgraphClientWithGroot("localhost:9182")
+	dg2 = z.DgraphClient("localhost:9182")
 	verifySnapshot(t, dg2, 1200)
 }
 
@@ -117,7 +117,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {
 	snapPattern := `"snapshotTs":"([0-9]*)"`
 	for {
-		res, err := http.Get("http://localhost:6080/state")
+		res, err := http.Get("http://localhost:6180/state")
 		require.NoError(t, err)
 		body, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()
