@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -56,6 +55,21 @@ func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	commitTransaction(t, edge, l)
 }
 
+func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
+	t.Logf("%s", rdf)
+	_, err := dg.NewTxn().Mutate(context.Background(),
+		&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
+	require.NoError(t, err)
+
+}
+
+func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
+	t.Logf("%s", rdf)
+	_, err := dg.NewTxn().Mutate(context.Background(),
+		&api.Mutation{DelNquads: []byte(rdf), CommitNow: true})
+	require.NoError(t, err)
+
+}
 func getOrCreate(key []byte) *posting.List {
 	l, err := posting.GetNoStore(key)
 	x.Checkf(err, "While calling posting.Get")
@@ -106,13 +120,13 @@ func populateClusterGraph(t *testing.T, dg *dgo.Dgraph) {
 	data1 := [][]int{{10, 23}, {11, 23}, {12, 23}, {12, 25}, {12, 26}, {10, 31}, {12, 31}}
 	for _, pair := range data1 {
 		rdf := fmt.Sprintf(`<0x%x> <neighbour> <0x%x> .`, pair[0], pair[1])
-		runClusterSet(t, dg, rdf)
+		setClusterEdge(t, dg, rdf)
 	}
 
 	data2 := map[int]string{12: "photon", 10: "photon"}
 	for key, val := range data2 {
 		rdf := fmt.Sprintf(`<0x%x> <friend> %q .`, key, val)
-		runClusterSet(t, dg, rdf)
+		setClusterEdge(t, dg, rdf)
 	}
 }
 
@@ -231,99 +245,72 @@ func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*ap
 	return resp, err
 }
 
-// Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
+// Index-related test. Similar to TestProcessTaskIndex but we call MergeL:wq
+// ists only
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to BadgerDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	initTest(t, `friend:string @index(term) .`)
+	dg := initClusterTest(t, `friend:string @index(term) .`)
 
-	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := helpProcessTask(query, 1)
+	resp, err := runQuery(dg, "friend", nil, []string{"anyofterms", "", "hey photon"})
 	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{},
-		{10, 12},
-	}, algo.ToUintsListForTest(r.UidMatrix))
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xa" },
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &pb.DirectedEdge{
-		Value:  []byte("notphotonExtra"),
-		Label:  "author0",
-		Attr:   "friend",
-		Entity: 12,
-	}
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
-	edge.Value = []byte("notphoton")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = helpProcessTask(query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
 	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xa" },
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
-	require.EqualValues(t, [][]uint64{
-		{},
-		{12},
-		{},
-		{10},
-	}, algo.ToUintsListForTest(r.UidMatrix))
-
-	// Try deleting.
-	edge = &pb.DirectedEdge{
-		Value:  []byte("photon"),
-		Label:  "author0",
-		Attr:   "friend",
-		Entity: 10,
-	}
-	// Redundant deletes.
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	// Try redundant deletes.
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
 
 	// Delete followed by set.
-	edge.Entity = 12
-	edge.Value = []byte("notphoton")
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
-	edge.Value = []byte("ignored")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "photon notphoton ignored"})
 	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 
-	require.EqualValues(t, [][]uint64{
-		{12},
-		{},
-		{},
-	}, algo.ToUintsListForTest(r.UidMatrix))
-
-	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = helpProcessTask(query, 1)
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "photon notphoton ignored"})
 	require.NoError(t, err)
-
-	require.EqualValues(t, [][]uint64{
-		{12},
-		{},
-		{},
-	}, algo.ToUintsListForTest(r.UidMatrix))
-}
-
-func runClusterSet(t *testing.T, dg *dgo.Dgraph, rdf string) {
-	t.Logf("%s", rdf)
-	_, err := dg.NewTxn().Mutate(context.Background(),
-		&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
-	require.NoError(t, err)
-
-}
-
-func runClusterDel(t *testing.T, dg *dgo.Dgraph, rdf string) {
-	t.Logf("%s", rdf)
-	_, err := dg.NewTxn().Mutate(context.Background(),
-		&api.Mutation{DelNquads: []byte(rdf), CommitNow: true})
-	require.NoError(t, err)
-
+	require.JSONEq(t, `{
+		  "q": [
+		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
 }
 
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
@@ -344,8 +331,8 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	runClusterSet(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
-	runClusterSet(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphotonExtra"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
 	resp, err = runQuery(dg, "friend", nil,
@@ -361,12 +348,12 @@ func TestProcessTaskIndex(t *testing.T) {
 	)
 
 	// Try redundant deletes.
-	runClusterDel(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
-	runClusterDel(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 10, "photon"))
 
 	// Delete followed by set.
-	runClusterDel(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
-	runClusterSet(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
+	delClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
+	setClusterEdge(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
 	resp, err = runQuery(dg, "friend", nil,
