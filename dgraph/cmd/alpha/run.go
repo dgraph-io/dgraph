@@ -107,8 +107,8 @@ they form a Raft group and provide synchronous replication.
 			" lower this number, the more frequent snapshot creation would be."+
 			" Also determines how often Rollups would happen.")
 	flag.String("abort_older_than", "5m",
-		"Abort any pending transactions older than this duration. The liveness of transaction"+
-			" is determined based on the last mutation ran by the transaction.")
+		"Abort any pending transactions older than this duration. The liveness of a"+
+			" transaction is determined by its last mutation.")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
