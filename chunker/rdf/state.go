@@ -202,7 +202,7 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 		return r == dot || isPNChar(r)
 	})
 	if validRune && lastAccRune == dot {
-		return l.Errorf("Can not end %v with '.'", styp)
+		return l.Errorf("Cannot end %v with '.'", styp)
 	}
 
 	r = l.Peek()

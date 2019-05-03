@@ -19,6 +19,7 @@ package lex
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -202,10 +203,11 @@ func (l *Lexer) Run(f StateFn) *Lexer {
 
 // Errorf returns the error state function.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
+	lines := strings.Split(l.Input, "\n")
 	l.items = append(l.items, Item{
 		Typ: ItemError,
-		Val: fmt.Sprintf("while lexing %v at line %d column %d: "+format,
-			append([]interface{}{l.Input, l.Line, l.Column}, args...)...),
+		Val: fmt.Sprintf("while lexing line %d column %d: %v: "+format,
+			append([]interface{}{l.Line, l.Column, lines[l.Line-1]}, args...)...),
 		line:   l.Line,
 		column: l.Column,
 	})
