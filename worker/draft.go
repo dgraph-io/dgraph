@@ -963,7 +963,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		if amLeader {
 			pk := x.Parse(kv.Key)
 			if pk != nil && len(pk.Attr) > 0 {
-				addTo(attr, int64(kv.Size()))
+				addTo(pk.Attr, int64(kv.Size()))
 			}
 		}
 		return listWrap(kv), err
