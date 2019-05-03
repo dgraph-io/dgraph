@@ -699,7 +699,26 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	var snapshotLoops uint64
+	var applied uint64
+	err := pstore.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(x.RaftKey())
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			var snap pb.Snapshot
+			if err := snap.Unmarshal(val); err != nil {
+				return err
+			}
+			glog.Infof("Found Raft progress in p directory: %+v", snap)
+			applied = snap.Index
+			return nil
+		})
+	})
+	if err != nil {
+		glog.Errorf("While looking for Raft progress in p directory: %v", err)
+	}
+
 	for {
 		select {
 		case <-done:
@@ -712,23 +731,38 @@ func (n *node) Run() {
 
 		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-			if leader {
-				// We try to take a snapshot every slow tick duration, with a 1000 discard entries.
-				// But, once a while, we take a snapshot with 10 discard entries. This avoids the
-				// scenario where after bringing up an Alpha, and doing a hundred schema updates, we
-				// don't take any snapshots because there are not enough updates (discardN=10),
-				// which then really slows down restarts. At the same time, by checking more
-				// frequently, we can quickly take a snapshot if a lot of mutations are coming in
-				// fast (discardN=1000).
-				discardN := 1000
-				if snapshotLoops%5 == 0 {
-					discardN = 10
+
+			// Both leader and followers can independently calculate this snapshot. We don't store
+			// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
+			// has already applied, to speed up things on a restart.
+			if snap, err := n.calculateSnapshot(10); err != nil {
+				x.Errorf("While calculating snapshot for applied index: %v", err)
+			} else {
+				data, err := snap.Marshal()
+				x.Check(err)
+				txn := pstore.NewTransactionAt(math.MaxUint64, true)
+				if err := txn.Set(x.RaftKey(), data); err != nil {
+					glog.Errorf("Error while setting raft progress: %v", err)
 				}
-				snapshotLoops++
+				if err := txn.CommitAt(1, nil); err != nil {
+					glog.Errorf("Error while committing raft progress: %v", err)
+				}
+				glog.V(1).Infof("[%x] Set Raft progress to %d", n.Id, snap.Index)
+			}
+
+			if leader {
+				// We keep track of the applied index in the p directory. Even if we don't take
+				// snapshot for a while and let the Raft logs grow and restart, we would not have to
+				// run all the log entries, because we can tell Raft.Config to set Applied to that
+				// index.
+				// This applied index tracking also covers the case when we have a big index
+				// rebuild. The rebuild would be tracked just like others and would not need to be
+				// replayed after a restart, because the Applied config would let us skip right
+				// through it.
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(discardN); err != nil {
+				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
 					x.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
@@ -843,6 +877,10 @@ func (n *node) Run() {
 
 				} else if len(entry.Data) == 0 {
 					n.elog.Printf("Found empty data at index: %d", entry.Index)
+					n.Applied.Done(entry.Index)
+
+				} else if entry.Index < applied {
+					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 
 				} else {
@@ -1044,7 +1082,6 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 
 	// Let's propose the txn updates received from Zero. This is important because there are edge
 	// cases where a txn status might have been missed by the group.
-	glog.Infof("TryAbort returned with delta: %+v\n", delta)
 	aborted := &pb.OracleDelta{}
 	for _, txn := range delta.Txns {
 		// Only pick the aborts. DO NOT propose the commits. They must come in the right order via
@@ -1073,14 +1110,14 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	starts := posting.Oracle().TxnOlderThan(5 * time.Minute)
+	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
 		return
 	}
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:

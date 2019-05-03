@@ -36,6 +36,7 @@ const (
 	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
+	byteRaft      = byte(0xff)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -46,6 +47,13 @@ func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) == copy(rest, attr))
 
 	return rest[len(attr):]
+}
+
+func RaftKey() []byte {
+	buf := make([]byte, 5)
+	buf[0] = byteRaft
+	AssertTrue(4 == copy(buf[1:5], []byte("raft")))
+	return buf
 }
 
 // SchemaKey returns schema key for given attribute. Schema keys are stored
