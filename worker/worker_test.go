@@ -140,9 +140,9 @@ func helpProcessTask(query *pb.Query, gid uint32) (*pb.Result, error) {
 }
 
 func TestProcessTask(t *testing.T) {
-	initClusterTest(t, `neighbour: [uid] .`)
+	dg := initClusterTest(t, `neighbour: [uid] .`)
 
-	resp, err := runQuery("neighbour", []uint64{10, 11, 12}, nil)
+	resp, err := runQuery(dg, "neighbour", []uint64{10, 11, 12}, nil)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
 		  "q": [
@@ -194,7 +194,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *pb.Query {
 	return q
 }
 
-func runQuery(attr string, uids []uint64, srcFunc []string) (*api.Response, error) {
+func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*api.Response, error) {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 
 	var query string
@@ -225,7 +225,6 @@ func runQuery(attr string, uids []uint64, srcFunc []string) (*api.Response, erro
 	}
 
 	fmt.Fprintf(os.Stderr, "%s\n", query)
-	dg := z.DgraphClientWithGroot(z.SockAddr)
 	resp, err := z.RetryQuery(dg, query)
 	fmt.Fprintf(os.Stderr, "%s\n", string(resp.Json))
 
@@ -332,7 +331,7 @@ func runClusterDel(t *testing.T, dg *dgo.Dgraph, rdf string) {
 func TestProcessTaskIndex(t *testing.T) {
 	dg := initClusterTest(t, `friend:string @index(term) .`)
 
-	resp, err := runQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
+	resp, err := runQuery(dg, "friend", nil, []string{"anyofterms", "", "hey photon"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
 		  "q": [
@@ -349,7 +348,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	runClusterSet(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "notphoton"))
 
 	// Issue a similar query.
-	resp, err = runQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
 		  "q": [
@@ -369,7 +369,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	runClusterSet(t, dg, fmt.Sprintf("<0x%x> <friend> %q .", 12, "ignored"))
 
 	// Issue a similar query.
-	resp, err = runQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
+	resp, err = runQuery(dg, "friend", nil,
+		[]string{"anyofterms", "", "photon notphoton ignored"})
 	require.NoError(t, err)
 	require.JSONEq(t, `{
 		  "q": [
