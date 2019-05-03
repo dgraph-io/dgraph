@@ -700,8 +700,6 @@ func (n *node) updateRaftProgress() error {
 		return err
 	}
 	if snap == nil {
-		glog.V(1).Infof("No new Raft progress calculated. Done until: %d",
-			n.Applied.DoneUntil())
 		return nil
 	}
 
