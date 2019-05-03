@@ -16,7 +16,10 @@
 
 package x
 
-import "net"
+import (
+	"net"
+	"time"
+)
 
 type Options struct {
 	DebugMode      bool
@@ -43,6 +46,8 @@ type WorkerOptions struct {
 	MaxRetries          int
 	StrictMutations     bool
 	AclEnabled          bool
+	AbortOlderThan      time.Duration
+	SnapshotAfter       int
 }
 
 var WorkerConfig WorkerOptions
