@@ -695,7 +695,7 @@ func (n *node) updateRaftProgress() error {
 	// Both leader and followers can independently update their Raft progress. We don't store
 	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
 	// has already applied, to speed up things on a restart.
-	snap, err := n.calculateSnapshot(10)
+	snap, err := n.calculateSnapshot(10) // 10 is a randomly chosen small number.
 	if err != nil {
 		return err
 	}
