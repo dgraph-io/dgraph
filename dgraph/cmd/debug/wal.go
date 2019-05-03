@@ -205,9 +205,10 @@ func overwriteSnapshot(db *badger.DB, store *raftwal.DiskStorage) error {
 	fmt.Printf("Setting snapshot to: %+v\n", dsnap)
 	data, err := dsnap.Marshal()
 	x.Check(err)
-	err = store.CreateSnapshot(dsnap.Index, &cs, data)
-	fmt.Printf("Created snapshot with error: %v\n", err)
-	return nil
+	if err = store.CreateSnapshot(dsnap.Index, &cs, data); err != nil {
+		fmt.Printf("Created snapshot with error: %v\n", err)
+	}
+	return err
 }
 
 func parseWal(db *badger.DB) error {
@@ -259,8 +260,7 @@ func parseWal(db *badger.DB) error {
 			store := raftwal.Init(db, rid, gid)
 			switch {
 			case len(opt.wsetSnapshot) > 0:
-				err := overwriteSnapshot(db, store)
-				fmt.Printf("Overwrite Snapshot finished with error: %v\n", err)
+				return overwriteSnapshot(db, store)
 
 			default:
 				printRaft(db, store)
