@@ -99,6 +99,15 @@ they form a Raft group and provide synchronous replication.
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
+	// Snapshot and Transactions.
+	flag.Int("snapshot_after", 10000,
+		"Create a new Raft snapshot after this many number of Raft entries. The"+
+			" lower this number, the more frequent snapshot creation would be."+
+			" Also determines how often Rollups would happen.")
+	flag.String("abort_older_than", "5m",
+		"Abort any pending transactions older than this duration. The liveness of a"+
+			" transaction is determined by its last mutation.")
+
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
@@ -436,6 +445,10 @@ func run() {
 
 	ips, err := parseIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
+
+	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
+	x.Check(err)
+
 	worker.Config = worker.Options{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
@@ -447,6 +460,8 @@ func run() {
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
+		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
+		AbortOlderThan:      abortDur,
 	}
 
 	x.LoadTLSConfig(&tlsConf, Alpha.Conf, tlsNodeCert, tlsNodeKey)

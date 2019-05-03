@@ -34,6 +34,8 @@ const (
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
+	byteType      = byte(0x02)
+	byteRaft      = byte(0xff)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -44,6 +46,13 @@ func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) == copy(rest, attr))
 
 	return rest[len(attr):]
+}
+
+func RaftKey() []byte {
+	buf := make([]byte, 5)
+	buf[0] = byteRaft
+	AssertTrue(4 == copy(buf[1:5], []byte("raft")))
+	return buf
 }
 
 // SchemaKey returns schema key for given attribute,
@@ -121,6 +130,10 @@ type ParsedKey struct {
 	Term       string
 	Count      uint32
 	bytePrefix byte
+}
+
+func (p ParsedKey) IsRaft() bool {
+	return p.bytePrefix == byteRaft
 }
 
 func (p ParsedKey) IsData() bool {
@@ -256,6 +269,10 @@ func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
 	p.bytePrefix = key[0]
+	if p.bytePrefix == byteRaft {
+		return p
+	}
+
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 

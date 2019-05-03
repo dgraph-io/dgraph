@@ -16,7 +16,10 @@
 
 package worker
 
-import "net"
+import (
+	"net"
+	"time"
+)
 
 type IPRange struct {
 	Lower, Upper net.IP
@@ -34,6 +37,8 @@ type Options struct {
 	WhiteListedIPRanges []IPRange
 	MaxRetries          int
 	StrictMutations     bool
+	SnapshotAfter       int
+	AbortOlderThan      time.Duration
 }
 
 var Config Options
