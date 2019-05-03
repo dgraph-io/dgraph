@@ -143,7 +143,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
-	go gr.informZeroAboutTablets()
+	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
 }
 
@@ -176,7 +176,17 @@ func (g *groupi) informZeroAboutTablets() {
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
-		g.upsertSchema(s)
+		// g.upsertSchema(s)
+		if gid, err := g.BelongsToReadOnly(s.Predicate); err != nil {
+			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
+				s.Predicate)
+			g.upsertSchema(s)
+		} else if gid == 0 {
+			g.upsertSchema(s)
+		} else {
+			// The schema for this predicate has already been proposed.
+			continue
+		}
 	}
 }
 
