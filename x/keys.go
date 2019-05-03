@@ -35,7 +35,7 @@ const (
 	defaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-	byteRaft      = byte(0xff)
+	ByteRaft      = byte(0xff)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -50,7 +50,7 @@ func writeAttr(buf []byte, attr string) []byte {
 
 func RaftKey() []byte {
 	buf := make([]byte, 5)
-	buf[0] = byteRaft
+	buf[0] = ByteRaft
 	AssertTrue(4 == copy(buf[1:5], []byte("raft")))
 	return buf
 }
@@ -133,7 +133,7 @@ type ParsedKey struct {
 }
 
 func (p ParsedKey) IsRaft() bool {
-	return p.bytePrefix == byteRaft
+	return p.bytePrefix == ByteRaft
 }
 
 func (p ParsedKey) IsData() bool {
@@ -269,7 +269,7 @@ func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
 	p.bytePrefix = key[0]
-	if p.bytePrefix == byteRaft {
+	if p.bytePrefix == ByteRaft {
 		return p
 	}
 

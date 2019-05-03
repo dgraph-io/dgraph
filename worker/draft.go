@@ -666,7 +666,7 @@ func (n *node) updateRaftProgress() error {
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
 	defer txn.Discard()
 
-	if err := txn.Set(x.RaftKey(), data); err != nil {
+	if err := txn.SetWithMeta(x.RaftKey(), data, x.ByteRaft); err != nil {
 		return err
 	}
 	if err := txn.CommitAt(1, nil); err != nil {
@@ -948,6 +948,8 @@ func (n *node) rollupLists(readTs uint64) error {
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			addTo(item.Key(), item.EstimatedSize())
+			return false
+		case x.ByteRaft:
 			return false
 		default:
 			return true
