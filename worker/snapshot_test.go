@@ -18,8 +18,8 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"regexp"
@@ -81,7 +81,7 @@ func TestSnapshot(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
-	snapshotTs = waitForSnapshot(t, snapshotTs)
+	_ = waitForSnapshot(t, snapshotTs)
 
 	err = z.DockerStart("alpha2")
 	require.NoError(t, err)
