@@ -137,7 +137,7 @@ func runJsonMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	_, _, err := runWithRetries("PUT", addr+"/alter", s, nil)
+	_, _, err := runWithRetries("PUT", addr+"/alter", s)
 	if err != nil {
 		return fmt.Errorf("error while running request with retries: %v", err)
 	}
@@ -156,13 +156,13 @@ func alterSchemaWithRetry(s string) error {
 
 func dropAll() error {
 	op := `{"drop_all": true}`
-	_, _, err := runWithRetries("PUT", addr+"/alter", op, nil)
+	_, _, err := runWithRetries("PUT", addr+"/alter", op)
 	return err
 }
 
 func deletePredicate(pred string) error {
 	op := `{"drop_attr": "` + pred + `"}`
-	_, _, err := runWithRetries("PUT", addr+"/alter", op, nil)
+	_, _, err := runWithRetries("PUT", addr+"/alter", op)
 	return err
 }
 

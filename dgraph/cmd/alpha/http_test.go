@@ -130,7 +130,7 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
 	}
 
-	_, body, err := runWithRetries("POST", url, q, nil)
+	_, body, err := runWithRetries("POST", url, q)
 	if err != nil {
 		return "", 0, err
 	}
@@ -150,20 +150,24 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 
 func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
 	ts uint64) ([]string, []string, uint64, error) {
+
 	url := addr + "/mutate"
+	separator := "?"
 	if ts != 0 {
-		url += "/" + strconv.FormatUint(ts, 10)
+		url += separator + "startTs=" + strconv.FormatUint(ts, 10)
+		separator = "&"
 	}
 	var keys []string
 	var preds []string
-	headers := make(map[string]string)
 	if isJson {
-		headers["X-Dgraph-MutationType"] = "json"
+		url += separator + "mutationType=json"
+		separator = "&"
 	}
 	if commitNow {
-		headers["X-Dgraph-CommitNow"] = "true"
+		url += separator + "commitNow=true"
+		separator = "&"
 	}
-	_, body, err := runWithRetries("POST", url, m, headers)
+	_, body, err := runWithRetries("POST", url, m)
 	if err != nil {
 		return keys, preds, 0, err
 	}
@@ -175,24 +179,20 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	return r.Extensions.Txn.Keys, r.Extensions.Txn.Preds, startTs, nil
 }
 
-func createRequest(method, url string, body string, headers map[string]string) (*http.Request,
+func createRequest(method, url string, body string) (*http.Request,
 	error) {
 	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		return nil, err
 	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
 	return req, nil
 }
 
-func runWithRetries(method, url string, body string, headers map[string]string) (*x.QueryResWithData, []byte, error) {
-	req, err := createRequest(method, url, body, headers)
+func runWithRetries(method, url string, body string) (*x.QueryResWithData, []byte, error) {
+	req, err := createRequest(method, url, body)
 	if err != nil {
 		return nil, nil, err
 	}
-	// attach the headers
 
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
@@ -202,7 +202,7 @@ func runWithRetries(method, url string, body string, headers map[string]string) 
 		})
 
 		// create a new request since the previous request would have been closed upon the err
-		retryReq, err := createRequest(method, url, body, headers)
+		retryReq, err := createRequest(method, url, body)
 		if err != nil {
 			return nil, nil, err
 		}
