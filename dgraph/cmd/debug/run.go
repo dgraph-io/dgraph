@@ -62,6 +62,7 @@ type flagOptions struct {
 	// Options related to the WAL.
 	wdir           string
 	wtruncateUntil uint64
+	wsetSnapshot   string
 }
 
 func init() {
@@ -91,6 +92,8 @@ func init() {
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
+	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
+		"Set snapshot term,index,readts to this.")
 }
 
 func toInt(o *pb.Posting) int {
@@ -884,7 +887,61 @@ func parseWal(db *badger.DB) error {
 		for gid := range gids {
 			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
 			store := raftwal.Init(db, rid, gid)
-			printRaft(store)
+			switch {
+			case len(opt.wsetSnapshot) > 0:
+				snap, err := store.Snapshot()
+				x.Checkf(err, "Unable to get snapshot")
+				cs := snap.Metadata.ConfState
+				fmt.Printf("Confstate: %+v\n", cs)
+
+				var dsnap pb.Snapshot
+				if len(snap.Data) > 0 {
+					x.Check(dsnap.Unmarshal(snap.Data))
+				}
+				fmt.Printf("Previous snapshot: %+v\n", dsnap)
+
+				splits := strings.Split(opt.wsetSnapshot, ",")
+				x.AssertTruef(len(splits) == 3,
+					"Expected term,index,readts in string. Got: %s", splits)
+				term, err := strconv.Atoi(splits[0])
+				x.Check(err)
+				index, err := strconv.Atoi(splits[1])
+				x.Check(err)
+				readTs, err := strconv.Atoi(splits[2])
+
+				ent := raftpb.Entry{
+					Term:  uint64(term),
+					Index: uint64(index),
+					Type:  raftpb.EntryNormal,
+				}
+				fmt.Printf("Using term: %d , index: %d , readTs : %d\n", term, index, readTs)
+				if dsnap.Index >= ent.Index {
+					fmt.Printf("Older snapshot is >= index %d", ent.Index)
+					return nil
+				}
+
+				// We need to write the Raft entry first.
+				fmt.Printf("Setting entry: %+v\n", ent)
+				err = db.Update(func(txn *badger.Txn) error {
+					data, err := ent.Marshal()
+					if err != nil {
+						return err
+					}
+					return txn.Set(store.EntryKey(ent.Index), data)
+				})
+				x.Check(err)
+
+				dsnap.Index = uint64(index)
+				dsnap.ReadTs = uint64(readTs)
+
+				fmt.Printf("Setting snapshot to: %+v\n", dsnap)
+				data, err := dsnap.Marshal()
+				x.Check(err)
+				err = store.CreateSnapshot(dsnap.Index, &cs, data)
+				fmt.Printf("Created snapshot with error: %v\n", err)
+			default:
+				printRaft(store)
+			}
 		}
 	}
 	return nil
