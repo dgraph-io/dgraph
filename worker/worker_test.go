@@ -59,14 +59,12 @@ func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	_, err := dg.NewTxn().Mutate(context.Background(),
 		&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 	require.NoError(t, err)
-
 }
 
 func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	_, err := dg.NewTxn().Mutate(context.Background(),
 		&api.Mutation{DelNquads: []byte(rdf), CommitNow: true})
 	require.NoError(t, err)
-
 }
 func getOrCreate(key []byte) *posting.List {
 	l, err := posting.GetNoStore(key)
