@@ -752,8 +752,8 @@ func run() {
 	defer db.Close()
 
 	if isWal {
-		if err := parseWal(db); err != nil {
-			fmt.Printf("\nGot error while parsing WAL: %v\n", err)
+		if err := handleWal(db); err != nil {
+			fmt.Printf("\nGot error while handling WAL: %v\n", err)
 		}
 		fmt.Println("Done")
 		// WAL can't execute the getMinMax function, so we need to deal with it

@@ -211,7 +211,7 @@ func overwriteSnapshot(db *badger.DB, store *raftwal.DiskStorage) error {
 	return err
 }
 
-func parseWal(db *badger.DB) error {
+func handleWal(db *badger.DB) error {
 	rids := make(map[uint64]bool)
 	gids := make(map[uint32]bool)
 
