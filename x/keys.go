@@ -144,6 +144,10 @@ type ParsedKey struct {
 	bytePrefix byte
 }
 
+func (p ParsedKey) IsRaft() bool {
+	return p.bytePrefix == byteRaft
+}
+
 func (p ParsedKey) IsData() bool {
 	return p.bytePrefix == DefaultPrefix && p.byteType == ByteData
 }
@@ -303,6 +307,10 @@ func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
 	p.bytePrefix = key[0]
+	if p.bytePrefix == byteRaft {
+		return p
+	}
+
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 
