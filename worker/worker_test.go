@@ -56,7 +56,6 @@ func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 }
 
 func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
-	t.Logf("%s", rdf)
 	_, err := dg.NewTxn().Mutate(context.Background(),
 		&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 	require.NoError(t, err)
@@ -64,7 +63,6 @@ func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 }
 
 func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
-	t.Logf("%s", rdf)
 	_, err := dg.NewTxn().Mutate(context.Background(),
 		&api.Mutation{DelNquads: []byte(rdf), CommitNow: true})
 	require.NoError(t, err)
@@ -140,7 +138,6 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 	dg := z.DgraphClientWithGroot(z.SockAddr)
 	z.DropAll(t, dg)
 
-	fmt.Fprintf(os.Stderr, "%s", schemaStr)
 	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
 	populateClusterGraph(t, dg)
@@ -238,9 +235,7 @@ func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*ap
 			}`, srcFunc[0], attr, langs, args)
 	}
 
-	fmt.Fprintf(os.Stderr, "%s\n", query)
 	resp, err := z.RetryQuery(dg, query)
-	fmt.Fprintf(os.Stderr, "%s\n", string(resp.Json))
 
 	return resp, err
 }
