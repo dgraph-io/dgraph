@@ -301,19 +301,54 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := readRequest(w, r)
-	if m == nil {
+	body := readRequest(w, r)
+	if body == nil {
 		return
 	}
 
+	// read parameters from body or URL
+	var params struct {
+		MutationType string `json:"mutationType"`
+		CommitNow    bool   `json:"commitNow"`
+		StartTs      uint64 `json:"startTs"`
+		Query        []byte `json:"query"`
+	}
+
+	contentType := r.Header.Get("Content-Type")
+	switch strings.ToLower(contentType) {
+	case "application/json":
+		if err := json.Unmarshal(body, &params); err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest,
+				"Error while unmarshalling body into json object")
+			return
+		}
+
+	// when content type is marked as application/graphql
+	default:
+		var err error
+		params.MutationType = r.URL.Query().Get("mutationType")
+		params.CommitNow, err = parseBool(r.URL.Query().Get("commitNow"), "commitNow")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		params.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		params.Query = body
+	}
+
+	// start parsing the query
 	parseStart := time.Now()
 
 	var mu *api.Mutation
 	var err error
-	if mType := r.Header.Get("X-Dgraph-MutationType"); mType == "json" {
+	if params.MutationType == "json" {
 		// Parse JSON.
 		ms := make(map[string]*skipJSONUnmarshal)
-		err := json.Unmarshal(m, &ms)
+		err := json.Unmarshal(params.Query, &ms)
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
@@ -328,35 +363,21 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Parse N-Quads.
-		mu, err = gql.ParseMutation(string(m))
+		mu, err = gql.ParseMutation(string(params.Query))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
 	}
 
+	// parsing complete
 	parseEnd := time.Now()
 
-	// Maybe rename it so that default is CommitNow.
-	commit := r.Header.Get("X-Dgraph-CommitNow")
-	if commit != "" {
-		c, err := strconv.ParseBool(commit)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while parsing Commit header as bool")
-			return
-		}
-		mu.CommitNow = c
-	}
+	// setup muation query parameters
+	mu.CommitNow = params.CommitNow
+	mu.StartTs = params.StartTs
+
 	ctx := attachAccessJwt(context.Background(), r)
-
-	ts, err := extractStartTs(r.URL.Path)
-	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
-		return
-	}
-	mu.StartTs = ts
-
 	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
