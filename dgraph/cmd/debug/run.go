@@ -922,16 +922,29 @@ func parseWal(db *badger.DB) error {
 
 				// We need to write the Raft entry first.
 				fmt.Printf("Setting entry: %+v\n", ent)
+				hs := raftpb.HardState{
+					Term:   ent.Term,
+					Commit: ent.Index,
+				}
+				fmt.Printf("Setting hard state: %+v\n", hs)
 				err = db.Update(func(txn *badger.Txn) error {
 					data, err := ent.Marshal()
 					if err != nil {
 						return err
 					}
-					return txn.Set(store.EntryKey(ent.Index), data)
+					if err = txn.Set(store.EntryKey(ent.Index), data); err != nil {
+						return err
+					}
+
+					data, err = hs.Marshal()
+					if err != nil {
+						return err
+					}
+					return txn.Set(store.HardStateKey(), data)
 				})
 				x.Check(err)
 
-				dsnap.Index = uint64(index)
+				dsnap.Index = ent.Index
 				dsnap.ReadTs = uint64(readTs)
 
 				fmt.Printf("Setting snapshot to: %+v\n", dsnap)
@@ -939,6 +952,7 @@ func parseWal(db *badger.DB) error {
 				x.Check(err)
 				err = store.CreateSnapshot(dsnap.Index, &cs, data)
 				fmt.Printf("Created snapshot with error: %v\n", err)
+
 			default:
 				printRaft(store)
 			}
