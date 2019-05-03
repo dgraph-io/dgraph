@@ -673,6 +673,9 @@ func (n *node) findRaftProgress() (uint64, error) {
 	var applied uint64
 	err := pstore.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(x.RaftKey())
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
