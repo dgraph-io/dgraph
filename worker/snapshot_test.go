@@ -107,6 +107,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 	require.NoError(t, err)
 
 	sum := 0
+	require.Equal(t, num, len(resMap["values"]))
 	for _, item := range resMap["values"] {
 		sum += item["value"]
 	}

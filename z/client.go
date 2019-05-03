@@ -187,7 +187,8 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
 	for {
 		_, err := dg.NewTxn().Mutate(context.Background(), mu)
-		if err != nil && strings.Contains(err.Error(), "Please retry") {
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "Tablet isn't being served by this instance")) {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
