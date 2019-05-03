@@ -238,8 +238,7 @@ func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*ap
 	return resp, err
 }
 
-// Index-related test. Similar to TestProcessTaskIndex but we call MergeL:wq
-// ists only
+// Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to BadgerDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
