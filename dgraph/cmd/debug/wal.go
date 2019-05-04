@@ -163,6 +163,7 @@ func overwriteSnapshot(db *badger.DB, store *raftwal.DiskStorage) error {
 	index, err := strconv.Atoi(splits[1])
 	x.Check(err)
 	readTs, err := strconv.Atoi(splits[2])
+	x.Check(err)
 
 	ent := raftpb.Entry{
 		Term:  uint64(term),

@@ -53,12 +53,12 @@ type exportFormat struct {
 }
 
 var exportFormats = map[string]exportFormat{
-	"json": exportFormat{
+	"json": {
 		ext:  ".json",
 		pre:  "[\n",
 		post: "\n]\n",
 	},
-	"rdf": exportFormat{
+	"rdf": {
 		ext:  ".rdf",
 		pre:  "",
 		post: "",
