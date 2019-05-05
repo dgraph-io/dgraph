@@ -86,7 +86,7 @@ func NewReader(file string) (*Reader, func()) {
 	return &rd, cleanup
 }
 
-// Offset returns the current position of the reader in the file or stream. Or alternatively,
+// ByteCount returns the current position of the reader in the file or stream. Or alternatively,
 // returns the number of bytes that have been read.
 func (r *Reader) Offset() uint64 {
 	return r.offset
@@ -137,10 +137,6 @@ func (r *Reader) ReadRune() (rune, int, error) {
 }
 
 func (r *Reader) UnreadRune() error {
-	if r.prevOffset == 0 {
-		return bufio.ErrInvalidUnreadRune
-	}
-
 	r.offset, r.line = r.prevOffset, r.prevLine
 	r.prevOffset, r.prevLine = 0, 0
 	return r.reader.UnreadRune()

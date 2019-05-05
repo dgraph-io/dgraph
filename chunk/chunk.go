@@ -26,6 +26,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
+
 	"github.com/dgraph-io/dgraph/chunk/json"
 	"github.com/dgraph-io/dgraph/chunk/rdf"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,13 +34,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Chunk holds a part of a load file read from a reader. ByteCount and LineCount hold the
+// number of bytes and lines that were read *prior* to the data in Buffer.
 type Chunk struct {
 	*bytes.Buffer
-	Offset    uint64
+	ByteCount uint64
 	LineCount uint32
 
-	// internal
-	ck Chunker
+	chunker Chunker
 }
 
 type Chunker interface {
@@ -47,7 +49,9 @@ type Chunker interface {
 	Chunk(r *Reader) (*bytes.Buffer, error)
 	ChunkNew(r *Reader) (*Chunk, error)
 	End(r *Reader) error
-	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) // FIXME replace with Chunk.Parse
+
+	parse(c *Chunk) ([]*api.NQuad, error)
 }
 
 type rdfChunker struct{}
@@ -58,6 +62,10 @@ const (
 	RdfFormat
 	JsonFormat
 )
+
+func (c *Chunk) Parse() ([]*api.NQuad, error) {
+	return c.chunker.parse(c)
+}
 
 func NewChunker(inputFormat int) Chunker {
 	switch inputFormat {
@@ -73,6 +81,13 @@ func NewChunker(inputFormat int) Chunker {
 // RDF files don't require any special processing at the beginning of the file.
 func (rdfChunker) Begin(r *Reader) error {
 	return nil
+}
+
+func (c rdfChunker) ChunkNew(r *Reader) (*Chunk, error) {
+	chunk := Chunk{chunker: c, ByteCount: r.Offset(), LineCount: r.LineCount()}
+	buf, err := c.Chunk(r)
+	chunk.Buffer = buf
+	return &chunk, err
 }
 
 // Chunk reads the input line by line until one of the following 3 conditions happens
@@ -111,13 +126,6 @@ func (rdfChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func (c rdfChunker) ChunkNew(r *Reader) (*Chunk, error) {
-	chunk := Chunk{ck: c, Offset: r.Offset(), LineCount: r.LineCount()}
-	buf, err := c.Chunk(r)
-	chunk.Buffer = buf
-	return &chunk, err
-}
-
 func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
@@ -134,7 +142,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		if err == rdf.ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
-			return nil, errors.Wrapf(err, "while parsing line %q", str)
+			return nil, err
 		}
 		nqs = append(nqs, &nq)
 	}
@@ -142,15 +150,15 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, nil
 }
 
-func (chunk *Chunk) Parse() ([]*api.NQuad, error) {
-	if chunk.Len() == 0 {
+func (rdfChunker) parse(c *Chunk) ([]*api.NQuad, error) {
+	if c.Len() == 0 {
 		return nil, io.EOF
 	}
 
 	nqs := make([]*api.NQuad, 0)
-	line := chunk.LineCount
-	for chunk.Len() > 0 {
-		str, err := chunk.ReadString('\n')
+	line := c.LineCount
+	for c.Len() > 0 {
+		str, err := c.ReadString('\n')
 		if err != nil && err != io.EOF {
 			x.Check(err)
 		}
@@ -160,7 +168,7 @@ func (chunk *Chunk) Parse() ([]*api.NQuad, error) {
 		if err == rdf.ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
-			return nil, fmt.Errorf("parsing line %d: %s", line, str)
+			return nil, fmt.Errorf("error parsing line %d: %s", line, str)
 		}
 		nqs = append(nqs, &nq)
 	}
@@ -189,6 +197,13 @@ func (jsonChunker) Begin(r *Reader) error {
 		return fmt.Errorf("JSON file must contain array. Found: %v", ch)
 	}
 	return nil
+}
+
+func (c jsonChunker) ChunkNew(r *Reader) (*Chunk, error) {
+	chunk := Chunk{chunker: c, ByteCount: r.Offset(), LineCount: r.LineCount()}
+	buf, err := c.Chunk(r)
+	chunk.Buffer = buf
+	return &chunk, err
 }
 
 func (jsonChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
@@ -258,13 +273,6 @@ func (jsonChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (c jsonChunker) ChunkNew(r *Reader) (*Chunk, error) {
-	chunk := Chunk{Offset: r.Offset(), LineCount: r.LineCount()}
-	buf, err := c.Chunk(r)
-	chunk.Buffer = buf
-	return &chunk, err
-}
-
 func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
@@ -279,7 +287,7 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, err
 }
 
-func (jsonChunker) ParseNew(chunk *Chunk) ([]*api.NQuad, error) {
+func (jsonChunker) parse(chunk *Chunk) ([]*api.NQuad, error) {
 	return nil, nil
 }
 
@@ -299,6 +307,9 @@ func slurpSpace(r *Reader) error {
 		if !unicode.IsSpace(ch) {
 			x.Check(r.UnreadRune())
 			return nil
+		}
+		if ch == '\n' {
+			r.line++
 		}
 	}
 }

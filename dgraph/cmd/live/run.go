@@ -209,12 +209,9 @@ func (l *loader) processLoadFile(ctx context.Context, rd *chunk.Reader, ck chunk
 		}
 
 		chunk, err := ck.ChunkNew(rd)
-		if err == nil || err == io.EOF {
-			err = l.processChunk(chunk)
-			if err != nil {
-				return err
-			}
-		}
+		fmt.Printf("[%d/%d] [%+v] CHUNK=%+v\n", chunk.ByteCount, chunk.LineCount, err, chunk)
+		time.Sleep(100 * time.Millisecond)
+		l.processChunk(chunk)
 		if err == io.EOF {
 			break
 		} else {
