@@ -24,30 +24,30 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type KeyType int
+type keyType int
 
 const (
-	NONE KeyType = iota
+	NONE keyType = iota
 	PRIMARY
 	MULTI
 )
 
 type DataType int
 
-type ColumnInfo struct {
+type columnInfo struct {
 	name     string
-	keyType  KeyType
+	keyType  keyType
 	dataType DataType
 }
 
-// FKConstraint represents a foreign key constraint
-type FKConstraint struct {
-	parts []*ConstraintPart
+// fkConstraint represents a foreign key constraint
+type fkConstraint struct {
+	parts []*constraintPart
 	// the referenced column names and their indices in the foreign table
 	foreignIndices []*ColumnIdx
 }
 
-type ConstraintPart struct {
+type constraintPart struct {
 	// the local table name
 	tableName string
 	// the local column name
@@ -58,20 +58,25 @@ type ConstraintPart struct {
 	remoteColumnName string
 }
 
-type TableInfo struct {
+// a tableInfo contains a SQL table's metadata such as the table name,
+// the info of each column etc
+type tableInfo struct {
 	tableName string
-	columns   map[string]*ColumnInfo
+	columns   map[string]*columnInfo
 
-	columnDataTypes []DataType // used by the RowMetaInfo when outputing rows
+	// The following 3 columns are used by the rowMeta when converting rows
+	columnDataTypes []DataType
+	columnNames     []string
+	predNames       []string
 
 	// the referenced tables by the current table through foreign key constraints
 	referencedTables map[string]interface{}
 
 	// a map from constraint names to constraints
-	foreignKeyConstraints map[string]*FKConstraint
+	foreignKeyConstraints map[string]*fkConstraint
 
 	// the list of foreign key constraints using this table as the target
-	cstSources []*FKConstraint
+	cstSources []*fkConstraint
 }
 
 func getDataType(dbType string) DataType {
@@ -83,14 +88,14 @@ func getDataType(dbType string) DataType {
 	return UNKNOWN
 }
 
-func getColumnInfo(fieldName string, dbType string) *ColumnInfo {
-	columnInfo := ColumnInfo{}
+func getColumnInfo(fieldName string, dbType string) *columnInfo {
+	columnInfo := columnInfo{}
 	columnInfo.name = fieldName
 	columnInfo.dataType = getDataType(dbType)
 	return &columnInfo
 }
 
-func getTableInfo(table string, database string, pool *sql.DB) (*TableInfo, error) {
+func getTableInfo(pool *sql.DB, table string, database string) (*tableInfo, error) {
 	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE from INFORMATION_SCHEMA.
 COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, table, database)
 	columnRows, err := pool.Query(query)
@@ -99,12 +104,14 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 	}
 	defer columnRows.Close()
 
-	tableInfo := &TableInfo{
+	tableInfo := &tableInfo{
 		tableName:             table,
-		columns:               make(map[string]*ColumnInfo),
+		columns:               make(map[string]*columnInfo),
+		columnNames:           make([]string, 0),
 		columnDataTypes:       make([]DataType, 0),
+		predNames:             make([]string, 0),
 		referencedTables:      make(map[string]interface{}),
-		foreignKeyConstraints: make(map[string]*FKConstraint),
+		foreignKeyConstraints: make(map[string]*fkConstraint),
 	}
 
 	for columnRows.Next() {
@@ -130,6 +137,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		// TODO, should store the column data types into the table info as an array
 		// and the RMI should simply get the data types from the table info
 		tableInfo.columns[fieldName] = getColumnInfo(fieldName, dbType)
+		tableInfo.columnNames = append(tableInfo.columnNames, fieldName)
 		tableInfo.columnDataTypes = append(tableInfo.columnDataTypes, getDataType(dbType))
 	}
 
@@ -183,15 +191,15 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		}
 
 		tableInfo.referencedTables[referencedTableName] = struct{}{}
-		var constraint *FKConstraint
+		var constraint *fkConstraint
 		var ok bool
 		if constraint, ok = tableInfo.foreignKeyConstraints[constraintName]; !ok {
-			constraint = &FKConstraint{
-				parts: make([]*ConstraintPart, 0),
+			constraint = &fkConstraint{
+				parts: make([]*constraintPart, 0),
 			}
 			tableInfo.foreignKeyConstraints[constraintName] = constraint
 		}
-		constraint.parts = append(constraint.parts, &ConstraintPart{
+		constraint.parts = append(constraint.parts, &constraintPart{
 			tableName:        table,
 			columnName:       columnName,
 			remoteTableName:  referencedTableName,
@@ -207,8 +215,8 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 // then we return a reversed constraint whose local table name is B with local columns
 // col4, col5, col6 whose remote table name is A, and remote columns are
 // col1, col2 and col3
-func validateAndGetReverse(constraint *FKConstraint) (string, *FKConstraint) {
-	reverseParts := make([]*ConstraintPart, 0)
+func validateAndGetReverse(constraint *fkConstraint) (string, *fkConstraint) {
+	reverseParts := make([]*constraintPart, 0)
 	// verify that within one constraint, the remote table names are the same
 	var remoteTableName string
 	for _, part := range constraint.parts {
@@ -217,14 +225,14 @@ func validateAndGetReverse(constraint *FKConstraint) (string, *FKConstraint) {
 		} else {
 			x.AssertTrue(part.remoteTableName == remoteTableName)
 		}
-		reverseParts = append(reverseParts, &ConstraintPart{
+		reverseParts = append(reverseParts, &constraintPart{
 			tableName:        part.remoteColumnName,
 			columnName:       part.remoteColumnName,
 			remoteTableName:  part.tableName,
 			remoteColumnName: part.columnName,
 		})
 	}
-	return remoteTableName, &FKConstraint{
+	return remoteTableName, &fkConstraint{
 		parts: reverseParts,
 	}
 }
@@ -232,7 +240,7 @@ func validateAndGetReverse(constraint *FKConstraint) (string, *FKConstraint) {
 // populateReferencedByColumns calculates the reverse links of
 // the data at tables[table name].foreignKeyReferences
 // and stores them in tables[table name].columns[column name].referencedBy
-func populateReferencedByColumns(tables map[string]*TableInfo) {
+func populateReferencedByColumns(tables map[string]*tableInfo) {
 	for _, tableInfo := range tables {
 		for _, constraint := range tableInfo.foreignKeyConstraints {
 			reverseTable, reverseConstraint := validateAndGetReverse(constraint)

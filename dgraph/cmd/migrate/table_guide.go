@@ -24,17 +24,17 @@ import (
 )
 
 const (
-	SEPERATOR = "_"
+	separator = "_"
 )
 
-// A BlankNodeG generates the unique blank node label that corresponds to a Dgraph uid.
+// A blankNodeGen generates the unique blank node label that corresponds to a Dgraph uid.
 // Values are passed to the genBlankNode method in the order of alphabetically sorted columns
-type BlankNodeG interface {
-	genBlankNode(info *TableInfo, values []interface{}) string
+type blankNodeGen interface {
+	genBlankNode(info *tableInfo, values []interface{}) string
 }
 
-// ColumnBNG generates blank node labels using values in the primary key columns
-type ColumnBNG struct {
+// columnBNGen generates blank node labels using values in the primary key columns
+type columnBNGen struct {
 	primaryKeyIndices []*ColumnIdx
 	separator         string
 }
@@ -44,9 +44,9 @@ type ColumnBNG struct {
 // Then a row with values John (f_name), Doe (l_name), Software Engineer (title)
 // would generate a blank node label _:person_John_Doe using values from the primary key columns
 // in the alphabetic order, that is f_name, l_name in this case.
-func (g *ColumnBNG) genBlankNode(info *TableInfo, values []interface{}) string {
+func (g *columnBNGen) genBlankNode(info *tableInfo, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
-		g.primaryKeyIndices = getColumnIndices(info, func(info *TableInfo, column string) bool {
+		g.primaryKeyIndices = getColumnIndices(info, func(info *tableInfo, column string) bool {
 			return info.columns[column].keyType == PRIMARY
 		})
 	}
@@ -57,7 +57,7 @@ func (g *ColumnBNG) genBlankNode(info *TableInfo, values []interface{}) string {
 		strVal, err := getValue(info.columns[columnIndex.name].dataType,
 			values[columnIndex.index])
 		if err != nil {
-			logger.Fatalf("unable to get string value from primary key column %s", columnIndex.name)
+			logger.Fatalf("Unable to get string value from primary key column %s", columnIndex.name)
 		}
 		valuesForKey = append(valuesForKey, strVal)
 	}
@@ -66,18 +66,18 @@ func (g *ColumnBNG) genBlankNode(info *TableInfo, values []interface{}) string {
 		strings.Join(valuesForKey, g.separator))
 }
 
-// A CounterBNG generates blank node labels using a row counter
-type CounterBNG struct {
+// A counterBNGen generates blank node labels using a row counter
+type counterBNGen struct {
 	rowCounter int
 	separator  string
 }
 
-func (g *CounterBNG) genBlankNode(info *TableInfo, values []interface{}) string {
+func (g *counterBNGen) genBlankNode(info *tableInfo, values []interface{}) string {
 	g.rowCounter++
 	return fmt.Sprintf("_:%s%s%d", info.tableName, g.separator, g.rowCounter)
 }
 
-// a ValuesRecorder remembers the mapping between an ref label and its blank node label
+// a valuesRecorder remembers the mapping between an ref label and its blank node label
 // For example, if the person table has the (fname, lname) as the primary key,
 // and there are two unique indices on the columns "license" and "ssn" respectively.
 // For the row fname (John), lname (Doe), license(101), ssn (999-999-9999)
@@ -87,14 +87,14 @@ func (g *CounterBNG) genBlankNode(info *TableInfo, values []interface{}) string 
 // It remembers these mapping so that if another table references the person table through foreign
 // key constraints, there is a way to look up the blank node labels and use it to create
 // a Dgraph link between the two rows in the two different tables.
-type ValuesRecorder interface {
-	record(info *TableInfo, values []interface{}, blankNodeLabel string)
+type valuesRecorder interface {
+	record(info *tableInfo, values []interface{}, blankNodeLabel string)
 	getBlankNode(indexLabel string) string
 }
 
-// for a given SQL row, the FKValuesRecorder records mappings from its foreign key target columns to
+// for a given SQL row, the fkValuesRecorder records mappings from its foreign key target columns to
 // the blank node of the row
-type FKValuesRecorder struct {
+type fkValuesRecorder struct {
 	refToBlank map[string]string
 	separator  string
 }
@@ -122,18 +122,18 @@ type FKValuesRecorder struct {
 // This mapping will be used later, when processing the salary table, to find the blank node label
 // _:person_John_Doe, which is used further to create the Dgraph link between a salary row
 // and the person row
-func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
+func (r *fkValuesRecorder) record(info *tableInfo, values []interface{},
 	blankNode string) {
 	for _, cst := range info.cstSources {
 		// for each foreign key cst, there should be a mapping
 		cstColumns := getCstColumns(cst)
 		cstColumnIndices := getColumnIndices(info,
-			func(info *TableInfo, column string) bool {
+			func(info *tableInfo, column string) bool {
 				_, ok := cstColumns[column]
 				return ok
 			})
 
-		refLabel, err := getRefLabel(&Ref{
+		refLabel, err := getRefLabel(&ref{
 			allColumns:       info.columns,
 			refColumnIndices: cstColumnIndices,
 			tableName:        info.tableName,
@@ -149,7 +149,7 @@ func (r *FKValuesRecorder) record(info *TableInfo, values []interface{},
 	}
 }
 
-func getCstColumns(cst *FKConstraint) map[string]interface{} {
+func getCstColumns(cst *fkConstraint) map[string]interface{} {
 	columnNames := make(map[string]interface{})
 	for _, part := range cst.parts {
 		columnNames[part.columnName] = struct{}{}
@@ -182,15 +182,15 @@ func getValue(dataType DataType, value interface{}) (string, error) {
 	}
 }
 
-type Ref struct {
-	allColumns       map[string]*ColumnInfo
+type ref struct {
+	allColumns       map[string]*columnInfo
 	refColumnIndices []*ColumnIdx
 	tableName        string
 	separator        string
 	colValues        []interface{}
 }
 
-func getRefLabel(ref *Ref) (string, error) {
+func getRefLabel(ref *ref) (string, error) {
 	columnNameAndValues := make([]string, 0)
 	for _, columnIdx := range ref.refColumnIndices {
 		colVal, err := getValue(ref.allColumns[columnIdx.name].dataType,
@@ -209,28 +209,28 @@ func getRefLabel(ref *Ref) (string, error) {
 		strings.Join(columnNameAndValues, ref.separator)), nil
 }
 
-func (r *FKValuesRecorder) getBlankNode(indexLabel string) string {
+func (r *fkValuesRecorder) getBlankNode(indexLabel string) string {
 	return r.refToBlank[indexLabel]
 }
 
-// an IdxG is responsible for generating Dgraph indices
-type IdxG interface {
-	genDgraphIndices(info *TableInfo) []string
+// an IdxGen is responsible for generating Dgraph indices
+type IdxGen interface {
+	genDgraphIndices(info *tableInfo) []string
 }
 
-// CompositeIdxG generates one Dgraph index per SQL table primary key
+// compositeIdxGen generates one Dgraph index per SQL table primary key
 // or index. For a composite index in SQL, e.g. (fname, lname) in the person table, we will create
 // separate indices for each individual column within Dgraph, e.g.
 // person_fname: string @index(exact) .
 // person_lname: string @index(exact) .
 // The reason is that Dgraph does not support composite indices as of now.
-type CompositeIdxG struct {
+type compositeIdxGen struct {
 	separator string
 }
 
-func (g *CompositeIdxG) genDgraphIndices(info *TableInfo) []string {
+func (g *compositeIdxGen) genDgraphIndices(info *tableInfo) []string {
 	dgraphIndexes := make([]string, 0)
-	sqlIndexedColumns := getColumnIndices(info, func(info *TableInfo, column string) bool {
+	sqlIndexedColumns := getColumnIndices(info, func(info *tableInfo, column string) bool {
 		return info.columns[column].keyType != NONE
 	})
 
@@ -259,7 +259,7 @@ func (g *CompositeIdxG) genDgraphIndices(info *TableInfo) []string {
 }
 
 func getPredFromConstraint(
-	tableName string, separator string, constraint *FKConstraint) string {
+	tableName string, separator string, constraint *fkConstraint) string {
 	columnNames := make([]string, 0)
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
@@ -267,56 +267,56 @@ func getPredFromConstraint(
 	return fmt.Sprintf("%s%s%s_", tableName, separator, strings.Join(columnNames, separator))
 }
 
-// a PredNameG is responsible for generating pred names based on a table's info and a column name
-type PredNameG interface {
-	genPredicateName(info *TableInfo, column string) string
+// a predNameGen is responsible for generating pred names based on a table's info and a column name
+type predNameGen interface {
+	genPredicateName(info *tableInfo, column string) string
 }
 
-type SimplePredNameG struct {
+type simplePredNameGen struct {
 	separator string
 }
 
-func (g *SimplePredNameG) genPredicateName(info *TableInfo, column string) string {
+func (g *simplePredNameGen) genPredicateName(info *tableInfo, column string) string {
 	return fmt.Sprintf("%s%s%s", info.tableName, g.separator, column)
 }
 
-type TableGuide struct {
-	blankNodeG     BlankNodeG
-	valuesRecorder ValuesRecorder
-	indexG         IdxG
-	predNameG      PredNameG
+type tableGuide struct {
+	blankNodeGen   blankNodeGen
+	valuesRecorder valuesRecorder
+	indexGen       IdxGen
+	predNameGen    predNameGen
 }
 
-func getBlankNodeG(tableInfo *TableInfo) BlankNodeG {
-	primaryKeyIndices := getColumnIndices(tableInfo, func(info *TableInfo, column string) bool {
+func getBlankNodeGen(ti *tableInfo) blankNodeGen {
+	primaryKeyIndices := getColumnIndices(ti, func(info *tableInfo, column string) bool {
 		return info.columns[column].keyType == PRIMARY
 	})
 
 	if len(primaryKeyIndices) > 0 {
-		return &ColumnBNG{
-			separator: SEPERATOR,
+		return &columnBNGen{
+			separator: separator,
 		}
 	}
 
-	return &CounterBNG{
-		separator: SEPERATOR,
+	return &counterBNGen{
+		separator: separator,
 	}
 }
 
-func getTableGuides(tables map[string]*TableInfo) map[string]*TableGuide {
-	tableGuides := make(map[string]*TableGuide)
+func getTableGuides(tables map[string]*tableInfo) map[string]*tableGuide {
+	tableGuides := make(map[string]*tableGuide)
 	for table, tableInfo := range tables {
-		guide := &TableGuide{
-			blankNodeG: getBlankNodeG(tableInfo),
-			valuesRecorder: &FKValuesRecorder{
+		guide := &tableGuide{
+			blankNodeGen: getBlankNodeGen(tableInfo),
+			valuesRecorder: &fkValuesRecorder{
 				refToBlank: make(map[string]string),
-				separator:  SEPERATOR,
+				separator:  separator,
 			},
-			indexG: &CompositeIdxG{
-				separator: SEPERATOR,
+			indexGen: &compositeIdxGen{
+				separator: separator,
 			},
-			predNameG: &SimplePredNameG{
-				separator: SEPERATOR,
+			predNameGen: &simplePredNameGen{
+				separator: separator,
 			},
 		}
 

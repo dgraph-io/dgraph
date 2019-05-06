@@ -17,9 +17,11 @@
 package migrate
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -29,6 +31,7 @@ import (
 var (
 	logger  = log.New(os.Stderr, "", 0)
 	Migrate x.SubCommand
+	quiet   bool // enabling quiet mode would suppress the warning logs
 )
 
 func init() {
@@ -51,8 +54,10 @@ func init() {
 	flag.StringP("mysql_db", "", "", "The MySQL database to import")
 	flag.StringP("mysql_tables", "", "", "The comma separated list of "+
 		"MySQL tables to import, an empty string means importing all tables in the database")
-	flag.StringP("output_schema", "s", "", "The schema output file")
-	flag.StringP("output_data", "o", "", "The data output file")
+	flag.StringP("output_schema", "s", "schema.txt", "The schema output file")
+	flag.StringP("output_data", "o", "sql.rdf", "The data output file")
+	flag.BoolP("quiet", "q", false, "Enable quiet mode to suppress "+
+		"the warning logs")
 }
 
 func run(conf *viper.Viper) error {
@@ -62,22 +67,30 @@ func run(conf *viper.Viper) error {
 	mysqlTables := conf.GetString("mysql_tables")
 	schemaOutput := conf.GetString("output_schema")
 	dataOutput := conf.GetString("output_data")
+	quiet = conf.GetBool("quiet")
 
 	if len(mysqlUser) == 0 {
-		logger.Fatalf("the mysql_user property should not be empty")
+		logger.Fatalf("The mysql_user property should not be empty.")
 	}
 	if len(mysqlDB) == 0 {
-		logger.Fatalf("the mysql_db property should not be empty")
+		logger.Fatalf("The mysql_db property should not be empty.")
 	}
 	if len(mysqlPassword) == 0 {
-		logger.Fatalf("the mysql_password property should not be empty")
+		logger.Fatalf("The mysql_password property should not be empty.")
 	}
 	if len(schemaOutput) == 0 {
-		logger.Fatalf("please use the --output_schema option to " +
-			"provide the schema output file")
+		logger.Fatalf("Please use the --output_schema option to " +
+			"provide the schema output file.")
 	}
 	if len(dataOutput) == 0 {
-		logger.Fatalf("please use the --output_data option to provide the data output file")
+		logger.Fatalf("Please use the --output_data option to provide the data output file.")
+	}
+
+	if err := checkFileOW(schemaOutput); err != nil {
+		return err
+	}
+	if err := checkFileOW(dataOutput); err != nil {
+		return err
 	}
 
 	initDataTypes()
@@ -93,9 +106,9 @@ func run(conf *viper.Viper) error {
 		return err
 	}
 
-	tableInfos := make(map[string]*TableInfo, 0)
+	tableInfos := make(map[string]*tableInfo, 0)
 	for _, table := range tablesToRead {
-		tableInfo, err := getTableInfo(table, mysqlDB, pool)
+		tableInfo, err := getTableInfo(pool, table, mysqlDB)
 		if err != nil {
 			return err
 		}
@@ -105,17 +118,42 @@ func run(conf *viper.Viper) error {
 
 	tableGuides := getTableGuides(tableInfos)
 
-	return generateSchemaAndData(&DumpMeta{
+	return generateSchemaAndData(&dumpMeta{
 		tableInfos:  tableInfos,
 		tableGuides: tableGuides,
 		sqlPool:     pool,
 	}, schemaOutput, dataOutput)
 }
 
+// checkFileOW checks if the program is trying to output to an existing file.
+// If so, we would need to ask the user whether we should overwrite the file or abort the program.
+func checkFileOW(file string) error {
+	if _, err := os.Stat(file); err == nil {
+		// The file already exists.
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			fmt.Printf("overwriting the file %s (y/N)? ", file)
+			text, _ := reader.ReadString('\n')
+			text = strings.TrimSpace(text)
+
+			if len(text) == 0 || strings.ToLower(text) == "n" {
+				return fmt.Errorf("not allowed to overwrite %s", file)
+			}
+			if strings.ToLower(text) == "y" {
+				return nil
+			}
+			fmt.Println("Please type y or n (hit enter to choose n)")
+		}
+	}
+
+	// The file does not exist.
+	return nil
+}
+
 // generateSchemaAndData opens the two files schemaOutput and dataOutput,
 // then it dumps schema to the writer backed by schemaOutput, and data in RDF format
 // to the writer backed by dataOutput
-func generateSchemaAndData(dumpMeta *DumpMeta, schemaOutput string, dataOutput string) error {
+func generateSchemaAndData(dumpMeta *dumpMeta, schemaOutput string, dataOutput string) error {
 	schemaWriter, schemaCancelFunc, err := getFileWriter(schemaOutput)
 	if err != nil {
 		return err
