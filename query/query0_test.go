@@ -1777,7 +1777,7 @@ func TestDefaultValueVar1(t *testing.T) {
 	{
 		var(func: has(pred)) {
 			n as uid
-			cnt as count(_predicate_)
+			cnt as count(nonexistent_pred)
 		}
 
 		data(func: uid(n)) @filter(gt(val(cnt), 4)) {
@@ -1792,7 +1792,7 @@ func TestDefaultValueVar2(t *testing.T) {
 	query := `
 	{
 		var(func: uid(0x1)) {
-			cnt as _predicate_
+			cnt as nonexistent_pred
 		}
 
 		data(func: uid(0x1)) {
