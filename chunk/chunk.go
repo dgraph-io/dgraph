@@ -63,6 +63,9 @@ const (
 	JsonFormat
 )
 
+// This is should only be changed for testing.
+var maxRdfLines = 10000
+
 func (c *Chunk) Parse() ([]*api.NQuad, error) {
 	return c.ck.parse(c)
 }
@@ -97,7 +100,7 @@ func (c rdfChunker) ChunkNew(r *Reader) (*Chunk, error) {
 func (rdfChunker) Chunk(r *Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
-	for lineCount := 0; lineCount < 10000; lineCount++ {
+	for lineCount := 0; lineCount < maxRdfLines; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
 			batch.Write(slc)

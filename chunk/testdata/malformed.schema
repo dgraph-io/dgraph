@@ -1,7 +1,0 @@
-name:string @index(term) .
-age: int .
-role:string @index(term) .
-aka:string @index(term) .
-carries:string @index(term) .
-parent_to: [uid] @reverse .
-sibling_of: [uid] @reverse .
