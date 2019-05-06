@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 )
 
 type groupi struct {
@@ -176,12 +177,16 @@ func (g *groupi) informZeroAboutTablets() {
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
-		// g.upsertSchema(s)
 		if gid, err := g.BelongsToReadOnly(s.Predicate); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
 			g.upsertSchema(s)
 		} else if gid == 0 {
+			g.upsertSchema(s)
+		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
+			!proto.Equal(s, &curr){
+			// If this tablet is served to the group, do not upsert the schema unless the
+			// stored schema and the proposed one are different.
 			g.upsertSchema(s)
 		} else {
 			// The schema for this predicate has already been proposed.
