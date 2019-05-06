@@ -23,6 +23,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type position struct {
+	off  int
+	line int
+}
+
+func checkChunks(t *testing.T, ck Chunker, rd *Reader, chunks []position) {
+	var chunk *Chunk
+	var err error
+	for _, expected := range chunks {
+		chunk, err = ck.Chunk(rd)
+		//t.Logf("ERR=%+v CHUNK@%d/%d=%+v", err, chunk.BytePos, chunk.LinePos, chunk)
+		require.True(t, err == nil || err == io.EOF,
+			"Chunk() unexpected error: %+v", err)
+		require.Equal(t, expected.line, chunk.LinePos,
+			"incorrect line number")
+		require.Equal(t, expected.off, chunk.BytePos,
+			"incorrect offset")
+	}
+	require.EqualError(t, err, io.EOF.Error())
+}
+
 func TestReaderRdf(t *testing.T) {
 	ck := NewChunker(RdfFormat)
 	rd, fn := NewReader("testdata/data.rdf")
@@ -31,21 +52,38 @@ func TestReaderRdf(t *testing.T) {
 	// ensure small test file is read in more than one chunk
 	maxRdfLines = 10
 
-	var chunks = []struct{ line, pos int }{
+	var chunks = []position{
 		{0, 0},
-		{10, 321},
-		{20, 640},
-		{30, 935},
-		{40, 1289},
+		{321, 10},
+		{640, 20},
+		{935, 30},
+		{1289, 40},
 	}
+	checkChunks(t, ck, rd, chunks)
+}
 
-	var chunk *Chunk
-	var err error
-	for _, expected := range chunks {
-		chunk, err = ck.ChunkNew(rd)
-		require.True(t, err == nil || err == io.EOF)
-		require.Equal(t, expected.line, chunk.LinePos)
-		require.Equal(t, expected.pos, chunk.BytePos)
+func TestReaderJsonPretty(t *testing.T) {
+	ck := NewChunker(JsonFormat)
+	rd, fn := NewReader("testdata/pretty.json")
+	defer fn()
+
+	var chunks = []position{
+		{4, 1},
+		{282, 16},
+		{579, 32},
+		{878, 48},
+		{1164, 63},
+		{1474, 79},
 	}
-	require.EqualError(t, err, io.EOF.Error())
+	require.NoError(t, ck.Begin(rd))
+	checkChunks(t, ck, rd, chunks)
+	require.NoError(t, ck.End(rd))
+}
+
+func TestReaderJsonUgly(t *testing.T) {
+	ck := NewChunker(JsonFormat)
+	rd, fn := NewReader("testdata/ugly.json")
+	defer fn()
+
+	// FIXME complete test
 }

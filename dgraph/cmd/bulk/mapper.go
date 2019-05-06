@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/chunk"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -118,12 +117,11 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func (m *mapper) run(inputFormat int) {
-	chunker := chunk.NewChunker(inputFormat)
-	for chunkBuf := range m.readerChunkCh {
+func (m *mapper) run(_ int) {
+	for chunk := range m.readerChunkCh {
 		done := false
 		for !done {
-			nqs, err := chunker.Parse(chunkBuf)
+			nqs, err := chunk.Parse()
 			if err == io.EOF {
 				done = true
 			} else if err != nil {

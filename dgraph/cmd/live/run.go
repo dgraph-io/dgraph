@@ -207,8 +207,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *chunk.Reader, ck chunk
 		default:
 		}
 
-		chunkBuf, err := ck.Chunk(rd)
-		l.processChunk(chunkBuf, ck)
+		chunk, err := ck.Chunk(rd)
+		l.processChunk(chunk, ck)
 		if err == io.EOF {
 			break
 		} else {
@@ -223,12 +223,12 @@ func (l *loader) processLoadFile(ctx context.Context, rd *chunk.Reader, ck chunk
 // processChunk parses the rdf entries from the chunk, and group them into
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunk.Chunker) {
-	if chunkBuf == nil || chunkBuf.Len() == 0 {
+func (l *loader) processChunk(chunk *chunk.Chunk, ck chunk.Chunker) {
+	if chunk == nil || chunk.Len() == 0 {
 		return
 	}
 
-	nqs, err := ck.Parse(chunkBuf)
+	nqs, err := chunk.Parse()
 	x.CheckfNoTrace(err)
 
 	batch := make([]*api.NQuad, 0, opt.batchSize)

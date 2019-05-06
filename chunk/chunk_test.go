@@ -17,7 +17,6 @@
 package chunk
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -188,7 +187,7 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	chunker := NewChunker(JsonFormat)
 	reader := chunkStrReader(testDoc)
 
-	var json *bytes.Buffer
+	var json *Chunk
 	var idx int
 
 	err := chunker.Begin(reader)
