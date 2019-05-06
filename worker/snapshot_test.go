@@ -18,8 +18,8 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"regexp"

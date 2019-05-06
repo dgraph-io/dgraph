@@ -184,7 +184,7 @@ func (g *groupi) proposeInitialSchema() {
 		} else if gid == 0 {
 			g.upsertSchema(s)
 		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
-			!proto.Equal(s, &curr){
+			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
 			g.upsertSchema(s)
