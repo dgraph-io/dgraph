@@ -69,6 +69,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = &groupi{
 		blockDeletes: new(sync.Mutex),
+		tablets:      make(map[string]*pb.Tablet),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -375,6 +376,8 @@ func (g *groupi) ServesTabletReadOnly(key string) (bool, error) {
 
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
+	emptyTablet := pb.Tablet{}
+
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
@@ -392,11 +395,16 @@ func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
-		return nil, err
+		return &emptyTablet, err
 	}
-	g.Lock()
-	g.tablets[key] = out
-	g.Unlock()
+
+	// Do not store tablets with group ID 0, as they are just dummy tablets for
+	// predicates that do no exist.
+	if out.GroupId > 0 {
+		g.Lock()
+		g.tablets[key] = out
+		g.Unlock()
+	}
 
 	if out.GroupId == groups().groupId() {
 		glog.Infof("Serving tablet for: %v\n", key)
@@ -874,12 +882,14 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 			for {
-				// Block forever trying to propose this.
+				// Block forever trying to propose this. Also this proposal should not be counted
+				// towards num pending proposals and be proposed right away.
 				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
 				if err == nil {
 					break
 				}
-				glog.Errorf("While proposing delta: %v. Error=%v. Retrying...\n", delta, err)
+				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
+					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
 		}
 	}

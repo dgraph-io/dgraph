@@ -34,6 +34,7 @@ import (
 
 	"github.com/dgraph-io/badger/y"
 
+	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,7 +45,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
-	"go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -100,6 +100,15 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
+
+	// Snapshot and Transactions.
+	flag.Int("snapshot_after", 10000,
+		"Create a new Raft snapshot after this many number of Raft entries. The"+
+			" lower this number, the more frequent snapshot creation would be."+
+			" Also determines how often Rollups would happen.")
+	flag.String("abort_older_than", "5m",
+		"Abort any pending transactions older than this duration. The liveness of a"+
+			" transaction is determined by its last mutation.")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -459,6 +468,10 @@ func run() {
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
+
+	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
+	x.Check(err)
+
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
@@ -470,6 +483,8 @@ func run() {
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
 		AclEnabled:          secretFile != "",
+		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
+		AbortOlderThan:      abortDur,
 	}
 
 	setupCustomTokenizers()
@@ -479,6 +494,11 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()
+
+	glog.Infof("x.Config: %+v", x.Config)
+	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
+	glog.Infof("edgraph.Config: %+v", edgraph.Config)
+
 	edgraph.InitServerState()
 	defer func() {
 		edgraph.State.Dispose()

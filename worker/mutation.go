@@ -39,8 +39,9 @@ import (
 )
 
 var (
-	ErrUnservedTabletMessage = "Tablet isn't being served by this instance"
-	errUnservedTablet        = x.Errorf(ErrUnservedTabletMessage)
+	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
+	errNonExistentTablet        = x.Errorf(ErrNonExistentTabletMessage)
+	errUnservedTablet           = x.Errorf("Tablet isn't being served by this instance")
 )
 
 func isStarAll(v []byte) bool {
@@ -179,7 +180,7 @@ func createSchema(attr string, typ types.TypeID) {
 	updateSchema(attr, s)
 }
 
-func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, startTs uint64) error {
+func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
 	if err := checkType(update); err != nil {
 		return err
 	}
@@ -475,7 +476,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		mu.Schema = append(mu.Schema, schema)
 	}
 
-	if src.DropOp == pb.Mutations_ALL || src.DropOp == pb.Mutations_DATA {
+	if src.DropOp > 0 {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
@@ -483,6 +484,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 				mm[gid] = mu
 			}
 			mu.DropOp = src.DropOp
+			mu.DropValue = src.DropValue
 		}
 	}
 
@@ -499,15 +501,6 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 	}
 
 	return mm, nil
-}
-
-func commitOrAbort(ctx context.Context, startTs, commitTs uint64) error {
-	txn := posting.Oracle().GetTxn(startTs)
-	if txn == nil {
-		return nil
-	}
-	// Ensures that we wait till prewrite is applied
-	return txn.CommitToMemory(commitTs)
 }
 
 type res struct {
@@ -532,7 +525,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 		if gid == 0 {
 			span.Annotatef(nil, "state: %+v", groups().state)
 			span.Annotatef(nil, "Group id zero for mutation: %+v", mu)
-			return tctx, errUnservedTablet
+			return tctx, errNonExistentTablet
 		}
 		mu.StartTs = m.StartTs
 		go proposeOrSend(ctx, gid, mu, resCh)

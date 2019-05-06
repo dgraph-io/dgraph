@@ -53,12 +53,12 @@ func init() {
 	var grpcPort int
 
 	getPort := func(envVar string, dfault int) int {
-		if p := os.Getenv(envVar); p == "" {
+		p := os.Getenv(envVar)
+		if p == "" {
 			return dfault
-		} else {
-			port, _ := strconv.Atoi(p)
-			return port
 		}
+		port, _ := strconv.Atoi(p)
+		return port
 	}
 
 	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
@@ -141,6 +141,32 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
+}
+
+// RetryQuery will retry a query until it succeeds or a non-retryable error is received.
+func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		resp, err := dg.NewTxn().Query(context.Background(), q)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return resp, err
+	}
+}
+
+// RetryMutation will retry a mutation until it succeeds or a non-retryable error is received.
+// The mutation should have CommitNow set to true.
+func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
+	for {
+		_, err := dg.NewTxn().Mutate(context.Background(), mu)
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "Tablet isn't being served by this instance")) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return err
+	}
 }
 
 type LoginParams struct {

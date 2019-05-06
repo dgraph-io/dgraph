@@ -23,6 +23,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -53,6 +54,11 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
+
+	// Options related to the WAL.
+	wdir           string
+	wtruncateUntil uint64
+	wsetSnapshot   string
 }
 
 func init() {
@@ -78,6 +84,13 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
+
+	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
+	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
+		"Remove data from Raft entries until but not including this index.")
+	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
+		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
+			" the value for these vars in that order.")
 }
 
 func toInt(o *pb.Posting) int {
@@ -484,6 +497,9 @@ func printKeys(db *badger.DB) {
 
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
+		if pk.IsRaft() {
+			buf.WriteString("{r}")
+		}
 		if pk.IsData() {
 			buf.WriteString("{d}")
 		}
@@ -657,19 +673,96 @@ func sizeHistogram(db *badger.DB) {
 	valueSizeHistogram.PrintHistogram()
 }
 
+func printAlphaProposal(buf *bytes.Buffer, pr pb.Proposal, pending map[uint64]bool) {
+	switch {
+	case pr.Mutations != nil:
+		fmt.Fprintf(buf, " Mutation . StartTs: %d . Edges: %d .",
+			pr.Mutations.StartTs, len(pr.Mutations.Edges))
+		if len(pr.Mutations.Edges) > 0 {
+			pending[pr.Mutations.StartTs] = true
+		} else {
+			fmt.Fprintf(buf, " Mutation: %+v .", pr.Mutations)
+		}
+		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
+	case len(pr.Kv) > 0:
+		fmt.Fprintf(buf, " KV . Size: %d ", len(pr.Kv))
+	case pr.State != nil:
+		fmt.Fprintf(buf, " State . %+v ", pr.State)
+	case pr.Delta != nil:
+		fmt.Fprintf(buf, " Delta .")
+		sort.Slice(pr.Delta.Txns, func(i, j int) bool {
+			ti := pr.Delta.Txns[i]
+			tj := pr.Delta.Txns[j]
+			return ti.StartTs < tj.StartTs
+		})
+		fmt.Fprintf(buf, " Max: %d .", pr.Delta.GetMaxAssigned())
+		for _, txn := range pr.Delta.Txns {
+			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
+			delete(pending, txn.StartTs)
+		}
+		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
+	case pr.Snapshot != nil:
+		fmt.Fprintf(buf, " Snapshot . %+v ", pr.Snapshot)
+	}
+}
+
+func printZeroProposal(buf *bytes.Buffer, zpr pb.ZeroProposal) {
+	switch {
+	case len(zpr.SnapshotTs) > 0:
+		fmt.Fprintf(buf, " Snapshot: %+v .", zpr.SnapshotTs)
+	case zpr.Member != nil:
+		fmt.Fprintf(buf, " Member: %+v .", zpr.Member)
+	case zpr.Tablet != nil:
+		fmt.Fprintf(buf, " Tablet: %+v .", zpr.Tablet)
+	case zpr.MaxLeaseId > 0:
+		fmt.Fprintf(buf, " MaxLeaseId: %d .", zpr.MaxLeaseId)
+	case zpr.MaxRaftId > 0:
+		fmt.Fprintf(buf, " MaxRaftId: %d .", zpr.MaxRaftId)
+	case zpr.MaxTxnTs > 0:
+		fmt.Fprintf(buf, " MaxTxnTs: %d .", zpr.MaxTxnTs)
+	case zpr.Txn != nil:
+		txn := zpr.Txn
+		fmt.Fprintf(buf, " Txn %d → %d .", txn.StartTs, txn.CommitTs)
+	default:
+		fmt.Fprintf(buf, " Proposal: %+v .", zpr)
+	}
+}
+
 func run() {
+	dir := opt.pdir
+	isWal := false
+	if len(dir) == 0 {
+		dir = opt.wdir
+		isWal = true
+	}
 	bopts := badger.DefaultOptions
-	bopts.Dir = opt.pdir
-	bopts.ValueDir = opt.pdir
+	bopts.Dir = dir
+	bopts.ValueDir = dir
 	bopts.TableLoadingMode = options.MemoryMap
 	bopts.ReadOnly = opt.readOnly
 
-	x.AssertTruef(len(bopts.Dir) > 0, "No posting dir specified.")
+	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
-	db, err := badger.OpenManaged(bopts)
+	var db *badger.DB
+	var err error
+	if isWal {
+		db, err = badger.Open(bopts)
+	} else {
+		db, err = badger.OpenManaged(bopts)
+	}
 	x.Check(err)
 	defer db.Close()
+
+	if isWal {
+		if err := handleWal(db); err != nil {
+			fmt.Printf("\nGot error while handling WAL: %v\n", err)
+		}
+		fmt.Println("Done")
+		// WAL can't execute the getMinMax function, so we need to deal with it
+		// here, instead of in the select case below.
+		return
+	}
 
 	min, max := getMinMax(db, opt.readTs)
 	fmt.Printf("Min commit: %d. Max commit: %d, w.r.t %d\n", min, max, opt.readTs)

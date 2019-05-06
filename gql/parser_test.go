@@ -3874,6 +3874,10 @@ func TestParserFuzz(t *testing.T) {
 		{"test054", "{e(orderasc:val(0)){min(val(0)0("},
 		{"test055", "{e(){@filter(p(/"},
 		{"test056", "{e(func:uid())@filter(p(/"},
+		{"test057", "a<><\\�"},
+		{"test058", "L<\\𝌀"},
+		{"test059", "{d(after:<>0)}"},
+		{"test060", "{e(orderasc:#"},
 	}
 
 	for _, test := range tests {
@@ -4305,7 +4309,6 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		line = bytes.TrimSpace(line)
 		nq, err := rdf.Parse(string(line))
 		if err == rdf.ErrEmpty {
 			continue
@@ -4354,21 +4357,21 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
 		errStr string
 	}{
 		{m: `
-			{
-				set { _:a1 <reg> "a1 content" . }
-			}{
-				set { _:b2 <reg> "b2 content" . }
-			}`,
+         {
+           set { _:a1 <reg> "a1 content" . }
+         }{
+		   set { _:b2 <reg> "b2 content" . }
+		 }`,
 			errStr: "Unexpected { after the end of the block.",
 		},
 		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
 			errStr: "Invalid operation type: something after the end of the block",
 		},
 		{m: `
-			# comments are ok
-			{
-				set { _:a1 <reg> "a1 content" . } # comments are ok
-			} # comments are ok`,
+          # comments are ok
+		  {
+		    set { _:a1 <reg> "a1 content" . } # comments are ok
+          } # comments are ok`,
 		},
 	}
 	for _, tc := range tests {

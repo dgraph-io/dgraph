@@ -17,7 +17,6 @@
 package edgraph
 
 import (
-	"expvar"
 	"path/filepath"
 	"time"
 
@@ -48,42 +47,8 @@ type Options struct {
 
 var Config Options
 
-// Sometimes users use config.yaml flag so /debug/vars doesn't have information about the
-// value of the flags. Hence we dump conf options we care about to the conf map.
-func setConfVar(conf Options) {
-	newStr := func(s string) *expvar.String {
-		v := new(expvar.String)
-		v.Set(s)
-		return v
-	}
-
-	newFloat := func(f float64) *expvar.Float {
-		v := new(expvar.Float)
-		v.Set(f)
-		return v
-	}
-
-	newInt := func(i int) *expvar.Int {
-		v := new(expvar.Int)
-		v.Set(int64(i))
-		return v
-	}
-
-	// This is so we can find these options in /debug/vars.
-	x.Conf.Set("badger.tables", newStr(conf.BadgerTables))
-	x.Conf.Set("badger.vlog", newStr(conf.BadgerVlog))
-	x.Conf.Set("posting_dir", newStr(conf.PostingDir))
-	x.Conf.Set("wal_dir", newStr(conf.WALDir))
-	x.Conf.Set("allotted_memory", newFloat(conf.AllottedMemory))
-
-	// Set some vars from worker.Config.
-	x.Conf.Set("tracing", newFloat(x.WorkerConfig.Tracing))
-	x.Conf.Set("num_pending_proposals", newInt(x.WorkerConfig.NumPendingProposals))
-}
-
 func SetConfiguration(newConfig Options) {
 	newConfig.validate()
-	setConfVar(newConfig)
 	Config = newConfig
 
 	posting.Config.Mu.Lock()

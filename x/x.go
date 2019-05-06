@@ -119,6 +119,13 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	}
 }
 
+// SetHttpStatus is similar to SetStatus but sets a proper HTTP status code
+// in the response instead of always returning HTTP 200 (OK).
+func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
+	w.WriteHeader(code)
+	SetStatus(w, "error", msg)
+}
+
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")

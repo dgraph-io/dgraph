@@ -375,21 +375,24 @@ func (n *Node) BatchAndSendMessages() {
 func (n *Node) streamMessages(to uint64, stream *Stream) {
 	defer atomic.StoreInt32(&stream.alive, 0)
 
-	const dur = 10 * time.Second
-	deadline := time.Now().Add(dur)
-	var lastLog time.Time
-	// Exit after a thousand tries or at least 10s. Let BatchAndSendMessages create another
-	// goroutine, if needed.
-	for i := 0; ; i++ {
+	// Exit after this deadline. Let BatchAndSendMessages create another goroutine, if needed.
+	// Let's set the deadline to 10s because if we increase it, then it takes longer to recover from
+	// a partition and get a new leader.
+	deadline := time.Now().Add(10 * time.Second)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	var logged int
+	for range ticker.C { // Don't do this in an busy-wait loop, use a ticker.
 		if err := n.doSendMessage(to, stream.msgCh); err != nil {
 			// Update lastLog so we print error only a few times if we are not able to connect.
 			// Otherwise, the log is polluted with repeated errors.
-			if time.Since(lastLog) > dur {
+			if logged == 0 {
 				glog.Warningf("Unable to send message to peer: %#x. Error: %v", to, err)
+				logged++
 			}
-			lastLog = time.Now()
 		}
-		if i >= 1e3 || time.Now().After(deadline) {
+		if time.Now().After(deadline) {
 			return
 		}
 	}
