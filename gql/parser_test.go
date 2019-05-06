@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/chunk/rdf"
 	"github.com/stretchr/testify/require"
 )
 

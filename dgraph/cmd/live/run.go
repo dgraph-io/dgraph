@@ -42,7 +42,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 
-	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/chunk"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
@@ -180,24 +180,24 @@ func (l *loader) uid(val string) string {
 func (l *loader) processFile(ctx context.Context, filename string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename)
+	rd, cleanup := chunk.NewReader(filename)
 	defer cleanup()
 
-	loadType := chunker.DataFormat(filename, opt.dataFormat)
-	if loadType == chunker.UnknownFormat {
-		if isJson, err := chunker.IsJSONData(rd); err == nil {
+	loadType := chunk.DataFormat(filename, opt.dataFormat)
+	if loadType == chunk.UnknownFormat {
+		if isJson, err := chunk.IsJSONData(rd); err == nil {
 			if isJson {
-				loadType = chunker.JsonFormat
+				loadType = chunk.JsonFormat
 			} else {
 				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
 			}
 		}
 	}
 
-	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
+	return l.processLoadFile(ctx, rd, chunk.NewChunker(loadType))
 }
 
-func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
+func (l *loader) processLoadFile(ctx context.Context, rd *chunk.Reader, ck chunk.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
 
 	for {
@@ -223,7 +223,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 // processChunk parses the rdf entries from the chunk, and group them into
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
+func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunk.Chunker) {
 	if chunkBuf == nil || chunkBuf.Len() == 0 {
 		return
 	}
