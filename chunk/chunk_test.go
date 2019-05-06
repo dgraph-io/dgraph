@@ -17,18 +17,27 @@
 package chunk
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
-	"strings"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
-func bufioReader(str string) *bufio.Reader {
-	return bufio.NewReader(strings.NewReader(str))
+// Since chunk.Reader requires a file, write string to temp file and create reader from that.
+// Once reader is initialized the temp file can be removed to ensure it gets cleaned up.
+func chunkStrReader(str string) *Reader {
+	f, err := ioutil.TempFile("", "chunk_test.*")
+	x.Check(err)
+	x.Check(ioutil.WriteFile(f.Name(), []byte(str), 0600))
+	rd, _ := newReader(f)
+	os.Remove(f.Name())
+	return rd
 }
 
 // Test that problems at the start of the JSON document are caught.
@@ -47,7 +56,7 @@ func TestJSONLoadStart(t *testing.T) {
 
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat)
-		require.Error(t, chunker.Begin(bufioReader(test.json)), test.desc)
+		require.Error(t, chunker.Begin(chunkStrReader(test.json)), test.desc)
 	}
 }
 
@@ -65,7 +74,7 @@ func TestJSONLoadReadNext(t *testing.T) {
 	}
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat)
-		reader := bufioReader(test.json)
+		reader := chunkStrReader(test.json)
 		require.NoError(t, chunker.Begin(reader), test.desc)
 
 		json, err := chunker.Chunk(reader)
@@ -114,7 +123,7 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 	}
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat)
-		reader := bufioReader(test.json)
+		reader := chunkStrReader(test.json)
 		require.NoError(t, chunker.Begin(reader), test.desc)
 
 		json, err := chunker.Chunk(reader)
@@ -177,7 +186,7 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	}
 
 	chunker := NewChunker(JsonFormat)
-	reader := bufioReader(testDoc)
+	reader := chunkStrReader(testDoc)
 
 	var json *bytes.Buffer
 	var idx int

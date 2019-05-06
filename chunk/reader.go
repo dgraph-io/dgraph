@@ -57,13 +57,16 @@ func NewReader(file string) (*Reader, func()) {
 	} else {
 		f, err = os.Open(file)
 	}
-
 	x.Check(err)
 
-	var rd = Reader{filename: file}
+	return newReader(f)
+}
+
+func newReader(f *os.File) (*Reader, func()) {
+	var rd = Reader{filename: f.Name()}
 	var cleanup = func() { f.Close() }
 
-	if filepath.Ext(file) == ".gz" {
+	if filepath.Ext(rd.filename) == ".gz" {
 		gzr, err := gzip.NewReader(f)
 		x.CheckfNoTrace(err)
 		rd.rd = bufio.NewReader(gzr)
