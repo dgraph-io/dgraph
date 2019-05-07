@@ -60,7 +60,6 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	dg2 := z.DgraphClient("localhost:9182")
-	verifySnapshot(t, dg1, 200)
 	verifySnapshot(t, dg2, 200)
 
 	err = z.DockerStop("alpha2")
@@ -79,7 +78,6 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	dg2 = z.DgraphClient("localhost:9182")
-	verifySnapshot(t, dg1, 400)
 	verifySnapshot(t, dg2, 400)
 }
 
