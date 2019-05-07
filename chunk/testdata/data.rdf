@@ -11,7 +11,7 @@
 <0x2001> <parent_to> <0x3003> .
 <0x2001> <role> "father"^^<xs:string> .
 #
-<0x2101> {age} "34"^^<xs:int> .
+<0x2101> <age> "34"^^<xs:int> .
 <0x2101> <aka> "Midge"^^<xs:string> .
 <0x2101> <name> "Marge"^^<xs:string> .
 <0x2101> <parent_to> <0x3001> .
@@ -22,7 +22,7 @@
 <0x3001> <age> "10"^^<xs:int> .
 <0x3001> <aka> "El Barto"^^<xs:string> .
 <0x3001> <carries> "slingshot"^^<xs:string> .
-<0x3001> [name] "Bart"^^<xs:string> .
+<0x3001> <name> "Bart"^^<xs:string> .
 <0x3001> <role> "son"^^<xs:string> .
 <0x3001> <sibling_of> <0x3002> .
 <0x3001> <sibling_of> <0x3003> .
