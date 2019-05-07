@@ -85,5 +85,15 @@ func TestReaderJsonUgly(t *testing.T) {
 	rd, fn := NewReader("testdata/ugly.json")
 	defer fn()
 
-	// FIXME complete test
+	var chunks = []position{
+		{1, 0},
+		{196, 0},
+		{405, 0},
+		{619, 0},
+		{826, 0},
+		{1052, 0},
+	}
+	require.NoError(t, ck.Begin(rd))
+	checkChunks(t, ck, rd, chunks)
+	require.NoError(t, ck.End(rd))
 }
