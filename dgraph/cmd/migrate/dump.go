@@ -114,7 +114,7 @@ func (m *dumpMeta) dumpTable(table string) error {
 		row.colValues = colValues
 
 		// step 2: output the column values in RDF format
-		row.blankNodeLabel = tableGuide.blankNodeGen.generate(tableInfo, colValues)
+		row.blankNodeLabel = tableGuide.blankNode.generate(tableInfo, colValues)
 		m.outputRow(row, tableInfo)
 
 		// step 3: record mappings to the blankNodeLabel so that future tables can look up the
@@ -152,7 +152,7 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 		rowMeta.colValues = colValues
 
 		// step 2: output the constraints in RDF format
-		rowMeta.blankNodeLabel = tableGuide.blankNodeGen.generate(tableInfo, colValues)
+		rowMeta.blankNodeLabel = tableGuide.blankNode.generate(tableInfo, colValues)
 
 		m.outputConstraints(rowMeta, tableInfo)
 	}

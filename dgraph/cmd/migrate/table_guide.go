@@ -272,7 +272,7 @@ func predicateName(info *sqlTable, column string) string {
 }
 
 type tableGuide struct {
-	blankNodeGen   blankNode
+	blankNode      blankNode
 	valuesRecorder valuesRecorder
 }
 
@@ -291,7 +291,7 @@ func getTableGuides(tables map[string]*sqlTable) map[string]*tableGuide {
 	tableGuides := make(map[string]*tableGuide)
 	for table, tableInfo := range tables {
 		guide := &tableGuide{
-			blankNodeGen: getBlankNodeGen(tableInfo),
+			blankNode: getBlankNodeGen(tableInfo),
 			valuesRecorder: &fkValuesRecorder{
 				refToBlank: make(map[string]string),
 			},
