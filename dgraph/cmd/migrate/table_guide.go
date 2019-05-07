@@ -46,7 +46,7 @@ type usingColumns struct {
 func (g *usingColumns) generate(info *sqlTable, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
 		g.primaryKeyIndices = getColumnIndices(info, func(info *sqlTable, column string) bool {
-			return info.columns[column].keyType == PRIMARY
+			return info.columns[column].keyType == primary
 		})
 	}
 
@@ -126,7 +126,7 @@ func (r *fkValuesRecorder) getBlankNode(indexLabel string) string {
 func (r *fkValuesRecorder) record(info *sqlTable, values []interface{},
 	blankNode string) {
 	for _, cst := range info.cstSources {
-		// for each foreign key cst, there should be a mapping
+		// for each foreign key constraint, there should be a mapping
 		cstColumns := getCstColumns(cst)
 		cstColumnIndices := getColumnIndices(info,
 			func(info *sqlTable, column string) bool {
@@ -204,25 +204,16 @@ func createLabel(ref *ref) (string, error) {
 	return fmt.Sprintf("_:%s", strings.Join(parts, separator)), nil
 }
 
-// // an IdxGen is responsible for generating Dgraph indices
-// type IdxGen interface {
-// 	genDgraphIndices(info *tableInfo) []string
-// }
-
-// compositeIdxGen generates one Dgraph index per SQL table primary key
+// createDgraphSchema generates one Dgraph index per SQL primary key
 // or index. For a composite index in SQL, e.g. (fname, lname) in the person table, we will create
 // separate indices for each individual column within Dgraph, e.g.
 // person_fname: string @index(exact) .
 // person_lname: string @index(exact) .
 // The reason is that Dgraph does not support composite indices as of now.
-// type compositeIdxGen struct {
-// 	separator string
-// }
-
 func createDgraphSchema(info *sqlTable) []string {
 	dgraphIndexes := make([]string, 0)
 	sqlIndexedColumns := getColumnIndices(info, func(info *sqlTable, column string) bool {
-		return info.columns[column].keyType != NONE
+		return info.columns[column].keyType != none
 	})
 
 	for _, column := range sqlIndexedColumns {
@@ -278,7 +269,7 @@ type tableGuide struct {
 
 func getBlankNodeGen(ti *sqlTable) blankNode {
 	primaryKeyIndices := getColumnIndices(ti, func(info *sqlTable, column string) bool {
-		return info.columns[column].keyType == PRIMARY
+		return info.columns[column].keyType == primary
 	})
 
 	if len(primaryKeyIndices) > 0 {

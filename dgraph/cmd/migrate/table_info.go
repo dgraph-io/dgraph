@@ -27,9 +27,9 @@ import (
 type keyType int
 
 const (
-	NONE keyType = iota
-	PRIMARY
-	MULTI
+	none keyType = iota
+	primary
+	secondary
 )
 
 type DataType int
@@ -70,7 +70,7 @@ type sqlTable struct {
 	predNames       []string
 
 	// the referenced tables by the current table through foreign key constraints
-	referencedTables map[string]interface{}
+	dstTables map[string]interface{}
 
 	// a map from constraint names to constraints
 	foreignKeyConstraints map[string]*fkConstraint
@@ -80,7 +80,7 @@ type sqlTable struct {
 }
 
 func getDataType(dbType string) DataType {
-	for prefix, goType := range mysqlTypePrefixToGoType {
+	for prefix, goType := range sqlTypeToInternal {
 		if strings.HasPrefix(dbType, prefix) {
 			return goType
 		}
@@ -95,26 +95,26 @@ func getColumnInfo(fieldName string, dbType string) *columnInfo {
 	return &columnInfo
 }
 
-func parseTables(pool *sql.DB, table string, database string) (*sqlTable, error) {
+func parseTables(pool *sql.DB, tableName string, database string) (*sqlTable, error) {
 	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE from INFORMATION_SCHEMA.
-COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, table, database)
-	columnRows, err := pool.Query(query)
+COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tableName, database)
+	columns, err := pool.Query(query)
 	if err != nil {
 		return nil, err
 	}
-	defer columnRows.Close()
+	defer columns.Close()
 
-	tableInfo := &sqlTable{
-		tableName:             table,
+	table := &sqlTable{
+		tableName:             tableName,
 		columns:               make(map[string]*columnInfo),
 		columnNames:           make([]string, 0),
 		columnDataTypes:       make([]DataType, 0),
 		predNames:             make([]string, 0),
-		referencedTables:      make(map[string]interface{}),
+		dstTables:             make(map[string]interface{}),
 		foreignKeyConstraints: make(map[string]*fkConstraint),
 	}
 
-	for columnRows.Next() {
+	for columns.Next() {
 		/*
 			each row represents info about a column, for example
 			+---------------+-----------+
@@ -128,51 +128,50 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 			+---------------+-----------+
 		*/
 		var fieldName, dbType string
-		err := columnRows.Scan(&fieldName, &dbType)
-		if err != nil {
+		if err := columns.Scan(&fieldName, &dbType); err != nil {
 			return nil, fmt.Errorf("unable to scan table description result for table %s: %v",
-				table, err)
+				tableName, err)
 		}
 
 		// TODO, should store the column data types into the table info as an array
 		// and the RMI should simply get the data types from the table info
-		tableInfo.columns[fieldName] = getColumnInfo(fieldName, dbType)
-		tableInfo.columnNames = append(tableInfo.columnNames, fieldName)
-		tableInfo.columnDataTypes = append(tableInfo.columnDataTypes, getDataType(dbType))
+		table.columns[fieldName] = getColumnInfo(fieldName, dbType)
+		table.columnNames = append(table.columnNames, fieldName)
+		table.columnDataTypes = append(table.columnDataTypes, getDataType(dbType))
 	}
 
 	// query indices
 	indexQuery := fmt.Sprintf(`select INDEX_NAME,COLUMN_NAME from INFORMATION_SCHEMA.`+
-		`STATISTICS where TABLE_NAME = "%s" AND index_schema="%s"`, table, database)
-	indexRows, err := pool.Query(indexQuery)
+		`STATISTICS where TABLE_NAME = "%s" AND index_schema="%s"`, tableName, database)
+	indices, err := pool.Query(indexQuery)
 	if err != nil {
 		return nil, err
 	}
-	defer indexRows.Close()
-	for indexRows.Next() {
+	defer indices.Close()
+	for indices.Next() {
 		var indexName, columnName string
-		err := indexRows.Scan(&indexName, &columnName)
+		err := indices.Scan(&indexName, &columnName)
 		if err != nil {
-			return nil, fmt.Errorf("unable to scan index info for table %s: %v", table, err)
+			return nil, fmt.Errorf("unable to scan index info for table %s: %v", tableName, err)
 		}
 		switch indexName {
 		case "PRIMARY":
-			tableInfo.columns[columnName].keyType = PRIMARY
+			table.columns[columnName].keyType = primary
 		default:
-			tableInfo.columns[columnName].keyType = MULTI
+			table.columns[columnName].keyType = secondary
 		}
 
 	}
 
 	foreignKeysQuery := fmt.Sprintf(`select COLUMN_NAME,CONSTRAINT_NAME,REFERENCED_TABLE_NAME,
 		REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where TABLE_NAME = "%s"
-        AND CONSTRAINT_SCHEMA="%s" AND REFERENCED_TABLE_NAME IS NOT NULL`, table, database)
-	foreignKeyRows, err := pool.Query(foreignKeysQuery)
+        AND CONSTRAINT_SCHEMA="%s" AND REFERENCED_TABLE_NAME IS NOT NULL`, tableName, database)
+	fkeys, err := pool.Query(foreignKeysQuery)
 	if err != nil {
 		return nil, err
 	}
-	defer foreignKeyRows.Close()
-	for foreignKeyRows.Next() {
+	defer fkeys.Close()
+	for fkeys.Next() {
 		/* example output from MySQL
 		+---------------+-----------------+-----------------------+------------------------+
 		| COLUMN_NAME   | CONSTRAINT_NAME | REFERENCED_TABLE_NAME | REFERENCED_COLUMN_NAME |
@@ -183,30 +182,28 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		| p_employee_id | role_ibfk_2     | person                | employee_id            |
 		+---------------+-----------------+-----------------------+------------------------+
 		*/
-		var columnName, constraintName, referencedTableName, referencedColumnName string
-		err := foreignKeyRows.Scan(&columnName, &constraintName, &referencedTableName,
-			&referencedColumnName)
-		if err != nil {
-			return nil, fmt.Errorf("unable to scan usage info for table %s: %v", table, err)
+		var col, constraintName, dstTable, dstCol string
+		if err := fkeys.Scan(&col, &constraintName, &dstTable, &dstCol); err != nil {
+			return nil, fmt.Errorf("unable to scan usage info for table %s: %v", tableName, err)
 		}
 
-		tableInfo.referencedTables[referencedTableName] = struct{}{}
+		table.dstTables[dstTable] = struct{}{}
 		var constraint *fkConstraint
 		var ok bool
-		if constraint, ok = tableInfo.foreignKeyConstraints[constraintName]; !ok {
+		if constraint, ok = table.foreignKeyConstraints[constraintName]; !ok {
 			constraint = &fkConstraint{
 				parts: make([]*constraintPart, 0),
 			}
-			tableInfo.foreignKeyConstraints[constraintName] = constraint
+			table.foreignKeyConstraints[constraintName] = constraint
 		}
 		constraint.parts = append(constraint.parts, &constraintPart{
-			tableName:        table,
-			columnName:       columnName,
-			remoteTableName:  referencedTableName,
-			remoteColumnName: referencedColumnName,
+			tableName:        tableName,
+			columnName:       col,
+			remoteTableName:  dstTable,
+			remoteColumnName: dstCol,
 		})
 	}
-	return tableInfo, nil
+	return table, nil
 }
 
 // validateAndGetReverse flip the foreign key reference direction in a constraint.
@@ -239,7 +236,7 @@ func validateAndGetReverse(constraint *fkConstraint) (string, *fkConstraint) {
 
 // populateReferencedByColumns calculates the reverse links of
 // the data at tables[table name].foreignKeyReferences
-// and stores them in tables[table name].columns[column name].referencedBy
+// and stores them in tables[table name].cstSources
 func populateReferencedByColumns(tables map[string]*sqlTable) {
 	for _, tableInfo := range tables {
 		for _, constraint := range tableInfo.foreignKeyConstraints {

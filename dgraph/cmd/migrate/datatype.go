@@ -26,8 +26,11 @@ const (
 	UID // foreign key reference, which would corrspond to uid type in Dgraph
 )
 
+// the typeToString map is used to generate the Dgraph schema file
 var typeToString map[DataType]string
-var mysqlTypePrefixToGoType map[string]DataType
+
+// the sqlTypeToInternal map is used to parse date types in SQL schema
+var sqlTypeToInternal map[string]DataType
 
 func initDataTypes() {
 	typeToString = make(map[DataType]string)
@@ -39,15 +42,15 @@ func initDataTypes() {
 	typeToString[DATETIME] = "datetime"
 	typeToString[UID] = "uid"
 
-	mysqlTypePrefixToGoType = make(map[string]DataType)
-	mysqlTypePrefixToGoType["int"] = INT
-	mysqlTypePrefixToGoType["varchar"] = STRING
-	mysqlTypePrefixToGoType["text"] = STRING
-	mysqlTypePrefixToGoType["date"] = DATETIME
-	mysqlTypePrefixToGoType["time"] = DATETIME
-	mysqlTypePrefixToGoType["datetime"] = DATETIME
-	mysqlTypePrefixToGoType["float"] = FLOAT
-	mysqlTypePrefixToGoType["double"] = DOUBLE
+	sqlTypeToInternal = make(map[string]DataType)
+	sqlTypeToInternal["int"] = INT
+	sqlTypeToInternal["varchar"] = STRING
+	sqlTypeToInternal["text"] = STRING
+	sqlTypeToInternal["date"] = DATETIME
+	sqlTypeToInternal["time"] = DATETIME
+	sqlTypeToInternal["datetime"] = DATETIME
+	sqlTypeToInternal["float"] = FLOAT
+	sqlTypeToInternal["double"] = DOUBLE
 }
 
 func (t DataType) String() string {

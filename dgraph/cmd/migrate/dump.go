@@ -35,12 +35,14 @@ type dumpMeta struct {
 	dataWriter   *bufio.Writer
 	schemaWriter *bufio.Writer
 	sqlPool      *sql.DB
+
+	buf strings.Builder // reusable buf for building strings, call buf.Reset before use
 }
 
 // sqlRow captures values in a SQL table row, as well as the metadata associated
 // with the row
 type sqlRow struct {
-	colValues      []interface{}
+	values         []interface{}
 	blankNodeLabel string
 	tableInfo      *sqlTable
 }
@@ -86,9 +88,8 @@ func (m *dumpMeta) dumpTables() error {
 func (m *dumpMeta) dumpTable(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
-	sortedColumns := getSortedColumns(tableInfo)
 
-	query := fmt.Sprintf(`select %s from %s`, strings.Join(sortedColumns, ","), table)
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(tableInfo.columnNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
 		return err
@@ -111,7 +112,7 @@ func (m *dumpMeta) dumpTable(table string) error {
 		if err != nil {
 			return err
 		}
-		row.colValues = colValues
+		row.values = colValues
 
 		// step 2: output the column values in RDF format
 		row.blankNodeLabel = tableGuide.blankNode.generate(tableInfo, colValues)
@@ -131,16 +132,15 @@ func (m *dumpMeta) dumpTable(table string) error {
 func (m *dumpMeta) dumpTableConstraints(table string) error {
 	tableGuide := m.tableGuides[table]
 	tableInfo := m.tableInfos[table]
-	sortedColumns := getSortedColumns(tableInfo)
 
-	query := fmt.Sprintf(`select %s from %s`, strings.Join(sortedColumns, ","), table)
+	query := fmt.Sprintf(`select %s from %s`, strings.Join(tableInfo.columnNames, ","), table)
 	rows, err := m.sqlPool.Query(query)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
-	rowMeta := &sqlRow{
+	row := &sqlRow{
 		tableInfo: tableInfo,
 	}
 	for rows.Next() {
@@ -149,12 +149,12 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 		if err != nil {
 			return err
 		}
-		rowMeta.colValues = colValues
+		row.values = colValues
 
 		// step 2: output the constraints in RDF format
-		rowMeta.blankNodeLabel = tableGuide.blankNode.generate(tableInfo, colValues)
+		row.blankNodeLabel = tableGuide.blankNode.generate(tableInfo, colValues)
 
-		m.outputConstraints(rowMeta, tableInfo)
+		m.outputConstraints(row, tableInfo)
 	}
 
 	return nil
@@ -187,15 +187,14 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 // _:person_company_Google_employee_id_100. The mapping from the ref label
 // _:person_company_Google_employee_id_100 to the foreign blank node _:person_2
 // is recorded through the person table's valuesRecorder.
-func (m *dumpMeta) outputRow(rmi *sqlRow, tableInfo *sqlTable) {
-	for i, colValue := range rmi.colValues {
+func (m *dumpMeta) outputRow(row *sqlRow, tableInfo *sqlTable) {
+	for i, colValue := range row.values {
 		predicate := tableInfo.predNames[i]
-		outputPlainCell(rmi.blankNodeLabel, tableInfo.columnDataTypes[i],
-			predicate, colValue, m.dataWriter)
+		m.outputPlainCell(row.blankNodeLabel, predicate, tableInfo.columnDataTypes[i], colValue)
 	}
 }
 
-func (m *dumpMeta) outputConstraints(rmi *sqlRow, tableInfo *sqlTable) {
+func (m *dumpMeta) outputConstraints(row *sqlRow, tableInfo *sqlTable) {
 	for _, constraint := range tableInfo.foreignKeyConstraints {
 		if len(constraint.parts) == 0 {
 			logger.Fatalf("The constraint should have at least one part: %v", constraint)
@@ -203,7 +202,7 @@ func (m *dumpMeta) outputConstraints(rmi *sqlRow, tableInfo *sqlTable) {
 
 		foreignTableName := constraint.parts[0].remoteTableName
 
-		refLabel, err := rmi.getRefLabelFromConstraint(m.tableInfos[foreignTableName], constraint)
+		refLabel, err := row.getRefLabelFromConstraint(m.tableInfos[foreignTableName], constraint)
 		if err != nil {
 			if !quiet {
 				logger.Printf("ignoring the constraint because of error "+
@@ -212,27 +211,24 @@ func (m *dumpMeta) outputConstraints(rmi *sqlRow, tableInfo *sqlTable) {
 			return
 		}
 		foreignBlankNode := m.tableGuides[foreignTableName].valuesRecorder.getBlankNode(refLabel)
-		outputPlainCell(rmi.blankNodeLabel, UID,
-			getPredFromConstraint(tableInfo.tableName, separator, constraint),
-			foreignBlankNode, m.dataWriter)
+		m.outputPlainCell(row.blankNodeLabel,
+			getPredFromConstraint(tableInfo.tableName, separator, constraint), UID, foreignBlankNode)
 	}
 }
 
 // outputPlainCell sends to the writer a RDF where the subject is the blankNode
 // the predicate is the predName, and the object is the colValue
-func outputPlainCell(blankNode string, dataType DataType, predName string,
-	colValue interface{}, writer *bufio.Writer) {
+func (m *dumpMeta) outputPlainCell(blankNode string, predName string, dataType DataType,
+	colValue interface{}) {
 	// Each cell value should be stored under a predicate
-
-	var buf strings.Builder
-
-	fmt.Fprintf(&buf, "%s <%s> ", blankNode, predName)
+	m.buf.Reset()
+	fmt.Fprintf(&m.buf, "%s <%s> ", blankNode, predName)
 
 	switch dataType {
 	case STRING:
-		fmt.Fprintf(&buf, "%q .\n", colValue)
+		fmt.Fprintf(&m.buf, "%q .\n", colValue)
 	case UID:
-		fmt.Fprintf(&buf, "%s .\n", colValue)
+		fmt.Fprintf(&m.buf, "%s .\n", colValue)
 	default:
 		objectVal, err := getValue(dataType, colValue)
 		if err != nil {
@@ -243,11 +239,11 @@ func outputPlainCell(blankNode string, dataType DataType, predName string,
 			return
 		}
 
-		fmt.Fprintf(&buf, "\"%v\" .\n", objectVal)
+		fmt.Fprintf(&m.buf, "\"%v\" .\n", objectVal)
 	}
 
 	// send the buf to writer
-	fmt.Fprintf(writer, "%s", buf.String())
+	fmt.Fprintf(m.dataWriter, "%s", m.buf.String())
 }
 
 // getRefLabelFromConstraint returns a ref label based on a foreign key constraint.
@@ -259,7 +255,7 @@ func outputPlainCell(blankNode string, dataType DataType, predName string,
 // where Google is the person_company, 100 is the employee id, and 50.0 is the salary rate
 // the refLabel will use the foreign table name, foreign column names and the local row's values,
 // yielding the value of _:person_company_Google_employee_id_100
-func (rmi *sqlRow) getRefLabelFromConstraint(foreignTableInfo *sqlTable,
+func (row *sqlRow) getRefLabelFromConstraint(foreignTableInfo *sqlTable,
 	constraint *fkConstraint) (string, error) {
 	if constraint.foreignIndices == nil {
 		foreignKeyColumnNames := make(map[string]string)
@@ -267,7 +263,7 @@ func (rmi *sqlRow) getRefLabelFromConstraint(foreignTableInfo *sqlTable,
 			foreignKeyColumnNames[part.columnName] = part.remoteColumnName
 		}
 
-		constraint.foreignIndices = getColumnIndices(rmi.tableInfo,
+		constraint.foreignIndices = getColumnIndices(row.tableInfo,
 			func(info *sqlTable, column string) bool {
 				_, ok := foreignKeyColumnNames[column]
 				return ok
@@ -283,6 +279,6 @@ func (rmi *sqlRow) getRefLabelFromConstraint(foreignTableInfo *sqlTable,
 		allColumns:       foreignTableInfo.columns,
 		refColumnIndices: constraint.foreignIndices,
 		tableName:        foreignTableInfo.tableName,
-		colValues:        rmi.colValues,
+		colValues:        row.values,
 	})
 }
