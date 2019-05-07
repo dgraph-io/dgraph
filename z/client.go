@@ -65,7 +65,7 @@ func init() {
 	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	grpcPort = getPort("TEST_PORT_ZERO", 5180)
 	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
