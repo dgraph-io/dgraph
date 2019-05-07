@@ -172,7 +172,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loadType)
+			m.run()
 			mapperWg.Done()
 		}(m)
 	}

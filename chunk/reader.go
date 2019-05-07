@@ -19,6 +19,7 @@ package chunk
 import (
 	"bufio"
 	"compress/gzip"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +30,6 @@ import (
 
 // chunk.Reader wraps a bufio.Reader to hold additional information
 // about the file being read.
-// XXX need to check how reliable offset value is
 type Reader struct {
 	rd         *bufio.Reader
 	offset     int // start of file is at offset 0
@@ -42,13 +42,9 @@ type Reader struct {
 	prevLine   int
 }
 
-//
-// TODO Unexport names?
-//
-
-// NewReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension. The caller is responsible for
-// calling the returned cleanup function when done with the reader.
+// NewReader returns an open reader and cleanup function for the given file. Gzip-compressed input
+// is detected and decompressed automatically even without the gz extension. The caller is
+// responsible for calling the returned cleanup function when done with the reader.
 func NewReader(file string) (*Reader, func()) {
 	var f *os.File
 	var err error
@@ -66,24 +62,24 @@ func newReader(f *os.File) (*Reader, func()) {
 	var rd = Reader{filename: f.Name()}
 	var cleanup = func() { f.Close() }
 
+	var gzf io.Reader
 	if filepath.Ext(rd.filename) == ".gz" {
-		gzr, err := gzip.NewReader(f)
+		gzf = f
+	} else {
+		rd.rd = bufio.NewReader(f)
+		buf, _ := rd.rd.Peek(512)
+		typ := http.DetectContentType(buf)
+		if typ == "application/x-gzip" {
+			gzf = rd.rd
+		}
+	}
+
+	if gzf != nil {
+		gzr, err := gzip.NewReader(gzf)
 		x.CheckfNoTrace(err)
 		rd.rd = bufio.NewReader(gzr)
 		rd.compressed = true
 		cleanup = func() { f.Close(); gzr.Close() }
-	} else {
-		rd.rd = bufio.NewReader(f)
-		buf, _ := rd.rd.Peek(512)
-
-		typ := http.DetectContentType(buf)
-		if typ == "application/x-gzip" {
-			gzr, err := gzip.NewReader(rd.rd)
-			x.Check(err)
-			rd.rd = bufio.NewReader(gzr)
-			rd.compressed = true
-			cleanup = func() { f.Close(); gzr.Close() }
-		}
 	}
 
 	return &rd, cleanup
@@ -99,10 +95,6 @@ func (r *Reader) Offset() int {
 func (r *Reader) LineCount() int {
 	return r.line
 }
-
-//
-// TODO check for corner cases in reader functions
-//
 
 func (r *Reader) ReadSlice(delim byte) ([]byte, error) {
 	r.prevOffset, r.prevLine = r.offset, r.line
@@ -134,7 +126,7 @@ func (r *Reader) ReadRune() (rune, int, error) {
 	char, size, err := r.rd.ReadRune()
 	r.offset += size
 	if char == '\n' {
-		r.line += 1
+		r.line++
 	}
 	return char, size, err
 }

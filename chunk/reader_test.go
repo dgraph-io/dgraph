@@ -24,8 +24,8 @@ import (
 )
 
 type position struct {
-	off  int
-	line int
+	byteOffset int
+	lineOffset int
 }
 
 func checkChunks(t *testing.T, ck Chunker, rd *Reader, chunks []position) {
@@ -33,12 +33,11 @@ func checkChunks(t *testing.T, ck Chunker, rd *Reader, chunks []position) {
 	var err error
 	for _, expected := range chunks {
 		chunk, err = ck.Chunk(rd)
-		//t.Logf("ERR=%+v CHUNK@%d/%d=%+v", err, chunk.BytePos, chunk.LinePos, chunk)
 		require.True(t, err == nil || err == io.EOF,
 			"Chunk() unexpected error: %+v", err)
-		require.Equal(t, expected.line, chunk.LinePos,
+		require.Equal(t, expected.lineOffset, chunk.LinePos,
 			"incorrect line number")
-		require.Equal(t, expected.off, chunk.BytePos,
+		require.Equal(t, expected.byteOffset, chunk.BytePos,
 			"incorrect offset")
 	}
 	require.EqualError(t, err, io.EOF.Error())
@@ -49,7 +48,7 @@ func TestReaderRdf(t *testing.T) {
 	rd, fn := NewReader("testdata/data.rdf")
 	defer fn()
 
-	// ensure small test file is read in more than one chunk
+	// Ensure small test file is read in more than one chunk.
 	maxRdfLines = 10
 
 	var chunks = []position{

@@ -61,7 +61,7 @@ const (
 	JsonFormat
 )
 
-// This is should only be changed for testing.
+// This should only be changed for testing.
 var maxRdfLines = 10000
 
 func (c *Chunk) Parse() ([]*api.NQuad, error) {
