@@ -54,6 +54,7 @@ func init() {
 		"tables to import, an empty string means importing all tables in the database")
 	flag.StringP("output_schema", "s", "schema.txt", "The schema output file")
 	flag.StringP("output_data", "o", "sql.rdf", "The data output file")
+	flag.StringP("separator", "p", ".", "The separator for constructing predicate names")
 	flag.BoolP("quiet", "q", false, "Enable quiet mode to suppress the warning logs")
 }
 
@@ -65,6 +66,7 @@ func run(conf *viper.Viper) error {
 	schemaOutput := conf.GetString("output_schema")
 	dataOutput := conf.GetString("output_data")
 	quiet = conf.GetBool("quiet")
+	separator = conf.GetString("separator")
 
 	switch {
 	case len(mysqlUser) == 0:

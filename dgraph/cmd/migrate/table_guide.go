@@ -23,9 +23,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-const (
-	separator = "."
-)
+var separator = "."
 
 // A blankNode generates the unique blank node label that corresponds to a Dgraph uid.
 // Values are passed to the genBlankNode method in the order of alphabetically sorted columns
