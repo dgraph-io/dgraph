@@ -246,17 +246,9 @@ func getPredFromConstraint(
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
 	}
-	return fmt.Sprintf("%s%s%s.", tableName, separator, strings.Join(columnNames, separator))
+	return fmt.Sprintf("%s%s%s%s", tableName, separator,
+		strings.Join(columnNames, separator), separator)
 }
-
-// a predNameGen is responsible for generating pred names based on a table's info and a column name
-// type predNameGen interface {
-// 	genPredicateName(info *tableInfo, column string) string
-// }
-
-// type simplePredNameGen struct {
-// 	separator string
-// }
 
 func predicateName(info *sqlTable, column string) string {
 	return fmt.Sprintf("%s%s%s", info.tableName, separator, column)
