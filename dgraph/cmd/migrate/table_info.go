@@ -58,9 +58,9 @@ type constraintPart struct {
 	remoteColumnName string
 }
 
-// a tableInfo contains a SQL table's metadata such as the table name,
+// a sqlTable contains a SQL table's metadata such as the table name,
 // the info of each column etc
-type tableInfo struct {
+type sqlTable struct {
 	tableName string
 	columns   map[string]*columnInfo
 
@@ -95,7 +95,7 @@ func getColumnInfo(fieldName string, dbType string) *columnInfo {
 	return &columnInfo
 }
 
-func getTableInfo(pool *sql.DB, table string, database string) (*tableInfo, error) {
+func parseTables(pool *sql.DB, table string, database string) (*sqlTable, error) {
 	query := fmt.Sprintf(`select COLUMN_NAME,DATA_TYPE from INFORMATION_SCHEMA.
 COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, table, database)
 	columnRows, err := pool.Query(query)
@@ -104,7 +104,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 	}
 	defer columnRows.Close()
 
-	tableInfo := &tableInfo{
+	tableInfo := &sqlTable{
 		tableName:             table,
 		columns:               make(map[string]*columnInfo),
 		columnNames:           make([]string, 0),
@@ -240,7 +240,7 @@ func validateAndGetReverse(constraint *fkConstraint) (string, *fkConstraint) {
 // populateReferencedByColumns calculates the reverse links of
 // the data at tables[table name].foreignKeyReferences
 // and stores them in tables[table name].columns[column name].referencedBy
-func populateReferencedByColumns(tables map[string]*tableInfo) {
+func populateReferencedByColumns(tables map[string]*sqlTable) {
 	for _, tableInfo := range tables {
 		for _, constraint := range tableInfo.foreignKeyConstraints {
 			reverseTable, reverseConstraint := validateAndGetReverse(constraint)

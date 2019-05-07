@@ -67,11 +67,11 @@ func readMySqlTables(pool *sql.DB, mysqlTables string) ([]string, error) {
 	return tables, nil
 }
 
-type criteriaFunc func(info *tableInfo, column string) bool
+type criteriaFunc func(info *sqlTable, column string) bool
 
 // getColumnIndices first sort the columns in the table alphabetically, and then
 // returns the indices of the columns satisfying the criteria function
-func getColumnIndices(info *tableInfo, criteria criteriaFunc) []*ColumnIdx {
+func getColumnIndices(info *sqlTable, criteria criteriaFunc) []*ColumnIdx {
 	columns := getSortedColumns(info)
 
 	indices := make([]*ColumnIdx, 0)
@@ -140,7 +140,7 @@ func getColumnValues(columns []string, dataTypes []DataType,
 
 // getSortedColumns sorts the column alphabetically using the column names
 // and return the column names as a slice
-func getSortedColumns(tableInfo *tableInfo) []string {
+func getSortedColumns(tableInfo *sqlTable) []string {
 	columns := make([]string, 0)
 	for column := range tableInfo.columns {
 		columns = append(columns, column)

@@ -30,27 +30,27 @@ import (
 // the writer to output the Dgraph schema,
 // and a sqlPool to read information from MySQL
 type dumpMeta struct {
-	tableInfos   map[string]*tableInfo
+	tableInfos   map[string]*sqlTable
 	tableGuides  map[string]*tableGuide
 	dataWriter   *bufio.Writer
 	schemaWriter *bufio.Writer
 	sqlPool      *sql.DB
 }
 
-// rowMeta captures values in a SQL table row, as well as the metadata associated
+// sqlRow captures values in a SQL table row, as well as the metadata associated
 // with the row
-type rowMeta struct {
+type sqlRow struct {
 	colValues      []interface{}
 	blankNodeLabel string
-	tableInfo      *tableInfo
+	tableInfo      *sqlTable
 }
 
 // dumpSchema generates the Dgraph schema based on m.tableGuides
 // and sends the schema to m.schemaWriter
 func (m *dumpMeta) dumpSchema() error {
-	for table, guide := range m.tableGuides {
+	for table := range m.tableGuides {
 		tableInfo := m.tableInfos[table]
-		for _, index := range guide.indexGen.genDgraphIndices(tableInfo) {
+		for _, index := range createDgraphSchema(tableInfo) {
 			_, err := m.schemaWriter.WriteString(index)
 			if err != nil {
 				return fmt.Errorf("error while writing schema: %v", err)
@@ -98,10 +98,10 @@ func (m *dumpMeta) dumpTable(table string) error {
 	// populate the predNames
 	for _, column := range tableInfo.columnNames {
 		tableInfo.predNames = append(tableInfo.predNames,
-			tableGuide.predNameGen.genPredicateName(tableInfo, column))
+			predicateName(tableInfo, column))
 	}
 
-	rowMeta := &rowMeta{
+	row := &sqlRow{
 		tableInfo: tableInfo,
 	}
 
@@ -111,15 +111,15 @@ func (m *dumpMeta) dumpTable(table string) error {
 		if err != nil {
 			return err
 		}
-		rowMeta.colValues = colValues
+		row.colValues = colValues
 
 		// step 2: output the column values in RDF format
-		rowMeta.blankNodeLabel = tableGuide.blankNodeGen.genBlankNode(tableInfo, colValues)
-		m.outputRow(rowMeta, tableInfo)
+		row.blankNodeLabel = tableGuide.blankNodeGen.generate(tableInfo, colValues)
+		m.outputRow(row, tableInfo)
 
 		// step 3: record mappings to the blankNodeLabel so that future tables can look up the
 		// blankNodeLabel
-		tableGuide.valuesRecorder.record(tableInfo, colValues, rowMeta.blankNodeLabel)
+		tableGuide.valuesRecorder.record(tableInfo, colValues, row.blankNodeLabel)
 	}
 
 	return nil
@@ -140,7 +140,7 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 	}
 	defer rows.Close()
 
-	rowMeta := &rowMeta{
+	rowMeta := &sqlRow{
 		tableInfo: tableInfo,
 	}
 	for rows.Next() {
@@ -152,7 +152,7 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 		rowMeta.colValues = colValues
 
 		// step 2: output the constraints in RDF format
-		rowMeta.blankNodeLabel = tableGuide.blankNodeGen.genBlankNode(tableInfo, colValues)
+		rowMeta.blankNodeLabel = tableGuide.blankNodeGen.generate(tableInfo, colValues)
 
 		m.outputConstraints(rowMeta, tableInfo)
 	}
@@ -187,7 +187,7 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 // _:person_company_Google_employee_id_100. The mapping from the ref label
 // _:person_company_Google_employee_id_100 to the foreign blank node _:person_2
 // is recorded through the person table's valuesRecorder.
-func (m *dumpMeta) outputRow(rmi *rowMeta, tableInfo *tableInfo) {
+func (m *dumpMeta) outputRow(rmi *sqlRow, tableInfo *sqlTable) {
 	for i, colValue := range rmi.colValues {
 		predicate := tableInfo.predNames[i]
 		outputPlainCell(rmi.blankNodeLabel, tableInfo.columnDataTypes[i],
@@ -195,7 +195,7 @@ func (m *dumpMeta) outputRow(rmi *rowMeta, tableInfo *tableInfo) {
 	}
 }
 
-func (m *dumpMeta) outputConstraints(rmi *rowMeta, tableInfo *tableInfo) {
+func (m *dumpMeta) outputConstraints(rmi *sqlRow, tableInfo *sqlTable) {
 	for _, constraint := range tableInfo.foreignKeyConstraints {
 		if len(constraint.parts) == 0 {
 			logger.Fatalf("The constraint should have at least one part: %v", constraint)
@@ -259,7 +259,7 @@ func outputPlainCell(blankNode string, dataType DataType, predName string,
 // where Google is the person_company, 100 is the employee id, and 50.0 is the salary rate
 // the refLabel will use the foreign table name, foreign column names and the local row's values,
 // yielding the value of _:person_company_Google_employee_id_100
-func (rmi *rowMeta) getRefLabelFromConstraint(foreignTableInfo *tableInfo,
+func (rmi *sqlRow) getRefLabelFromConstraint(foreignTableInfo *sqlTable,
 	constraint *fkConstraint) (string, error) {
 	if constraint.foreignIndices == nil {
 		foreignKeyColumnNames := make(map[string]string)
@@ -268,7 +268,7 @@ func (rmi *rowMeta) getRefLabelFromConstraint(foreignTableInfo *tableInfo,
 		}
 
 		constraint.foreignIndices = getColumnIndices(rmi.tableInfo,
-			func(info *tableInfo, column string) bool {
+			func(info *sqlTable, column string) bool {
 				_, ok := foreignKeyColumnNames[column]
 				return ok
 			})
@@ -279,11 +279,10 @@ func (rmi *rowMeta) getRefLabelFromConstraint(foreignTableInfo *tableInfo,
 		}
 	}
 
-	return getRefLabel(&ref{
+	return createLabel(&ref{
 		allColumns:       foreignTableInfo.columns,
 		refColumnIndices: constraint.foreignIndices,
 		tableName:        foreignTableInfo.tableName,
-		separator:        separator,
 		colValues:        rmi.colValues,
 	})
 }

@@ -106,9 +106,9 @@ func run(conf *viper.Viper) error {
 		return err
 	}
 
-	tableInfos := make(map[string]*tableInfo, 0)
+	tableInfos := make(map[string]*sqlTable, 0)
 	for _, table := range tablesToRead {
-		tableInfo, err := getTableInfo(pool, table, mysqlDB)
+		tableInfo, err := parseTables(pool, table, mysqlDB)
 		if err != nil {
 			return err
 		}

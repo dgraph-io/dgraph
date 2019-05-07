@@ -24,19 +24,18 @@ import (
 )
 
 const (
-	separator = "_"
+	separator = "."
 )
 
-// A blankNodeGen generates the unique blank node label that corresponds to a Dgraph uid.
+// A blankNode generates the unique blank node label that corresponds to a Dgraph uid.
 // Values are passed to the genBlankNode method in the order of alphabetically sorted columns
-type blankNodeGen interface {
-	genBlankNode(info *tableInfo, values []interface{}) string
+type blankNode interface {
+	generate(info *sqlTable, values []interface{}) string
 }
 
-// columnBNGen generates blank node labels using values in the primary key columns
-type columnBNGen struct {
+// usingColumns generates blank node labels using values in the primary key columns
+type usingColumns struct {
 	primaryKeyIndices []*ColumnIdx
-	separator         string
 }
 
 // As an example, if the employee table has 3 columns (f_name, l_name, and title),
@@ -44,37 +43,36 @@ type columnBNGen struct {
 // Then a row with values John (f_name), Doe (l_name), Software Engineer (title)
 // would generate a blank node label _:person_John_Doe using values from the primary key columns
 // in the alphabetic order, that is f_name, l_name in this case.
-func (g *columnBNGen) genBlankNode(info *tableInfo, values []interface{}) string {
+func (g *usingColumns) generate(info *sqlTable, values []interface{}) string {
 	if g.primaryKeyIndices == nil {
-		g.primaryKeyIndices = getColumnIndices(info, func(info *tableInfo, column string) bool {
+		g.primaryKeyIndices = getColumnIndices(info, func(info *sqlTable, column string) bool {
 			return info.columns[column].keyType == PRIMARY
 		})
 	}
 
 	// use the primary key indices to retrieve values in the current row
-	valuesForKey := make([]string, 0)
+	var parts []string
+	parts = append(parts, info.tableName)
 	for _, columnIndex := range g.primaryKeyIndices {
 		strVal, err := getValue(info.columns[columnIndex.name].dataType,
 			values[columnIndex.index])
 		if err != nil {
 			logger.Fatalf("Unable to get string value from primary key column %s", columnIndex.name)
 		}
-		valuesForKey = append(valuesForKey, strVal)
+		parts = append(parts, strVal)
 	}
 
-	return fmt.Sprintf("_:%s%s%s", info.tableName, g.separator,
-		strings.Join(valuesForKey, g.separator))
+	return fmt.Sprintf("_:%s", strings.Join(parts, separator))
 }
 
-// A counterBNGen generates blank node labels using a row counter
-type counterBNGen struct {
+// A usingCounter generates blank node labels using a row counter
+type usingCounter struct {
 	rowCounter int
-	separator  string
 }
 
-func (g *counterBNGen) genBlankNode(info *tableInfo, values []interface{}) string {
+func (g *usingCounter) generate(info *sqlTable, values []interface{}) string {
 	g.rowCounter++
-	return fmt.Sprintf("_:%s%s%d", info.tableName, g.separator, g.rowCounter)
+	return fmt.Sprintf("_:%s%s%d", info.tableName, separator, g.rowCounter)
 }
 
 // a valuesRecorder remembers the mapping between an ref label and its blank node label
@@ -88,7 +86,7 @@ func (g *counterBNGen) genBlankNode(info *tableInfo, values []interface{}) strin
 // key constraints, there is a way to look up the blank node labels and use it to create
 // a Dgraph link between the two rows in the two different tables.
 type valuesRecorder interface {
-	record(info *tableInfo, values []interface{}, blankNodeLabel string)
+	record(info *sqlTable, values []interface{}, blankNodeLabel string)
 	getBlankNode(indexLabel string) string
 }
 
@@ -96,7 +94,10 @@ type valuesRecorder interface {
 // the blank node of the row
 type fkValuesRecorder struct {
 	refToBlank map[string]string
-	separator  string
+}
+
+func (r *fkValuesRecorder) getBlankNode(indexLabel string) string {
+	return r.refToBlank[indexLabel]
 }
 
 // record keeps track of the mapping between referenced foreign columns and the blank node label
@@ -122,22 +123,21 @@ type fkValuesRecorder struct {
 // This mapping will be used later, when processing the salary table, to find the blank node label
 // _:person_John_Doe, which is used further to create the Dgraph link between a salary row
 // and the person row
-func (r *fkValuesRecorder) record(info *tableInfo, values []interface{},
+func (r *fkValuesRecorder) record(info *sqlTable, values []interface{},
 	blankNode string) {
 	for _, cst := range info.cstSources {
 		// for each foreign key cst, there should be a mapping
 		cstColumns := getCstColumns(cst)
 		cstColumnIndices := getColumnIndices(info,
-			func(info *tableInfo, column string) bool {
+			func(info *sqlTable, column string) bool {
 				_, ok := cstColumns[column]
 				return ok
 			})
 
-		refLabel, err := getRefLabel(&ref{
+		refLabel, err := createLabel(&ref{
 			allColumns:       info.columns,
 			refColumnIndices: cstColumnIndices,
 			tableName:        info.tableName,
-			separator:        r.separator,
 			colValues:        values,
 		})
 		if err != nil {
@@ -186,37 +186,28 @@ type ref struct {
 	allColumns       map[string]*columnInfo
 	refColumnIndices []*ColumnIdx
 	tableName        string
-	separator        string
 	colValues        []interface{}
 }
 
-func getRefLabel(ref *ref) (string, error) {
-	columnNameAndValues := make([]string, 0)
-	for _, columnIdx := range ref.refColumnIndices {
-		colVal, err := getValue(ref.allColumns[columnIdx.name].dataType,
-			ref.colValues[columnIdx.index])
+func createLabel(ref *ref) (string, error) {
+	parts := make([]string, 0)
+	parts = append(parts, ref.tableName)
+	for _, colIdx := range ref.refColumnIndices {
+		colVal, err := getValue(ref.allColumns[colIdx.name].dataType,
+			ref.colValues[colIdx.index])
 		if err != nil {
 			return "", err
 		}
-		nameAndValue := fmt.Sprintf("%s%s%s", columnIdx.name,
-			ref.separator, colVal)
-
-		columnNameAndValues = append(columnNameAndValues,
-			nameAndValue)
+		parts = append(parts, colIdx.name, colVal)
 	}
 
-	return fmt.Sprintf("_:%s%s%s", ref.tableName, ref.separator,
-		strings.Join(columnNameAndValues, ref.separator)), nil
+	return fmt.Sprintf("_:%s", strings.Join(parts, separator)), nil
 }
 
-func (r *fkValuesRecorder) getBlankNode(indexLabel string) string {
-	return r.refToBlank[indexLabel]
-}
-
-// an IdxGen is responsible for generating Dgraph indices
-type IdxGen interface {
-	genDgraphIndices(info *tableInfo) []string
-}
+// // an IdxGen is responsible for generating Dgraph indices
+// type IdxGen interface {
+// 	genDgraphIndices(info *tableInfo) []string
+// }
 
 // compositeIdxGen generates one Dgraph index per SQL table primary key
 // or index. For a composite index in SQL, e.g. (fname, lname) in the person table, we will create
@@ -224,18 +215,18 @@ type IdxGen interface {
 // person_fname: string @index(exact) .
 // person_lname: string @index(exact) .
 // The reason is that Dgraph does not support composite indices as of now.
-type compositeIdxGen struct {
-	separator string
-}
+// type compositeIdxGen struct {
+// 	separator string
+// }
 
-func (g *compositeIdxGen) genDgraphIndices(info *tableInfo) []string {
+func createDgraphSchema(info *sqlTable) []string {
 	dgraphIndexes := make([]string, 0)
-	sqlIndexedColumns := getColumnIndices(info, func(info *tableInfo, column string) bool {
+	sqlIndexedColumns := getColumnIndices(info, func(info *sqlTable, column string) bool {
 		return info.columns[column].keyType != NONE
 	})
 
 	for _, column := range sqlIndexedColumns {
-		predicate := fmt.Sprintf("%s%s%s", info.tableName, g.separator, column.name)
+		predicate := fmt.Sprintf("%s%s%s", info.tableName, separator, column.name)
 
 		dataType := info.columns[column.name].dataType
 
@@ -251,7 +242,7 @@ func (g *compositeIdxGen) genDgraphIndices(info *tableInfo) []string {
 	}
 
 	for _, cst := range info.foreignKeyConstraints {
-		pred := getPredFromConstraint(info.tableName, g.separator, cst)
+		pred := getPredFromConstraint(info.tableName, separator, cst)
 		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: [%s] .\n",
 			pred, UID))
 	}
@@ -268,55 +259,41 @@ func getPredFromConstraint(
 }
 
 // a predNameGen is responsible for generating pred names based on a table's info and a column name
-type predNameGen interface {
-	genPredicateName(info *tableInfo, column string) string
-}
+// type predNameGen interface {
+// 	genPredicateName(info *tableInfo, column string) string
+// }
 
-type simplePredNameGen struct {
-	separator string
-}
+// type simplePredNameGen struct {
+// 	separator string
+// }
 
-func (g *simplePredNameGen) genPredicateName(info *tableInfo, column string) string {
-	return fmt.Sprintf("%s%s%s", info.tableName, g.separator, column)
+func predicateName(info *sqlTable, column string) string {
+	return fmt.Sprintf("%s%s%s", info.tableName, separator, column)
 }
 
 type tableGuide struct {
-	blankNodeGen   blankNodeGen
+	blankNodeGen   blankNode
 	valuesRecorder valuesRecorder
-	indexGen       IdxGen
-	predNameGen    predNameGen
 }
 
-func getBlankNodeGen(ti *tableInfo) blankNodeGen {
-	primaryKeyIndices := getColumnIndices(ti, func(info *tableInfo, column string) bool {
+func getBlankNodeGen(ti *sqlTable) blankNode {
+	primaryKeyIndices := getColumnIndices(ti, func(info *sqlTable, column string) bool {
 		return info.columns[column].keyType == PRIMARY
 	})
 
 	if len(primaryKeyIndices) > 0 {
-		return &columnBNGen{
-			separator: separator,
-		}
+		return &usingColumns{}
 	}
-
-	return &counterBNGen{
-		separator: separator,
-	}
+	return &usingCounter{}
 }
 
-func getTableGuides(tables map[string]*tableInfo) map[string]*tableGuide {
+func getTableGuides(tables map[string]*sqlTable) map[string]*tableGuide {
 	tableGuides := make(map[string]*tableGuide)
 	for table, tableInfo := range tables {
 		guide := &tableGuide{
 			blankNodeGen: getBlankNodeGen(tableInfo),
 			valuesRecorder: &fkValuesRecorder{
 				refToBlank: make(map[string]string),
-				separator:  separator,
-			},
-			indexGen: &compositeIdxGen{
-				separator: separator,
-			},
-			predNameGen: &simplePredNameGen{
-				separator: separator,
 			},
 		}
 
