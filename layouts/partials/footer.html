@@ -55,49 +55,21 @@
         document.cookie = cname + "=" + cvalue + ";" + expires + ";domain=.dgraph.io;path=/";
       }
     </script>
+
     <script type="text/javascript" src="https://downloads.mailchimp.com/js/signup-forms/popup/embed.js" data-dojo-config="usePlainJson: true, isDebug: false"></script>
-    <script type="text/javascript">
-      function isLocal() {
-        const hostname = window.location.hostname;
-        return hostname === "localhost" || hostname === "127.0.0.1";
-      }
 
-      function showPopup(isStart) {
-        var skip = false;
-        if (isStart && (getCookie("MCCustom") || isLocal())) {
-          skip = true;
-        }
-
-        var elements = document.getElementsByClassName('mc-modal');
-        while(elements.length > 0) {
-          elements[0].parentNode.parentNode.removeChild(elements[0].parentNode);
-        }
-
-        require(["mojo/signup-forms/Loader"], function(L) {
-          if (!skip) {
-            L.start({"baseUrl":"mc.us17.list-manage.com","uuid":"f6c6a28bb40d10e26b88fff1c","lid":"e85c448cac"});
-          }
-        });
-
-        if (skip) {
-          return;
-        }
-
-        var mcPopupClosed = getCookie("MCPopupClosed");
-        if (mcPopupClosed) {
-          setCookie("MCCustom", "c");
-        }
-
-        var mcPopupSubscribed = getCookie("MCPopupSubscribed");
-        if (mcPopupSubscribed) {
-          setCookie("MCCustom", "s");
-        }
-
-        document.cookie = 'MCPopupClosed=;path=/;expires=Thu, 01 Jan 1970 00:00:00 UTC;';
-        document.cookie = 'MCPopupSubscribed=;path=/;expires=Thu, 01 Jan 1970 00:00:00 UTC;';
-      }
-
-      showPopup(true);
+    <script type="text/javascript" src="//downloads.mailchimp.com/js/signup-forms/popup/unique-methods/embed.js" data-dojo-config="usePlainJson: true, isDebug: false"></script>
+    <script>
+      window.dojoRequire(
+      		["mojo/signup-forms/Loader"],
+      		function(L) {
+      			L.start({
+      					"baseUrl":"mc.us17.list-manage.com",
+      					"uuid":"f6c6a28bb40d10e26b88fff1c",
+      					"lid":"e85c448cac",
+      					"uniqueMethods":true
+      			})
+      		})
     </script>
 
     </body>
