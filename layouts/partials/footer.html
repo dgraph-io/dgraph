@@ -44,5 +44,15 @@
       		})
     </script>
 
+    <script>
+      setInterval(function() {
+        var cookieVal = getCookie('MCPopupClosed');
+        if (cookieVal) {
+          // Unlike mailchimps standard behavior setCookie pushes cookie to all *.dgraph.io subdomains
+          setCookie('MCPopupClosed', cookieVal, 5)
+        }
+      }, 3000);
+    </script>
+
     </body>
 </html>
