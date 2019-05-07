@@ -96,33 +96,32 @@ func (c rdfChunker) Chunk(r *Reader) (*Chunk, error) {
 		ck:      c,
 	}
 
-	batch := chunk.Buffer
-	batch.Grow(1 << 20)
+	chunk.Grow(1 << 20)
 	for lineCount := 0; lineCount < maxRdfLines; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
-			batch.Write(slc)
+			chunk.Write(slc)
 			return chunk, err
 		}
 		if err == bufio.ErrBufferFull {
 			// This should only happen infrequently.
-			batch.Write(slc)
+			chunk.Write(slc)
 			var str string
 			str, err = r.ReadString('\n')
 			if err == io.EOF {
-				batch.WriteString(str)
+				chunk.WriteString(str)
 				return chunk, err
 			}
 			if err != nil {
 				return nil, err
 			}
-			batch.WriteString(str)
+			chunk.WriteString(str)
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		batch.Write(slc)
+		chunk.Write(slc)
 	}
 	return chunk, nil
 }
