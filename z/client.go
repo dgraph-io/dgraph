@@ -170,6 +170,7 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	return response.Q[0].Count
 }
 
+// RetryQuery will retry a query until it succeeds or a non-retryable error is received.
 func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 	for {
 		resp, err := dg.NewTxn().Query(context.Background(), q)
@@ -178,6 +179,20 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 			continue
 		}
 		return resp, err
+	}
+}
+
+// RetryMutation will retry a mutation until it succeeds or a non-retryable error is received.
+// The mutation should have CommitNow set to true.
+func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
+	for {
+		_, err := dg.NewTxn().Mutate(context.Background(), mu)
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "Tablet isn't being served by this instance")) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return err
 	}
 }
 

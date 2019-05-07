@@ -229,7 +229,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		}
 	}
 
-	// Some proposals, like schema updates can take a long time to apply. Let's
+	// Some proposals, like schema updates are very expensive to retry. So, let's
 	// not do the retry mechanism on them. Instead, we can set a long timeout.
 	//
 	// Note that timeout only affects how long it takes us to find the proposal back via Raft logs.
@@ -237,12 +237,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	//
 	// Based on updated logic, once we find the proposal in the raft log, we would not cancel it
 	// anyways. Instead, we'd let the proposal run its course.
-	//
-	// If a proposal is important (like delta updates), let's not run it via the limiter below. We
-	// should always propose it irrespective of how many pending proposals there might be.
-	if noTimeout || proposal.Delta != nil {
+	if noTimeout {
 		return propose(3 * time.Minute)
 	}
+
 	// Some proposals can be stuck if leader change happens. For e.g. MsgProp message from follower
 	// to leader can be dropped/end up appearing with empty Data in CommittedEntries.
 	// Having a timeout here prevents the mutation being stuck forever in case they don't have a
@@ -253,10 +251,17 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	for i := 0; i < 3; i++ {
 		// Each retry creates a new proposal, which adds to the number of pending proposals. We
 		// should consider this into account, when adding new proposals to the system.
-		if err := limiter.incr(ctx, i); err != nil {
-			return err
+		switch {
+		case proposal.Delta != nil: // Is a delta.
+			// If a proposal is important (like delta updates), let's not run it via the limiter
+			// below. We should always propose it irrespective of how many pending proposals there
+			// might be.
+		default:
+			if err := limiter.incr(ctx, i); err != nil {
+				return err
+			}
+			defer limiter.decr(i)
 		}
-		defer limiter.decr(i)
 
 		if err := propose(newTimeout(i)); err != errInternalRetry {
 			return err
