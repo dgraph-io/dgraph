@@ -151,22 +151,20 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
 	ts uint64) ([]string, []string, uint64, error) {
 
-	url := addr + "/mutate"
-	separator := "?"
+	queryParams := make([]string, 0)
 	if ts != 0 {
-		url += separator + "startTs=" + strconv.FormatUint(ts, 10)
-		separator = "&"
+		queryParams = append(queryParams, "startTs="+strconv.FormatUint(ts, 10))
 	}
 	var keys []string
 	var preds []string
 	if isJson {
-		url += separator + "mutationType=json"
-		separator = "&"
+		queryParams = append(queryParams, "mutationType=json")
 	}
 	if commitNow {
-		url += separator + "commitNow=true"
-		separator = "&"
+		queryParams = append(queryParams, "commitNow=true")
 	}
+
+	url := addr + "/mutate?" + strings.Join(queryParams, "&")
 	_, body, err := runWithRetries("POST", url, m)
 	if err != nil {
 		return keys, preds, 0, err
