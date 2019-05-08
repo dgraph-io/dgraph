@@ -34,7 +34,11 @@ type Request struct {
 	DB       *badger.DB // Badger pstore managed by this node.
 	Backup   *pb.BackupRequest
 	Manifest *Manifest
-	Version  uint64
+
+	// Version indicates the beginning timestamp from which the backup should start
+	// For a partial backup, the Version is the largest Version from previous manifest files
+	// For a full backup, we force the Version to be 0 so that all data is included
+	Version uint64
 }
 
 // Process uses the request values to create a stream writer then hand off the data
