@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"encoding/hex"
 	"hash"
 
 	"github.com/ChainSafe/gossamer/common"
@@ -30,12 +29,7 @@ type Hasher struct {
 }
 
 func newHasher() (*Hasher, error) {
-	key, err := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
-	if err != nil {
-		return nil, err
-	}
-
-	h, err := blake2s.New256(key)
+	h, err := blake2s.New256(nil)
 	if err != nil {
 		return nil, err
 	}

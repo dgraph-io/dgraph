@@ -149,17 +149,17 @@ func (l *leaf) Encode() ([]byte, error) {
 func (b *branch) header() []byte {
 	var header byte
 	if b.value == nil {
-		header = 2
+		header = 2 << 6
 	} else {
-		header = 3
+		header = 3 << 6
 	}
 	var encodePkLen []byte
 
-	if len(b.key) > 62 {
-		header = header | 0xfc
+	if len(b.key) >= 63 {
+		header = header | 0x3f
 		encodePkLen = encodeExtraPartialKeyLength(len(b.key))
 	} else {
-		header = header | (byte(len(b.key)) << 2)
+		header = header | byte(len(b.key))
 	}
 
 	fullHeader := append([]byte{header}, encodePkLen...)
@@ -167,14 +167,14 @@ func (b *branch) header() []byte {
 }
 
 func (l *leaf) header() []byte {
-	var header byte = 1
+	var header byte = 1 << 6
 	var encodePkLen []byte
 
-	if len(l.key) > 62 {
-		header = header | 0xfc
+	if len(l.key) >= 63 {
+		header = header | 0x3f
 		encodePkLen = encodeExtraPartialKeyLength(len(l.key))
 	} else {
-		header = header | (byte(len(l.key)) << 2)
+		header = header | byte(len(l.key))
 	}
 
 	fullHeader := append([]byte{header}, encodePkLen...)
