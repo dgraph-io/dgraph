@@ -238,8 +238,8 @@ func getJaeger() Service {
 			"SPAN_STORAGE_TYPE=badger",
 		},
 		Command: "--badger.ephemeral=false" +
-			" --badger.directory-key /working/jaeger/keys" +
-			" --badger.directory-value /working/jaeger/values",
+			" --badger.directory-key /working/jaeger" +
+			" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
