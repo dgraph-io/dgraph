@@ -225,11 +225,21 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
-func (n *Node) Send(m raftpb.Message) {
-	x.AssertTruef(n.Id != m.To, "Sending message to itself")
-	data, err := m.Marshal()
+func (n *Node) Send(msg raftpb.Message) {
+	x.AssertTruef(n.Id != msg.To, "Sending message to itself")
+	data, err := msg.Marshal()
 	x.Check(err)
 
+	if glog.V(2) {
+		switch msg.Type {
+		case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
+		case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
+		case raftpb.MsgApp, raftpb.MsgAppResp:
+		case raftpb.MsgProp:
+		default:
+			glog.Infof("RaftComm: [%#x] Sending message of type %s to %#x", msg.From, msg.Type, msg.To)
+		}
+	}
 	// As long as leadership is stable, any attempted Propose() calls should be reflected in the
 	// next raft.Ready.Messages. Leaders will send MsgApps to the followers; followers will send
 	// MsgProp to the leader. It is up to the transport layer to get those messages to their
@@ -243,7 +253,7 @@ func (n *Node) Send(m raftpb.Message) {
 	// node. But, we shouldn't take the liberty to do that here. It would take us more time to
 	// repropose these dropped messages anyway, than to block here a bit waiting for the messages
 	// channel to clear out.
-	n.messages <- sendmsg{to: m.To, data: data}
+	n.messages <- sendmsg{to: msg.To, data: data}
 }
 
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
