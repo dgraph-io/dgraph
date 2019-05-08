@@ -29,14 +29,13 @@ import (
 )
 
 // Since chunk.Reader requires a file, write string to temp file and create reader from that.
-// Once reader is initialized the temp file can be removed to ensure it gets cleaned up.
-func chunkStrReader(str string) *Reader {
+// It's the caller's responsibility to call the returned function to clean up the file.
+func chunkStrReader(str string) (*Reader, func()) {
 	f, err := ioutil.TempFile("", "chunk_test.*")
 	x.Check(err)
 	x.Check(ioutil.WriteFile(f.Name(), []byte(str), 0600))
 	rd, _ := newReader(f)
-	os.Remove(f.Name())
-	return rd
+	return rd, func() { f.Close(); os.Remove(f.Name()) }
 }
 
 // Test that problems at the start of the JSON document are caught.
@@ -55,7 +54,14 @@ func TestJSONLoadStart(t *testing.T) {
 
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat)
-		require.Error(t, chunker.Begin(chunkStrReader(test.json)), test.desc)
+		reader, cleanup := chunkStrReader(test.json)
+
+		// Run in a separate function so that cleanup happens after every test case
+		// instead of temp files accumulating until the end.
+		func() {
+			defer cleanup()
+			require.Error(t, chunker.Begin(reader), test.desc)
+		}()
 	}
 }
 
@@ -73,13 +79,14 @@ func TestJSONLoadReadNext(t *testing.T) {
 	}
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat)
-		reader := chunkStrReader(test.json)
-		require.NoError(t, chunker.Begin(reader), test.desc)
-
-		json, err := chunker.Chunk(reader)
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
-		require.Nil(t, json, test.desc)
-		require.Error(t, err, test.desc)
+		reader, cleanup := chunkStrReader(test.json)
+		func() {
+			defer cleanup()
+			require.NoError(t, chunker.Begin(reader), test.desc)
+			json, err := chunker.Chunk(reader)
+			require.Nil(t, json, test.desc)
+			require.Error(t, err, test.desc)
+		}()
 	}
 }
 
@@ -122,17 +129,18 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 	}
 	for _, test := range tests {
 		chunker := NewChunker(JsonFormat)
-		reader := chunkStrReader(test.json)
-		require.NoError(t, chunker.Begin(reader), test.desc)
-
-		json, err := chunker.Chunk(reader)
-		if err == io.EOF {
-			// pass
-		} else {
-			require.NoError(t, err, test.desc)
-		}
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
-		require.Equal(t, test.expt, json.String(), test.desc)
+		reader, cleanup := chunkStrReader(test.json)
+		func() {
+			defer cleanup()
+			require.NoError(t, chunker.Begin(reader), test.desc)
+			json, err := chunker.Chunk(reader)
+			if err == io.EOF {
+				// pass
+			} else {
+				require.NoError(t, err, test.desc)
+			}
+			require.Equal(t, test.expt, json.String(), test.desc)
+		}()
 	}
 }
 
@@ -185,7 +193,8 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	}
 
 	chunker := NewChunker(JsonFormat)
-	reader := chunkStrReader(testDoc)
+	reader, cleanup := chunkStrReader(testDoc)
+	defer cleanup()
 
 	var json *Chunk
 	var idx int
