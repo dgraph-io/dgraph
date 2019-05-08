@@ -225,6 +225,16 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			// This should be done in order, and not via a goroutine.
 			// Step can block forever. See: https://github.com/etcd-io/etcd/issues/10585
 			// So, add a context with timeout to allow it to get out of the blockage.
+			if glog.V(2) {
+				switch msg.Type {
+				case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
+				case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
+				case raftpb.MsgApp, raftpb.MsgAppResp:
+				case raftpb.MsgProp:
+				default:
+					glog.Infof("RaftComm: [%#x] Received msg of type: %s from %#x", msg.To, msg.Type, msg.From)
+				}
+			}
 			if err := raft.Step(ctx, msg); err != nil {
 				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
 					rc.GetId(), err)
