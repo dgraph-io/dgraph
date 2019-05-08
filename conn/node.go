@@ -72,6 +72,8 @@ type Node struct {
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
 	Applied y.WaterMark
+
+	Heartbeats int64
 }
 
 type ToGlog struct {
@@ -155,6 +157,16 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	return n
 }
 
+func (n *Node) ReportRaftComms() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		num := atomic.SwapInt64(&n.Heartbeats, 0)
+		glog.V(2).Infof("RaftComm: [%#x] Heartbeats exchanged since last report: %d", n.Id, num)
+	}
+}
+
 // SetRaft would set the provided raft.Node to this node.
 // It would check fail if the node is already set.
 func (n *Node) SetRaft(r raft.Node) {
@@ -233,6 +245,7 @@ func (n *Node) Send(msg raftpb.Message) {
 	if glog.V(2) {
 		switch msg.Type {
 		case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
+			atomic.AddInt64(&n.Heartbeats, 1)
 		case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
 		case raftpb.MsgApp, raftpb.MsgAppResp:
 		case raftpb.MsgProp:
