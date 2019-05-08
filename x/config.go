@@ -48,6 +48,7 @@ type WorkerOptions struct {
 	AclEnabled          bool
 	AbortOlderThan      time.Duration
 	SnapshotAfter       int
+	UseRaftProgress     bool
 }
 
 var WorkerConfig WorkerOptions
