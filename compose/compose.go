@@ -23,7 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -72,6 +72,7 @@ type Options struct {
 	TempFS        bool
 	UserOwnership bool
 	Jaeger        bool
+	Datadog       bool
 	Metrics       bool
 	PortOffset    int
 	Verbosity     int
@@ -160,6 +161,9 @@ func initService(basename string, idx, grpcPort int) Service {
 	if opts.Jaeger {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
+	if opts.Datadog {
+		svc.Command += " --datadog.collector=http://datadog:8126"
+	}
 
 	return svc
 }
@@ -222,6 +226,19 @@ func getAlpha(idx int) Service {
 		}
 	}
 
+	return svc
+}
+
+func getDatadog() Service {
+	svc := Service{
+		Image:         "datadog/agent:latest",
+		ContainerName: "datadog",
+		WorkdingDir:   "/working/datadog",
+		Ports: []string{
+			toExposedPort(8126),
+		},
+		Environment: []string{"DD_API_KEY=12345", "DD_APM_ENABLED"},
+	}
 	return svc
 }
 
@@ -342,6 +359,8 @@ func main() {
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
+	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "datadog", "g", false,
+		"include datadog service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
 	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,

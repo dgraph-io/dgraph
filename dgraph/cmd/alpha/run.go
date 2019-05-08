@@ -35,6 +35,8 @@ import (
 	"github.com/dgraph-io/badger/y"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
+	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -113,6 +115,7 @@ they form a Raft group and provide synchronous replication.
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
+	flag.String("datadog.collector", "", "Send opencensus traces to DataDog.")
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
 	flag.String("whitelist", "",
@@ -290,19 +293,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if collector := Alpha.Conf.GetString("jaeger.collector"); len(collector) > 0 {
-		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default collectorEndpointURI := "http://localhost:14268"
-		je, err := jaeger.NewExporter(jaeger.Options{
-			Endpoint:    collector,
-			ServiceName: "dgraph.alpha",
-		})
-		if err != nil {
-			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
-		}
-		// And now finally register it as a Trace Exporter
-		otrace.RegisterExporter(je)
-	}
+	registerExporters()
 	// Exclusively for stats, metrics, etc. Not for tracing.
 	// var views = append(ocgrpc.DefaultServerViews, ocgrpc.DefaultClientViews...)
 	// if err := view.Register(views...); err != nil {
@@ -325,6 +316,40 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
 	s.Stop()
+}
+
+func registerExporters() {
+	serviceName := "dgraph.alpha"
+	if collector := Alpha.Conf.GetString("jaeger.collector"); len(collector) > 0 {
+		// Port details: https://www.jaegertracing.io/docs/getting-started/
+		// Default collectorEndpointURI := "http://localhost:14268"
+		je, err := jaeger.NewExporter(jaeger.Options{
+			Endpoint:    collector,
+			ServiceName: serviceName,
+		})
+		if err != nil {
+			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+		}
+		// And now finally register it as a Trace Exporter
+		otrace.RegisterExporter(je)
+	}
+
+	if collector := Alpha.Conf.GetString("datadog.collector"); len(collector) > 0 {
+		exporter, err := datadog.NewExporter(datadog.Options{
+			Service:   serviceName,
+			TraceAddr: collector,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		otrace.RegisterExporter(exporter)
+
+		// For demoing purposes, always sample.
+		otrace.ApplyConfig(otrace.Config{
+			DefaultSampler: otrace.AlwaysSample(),
+		})
+	}
 }
 
 func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
