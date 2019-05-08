@@ -57,6 +57,7 @@ func populateGraphExport(t *testing.T) {
 		`<3> <name> "First Line\nSecondLine" .`,
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
+		`<5> <bell> "Ding!\aDing!\aDing!\a" .`,
 	}
 	idMap := map[string]uint64{
 		"1": 1,
