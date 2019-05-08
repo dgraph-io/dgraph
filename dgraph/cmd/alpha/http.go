@@ -180,15 +180,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// read parameters from body or URL
+	// read parameters from body
 	var params struct {
-		Variables    map[string]string `json:"variables"`
-		StartTs      uint64            `json:"startTs"`
-		Debug        bool              `json:"debug"`
-		Query        string            `json:"query"`
-		Timeout      time.Duration     `json:"timeout"`
-		IsBestEffort bool              `json:"be"`
-		IsReadOnly   bool              `json:"ro"`
+		Query     string            `json:"query"`
+		Variables map[string]string `json:"variables"`
 	}
 
 	contentType := r.Header.Get("Content-Type")
@@ -204,59 +199,60 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		// We do not allow any query variables in this case because the body contains the
 		// GraphQL query. And it is not pretty to encode the variables in the URL.
-
-		var err error
-		params.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		params.Debug, err = parseBool(r.URL.Query().Get("debug"), "debug")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
 		params.Query = string(body)
-		params.Timeout, err = parseDuration(r.URL.Query().Get("timeout"), "timeout")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		params.IsBestEffort, err = parseBool(r.URL.Query().Get("be"), "be")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		params.IsReadOnly, err = parseBool(r.URL.Query().Get("ro"), "ro")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
 	}
 
 	// setup context
-	ctx := context.WithValue(context.Background(), query.DebugKey, params.Debug)
+	isDebugMode, err := parseBool(r.URL.Query().Get("debug"), "debug")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
 	ctx = attachAccessJwt(ctx, r)
-	if params.Timeout != 0 {
+
+	// setup timeout
+	queryTimeout, err := parseDuration(r.URL.Query().Get("timeout"), "timeout")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	if queryTimeout != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, params.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, queryTimeout)
 		defer cancel()
 	}
 
 	// Setup query request
 	queryReq := api.Request{
-		Vars:    params.Variables,
-		StartTs: params.StartTs,
-		Query:   params.Query,
+		Vars:  params.Variables,
+		Query: params.Query,
+	}
+
+	queryReq.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
 	}
 	if queryReq.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
-		if params.IsBestEffort {
+		isBestEffort, err := parseBool(r.URL.Query().Get("be"), "be")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		if isBestEffort {
 			queryReq.BestEffort = true
 			queryReq.ReadOnly = true
 		}
+
 		// If ro is set, run this as a readonly query.
-		if params.IsReadOnly {
+		isReadOnly, err := parseBool(r.URL.Query().Get("ro"), "ro")
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		if isReadOnly {
 			queryReq.ReadOnly = true
 		}
 	}
@@ -306,12 +302,9 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// read parameters from body or URL
+	// read parameters from body
 	var params struct {
-		MutationType string `json:"mutationType"`
-		CommitNow    bool   `json:"commitNow"`
-		StartTs      uint64 `json:"startTs"`
-		Query        []byte `json:"query"`
+		Query []byte `json:"query"`
 	}
 
 	contentType := r.Header.Get("Content-Type")
@@ -325,18 +318,6 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	// when content type is marked as application/graphql
 	default:
-		var err error
-		params.MutationType = r.URL.Query().Get("mutationType")
-		params.CommitNow, err = parseBool(r.URL.Query().Get("commitNow"), "commitNow")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		params.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
 		params.Query = body
 	}
 
@@ -345,7 +326,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	var mu *api.Mutation
 	var err error
-	if params.MutationType == "json" {
+	mutationType := r.URL.Query().Get("mutationType")
+	if mutationType == "json" {
 		// Parse JSON.
 		ms := make(map[string]*skipJSONUnmarshal)
 		err := json.Unmarshal(params.Query, &ms)
@@ -374,8 +356,16 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	parseEnd := time.Now()
 
 	// setup muation query parameters
-	mu.CommitNow = params.CommitNow
-	mu.StartTs = params.StartTs
+	mu.CommitNow, err = parseBool(r.URL.Query().Get("commitNow"), "commitNow")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	mu.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
 
 	ctx := attachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
