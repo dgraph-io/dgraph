@@ -233,7 +233,7 @@ func getDatadog() Service {
 	svc := Service{
 		Image:         "datadog/agent:latest",
 		ContainerName: "datadog",
-		WorkdingDir:   "/working/datadog",
+		WorkingDir:    "/working/datadog",
 		Ports: []string{
 			toExposedPort(8126),
 		},
@@ -359,7 +359,7 @@ func main() {
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
-	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "datadog", "g", false,
+	cmd.PersistentFlags().BoolVarP(&opts.Datadog, "datadog", "g", false,
 		"include datadog service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
@@ -431,6 +431,10 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
+	}
+
+	if opts.Datadog {
+		services["datadog"] = getDatadog()
 	}
 
 	if opts.Metrics {
