@@ -19,11 +19,12 @@ package json2
 import (
 	"bytes"
 	"errors"
-	"github.com/ChainSafe/gossamer/rpc"
 	"log"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/rpc"
 )
 
 type RecordWriter struct {
@@ -113,14 +114,14 @@ func execInvalidJSON(s *rpc.Server, res interface{}) error {
 func TestService(t *testing.T) {
 	s := rpc.NewServer()
 	s.RegisterCodec(NewCodec())
-	err := s.RegisterService(new(Service), "")
+	err := s.RegisterService(new(Service), "Service")
 	if err != nil {
 		t.Fatalf("could not register service: %s", err)
 	}
 	var res ServiceResponse
 
 	// Valid request
-	err = exec(s, "Service.Echo", &ServiceRequest{1337}, &res)
+	err = exec(s, "Service_Echo", &ServiceRequest{1337}, &res)
 	if err != nil {
 		t.Fatalf("request execution failed: %s", err)
 	}
@@ -130,7 +131,7 @@ func TestService(t *testing.T) {
 
 	// Exepected to return error
 	res = ServiceResponse{}
-	err = exec(s, "Service.Fail", &ServiceRequest{1337}, &res)
+	err = exec(s, "Service_Fail", &ServiceRequest{1337}, &res)
 	if err == nil {
 		t.Fatalf("expected error to be thrown")
 	} else if err.Error() != ErrResponse.Error() {

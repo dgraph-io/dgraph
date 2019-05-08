@@ -18,9 +18,10 @@ package json2
 
 import (
 	"encoding/json"
-	"github.com/ChainSafe/gossamer/rpc"
 	"log"
 	"net/http"
+
+	"github.com/ChainSafe/gossamer/rpc"
 )
 
 var JSONVersion = "2.0"
