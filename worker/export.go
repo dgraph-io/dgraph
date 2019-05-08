@@ -131,6 +131,13 @@ func facetToString(fct *api.Facet) (string, error) {
 	return v2.Value.(string), nil
 }
 
+// jsonQuote fixes the string returned by strconv.Quote, which may contain quoted characters
+// not supported by JSON (or dgraph's lexer).
+func jsonQuote(str string) string {
+	// Escape sequence \a is not allowed by the JSON grammar (or the lexer).
+	return strings.Replace(strconv.Quote(str), "\\a", "\\u0007", -1)
+}
+
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
@@ -173,7 +180,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !val.Tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = jsonQuote(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -195,7 +202,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = jsonQuote(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -262,7 +269,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 
 				if tid == types.StringID {
-					str = strconv.Quote(str)
+					str = jsonQuote(str)
 				}
 				fmt.Fprint(bp, str)
 			}
