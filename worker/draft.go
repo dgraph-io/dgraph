@@ -721,9 +721,11 @@ func (n *node) Run() {
 
 		case <-slowTicker.C:
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-			if err := n.updateRaftProgress(); err != nil {
-				glog.Errorf("While updating Raft progress: %v", err)
-			}
+
+			// HACK HACK HACK. Bring this back.
+			// if err := n.updateRaftProgress(); err != nil {
+			// 	glog.Errorf("While updating Raft progress: %v", err)
+			// }
 
 			if leader {
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -737,9 +739,10 @@ func (n *node) Run() {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(Config.SnapshotAfter); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
-				}
+
+				// if err := n.proposeSnapshot(Config.SnapshotAfter); err != nil {
+				// 	x.Errorf("While calculating and proposing snapshot: %v", err)
+				// }
 				go n.abortOldTransactions()
 			}
 
