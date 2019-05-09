@@ -53,12 +53,12 @@ type exportFormat struct {
 }
 
 var exportFormats = map[string]exportFormat{
-	"json": exportFormat{
+	"json": {
 		ext:  ".json",
 		pre:  "[\n",
 		post: "\n]\n",
 	},
-	"rdf": exportFormat{
+	"rdf": {
 		ext:  ".rdf",
 		pre:  "",
 		post: "",
@@ -418,6 +418,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		pk := x.Parse(item.Key())
+		// _predicate_ is deprecated but leaving this here so that users with a
+		// binary with version >= 1.1 can export data from a version < 1.1 without
+		// this internal data showing up.
 		if pk.Attr == "_predicate_" {
 			return false
 		}

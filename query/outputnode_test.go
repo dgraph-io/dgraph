@@ -88,7 +88,7 @@ func TestNormalizeJSONLimit(t *testing.T) {
 		}
 	}
 	_, err := n.(*fastJsonNode).normalize()
-	require.Error(t, err, "Couldn't evaluate @normalize directive - to many results")
+	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
 }
 
 func TestNormalizeJSONUid1(t *testing.T) {

@@ -362,9 +362,8 @@ func run() error {
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return fmt.Errorf("No data files found in %s", opt.dataFiles)
-	} else {
-		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
+	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)

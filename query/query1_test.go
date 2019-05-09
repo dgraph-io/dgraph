@@ -1678,20 +1678,20 @@ func TestReturnEmptyBlock(t *testing.T) {
 }
 
 func TestExpandVal(t *testing.T) {
-	// We ignore password in expand(_all_)
 	query := `
 	{
-		var(func: uid(1)) {
-			pred as _predicate_
+		var(func: uid(11)) {
+			pred as name
 		}
 
-		me(func: uid(1)) {
+		me(func: uid(11)) {
 			expand(val(pred))
 		}
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"age":38,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","power":13.250000,"noindex_name":"Michonne's name not indexed","survival_rate":98.990000,"name":"Michonne","sword_present":"true","alive":true,"dob":"1910-01-01T00:00:00Z","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","graduation":["1932-01-01T00:00:00Z"],"gender":"female","_xid_":"mich"}]}}`, js)
+	require.JSONEq(t,
+		`{"data":{"me":[{"name":"name"}]}}`, js)
 }
 
 func TestGroupByGeoCrash(t *testing.T) {
@@ -1735,49 +1735,6 @@ func TestCountPanic(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": {"q":[{"uid":"0x1","name":"Michonne","count(name)":1},{"uid":"0x12c","count(name)":0}]}}`, js)
-}
-
-func TestExpandAll(t *testing.T) {
-
-	query := `
-	{
-		q(func: uid(1)) {
-			expand(_all_) {
-				name
-			}
-		}
-	}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
-}
-
-func TestExpandForward(t *testing.T) {
-	query := `
-	{
-		q(func: uid(1)) {
-			expand(_forward_) {
-				name
-			}
-		}
-	}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"power":13.250000,"_xid_":"mich","noindex_name":"Michonne's name not indexed","son":[{"name":"Andre"},{"name":"Helmut"}],"address":"31, 32 street, Jupiter","dob_day":"1910-01-01T00:00:00Z","follow":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"name":"Michonne","path":[{"name":"Glenn Rhee","path|weight":0.200000},{"name":"Andrea","path|weight":0.100000,"path|weight1":0.200000}],"school":[{"name":"School A"}],"full_name":"Michonne's large name for hashing","alive":true,"bin_data":"YmluLWRhdGE=","gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"graduation":["1932-01-01T00:00:00Z"],"age":38,"sword_present":"true","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000}]}}`, js)
-}
-
-func TestExpandReverse(t *testing.T) {
-	query := `
-	{
-		q(func: uid(1)) {
-			expand(_reverse_) {
-				name
-			}
-		}
-	}
-	`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"q":[{"~friend":[{"name":"Rick Grimes"}]}]}}`, js)
 }
 
 func TestUidWithoutDebug(t *testing.T) {

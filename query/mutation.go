@@ -34,20 +34,12 @@ import (
 )
 
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
-	if x.WorkerConfig.ExpandEdge {
-		edges, err := expandEdges(ctx, m)
-		if err != nil {
-			return nil, x.Wrapf(err, "While adding pb.edges")
-		}
-		m.Edges = edges
-	} else {
-		for _, mu := range m.Edges {
-			if mu.Attr == x.Star && !x.WorkerConfig.ExpandEdge {
-				return nil, x.Errorf("Expand edge (--expand_edge) is set to false." +
-					" Cannot perform S * * deletion.")
-			}
-		}
+	edges, err := expandEdges(ctx, m)
+	if err != nil {
+		return nil, x.Wrapf(err, "While adding pb.edges")
 	}
+	m.Edges = edges
+
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		if span := otrace.FromContext(ctx); span != nil {
@@ -69,41 +61,22 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
-			valMatrix, err := getNodePredicates(ctx, sg)
+
+			types, err := getNodeTypes(ctx, sg)
 			if err != nil {
 				return nil, err
 			}
-			if len(valMatrix) != 1 {
-				return nil, x.Errorf("Expected only one list in value matrix while deleting: %v",
-					edge.GetEntity())
-			}
-			for _, tv := range valMatrix[0].Values {
-				if len(tv.Val) > 0 {
-					preds = append(preds, string(tv.Val))
-				}
-			}
+			preds = append(preds, getPredicatesFromTypes(types)...)
+			preds = append(preds, x.ReservedPredicates()...)
 		}
 
 		for _, pred := range preds {
 			edgeCopy := *edge
 			edgeCopy.Attr = pred
 			edges = append(edges, &edgeCopy)
-
-			// We only want to delete the pred from <uid> + <_predicate_> posting list if this is
-			// a SP* deletion operation. Otherwise we just continue.
-			if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) != x.Star {
-				continue
-			}
-
-			e := &pb.DirectedEdge{
-				Op:     edge.Op,
-				Entity: edge.GetEntity(),
-				Attr:   "_predicate_",
-				Value:  []byte(pred),
-			}
-			edges = append(edges, e)
 		}
 	}
+
 	return edges, nil
 }
 

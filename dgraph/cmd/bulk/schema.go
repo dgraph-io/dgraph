@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	wk "github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,14 +38,18 @@ type schemaStore struct {
 
 func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
-		m: map[string]*pb.SchemaUpdate{
-			"_predicate_": {
-				ValueType: pb.Posting_STRING,
-				List:      true,
-			},
-		},
+		m:     map[string]*pb.SchemaUpdate{},
 		state: state,
 	}
+
+	// Load all initial predicates. Some predicates that might not be used when
+	// the alpha is started (e.g ACL predicates) might be included but it's
+	// better to include them in case the input data contains triples with these
+	// predicates.
+	for _, update := range schema.CompleteInitialSchema() {
+		s.m[update.Predicate] = update
+	}
+
 	if opt.StoreXids {
 		s.m["xid"] = &pb.SchemaUpdate{
 			ValueType: pb.Posting_STRING,
@@ -55,7 +60,8 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *sche
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
 		if _, ok := s.m[p]; ok {
-			x.Check(fmt.Errorf("Predicate %q already exists in schema", p))
+			fmt.Printf("Predicate %q already exists in schema\n", p)
+			continue
 		}
 		s.m[p] = sch
 	}

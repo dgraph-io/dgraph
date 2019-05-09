@@ -69,6 +69,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = &groupi{
 		blockDeletes: new(sync.Mutex),
+		tablets:      make(map[string]*pb.Tablet),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -182,7 +183,7 @@ func (g *groupi) proposeInitialSchema() {
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
-	// schema for _predicate_ is not changed once set.
+	// schema for a reserved predicate is not changed once set.
 	m.StartTs = 1
 	m.Schema = append(m.Schema, schema)
 
@@ -881,12 +882,14 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 			for {
-				// Block forever trying to propose this.
+				// Block forever trying to propose this. Also this proposal should not be counted
+				// towards num pending proposals and be proposed right away.
 				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
 				if err == nil {
 					break
 				}
-				glog.Errorf("While proposing delta: %v. Error=%v. Retrying...\n", delta, err)
+				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
+					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
 		}
 	}

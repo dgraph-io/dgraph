@@ -42,10 +42,6 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range result.Schemas {
 		State().Set(update.Predicate, *update)
 	}
-	State().Set("_predicate_", pb.SchemaUpdate{
-		ValueType: pb.Posting_STRING,
-		List:      true,
-	})
 	return nil
 }
 

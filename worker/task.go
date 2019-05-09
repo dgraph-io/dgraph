@@ -749,7 +749,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
 	if qs.cache == nil {
-		qs.cache = posting.NewLocalCache()
+		qs.cache = posting.NewLocalCache(q.ReadTs)
 	}
 
 	out, err := qs.helpProcessTask(ctx, q, gid)

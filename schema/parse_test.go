@@ -58,10 +58,6 @@ func TestSchema(t *testing.T) {
 			Predicate: "name",
 			ValueType: pb.Posting_STRING,
 		}},
-		{"_predicate_", &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		}},
 		{"address", &pb.SchemaUpdate{
 			Predicate: "address",
 			ValueType: pb.Posting_STRING,
@@ -173,10 +169,6 @@ friend  : [uid] @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"_predicate_", &pb.SchemaUpdate{
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		}},
 		{"name", &pb.SchemaUpdate{
 			Predicate: "name",
 			ValueType: pb.Posting_STRING,

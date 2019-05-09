@@ -49,7 +49,7 @@ function StartZero
   docker-compose -f $DOCKER_CONF up --force-recreate --detach zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
-    if docker logs bank-dg0.1 2>&1 | grep -q 'CID set'; then
+    if docker logs zero1 2>&1 | grep -q 'CID set'; then
       return
     else
       TIMEOUT=$((TIMEOUT - 1))
@@ -64,15 +64,15 @@ function StartAlpha
   local p_dir=$1
 
   INFO "starting alpha container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --no-start dg1
+  docker-compose -f $DOCKER_CONF up --force-recreate --no-start alpha1
   if [[ $p_dir ]]; then
-    docker cp $p_dir bank-dg1:/data/dg1/
+    docker cp $p_dir alpha1:/data/alpha1/
   fi
-  docker-compose -f $DOCKER_CONF up --detach dg1
+  docker-compose -f $DOCKER_CONF up --detach alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
-    if docker logs bank-dg1 2>&1 | grep -q 'Got Zero leader'; then
+    if docker logs alpha1 2>&1 | grep -q 'Got Zero leader'; then
       return
     else
       TIMEOUT=$((TIMEOUT - 1))
@@ -119,9 +119,9 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec bank-dg1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec alpha1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
   sleep 2
-  docker cp bank-dg1:/data/dg1/export .
+  docker cp alpha1:/data/alpha1/export .
   sleep 1
 }
 
@@ -190,7 +190,11 @@ EOF
   dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
   dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
-      1 _predicate_
+      1 dgraph.group.acl
+      1 dgraph.password
+      1 dgraph.type
+      1 dgraph.user.group
+      1 dgraph.xid
       1 genre
       1 language
       1 name

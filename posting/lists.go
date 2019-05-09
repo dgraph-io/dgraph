@@ -179,11 +179,27 @@ func GetNoStore(key []byte) (rlist *List, err error) {
 type LocalCache struct {
 	sync.RWMutex
 
+	startTs uint64
+
+	// The keys for these maps is a string representation of the Badger key for the posting list.
+	// deltas keep track of the updates made by txn. These must be kept around until written to disk
+	// during commit.
+	deltas map[string][]byte
+
+	// max committed timestamp of the read posting lists.
+	maxVersions map[string]uint64
+
+	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
 }
 
-func NewLocalCache() *LocalCache {
-	return &LocalCache{plists: make(map[string]*List)}
+func NewLocalCache(startTs uint64) *LocalCache {
+	return &LocalCache{
+		startTs:     startTs,
+		deltas:      make(map[string][]byte),
+		plists:      make(map[string]*List),
+		maxVersions: make(map[string]uint64),
+	}
 }
 
 func (lc *LocalCache) getNoStore(key string) *List {
@@ -218,5 +234,29 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 	if err != nil {
 		return nil, err
 	}
+	// If we just brought this posting list into memory and we already have a delta for it, let's
+	// apply it before returning the list.
+	lc.RLock()
+	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
+		pl.SetMutation(lc.startTs, delta)
+	}
+	lc.RUnlock()
 	return lc.Set(skey, pl), nil
+}
+
+func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
+	lc.Lock()
+	defer lc.Unlock()
+	if len(lc.plists) == 0 {
+		return
+	}
+
+	for key, pl := range lc.plists {
+		data := pl.GetMutation(lc.startTs)
+		if len(data) > 0 {
+			lc.deltas[key] = data
+		}
+		lc.maxVersions[key] = pl.maxVersion()
+	}
+	lc.plists = make(map[string]*List)
 }

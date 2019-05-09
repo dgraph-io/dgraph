@@ -91,7 +91,7 @@ func FindDataFiles(str string, ext []string) []string {
 		x.Check(err)
 
 		if fi.IsDir() {
-			match_fn := func(f string) bool {
+			matchFn := func(f string) bool {
 				for _, e := range ext {
 					if strings.HasSuffix(f, e) {
 						return true
@@ -99,7 +99,7 @@ func FindDataFiles(str string, ext []string) []string {
 				}
 				return false
 			}
-			list = FindFilesFunc(str, match_fn)
+			list = FindFilesFunc(str, matchFn)
 		}
 	}
 

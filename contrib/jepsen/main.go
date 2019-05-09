@@ -241,9 +241,8 @@ func runJepsenTest(test *JepsenTest) int {
 		// Check jepsen source to be sure.
 		if strings.Contains(out.String(), "Analysis invalid") {
 			return TestFail
-		} else {
-			return TestIncomplete
 		}
+		return TestIncomplete
 	}
 	if strings.Contains(out.String(), "Everything looks good!") {
 		return TestPass
