@@ -418,6 +418,7 @@ func (n *Node) streamMessages(to uint64, stream *Stream) {
 			}
 		}
 		if time.Now().After(deadline) {
+			glog.V(2).Infof("RaftComm: Returning from streamMessages after deadline")
 			return
 		}
 	}
@@ -466,6 +467,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	for {
 		select {
 		case data := <-msgCh:
+			start := time.Now()
 			batch := &pb.RaftBatch{
 				Context: n.RaftContext,
 				Payload: &api.Payload{Data: data},
@@ -486,6 +488,9 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				// We don't need to do anything if we receive any error while sending message.
 				// RAFT would automatically retry.
 				return err
+			}
+			if dur := time.Since(start); dur >= 500*time.Millisecond {
+				glog.Warningf("RaftComm: Took %s to send a batch over to: %#x", dur, to)
 			}
 		case <-ticker.C:
 			if lastPackets == packets {
