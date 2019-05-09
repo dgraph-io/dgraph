@@ -57,7 +57,7 @@ func populateGraphExport(t *testing.T) {
 		`<3> <name> "First Line\nSecondLine" .`,
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
-		`<6> <name> "Ding!\aDing!\aDing!\a" .`,
+		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -201,7 +201,7 @@ func TestExportRdf(t *testing.T) {
 			case "0x5":
 				require.Equal(t, `<0x5> <name> "" .`, scanner.Text())
 			case "0x6":
-				require.Equal(t, `<0x6> <name> "Ding!\aDing!\aDing!\a" .`, scanner.Text())
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
@@ -280,7 +280,7 @@ func TestExportJson(t *testing.T) {
   {"uid":"0x2","name@en":"pho\ton"},
   {"uid":"0x3","name":"First Line\nSecondLine"},
   {"uid":"0x5","name":""},
-  {"uid":"0x6","name":"Ding!\aDing!\aDing!\a"},
+  {"uid":"0x6","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
   {"uid":"0x1","friend":[{"uid":"0x5"}]},
   {"uid":"0x2","friend":[{"uid":"0x5"}]},
   {"uid":"0x3","friend":[{"uid":"0x5"}]},
