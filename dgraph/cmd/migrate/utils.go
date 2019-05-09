@@ -28,20 +28,20 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func getPool(mysqlUser string, mysqlDB string, password string) (*sql.DB,
+func getPool(user string, db string, password string) (*sql.DB,
 	error) {
 	return sql.Open("mysql",
-		fmt.Sprintf("%s:%s@/%s?parseTime=true", mysqlUser, password, mysqlDB))
+		fmt.Sprintf("%s:%s@/%s?parseTime=true", user, password, db))
 }
 
 // showTables will return a slice of table names using one of the following logic
-// 1) if the parameter mysqlTables is not empty, this function will return a slice of table names
+// 1) if the parameter tables is not empty, this function will return a slice of table names
 // by splitting the parameter with the separate comma
 // 2) if the parameter is empty, this function will read all the tables under the given
-// database from MySQL and then return the result
-func showTables(pool *sql.DB, mysqlTables string) ([]string, error) {
-	if len(mysqlTables) > 0 {
-		return strings.Split(mysqlTables, ","), nil
+// database and then return the result
+func showTables(pool *sql.DB, tableNames string) ([]string, error) {
+	if len(tableNames) > 0 {
+		return strings.Split(tableNames, ","), nil
 	}
 	query := "show tables"
 	rows, err := pool.Query(query)

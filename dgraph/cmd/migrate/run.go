@@ -59,21 +59,21 @@ func init() {
 }
 
 func run(conf *viper.Viper) error {
-	mysqlUser := conf.GetString("user")
-	mysqlDB := conf.GetString("db")
-	mysqlPassword := conf.GetString("password")
-	mysqlTables := conf.GetString("tables")
+	user := conf.GetString("user")
+	db := conf.GetString("db")
+	password := conf.GetString("password")
+	tables := conf.GetString("tables")
 	schemaOutput := conf.GetString("output_schema")
 	dataOutput := conf.GetString("output_data")
 	quiet = conf.GetBool("quiet")
 	separator = conf.GetString("separator")
 
 	switch {
-	case len(mysqlUser) == 0:
+	case len(user) == 0:
 		logger.Fatalf("The user property should not be empty.")
-	case len(mysqlDB) == 0:
+	case len(db) == 0:
 		logger.Fatalf("The db property should not be empty.")
-	case len(mysqlPassword) == 0:
+	case len(password) == 0:
 		logger.Fatalf("The password property should not be empty.")
 	case len(schemaOutput) == 0:
 		logger.Fatalf("Please use the --output_schema option to " +
@@ -91,20 +91,20 @@ func run(conf *viper.Viper) error {
 
 	initDataTypes()
 
-	pool, err := getPool(mysqlUser, mysqlDB, mysqlPassword)
+	pool, err := getPool(user, db, password)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	tablesToRead, err := showTables(pool, mysqlTables)
+	tablesToRead, err := showTables(pool, tables)
 	if err != nil {
 		return err
 	}
 
 	tableInfos := make(map[string]*sqlTable, 0)
 	for _, table := range tablesToRead {
-		tableInfo, err := parseTables(pool, table, mysqlDB)
+		tableInfo, err := parseTables(pool, table, db)
 		if err != nil {
 			return err
 		}

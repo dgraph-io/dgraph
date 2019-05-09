@@ -249,7 +249,6 @@ func (m *dumpMeta) outputPlainCell(blankNode string, predName string, dataType D
 // getRefLabelFromConstraint returns a ref label based on a foreign key constraint.
 // Consider the foreign key constraint
 // foreign key (person_company, person_employee_id) references person (company, employee_id)
-
 // and a row with the following values in the table
 // Google, 100, 50.0 (salary)
 // where Google is the person_company, 100 is the employee id, and 50.0 is the salary rate

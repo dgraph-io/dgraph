@@ -139,8 +139,10 @@ func (r *fkValuesRecorder) record(info *sqlTable, values []interface{},
 			colValues:        values,
 		})
 		if err != nil {
-			//logger.Printf("ignoring the constraint because of error when getting ref label: %+v",
-			//cst)
+			if !quiet {
+				logger.Printf("ignoring the constraint because of error "+
+					"when getting ref label: %+v\n", cst)
+			}
 			continue
 		}
 		r.refToBlank[refLabel] = blankNode
