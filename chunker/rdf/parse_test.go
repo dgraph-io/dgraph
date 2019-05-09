@@ -486,17 +486,11 @@ var testNQuads = []struct {
 	},
 	{
 		input:       `_:0a. <name> <bad> .`,
-		expectedErr: true, // blanknode cannot end with .
+		expectedErr: true, // blanknode can not end with .
 	},
 	{
-		input: `<alice> <lives> "wonder \a land" .`,
-		nq: api.NQuad{
-			Subject:     "alice",
-			Predicate:   "lives",
-			ObjectId:    "",
-			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "wonder \a land"}},
-		},
-		expectedErr: false, // \a is valid escape char.
+		input:       `<alice> <lives> "wonder \a land" .`,
+		expectedErr: true, // \a not valid escape char.
 	},
 	{
 		input: `<alice> <lives> "\u0045 wonderland" .`,
@@ -530,12 +524,12 @@ var testNQuads = []struct {
 		expectedErr: true, // object langtag can not end with -
 	},
 	{
-		input: `<alice> <lives> "\a\v\t\b\n\r\f\"\\"@a-b .`,
+		input: `<alice> <lives> "\v\t\b\n\r\f\"\\"@a-b .`,
 		nq: api.NQuad{
 			Subject:     "alice",
 			Predicate:   "lives",
 			Lang:        "a-b",
-			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\a\v\t\b\n\r\f\"\\"}},
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\v\t\b\n\r\f\"\\"}},
 		},
 	},
 	{
@@ -543,14 +537,8 @@ var testNQuads = []struct {
 		expectedErr: true, // \' isn't a valid escape sequence
 	},
 	{
-		input: `<alice> <lives> "\a" .`,
-		nq: api.NQuad{
-			Subject:     "alice",
-			Predicate:   "lives",
-			Lang:        "",
-			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\a"}},
-		},
-		expectedErr: false, // \a is a valid escape char (BEL)
+		input:       `<alice> <lives> "\a" .`,
+		expectedErr: true, // \a is not valid escape char
 	},
 	{
 		input:        `# nothing happened`,
