@@ -73,7 +73,8 @@ type Node struct {
 	// applied (to PL) -> synced (to BadgerDB).
 	Applied y.WaterMark
 
-	Heartbeats int64
+	heartbeatsOut int64
+	heartbeatsIn  int64
 }
 
 type ToGlog struct {
@@ -158,12 +159,13 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 }
 
 func (n *Node) ReportRaftComms() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		num := atomic.SwapInt64(&n.Heartbeats, 0)
-		glog.V(2).Infof("RaftComm: [%#x] Heartbeats exchanged since last report: %d", n.Id, num)
+		out := atomic.SwapInt64(&n.heartbeatsOut, 0)
+		in := atomic.SwapInt64(&n.heartbeatsIn, 0)
+		glog.V(2).Infof("RaftComm: [%#x] Heartbeats out: %d, in: %d", n.Id, out, in)
 	}
 }
 
@@ -245,7 +247,7 @@ func (n *Node) Send(msg raftpb.Message) {
 	if glog.V(2) {
 		switch msg.Type {
 		case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
-			atomic.AddInt64(&n.Heartbeats, 1)
+			atomic.AddInt64(&n.heartbeatsOut, 1)
 		case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
 		case raftpb.MsgApp, raftpb.MsgAppResp:
 		case raftpb.MsgProp:
