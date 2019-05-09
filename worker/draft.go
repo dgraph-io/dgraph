@@ -728,6 +728,52 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
+func (n *node) checkpointAndClose(done chan struct{}) {
+	slowTicker := time.NewTicker(time.Minute)
+	defer slowTicker.Stop()
+
+	for {
+		select {
+		case <-slowTicker.C:
+			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
+			// be sent on time. Otherwise, followers would just keep running elections.
+
+			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+			if err := n.updateRaftProgress(); err != nil {
+				glog.Errorf("While updating Raft progress: %v", err)
+			}
+
+			if n.AmLeader() {
+				// We keep track of the applied index in the p directory. Even if we don't take
+				// snapshot for a while and let the Raft logs grow and restart, we would not have to
+				// run all the log entries, because we can tell Raft.Config to set Applied to that
+				// index.
+				// This applied index tracking also covers the case when we have a big index
+				// rebuild. The rebuild would be tracked just like others and would not need to be
+				// replayed after a restart, because the Applied config would let us skip right
+				// through it.
+				// We use disk based storage for Raft. So, we're not too concerned about
+				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
+				// entries to process on a restart.
+				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+					x.Errorf("While calculating and proposing snapshot: %v", err)
+				}
+				go n.abortOldTransactions()
+			}
+
+		case <-n.closer.HasBeenClosed():
+			glog.Infof("Stopping node.Run")
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
+				time.Sleep(time.Second) // Let transfer happen.
+			}
+			n.Raft().Stop()
+			close(done)
+			return
+		}
+	}
+}
+
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -738,52 +784,7 @@ func (n *node) Run() {
 	defer ticker.Stop()
 
 	done := make(chan struct{})
-	go func() {
-		slowTicker := time.NewTicker(time.Minute)
-		defer slowTicker.Stop()
-
-		for {
-			select {
-			case <-slowTicker.C:
-				// Do these operations asynchronously away from the main Run loop to allow heartbeats to
-				// be sent on time. Otherwise, followers would just keep running elections.
-
-				n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-				if err := n.updateRaftProgress(); err != nil {
-					glog.Errorf("While updating Raft progress: %v", err)
-				}
-
-				if n.AmLeader() {
-					// We keep track of the applied index in the p directory. Even if we don't take
-					// snapshot for a while and let the Raft logs grow and restart, we would not have to
-					// run all the log entries, because we can tell Raft.Config to set Applied to that
-					// index.
-					// This applied index tracking also covers the case when we have a big index
-					// rebuild. The rebuild would be tracked just like others and would not need to be
-					// replayed after a restart, because the Applied config would let us skip right
-					// through it.
-					// We use disk based storage for Raft. So, we're not too concerned about
-					// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
-					// entries to process on a restart.
-					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
-						x.Errorf("While calculating and proposing snapshot: %v", err)
-					}
-					go n.abortOldTransactions()
-				}
-
-			case <-n.closer.HasBeenClosed():
-				glog.Infof("Stopping node.Run")
-				if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-					n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
-					time.Sleep(time.Second) // Let transfer happen.
-				}
-				n.Raft().Stop()
-				close(done)
-				return
-			}
-		}
-	}()
-
+	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
 	applied, err := n.findRaftProgress()
