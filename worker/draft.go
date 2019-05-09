@@ -1231,7 +1231,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	}
 
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
-		glog.Infof("Num pending txns: %d", num)
+		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
