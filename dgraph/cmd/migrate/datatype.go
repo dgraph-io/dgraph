@@ -51,6 +51,7 @@ func initDataTypes() {
 	sqlTypeToInternal["datetime"] = DATETIME
 	sqlTypeToInternal["float"] = FLOAT
 	sqlTypeToInternal["double"] = DOUBLE
+	sqlTypeToInternal["decimal"] = FLOAT
 }
 
 func (t DataType) String() string {

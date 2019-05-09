@@ -177,6 +177,12 @@ func getValue(dataType DataType, value interface{}) (string, error) {
 		}
 		dateVal, _ := value.(mysql.NullTime).Value()
 		return fmt.Sprintf("%v", dateVal), nil
+	case FLOAT:
+		if !value.(sql.NullFloat64).Valid {
+			return "", fmt.Errorf("found invalid nullfloat")
+		}
+		floatVal, _ := value.(sql.NullFloat64).Value()
+		return fmt.Sprintf("%v", floatVal), nil
 	default:
 		return fmt.Sprintf("%v", value), nil
 	}
