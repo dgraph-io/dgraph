@@ -703,7 +703,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+				if err := n.proposeSnapshot(Config.SnapshotAfter); err != nil {
 					x.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
@@ -712,7 +712,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 		case <-n.closer.HasBeenClosed():
 			glog.Infof("Stopping node.Run")
 			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
+				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
