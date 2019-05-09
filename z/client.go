@@ -65,7 +65,7 @@ func init() {
 	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	grpcPort = getPort("TEST_PORT_ZERO", 5180)
 	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
@@ -320,6 +320,10 @@ func VerifyCurlCmd(t *testing.T, args []string,
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code
 		require.Error(t, err, "the curl command should have failed")
+		if ee, ok := err.(*exec.ExitError); ok {
+			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+				"the curl output does not contain the expected output")
+		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
 		verifyOutput(t, output, failureConfig)
