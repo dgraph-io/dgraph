@@ -141,33 +141,6 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
-
-	nodes := DbNodeCount(t, dg)
-	// the only node left should be the groot node
-	require.Equal(t, 1, nodes)
-}
-
-func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
-	resp, err := dg.NewTxn().Query(context.Background(), `
-		{
-			q(func: has(_predicate_)) {
-				count(uid)
-			}
-		}
-	`)
-	require.NoError(t, err)
-
-	type count struct {
-		Count int
-	}
-	type root struct {
-		Q []count
-	}
-	var response root
-	err = json.Unmarshal(resp.GetJson(), &response)
-	require.NoError(t, err)
-
-	return response.Q[0].Count
 }
 
 // RetryQuery will retry a query until it succeeds or a non-retryable error is received.

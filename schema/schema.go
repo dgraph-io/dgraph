@@ -427,15 +427,6 @@ func CompleteInitialSchema() []*pb.SchemaUpdate {
 func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	var initialSchema []*pb.SchemaUpdate
 
-	// propose the schema for _predicate_
-	if x.WorkerConfig.ExpandEdge {
-		initialSchema = append(initialSchema, &pb.SchemaUpdate{
-			Predicate: x.PredicateListAttr,
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		})
-	}
-
 	initialSchema = append(initialSchema, &pb.SchemaUpdate{
 		Predicate: "dgraph.type",
 		ValueType: pb.Posting_STRING,

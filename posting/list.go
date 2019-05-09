@@ -424,10 +424,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	var conflictKey string
-	if t.Attr == "_predicate_" {
-		// Don't check for conflict.
-
-	} else if schema.State().HasUpsert(t.Attr) {
+	if schema.State().HasUpsert(t.Attr) {
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.

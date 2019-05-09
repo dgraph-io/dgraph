@@ -50,7 +50,6 @@ type options struct {
 	TmpDir           string
 	NumGoroutines    int
 	MapBufSize       int64
-	ExpandEdges      bool
 	SkipMapPhase     bool
 	CleanupTmp       bool
 	NumShufflers     int

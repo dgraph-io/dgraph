@@ -127,9 +127,6 @@ they form a Raft group and provide synchronous replication.
 		"IP_ADDRESS:PORT of a Dgraph Zero.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
-	flag.Bool("expand_edge", true,
-		"Enables the expand() feature. This is very expensive for large data loads because it"+
-			" doubles the number of mutations going on in the system.")
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
@@ -482,7 +479,6 @@ func run() {
 		MyAddr:              Alpha.Conf.GetString("my"),
 		ZeroAddr:            Alpha.Conf.GetString("zero"),
 		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
-		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,

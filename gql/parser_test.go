@@ -167,28 +167,28 @@ func TestParseQueryAliasListPred(t *testing.T) {
 	query := `
 	{
 		me(func: uid(0x0a)) {
-			pred: _predicate_
+			pred: some_pred
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, "pred", res.Query[0].Children[0].Alias)
-	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
+	require.Equal(t, "some_pred", res.Query[0].Children[0].Attr)
 }
 
 func TestParseQueryCountListPred(t *testing.T) {
 	query := `
 	{
 		me(func: uid(0x0a)) {
-			count(_predicate_)
+			count(some_pred)
 		}
 	}
 `
 	res, err := Parse(Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, true, res.Query[0].Children[0].IsCount)
-	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
+	require.Equal(t, "some_pred", res.Query[0].Children[0].Attr)
 }
 
 func TestParseQueryListPred2(t *testing.T) {
@@ -199,7 +199,7 @@ func TestParseQueryListPred2(t *testing.T) {
 		}
 
 		var(func: uid(f)) {
-			l as _predicate_
+			l as some_pred
 		}
 
 		var(func: uid( 0x0a)) {
@@ -221,9 +221,9 @@ func TestParseQueryListPred_MultiVarError(t *testing.T) {
 		}
 
 		var(func: uid(f)) {
-			l as _predicate_
+			l as some_pred
 			friend {
-				g as _predicate_
+				g as some_pred
 			}
 		}
 
