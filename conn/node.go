@@ -103,7 +103,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		Store:  store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
-			ElectionTick:             100, // 2s if we call Tick() every 20 ms.
+			ElectionTick:             400, // 8s if we call Tick() every 20 ms.
 			HeartbeatTick:            1,   // 20ms if we call Tick() every 20 ms.
 			Storage:                  store,
 			MaxInflightMsgs:          256,
