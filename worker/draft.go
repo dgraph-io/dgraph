@@ -700,8 +700,6 @@ func (n *node) Run() {
 		close(done)
 	}()
 
-	go n.ReportRaftComms()
-
 	applied, err := n.findRaftProgress()
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
@@ -752,9 +750,6 @@ func (n *node) Run() {
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
-				glog.V(2).Infof("RaftComm: Resetting heartbeats")
-				atomic.StoreInt64(&n.Node.Heartbeats, 0)
-
 				groups().triggerMembershipSync()
 				leader = rd.RaftState == raft.StateLeader
 			}

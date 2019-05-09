@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -229,7 +228,6 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			if glog.V(2) {
 				switch msg.Type {
 				case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
-					atomic.AddInt64(&n.Heartbeats, 1)
 				case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
 				case raftpb.MsgApp, raftpb.MsgAppResp:
 				case raftpb.MsgProp:
