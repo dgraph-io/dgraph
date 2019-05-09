@@ -56,7 +56,7 @@ func TestQueries(t *testing.T) {
 	savepath := ""
 	diffs := 0
 	for _, file := range files {
-		if ! strings.HasPrefix(file.Name(),"query-") {
+		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
 		}
 
@@ -85,7 +85,7 @@ func TestQueries(t *testing.T) {
 			savepath = path.Join(*savedir, file.Name())
 		}
 
-		if ! z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
+		if !z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
 			diffs++
 		}
 	}

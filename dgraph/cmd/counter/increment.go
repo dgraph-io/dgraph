@@ -23,7 +23,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/dgraph-io/dgo"
@@ -69,7 +68,7 @@ type Counter struct {
 }
 
 func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var counter Counter
@@ -140,9 +139,15 @@ func run(conf *viper.Viper) {
 	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	x.CheckfNoTrace(err)
 
+	format := "0102 03:04:05.999"
+
+retryConn:
 	conn, err := x.SetupConnection(alpha, tlsCfg, false)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...",
+			time.Now().UTC().Format(format), err)
+		time.Sleep(time.Second)
+		goto retryConn
 	}
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
@@ -152,11 +157,11 @@ func run(conf *viper.Viper) {
 
 	for num > 0 {
 		cnt, err := process(dg, conf)
-		now := time.Now().UTC().Format("0102 03:04:05.999")
+		now := time.Now().UTC().Format(format)
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 			time.Sleep(time.Second)
-			continue
+			goto retryConn
 		}
 		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
 		num--

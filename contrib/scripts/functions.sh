@@ -23,7 +23,7 @@ function restartCluster {
   docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
   popd >/dev/null
 
-  $basedir/contrib/wait-for-it.sh -t 60 localhost:6080 || exit 1
+  $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
   sleep 10 || exit 1
 }

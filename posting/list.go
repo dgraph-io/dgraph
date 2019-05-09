@@ -462,7 +462,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 
 	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.pendingTxns, 1)
-	txn.AddKeys(string(l.key), conflictKey)
+	txn.AddConflictKey(conflictKey)
 	return nil
 }
 
@@ -476,6 +476,15 @@ func (l *List) GetMutation(startTs uint64) []byte {
 		return data
 	}
 	return nil
+}
+
+func (l *List) SetMutation(startTs uint64, data []byte) {
+	pl := new(pb.PostingList)
+	x.Check(pl.Unmarshal(data))
+
+	l.Lock()
+	l.mutationMap[startTs] = pl
+	l.Unlock()
 }
 
 func (l *List) CommitMutation(startTs, commitTs uint64) error {

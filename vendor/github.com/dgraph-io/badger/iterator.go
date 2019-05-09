@@ -140,7 +140,7 @@ func (item *Item) IsDeletedOrExpired() bool {
 	return isDeletedOrExpired(item.meta, item.expiresAt)
 }
 
-// DiscardEarlierVersions returns whether the iterator was created with the
+// DiscardEarlierVersions returns whether the item was created with the
 // option to discard earlier versions of a key when multiple are available.
 func (item *Item) DiscardEarlierVersions() bool {
 	return item.meta&bitDiscardEarlierVersions > 0
@@ -244,6 +244,12 @@ func (item *Item) EstimatedSize() int64 {
 	var vp valuePointer
 	vp.Decode(item.vptr)
 	return int64(vp.Len) // includes key length.
+}
+
+// KeySize returns the size of the key.
+// Exact size of the key is key + 8 bytes of timestamp
+func (item *Item) KeySize() int64 {
+	return int64(len(item.key))
 }
 
 // ValueSize returns the exact size of the value.

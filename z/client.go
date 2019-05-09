@@ -65,7 +65,7 @@ func init() {
 	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	grpcPort = getPort("TEST_PORT_ZERO", 5180)
 	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
@@ -168,6 +168,32 @@ func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
 	require.NoError(t, err)
 
 	return response.Q[0].Count
+}
+
+// RetryQuery will retry a query until it succeeds or a non-retryable error is received.
+func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		resp, err := dg.NewTxn().Query(context.Background(), q)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return resp, err
+	}
+}
+
+// RetryMutation will retry a mutation until it succeeds or a non-retryable error is received.
+// The mutation should have CommitNow set to true.
+func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
+	for {
+		_, err := dg.NewTxn().Mutate(context.Background(), mu)
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "Tablet isn't being served by this instance")) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return err
+	}
 }
 
 type LoginParams struct {
@@ -294,6 +320,10 @@ func VerifyCurlCmd(t *testing.T, args []string,
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code
 		require.Error(t, err, "the curl command should have failed")
+		if ee, ok := err.(*exec.ExitError); ok {
+			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+				"the curl output does not contain the expected output")
+		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
 		verifyOutput(t, output, failureConfig)
