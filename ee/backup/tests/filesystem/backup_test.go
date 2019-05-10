@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,11 @@ import (
 var (
 	dirs = []string{
 		"./data/restore",
+		"./data/backups",
+	}
+
+	alphaDirs = []string{
+		"/data/backups",
 	}
 
 	alphaContainers = []string{
@@ -107,6 +113,7 @@ func TestBackupFilesystem(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Verify that the right amount of files and directories were created.
+	copyToLocalFs()
 	files := x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
@@ -159,6 +166,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, getError(resp.Body))
 	time.Sleep(5 * time.Second)
 
+	copyToLocalFs()
 	files = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
@@ -206,6 +214,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, getError(resp.Body))
 	time.Sleep(5 * time.Second)
 
+	copyToLocalFs()
 	files = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
@@ -350,13 +359,43 @@ func getPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 }
 
 func dirSetup() {
-	for i := range dirs {
-		x.Check(os.MkdirAll(dirs[i], 777))
+	for _, dir := range dirs {
+		x.Check(os.MkdirAll(dir, os.ModePerm))
+	}
+
+	for _, alpha := range alphaContainers {
+		for _, dir := range alphaDirs {
+			cmd := []string{"mkdir", "-p", dir}
+			x.Check(z.DockerExec(alpha, cmd...))
+		}
 	}
 }
 
 func dirCleanup() {
-	for i := range dirs {
-		x.Check(os.RemoveAll(dirs[i]))
+	x.Check(os.RemoveAll("./data"))
+}
+
+func copyToLocalFs() {
+	cwd, err := os.Getwd()
+	x.Check(err)
+
+	for _, alpha := range alphaContainers {
+		tmpDir := "./data/backups/" + alpha
+		srcPath := fmt.Sprintf("%s:/data/backups", alpha)
+		x.Check(z.DockerCp(srcPath, tmpDir))
+
+		paths, err := filepath.Glob(tmpDir + "/*")
+		x.Check(err)
+
+		opts := z.CmdOpts{
+			Dir: cwd,
+		}
+		cpCmd := []string{"cp", "-r"}
+		cpCmd = append(cpCmd, paths...)
+		cpCmd = append(cpCmd, "./data/backups")
+
+		x.Check(z.ExecWithOpts([]string{"ls", "./data/backups/"}, opts))
+		x.Check(z.ExecWithOpts(cpCmd, opts))
+		x.Check(z.ExecWithOpts([]string{"rm", "-r", tmpDir}, opts))
 	}
 }
