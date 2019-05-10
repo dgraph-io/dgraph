@@ -162,7 +162,7 @@ func initService(basename string, idx, grpcPort int) Service {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
 	if opts.Datadog {
-		svc.Command += " --datadog.collector=http://datadog:8126"
+		svc.Command += " --datadog.collector=datadog:8126"
 	}
 
 	return svc
@@ -237,7 +237,10 @@ func getDatadog() Service {
 		Ports: []string{
 			toExposedPort(8126),
 		},
-		Environment: []string{"DD_API_KEY=12345", "DD_APM_ENABLED"},
+		Environment: []string{"DD_API_KEY=12345",
+			"DD_APM_ENABLED=true",
+			"DD_APM_NON_LOCAL_TRAFFIC=true",
+		},
 	}
 	return svc
 }
