@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -59,7 +58,6 @@ func (txn *Txn) AddConflictKey(conflictKey string) {
 
 func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
-	defer txn.Unlock()
 	ctx.StartTs = txn.StartTs
 	for key := range txn.conflicts {
 		// We don'txn need to send the whole conflict key to Zero. Solving #2338
@@ -70,17 +68,10 @@ func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 			ctx.Keys = append(ctx.Keys, fps)
 		}
 	}
+	txn.Unlock()
 
 	txn.Update()
-	for key := range txn.cache.deltas {
-		pk := x.Parse([]byte(key))
-		// Also send the group id that the predicate was being served by. This is useful when
-		// checking if Zero should allow a commit during a predicate move.
-		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
-		if !x.HasString(ctx.Preds, predKey) {
-			ctx.Preds = append(ctx.Preds, predKey)
-		}
-	}
+	txn.cache.FillPreds(ctx, gid)
 }
 
 // Don't call this for schema mutations. Directly commit them.
