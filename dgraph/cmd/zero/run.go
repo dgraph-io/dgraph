@@ -217,7 +217,7 @@ func run() {
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions
-	kvOpt.SyncWrites = true
+	kvOpt.SyncWrites = false
 	kvOpt.Truncate = true
 	kvOpt.Dir = opts.w
 	kvOpt.ValueDir = opts.w
