@@ -30,6 +30,7 @@ import (
 
 var o *oracle
 
+// Oracle returns the global oracle instance.
 // TODO: Oracle should probably be located in worker package, instead of posting
 // package now that we don't run inSnapshot anymore.
 func Oracle() *oracle {
@@ -41,6 +42,7 @@ func init() {
 	o.init()
 }
 
+// Txn represents a transaction.
 type Txn struct {
 	StartTs uint64
 
@@ -60,6 +62,7 @@ type Txn struct {
 	cache *LocalCache // This pointer does not get modified.
 }
 
+// NewTxn returns a new Txn instance.
 func NewTxn(startTs uint64) *Txn {
 	return &Txn{
 		StartTs:    startTs,
@@ -68,9 +71,12 @@ func NewTxn(startTs uint64) *Txn {
 	}
 }
 
+// Get retrieves the posting list for the given list from the local cache.
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
+
+// Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
 }

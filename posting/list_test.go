@@ -67,7 +67,7 @@ func addMutationHelper(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32, 
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
-	err := l.AddMutation(context.Background(), txn, edge)
+	err := l.addMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 }
 
@@ -112,7 +112,7 @@ func TestAddMutation(t *testing.T) {
 	edge.ValueId = 9
 	edge.Label = "anti-testing"
 	addMutationHelper(t, l, edge, Set, txn)
-	l.CommitMutation(1, 2)
+	l.commitMutation(1, 2)
 
 	uids := []uint64{9, 69, 81}
 	checkUids(t, l, uids, 3)
@@ -125,7 +125,7 @@ func TestAddMutation(t *testing.T) {
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
 	l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		res = *p
-		return ErrStopIteration
+		return errStopIteration
 	})
 	return res
 }
@@ -150,7 +150,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there", txn.StartTs)
 
 	// Run the same check after committing.
-	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
+	ol.commitMutation(txn.StartTs, txn.StartTs+1)
 	checkValue(t, ol, "oh hey there", uint64(3))
 
 	// The value made it to the posting list. Changing it now.
@@ -172,7 +172,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(1, uint64(2))
+	ol.commitMutation(1, uint64(2))
 
 	// TODO: Read at commitTimestamp with all committed
 	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
@@ -219,7 +219,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 		Op:    pb.DirectedEdge_DEL,
 	}
 	txn := &Txn{StartTs: 1}
-	err = ol.AddMutation(context.Background(), txn, edge)
+	err = ol.addMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 
 	// Set value to newcars, commit it
@@ -228,7 +228,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 	}
 	txn = &Txn{StartTs: 2}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(2, uint64(3))
+	ol.commitMutation(2, uint64(3))
 	require.EqualValues(t, 1, ol.Length(3, 0))
 	checkValue(t, ol, "newcars", 3)
 }
@@ -244,7 +244,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(1, uint64(2))
+	ol.commitMutation(1, uint64(2))
 	require.EqualValues(t, 1, ol.Length(2, 0))
 	checkValue(t, ol, "newcars", 2)
 
@@ -255,7 +255,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 		Op:    pb.DirectedEdge_DEL,
 	}
 	txn = &Txn{StartTs: 3}
-	err = ol.AddMutation(context.Background(), txn, edge)
+	err = ol.addMutation(context.Background(), txn, edge)
 	require.NoError(t, err)
 
 	// Part of same transaction as sp*, so should see zero length even
@@ -263,7 +263,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(3, 0))
 
 	// Commit sp* only in oracle, don't apply to pl yet
-	ol.CommitMutation(3, 5)
+	ol.commitMutation(3, 5)
 
 	// This read should ignore sp*, since readts is 4 and it was committed at 5
 	require.EqualValues(t, 1, ol.Length(4, 0))
@@ -308,7 +308,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Del, txn)
-	ol.CommitMutation(1, uint64(2))
+	ol.commitMutation(1, uint64(2))
 	require.EqualValues(t, 0, ol.Length(uint64(3), 0))
 
 	// Set value to newcars, but don't merge yet.
@@ -318,7 +318,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	}
 	txn = &Txn{StartTs: 3}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(3, uint64(4))
+	ol.commitMutation(3, uint64(4))
 	require.EqualValues(t, 1, ol.Length(5, 0))
 	checkValue(t, ol, "newcars", 5)
 }
@@ -335,7 +335,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(1, uint64(2))
+	ol.commitMutation(1, uint64(2))
 	require.Equal(t, 1, ol.Length(uint64(3), 0))
 	require.EqualValues(t, 1, ol.Length(uint64(3), 0))
 	checkValue(t, ol, "cars", uint64(3))
@@ -379,7 +379,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 	txn := &Txn{StartTs: 1}
 	addMutationHelper(t, ol, edge, Set, txn)
-	ol.CommitMutation(1, uint64(2))
+	ol.commitMutation(1, uint64(2))
 
 	// Delete the previously committed value cars. But don't merge.
 	txn = &Txn{StartTs: 3}
@@ -432,7 +432,7 @@ func TestMillion(t *testing.T) {
 		}
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%10000 == 0 {
 			// Do a rollup, otherwise, it gets too slow to add a million mutations to one posting
 			// list.
@@ -480,10 +480,10 @@ func TestAddMutation_mrjn2(t *testing.T) {
 		require.EqualValues(t, uint64(i), list.Uids[0])
 	}
 	require.EqualValues(t, 0, ol.Length(readTs, 0))
-	require.NoError(t, ol.CommitMutation(1, 0))
-	require.NoError(t, ol.CommitMutation(3, 4))
-	require.NoError(t, ol.CommitMutation(6, 10))
-	require.NoError(t, ol.CommitMutation(9, 14))
+	require.NoError(t, ol.commitMutation(1, 0))
+	require.NoError(t, ol.commitMutation(3, 4))
+	require.NoError(t, ol.commitMutation(6, 10))
+	require.NoError(t, ol.commitMutation(9, 14))
 	require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits.
 
 	{
@@ -492,7 +492,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 7}
-		err := ol.AddMutation(ctx, txn, edge)
+		err := ol.addMutation(ctx, txn, edge)
 		require.NoError(t, err)
 
 		// Add edge just to test that the deletion still happens.
@@ -500,11 +500,11 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			ValueId:   7,
 			ValueType: pb.Posting_INT,
 		}
-		err = ol.AddMutation(ctx, txn, edge)
+		err = ol.addMutation(ctx, txn, edge)
 		require.NoError(t, err)
 
 		require.EqualValues(t, 3, ol.Length(15, 0)) // The three commits should still be found.
-		require.NoError(t, ol.CommitMutation(7, 11))
+		require.NoError(t, ol.commitMutation(7, 11))
 
 		require.EqualValues(t, 2, ol.Length(10, 0)) // Two commits should be found.
 		require.EqualValues(t, 1, ol.Length(12, 0)) // Only one commit should be found.
@@ -516,14 +516,14 @@ func TestAddMutation_mrjn2(t *testing.T) {
 			Op:    pb.DirectedEdge_DEL,
 		}
 		txn := &Txn{StartTs: 5}
-		err := ol.AddMutation(ctx, txn, edge)
+		err := ol.addMutation(ctx, txn, edge)
 		require.NoError(t, err)
-		require.NoError(t, ol.CommitMutation(5, 7))
+		require.NoError(t, ol.commitMutation(5, 7))
 
 		// Commits are:
 		// 4, 7 (Delete *), 10, 11 (Delete *), 14
 		require.EqualValues(t, 1, ol.Length(8, 0)) // Nothing below 8, but consider itself.
-		require.NoError(t, ol.CommitMutation(8, 0))
+		require.NoError(t, ol.commitMutation(8, 0))
 		require.EqualValues(t, 0, ol.Length(8, 0))  // Nothing <= 8.
 		require.EqualValues(t, 1, ol.Length(10, 0)) // Find committed 10.
 		require.EqualValues(t, 1, ol.Length(12, 0)) // Find committed 11.
@@ -554,7 +554,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.CommitMutation(1, uint64(2))
+		ol.commitMutation(1, uint64(2))
 	}
 
 	{
@@ -569,7 +569,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.CommitMutation(3, uint64(4))
+		ol.commitMutation(3, uint64(4))
 	}
 }
 
@@ -592,7 +592,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		txn = &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.CommitMutation(1, uint64(2))
+		ol.commitMutation(1, uint64(2))
 	}
 
 	{
@@ -615,7 +615,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		addMutationHelper(t, ol, edge, Set, txn)
 
-		ol.CommitMutation(3, uint64(4))
+		ol.commitMutation(3, uint64(4))
 	}
 
 	// Posting list should just have the new tag.
@@ -637,7 +637,7 @@ func TestAddAndDelMutation(t *testing.T) {
 		}
 		txn := &Txn{StartTs: 1}
 		addMutationHelper(t, ol, edge, Set, txn)
-		ol.CommitMutation(1, uint64(2))
+		ol.commitMutation(1, uint64(2))
 	}
 
 	{
@@ -648,7 +648,7 @@ func TestAddAndDelMutation(t *testing.T) {
 		txn := &Txn{StartTs: 3}
 		addMutationHelper(t, ol, edge, Del, txn)
 		addMutationHelper(t, ol, edge, Del, txn)
-		ol.CommitMutation(3, uint64(4))
+		ol.commitMutation(3, uint64(4))
 
 		checkUids(t, ol, []uint64{}, 5)
 	}
@@ -778,7 +778,7 @@ func TestDelete(t *testing.T) {
 	edge.Value = []byte(x.Star)
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 0))
-	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
+	ol.commitMutation(txn.StartTs, txn.StartTs+1)
 
 	require.EqualValues(t, 0, ol.Length(txn.StartTs+2, 0))
 }
@@ -803,7 +803,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(txn.StartTs, 400))
 
 	// Commit to database.
-	ol.CommitMutation(txn.StartTs, txn.StartTs+1)
+	ol.commitMutation(txn.StartTs, txn.StartTs+1)
 
 	txn = &Txn{StartTs: 3}
 	// Mutation layer starts afresh from here.
@@ -884,7 +884,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
@@ -922,7 +922,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
@@ -941,7 +941,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		}
 		txn := Txn{StartTs: baseStartTs + uint64(i)}
 		addMutationHelper(t, ol, edge, Del, &txn)
-		require.NoError(t, ol.CommitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
+		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 		if i%2000 == 0 {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
@@ -1118,7 +1118,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(uint64(i), uint64(i)+1))
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
 		if i%2000 == 0 {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
@@ -1145,7 +1145,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		}
 		txn := Txn{StartTs: baseStartTs + uint64(i)}
 		addMutationHelper(t, ol, edge, Del, &txn)
-		require.NoError(t, ol.CommitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
+		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 		if i%2000 == 0 {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
@@ -1179,7 +1179,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 		}
 		txn := Txn{StartTs: baseStartTs + uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.CommitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
+		require.NoError(t, ol.commitMutation(baseStartTs+uint64(i), baseStartTs+uint64(i)+1))
 
 		if i%2000 == 0 {
 			kvs, err := ol.Rollup()
@@ -1251,7 +1251,7 @@ func BenchmarkAddMutations(b *testing.B) {
 			Op:      pb.DirectedEdge_SET,
 		}
 		txn := &Txn{StartTs: 1}
-		if err = l.AddMutation(ctx, txn, edge); err != nil {
+		if err = l.addMutation(ctx, txn, edge); err != nil {
 			b.Error(err)
 		}
 	}

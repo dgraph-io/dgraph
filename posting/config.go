@@ -18,6 +18,7 @@ package posting
 
 import "sync"
 
+// Options contains options for the postings package.
 type Options struct {
 	Mu             sync.Mutex
 	AllottedMemory float64
@@ -25,4 +26,5 @@ type Options struct {
 	CommitFraction float64
 }
 
+// Config stores the posting options of this instance.
 var Config Options
