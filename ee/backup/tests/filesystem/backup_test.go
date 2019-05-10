@@ -55,10 +55,6 @@ var (
 		"alpha2",
 		"alpha3",
 	}
-
-	original *api.Assigned
-	incr1    *api.Assigned
-	incr2    *api.Assigned
 )
 
 func TestBackupFilesystem(t *testing.T) {
@@ -66,10 +62,11 @@ func TestBackupFilesystem(t *testing.T) {
 	x.Check(err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
+	// Add initial data.
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .`}))
-	original, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+	original, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(`
 			<_:x1> <movie> "BIRDS MAN OR (THE UNEXPECTED VIRTUE OF IGNORANCE)" .
@@ -82,10 +79,11 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
-	// move tablet to group 1 to avoid messes later.
+	// Move tablet to group 1 to avoid messes later.
 	_, err = http.Get("http://" + z.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
-	// if the move happened, we need to pause a bit to give zero a chance to quorum
+
+	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
@@ -96,8 +94,10 @@ func TestBackupFilesystem(t *testing.T) {
 		}
 	}
 
+	// Setup test directories.
 	dirSetup()
 
+	// Send backup request.
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{"/data/backups"},
 	})
@@ -106,28 +106,26 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, getError(resp.Body))
 	time.Sleep(5 * time.Second)
 
-	// There must be a backup file for each three groups.
+	// Verify that the right amount of files and directories were created.
 	files := x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.True(t, len(files) == 3)
-
 	dirs := x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
 	})
 	require.True(t, len(dirs) == 1)
 
-	// Restore this backup dir (3 files total).
 	t.Logf("--- Restoring from: %q", dirs[0])
 	_, err = backup.RunRestore("./data/restore", dirs[0])
 	require.NoError(t, err)
 
-	// just check p1 which should have the 'movie' predicate (moved during setup)
+	// Only p1 needs to be checked, since the predicate was moved here during setup.
 	restored, err := getPValues("./data/restore/p1", "movie", math.MaxUint64)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
-	tests := []struct {
+	checks := []struct {
 		blank, expected string
 	}{
 		{blank: "x1", expected: "BIRDS MAN OR (THE UNEXPECTED VIRTUE OF IGNORANCE)"},
@@ -136,12 +134,12 @@ func TestBackupFilesystem(t *testing.T) {
 		{blank: "x4", expected: "THE SHAPE OF WATERLOO"},
 		{blank: "x5", expected: "BLACK PUNTER"},
 	}
-	for _, tc := range tests {
-		require.EqualValues(t, tc.expected, restored[original.Uids[tc.blank]])
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
-	// Do a mutation.
-	incr1, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+	// Add more data for the incremental backup.
+	incr1, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(fmt.Sprintf(`
 			<%s> <movie> "Birdman or (The Unexpected Virtue of Ignorance)" .
@@ -152,6 +150,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(5 * time.Second)
 
+	// Perform first incremental backup.
 	resp, err = http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{"/data/backups"},
 	})
@@ -160,38 +159,35 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, getError(resp.Body))
 	time.Sleep(5 * time.Second)
 
-	// there must be a backup file for each 3 groups
 	files = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.True(t, len(files) == 6)
-
 	dirs = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
 	})
 	require.True(t, len(dirs) == 2)
 
-	// Restore this backup dir (3 files total).
 	t.Logf("--- Restoring from: %q", dirs[1])
 	_, err = backup.RunRestore("./data/restore", dirs[1])
 	require.NoError(t, err)
 
-	// Just check p1 which should have the 'movie' predicate (moved during setup).
 	restored, err = getPValues("./data/restore/p1", "movie", incr1.Context.CommitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
-	tests = []struct {
+	checks = []struct {
 		blank, expected string
 	}{
 		{blank: "x1", expected: "Birdman or (The Unexpected Virtue of Ignorance)"},
 		{blank: "x4", expected: "The Shape of Waterloo"},
 	}
-	for _, tc := range tests {
-		require.EqualValues(t, tc.expected, restored[original.Uids[tc.blank]])
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
-	incr2, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+	// Add more data for a second incremental backup.
+	incr2, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte(fmt.Sprintf(`
 				<%s> <movie> "The Shape of Water" .
@@ -201,6 +197,7 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(5 * time.Second)
 
+	// Perform second incremental backup.
 	resp, err = http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{"/data/backups"},
 	})
@@ -209,37 +206,34 @@ func TestBackupFilesystem(t *testing.T) {
 	require.NoError(t, getError(resp.Body))
 	time.Sleep(5 * time.Second)
 
-	// there must be a backup file for each 3 groups
 	files = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.True(t, len(files) == 9)
-
 	dirs = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
 		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
 	})
 	require.True(t, len(dirs) == 3)
 
-	// Restore this backup dir (3 files total).
 	t.Logf("--- Restoring from: %q", dirs[2])
 	_, err = backup.RunRestore("./data/restore", dirs[2])
 	require.NoError(t, err)
 
-	// just check p1 which should have the 'movie' predicate (moved during setup)
 	restored, err = getPValues("./data/restore/p1", "movie", incr2.Context.CommitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
-	tests = []struct {
+	checks = []struct {
 		blank, expected string
 	}{
 		{blank: "x4", expected: "The Shape of Water"},
 		{blank: "x5", expected: "The Black Panther"},
 	}
-	for _, tc := range tests {
-		require.EqualValues(t, tc.expected, restored[original.Uids[tc.blank]])
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
+	// Clean up test directories.
 	dirCleanup()
 }
 
