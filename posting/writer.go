@@ -104,6 +104,7 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 }
 
 func (w *TxnWriter) Flush() error {
+	defer w.db.Sync()
 	w.wg.Wait()
 	select {
 	case err := <-w.che:

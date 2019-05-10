@@ -633,3 +633,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 	}
 	return nil
 }
+
+func (w *DiskStorage) Sync() error {
+	return w.db.Sync()
+}
