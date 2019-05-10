@@ -393,6 +393,14 @@ func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
 }
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+	l.Lock()
+	defer l.Unlock()
+	return l.addMutationInternal(ctx, txn, t)
+}
+
+func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+	l.AssertLock()
+
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		return ErrRetry
 	}
@@ -472,7 +480,8 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		return ErrRetry
 	}
-	l.AssertLock()
+	l.Lock()
+	defer l.Unlock()
 
 	// Check if we still have a pending txn when we return from this function.
 	defer func() {

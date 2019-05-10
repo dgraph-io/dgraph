@@ -139,10 +139,9 @@ type countParams struct {
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
-	plist.Lock()
-	defer plist.Unlock()
+
 	if hasCountIndex {
-		countBefore = plist.length(txn.StartTs, 0)
+		countBefore = plist.Length(txn.StartTs, 0)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -151,7 +150,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		countAfter = plist.length(txn.StartTs, 0)
+		countAfter = plist.Length(txn.StartTs, 0)
 		if countAfter == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -249,8 +248,6 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 		}
 	}
 
-	l.Lock()
-	defer l.Unlock()
 	return l.addMutation(ctx, txn, edge)
 }
 
@@ -302,6 +299,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	t1 := time.Now()
 	l.Lock()
 	defer l.Unlock()
+
 	if dur := time.Since(t1); dur > time.Millisecond {
 		span := otrace.FromContext(ctx)
 		span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-lock", true)},
@@ -342,7 +340,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, ErrTsTooOld
 		}
 	}
-	if err = l.addMutation(ctx, txn, t); err != nil {
+	if err = l.addMutationInternal(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 	if hasCountIndex {
