@@ -19,13 +19,13 @@ package posting
 import (
 	"context"
 	"math"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	deadlock "github.com/sasha-s/go-deadlock"
 )
 
 var o *oracle
@@ -47,7 +47,7 @@ type Txn struct {
 	// atomic
 	shouldAbort uint32
 	// Fields which can changed after init
-	sync.Mutex
+	deadlock.Mutex
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
