@@ -20,11 +20,13 @@ import (
 	"encoding/binary"
 )
 
+// ProtoMessage is an interface to interact with protobuf messages.
 type ProtoMessage interface {
 	Size() int
 	MarshalTo([]byte) (int, error)
 }
 
+// AppendProtoMsg appends the given protobuf message to the given byte slice.
 func AppendProtoMsg(p []byte, msg ProtoMessage) ([]byte, error) {
 	sz := msg.Size()
 	p = ReserveCap(p, len(p)+sz)
@@ -34,6 +36,7 @@ func AppendProtoMsg(p []byte, msg ProtoMessage) ([]byte, error) {
 	return p[:len(p)+sz], err
 }
 
+// AppendUvarint appends the given uint64 to the given byte slice.
 func AppendUvarint(p []byte, x uint64) []byte {
 	p = ReserveCap(p, len(p)+binary.MaxVarintLen64)
 	buf := p[len(p) : len(p)+binary.MaxVarintLen64]
@@ -41,6 +44,9 @@ func AppendUvarint(p []byte, x uint64) []byte {
 	return p[:len(p)+n]
 }
 
+// ReserveCap returns a new byte slice containing the contents of the given one with
+// a capacity of atLeast. The original byte slice is returned if it meets the capacity
+// requirements.
 func ReserveCap(p []byte, atLeast int) []byte {
 	if cap(p) >= atLeast {
 		return p

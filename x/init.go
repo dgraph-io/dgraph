@@ -26,7 +26,6 @@ import (
 
 var (
 	initFunc []func()
-	isTest   bool
 
 	// These variables are set using -ldflags
 	dgraphVersion  string
@@ -34,14 +33,6 @@ var (
 	lastCommitSHA  string
 	lastCommitTime string
 )
-
-func SetTestRun() {
-	isTest = true
-}
-
-func IsTestRun() bool {
-	return isTest
-}
 
 // AddInit adds a function to be run in x.Init, which should be called at the
 // beginning of all mains.
@@ -60,6 +51,7 @@ func Init() {
 	}
 }
 
+// BuildDetails returns a string containing details about the Dgraph binary.
 func BuildDetails() string {
 	licenseInfo := `Licensed under the Apache Public License 2.0`
 	if !strings.HasSuffix(dgraphVersion, "-oss") {
@@ -83,11 +75,12 @@ Copyright 2015-2018 Dgraph Labs, Inc.
 		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version(), licenseInfo)
 }
 
-// PrintVersionOnly prints version and other helpful information if --version.
+// PrintVersion prints version and other helpful information if --version.
 func PrintVersion() {
 	glog.Infof("\n%s\n", BuildDetails())
 }
 
+// Version returns a string containing the dgraphVersion.
 func Version() string {
 	return dgraphVersion
 }

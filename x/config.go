@@ -21,18 +21,23 @@ import (
 	"time"
 )
 
+// Options stores the options for this package.
 type Options struct {
 	DebugMode      bool
 	PortOffset     int
 	QueryEdgeLimit uint64
 }
 
+// Config stores the global instance of this package's options.
 var Config Options
 
+// IPRange represents an IP range.
 type IPRange struct {
 	Lower, Upper net.IP
 }
 
+// WorkerOptions stores the options for the worker package. It's declared here
+// since it's used by multiple packages.
 type WorkerOptions struct {
 	ExportPath          string
 	NumPendingProposals int
@@ -49,4 +54,5 @@ type WorkerOptions struct {
 	SnapshotAfter       int
 }
 
+// WorkerConfig stores the global instance of the worker package's options.
 var WorkerConfig WorkerOptions

@@ -89,6 +89,7 @@ func AssertTruef(b bool, format string, args ...interface{}) {
 	}
 }
 
+// AssertTruefNoTrace is AssertTruef without a stack trace.
 func AssertTruefNoTrace(b bool, format string, args ...interface{}) {
 	if !b {
 		log.Fatalf("%+v", fmt.Errorf(format, args...))
