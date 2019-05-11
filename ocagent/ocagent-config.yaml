@@ -1,0 +1,9 @@
+receivers:
+  jaeger:
+    collector_http_port: 14268
+
+exporters:
+  datadog:
+    namespace: "oc_pool"
+    trace_addr: "datadog:8126"
+    enable_tracing: true
