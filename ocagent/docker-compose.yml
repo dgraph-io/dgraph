@@ -68,6 +68,4 @@ services:
     - DD_APM_NON_LOCAL_TRAFFIC=true
     ports:
     - 8126:8126
-
 volumes: {}
-        
