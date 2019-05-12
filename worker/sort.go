@@ -148,7 +148,7 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 				var offset int32
 				// Usually start would equal ts.Offset unless the values around the offset index
 				// (at offset-1, offset-2 index and so on) are equal. In that case we keep those
-				// values and applying the remaining offset later.
+				// values and apply the remaining offset later.
 				if int32(start) < ts.Offset {
 					offset = ts.Offset - int32(start)
 				}
@@ -569,7 +569,8 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 			} else {
 				// Incase of multi sort we can't apply the offset yet, as the order might change after other sort
 				// orders are applied. So we need to pick all the uids in the current bucket.
-				// Since we are picking all values in this bucket, we have to apply this remaining offset later.
+				// Since we are picking all values in this bucket, we have to apply this remaining offset later
+				// and hence are storing it here.
 				il.multiSortOffset = int32(il.offset)
 			}
 			il.offset = 0
