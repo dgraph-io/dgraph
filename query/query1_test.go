@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -1646,7 +1645,6 @@ func TestMultiSort8PaginateWithOffset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			js := processQueryNoErr(t, tt.query)
-			fmt.Println(js)
 			require.JSONEq(t, tt.result, js)
 		})
 	}

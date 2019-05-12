@@ -438,7 +438,6 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 
 	go func() {
 		sr := sortWithIndex(cctx, ts)
-		fmt.Println("with index returned")
 		resCh <- sr
 	}()
 
@@ -525,8 +524,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
-		fmt.Printf("token: %v, offset: %v, count: %v, len: %v\n", token, il.multiSortOffset, count, len(il.ulist.Uids))
-		if count > 0 && len(il.ulist.Uids) >= count {
+		if count > 0 && len(il.ulist.Uids)-int(il.multiSortOffset) >= count {
 			continue
 		}
 
@@ -596,7 +594,9 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 	// Check out[i] sizes for all i.
 	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
-		if len(out[i].ulist.Uids) < count {
+		// We need to reduce multiSortOffset while checking the count as we might have included
+		// some extra uids earlier for the multi-sort case.
+		if len(out[i].ulist.Uids)-int(out[i].multiSortOffset) < count {
 			return errContinue
 		}
 
