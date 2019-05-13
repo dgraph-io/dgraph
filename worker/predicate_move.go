@@ -170,10 +170,10 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	if !n.AmLeader() {
 		return &emptyPayload, errNotLeader
 	}
-	if groups().gid != in.SourceGid {
+	if groups().groupId() != in.SourceGid {
 		return &emptyPayload,
 			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
-				in.SourceGid, groups().gid)
+				in.SourceGid, groups().groupId())
 	}
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate

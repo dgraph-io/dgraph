@@ -259,8 +259,8 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		for _, tablet := range group.Tablets {
 			g.tablets[tablet.Predicate] = tablet
 		}
-		if gid == g.gid {
-			glog.V(3).Infof("group %d checksum: %d", g.gid, group.Checksum)
+		if gid == g.groupId() {
+			glog.V(3).Infof("group %d checksum: %d", g.groupId(), group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
@@ -289,9 +289,9 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
-	g.RLock()
-	defer g.RUnlock()
-	return g.gid == gid
+	// No need to acquire the lock on g because gid is always
+	// accessed atomically via groupId() function
+	return g.groupId() == gid
 }
 
 func (g *groupi) ChecksumsMatch(ctx context.Context) error {
@@ -307,7 +307,7 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 				return nil
 			}
 		case <-ctx.Done():
-			return fmt.Errorf("Group checksum mismatch for id: %d", g.gid)
+			return fmt.Errorf("Group checksum mismatch for id: %d", g.groupId())
 		}
 	}
 }
