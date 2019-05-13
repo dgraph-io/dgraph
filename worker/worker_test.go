@@ -56,14 +56,14 @@ func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 }
 
 func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
-	_, err := dg.NewTxn().Mutate(context.Background(),
-		&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
+	mu := &api.Mutation{SetNquads: []byte(rdf), CommitNow: true}
+	err := z.RetryMutation(dg, mu)
 	require.NoError(t, err)
 }
 
 func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
-	_, err := dg.NewTxn().Mutate(context.Background(),
-		&api.Mutation{DelNquads: []byte(rdf), CommitNow: true})
+	mu := &api.Mutation{DelNquads: []byte(rdf), CommitNow: true}
+	err := z.RetryMutation(dg, mu)
 	require.NoError(t, err)
 }
 func getOrCreate(key []byte) *posting.List {
