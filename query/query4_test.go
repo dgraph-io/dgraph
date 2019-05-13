@@ -54,7 +54,7 @@ func TestDeleteAndReaddIndex(t *testing.T) {
 	// Remove the fulltext index and verify the previous query is no longer supported.
 	s2 := testSchema + "\n numerology: string @index(exact, term) .\n"
 	setSchema(s2)
-	_, err := processQuery(t, context.Background(), q1)
+	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute numerology is not indexed with type fulltext")
 
@@ -112,7 +112,7 @@ func TestDeleteAndReaddCount(t *testing.T) {
 	// Remove the count index and verify the previous query is no longer supported.
 	s2 := testSchema + "\n numerology: string .\n"
 	setSchema(s2)
-	_, err := processQuery(t, context.Background(), q1)
+	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Need @count directive in schema for attr: numerology")
 
@@ -151,7 +151,7 @@ func TestDeleteAndReaddReverse(t *testing.T) {
 	// Remove the reverse edges and verify the previous query is no longer supported.
 	s2 := testSchema + "\n child_pred: uid .\n"
 	setSchema(s2)
-	_, err := processQuery(t, context.Background(), q1)
+	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate child_pred doesn't have reverse edge")
 
@@ -192,7 +192,7 @@ func TestDropPredicate(t *testing.T) {
 	// Finally, drop the predicate and verify the query no longer works because
 	// the index was dropped when all the data for that predicate was deleted.
 	dropPredicate("numerology")
-	_, err := processQuery(t, context.Background(), q1)
+	_, err := processQuery(context.Background(), t, q1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute numerology is not indexed with type term")
 

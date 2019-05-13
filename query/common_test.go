@@ -63,7 +63,7 @@ func dropPredicate(pred string) {
 	}
 }
 
-func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
+func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -81,7 +81,7 @@ func processQuery(t *testing.T, ctx context.Context, query string) (string, erro
 }
 
 func processQueryNoErr(t *testing.T, query string) string {
-	res, err := processQuery(t, context.Background(), query)
+	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
 	return res
 }

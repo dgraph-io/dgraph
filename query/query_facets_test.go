@@ -776,7 +776,7 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 	}
 `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
