@@ -555,7 +555,8 @@ func run() {
 			}
 		}
 	}()
-	_ = numShutDownSig
+	// TODO (animesh): Not sure why this was done in the first place
+	// _ = numShutDownSig
 
 	// Setup external communication.
 	aclCloser := y.NewCloser(1)
