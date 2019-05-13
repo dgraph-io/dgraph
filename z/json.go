@@ -29,12 +29,19 @@ import (
 	"testing"
 )
 
+// CompareJSON compares two JSON objects (passed as strings).
 func CompareJSON(t *testing.T, want, got string) {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
 	CompareJSONMaps(t, wantMap, gotMap)
 }
 
+// CompareJSON compares two JSON objects (passed as maps).
+func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
+	return DiffJSONMaps(t, wantMap, gotMap, "", false)
+}
+
+//EqualJSON compares two JSON objects for equality.
 func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
@@ -42,6 +49,7 @@ func EqualJSON(t *testing.T, want, got string, savepath string, quiet bool) bool
 	return DiffJSONMaps(t, wantMap, gotMap, savepath, quiet)
 }
 
+// UnmarshalJSON unmarshals the given string into a map.
 func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 	jsonMap := map[string]interface{}{}
 	err := json.Unmarshal([]byte(jsonStr), &jsonMap)
@@ -52,10 +60,8 @@ func UnmarshalJSON(t *testing.T, jsonStr string) map[string]interface{} {
 	return jsonMap
 }
 
-func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
-	return DiffJSONMaps(t, wantMap, gotMap, "", false)
-}
-
+// DiffJSONMaps compares two JSON maps, optionally printing their differences,
+// and returning true if they are equal.
 func DiffJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{},
 	savepath string, quiet bool) bool {
 	sortJSON(wantMap)

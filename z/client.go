@@ -41,9 +41,14 @@ import (
 
 // socket addr = IP address and port number
 var (
-	SockAddr         string
-	SockAddrHttp     string
-	SockAddrZero     string
+
+	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
+	SockAddr string
+	// SockAddrHttp is the address to the HTTP of alpha used during tests.
+	SockAddrHttp string
+	// SockAddrZero is the address to the gRPC endpoint of the zero used during tests.
+	SockAddrZero string
+	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
 )
 
@@ -70,7 +75,8 @@ func init() {
 	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
 
-// DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
+// DgraphClientDropAll creates a Dgraph client and drops all existing data.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.
 func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
 	dg := DgraphClient(serviceAddr)
@@ -88,6 +94,9 @@ func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
+// DgraphClientWithGroot creates a Dgraph client with groot permissions set up.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
 	dg := DgraphClient(serviceAddr)
 
@@ -106,8 +115,9 @@ func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
-// DgraphClientNoDropAll is intended to be called from TestMain() to establish a Dgraph connection
-// shared by all tests, so there is no testing.T instance for it to use.
+// DgraphClient creates a Dgraph client.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
 	x.CheckfNoTrace(err)
@@ -118,6 +128,10 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
+// DgraphClientWithCerts creates a Dgraph client with TLS configured using the given
+// viper configuration.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, error) {
 	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	if err != nil {
@@ -138,6 +152,7 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 	return dg, nil
 }
 
+// DropAll drops all the data in the Dgraph instance associated with the given client.
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
@@ -169,6 +184,7 @@ func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
 	}
 }
 
+// LoginParams stores the information needed to perform a login request.
 type LoginParams struct {
 	Endpoint   string
 	UserID     string
@@ -285,6 +301,8 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *FailureConfig) {
 	}
 }
 
+// VerifyCurlCmd executes the curl command with the given arguments and verifies
+// the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string,
 	failureConfig *FailureConfig) {
 	queryCmd := exec.Command("curl", args...)
