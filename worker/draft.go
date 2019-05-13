@@ -62,8 +62,6 @@ type node struct {
 	gid      uint32
 	closer   *y.Closer
 
-	lastCommitTs uint64 // Only used to ensure that our commit Ts is monotonically increasing.
-
 	streaming int32 // Used to avoid calculating snapshot
 
 	canCampaign bool
@@ -283,6 +281,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
+
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
 
 	sort.Slice(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
@@ -525,6 +526,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
@@ -536,12 +538,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	for _, status := range delta.Txns {
-		if status.CommitTs > 0 && status.CommitTs < n.lastCommitTs {
-			glog.Errorf("Lastcommit %d > current %d. This would cause some commits to be lost.",
-				n.lastCommitTs, status.CommitTs)
-		}
 		toDisk(status.StartTs, status.CommitTs)
-		n.lastCommitTs = status.CommitTs
 	}
 	if err := writer.Flush(); err != nil {
 		return x.Errorf("Error while flushing to disk: %v", err)
@@ -671,6 +668,112 @@ func (n *node) rampMeter() {
 		time.Sleep(3 * time.Millisecond)
 	}
 }
+
+func (n *node) findRaftProgress() (uint64, error) {
+	var applied uint64
+	err := pstore.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(x.RaftKey())
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			var snap pb.Snapshot
+			if err := snap.Unmarshal(val); err != nil {
+				return err
+			}
+			applied = snap.Index
+			return nil
+		})
+	})
+	return applied, err
+}
+
+func (n *node) updateRaftProgress() error {
+	// Both leader and followers can independently update their Raft progress. We don't store
+	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
+	// has already applied, to speed up things on a restart.
+	snap, err := n.calculateSnapshot(10) // 10 is a randomly chosen small number.
+	if err != nil {
+		return err
+	}
+	if snap == nil {
+		return nil
+	}
+
+	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
+	// stored applied.
+	applied, err := n.findRaftProgress()
+	if err != nil {
+		return err
+	}
+	if snap.Index <= applied {
+		return nil
+	}
+
+	data, err := snap.Marshal()
+	x.Check(err)
+	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	defer txn.Discard()
+
+	if err := txn.SetWithMeta(x.RaftKey(), data, x.ByteRaft); err != nil {
+		return err
+	}
+	if err := txn.CommitAt(1, nil); err != nil {
+		return err
+	}
+	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	return nil
+}
+
+func (n *node) checkpointAndClose(done chan struct{}) {
+	slowTicker := time.NewTicker(time.Minute)
+	defer slowTicker.Stop()
+
+	for {
+		select {
+		case <-slowTicker.C:
+			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
+			// be sent on time. Otherwise, followers would just keep running elections.
+
+			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+			if err := n.updateRaftProgress(); err != nil {
+				glog.Errorf("While updating Raft progress: %v", err)
+			}
+
+			if n.AmLeader() {
+				// We keep track of the applied index in the p directory. Even if we don't take
+				// snapshot for a while and let the Raft logs grow and restart, we would not have to
+				// run all the log entries, because we can tell Raft.Config to set Applied to that
+				// index.
+				// This applied index tracking also covers the case when we have a big index
+				// rebuild. The rebuild would be tracked just like others and would not need to be
+				// replayed after a restart, because the Applied config would let us skip right
+				// through it.
+				// We use disk based storage for Raft. So, we're not too concerned about
+				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
+				// entries to process on a restart.
+				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+					x.Errorf("While calculating and proposing snapshot: %v", err)
+				}
+				go n.abortOldTransactions()
+			}
+
+		case <-n.closer.HasBeenClosed():
+			glog.Infof("Stopping node.Run")
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
+				time.Sleep(time.Second) // Let transfer happen.
+			}
+			n.Raft().Stop()
+			close(done)
+			return
+		}
+	}
+}
+
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -680,22 +783,18 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	slowTicker := time.NewTicker(30 * time.Second)
-	defer slowTicker.Stop()
-
 	done := make(chan struct{})
-	go func() {
-		<-n.closer.HasBeenClosed()
-		glog.Infof("Stopping node.Run")
-		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-			n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
-			time.Sleep(time.Second) // Let transfer happen.
-		}
-		n.Raft().Stop()
-		close(done)
-	}()
+	go n.checkpointAndClose(done)
+	go n.ReportRaftComms()
 
-	var snapshotLoops uint64
+	applied, err := n.findRaftProgress()
+	if err != nil {
+		glog.Errorf("While trying to find raft progress: %v", err)
+	} else {
+		glog.Infof("Found Raft progress in p directory: %d", applied)
+	}
+
+	var timer x.Timer
 	for {
 		select {
 		case <-done:
@@ -706,35 +805,15 @@ func (n *node) Run() {
 			glog.Infoln("Raft node done.")
 			return
 
-		case <-slowTicker.C:
-			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-			if leader {
-				// We try to take a snapshot every slow tick duration, with a 1000 discard entries.
-				// But, once a while, we take a snapshot with 10 discard entries. This avoids the
-				// scenario where after bringing up an Alpha, and doing a hundred schema updates, we
-				// don't take any snapshots because there are not enough updates (discardN=10),
-				// which then really slows down restarts. At the same time, by checking more
-				// frequently, we can quickly take a snapshot if a lot of mutations are coming in
-				// fast (discardN=1000).
-				discardN := 1000
-				if snapshotLoops%5 == 0 {
-					discardN = 10
-				}
-				snapshotLoops++
-				// We use disk based storage for Raft. So, we're not too concerned about
-				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
-				// entries to process on a restart.
-				if err := n.proposeSnapshot(discardN); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
-				}
-				go n.abortOldTransactions()
-			}
-
+			// Slow ticker can't be placed here because figuring out checkpoints and snapshots takes
+			// time and if the leader does not send heartbeats out during this time, the followers
+			// start an election process. And that election process would just continue to happen
+			// indefinitely because checkpoints and snapshots are being calculated indefinitely.
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			start := time.Now()
+			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
@@ -812,13 +891,13 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			diskDur := time.Since(start)
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
+			timer.Record("disk")
 
 			// Now schedule or apply committed entries.
 			var proposals []*pb.Proposal
@@ -839,6 +918,10 @@ func (n *node) Run() {
 
 				} else if len(entry.Data) == 0 {
 					n.elog.Printf("Found empty data at index: %d", entry.Index)
+					n.Applied.Done(entry.Index)
+
+				} else if entry.Index < applied {
+					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 
 				} else {
@@ -886,8 +969,11 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Followed queued messages.")
 			}
+			timer.Record("proposals")
 
 			n.Raft().Advance()
+			timer.Record("advance")
+
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
@@ -897,14 +983,13 @@ func (n *node) Run() {
 				span.End()
 				ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
-					x.LatencyMs.M(x.SinceMs(start)))
+					x.LatencyMs.M(float64(timer.Total())/1e6))
 			}
-			if time.Since(start) > 100*time.Millisecond {
+			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+					"Raft.Ready took too long to process: %s"+
 						" Num entries: %d. MustSync: %v",
-					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
-					len(rd.Entries), rd.MustSync)
+					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
 	}
@@ -947,6 +1032,8 @@ func (n *node) rollupLists(readTs uint64) error {
 		switch item.UserMeta() {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			addTo(item.Key(), item.EstimatedSize())
+			return false
+		case x.ByteRaft:
 			return false
 		default:
 			return true
@@ -1040,7 +1127,6 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 
 	// Let's propose the txn updates received from Zero. This is important because there are edge
 	// cases where a txn status might have been missed by the group.
-	glog.Infof("TryAbort returned with delta: %+v\n", delta)
 	aborted := &pb.OracleDelta{}
 	for _, txn := range delta.Txns {
 		// Only pick the aborts. DO NOT propose the commits. They must come in the right order via
@@ -1069,14 +1155,14 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	starts := posting.Oracle().TxnOlderThan(5 * time.Minute)
+	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
 		return
 	}
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
@@ -1145,6 +1231,9 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 
+	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		glog.V(2).Infof("Num pending txns: %d", num)
+	}
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.

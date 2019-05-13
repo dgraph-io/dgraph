@@ -36,7 +36,7 @@ func run(ctx context.Context, command string) error {
 }
 
 func partition(instance string) error {
-	return run(ctxb, fmt.Sprintf("blockade partition %s", instance))
+	return run(ctxb, fmt.Sprintf("embargo partition %s", instance))
 }
 
 func increment(atLeast int, args string) error {
@@ -104,7 +104,7 @@ func testCommon(remove, join, incrementArgs string, nodes []string, minAlphasUp 
 		if err := run(ctxb, remove+" "+node); err != nil {
 			return err
 		}
-		if err := run(ctxb, "blockade status"); err != nil {
+		if err := run(ctxb, "embargo status"); err != nil {
 			return err
 		}
 		if err := increment(minAlphasUp, incrementArgs); err != nil {
@@ -162,37 +162,37 @@ func runTests() error {
 	}
 
 	// Setting flaky --all just does not converge. Too many network interruptions.
-	// if err := testCommon("blockade flaky", "blockade fast --all", 3); err != nil {
+	// if err := testCommon("embargo flaky", "embargo fast --all", 3); err != nil {
 	// 	fmt.Printf("Error testFlaky: %v\n", err)
 	// 	return err
 	// }
 	// fmt.Println("===> Flaky TEST: OK")
 
-	// if err := testCommon("blockade slow", "blockade fast --all", 3); err != nil {
+	// if err := testCommon("embargo slow", "embargo fast --all", 3); err != nil {
 	// 	fmt.Printf("Error testSlow: %v\n", err)
 	// 	return err
 	// }
 	// fmt.Println("===> Slow TEST: OK")
 
-	if err := testCommon("blockade stop", "blockade start --all", "", nodes, 2); err != nil {
+	if err := testCommon("embargo stop", "embargo start --all", "", nodes, 2); err != nil {
 		fmt.Printf("Error testStop: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Stop TEST: OK")
 
-	if err := testCommon("blockade restart", "", "", nodes, 3); err != nil {
+	if err := testCommon("embargo restart", "", "", nodes, 3); err != nil {
 		fmt.Printf("Error testRestart with restart: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Restart TEST: OK")
 
-	if err := testCommon("blockade partition", "blockade join", "", nodes, 2); err != nil {
+	if err := testCommon("embargo partition", "embargo join", "", nodes, 2); err != nil {
 		fmt.Printf("Error testPartitions: %v\n", err)
 		return err
 	}
 	fmt.Println("===> Partition TEST: OK")
 
-	if err := testCommon("blockade partition", "blockade join", "--be", alphaNodes, 3); err != nil {
+	if err := testCommon("embargo partition", "embargo join", "--be", alphaNodes, 3); err != nil {
 		fmt.Printf("Error testPartitionsBestEffort: %v\n", err)
 		return err
 	}
@@ -203,15 +203,15 @@ func runTests() error {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	fmt.Println("Starting blockade")
-	if err := run(ctxb, "blockade up"); err != nil {
+	fmt.Println("Starting embargo")
+	if err := run(ctxb, "embargo up"); err != nil {
 		log.Fatal(err)
 	}
-	// This defer can be moved within runTests, if we want to destroy blockade,
+	// This defer can be moved within runTests, if we want to destroy embargo,
 	// in case our tests fail. We don't want to do that, because then we won't
 	// be able to get the logs.
 	defer func() {
-		if err := run(ctxb, "blockade destroy"); err != nil {
+		if err := run(ctxb, "embargo destroy"); err != nil {
 			log.Fatalf("While destroying: %v", err)
 		}
 	}()
@@ -219,5 +219,5 @@ func main() {
 	if err := runTests(); err != nil {
 		os.Exit(1)
 	}
-	fmt.Println("Blockade tests: OK")
+	fmt.Println("embargo tests: OK")
 }

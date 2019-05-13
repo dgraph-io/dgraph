@@ -93,7 +93,7 @@ func (w *DiskStorage) snapshotKey() []byte {
 	return b
 }
 
-func (w *DiskStorage) hardStateKey() []byte {
+func (w *DiskStorage) HardStateKey() []byte {
 	b := make([]byte, 14)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	copy(b[8:10], []byte("hs"))
@@ -338,7 +338,7 @@ func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st pb.HardState) er
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal hardstate")
 	}
-	return batch.Set(w.hardStateKey(), data, 0)
+	return batch.Set(w.HardStateKey(), data, 0)
 }
 
 // reset resets the entries. Used for testing.
@@ -406,7 +406,7 @@ func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
 	w.elog.Printf("HardState")
 	defer w.elog.Printf("Done")
 	err := w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.hardStateKey())
+		item, err := txn.Get(w.HardStateKey())
 		if err != nil {
 			return err
 		}

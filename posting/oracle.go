@@ -48,10 +48,6 @@ type Txn struct {
 	shouldAbort uint32
 	// Fields which can changed after init
 	sync.Mutex
-	// Deltas keeps track of the posting list keys, and whether they should be considered for
-	// conflict detection or not. When a txn is marked committed or aborted, we use the keys stored
-	// here to determine which posting lists to get and update.
-	deltas map[string]struct{}
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
@@ -61,13 +57,13 @@ type Txn struct {
 	// determine unhealthy, stale txns.
 	lastUpdate time.Time
 
-	cache *LocalCache
+	cache *LocalCache // This pointer does not get modified.
 }
 
 func NewTxn(startTs uint64) *Txn {
 	return &Txn{
 		StartTs:    startTs,
-		cache:      NewLocalCache(),
+		cache:      NewLocalCache(startTs),
 		lastUpdate: time.Now(),
 	}
 }
@@ -75,7 +71,11 @@ func NewTxn(startTs uint64) *Txn {
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
+func (txn *Txn) Update() {
+	txn.cache.UpdateDeltasAndDiscardLists()
+}
 
+// Store is used by tests.
 func (txn *Txn) Store(pl *List) *List {
 	return txn.cache.Set(string(pl.key), pl)
 }
@@ -137,6 +137,12 @@ func (o *oracle) MinPendingStartTs() uint64 {
 		}
 	}
 	return min
+}
+
+func (o *oracle) NumPendingTxns() int {
+	o.RLock()
+	defer o.RUnlock()
+	return len(o.pendingTxns)
 }
 
 func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
@@ -237,7 +243,7 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
 	txn.Lock()
 	defer txn.Unlock()
-	for key := range txn.deltas {
+	for key := range txn.cache.deltas {
 		if ok([]byte(key)) {
 			return true
 		}

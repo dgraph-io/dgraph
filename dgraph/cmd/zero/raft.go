@@ -618,6 +618,7 @@ func (n *node) Run() {
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
+	var timer x.Timer
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
@@ -626,7 +627,7 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			start := time.Now()
+			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
@@ -654,7 +655,7 @@ func (n *node) Run() {
 			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
 			span.Annotatef(nil, "Saved to storage")
-			diskDur := time.Since(start)
+			timer.Record("disk")
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -689,16 +690,18 @@ func (n *node) Run() {
 				}
 			}
 			span.Annotate(nil, "Sent messages")
+			timer.Record("proposals")
 
 			n.Raft().Advance()
 			span.Annotate(nil, "Advanced Raft")
+			timer.Record("advance")
+
 			span.End()
-			if time.Since(start) > 100*time.Millisecond {
+			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
-					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
-					len(rd.Entries), rd.MustSync)
+					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
 	}

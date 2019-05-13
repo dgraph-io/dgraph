@@ -211,14 +211,6 @@ func TestDeletePredicate(t *testing.T) {
 	var q4 = `
 		{
 			user(func: uid(0x3)) {
-				_predicate_
-			}
-		}
-	`
-
-	var q5 = `
-		{
-			user(func: uid(0x3)) {
 				age
 				friend {
 					name
@@ -260,10 +252,6 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}}`, output)
 
-	output, err = runQuery(q4)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
-
 	err = deletePredicate("friend")
 	require.NoError(t, err)
 	err = deletePredicate("salary")
@@ -272,7 +260,6 @@ func TestDeletePredicate(t *testing.T) {
 	output, err = runQuery(`schema{}`)
 	require.NoError(t, err)
 	z.CompareJSON(t, `{"data":{"schema":[`+
-		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+
@@ -287,13 +274,9 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": [{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}}`, output)
 
-	output, err = runQuery(q5)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"age": "13"}]}}`, output)
-
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"age": "13"}]}}`, output)
 
 	// Lets try to change the type of predicates now.
 	err = alterSchemaWithRetry(s2)
@@ -1053,122 +1036,6 @@ func BenchmarkQuery(b *testing.B) {
 	}
 }
 
-func TestListPred(t *testing.T) {
-	require.NoError(t, alterSchema(`{"drop_all": true}`))
-	var q1 = `
-	{
-		listpred(func:anyofterms(name, "Alice")) {
-				_predicate_
-		}
-	}
-	`
-	var m = `
-	{
-		set {
-			<0x1> <name> "Alice" .
-			<0x1> <age> "13" .
-			<0x1> <friend> <0x4> .
-		}
-	}
-	`
-	var s = `
-			name:string @index(term) .
-	`
-
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	// add index to name
-	err = alterSchemaWithRetry(s)
-	require.NoError(t, err)
-
-	output, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"listpred":[{"_predicate_":["name","age","friend"]}]}}`,
-		output)
-}
-
-func TestExpandPredError(t *testing.T) {
-	var q1 = `
-	{
-		me(func:anyofterms(name, "Alice")) {
-  			expand(_all_)
-			name
-			friend
-		}
-	}
-	`
-	var m = `
-	{
-		set {
-			<0x1> <name> "Alice" .
-			<0x1> <age> "13" .
-			<0x1> <friend> <0x4> .
-			<0x4> <name> "bob" .
-			<0x4> <age> "12" .
-		}
-	}
-	`
-	var s = `
-			name:string @index(term) .
-	`
-
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	// add index to name
-	err = alterSchemaWithRetry(s)
-	require.NoError(t, err)
-
-	_, err = runQuery(q1)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Repeated subgraph")
-}
-
-func TestExpandPred(t *testing.T) {
-	var q1 = `
-	{
-		me(func: uid(0x11)) {
-			expand(_all_) {
-				expand(_all_)
-			}
-		}
-	}
-	`
-	var m = `
-	{
-		set {
-			<0x11> <name> "Alice" .
-			<0x11> <age> "13" .
-			<0x11> <friend> <0x4> .
-			<0x4> <name> "bob" .
-			<0x4> <age> "12" .
-		}
-	}
-	`
-	var s = `
-			name:string @index(term) .
-	`
-
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	// add index to name
-	err = alterSchemaWithRetry(s)
-	require.NoError(t, err)
-
-	output, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}}`,
-		output)
-}
-
 var threeNiceFriends = `{
 	"data": {
 	  "me": [
@@ -1348,13 +1215,30 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 	z.CompareJSON(t, `{"data":{"schema":[`+
 		x.AclPredicates+","+
-		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
 			"list":true}]}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
+	s := `
+	type Node12345 {
+		nodeType: string
+		name: string
+		date: dateTime
+		weight: float
+		weightUnit: string
+		lifeLoad: int
+		stressLevel: int
+		plan: string
+		postMortem: string
+	}
+	`
+	require.NoError(t, dropAll())
+	schema.ParseBytes([]byte(""), 1)
+	err := alterSchemaWithRetry(s)
+	require.NoError(t, err)
+
 	var m = `
 	{
 	  set {
@@ -1367,16 +1251,16 @@ func TestDeleteAllSP2(t *testing.T) {
 	    <0x12345> <stressLevel> "3" .
 	    <0x12345> <plan> "modest day" .
 	    <0x12345> <postMortem> "win!" .
+	    <0x12345> <dgraph.type> "Node12345" .
 	  }
 	}
 	`
-	err := runMutation(m)
+	err = runMutation(m)
 	require.NoError(t, err)
 
 	q := fmt.Sprintf(`
 	{
 	  me(func: uid(%s)) {
-		_predicate_
 		name
 	    date
 	    weight
@@ -1387,7 +1271,7 @@ func TestDeleteAllSP2(t *testing.T) {
 
 	output, err := runQuery(q)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"_predicate_":["name","date","weightUnit","postMortem","lifeLoad","weight","stressLevel","nodeType","plan"],"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
+	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
 
 	m = fmt.Sprintf(`
 		{
@@ -1550,7 +1434,7 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q3)
 	require.NoError(t, err)
 	z.CompareJSON(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
+		`{"data":{"schema":[`+
 			x.AclPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
 				"list":true}]}}`, output)
@@ -1569,40 +1453,6 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q5)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"q":[]}}`, output)
-}
-
-func TestRecurseExpandAll(t *testing.T) {
-	var q1 = `
-	{
-		me(func:anyofterms(name, "Alica")) @recurse {
-  			expand(_all_)
-		}
-	}
-	`
-	var m = `
-	{
-		set {
-			<0x1> <name> "Alica" .
-			<0x1> <age> "13" .
-			<0x1> <friend> <0x4> .
-			<0x4> <name> "bob" .
-			<0x4> <age> "12" .
-		}
-	}
-	`
-
-	var s = `name:string @index(term) .`
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	err = alterSchemaWithRetry(s)
-	require.NoError(t, err)
-
-	output, err := runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Alica","age":"13","friend":[{"name":"bob","age":"12"}]}]}}`, output)
 }
 
 func TestIllegalCountInQueryFn(t *testing.T) {

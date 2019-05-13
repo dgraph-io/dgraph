@@ -287,7 +287,7 @@ func TestNoResultsCount(t *testing.T) {
 
 func TestTypeExpandAll(t *testing.T) {
 	query := `{
-		q(func: has(make)) {
+		q(func: eq(make, "Ford")) {
 			expand(_all_) {
 				uid
 			}
@@ -302,7 +302,7 @@ func TestTypeExpandAll(t *testing.T) {
 
 func TestTypeExpandForward(t *testing.T) {
 	query := `{
-		q(func: has(make)) {
+		q(func: eq(make, "Ford")) {
 			expand(_forward_) {
 				uid
 			}
@@ -317,7 +317,7 @@ func TestTypeExpandForward(t *testing.T) {
 
 func TestTypeExpandReverse(t *testing.T) {
 	query := `{
-		q(func: has(make)) {
+		q(func: eq(make, "Ford")) {
 			expand(_reverse_) {
 				uid
 			}
@@ -327,4 +327,17 @@ func TestTypeExpandReverse(t *testing.T) {
 	require.JSONEq(t, `{"data": {"q":[
 		{"~previous_model": [{"uid":"0xc9"}]}
 	]}}`, js)
+}
+
+func TestTypeExpandLang(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(_all_) {
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "year":2009}]}}`, js)
 }
