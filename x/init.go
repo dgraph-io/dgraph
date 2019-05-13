@@ -26,6 +26,7 @@ import (
 
 var (
 	initFunc []func()
+	isTest   bool
 
 	// These variables are set using -ldflags
 	dgraphVersion  string
@@ -33,6 +34,17 @@ var (
 	lastCommitSHA  string
 	lastCommitTime string
 )
+
+// SetTestRun sets a variable to indicate that the current execution is a test.
+func SetTestRun() {
+	isTest = true
+}
+
+// IsTestRun indicates whether a test is being executed. Useful to handle special
+// conditions during tests that differ from normal execution.
+func IsTestRun() bool {
+	return isTest
+}
 
 // AddInit adds a function to be run in x.Init, which should be called at the
 // beginning of all mains.

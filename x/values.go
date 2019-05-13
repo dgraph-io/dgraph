@@ -29,7 +29,7 @@ const (
 	ValueUid
 	// ValuePlain represents a plain old value without defined language tag.
 	ValuePlain
-	// ValueMulti represents which is part of a multi-value posting list (like language).
+	// ValueMulti represents a value which is part of a multi-value posting list (like language).
 	ValueMulti
 )
 
