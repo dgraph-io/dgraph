@@ -289,8 +289,6 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
-	// No need to acquire the lock on g because gid is always
-	// accessed atomically via groupId() function
 	return g.groupId() == gid
 }
 
