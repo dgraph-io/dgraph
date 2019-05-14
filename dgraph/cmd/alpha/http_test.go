@@ -239,7 +239,7 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 func commitWithTs(keys, preds []string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
-		url += "/" + strconv.FormatUint(ts, 10)
+		url += "?startTs=" + strconv.FormatUint(ts, 10)
 	}
 
 	m := make(map[string]interface{})
@@ -260,7 +260,7 @@ func commitWithTs(keys, preds []string, ts uint64) error {
 func commitWithTsKeysOnly(keys []string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
-		url += "/" + strconv.FormatUint(ts, 10)
+		url += "?startTs=" + strconv.FormatUint(ts, 10)
 	}
 
 	b, err := json.Marshal(keys)
