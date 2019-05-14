@@ -39,11 +39,12 @@ var emptySortResult pb.SortResult
 
 type sortresult struct {
 	reply *pb.SortResult
-	// For multi sort we apply the offset in two stages. In the first stage a part of the offset is applied but
-	// equal values in the bucket that the offset falls into are skipped. This slice stores the remaining offset
-	// for individual uid lists that must be applied after all multi sort is done.
-	// TODO (pawan) - Offset has type int32 whereas paginate function returns an int. We should use a common type
-	// so that we can avoid casts between the two.
+	// For multi sort we apply the offset in two stages. In the first stage a part of the offset
+	// is applied but equal values in the bucket that the offset falls into are skipped. This
+	// slice stores the remaining offset for individual uid lists that must be applied after all
+	// multi sort is done.
+	// TODO (pawan) - Offset has type int32 whereas paginate function returns an int. We should
+	// use a common type so that we can avoid casts between the two.
 	multiSortOffsets []int32
 	vals             [][]types.Val
 	err              error
@@ -184,12 +185,14 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return &sortresult{&emptySortResult, nil, nil, fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
+		return &sortresult{&emptySortResult, nil, nil,
+			fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
 	}
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(order.Attr) {
-		return &sortresult{&emptySortResult, nil, nil, x.Errorf("Attribute %s is not indexed.", order.Attr)}
+		return &sortresult{&emptySortResult, nil, nil,
+			x.Errorf("Attribute %s is not indexed.", order.Attr)}
 	}
 
 	tokenizers := schema.State().Tokenizer(order.Attr)
@@ -211,7 +214,8 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return &sortresult{&emptySortResult, nil, nil, x.Errorf("Attribute:%s is not sortable.", order.Attr)}
+		return &sortresult{&emptySortResult, nil, nil,
+			x.Errorf("Attribute:%s is not sortable.", order.Attr)}
 	}
 
 	// Iterate over every bucket / token.
@@ -572,10 +576,11 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 			if len(ts.Order) == 1 {
 				result.Uids = result.Uids[il.offset:n]
 			} else {
-				// Incase of multi sort we can't apply the offset yet, as the order might change after other sort
-				// orders are applied. So we need to pick all the uids in the current bucket.
-				// Since we are picking all values in this bucket, we have to apply this remaining offset later
-				// and hence are storing it here.
+				// Incase of multi sort we can't apply the offset yet, as the order might change
+				// after other sort orders are applied. So we need to pick all the uids in the
+				// current bucket.
+				// Since we are picking all values in this bucket, we have to apply this remaining
+				// offset later and hence are storing it here.
 				il.multiSortOffset = int32(il.offset)
 			}
 			il.offset = 0
