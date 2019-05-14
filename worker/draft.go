@@ -1248,7 +1248,6 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	// cases where the raft log is too big to fit into memory. Instead of retrieving
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
-	var foundEntries bool
 	for batchFirst := first; batchFirst <= last; {
 		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
 		if err != nil {
@@ -1264,7 +1263,6 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		// Store the last entry (as it might be needed outside the loop) and set the
 		// start of the new batch at the entry following it. Also set foundEntries to
 		// true to indicate to the code outside the loop that entries were retrieved.
-		foundEntries = true
 		lastEntry = entries[len(entries)-1]
 		batchFirst = lastEntry.Index + 1
 
@@ -1298,9 +1296,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		if foundEntries {
-			snapshotIdx = lastEntry.Index
-		}
+		snapshotIdx = lastEntry.Index
 		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
 
