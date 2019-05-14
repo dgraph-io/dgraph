@@ -608,7 +608,7 @@ transaction start timestamp as a path parameter, so that Dgraph knows which
 transaction the mutation should be part of.
 
 ```sh
-$ curl -X POST localhost:8080/mutate/4 -d $'
+$ curl -X POST localhost:8080/mutate?startTs=4 -d $'
 {
   set {
     <0x1> <balance> "110" .
@@ -656,7 +656,7 @@ transaction state. We also get some `preds`, which should be added to the set of
 {{% notice "note" %}}
 It's possible to commit immediately after a mutation is made (without requiring
 to use the `/commit` endpoint as explained in this section). To do this, add
-the `X-Dgraph-CommitNow: true` header to the final `/mutate` call.
+the parameter `commitNow` in the URL `/mutate?commitNow=true`.
 {{% /notice %}}
 
 Finally, we can commit the transaction using the `/commit` endpoint. We need the
@@ -670,7 +670,7 @@ predicates are moved. This field is not required and the `/commit` endpoint also
 accepts the old format, which was a single array of keys.
 
 ```sh
-$ curl -X POST localhost:8080/commit/4 -d $'
+$ curl -X POST localhost:8080/commit?startTs=4 -d $'
 {
     "keys": [
 		"i4elpex2rwx3",
@@ -731,9 +731,8 @@ Example of a compressed request via curl:
 
 ```sh
 $ curl -X POST \
-  -H 'X-Dgraph-CommitNow: true' \
   -H 'Content-Encoding: gzip' \
-  localhost:8080/mutate --data-binary @mutation.gz
+  localhost:8080/mutate?commitNow=true --data-binary @mutation.gz
 ```
 
 Example of a compressed request via curl:

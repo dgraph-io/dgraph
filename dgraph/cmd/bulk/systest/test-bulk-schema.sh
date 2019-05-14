@@ -99,7 +99,7 @@ predicate_with_default_type:default  .
 predicate_with_index_no_uid_count:string @index(exact) .
 ' &>/dev/null
 
-  curl localhost:$HTTP_PORT/mutate -X POST -H 'X-Dgraph-CommitNow: true' -d $'
+  curl localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
 {
   set {
     _:company1 <predicate_with_default_type> "CompanyABC" .
