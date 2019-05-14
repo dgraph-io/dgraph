@@ -54,10 +54,17 @@ func DockerUnpause(services ...string) error {
 
 // DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
-func DockerCp(container, srcPath, dstPath string) error {
+func DockerCp(srcPath, dstPath string) error {
 	argv := []string{"docker", "cp"}
 	argv = append(argv, srcPath)
 	argv = append(argv, dstPath)
-	err := Exec(argv...)
-	return err
+	return Exec(argv...)
+}
+
+// DockerExec executes a command inside the given container.
+func DockerExec(container, cmd string) error {
+	argv := []string{"docker", "exec", "-it"}
+	argv = append(argv, container)
+	argv = append(argv, cmd)
+	return Exec(argv...)
 }

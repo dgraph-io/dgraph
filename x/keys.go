@@ -398,10 +398,10 @@ func IsAclPredicate(pred string) bool {
 // ReservedPredicates returns the complete list of reserved predicates.
 func ReservedPredicates() []string {
 	var preds []string
-	for pred, _ := range reservedPredicateMap {
+	for pred := range reservedPredicateMap {
 		preds = append(preds, pred)
 	}
-	for pred, _ := range aclPredicateMap {
+	for pred := range aclPredicateMap {
 		preds = append(preds, pred)
 	}
 	return preds

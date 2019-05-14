@@ -527,7 +527,6 @@ func run() {
 	sdCh := make(chan os.Signal, 3)
 	shutdownCh = make(chan struct{})
 
-	var numShutDownSig int
 	defer func() {
 		signal.Stop(sdCh)
 		close(sdCh)
@@ -535,6 +534,7 @@ func run() {
 	// sigint : Ctrl-C, sigterm : kill command.
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
+		var numShutDownSig int
 		for {
 			select {
 			case _, ok := <-sdCh:
@@ -555,7 +555,6 @@ func run() {
 			}
 		}
 	}()
-	_ = numShutDownSig
 
 	// Setup external communication.
 	aclCloser := y.NewCloser(1)

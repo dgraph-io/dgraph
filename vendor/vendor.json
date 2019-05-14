@@ -513,6 +513,12 @@
 			"revisionTime": "2018-10-14T23:42:04Z"
 		},
 		{
+			"checksumSHA1": "V0JNBANCSAzTqLq4ROu0WZOmc6Q=",
+			"path": "github.com/go-sql-driver/mysql",
+			"revision": "c0f6b444ad8f92ecd68f86b27635c1fccdede4c4",
+			"revisionTime": "2019-03-30T03:22:41Z"
+		},
+		{
 			"checksumSHA1": "FhEC1RwKSm/8jvTI2MKlzDVz+Vs=",
 			"path": "github.com/gogo/protobuf/gogoproto",
 			"revision": "61dbc136cf5d2f08d68a011382652244990a53a9",
