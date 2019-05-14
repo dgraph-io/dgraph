@@ -77,6 +77,11 @@ type DB struct {
 	writeCh   chan *request
 	flushChan chan flushTask // For flushing memtables.
 
+	// Number of log rotates since the last memtable flush. We will access this field via atomic
+	// functions. Since we are not going to use any 64bit atomic functions, there is no need for
+	// 64 bit alignment of this struct(see #311).
+	logRotates int32
+
 	blockWrites int32
 
 	orc *oracle
@@ -309,7 +314,7 @@ func Open(opt Options) (db *DB, err error) {
 	// In normal mode, we must update readMark so older versions of keys can be removed during
 	// compaction when run in offline mode via the flatten tool.
 	db.orc.readMark.Done(db.orc.nextTxnTs)
-	db.orc.nextTxnTs++
+	db.orc.incrementNextTs()
 
 	db.writeCh = make(chan *request, kvWriteChCapacity)
 	db.closers.writes = y.NewCloser(1)
@@ -761,21 +766,36 @@ func (db *DB) ensureRoomForWrite() error {
 	var err error
 	db.Lock()
 	defer db.Unlock()
-	if db.mt.MemSize() < db.opt.MaxTableSize {
+
+	// Here we determine if we need to force flush memtable. Given we rotated log file, it would
+	// make sense to force flush a memtable, so the updated value head would have a chance to be
+	// pushed to L0. Otherwise, it would not go to L0, until the memtable has been fully filled,
+	// which can take a lot longer if the write load has fewer keys and larger values. This force
+	// flush, thus avoids the need to read through a lot of log files on a crash and restart.
+	// Above approach is quite simple with small drawback. We are calling ensureRoomForWrite before
+	// inserting every entry in Memtable. We will get latest db.head after all entries for a request
+	// are inserted in Memtable. If we have done >= db.logRotates rotations, then while inserting
+	// first entry in Memtable, below condition will be true and we will endup flushing old value of
+	// db.head. Hence we are limiting no of value log files to be read to db.logRotates only.
+	forceFlush := atomic.LoadInt32(&db.logRotates) >= db.opt.LogRotatesToFlush
+
+	if !forceFlush && db.mt.MemSize() < db.opt.MaxTableSize {
 		return nil
 	}
 
 	y.AssertTrue(db.mt != nil) // A nil mt indicates that DB is being closed.
 	select {
 	case db.flushChan <- flushTask{mt: db.mt, vptr: db.vhead}:
-		db.elog.Printf("Flushing value log to disk if async mode.")
+		// After every memtable flush, let's reset the counter.
+		atomic.StoreInt32(&db.logRotates, 0)
+
 		// Ensure value log is synced to disk so this memtable's contents wouldn't be lost.
 		err = db.vlog.sync(db.vhead.Fid)
 		if err != nil {
 			return err
 		}
 
-		db.elog.Printf("Flushing memtable, mt.size=%d size of flushChan: %d\n",
+		db.opt.Debugf("Flushing memtable, mt.size=%d size of flushChan: %d\n",
 			db.mt.MemSize(), len(db.flushChan))
 		// We manage to push this task. Let's modify imm.
 		db.imm = append(db.imm, db.mt)
@@ -818,22 +838,26 @@ type flushTask struct {
 
 // handleFlushTask must be run serially.
 func (db *DB) handleFlushTask(ft flushTask) error {
-	if !ft.mt.Empty() {
-		// Store badger head even if vptr is zero, need it for readTs
-		db.opt.Debugf("Storing value log head: %+v\n", ft.vptr)
-		db.elog.Printf("Storing offset: %+v\n", ft.vptr)
-		offset := make([]byte, vptrSize)
-		ft.vptr.Encode(offset)
-
-		// Pick the max commit ts, so in case of crash, our read ts would be higher than all the
-		// commits.
-		headTs := y.KeyWithTs(head, db.orc.nextTs())
-		ft.mt.Put(headTs, y.ValueStruct{Value: offset})
-
-		// Also store lfDiscardStats before flushing memtables
-		discardStatsKey := y.KeyWithTs(lfDiscardStatsKey, 1)
-		ft.mt.Put(discardStatsKey, y.ValueStruct{Value: db.vlog.encodedDiscardStats()})
+	// There can be a scnerio, when empty memtable is flushed. For example, memtable is empty and
+	// after writing request to value log, rotation count exceeds db.LogRotatesToFlush.
+	if ft.mt.Empty() {
+		return nil
 	}
+
+	// Store badger head even if vptr is zero, need it for readTs
+	db.opt.Debugf("Storing value log head: %+v\n", ft.vptr)
+	db.elog.Printf("Storing offset: %+v\n", ft.vptr)
+	offset := make([]byte, vptrSize)
+	ft.vptr.Encode(offset)
+
+	// Pick the max commit ts, so in case of crash, our read ts would be higher than all the
+	// commits.
+	headTs := y.KeyWithTs(head, db.orc.nextTs())
+	ft.mt.Put(headTs, y.ValueStruct{Value: offset})
+
+	// Also store lfDiscardStats before flushing memtables
+	discardStatsKey := y.KeyWithTs(lfDiscardStatsKey, 1)
+	ft.mt.Put(discardStatsKey, y.ValueStruct{Value: db.vlog.encodedDiscardStats()})
 
 	fileID := db.lc.reserveFileID()
 	fd, err := y.CreateSyncedFile(table.NewFilename(fileID, db.opt.Dir), true)

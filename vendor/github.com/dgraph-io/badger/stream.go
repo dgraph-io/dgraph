@@ -174,13 +174,21 @@ func (st *Stream) produceKVs(ctx context.Context) error {
 			outList.Kv = append(outList.Kv, list.Kv...)
 			size += list.Size()
 			if size >= pageSize {
-				st.kvChan <- outList
+				select {
+				case st.kvChan <- outList:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 				outList = new(pb.KVList)
 				size = 0
 			}
 		}
 		if len(outList.Kv) > 0 {
-			st.kvChan <- outList
+			select {
+			case st.kvChan <- outList:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 		return nil
 	}
