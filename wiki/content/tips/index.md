@@ -46,8 +46,8 @@ Use the `has` function among the value variables to search on non-indexed predic
   }
   query(func: eq(val(p), "1961-01-01T00:00:00Z")) {
       uid
-      name@en 
-      name@ru 
+      name@en
+      name@ru
       name@pl
       festival.date_founded
       festival.focus { name@en }

@@ -211,7 +211,7 @@ Changing the data stored in Dgraph is a mutation.  The following mutation stores
 
 
 ```sh
-curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+curl localhost:8080/mutate?commitNow=true -XPOST -d $'
 {
   set {
    _:luke <name> "Luke Skywalker" .
