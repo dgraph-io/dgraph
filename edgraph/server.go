@@ -616,7 +616,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
-	var queryRequest = query.QueryRequest{
+	var queryRequest = query.Request{
 		Latency:  &l,
 		GqlQuery: &parsedReq,
 	}
