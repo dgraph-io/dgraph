@@ -39,9 +39,11 @@ var emptySortResult pb.SortResult
 
 type sortresult struct {
 	reply *pb.SortResult
-	// For multi sort we apply offset in two stages. In the first stage a part of the offset is applied but equal
-	// values in the bucket that the offset falls in are skipped. This slice stores the remaining offset for
-	// individual uid lists that must be applied after all multi sort is done.
+	// For multi sort we apply the offset in two stages. In the first stage a part of the offset is applied but
+	// equal values in the bucket that the offset falls into are skipped. This slice stores the remaining offset
+	// for individual uid lists that must be applied after all multi sort is done.
+	// TODO (pawan) - Offset has type int32 whereas paginate function returns an int. We should use a common type
+	// so that we can avoid casts between the two.
 	multiSortOffsets []int32
 	vals             [][]types.Val
 	err              error
@@ -524,6 +526,9 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
+		// We need to reduce multiSortOffset while checking the count as we might have included
+		// some extra uids from the bucket that the offset falls into. We are going to discard
+		// the first multiSortOffset number of uids later after all sorts are applied.
 		if count > 0 && len(il.ulist.Uids)-int(il.multiSortOffset) >= count {
 			continue
 		}
@@ -578,7 +583,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 		}
 
 		// n is number of elements to copy from result to out.
-		// In case of multiple sort, we dont want to apply the count and copy all uids for the
+		// In case of multiple sort, we don't want to apply the count and copy all uids for the
 		// current bucket.
 		if count > 0 && (len(ts.Order) == 1) {
 			slack := count - len(il.ulist.Uids)

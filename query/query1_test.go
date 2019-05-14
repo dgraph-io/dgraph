@@ -1583,7 +1583,7 @@ func TestMultiSort7Paginate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
 }
 
-func TestMultiSort8PaginateWithOffset(t *testing.T) {
+func TestMultiSortPaginateWithOffset(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
