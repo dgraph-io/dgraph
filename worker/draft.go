@@ -1249,8 +1249,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	// all entries at once, retrieve it in batches of 64MB.
 	var lastEntry raftpb.Entry
 	var foundEntries bool
-	batchFirst := first
-	for batchFirst <= last {
+	for batchFirst := first; batchFirst <= last; {
 		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
 		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
