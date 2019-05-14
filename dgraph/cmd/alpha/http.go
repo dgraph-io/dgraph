@@ -47,24 +47,6 @@ func allowed(method string) bool {
 	return method == http.MethodPost || method == http.MethodPut
 }
 
-func extractStartTs(urlPath string) (uint64, error) {
-	params := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
-
-	switch l := len(params); l {
-	case 1:
-		// When startTs is not supplied. /query or /mutate
-		return 0, nil
-	case 2:
-		ts, err := strconv.ParseUint(params[1], 0, 64)
-		if err != nil {
-			return 0, fmt.Errorf("Error: %+v while parsing StartTs path parameter as uint64", err)
-		}
-		return ts, nil
-	default:
-		return 0, x.Errorf("Incorrect no. of path parameters. Expected 1 or 2. Got: %+v", l)
-	}
-}
-
 // Common functionality for these request handlers. Returns true if the request is completely
 // handled here and nothing further needs to be done.
 func commonHandler(w http.ResponseWriter, r *http.Request) bool {
@@ -120,7 +102,7 @@ func parseUint64(value, name string) (uint64, error) {
 
 	uintVal, err := strconv.ParseUint(value, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("Error: %+v while parsing %s as uint64", err, value)
+		return 0, fmt.Errorf("Error: %+v while parsing %s as uint64", err, name)
 	}
 
 	return uintVal, nil
@@ -134,7 +116,7 @@ func parseBool(value, name string) (bool, error) {
 
 	boolval, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("Error: %+v while parsing %s as bool", err, value)
+		return false, fmt.Errorf("Error: %+v while parsing %s as bool", err, name)
 	}
 
 	return boolval, nil
@@ -148,7 +130,7 @@ func parseDuration(value, name string) (time.Duration, error) {
 
 	durationValue, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("Error: %+v while parsing %s as time.Duration", err, value)
+		return 0, fmt.Errorf("Error: %+v while parsing %s as time.Duration", err, name)
 	}
 
 	return durationValue, nil
@@ -409,27 +391,70 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := &api.Assigned{}
-	tc := &api.TxnContext{}
-	resp.Context = tc
-
-	ts, err := extractStartTs(r.URL.Path)
+	startTs, err := parseUint64(r.URL.Query().Get("startTs"), "startTs")
 	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-
-	if ts == 0 {
+	if startTs == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs path parameter is mandatory while trying to commit")
+			"startTs parameter is mandatory while trying to commit")
 		return
 	}
-	tc.StartTs = ts
 
-	// Keys are sent as an array in the body.
-	reqText := readRequest(w, r)
-	if reqText == nil {
+	aborted, err := parseBool(r.URL.Query().Get("aborted"), "aborted")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
+	}
+
+	var response map[string]interface{}
+	if aborted {
+		// Abort Handler
+		response, err = handleAbort(startTs)
+	} else {
+		// Keys are sent as an array in the body.
+		reqText := readRequest(w, r)
+		if reqText == nil {
+			return
+		}
+
+		// Commit handler
+		response, err = handleCommit(startTs, reqText)
+	}
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+
+	writeResponse(w, r, js)
+}
+
+func handleAbort(startTs uint64) (map[string]interface{}, error) {
+	tc := &api.TxnContext{
+		StartTs: startTs,
+		Aborted: true,
+	}
+	_, err := worker.CommitOverNetwork(context.Background(), tc)
+	if err != nil {
+		return nil, err
+	}
+
+	response := map[string]interface{}{}
+	response["code"] = x.Success
+	response["message"] = "Done"
+	return response, nil
+}
+
+func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
+	tc := &api.TxnContext{
+		StartTs: startTs,
 	}
 
 	var reqList []string
@@ -440,8 +465,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	var reqMap map[string][]string
 	if err := json.Unmarshal(reqText, &reqMap); err != nil && !useList {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Error while unmarshalling request body")
-		return
+		return nil, err
 	}
 
 	if useList {
@@ -453,11 +477,12 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	cts, err := worker.CommitOverNetwork(context.Background(), tc)
 	if err != nil {
-		x.SetStatus(w, x.Error, err.Error())
-		return
+		return nil, err
 	}
-	resp.Context.CommitTs = cts
 
+	resp := &api.Assigned{}
+	resp.Context = tc
+	resp.Context.CommitTs = cts
 	e := query.Extensions{
 		Txn: resp.Context,
 	}
@@ -469,55 +494,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	mp["message"] = "Done"
 	response["data"] = mp
 
-	js, err := json.Marshal(response)
-	if err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-
-	writeResponse(w, r, js)
-}
-
-func abortHandler(w http.ResponseWriter, r *http.Request) {
-	if commonHandler(w, r) {
-		return
-	}
-
-	resp := &api.Assigned{}
-	tc := &api.TxnContext{}
-	resp.Context = tc
-
-	ts, err := extractStartTs(r.URL.Path)
-	if err != nil {
-		x.SetStatus(w, err.Error(), x.ErrorInvalidRequest)
-		return
-	}
-
-	if ts == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest,
-			"StartTs path parameter is mandatory while trying to abort.")
-		return
-	}
-	tc.StartTs = ts
-	tc.Aborted = true
-
-	_, aerr := worker.CommitOverNetwork(context.Background(), tc)
-	if aerr != nil {
-		x.SetStatus(w, x.Error, aerr.Error())
-		return
-	}
-
-	response := map[string]interface{}{}
-	response["code"] = x.Success
-	response["message"] = "Done"
-
-	js, err := json.Marshal(response)
-	if err != nil {
-		x.SetStatusWithData(w, x.Error, err.Error())
-		return
-	}
-
-	writeResponse(w, r, js)
+	return response, nil
 }
 
 func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
