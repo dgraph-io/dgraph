@@ -2512,7 +2512,7 @@ curl localhost:8080/alter -XPOST -d $'
 ```
 
 ```sh
-curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+curl localhost:8080/mutate?commitNow=true -XPOST -d $'
 {
   set {
 
@@ -2885,7 +2885,7 @@ curl localhost:8080/alter -XPOST -d $'
 ```
 
 ```sh
-curl localhost:8080/mutate -H "X-Dgraph-CommitNow: true" -XPOST -d $'
+curl localhost:8080/mutate?commitNow=true -XPOST -d $'
 {
   set {
     _:a <friend> _:b (weight=0.1) .
