@@ -77,6 +77,13 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	if err != nil {
 		return counter, fmt.Errorf("Query error: %v", err)
 	}
+
+	// Total query latency is sum of encoding, parsing and processing latencies.
+	queryLatency := resp.Latency.GetEncodingNs() +
+		resp.Latency.GetParsingNs() + resp.Latency.GetProcessingNs()
+	latency := time.Nanosecond * time.Duration(queryLatency)
+	fmt.Println("Query latency:", latency)
+
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
 		return counter, err
@@ -118,20 +125,30 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 
 	counter.Val++
 	var mu api.Mutation
+	mu.CommitNow = true
 	if len(counter.Uid) == 0 {
 		counter.Uid = "_:new"
 	}
 	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val))
 
 	// Don't put any timeout for mutation.
-	_, err = txn.Mutate(context.Background(), &mu)
+	resp, err := txn.Mutate(context.Background(), &mu)
 	if err != nil {
 		return Counter{}, err
 	}
-	return counter, txn.Commit(context.Background())
+
+	mutationLatency := resp.Latency.GetProcessingNs() +
+		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
+	latency := time.Nanosecond * time.Duration(mutationLatency)
+	fmt.Println("Mutation latency:", latency)
+
+	return counter, nil
 }
 
 func run(conf *viper.Viper) {
+	startTime := time.Now()
+	defer func() { fmt.Println("Total txn latency is:", time.Since(startTime)) }()
+
 	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
