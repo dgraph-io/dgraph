@@ -57,7 +57,7 @@ func (r *lockedSource) Seed(seed int64) {
 // ProposalCtx stores the context for a proposal with extra information.
 type ProposalCtx struct {
 	Found uint32
-	Ch    chan error
+	Errc  chan error
 	Ctx   context.Context
 }
 
@@ -118,10 +118,10 @@ func (p *proposals) Done(key string, err error) {
 		return
 	}
 	delete(p.all, key)
-	pd.Ch <- err
+	pd.Errc <- err
 }
 
-func (w *RaftServer) getNode() *Node {
+func (w *RaftServer) node() *Node {
 	w.nodeLock.RLock()
 	defer w.nodeLock.RUnlock()
 	return w.Node
@@ -136,7 +136,7 @@ type RaftServer struct {
 // IsPeer checks whether this node is a peer of the node sending the request.
 func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (*pb.PeerResponse,
 	error) {
-	node := w.getNode()
+	node := w.node()
 	if node == nil || node.Raft() == nil {
 		return &pb.PeerResponse{}, ErrNoNode
 	}
@@ -161,7 +161,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	// Commenting out the following checks for now, until we get rid of groups.
 	// TODO: Uncomment this after groups is removed.
-	node := w.getNode()
+	node := w.node()
 	if node == nil || node.Raft() == nil {
 		return nil, ErrNoNode
 	}
@@ -201,14 +201,14 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	}
 	span := otrace.FromContext(ctx)
 
-	n := w.getNode()
+	n := w.node()
 	if n == nil || n.Raft() == nil {
 		return ErrNoNode
 	}
 	span.Annotatef(nil, "Stream server is node %#x", n.Id)
 
 	var rc *pb.RaftContext
-	raft := w.getNode().Raft()
+	raft := w.node().Raft()
 	step := func(data []byte) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()

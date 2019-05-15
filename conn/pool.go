@@ -85,7 +85,7 @@ func (p *Pools) Get(addr string) (*Pool, error) {
 	return pool, nil
 }
 
-// RemoveInvalid remove invalid nodes from the list of pools.
+// RemoveInvalid removes invalid nodes from the list of pools.
 func (p *Pools) RemoveInvalid(state *pb.MembershipState) {
 	// Keeps track of valid IP addresses, assigned to active nodes. We do this
 	// to avoid removing valid IP addresses from the Removed list.
@@ -125,7 +125,7 @@ func (p *Pools) getPool(addr string) (*Pool, bool) {
 	return existingPool, has
 }
 
-// Connect creates a Pools instance for the node with the given address or returns the existing one.
+// Connect creates a Pool instance for the node with the given address or returns the existing one.
 func (p *Pools) Connect(addr string) *Pool {
 	existingPool, has := p.getPool(addr)
 	if has {
