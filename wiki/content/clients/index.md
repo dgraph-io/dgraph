@@ -33,12 +33,11 @@ fashion, resulting in an initially semi random predicate distribution.
 ### Transactions
 
 Clients perform mutations and queries on Dgraph using transactions. A
-transaction is a unit of work to be performed by Dgraph. A transaction has
-all-or-nothing semantics: either all the changes are accepted by Dgraph or none
-are. A transaction will be aborted when a majority of the nodes cannot reach
-agreement on the changes (e.g a recent transaction made changes to some of the
-same nodes). Transactions can also be manually aborted, in which case all the
-changes will be discarded.
+transaction is a unit of work to be performed by Dgraph. A transaction commit
+has all-or-nothing semantics: either all the changes are accepted by Dgraph or
+none are. A transaction can be aborted when a concurrently running transaction
+was committed and mutated the same data. Transactions can also be manually
+aborted, in which case all the changes will be discarded.
 
 ## Go
 
