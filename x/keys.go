@@ -26,21 +26,27 @@ import (
 const (
 	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
+
+	// ByteData indicates the key stores data.
 	ByteData     = byte(0x00)
+	// ByteIndex indicates the key stores an index.
 	ByteIndex    = byte(0x02)
+	// ByteReverse indicates the key stores a reverse index.
 	ByteReverse  = byte(0x04)
+	// ByteCount indicates the key stores a count index.
 	ByteCount    = byte(0x08)
+	// ByteCountRev indicates the key stores a reverse count index.
 	ByteCountRev = ByteCount | ByteReverse
-	// same prefix for data, index and reverse keys so that relative order of data doesn't change
-	// keys of same attributes are located together
+	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
+	// order of data doesn't change keys of same attributes are located together.
 	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-	// Constant to specify a given key corresponds to a posting list split into multiple parts.
+	// ByteSplit is a constant to specify a given key corresponds to a posting list split
+	// into multiple parts.
 	ByteSplit = byte(0x01)
-=======
-	ByteRaft      = byte(0xff)
->>>>>>> origin/master
+	// ByteRaft is a constant to specify a given key stores RAFT information.
+	ByteRaft = byte(0xff)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -51,6 +57,21 @@ func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) == copy(rest, attr))
 
 	return rest[len(attr):]
+}
+
+
+// genKey creates the key and writes the initial bytes (type byte, length of attribute,
+// and the attribute itself). It leaves the rest of the key empty for further processing
+// if necessary.
+func generateKey(typeByte byte, attr string, totalLen int) []byte {
+	AssertTrue(totalLen >= 1+2+len(attr))
+
+	buf := make([]byte, totalLen)
+	buf[0] = typeByte
+	rest := buf[1:]
+
+	writeAttr(rest, attr)
+	return buf
 }
 
 func RaftKey() []byte {
@@ -68,12 +89,7 @@ func RaftKey() []byte {
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 func SchemaKey(attr string) []byte {
-	buf := make([]byte, 1+2+len(attr))
-	buf[0] = byteSchema
-	rest := buf[1:]
-
-	writeAttr(rest, attr)
-	return buf
+	return generateKey(byteSchema, attr, 1+2+len(attr))
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
@@ -84,12 +100,7 @@ func SchemaKey(attr string) []byte {
 // byte 1-2: length of typeName
 // next len(attr) bytes: value of typeName
 func TypeKey(typeName string) []byte {
-	buf := make([]byte, 1+2+len(typeName))
-	buf[0] = byteType
-	rest := buf[1:]
-
-	writeAttr(rest, typeName)
-	return buf
+	return generateKey(byteType, typeName, 1+2+len(typeName))
 }
 
 // DataKey generates a data key with the given attribute and UID.
@@ -105,11 +116,11 @@ func TypeKey(typeName string) []byte {
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func DataKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 1+2+len(attr)+1+1+8)
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1+2+len(attr)
+	totalLen := prefixLen+1+1+8
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	rest[0] = ByteData
 
 	// By default, this key does not correspond to a part of a split key.
@@ -134,11 +145,11 @@ func DataKey(attr string, uid uint64) []byte {
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 1+2+len(attr)+1+1+8)
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1+2+len(attr)
+	totalLen := prefixLen+1+1+8
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	rest[0] = ByteReverse
 
 	// By default, this key does not correspond to a part of a split key.
@@ -163,11 +174,11 @@ func ReverseKey(attr string, uid uint64) []byte {
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func IndexKey(attr, term string) []byte {
-	buf := make([]byte, 1+2+len(attr)+1+1+len(term))
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1+2+len(attr)
+	totalLen := prefixLen+1+1+len(term)
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	rest[0] = ByteIndex
 
 	// By default, this key does not correspond to a part of a split key.
@@ -187,16 +198,15 @@ func IndexKey(attr, term string) []byte {
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteCount or ByteCountRev)
 // next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
+//   into multiple parts. Since count indexes only store one number, this value will
+//   always be zero.
 // next four bytes: value of count.
-// next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key.
 func CountKey(attr string, count uint32, reverse bool) []byte {
-	buf := make([]byte, 1+2+len(attr)+1+1+4)
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1+2+len(attr)
+	totalLen := prefixLen+1+1+4
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	if reverse {
 		rest[0] = ByteCountRev
 	} else {
@@ -382,6 +392,9 @@ func GetSplitKey(baseKey []byte, startUid uint64) []byte {
 
 	p := Parse(baseKey)
 	index := 1 + 2 + len(p.Attr) + 1
+	if index >= len(keyCopy) {
+		panic("Cannot write to key. Key is too small")
+	}
 	keyCopy[index] = ByteSplit
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
 
@@ -431,6 +444,7 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 16 {
+			// TODO(martinmr): replace DebugMode with glog.vlog(2).
 			if Config.DebugMode {
 				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
 			}

@@ -28,6 +28,8 @@ import (
 func TestDataKey(t *testing.T) {
 	var uid uint64
 	for uid = 0; uid < 1001; uid++ {
+		// Use the uid to derive the attribute so it has variable length and the test
+		// can verify that multiple sizes of attr work correctly.
 		sattr := fmt.Sprintf("attr:%d", uid)
 		key := DataKey(sattr, uid)
 		pk := Parse(key)
