@@ -8,10 +8,14 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - govet
     - errcheck
-    - unused
+    - ineffassign
     - gas
-    - varcheck
+    - gofmt
     - goimports
+    - golint
+    - gosimple
+    - govet
     - lll
+    - varcheck
+    - unused
