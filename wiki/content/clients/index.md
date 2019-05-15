@@ -5,11 +5,6 @@ title = "Clients"
 
 ## Implementation
 
-{{% notice "note" %}}
-All mutations and queries run within the context of a transaction. This differs
-significantly from the interaction model pre v0.9.
-{{% /notice %}}
-
 Clients can communicate with the server in two different ways:
 
 - **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
@@ -34,6 +29,15 @@ Dgraph instances. For the Go client, this means passing in one
 `*grpc.ClientConn` per Dgraph instance. Mutations will be made in a round robin
 fashion, resulting in an initially semi random predicate distribution.
 {{% /notice %}}
+
+### Transactions
+
+Clients perform mutations and queries on Dgraph using transactions. A
+transaction is a unit of work to be performed by Dgraph. A transaction commit
+has all-or-nothing semantics: either all the changes are accepted by Dgraph or
+none are. A transaction can be aborted when a concurrently running transaction
+was committed and mutated the same data. Transactions can also be manually
+aborted, in which case all the changes will be discarded.
 
 ## Go
 
@@ -122,7 +126,7 @@ a clean slate, without bringing the instance down.
 
 ### Create a transaction
 
-Dgraph v0.9 supports running distributed ACID transactions. To create a
+Dgraph supports running distributed ACID transactions. To create a
 transaction, just call `c.NewTxn()`. This operation incurs no network call.
 Typically, you'd also want to call a `defer txn.Discard()` to let it
 automatically rollback in case of errors. Calling `Discard` after `Commit` would
