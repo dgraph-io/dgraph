@@ -157,17 +157,31 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isDebugMode, err := parseBool(r.URL.Query().Get("debug"), "debug")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	queryTimeout, err := parseDuration(r.URL.Query().Get("timeout"), "timeout")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	startTs, err := parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
 	body := readRequest(w, r)
 	if body == nil {
 		return
 	}
 
-	// read parameters from body
 	var params struct {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
 	}
-
 	contentType := r.Header.Get("Content-Type")
 	switch strings.ToLower(contentType) {
 	case "application/json":
@@ -184,38 +198,21 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		params.Query = string(body)
 	}
 
-	// setup context
-	isDebugMode, err := parseBool(r.URL.Query().Get("debug"), "debug")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
 	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
 	ctx = attachAccessJwt(ctx, r)
 
-	// setup timeout
-	queryTimeout, err := parseDuration(r.URL.Query().Get("timeout"), "timeout")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, queryTimeout)
 		defer cancel()
 	}
 
-	// Setup query request
 	queryReq := api.Request{
-		Vars:  params.Variables,
-		Query: params.Query,
+		Vars:    params.Variables,
+		Query:   params.Query,
+		StartTs: startTs,
 	}
 
-	queryReq.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
 	if queryReq.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
 		isBestEffort, err := parseBool(r.URL.Query().Get("be"), "be")
@@ -279,12 +276,22 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	commitNow, err := parseBool(r.URL.Query().Get("commitNow"), "commitNow")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	startTs, err := parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
 	body := readRequest(w, r)
 	if body == nil {
 		return
 	}
 
-	// read parameters from body
 	var params struct {
 		Query []byte `json:"query"`
 	}
@@ -307,7 +314,6 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	parseStart := time.Now()
 
 	var mu *api.Mutation
-	var err error
 	mutationType := r.URL.Query().Get("mutationType")
 	if mutationType == "json" {
 		// Parse JSON.
@@ -334,20 +340,10 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// parsing complete
 	parseEnd := time.Now()
 
-	// setup muation query parameters
-	mu.CommitNow, err = parseBool(r.URL.Query().Get("commitNow"), "commitNow")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-	mu.StartTs, err = parseUint64(r.URL.Query().Get("startTs"), "startTs")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
+	mu.StartTs = startTs
+	mu.CommitNow = commitNow
 
 	ctx := attachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
@@ -383,7 +379,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, r, js)
+	_, _ = writeResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
@@ -410,7 +406,6 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	var response map[string]interface{}
 	if aborted {
-		// Abort Handler
 		response, err = handleAbort(startTs)
 	} else {
 		// Keys are sent as an array in the body.
@@ -419,7 +414,6 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Commit handler
 		response, err = handleCommit(startTs, reqText)
 	}
 	if err != nil {
@@ -433,7 +427,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, r, js)
+	_, _ = writeResponse(w, r, js)
 }
 
 func handleAbort(startTs uint64) (map[string]interface{}, error) {
@@ -515,16 +509,16 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	op := &api.Operation{}
-
-	b := readRequest(w, r)
-	if b == nil {
+	body := readRequest(w, r)
+	if body == nil {
 		return
 	}
 
-	err := jsonpb.UnmarshalString(string(b), op)
+	op := &api.Operation{}
+	bodyStr := string(body)
+	err := jsonpb.UnmarshalString(bodyStr, op)
 	if err != nil {
-		op.Schema = string(b)
+		op.Schema = bodyStr
 	}
 
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
@@ -555,7 +549,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, r, js)
+	_, _ = writeResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.
