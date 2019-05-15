@@ -42,7 +42,7 @@ changes it makes - changes from concurrent transactions aren't visible.
 
 On commit, Dgraph will abort a transaction rather than commit when a
 conflicting, concurrently running transaction has already been committed.  Two
-transactions conflict when both: 
+transactions conflict when both transactions: 
 
 - write data to the same key in an index, or
 - write to the same edge of the same node.  
