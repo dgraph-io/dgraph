@@ -11,6 +11,8 @@ import (
 	api "github.com/dgraph-io/dgo/protos/api"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	io "io"
 	math "math"
 )
@@ -4119,6 +4121,23 @@ type RaftServer interface {
 	IsPeer(context.Context, *RaftContext) (*PeerResponse, error)
 }
 
+// UnimplementedRaftServer can be embedded to have forward compatible implementations.
+type UnimplementedRaftServer struct {
+}
+
+func (*UnimplementedRaftServer) Heartbeat(req *api.Payload, srv Raft_HeartbeatServer) error {
+	return status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (*UnimplementedRaftServer) RaftMessage(srv Raft_RaftMessageServer) error {
+	return status.Errorf(codes.Unimplemented, "method RaftMessage not implemented")
+}
+func (*UnimplementedRaftServer) JoinCluster(ctx context.Context, req *RaftContext) (*api.Payload, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JoinCluster not implemented")
+}
+func (*UnimplementedRaftServer) IsPeer(ctx context.Context, req *RaftContext) (*PeerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IsPeer not implemented")
+}
+
 func RegisterRaftServer(s *grpc.Server, srv RaftServer) {
 	s.RegisterService(&_Raft_serviceDesc, srv)
 }
@@ -4397,6 +4416,38 @@ type ZeroServer interface {
 	Timestamps(context.Context, *Num) (*AssignedIds, error)
 	CommitOrAbort(context.Context, *api.TxnContext) (*api.TxnContext, error)
 	TryAbort(context.Context, *TxnTimestamps) (*OracleDelta, error)
+}
+
+// UnimplementedZeroServer can be embedded to have forward compatible implementations.
+type UnimplementedZeroServer struct {
+}
+
+func (*UnimplementedZeroServer) Connect(ctx context.Context, req *Member) (*ConnectionState, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Connect not implemented")
+}
+func (*UnimplementedZeroServer) UpdateMembership(ctx context.Context, req *Group) (*api.Payload, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateMembership not implemented")
+}
+func (*UnimplementedZeroServer) StreamMembership(req *api.Payload, srv Zero_StreamMembershipServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamMembership not implemented")
+}
+func (*UnimplementedZeroServer) Oracle(req *api.Payload, srv Zero_OracleServer) error {
+	return status.Errorf(codes.Unimplemented, "method Oracle not implemented")
+}
+func (*UnimplementedZeroServer) ShouldServe(ctx context.Context, req *Tablet) (*Tablet, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ShouldServe not implemented")
+}
+func (*UnimplementedZeroServer) AssignUids(ctx context.Context, req *Num) (*AssignedIds, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AssignUids not implemented")
+}
+func (*UnimplementedZeroServer) Timestamps(ctx context.Context, req *Num) (*AssignedIds, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Timestamps not implemented")
+}
+func (*UnimplementedZeroServer) CommitOrAbort(ctx context.Context, req *api.TxnContext) (*api.TxnContext, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitOrAbort not implemented")
+}
+func (*UnimplementedZeroServer) TryAbort(ctx context.Context, req *TxnTimestamps) (*OracleDelta, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TryAbort not implemented")
 }
 
 func RegisterZeroServer(s *grpc.Server, srv ZeroServer) {
@@ -4783,6 +4834,38 @@ type WorkerServer interface {
 	Export(context.Context, *ExportRequest) (*Status, error)
 	ReceivePredicate(Worker_ReceivePredicateServer) error
 	MovePredicate(context.Context, *MovePredicatePayload) (*api.Payload, error)
+}
+
+// UnimplementedWorkerServer can be embedded to have forward compatible implementations.
+type UnimplementedWorkerServer struct {
+}
+
+func (*UnimplementedWorkerServer) Mutate(ctx context.Context, req *Mutations) (*api.TxnContext, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Mutate not implemented")
+}
+func (*UnimplementedWorkerServer) ServeTask(ctx context.Context, req *Query) (*Result, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ServeTask not implemented")
+}
+func (*UnimplementedWorkerServer) StreamSnapshot(srv Worker_StreamSnapshotServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamSnapshot not implemented")
+}
+func (*UnimplementedWorkerServer) Sort(ctx context.Context, req *SortMessage) (*SortResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Sort not implemented")
+}
+func (*UnimplementedWorkerServer) Schema(ctx context.Context, req *SchemaRequest) (*SchemaResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Schema not implemented")
+}
+func (*UnimplementedWorkerServer) Backup(ctx context.Context, req *BackupRequest) (*Num, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Backup not implemented")
+}
+func (*UnimplementedWorkerServer) Export(ctx context.Context, req *ExportRequest) (*Status, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Export not implemented")
+}
+func (*UnimplementedWorkerServer) ReceivePredicate(srv Worker_ReceivePredicateServer) error {
+	return status.Errorf(codes.Unimplemented, "method ReceivePredicate not implemented")
+}
+func (*UnimplementedWorkerServer) MovePredicate(ctx context.Context, req *MovePredicatePayload) (*api.Payload, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MovePredicate not implemented")
 }
 
 func RegisterWorkerServer(s *grpc.Server, srv WorkerServer) {
