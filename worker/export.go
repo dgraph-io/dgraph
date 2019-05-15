@@ -20,11 +20,11 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -131,6 +131,18 @@ func facetToString(fct *api.Facet) (string, error) {
 	return v2.Value.(string), nil
 }
 
+// jsonString converts a string into a valid JSON string.
+func jsonString(str string) string {
+	byt, err := json.Marshal(str)
+	if err != nil {
+		// All valid stings should be able to be escaped to a JSON string so
+		// it's safe to panic here. Marshal has to return an error because it
+		// accepts an interface.
+		panic("Could not marshal string to JSON string")
+	}
+	return string(byt)
+}
+
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
@@ -173,7 +185,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !val.Tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = jsonString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -195,7 +207,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = jsonString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -227,7 +239,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
-			fmt.Fprintf(bp, "%q", str)
+			fmt.Fprintf(bp, "%s", jsonString(str))
 
 			tid := types.TypeID(p.ValType)
 			if p.PostingType == pb.Posting_VALUE_LANG {
@@ -262,7 +274,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 
 				if tid == types.StringID {
-					str = strconv.Quote(str)
+					str = jsonString(str)
 				}
 				fmt.Fprint(bp, str)
 			}

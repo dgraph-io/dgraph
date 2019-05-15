@@ -133,7 +133,7 @@ func initTest(t *testing.T, schemaStr string) {
 }
 
 func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	dg := z.DgraphClient(z.SockAddr)
 	z.DropAll(t, dg)
 
 	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
