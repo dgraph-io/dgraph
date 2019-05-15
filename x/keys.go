@@ -28,13 +28,13 @@ const (
 	// bytePrefix. Change it so that it just has one field which has all the information.
 
 	// ByteData indicates the key stores data.
-	ByteData     = byte(0x00)
+	ByteData = byte(0x00)
 	// ByteIndex indicates the key stores an index.
-	ByteIndex    = byte(0x02)
+	ByteIndex = byte(0x02)
 	// ByteReverse indicates the key stores a reverse index.
-	ByteReverse  = byte(0x04)
+	ByteReverse = byte(0x04)
 	// ByteCount indicates the key stores a count index.
-	ByteCount    = byte(0x08)
+	ByteCount = byte(0x08)
 	// ByteCountRev indicates the key stores a reverse count index.
 	ByteCountRev = ByteCount | ByteReverse
 	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
@@ -58,7 +58,6 @@ func writeAttr(buf []byte, attr string) []byte {
 
 	return rest[len(attr):]
 }
-
 
 // genKey creates the key and writes the initial bytes (type byte, length of attribute,
 // and the attribute itself). It leaves the rest of the key empty for further processing
@@ -116,8 +115,8 @@ func TypeKey(typeName string) []byte {
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func DataKey(attr string, uid uint64) []byte {
-	prefixLen := 1+2+len(attr)
-	totalLen := prefixLen+1+1+8
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + 8
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
@@ -145,8 +144,8 @@ func DataKey(attr string, uid uint64) []byte {
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
-	prefixLen := 1+2+len(attr)
-	totalLen := prefixLen+1+1+8
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + 8
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
@@ -174,8 +173,8 @@ func ReverseKey(attr string, uid uint64) []byte {
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func IndexKey(attr, term string) []byte {
-	prefixLen := 1+2+len(attr)
-	totalLen := prefixLen+1+1+len(term)
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + len(term)
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
@@ -202,8 +201,8 @@ func IndexKey(attr, term string) []byte {
 //   always be zero.
 // next four bytes: value of count.
 func CountKey(attr string, count uint32, reverse bool) []byte {
-	prefixLen := 1+2+len(attr)
-	totalLen := prefixLen+1+1+4
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + 4
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
