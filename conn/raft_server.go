@@ -57,7 +57,7 @@ func (r *lockedSource) Seed(seed int64) {
 // ProposalCtx stores the context for a proposal with extra information.
 type ProposalCtx struct {
 	Found uint32
-	Errc  chan error
+	ErrCh chan error
 	Ctx   context.Context
 }
 
@@ -118,7 +118,7 @@ func (p *proposals) Done(key string, err error) {
 		return
 	}
 	delete(p.all, key)
-	pd.Errc <- err
+	pd.ErrCh <- err
 }
 
 // TODO(martinmr): Getting the lock is not really doing anything to protect the node
@@ -131,8 +131,8 @@ func (w *RaftServer) node() *Node {
 
 // RaftServer stores a RAFT node along with a lock.
 type RaftServer struct {
-	m sync.RWMutex
-	Node     *Node
+	m    sync.RWMutex
+	Node *Node
 }
 
 // IsPeer checks whether this node is a peer of the node sending the request.

@@ -189,10 +189,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		errc := make(chan error, 1)
+		errCh := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
-			Errc: errc,
-			Ctx:  cctx,
+			ErrCh: errCh,
+			Ctx:   cctx,
 		}
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%v]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
@@ -211,7 +211,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 
 		for {
 			select {
-			case err = <-errc:
+			case err = <-errCh:
 				// We arrived here by a call to n.Proposals.Done().
 				return err
 			case <-ctx.Done():

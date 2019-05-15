@@ -107,9 +107,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		errc := make(chan error, 1)
+		errCh := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
-			Errc: errc,
+			ErrCh: errCh,
 			// Don't use the original context, because that's not what we're passing to Raft.
 			Ctx: cctx,
 		}
@@ -131,7 +131,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 
 		// Wait for proposal to be applied or timeout.
 		select {
-		case err := <-errc:
+		case err := <-errCh:
 			// We arrived here by a call to n.props.Done().
 			return err
 		case <-cctx.Done():
