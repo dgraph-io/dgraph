@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/dgraph-io/dgo"
@@ -74,6 +75,15 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	var counter Counter
 	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", pred, pred)
 	resp, err := txn.Query(ctx, query)
+
+	// Total query latency is sum of encoding, parsing and processing
+	// latencies
+	queryLatency := resp.Latency.GetEncodingNs() +
+		resp.Latency.GetParsingNs() + resp.Latency.GetProcessingNs()
+	latency := strconv.FormatUint(queryLatency, 10) + "ns"
+	queryDuration, _ := time.ParseDuration(latency)
+	fmt.Println("Query latency: ", queryDuration)
+
 	if err != nil {
 		return counter, fmt.Errorf("Query error: %v", err)
 	}
@@ -118,20 +128,31 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 
 	counter.Val++
 	var mu api.Mutation
+	mu.CommitNow = true
 	if len(counter.Uid) == 0 {
 		counter.Uid = "_:new"
 	}
 	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val))
 
 	// Don't put any timeout for mutation.
-	_, err = txn.Mutate(context.Background(), &mu)
+	resp, err := txn.Mutate(context.Background(), &mu)
 	if err != nil {
 		return Counter{}, err
 	}
-	return counter, txn.Commit(context.Background())
+
+	mutationLatency := resp.Latency.GetProcessingNs() +
+		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
+	latency := strconv.FormatUint(mutationLatency, 10) + "ns"
+	mutationDuration, _ := time.ParseDuration(latency)
+	fmt.Println("Mutation latency:", mutationDuration)
+
+	return counter, nil
 }
 
 func run(conf *viper.Viper) {
+	startTime := time.Now()
+	defer func() { fmt.Println("Total txn latency is:", time.Since(startTime)) }()
+
 	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
