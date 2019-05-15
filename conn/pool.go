@@ -53,7 +53,7 @@ type Pool struct {
 	closer   *y.Closer
 }
 
-// Pools stores the set of all pools.
+// Pools manages a concurrency-safe set of Pool.
 type Pools struct {
 	sync.RWMutex
 	all map[string]*Pool
@@ -66,8 +66,8 @@ func init() {
 	pi.all = make(map[string]*Pool)
 }
 
-// Get returns the list of pools.
-func Get() *Pools {
+// GetPools returns the list of pools.
+func GetPools() *Pools {
 	return pi
 }
 

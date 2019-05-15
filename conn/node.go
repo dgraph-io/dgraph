@@ -80,6 +80,7 @@ type Node struct {
 }
 
 // ToGlog is a logger that forwards the output to glog.
+// TODO(martinmr): move this to a more appropriate package.
 type ToGlog struct {
 }
 
@@ -445,7 +446,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	if !has {
 		return x.Errorf("Do not have address of peer %#x", to)
 	}
-	pool, err := Get().Get(addr)
+	pool, err := GetPools().Get(addr)
 	if err != nil {
 		return err
 	}
@@ -537,7 +538,7 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	Get().Connect(addr)
+	GetPools().Connect(addr)
 	n.SetPeer(pid, addr)
 }
 

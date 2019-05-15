@@ -214,7 +214,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 
 	// Create a connection to this server.
-	go conn.Get().Connect(member.Addr)
+	go conn.GetPools().Connect(member.Addr)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -448,7 +448,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(opts.peer) > 0 {
-		p := conn.Get().Connect(opts.peer)
+		p := conn.GetPools().Connect(opts.peer)
 		if p == nil {
 			return x.Errorf("Unhealthy connection to %v", opts.peer)
 		}
@@ -544,7 +544,7 @@ func (n *node) checkQuorum(closer *y.Closer) {
 			n.lastQuorum = time.Now()
 			n.mu.Unlock()
 			// Also do some connection cleanup.
-			conn.Get().RemoveInvalid(state)
+			conn.GetPools().RemoveInvalid(state)
 			span.Annotate(nil, "Updated lastQuorum")
 
 		} else if glog.V(1) {

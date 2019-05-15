@@ -181,7 +181,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	// Check that the new node is not already part of the group.
 	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
 		// There exists a healthy connection to server with same id.
-		if _, err := Get().Get(addr); err == nil {
+		if _, err := GetPools().Get(addr); err == nil {
 			return &api.Payload{}, x.Errorf(
 				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
 		}

@@ -253,7 +253,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if x.WorkerConfig.MyAddr != member.Addr {
-				conn.Get().Connect(member.Addr)
+				conn.GetPools().Connect(member.Addr)
 			}
 		}
 		for _, tablet := range group.Tablets {
@@ -266,7 +266,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 	}
 	for _, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
-			conn.Get().Connect(member.Addr)
+			conn.GetPools().Connect(member.Addr)
 		}
 	}
 	if !foundSelf {
@@ -284,7 +284,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
 			}
 		}
-		conn.Get().RemoveInvalid(g.state)
+		conn.GetPools().RemoveInvalid(g.state)
 	}
 }
 
@@ -469,7 +469,7 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	members := g.members(gid)
 	if members != nil {
 		for _, m := range members {
-			pl, err := conn.Get().Get(m.Addr)
+			pl, err := conn.GetPools().Get(m.Addr)
 			if err == nil {
 				return pl
 			}
@@ -499,7 +499,7 @@ func (g *groupi) Leader(gid uint32) *conn.Pool {
 	}
 	for _, m := range members {
 		if m.Leader {
-			if pl, err := conn.Get().Get(m.Addr); err == nil {
+			if pl, err := conn.GetPools().Get(m.Addr); err == nil {
 				return pl
 			}
 		}
@@ -548,7 +548,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		for _, mz := range connState.State.GetZeros() {
 			if mz.Leader {
-				return conn.Get().Connect(mz.GetAddr())
+				return conn.GetPools().Connect(mz.GetAddr())
 			}
 		}
 		return nil
@@ -564,7 +564,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.Get().Connect(x.WorkerConfig.ZeroAddr)
+			pl = conn.GetPools().Connect(x.WorkerConfig.ZeroAddr)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")

@@ -597,7 +597,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	addr := snap.Context.GetAddr()
 	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
 	if len(addr) > 0 {
-		p, err := conn.Get().Get(addr)
+		p, err := conn.GetPools().Get(addr)
 		if err != nil {
 			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
 		} else {
