@@ -2329,7 +2329,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return nil, item.Errorf("Expecting a comma. Got: %v", item)
+				return nil, item.Errorf("Not expecting argument. Got: %v", item)
 			}
 			key = item.Val
 			expectArg = false
@@ -2435,9 +2435,12 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			// TODO - Allow only order by one of variable/predicate for now.
 			if val == "" {
-				// Right now we only allow one sort by a variable and it has to be at the first
-				// position.
+				// This should only happen in cases like: orderasc: val(c)
+				if len(gq.NeedsVar) == 0 {
+					return nil, it.Errorf("unable to get value when parsing key value pairs")
+				}
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
+				// Right now we only allow one sort by a variable
 				if len(gq.Order) > 0 && isSortkey(key) {
 					return nil, it.Errorf("Multiple sorting only allowed by predicates. "+
 						"Got: %+v", val)

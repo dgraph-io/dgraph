@@ -34,6 +34,7 @@ import (
 
 	"github.com/dgraph-io/badger/y"
 
+	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,7 +45,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
-	"go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -101,6 +101,15 @@ they form a Raft group and provide synchronous replication.
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
 
+	// Snapshot and Transactions.
+	flag.Int("snapshot_after", 10000,
+		"Create a new Raft snapshot after this many number of Raft entries. The"+
+			" lower this number, the more frequent snapshot creation would be."+
+			" Also determines how often Rollups would happen.")
+	flag.String("abort_older_than", "5m",
+		"Abort any pending transactions older than this duration. The liveness of a"+
+			" transaction is determined by its last mutation.")
+
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
@@ -118,9 +127,6 @@ they form a Raft group and provide synchronous replication.
 		"IP_ADDRESS:PORT of a Dgraph Zero.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
-	flag.Bool("expand_edge", true,
-		"Enables the expand() feature. This is very expensive for large data loads because it"+
-			" doubles the number of mutations going on in the system.")
 	flag.Int("max_retries", -1,
 		"Commits to disk will give up after these number of retries to prevent locking the worker"+
 			" in a failed state. Use -1 to retry infinitely.")
@@ -462,6 +468,10 @@ func run() {
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
 	x.Check(err)
+
+	abortDur, err := time.ParseDuration(Alpha.Conf.GetString("abort_older_than"))
+	x.Check(err)
+
 	x.WorkerConfig = x.WorkerOptions{
 		ExportPath:          Alpha.Conf.GetString("export"),
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
@@ -469,11 +479,12 @@ func run() {
 		MyAddr:              Alpha.Conf.GetString("my"),
 		ZeroAddr:            Alpha.Conf.GetString("zero"),
 		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
-		ExpandEdge:          Alpha.Conf.GetBool("expand_edge"),
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
 		AclEnabled:          secretFile != "",
+		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
+		AbortOlderThan:      abortDur,
 	}
 
 	setupCustomTokenizers()
@@ -483,6 +494,11 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 
 	x.PrintVersion()
+
+	glog.Infof("x.Config: %+v", x.Config)
+	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
+	glog.Infof("edgraph.Config: %+v", edgraph.Config)
+
 	edgraph.InitServerState()
 	defer func() {
 		edgraph.State.Dispose()
@@ -511,7 +527,6 @@ func run() {
 	sdCh := make(chan os.Signal, 3)
 	shutdownCh = make(chan struct{})
 
-	var numShutDownSig int
 	defer func() {
 		signal.Stop(sdCh)
 		close(sdCh)
@@ -519,6 +534,7 @@ func run() {
 	// sigint : Ctrl-C, sigterm : kill command.
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
+		var numShutDownSig int
 		for {
 			select {
 			case _, ok := <-sdCh:
@@ -539,7 +555,6 @@ func run() {
 			}
 		}
 	}()
-	_ = numShutDownSig
 
 	// Setup external communication.
 	aclCloser := y.NewCloser(1)

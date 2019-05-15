@@ -59,7 +59,7 @@ type Table struct {
 	tableSize int      // Initialized in OpenTable, using fd.Stat().
 
 	blockIndex []keyOffset
-	ref        int32 // For file garbage collection.  Atomic.
+	ref        int32 // For file garbage collection. Atomic.
 
 	loadingMode options.FileLoadingMode
 	mmap        []byte // Memory mapped.
@@ -197,7 +197,7 @@ func (t *Table) Close() error {
 	return t.fd.Close()
 }
 
-func (t *Table) read(off int, sz int) ([]byte, error) {
+func (t *Table) read(off, sz int) ([]byte, error) {
 	if len(t.mmap) > 0 {
 		if len(t.mmap[off:]) < sz {
 			return nil, y.ErrEOF
@@ -212,7 +212,7 @@ func (t *Table) read(off int, sz int) ([]byte, error) {
 	return res, err
 }
 
-func (t *Table) readNoFail(off int, sz int) []byte {
+func (t *Table) readNoFail(off, sz int) []byte {
 	res, err := t.read(off, sz)
 	y.Check(err)
 	return res

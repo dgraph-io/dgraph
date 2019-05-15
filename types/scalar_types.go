@@ -119,6 +119,10 @@ func (t TypeID) IsScalar() bool {
 	return t != UidID
 }
 
+func (t TypeID) IsNumber() bool {
+	return t == IntID || t == FloatID
+}
+
 // ValueForType returns the zero value for a type id
 func ValueForType(id TypeID) Val {
 	switch id {

@@ -44,7 +44,9 @@ type DiskStorage struct {
 
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map)}
-	x.Check(w.StoreRaftId(id))
+	if prev, err := RaftId(db); err != nil || prev != id {
+		x.Check(w.StoreRaftId(id))
+	}
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.Snapshot()
@@ -91,7 +93,7 @@ func (w *DiskStorage) snapshotKey() []byte {
 	return b
 }
 
-func (w *DiskStorage) hardStateKey() []byte {
+func (w *DiskStorage) HardStateKey() []byte {
 	b := make([]byte, 14)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	copy(b[8:10], []byte("hs"))
@@ -99,7 +101,7 @@ func (w *DiskStorage) hardStateKey() []byte {
 	return b
 }
 
-func (w *DiskStorage) entryKey(idx uint64) []byte {
+func (w *DiskStorage) EntryKey(idx uint64) []byte {
 	b := make([]byte, 20)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	binary.BigEndian.PutUint32(b[8:12], w.gid)
@@ -166,7 +168,7 @@ func (w *DiskStorage) seekEntry(e *pb.Entry, seekTo uint64, reverse bool) (uint6
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		itr.Seek(w.entryKey(seekTo))
+		itr.Seek(w.EntryKey(seekTo))
 		if !itr.Valid() {
 			return errNotFound
 		}
@@ -238,7 +240,7 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		start := w.entryKey(0)
+		start := w.EntryKey(0)
 		first := true
 		var index uint64
 		for itr.Seek(start); itr.Valid(); itr.Next() {
@@ -309,7 +311,7 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s pb.Snapshot) error
 	if err != nil {
 		return err
 	}
-	if err := batch.Set(w.entryKey(e.Index), data, 0); err != nil {
+	if err := batch.Set(w.EntryKey(e.Index), data, 0); err != nil {
 		return err
 	}
 
@@ -336,7 +338,7 @@ func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st pb.HardState) er
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal hardstate")
 	}
-	return batch.Set(w.hardStateKey(), data, 0)
+	return batch.Set(w.HardStateKey(), data, 0)
 }
 
 // reset resets the entries. Used for testing.
@@ -356,7 +358,7 @@ func (w *DiskStorage) reset(es []pb.Entry) error {
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
-		k := w.entryKey(e.Index)
+		k := w.EntryKey(e.Index)
 		if err := batch.Set(k, data, 0); err != nil {
 			return err
 		}
@@ -381,7 +383,7 @@ func (w *DiskStorage) deleteKeys(batch *badger.WriteBatch, keys []string) error 
 func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
-		start := w.entryKey(from)
+		start := w.EntryKey(from)
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
 		opt.Prefix = w.entryPrefix()
@@ -404,7 +406,7 @@ func (w *DiskStorage) HardState() (hd pb.HardState, rerr error) {
 	w.elog.Printf("HardState")
 	defer w.elog.Printf("Done")
 	err := w.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(w.hardStateKey())
+		item, err := txn.Get(w.HardStateKey())
 		if err != nil {
 			return err
 		}
@@ -443,7 +445,7 @@ func (w *DiskStorage) NumEntries() (int, error) {
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		start := w.entryKey(0)
+		start := w.EntryKey(0)
 		for itr.Seek(start); itr.Valid(); itr.Next() {
 			count++
 		}
@@ -455,7 +457,7 @@ func (w *DiskStorage) NumEntries() (int, error) {
 func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr error) {
 	err := w.db.View(func(txn *badger.Txn) error {
 		if hi-lo == 1 { // We only need one entry.
-			item, err := txn.Get(w.entryKey(lo))
+			item, err := txn.Get(w.EntryKey(lo))
 			if err != nil {
 				return err
 			}
@@ -474,8 +476,8 @@ func (w *DiskStorage) allEntries(lo, hi, maxSize uint64) (es []pb.Entry, rerr er
 		itr := txn.NewIterator(iopt)
 		defer itr.Close()
 
-		start := w.entryKey(lo)
-		end := w.entryKey(hi) // Not included in results.
+		start := w.EntryKey(lo)
+		end := w.EntryKey(hi) // Not included in results.
 
 		var size, lastIndex uint64
 		first := true
@@ -615,7 +617,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 	// firste can exceed last if Raft makes a jump.
 
 	for _, e := range entries {
-		k := w.entryKey(e.Index)
+		k := w.EntryKey(e.Index)
 		data, err := e.Marshal()
 		if err != nil {
 			return x.Wrapf(err, "wal.Append: While marshal entry")
@@ -630,4 +632,8 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []pb.Entry) e
 		return w.deleteFrom(batch, laste+1)
 	}
 	return nil
+}
+
+func (w *DiskStorage) Sync() error {
+	return w.db.Sync()
 }

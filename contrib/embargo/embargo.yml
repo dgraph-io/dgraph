@@ -1,9 +1,9 @@
-# Blockade config for testing network failures and network partiions.
-# Blockade docs: https://blockade.readthedocs.io
+# Embargo config for testing network failures and network partiions.
+# Embargo (fork of blockade) docs: https://blockade.readthedocs.io
 # Usage:
-#   blockade up
+#   embargo up
 # To partition zero1 and dg1 from the rest of the cluster:
-#   blockade partition zero1,dg1
+#   embargo partition zero1,dg1
 
 containers:
   zero1:

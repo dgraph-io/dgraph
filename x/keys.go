@@ -36,9 +36,11 @@ const (
 	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-
 	// Constant to specify a given key corresponds to a posting list split into multiple parts.
 	ByteSplit = byte(0x01)
+=======
+	ByteRaft      = byte(0xff)
+>>>>>>> origin/master
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -49,6 +51,13 @@ func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) == copy(rest, attr))
 
 	return rest[len(attr):]
+}
+
+func RaftKey() []byte {
+	buf := make([]byte, 5)
+	buf[0] = ByteRaft
+	AssertTrue(4 == copy(buf[1:5], []byte("raft")))
+	return buf
 }
 
 // SchemaKey returns schema key for given attribute. Schema keys are stored
@@ -213,6 +222,10 @@ type ParsedKey struct {
 	Term        string
 	Count       uint32
 	bytePrefix  byte
+}
+
+func (p ParsedKey) IsRaft() bool {
+	return p.bytePrefix == ByteRaft
 }
 
 func (p ParsedKey) IsData() bool {
@@ -381,6 +394,10 @@ func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
 	p.bytePrefix = key[0]
+	if p.bytePrefix == ByteRaft {
+		return p
+	}
+
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 
@@ -468,23 +485,38 @@ func Parse(key []byte) *ParsedKey {
 	return p
 }
 
-// IsReservedPredicate returns true if 'pred' is in the reserved predicate list.
+var reservedPredicateMap = map[string]struct{}{
+	"dgraph.type": {},
+}
+
+var aclPredicateMap = map[string]struct{}{
+	"dgraph.xid":        {},
+	"dgraph.password":   {},
+	"dgraph.user.group": {},
+	"dgraph.group.acl":  {},
+}
+
+// IsReservedPredicate returns true if the predicate is in the reserved predicate list.
 func IsReservedPredicate(pred string) bool {
-	var m = map[string]struct{}{
-		PredicateListAttr: {},
-		"dgraph.type":     {},
-	}
-	_, ok := m[strings.ToLower(pred)]
+	_, ok := reservedPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred)
 }
 
+// IsAclPredicate returns true if the predicate is in the list of reserved
+// predicates for the ACL feature.
 func IsAclPredicate(pred string) bool {
-	var m = map[string]struct{}{
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-	}
-	_, ok := m[strings.ToLower(pred)]
+	_, ok := aclPredicateMap[strings.ToLower(pred)]
 	return ok
+}
+
+// ReservedPredicates returns the complete list of reserved predicates.
+func ReservedPredicates() []string {
+	var preds []string
+	for pred := range reservedPredicateMap {
+		preds = append(preds, pred)
+	}
+	for pred := range aclPredicateMap {
+		preds = append(preds, pred)
+	}
+	return preds
 }

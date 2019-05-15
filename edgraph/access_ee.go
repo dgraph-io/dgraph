@@ -424,6 +424,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	var preds []string
 	if len(op.DropAttr) > 0 {
 		preds = []string{op.DropAttr}
+	} else if op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0 {
+		preds = []string{op.DropValue}
 	} else {
 		update, err := schema.Parse(op.Schema)
 		if err != nil {

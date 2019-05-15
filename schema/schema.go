@@ -408,17 +408,24 @@ func LoadTypesFromDb() error {
 	return nil
 }
 
+// InitialSchema returns the schema updates to insert at the beginning of
+// Dgraph's execution. It looks at the worker options to determine which
+// attributes to insert.
 func InitialSchema() []*pb.SchemaUpdate {
-	var initialSchema []*pb.SchemaUpdate
+	return initialSchemaInternal(false)
+}
 
-	// propose the schema for _predicate_
-	if x.WorkerConfig.ExpandEdge {
-		initialSchema = append(initialSchema, &pb.SchemaUpdate{
-			Predicate: x.PredicateListAttr,
-			ValueType: pb.Posting_STRING,
-			List:      true,
-		})
-	}
+// CompleteInitialSchema returns all the schema updates regardless of the worker
+// options. This is useful in situations where the worker options are not known
+// in advance and it's better to create all the reserved predicates and remove
+// them later than miss some of them. An example of such situation is during bulk
+// loading.
+func CompleteInitialSchema() []*pb.SchemaUpdate {
+	return initialSchemaInternal(true)
+}
+
+func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
+	var initialSchema []*pb.SchemaUpdate
 
 	initialSchema = append(initialSchema, &pb.SchemaUpdate{
 		Predicate: "dgraph.type",
@@ -428,7 +435,7 @@ func InitialSchema() []*pb.SchemaUpdate {
 		List:      true,
 	})
 
-	if x.WorkerConfig.AclEnabled {
+	if all || x.WorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{

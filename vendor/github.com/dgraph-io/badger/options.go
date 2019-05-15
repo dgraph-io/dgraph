@@ -117,7 +117,7 @@ type Options struct {
 var DefaultOptions = Options{
 	LevelOneSize:        256 << 20,
 	LevelSizeMultiplier: 10,
-	TableLoadingMode:    options.LoadToRAM,
+	TableLoadingMode:    options.MemoryMap,
 	ValueLogLoadingMode: options.MemoryMap,
 	// table.MemoryMap to mmap() the tables.
 	// table.Nothing to not preload the tables.

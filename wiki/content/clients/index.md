@@ -5,11 +5,6 @@ title = "Clients"
 
 ## Implementation
 
-{{% notice "note" %}}
-All mutations and queries run within the context of a transaction. This differs
-significantly from the interaction model pre v0.9.
-{{% /notice %}}
-
 Clients can communicate with the server in two different ways:
 
 - **Via [gRPC](http://www.grpc.io/).** Internally this uses [Protocol
@@ -34,6 +29,15 @@ Dgraph instances. For the Go client, this means passing in one
 `*grpc.ClientConn` per Dgraph instance. Mutations will be made in a round robin
 fashion, resulting in an initially semi random predicate distribution.
 {{% /notice %}}
+
+### Transactions
+
+Clients perform mutations and queries on Dgraph using transactions. A
+transaction is a unit of work to be performed by Dgraph. A transaction commit
+has all-or-nothing semantics: either all the changes are accepted by Dgraph or
+none are. A transaction can be aborted when a concurrently running transaction
+was committed and mutated the same data. Transactions can also be manually
+aborted, in which case all the changes will be discarded.
 
 ## Go
 
@@ -109,9 +113,19 @@ func setup(c *dgo.Dgraph) {
 }
 ```
 
-`api.Operation` contains other fields as well, including drop predicate and
-drop all. Drop all is useful if you wish to discard all the data, and start from
-a clean slate, without bringing the instance down.
+`api.Operation` contains other fields as well, including drop predicate and drop
+all. Drop all is useful if you wish to discard all the data, and start from a
+clean slate, without bringing the instance down.
+
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(context.Background(), &api.Operation{DropOp: api.Operation_ALL})
+```
+
+The old way to send a drop all operation is still supported but will be eventually
+deprecated. It's shown below for reference.
 
 ```go
 	// Drop all data including schema from the dgraph instance. This is useful
@@ -120,9 +134,20 @@ a clean slate, without bringing the instance down.
 	err := c.Alter(context.Background(), &api.Operation{DropAll: true})
 ```
 
+Starting with version 1.1, `api.Operation` also supports a drop data operation.
+This operation drops all the data but preserves the schema. This is useful when
+the schema is large and needs to be reused, such as in between unit tests.
+
+```go
+	// Drop all data including schema from the dgraph instance. This is useful
+	// for small examples such as this, since it puts dgraph into a clean
+	// state.
+	err := c.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA})
+```
+
 ### Create a transaction
 
-Dgraph v0.9 supports running distributed ACID transactions. To create a
+Dgraph supports running distributed ACID transactions. To create a
 transaction, just call `c.NewTxn()`. This operation incurs no network call.
 Typically, you'd also want to call a `defer txn.Discard()` to let it
 automatically rollback in case of errors. Calling `Discard` after `Commit` would
@@ -189,6 +214,15 @@ via `json.Unmarshal`.
 `txn.Mutate` would run the mutation. It takes in a `api.Mutation` object,
 which provides two main ways to set data: JSON and RDF N-Quad. You can choose
 whichever way is convenient.
+
+To use JSON, use the fields SetJson and DeleteJson, which accept a string
+representing the nodes to be added or removed respectively (either as a JSON map
+or a list). To use RDF, use the fields SetNquads and DeleteNquads, which accept
+a string representing the valid RDF triples (one per line) to added or removed
+respectively. This protobuf object also contains the Set and Del fields which
+accept a list of RDF triples that have already been parsed into our internal
+format. As such, these fields are mainly used internally and users should use
+the SetNquads and DeleteNquads instead if they are planning on using RDF.
 
 We're going to continue using JSON. You could modify the Go structs parsed from
 the query, and marshal them back into JSON.

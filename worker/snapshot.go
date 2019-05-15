@@ -23,6 +23,7 @@ import (
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -45,12 +46,16 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	if err := stream.Send(&snap); err != nil {
 		return 0, err
 	}
-	// Before we write anything, we should drop all the data stored in ps.
-	if err := pstore.DropAll(); err != nil {
-		return 0, err
+
+	if snap.SinceTs == 0 {
+		// Before we write anything, we should drop all the data stored in ps.
+		if err := pstore.DropAll(); err != nil {
+			return 0, err
+		}
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
@@ -126,6 +131,10 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		num += len(kvs.Kv)
 		return out.Send(kvs)
 	}
+	stream.ChooseKey = func(item *badger.Item) bool {
+		return item.Version() >= snap.SinceTs
+	}
+
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}

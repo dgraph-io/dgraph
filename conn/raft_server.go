@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -53,9 +54,10 @@ func (r *lockedSource) Seed(seed int64) {
 	r.src.Seed(seed)
 }
 
+// ProposalCtx stores the context for a proposal with extra information.
 type ProposalCtx struct {
 	Found uint32
-	Ch    chan error
+	ErrCh chan error
 	Ctx   context.Context
 }
 
@@ -116,23 +118,27 @@ func (p *proposals) Done(key string, err error) {
 		return
 	}
 	delete(p.all, key)
-	pd.Ch <- err
+	pd.ErrCh <- err
 }
 
-func (w *RaftServer) GetNode() *Node {
-	w.nodeLock.RLock()
-	defer w.nodeLock.RUnlock()
+// TODO(martinmr): Getting the lock is not really doing anything to protect the node
+// after this method returns.
+func (w *RaftServer) node() *Node {
+	w.m.RLock()
+	defer w.m.RUnlock()
 	return w.Node
 }
 
+// RaftServer stores a RAFT node along with a lock.
 type RaftServer struct {
-	nodeLock sync.RWMutex // protects Node.
-	Node     *Node
+	m    sync.RWMutex
+	Node *Node
 }
 
+// IsPeer checks whether this node is a peer of the node sending the request.
 func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (*pb.PeerResponse,
 	error) {
-	node := w.GetNode()
+	node := w.node()
 	if node == nil || node.Raft() == nil {
 		return &pb.PeerResponse{}, ErrNoNode
 	}
@@ -149,6 +155,7 @@ func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (*pb.PeerRe
 	return &pb.PeerResponse{}, nil
 }
 
+// JoinCluster handles requests to join the cluster.
 func (w *RaftServer) JoinCluster(ctx context.Context,
 	rc *pb.RaftContext) (*api.Payload, error) {
 	if ctx.Err() != nil {
@@ -156,7 +163,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	// Commenting out the following checks for now, until we get rid of groups.
 	// TODO: Uncomment this after groups is removed.
-	node := w.GetNode()
+	node := w.node()
 	if node == nil || node.Raft() == nil {
 		return nil, ErrNoNode
 	}
@@ -176,18 +183,19 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	// Check that the new node is not already part of the group.
 	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
 		// There exists a healthy connection to server with same id.
-		if _, err := Get().Get(addr); err == nil {
+		if _, err := GetPools().Get(addr); err == nil {
 			return &api.Payload{}, x.Errorf(
 				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
 		}
 	}
 	node.Connect(rc.Id, rc.Addr)
 
-	err := node.AddToCluster(context.Background(), rc.Id)
+	err := node.addToCluster(context.Background(), rc.Id)
 	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
 	return &api.Payload{}, err
 }
 
+// RaftMessage handles RAFT messages.
 func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	ctx := server.Context()
 	if ctx.Err() != nil {
@@ -195,14 +203,14 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	}
 	span := otrace.FromContext(ctx)
 
-	n := w.GetNode()
+	n := w.node()
 	if n == nil || n.Raft() == nil {
 		return ErrNoNode
 	}
 	span.Annotatef(nil, "Stream server is node %#x", n.Id)
 
 	var rc *pb.RaftContext
-	raft := w.GetNode().Raft()
+	raft := w.node().Raft()
 	step := func(data []byte) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
@@ -225,6 +233,18 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			// This should be done in order, and not via a goroutine.
 			// Step can block forever. See: https://github.com/etcd-io/etcd/issues/10585
 			// So, add a context with timeout to allow it to get out of the blockage.
+			if glog.V(2) {
+				switch msg.Type {
+				case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
+					atomic.AddInt64(&n.heartbeatsIn, 1)
+				case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
+				case raftpb.MsgApp, raftpb.MsgAppResp:
+				case raftpb.MsgProp:
+				default:
+					glog.Infof("RaftComm: [%#x] Received msg of type: %s from %#x",
+						msg.To, msg.Type, msg.From)
+				}
+			}
 			if err := raft.Step(ctx, msg); err != nil {
 				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
 					rc.GetId(), err)
@@ -260,7 +280,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	}
 }
 
-// Hello rpc call is used to check connection with other workers after worker
+// Heartbeat rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
 func (w *RaftServer) Heartbeat(in *api.Payload, stream pb.Raft_HeartbeatServer) error {
 	ticker := time.NewTicker(echoDuration)

@@ -73,7 +73,6 @@ const (
 
 // This function inspects the next rune and calls the appropriate stateFn.
 func lexText(l *lex.Lexer) lex.StateFn {
-Loop:
 	for {
 		switch r := l.Next(); {
 		case r == lsThan || r == underscore:
@@ -130,7 +129,8 @@ Loop:
 			return l.Errorf("Invalid input: %c at Facet", r)
 
 		case r == lex.EOF:
-			break Loop
+			l.Emit(lex.ItemEOF)
+			return nil
 
 		case r == dot:
 			if l.Depth > atObject {
@@ -152,14 +152,6 @@ Loop:
 			l.Errorf("Invalid input: %c at lexText", r)
 		}
 	}
-	if l.Pos > l.Start {
-		l.Emit(itemText)
-	}
-	if l.Depth == atSubject { // no valid term encountered, taken as comment-line
-		return lexComment
-	}
-	l.Emit(lex.ItemEOF)
-	return nil
 }
 
 // Assumes that caller has consumed initial '<'

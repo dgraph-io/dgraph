@@ -33,6 +33,7 @@ import (
 )
 
 var alphaService = z.SockAddr
+var zeroService = z.SockAddrZero
 
 var (
 	testDataDir string
@@ -47,19 +48,22 @@ func checkLoadedData(t *testing.T) {
 			q(func: anyofterms(name, "Homer")) {
 				name
 				age
-				role
+				role @facets(gender,generation)
+				role@es
 			}
 		}
 	`)
 	require.NoError(t, err)
 	z.CompareJSON(t, `
 		{
-		    "q": [
+			"q": [
 					{
 					"name": "Homer",
 					"age": 38,
-					"role": "father"
-			    }
+					"role": "father",
+					"role@es": "padre",
+					"role|gender": "male"
+				}
 			]
 		}
 	`, string(resp.GetJson()))
@@ -68,7 +72,8 @@ func checkLoadedData(t *testing.T) {
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				name
-				role
+				role @facets(gender,generation)
+				role@es
 				carries
 			}
 		}
@@ -76,15 +81,31 @@ func checkLoadedData(t *testing.T) {
 	require.NoError(t, err)
 	z.CompareJSON(t, `
 		{
-		    "q": [
+			"q": [
 				{
 					"name": "Maggie",
 					"role": "daughter",
-					"carries": "pacifier"
-			    }
+					"role@es": "hija",
+					"carries": "pacifier",
+					"role|gender": "female",
+					"role|generation": 3
+				}
 			]
 		}
 	`, string(resp.GetJson()))
+}
+
+func TestLiveLoadJSONFileEmpty(t *testing.T) {
+	z.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{"echo", "[]"},
+		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
+			"--alpha", alphaService, "--zero", zeroService},
+	}
+	err := z.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file ran successfully")
 }
 
 func TestLiveLoadJSONFile(t *testing.T) {
@@ -93,7 +114,7 @@ func TestLiveLoadJSONFile(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
-			"--alpha", alphaService},
+			"--alpha", alphaService, "--zero", zeroService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
@@ -108,7 +129,7 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 		{"gzip", "-c", testDataDir + "/family.json"},
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
-			"--alpha", alphaService},
+			"--alpha", alphaService, "--zero", zeroService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON stream exited with error")
@@ -129,7 +150,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", fileList,
-			"--alpha", alphaService},
+			"--alpha", alphaService, "--zero", zeroService},
 	}
 	err := z.Pipeline(pipeline)
 	require.NoError(t, err, "live loading multiple JSON files exited with error")

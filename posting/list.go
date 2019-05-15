@@ -424,10 +424,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	var conflictKey string
-	if t.Attr == "_predicate_" {
-		// Don't check for conflict.
-
-	} else if schema.State().HasUpsert(t.Attr) {
+	if schema.State().HasUpsert(t.Attr) {
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.
@@ -462,7 +459,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 
 	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.pendingTxns, 1)
-	txn.AddKeys(string(l.key), conflictKey)
+	txn.AddConflictKey(conflictKey)
 	return nil
 }
 
@@ -476,6 +473,15 @@ func (l *List) GetMutation(startTs uint64) []byte {
 		return data
 	}
 	return nil
+}
+
+func (l *List) SetMutation(startTs uint64, data []byte) {
+	pl := new(pb.PostingList)
+	x.Check(pl.Unmarshal(data))
+
+	l.Lock()
+	l.mutationMap[startTs] = pl
+	l.Unlock()
 }
 
 func (l *List) CommitMutation(startTs, commitTs uint64) error {
@@ -1295,7 +1301,7 @@ func (out *rollupOutput) removeEmptySplits() {
 // safer than using out.plist.Splits directly.
 func (out *rollupOutput) splits() []uint64 {
 	var splits []uint64
-	for startUid, _ := range out.parts {
+	for startUid := range out.parts {
 		splits = append(splits, startUid)
 	}
 	sortSplits(splits)
@@ -1318,4 +1324,12 @@ func sortSplits(splits []uint64) {
 	sort.Slice(splits, func(i, j int) bool {
 		return splits[i] < splits[j]
 	})
+}
+
+// PartSplits returns an empty array if the list has not been split into multiple parts.
+// Otherwise, it returns an array containing the start UID of each part.
+func (l *List) PartSplits() []uint64 {
+	splits := make([]uint64, len(l.plist.Splits))
+	copy(splits, l.plist.Splits)
+	return splits
 }

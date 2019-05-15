@@ -15,28 +15,31 @@
 {
   "HP": [
     {
-      "name@en": "Harry Potter and the Prisoner of Azkaban",
+      "name@en": "Harry Potter and the Deathly Hallows – Part 2",
       "starring": [
         {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Deathly Hallows - Part I",
-      "starring": [
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Griphook"
+            }
+          ]
+        },
         {
-          "performance.character": {
-            "name@en": "Griphook"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
         }
       ]
     },
@@ -44,38 +47,16 @@
       "name@en": "Harry Potter and the Chamber of Secrets",
       "starring": [
         {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Order of the Phoenix",
-      "starring": [
-        {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Goblet of Fire",
-      "starring": [
-        {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
         }
       ]
     },
@@ -83,33 +64,16 @@
       "name@en": "Harry Potter and the Half-Blood Prince",
       "starring": [
         {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Deathly Hallows – Part 2",
-      "starring": [
-        {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
-        },
-        {
-          "performance.character": {
-            "name@en": "Griphook"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
         }
       ]
     },
@@ -117,20 +81,96 @@
       "name@en": "Harry Potter and the Philosopher's Stone",
       "starring": [
         {
-          "performance.character": {
-            "name@en": "Professor Filius Flitwick"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
         },
         {
-          "performance.character": {
-            "name@en": "Goblin Bank Teller"
-          },
-          "performance.actor": {
-            "name@en": "Warwick Davis"
-          }
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Goblin Bank Teller"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Goblet of Fire",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Prisoner of Azkaban",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Deathly Hallows - Part I",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Griphook"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Order of the Phoenix",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
         }
       ]
     }

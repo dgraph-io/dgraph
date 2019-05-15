@@ -205,26 +205,30 @@ message Mutations {
 		NONE = 0;
 		ALL = 1;
 		DATA = 2;
+		TYPE = 3;
 	}
 	DropOp drop_op = 7;
+	string drop_value = 8;
 }
 
 message Snapshot {
 	RaftContext context = 1;
-	uint64 index        = 2;
-	uint64 read_ts      = 3;
+	uint64 index = 2;
+	uint64 read_ts = 3;
 	// done is used to indicate that snapshot stream was a success.
-	bool done           = 4;
+	bool done	= 4;
+	// since_ts stores the ts of the last snapshot to support diff snap updates.
+	uint64 since_ts = 5;
 }
 
 message Proposal {
 	Mutations mutations    = 2;
 	repeated KV kv         = 4;
 	MembershipState state  = 5;
-	string clean_predicate = 6; // Delete the predicate which was moved to other group.
+	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
 	string key             = 7;
 	OracleDelta delta      = 8;
-	Snapshot snapshot      = 9; // Used to tell the group when to take snapshot.
+	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
 	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
 }
 
@@ -486,9 +490,10 @@ message BackupRequest {
 }
 
 message ExportRequest {
-	uint32 group_id = 1;  // Group id to back up.
-	uint64 read_ts  = 2;
-	int64 unix_ts   = 3;
+	uint32  group_id = 1;  // Group id to back up.
+	uint64  read_ts  = 2;
+	int64   unix_ts  = 3;
+	string  format   = 4;
 }
 
 // vim: noexpandtab sw=2 ts=2

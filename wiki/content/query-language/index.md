@@ -2109,6 +2109,9 @@ right now, as the type system is still a work in progress. It's a good idea to
 properly think about how they should be setup to avoid any issues once the type
 system starts using them.
 
+If you send a type definition through the Alter endpoint for a type that already
+exists, the current definition will be overwritten.
+
 #### Setting the type of a node.
 
 Scalar nodes cannot have types since they only have one attribute and its type
@@ -2162,7 +2165,17 @@ type of the parent node has been previously set to `Person`.
 
 #### Deleting a type
 
-TODO
+Type definitions can be deleted using the Alter endpoint. All that is needed is
+to send an operation object with the field `DropOp` (or `drop_op` depending on
+the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
+to the type that is meant to be deleted.
+
+Below is an example deleting the type `Person` using the go client:
+```go
+	err := c.Alter(context.Background(), &api.Operation{
+			DropOp: api.Operation_TYPE,
+			DropValue: "Person"})
+```
 
 #### Expand queries and types
 

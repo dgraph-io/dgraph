@@ -231,10 +231,15 @@ func getJaeger() Service {
 		ContainerName: "jaeger",
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
+			toExposedPort(14268),
 			toExposedPort(16686),
 		},
-		Environment: []string{"COLLECTOR_ZIPKIN_HTTP_PORT=9411"},
-		Command:     "--memory.max-traces=1000000",
+		Environment: []string{
+			"SPAN_STORAGE_TYPE=badger",
+		},
+		Command: "--badger.ephemeral=false" +
+			" --badger.directory-key /working/jaeger" +
+			" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
@@ -354,12 +359,6 @@ func main() {
 		"use locally-compiled binary if true, otherwise use binary from docker container")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
-
-	// Output the help message if there are no arguments.
-	if len(os.Args) < 2 {
-		_ = cmd.Usage()
-		os.Exit(1)
-	}
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {

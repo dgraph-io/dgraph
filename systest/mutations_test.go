@@ -47,10 +47,8 @@ func TestSystem(t *testing.T) {
 	}
 
 	t.Run("n-quad mutation", wrap(NQuadMutationTest))
-	t.Run("expand all lang test", wrap(ExpandAllLangTest))
 	t.Run("list with languages", wrap(ListWithLanguagesTest))
 	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
-	t.Run("expand all with reverse predicates", wrap(ExpandAllReversePredicatesTest))
 	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
 	t.Run("facets with order", wrap(FacetOrderTest))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
@@ -66,7 +64,6 @@ func TestSystem(t *testing.T) {
 	t.Run("delete with expand all", wrap(DeleteWithExpandAll))
 	t.Run("facets using nquads", wrap(FacetsUsingNQuadsError))
 	t.Run("skip empty pl for has", wrap(SkipEmptyPLForHas))
-	t.Run("facet expand all", wrap(FacetExpandAll))
 	t.Run("has with dash", wrap(HasWithDash))
 	t.Run("list geo filter", wrap(ListGeoFilterTest))
 	t.Run("list regex filter", wrap(ListRegexFilterTest))
@@ -80,6 +77,8 @@ func TestSystem(t *testing.T) {
 	t.Run("restore reserved preds", wrap(RestoreReservedPreds))
 	t.Run("drop data", wrap(DropData))
 	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
+	t.Run("drop type", wrap(DropType))
+	t.Run("drop type without specified type", wrap(DropTypeNoValue))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -142,70 +141,6 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
     "access.to":[
     {"uid":"%s","access.to|inherit":false,"access.to|permission":"WRITE"}]}]}
 `, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
-}
-
-func ExpandAllLangTest(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
-
-	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `
-			list: [string] .
-			name: string @lang .
-		`,
-	})))
-
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
-	_, err := txn.Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-			<0x1> <name> "abc" .
-			<0x1> <name> "abc_en"@en .
-			<0x1> <name> "abc_nl"@nl .
-			<0x2> <name> "abc_hi"@hi .
-			<0x2> <name> "abc_ci"@ci .
-			<0x2> <name> "abc_ja"@ja .
-			<0x3> <name> "abcd" .
-			<0x1> <number> "99"^^<xs:int> .
-			<0x1> <list> "first" .
-			<0x1> <list> "second" .
-		`),
-	})
-	check(t, err)
-
-	resp, err := c.NewTxn().Query(context.Background(), `
-	{
-		q(func: uid(0x1,0x2,0x3)) {
-			expand(_all_)
-		}
-	}
-	`)
-	check(t, err)
-
-	CompareJSON(t, `
-	{
-		"q": [
-			{
-				"name": "abcd"
-			},
-			{
-			    "name@ci": "abc_ci",
-			    "name@hi": "abc_hi",
-			    "name@ja": "abc_ja"
-			},
-			{
-				"name@en": "abc_en",
-				"name@nl": "abc_nl",
-				"name": "abc",
-				"number": 99,
-				"list": [
-					"second",
-					"first"
-				]
-			}
-		]
-	}
-	`, string(resp.GetJson()))
 }
 
 func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
@@ -340,109 +275,6 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, fmt.Sprintf("{ q(func: uid(%s)) { ~link { uid } }}", cId))
 	require.NoError(t, err)
 	CompareJSON(t, fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
-}
-
-func ExpandAllReversePredicatesTest(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
-
-	require.NoError(t, c.Alter(ctx, &api.Operation{
-		Schema: `link: [uid] @reverse .`,
-	}))
-
-	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		SetNquads: []byte(`
-			# SPO
-			<0x1> <link> <0x2> .
-
-			# SP*
-			<0x3> <link> <0x4> .
-			<0x3> <link> <0x5> .
-
-			# S**
-			<0x6> <link> <0x7> .
-		`),
-	})
-	require.NoError(t, err)
-
-	// Make sure expand(_all_) follows reverse edges.
-	resp, err := c.NewTxn().Query(ctx, `
-		{
-			spo(func: uid(0x2)) {
-				uid
-				expand(_all_) {
-					uid
-				}
-			}
-		}
-	`)
-	require.NoError(t, err)
-	CompareJSON(t, `
-	{
-		"spo": [
-			{
-				"uid": "0x2",
-				"~link": [
-					{
-						"uid": "0x1"
-					}
-				]
-			}
-		]
-	}`, string(resp.GetJson()))
-
-	// Delete nodes with reverse edges, and make sure the entries in
-	// _predicate_ are removed.
-	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
-		CommitNow: true,
-		DelNquads: []byte(`
-			<0x1> <link> <0x2> .
-			<0x3> <link> * .
-			<0x6> * * .
-		`),
-	})
-	require.NoError(t, err)
-
-	resp, err = c.NewTxn().Query(ctx, `
-		{
-			spo(func: uid(0x2)) {
-				expand(_all_) {
-					uid
-				}
-			}
-			spstar(func: uid(0x4, 0x5)) {
-				uid
-				expand(_all_) {
-					uid
-				}
-			}
-			sstarstar(func: uid(0x7)) {
-				uid
-				expand(_all_) {
-					uid
-				}
-			}
-		}
-	`)
-	require.NoError(t, err)
-	CompareJSON(t, `
-		{
-		  "spo": [],
-		  "spstar": [
-			{
-			  "uid": "0x4"
-			},
-			{
-			  "uid": "0x5"
-			}
-		  ],
-		  "sstarstar": [
-			{
-			  "uid": "0x7"
-			}
-		  ]
-		}
-	`, string(resp.GetJson()))
 }
 
 func NormalizeEdgeCasesTest(t *testing.T, c *dgo.Dgraph) {
@@ -682,7 +514,6 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	resp, err := c.NewTxn().Query(ctx, `schema{}`)
 	require.NoError(t, err)
 	z.CompareJSON(t, asJson(`[`+
-		`{"predicate":"_predicate_","type":"string","list":true},`+
 		x.AclPredicates+","+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"married","type":"bool"},`+
@@ -706,7 +537,6 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	z.CompareJSON(t, asJson(`[`+
 		x.AclPredicates+","+
-		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"friend","type":"uid","list":true},`+
 		`{"predicate":"name","type":"default"},`+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
@@ -998,9 +828,24 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 }
 
 func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
+	op := &api.Operation{}
+	op.Schema = `
+		type Node {
+			to: uid
+			name: string
+		}
+`
+
 	ctx := context.Background()
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+
+	ctx = context.Background()
 	assigned, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
+			_:a <dgraph.type> "Node" .
+			_:b <dgraph.type> "Node" .
+
 			_:a <to> _:b .
 			_:b <name> "b" .
 			_:a <to> _:c .
@@ -1023,16 +868,14 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 
 	q := `query test($id: string) {
 		  me(func: uid($id)) {
-			_predicate_
+			expand(_all_) {
+				uid
+			}
 		  }
 		}`
 
-	type Preds struct {
-		Predicates []string `json:"_predicate_"`
-	}
-
 	type Root struct {
-		Me []Preds `json:"me"`
+		Me []map[string]interface{} `json:"me"`
 	}
 
 	var r Root
@@ -1040,10 +883,9 @@ func DeleteWithExpandAll(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	json.Unmarshal(resp.Json, &r)
 	// S P O deletion shouldn't delete "to" .
-	require.Equal(t, 1, len(r.Me[0].Predicates))
-	require.Equal(t, "to", r.Me[0].Predicates[0])
+	require.Equal(t, 1, len(r.Me[0]))
 
-	// b should not have any _predicate_.
+	// b should not have any predicates.
 	resp, err = c.NewTxn().QueryWithVars(ctx, q, map[string]string{"$id": buid})
 	require.NoError(t, err)
 	json.Unmarshal(resp.Json, &r)
@@ -1131,76 +973,6 @@ func SkipEmptyPLForHas(t *testing.T, c *dgo.Dgraph) {
 	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"users": []}`, string(resp.Json))
-}
-
-func FacetExpandAll(t *testing.T, c *dgo.Dgraph) {
-	ctx := context.Background()
-
-	check(t, (c.Alter(ctx, &api.Operation{
-		Schema: `name: string @index(hash) .
-				friend: [uid] @reverse .`,
-	})))
-
-	txn := c.NewTxn()
-	_, err := txn.Mutate(ctx, &api.Mutation{
-		SetNquads: []byte(`
-			_:a <name> "Alice" (from="US",to="Canada") .
-			_:a <friend> _:b (age=13,car="Honda") .
-			_:b <name> "Bob" (from="Toronto",to="Vancouver").
-			_:a <friend> _:c (age=15,car="Tesla") .
-			_:c <name> "Charlie" .
-		`),
-	})
-	require.NoError(t, err)
-	require.NoError(t, txn.Commit(ctx))
-
-	const friendQuery = `
-	{
-		q(func: eq(name, "Alice")) {
-			expand(_all_) {
-				expand(_all_)
-			}
-		}
-	}`
-
-	txn = c.NewTxn()
-	resp, err := txn.Query(ctx, friendQuery)
-	require.NoError(t, err)
-	CompareJSON(t, `{
-  "q": [
-    {
-      "friend": [
-        {
-          "friend|age": 13,
-          "friend|car": "Honda",
-          "name": "Bob",
-          "name|from": "Toronto",
-          "name|to": "Vancouver",
-          "~friend": [
-            {
-              "~friend|age": 13,
-              "~friend|car": "Honda"
-            }
-          ]
-        },
-        {
-          "friend|age": 15,
-          "friend|car": "Tesla",
-          "name": "Charlie",
-          "~friend": [
-            {
-              "~friend|age": 15,
-              "~friend|car": "Tesla"
-            }
-          ]
-        }
-      ],
-      "name": "Alice",
-      "name|from": "US",
-      "name|to": "Canada"
-    }
-  ]
-}`, string(resp.Json))
 }
 
 func HasWithDash(t *testing.T, c *dgo.Dgraph) {
@@ -1772,7 +1544,6 @@ func DropData(t *testing.T, c *dgo.Dgraph) {
 	}`)
 	require.NoError(t, err)
 	CompareJSON(t, `{"q": []}`, string(resp.GetJson()))
-
 }
 
 func DropDataAndDropAll(t *testing.T, c *dgo.Dgraph) {
@@ -1784,4 +1555,42 @@ func DropDataAndDropAll(t *testing.T, c *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only one of DropAll and DropData can be true")
+}
+
+func DropType(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			type Person {
+				name: string
+			}
+		`,
+	}))
+
+	// Check type has been added.
+	query := `schema(type: Person) {}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, `{"types":[{"name":"Person",
+		"fields":[{"name":"name", "type":"string"}]}]}`, string(resp.Json))
+
+	require.NoError(t, c.Alter(ctx, &api.Operation{
+		DropOp:    api.Operation_TYPE,
+		DropValue: "Person",
+	}))
+
+	// Check type is gone.
+	resp, err = c.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err)
+	CompareJSON(t, "{}", string(resp.Json))
+}
+
+func DropTypeNoValue(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	err := c.Alter(ctx, &api.Operation{
+		DropOp: api.Operation_TYPE,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DropValue must not be empty")
 }

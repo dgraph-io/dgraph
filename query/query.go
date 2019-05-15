@@ -971,7 +971,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 	if err := args.fill(gq); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error while filling args: %v", err)
 	}
 
 	sg := &SubGraph{Params: args}
@@ -995,7 +995,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	if isUidFnWithoutVar(gq.Func) && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error while populating UIDs: %v", err)
 		}
 	}
 
@@ -1003,14 +1003,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
 		if err := filterCopy(sgf, gq.Filter); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error while copying filter: %v", err)
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
 	if gq.FacetsFilter != nil {
 		facetsFilter, err := toFacetsFilter(gq.FacetsFilter)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error while converting to facets filter: %v", err)
 		}
 		sg.facetsFilter = facetsFilter
 	}
@@ -1417,7 +1417,6 @@ func (sg *SubGraph) updateUidMatrix() {
 			algo.IntersectWith(l, sg.DestUIDs, l)
 		}
 	}
-
 }
 
 func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGraph) error {
@@ -1507,18 +1506,12 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 	var v varValue
 	var ok bool
-	if sg.Attr == "_predicate_" {
-		// This is a predicates list.
-		doneVars[sg.Params.Var] = varValue{
-			strList: sg.valueMatrix,
-			path:    sgPath,
-			Vals:    make(map[uint64]types.Val),
-		}
-	} else if len(sg.counts) > 0 {
+	if len(sg.counts) > 0 {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
+			Vals:    make(map[uint64]types.Val),
+			path:    sgPath,
+			strList: sg.valueMatrix,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			val := types.Val{
@@ -1529,8 +1522,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 	} else if sg.Params.uidCount {
 		doneVars[sg.Params.Var] = varValue{
-			Vals: make(map[uint64]types.Val),
-			path: sgPath,
+			Vals:    make(map[uint64]types.Val),
+			path:    sgPath,
+			strList: sg.valueMatrix,
 		}
 
 		val := types.Val{
@@ -1548,9 +1542,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// This implies it is a entity variable.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
-				Uids: uids,
-				path: sgPath,
-				Vals: make(map[uint64]types.Val),
+				Uids:    uids,
+				path:    sgPath,
+				Vals:    make(map[uint64]types.Val),
+				strList: sg.valueMatrix,
 			}
 			return nil
 		}
@@ -1565,6 +1560,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			v.Vals = make(map[uint64]types.Val)
 			v.path = sgPath
+			v.strList = sg.valueMatrix
 		}
 
 		for idx, uid := range sg.SrcUIDs.Uids {
@@ -1590,8 +1586,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = varValue{
-			path: sgPath,
-			Vals: make(map[uint64]types.Val),
+			path:    sgPath,
+			Vals:    make(map[uint64]types.Val),
+			strList: sg.valueMatrix,
 		}
 	}
 	return nil
@@ -1823,15 +1820,22 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
-func uniqueValues(vl []*pb.ValueList) []string {
-	predMap := make(map[string]struct{})
-
+func getPredsFromVals(vl []*pb.ValueList) []string {
+	preds := make([]string, 0)
 	for _, l := range vl {
 		for _, v := range l.Values {
 			if len(v.Val) > 0 {
-				predMap[string(v.Val)] = struct{}{}
+				preds = append(preds, string(v.Val))
 			}
 		}
+	}
+	return preds
+}
+
+func uniquePreds(list []string) []string {
+	predMap := make(map[string]struct{})
+	for _, item := range list {
+		predMap[item] = struct{}{}
 	}
 
 	preds := make([]string, 0, len(predMap))
@@ -1868,19 +1872,9 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if !x.WorkerConfig.ExpandEdge && child.Attr == "_predicate_" {
-			return out,
-				x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
-		}
-
 		if child.Params.Expand == "" {
 			out = append(out, child)
 			continue
-		}
-
-		if !x.WorkerConfig.ExpandEdge {
-			return out,
-				x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
 		}
 
 		var preds []string
@@ -1893,64 +1887,41 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		// It could be expand(_all_), expand(_forward_), expand(_reverse_) or expand(val(x)).
 		case "_all_":
 			span.Annotate(nil, "expand(_all_)")
-			if len(types) > 0 {
-				preds = getPredicatesFromTypes(types)
-
-				rpreds, err := getReversePredicatesFromType(ctx, preds)
-				if err != nil {
-					return out, err
-				}
-				preds = append(preds, rpreds...)
+			if len(types) == 0 {
 				break
 			}
 
-			// Get the predicate list for expansion.
-			child.ExpandPreds, err = getNodePredicates(ctx, sg)
-			if err != nil {
-				return out, err
-			}
-			preds = uniqueValues(child.ExpandPreds)
-
-			rpreds, err := getReversePredicates(ctx)
+			preds = getPredicatesFromTypes(types)
+			rpreds, err := getReversePredicates(ctx, preds)
 			if err != nil {
 				return out, err
 			}
 			preds = append(preds, rpreds...)
 		case "_forward_":
 			span.Annotate(nil, "expand(_forward_)")
-			if len(types) > 0 {
-				preds = getPredicatesFromTypes(types)
+			if len(types) == 0 {
 				break
 			}
 
-			child.ExpandPreds, err = getNodePredicates(ctx, sg)
-			if err != nil {
-				return out, err
-			}
-			preds = uniqueValues(child.ExpandPreds)
+			preds = getPredicatesFromTypes(types)
 		case "_reverse_":
 			span.Annotate(nil, "expand(_reverse_)")
-			if len(types) > 0 {
-				typePreds := getPredicatesFromTypes(types)
-
-				rpreds, err := getReversePredicatesFromType(ctx, typePreds)
-				if err != nil {
-					return out, err
-				}
-				preds = append(preds, rpreds...)
+			if len(types) == 0 {
 				break
 			}
 
-			rpreds, err := getReversePredicates(ctx)
+			typePreds := getPredicatesFromTypes(types)
+			rpreds, err := getReversePredicates(ctx, typePreds)
 			if err != nil {
 				return out, err
 			}
-			preds = rpreds
+			preds = append(preds, rpreds...)
 		default:
 			span.Annotate(nil, "expand default")
 			// We already have the predicates populated from the var.
-			preds = uniqueValues(child.ExpandPreds)
+			preds = getPredsFromVals(child.ExpandPreds)
 		}
+		preds = uniquePreds(preds)
 
 		for _, pred := range preds {
 			temp := &SubGraph{
@@ -2064,7 +2035,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil && strings.Contains(err.Error(), worker.ErrUnservedTabletMessage) {
+			if err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage) {
 				sg.UnknownAttr = true
 			} else if err != nil {
 				rch <- err
@@ -2514,38 +2485,6 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f != nil && f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func getNodePredicates(ctx context.Context, sg *SubGraph) ([]*pb.ValueList, error) {
-	temp := &SubGraph{
-		Attr:    "_predicate_",
-		SrcUIDs: sg.DestUIDs,
-		ReadTs:  sg.ReadTs,
-	}
-	taskQuery, err := createTaskQuery(temp)
-	if err != nil {
-		return nil, err
-	}
-	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-	if err != nil {
-		return nil, err
-	}
-	return result.ValueMatrix, nil
-}
-
-func getReversePredicates(ctx context.Context) ([]string, error) {
-	schs, err := worker.GetSchemaOverNetwork(ctx, &pb.SchemaRequest{})
-	if err != nil {
-		return nil, err
-	}
-	preds := make([]string, 0, len(schs))
-	for _, sch := range schs {
-		if !sch.Reverse {
-			continue
-		}
-		preds = append(preds, "~"+sch.Predicate)
-	}
-	return preds, nil
-}
-
 func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	temp := &SubGraph{
 		Attr:    "dgraph.type",
@@ -2560,7 +2499,7 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return uniqueValues(result.ValueMatrix), nil
+	return getPredsFromVals(result.ValueMatrix), nil
 }
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
@@ -2580,9 +2519,9 @@ func getPredicatesFromTypes(types []string) []string {
 	return preds
 }
 
-// getReversePredicatesFromType queries the schema and returns a list of the
-// reverse predicates that exist within the given preds.
-func getReversePredicatesFromType(ctx context.Context, preds []string) ([]string, error) {
+// getReversePredicates queries the schema and returns a list of the reverse
+// predicates that exist within the given preds.
+func getReversePredicates(ctx context.Context, preds []string) ([]string, error) {
 	var rpreds []string
 	predMap := make(map[string]bool)
 	for _, pred := range preds {
@@ -2681,7 +2620,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return err
+			return fmt.Errorf("error while converting to subgraph: %v", err)
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs

@@ -18,7 +18,6 @@ package zero
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -334,21 +333,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	checkPreds := func() error {
 		// Check if any of these tablets is being moved. If so, abort the transaction.
 		preds := make(map[string]struct{})
-		// _predicate_ would never be part of conflict detection, so keys corresponding to any
-		// modifications to this predicate would not be sent to Zero. But, we still need to abort
-		// transactions which are coming in, while this predicate is being moved. This means that if
-		// _predicate_ expansion is enabled, and a move for this predicate is happening, NO transactions
-		// across the entire cluster would commit. Sorry! But if we don't do this, we might lose commits
-		// which sneaked in during the move.
 
-		// Ensure that we only consider checking _predicate_, if expand_edge flag is
-		// set to true, i.e. we are actually serving _predicate_. Otherwise, the
-		// code below, which checks if a tablet is present or is readonly, causes
-		// ALL txns to abort. See #2547.
-		if tablet := s.ServingTablet("_predicate_"); tablet != nil {
-			pkey := fmt.Sprintf("%d-_predicate_", tablet.GroupId)
-			preds[pkey] = struct{}{}
-		}
 		for _, k := range src.Preds {
 			preds[k] = struct{}{}
 		}

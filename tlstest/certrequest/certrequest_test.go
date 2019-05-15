@@ -30,7 +30,7 @@ func TestAccessWithCaCert(t *testing.T) {
 func TestCurlAccessWithCaCert(t *testing.T) {
 	// curl over plaintext should fail
 	curlPlainTextArgs := []string{
-		"--cacert", "http://localhost:8180/alter",
+		"https://localhost:8180/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	z.VerifyCurlCmd(t, curlPlainTextArgs, &z.FailureConfig{

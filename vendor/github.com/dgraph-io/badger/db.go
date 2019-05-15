@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"expvar"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -40,10 +41,11 @@ import (
 )
 
 var (
-	badgerPrefix = []byte("!badger!")     // Prefix for internal keys used by badger.
-	head         = []byte("!badger!head") // For storing value offset for replay.
-	txnKey       = []byte("!badger!txn")  // For indicating end of entries in txn.
-	badgerMove   = []byte("!badger!move") // For key-value pairs which got moved during GC.
+	badgerPrefix      = []byte("!badger!")        // Prefix for internal keys used by badger.
+	head              = []byte("!badger!head")    // For storing value offset for replay.
+	txnKey            = []byte("!badger!txn")     // For indicating end of entries in txn.
+	badgerMove        = []byte("!badger!move")    // For key-value pairs which got moved during GC.
+	lfDiscardStatsKey = []byte("!badger!discard") // For storing lfDiscardStats
 )
 
 type closers struct {
@@ -126,9 +128,10 @@ func (db *DB) replayFunction() func(Entry, valuePointer) error {
 		}
 
 		v := y.ValueStruct{
-			Value:    nv,
-			Meta:     meta,
-			UserMeta: e.UserMeta,
+			Value:     nv,
+			Meta:      meta,
+			UserMeta:  e.UserMeta,
+			ExpiresAt: e.ExpiresAt,
 		}
 
 		if e.meta&bitFinTxn > 0 {
@@ -183,6 +186,8 @@ func Open(opt Options) (db *DB, err error) {
 	if opt.ReadOnly {
 		// Can't truncate if the DB is read only.
 		opt.Truncate = false
+		// Do not perform compaction in read only mode.
+		opt.CompactL0OnClose = false
 	}
 
 	for _, path := range []string{opt.Dir, opt.ValueDir} {
@@ -333,7 +338,7 @@ func (db *DB) Close() (err error) {
 	db.closers.writes.SignalAndWait()
 
 	// Now close the value log.
-	if vlogErr := db.vlog.Close(); err == nil {
+	if vlogErr := db.vlog.Close(); vlogErr != nil {
 		err = errors.Wrap(vlogErr, "DB.Close")
 	}
 
@@ -424,6 +429,12 @@ func (db *DB) Close() (err error) {
 const (
 	lockFile = "LOCK"
 )
+
+// Sync syncs database content to disk. This function provides
+// more control to user to sync data whenever required.
+func (db *DB) Sync() error {
+	return db.vlog.sync(math.MaxUint32)
+}
 
 // When you create or delete a file, you have to ensure the directory entry for the file is synced
 // in order to guarantee the file is visible (if the system crashes).  (See the man page for fsync,
@@ -602,7 +613,7 @@ func (db *DB) writeRequests(reqs []*request) error {
 		}
 		count += len(b.Entries)
 		var i uint64
-		for err := db.ensureRoomForWrite(); err == errNoRoom; err = db.ensureRoomForWrite() {
+		for err = db.ensureRoomForWrite(); err == errNoRoom; err = db.ensureRoomForWrite() {
 			i++
 			if i%100 == 0 {
 				db.elog.Printf("Making room for writes")
@@ -759,7 +770,7 @@ func (db *DB) ensureRoomForWrite() error {
 	case db.flushChan <- flushTask{mt: db.mt, vptr: db.vhead}:
 		db.elog.Printf("Flushing value log to disk if async mode.")
 		// Ensure value log is synced to disk so this memtable's contents wouldn't be lost.
-		err = db.vlog.sync()
+		err = db.vlog.sync(db.vhead.Fid)
 		if err != nil {
 			return err
 		}
@@ -782,7 +793,7 @@ func arenaSize(opt Options) int64 {
 }
 
 // WriteLevel0Table flushes memtable.
-func writeLevel0Table(ft flushTask, f *os.File) error {
+func writeLevel0Table(ft flushTask, f io.Writer) error {
 	iter := ft.mt.NewIterator()
 	defer iter.Close()
 	b := table.NewTableBuilder()
@@ -818,6 +829,10 @@ func (db *DB) handleFlushTask(ft flushTask) error {
 		// commits.
 		headTs := y.KeyWithTs(head, db.orc.nextTs())
 		ft.mt.Put(headTs, y.ValueStruct{Value: offset})
+
+		// Also store lfDiscardStats before flushing memtables
+		discardStatsKey := y.KeyWithTs(lfDiscardStatsKey, 1)
+		ft.mt.Put(discardStatsKey, y.ValueStruct{Value: db.vlog.encodedDiscardStats()})
 	}
 
 	fileID := db.lc.reserveFileID()
@@ -1004,7 +1019,7 @@ func (db *DB) RunValueLogGC(discardRatio float64) error {
 
 // Size returns the size of lsm and value log files in bytes. It can be used to decide how often to
 // call RunValueLogGC.
-func (db *DB) Size() (lsm int64, vlog int64) {
+func (db *DB) Size() (lsm, vlog int64) {
 	if y.LSMSize.Get(db.opt.Dir) == nil {
 		lsm, vlog = 0, 0
 		return
@@ -1114,16 +1129,18 @@ func (db *DB) GetSequence(key []byte, bandwidth uint64) (*Sequence, error) {
 	return seq, err
 }
 
-// Tables gets the TableInfo objects from the level controller.
-func (db *DB) Tables() []TableInfo {
-	return db.lc.getTableInfo()
+// Tables gets the TableInfo objects from the level controller. If withKeysCount
+// is true, TableInfo objects also contain counts of keys for the tables.
+func (db *DB) Tables(withKeysCount bool) []TableInfo {
+	return db.lc.getTableInfo(withKeysCount)
 }
 
 // KeySplits can be used to get rough key ranges to divide up iteration over
 // the DB.
 func (db *DB) KeySplits(prefix []byte) []string {
 	var splits []string
-	for _, ti := range db.Tables() {
+	// We just want table ranges here and not keys count.
+	for _, ti := range db.Tables(false) {
 		// We don't use ti.Left, because that has a tendency to store !badger
 		// keys.
 		if bytes.HasPrefix(ti.Right, prefix) {
