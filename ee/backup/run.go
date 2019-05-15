@@ -113,7 +113,7 @@ func run() error {
 		}
 		defer db.Close()
 		fmt.Println("--- Creating new db:", bo.Dir)
-		return db.Load(r)
+		return db.Load(r, 16 /* maxPendingWrites */)
 	})
 	if err != nil {
 		return err
