@@ -121,15 +121,17 @@ func (p *proposals) Done(key string, err error) {
 	pd.Errc <- err
 }
 
+// TODO(martinmr): Getting the lock is not really doing anything to protect the node
+// after this method returns.
 func (w *RaftServer) node() *Node {
-	w.nodeLock.RLock()
-	defer w.nodeLock.RUnlock()
+	w.m.RLock()
+	defer w.m.RUnlock()
 	return w.Node
 }
 
 // RaftServer stores a RAFT node along with a lock.
 type RaftServer struct {
-	nodeLock sync.RWMutex // protects Node.
+	m sync.RWMutex
 	Node     *Node
 }
 
