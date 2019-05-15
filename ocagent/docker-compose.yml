@@ -63,7 +63,7 @@ services:
       target: /host/sys/fs/cgroup
       read_only: true
     environment:
-    - DD_API_KEY=<key goes here>
+    - DD_API_KEY
     - DD_APM_ENABLED=true
     - DD_APM_NON_LOCAL_TRAFFIC=true
     ports:
