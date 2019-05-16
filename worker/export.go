@@ -131,8 +131,10 @@ func facetToString(fct *api.Facet) (string, error) {
 	return v2.Value.(string), nil
 }
 
-// jsonString converts a string into a valid JSON string.
-func jsonString(str string) string {
+// escapedString converts a string into an escaped string for exports.
+func escapedString(str string) string {
+	// We use the Marshal function in the JSON package for all export formats
+	// because it properly escapes strings.
 	byt, err := json.Marshal(str)
 	if err != nil {
 		// All valid stings should be able to be escaped to a JSON string so
@@ -185,7 +187,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !val.Tid.IsNumber() {
-				str = jsonString(str)
+				str = escapedString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -207,7 +209,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !tid.IsNumber() {
-				str = jsonString(str)
+				str = escapedString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -239,7 +241,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
-			fmt.Fprintf(bp, "%s", jsonString(str))
+			fmt.Fprintf(bp, "%s", escapedString(str))
 
 			tid := types.TypeID(p.ValType)
 			if p.PostingType == pb.Posting_VALUE_LANG {
@@ -274,7 +276,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 
 				if tid == types.StringID {
-					str = jsonString(str)
+					str = escapedString(str)
 				}
 				fmt.Fprint(bp, str)
 			}
