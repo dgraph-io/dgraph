@@ -64,7 +64,9 @@ type Counter struct {
 	Uid string `json:"uid"`
 	Val int    `json:"val"`
 
-	startTs uint64 // Only used for internal testing.
+	startTs  uint64 // Only used for internal testing.
+	qLatency time.Duration
+	mLatency time.Duration
 }
 
 func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
@@ -81,8 +83,6 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	// Total query latency is sum of encoding, parsing and processing latencies.
 	queryLatency := resp.Latency.GetEncodingNs() +
 		resp.Latency.GetParsingNs() + resp.Latency.GetProcessingNs()
-	latency := time.Nanosecond * time.Duration(queryLatency)
-	fmt.Println("Query latency:", latency)
 
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
@@ -96,6 +96,7 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
 	counter.startTs = resp.GetTxn().GetStartTs()
+	counter.qLatency = time.Duration(queryLatency)
 	return counter, nil
 }
 
@@ -139,15 +140,13 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 
 	mutationLatency := resp.Latency.GetProcessingNs() +
 		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
-	latency := time.Nanosecond * time.Duration(mutationLatency)
-	fmt.Println("Mutation latency:", latency)
-
+	counter.mLatency = time.Duration(mutationLatency)
 	return counter, nil
 }
 
 func run(conf *viper.Viper) {
 	startTime := time.Now()
-	defer func() { fmt.Println("Total txn latency is:", time.Since(startTime)) }()
+	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()
 
 	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
@@ -173,14 +172,21 @@ retryConn:
 	}
 
 	for num > 0 {
+		txnST := time.Now() // Start time of transaction
 		cnt, err := process(dg, conf)
+		qLatency := cnt.qLatency
+		mLatency := cnt.mLatency
 		now := time.Now().UTC().Format(format)
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 			time.Sleep(time.Second)
 			goto retryConn
 		}
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
+		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ][ %s %s %s %s ]\n", now, cnt.Val,
+			cnt.startTs, qLatency.Round(time.Millisecond).String(),
+			mLatency.Round(time.Millisecond).String(),
+			(qLatency + mLatency).Round(time.Millisecond).String(),
+			time.Since(txnST).Round(time.Millisecond).String())
 		num--
 		time.Sleep(waitDur)
 	}
