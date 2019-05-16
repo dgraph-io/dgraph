@@ -133,7 +133,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
-	raftServer.Node = gr.Node.Node
+	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")

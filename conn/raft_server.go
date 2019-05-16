@@ -121,27 +121,41 @@ func (p *proposals) Done(key string, err error) {
 	pd.ErrCh <- err
 }
 
-// TODO(martinmr): Getting the lock is not really doing anything to protect the node
-// after this method returns.
-func (w *RaftServer) node() *Node {
-	w.m.RLock()
-	defer w.m.RUnlock()
-	return w.Node
-}
-
-// RaftServer stores a RAFT node along with a lock.
+// RaftServer is a wrapper around node that implements the Raft service.
 type RaftServer struct {
 	m    sync.RWMutex
-	Node *Node
+	node *Node
+}
+
+// UpdateNode safely updates the node.
+func (w *RaftServer) UpdateNode(n *Node) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+}
+
+// GetNode safely retrieves the node.
+func (w *RaftServer) GetNode() *Node {
+	w.m.RLock()
+	defer w.m.RUnlock()
+	return w.node
+}
+
+// NewRaftServer returns a pointer to a new RaftServer instance.
+func NewRaftServer(n *Node) *RaftServer {
+	return &RaftServer{node: n}
 }
 
 // IsPeer checks whether this node is a peer of the node sending the request.
 func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (*pb.PeerResponse,
 	error) {
-	node := w.node()
+	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
 		return &pb.PeerResponse{}, ErrNoNode
 	}
+
+	node.RLock()
+	defer node.RUnlock()
 
 	if node._confState == nil {
 		return &pb.PeerResponse{}, nil
@@ -163,7 +177,7 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	// Commenting out the following checks for now, until we get rid of groups.
 	// TODO: Uncomment this after groups is removed.
-	node := w.node()
+	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
 		return nil, ErrNoNode
 	}
@@ -203,14 +217,14 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 	}
 	span := otrace.FromContext(ctx)
 
-	n := w.node()
-	if n == nil || n.Raft() == nil {
+	node := w.GetNode()
+	if node == nil || node.Raft() == nil {
 		return ErrNoNode
 	}
-	span.Annotatef(nil, "Stream server is node %#x", n.Id)
+	span.Annotatef(nil, "Stream server is node %#x", node.Id)
 
 	var rc *pb.RaftContext
-	raft := w.node().Raft()
+	raft := node.Raft()
 	step := func(data []byte) error {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
@@ -236,7 +250,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			if glog.V(2) {
 				switch msg.Type {
 				case raftpb.MsgHeartbeat, raftpb.MsgHeartbeatResp:
-					atomic.AddInt64(&n.heartbeatsIn, 1)
+					atomic.AddInt64(&node.heartbeatsIn, 1)
 				case raftpb.MsgReadIndex, raftpb.MsgReadIndexResp:
 				case raftpb.MsgApp, raftpb.MsgAppResp:
 				case raftpb.MsgProp:
@@ -261,13 +275,13 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			return err
 		}
 		if loop%1e6 == 0 {
-			glog.V(2).Infof("%d messages received by %#x from %#x", loop, n.Id, rc.GetId())
+			glog.V(2).Infof("%d messages received by %#x from %#x", loop, node.Id, rc.GetId())
 		}
 		if loop == 1 {
 			rc = batch.GetContext()
 			span.Annotatef(nil, "Stream from %#x", rc.GetId())
 			if rc != nil {
-				n.Connect(rc.Id, rc.Addr)
+				node.Connect(rc.Id, rc.Addr)
 			}
 		}
 		if batch.Payload == nil {
