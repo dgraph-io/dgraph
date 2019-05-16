@@ -20,11 +20,11 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -54,6 +54,20 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:password",
 }
 
+// escapedString converts a string into an escaped string for exporting.
+func escapedString(str string) string {
+	// We use the Marshal function in the JSON package for all export formats
+	// because it properly escapes strings.
+	byt, err := json.Marshal(str)
+	if err != nil {
+		// All valid stings should be able to be escaped to a JSON string so
+		// it's safe to panic here. Marshal has to return an error because it
+		// accepts an interface.
+		panic("Could not marshal string to JSON string")
+	}
+	return string(byt)
+}
+
 func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) {
 	var buf bytes.Buffer
 
@@ -76,7 +90,7 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) 
 
 			// trim null character at end
 			trimmed := strings.TrimRight(str.Value.(string), "\x00")
-			buf.WriteString(strconv.Quote(trimmed))
+			buf.WriteString(escapedString(trimmed))
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.LangTag))
@@ -121,7 +135,7 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) 
 				}
 
 				if facetTid == types.StringID {
-					buf.WriteString(strconv.Quote(fStringVal.Value.(string)))
+					buf.WriteString(escapedString(fStringVal.Value.(string)))
 				} else {
 					buf.WriteString(fStringVal.Value.(string))
 				}
