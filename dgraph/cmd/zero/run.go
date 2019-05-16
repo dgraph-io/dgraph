@@ -90,7 +90,10 @@ instances to achieve high-availability.
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
-	flag.String("datadog.collector", "", "Send opencensus traces to Datadog.")
+	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
+	// about the status of supporting annotation logs through the datadog exporter
+	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
+		" exporter does not support annotation logs and would discard them.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
