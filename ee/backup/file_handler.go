@@ -72,11 +72,6 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 				return err
 			}
 
-			// No new changes since last backup.
-			if !req.Backup.ForceFull && m.Version >= req.Backup.ReadTs {
-				return ErrBackupNoChanges
-			}
-
 			// Return the version of last backup
 			req.Version = m.Version
 		}

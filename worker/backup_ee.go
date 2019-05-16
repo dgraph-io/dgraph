@@ -145,10 +145,6 @@ func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 
 	for range m.Groups {
 		if err := <-errCh; err != nil {
-			// No changes, nothing was done.
-			if err == backup.ErrBackupNoChanges {
-				return nil
-			}
 			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
