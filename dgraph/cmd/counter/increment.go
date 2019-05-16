@@ -96,7 +96,7 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
 	counter.startTs = resp.GetTxn().GetStartTs()
-	counter.qLatency = time.Duration(queryLatency)
+	counter.qLatency = time.Duration(queryLatency).Round(time.Millisecond)
 	return counter, nil
 }
 
@@ -140,7 +140,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 
 	mutationLatency := resp.Latency.GetProcessingNs() +
 		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
-	counter.mLatency = time.Duration(mutationLatency)
+	counter.mLatency = time.Duration(mutationLatency).Round(time.Millisecond)
 	return counter, nil
 }
 
@@ -172,21 +172,18 @@ retryConn:
 	}
 
 	for num > 0 {
-		txnST := time.Now() // Start time of transaction
+		txnStart := time.Now() // Start time of transaction
 		cnt, err := process(dg, conf)
-		qLatency := cnt.qLatency
-		mLatency := cnt.mLatency
 		now := time.Now().UTC().Format(format)
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 			time.Sleep(time.Second)
 			goto retryConn
 		}
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ][ %s %s %s %s ]\n", now, cnt.Val,
-			cnt.startTs, qLatency.Round(time.Millisecond).String(),
-			mLatency.Round(time.Millisecond).String(),
-			(qLatency + mLatency).Round(time.Millisecond).String(),
-			time.Since(txnST).Round(time.Millisecond).String())
+		serverLat := cnt.qLatency + cnt.mLatency
+		clientLat := time.Since(txnStart).Round(time.Millisecond)
+		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n", now, cnt.Val,
+			cnt.startTs, cnt.qLatency, cnt.mLatency, serverLat, clientLat, clientLat-serverLat)
 		num--
 		time.Sleep(waitDur)
 	}
