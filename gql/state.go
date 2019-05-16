@@ -28,16 +28,12 @@ const (
 	rightSquare = ']'
 	period      = '.'
 	comma       = ','
-	bang        = '!'
-	dollar      = '$'
 	slash       = '/'
-	backslash   = '\\'
 	equal       = '='
 	quote       = '"'
 	at          = '@'
 	colon       = ':'
 	lsThan      = '<'
-	grThan      = '>'
 	star        = '*'
 )
 
@@ -49,7 +45,6 @@ const (
 	itemEqual                                   // equals to symbol
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
-	itemString                                  // quoted string
 	itemLeftRound                               // left round bracket
 	itemRightRound                              // right round bracket
 	itemColon                                   // Colon
@@ -57,7 +52,6 @@ const (
 	itemPeriod                                  // .
 	itemDollar                                  // $
 	itemRegex                                   // /
-	itemBackslash                               // \
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemLeftSquare
