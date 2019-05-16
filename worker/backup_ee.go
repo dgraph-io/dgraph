@@ -118,6 +118,7 @@ func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 		SecretKey:    secretKey,
 		SessionToken: sessionToken,
 		Anonymous:    anonymous,
+		// TODO(martinmr): Check if this field can be removed.
 		ForceFull:    forceFull,
 	}
 	m := backup.Manifest{Groups: groups().KnownGroups()}
