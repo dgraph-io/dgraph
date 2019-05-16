@@ -488,6 +488,7 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
 		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
 			glog.Warningf("Pending size should remain above zero: %d", sz)
