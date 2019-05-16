@@ -23,7 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -72,7 +72,6 @@ type Options struct {
 	TempFS        bool
 	UserOwnership bool
 	Jaeger        bool
-	Datadog       bool
 	Metrics       bool
 	PortOffset    int
 	Verbosity     int
@@ -161,9 +160,6 @@ func initService(basename string, idx, grpcPort int) Service {
 	if opts.Jaeger {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
-	if opts.Datadog {
-		svc.Command += " --datadog.collector=datadog:8126"
-	}
 
 	return svc
 }
@@ -229,32 +225,21 @@ func getAlpha(idx int) Service {
 	return svc
 }
 
-func getDatadog() Service {
-	svc := Service{
-		Image:         "datadog/agent:latest",
-		ContainerName: "datadog",
-		WorkingDir:    "/working/datadog",
-		Ports: []string{
-			toExposedPort(8126),
-		},
-		Environment: []string{"DD_API_KEY=12345",
-			"DD_APM_ENABLED=true",
-			"DD_APM_NON_LOCAL_TRAFFIC=true",
-		},
-	}
-	return svc
-}
-
 func getJaeger() Service {
 	svc := Service{
 		Image:         "jaegertracing/all-in-one:latest",
 		ContainerName: "jaeger",
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
+			toExposedPort(14268),
 			toExposedPort(16686),
 		},
-		Environment: []string{"COLLECTOR_ZIPKIN_HTTP_PORT=9411"},
-		Command:     "--memory.max-traces=1000000",
+		Environment: []string{
+			"SPAN_STORAGE_TYPE=badger",
+		},
+		Command: "--badger.ephemeral=false" +
+			" --badger.directory-key /working/jaeger" +
+			" --badger.directory-value /working/jaeger",
 	}
 	return svc
 }
@@ -362,8 +347,6 @@ func main() {
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
-	cmd.PersistentFlags().BoolVarP(&opts.Datadog, "datadog", "g", false,
-		"include datadog service")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
 	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
@@ -434,10 +417,6 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
-	}
-
-	if opts.Datadog {
-		services["datadog"] = getDatadog()
 	}
 
 	if opts.Metrics {
