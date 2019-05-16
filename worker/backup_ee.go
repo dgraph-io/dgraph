@@ -119,7 +119,7 @@ func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 		SessionToken: sessionToken,
 		Anonymous:    anonymous,
 		// TODO(martinmr): Check if this field can be removed.
-		ForceFull:    forceFull,
+		ForceFull: forceFull,
 	}
 	m := backup.Manifest{Groups: groups().KnownGroups()}
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
