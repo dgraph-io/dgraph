@@ -67,7 +67,7 @@ type Counter struct {
 	startTs uint64 // Only used for internal testing.
 }
 
-func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
+func queryCounter(txn *dgo.Txn, pred string) (Counter, uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -75,18 +75,16 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", pred, pred)
 	resp, err := txn.Query(ctx, query)
 	if err != nil {
-		return counter, fmt.Errorf("Query error: %v", err)
+		return counter, 0, fmt.Errorf("Query error: %v", err)
 	}
 
 	// Total query latency is sum of encoding, parsing and processing latencies.
 	queryLatency := resp.Latency.GetEncodingNs() +
 		resp.Latency.GetParsingNs() + resp.Latency.GetProcessingNs()
-	latency := time.Nanosecond * time.Duration(queryLatency)
-	fmt.Println("Query latency:", latency)
 
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
-		return counter, err
+		return counter, 0, err
 	}
 	if len(m["q"]) == 0 {
 		// Do nothing.
@@ -96,10 +94,10 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
 	counter.startTs = resp.GetTxn().GetStartTs()
-	return counter, nil
+	return counter, queryLatency, nil
 }
 
-func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
+func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, uint64, uint64, error) {
 	ro := conf.GetBool("ro")
 	be := conf.GetBool("be")
 	pred := conf.GetString("pred")
@@ -115,12 +113,12 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	}
 	defer txn.Discard(nil)
 
-	counter, err := queryCounter(txn, pred)
+	counter, qLatency, err := queryCounter(txn, pred)
 	if err != nil {
-		return Counter{}, err
+		return Counter{}, 0, 0, err
 	}
 	if be || ro {
-		return counter, nil
+		return counter, qLatency, 0, nil
 	}
 
 	counter.Val++
@@ -134,20 +132,18 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	// Don't put any timeout for mutation.
 	resp, err := txn.Mutate(context.Background(), &mu)
 	if err != nil {
-		return Counter{}, err
+		return Counter{}, 0, 0, err
 	}
 
-	mutationLatency := resp.Latency.GetProcessingNs() +
+	mLatency := resp.Latency.GetProcessingNs() +
 		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
-	latency := time.Nanosecond * time.Duration(mutationLatency)
-	fmt.Println("Mutation latency:", latency)
 
-	return counter, nil
+	return counter, qLatency, mLatency, nil
 }
 
 func run(conf *viper.Viper) {
 	startTime := time.Now()
-	defer func() { fmt.Println("Total txn latency is:", time.Since(startTime)) }()
+	defer func() { fmt.Println("Total:", time.Since(startTime).Truncate(time.Millisecond)) }()
 
 	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
@@ -173,14 +169,18 @@ retryConn:
 	}
 
 	for num > 0 {
-		cnt, err := process(dg, conf)
+		startTime := time.Now()
+		cnt, qLatency, mLatency, err := process(dg, conf)
 		now := time.Now().UTC().Format(format)
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 			time.Sleep(time.Second)
 			goto retryConn
 		}
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
+		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ][ ", now, cnt.Val, cnt.startTs)
+		fmt.Println(time.Duration(qLatency).Truncate(time.Millisecond)*time.Nanosecond,
+			time.Duration(mLatency).Truncate(time.Millisecond)*time.Nanosecond,
+			time.Since(startTime).Truncate(time.Millisecond), "]")
 		num--
 		time.Sleep(waitDur)
 	}
