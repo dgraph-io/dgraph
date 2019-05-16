@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"contrib.go.opencensus.io/exporter/jaeger"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -91,6 +90,10 @@ instances to achieve high-availability.
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
+	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
+	// about the status of supporting annotation logs through the datadog exporter
+	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
+		" exporter does not support annotation logs and would discard them.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -106,24 +109,7 @@ type state struct {
 }
 
 func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
-	if collector := Zero.Conf.GetString("jaeger.collector"); len(collector) > 0 {
-		// Port details: https://www.jaegertracing.io/docs/getting-started/
-		// Default collectorEndpointURI := "http://localhost:14268"
-		je, err := jaeger.NewExporter(jaeger.Options{
-			Endpoint:    collector,
-			ServiceName: "dgraph.zero",
-		})
-		if err != nil {
-			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
-		}
-		// And now finally register it as a Trace Exporter
-		otrace.RegisterExporter(je)
-	}
-	// Exclusively for stats, metrics, etc. Not for tracing.
-	// var views = append(ocgrpc.DefaultServerViews, ocgrpc.DefaultClientViews...)
-	// if err := view.Register(views...); err != nil {
-	// 	glog.Fatalf("Unable to register OpenCensus stats: %v", err)
-	// }
+	x.RegisterExporters(Zero.Conf, "dgraph.zero")
 
 	s := grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
