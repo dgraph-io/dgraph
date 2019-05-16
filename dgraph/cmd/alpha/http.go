@@ -94,13 +94,15 @@ func readRequest(w http.ResponseWriter, r *http.Request) []byte {
 	return body
 }
 
-// parseUint64 parses string into uint64, empty string is converted into zero value
-func parseUint64(value, name string) (uint64, error) {
+// parseUint64 reads the value for given URL parameter from request and
+// parses it into uint64, empty string is converted into zero value
+func parseUint64(r *http.Request, name string) (uint64, error) {
+	value := r.URL.Query().Get(name)
 	if value == "" {
 		return 0, nil
 	}
 
-	uintVal, err := strconv.ParseUint(value, 10, 64)
+	uintVal, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
 		return 0, fmt.Errorf("Error: %+v while parsing %s as uint64", err, name)
 	}
@@ -108,8 +110,10 @@ func parseUint64(value, name string) (uint64, error) {
 	return uintVal, nil
 }
 
-// parseBool parses string into bool, empty string is converted into zero value
-func parseBool(value, name string) (bool, error) {
+// parseBool reads the value for given URL parameter from request and
+// parses it into bool, empty string is converted into zero value
+func parseBool(r *http.Request, name string) (bool, error) {
+	value := r.URL.Query().Get(name)
 	if value == "" {
 		return false, nil
 	}
@@ -122,8 +126,10 @@ func parseBool(value, name string) (bool, error) {
 	return boolval, nil
 }
 
-// parseDuration parses string into time.Duration, empty string is converted into zero value
-func parseDuration(value, name string) (time.Duration, error) {
+// parseDuration reads the value for given URL parameter from request and
+// parses it into time.Duration, empty string is converted into zero value
+func parseDuration(r *http.Request, name string) (time.Duration, error) {
+	value := r.URL.Query().Get(name)
 	if value == "" {
 		return 0, nil
 	}
@@ -157,17 +163,17 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isDebugMode, err := parseBool(r.URL.Query().Get("debug"), "debug")
+	isDebugMode, err := parseBool(r, "debug")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	queryTimeout, err := parseDuration(r.URL.Query().Get("timeout"), "timeout")
+	queryTimeout, err := parseDuration(r, "timeout")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	startTs, err := parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	startTs, err := parseUint64(r, "startTs")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -207,37 +213,37 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 	}
 
-	queryReq := api.Request{
+	req := api.Request{
 		Vars:    params.Variables,
 		Query:   params.Query,
 		StartTs: startTs,
 	}
 
-	if queryReq.StartTs == 0 {
+	if req.StartTs == 0 {
 		// If be is set, run this as a best-effort query.
-		isBestEffort, err := parseBool(r.URL.Query().Get("be"), "be")
+		isBestEffort, err := parseBool(r, "be")
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
 		if isBestEffort {
-			queryReq.BestEffort = true
-			queryReq.ReadOnly = true
+			req.BestEffort = true
+			req.ReadOnly = true
 		}
 
 		// If ro is set, run this as a readonly query.
-		isReadOnly, err := parseBool(r.URL.Query().Get("ro"), "ro")
+		isReadOnly, err := parseBool(r, "ro")
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
 		if isReadOnly {
-			queryReq.ReadOnly = true
+			req.ReadOnly = true
 		}
 	}
 
 	// Core processing happens here.
-	resp, err := (&edgraph.Server{}).Query(ctx, &queryReq)
+	resp, err := (&edgraph.Server{}).Query(ctx, &req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -276,12 +282,12 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	commitNow, err := parseBool(r.URL.Query().Get("commitNow"), "commitNow")
+	commitNow, err := parseBool(r, "commitNow")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	startTs, err := parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	startTs, err := parseUint64(r, "startTs")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -387,7 +393,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startTs, err := parseUint64(r.URL.Query().Get("startTs"), "startTs")
+	startTs, err := parseUint64(r, "startTs")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -398,7 +404,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	aborted, err := parseBool(r.URL.Query().Get("aborted"), "aborted")
+	aborted, err := parseBool(r, "aborted")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
