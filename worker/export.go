@@ -131,7 +131,7 @@ func facetToString(fct *api.Facet) (string, error) {
 	return v2.Value.(string), nil
 }
 
-// escapedString converts a string into properly escaped string.
+// escapedString converts a string into an escaped strings for exports.
 func escapedString(str string) string {
 	// We use the Marshal function in the JSON package for all export formats
 	// because it properly escapes strings.
