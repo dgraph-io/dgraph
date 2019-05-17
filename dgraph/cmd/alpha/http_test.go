@@ -48,7 +48,12 @@ type res struct {
 	Errors     []respError       `json:"errors,omitempty"`
 }
 
-func queryWithGz(q string, gzReq bool, gzResp bool, timeout string) (
+type params struct {
+	Query     string            `json:"query"`
+	Variables map[string]string `json:"variables"`
+}
+
+func queryWithGz(q, t string, gzReq bool, gzResp bool, timeout string) (
 	string, *http.Response, error) {
 
 	url := addr + "/query"
@@ -71,6 +76,7 @@ func queryWithGz(q string, gzReq bool, gzResp bool, timeout string) (
 	if err != nil {
 		return "", nil, err
 	}
+	req.Header.Add("Content-Type", t)
 
 	if gzReq {
 		req.Header.Set("Content-Encoding", "gzip")
@@ -124,13 +130,13 @@ func queryWithGz(q string, gzReq bool, gzResp bool, timeout string) (
 	return string(output), resp, err
 }
 
-func queryWithTs(q string, ts uint64) (string, uint64, error) {
+func queryWithTs(q, t string, ts uint64) (string, uint64, error) {
 	url := addr + "/query"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
 	}
 
-	_, body, err := runWithRetries("POST", url, q)
+	_, body, err := runWithRetries("POST", t, url, q)
 	if err != nil {
 		return "", 0, err
 	}
@@ -148,7 +154,7 @@ func queryWithTs(q string, ts uint64) (string, uint64, error) {
 	return string(output), startTs, err
 }
 
-func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict bool,
+func mutationWithTs(m, t string, isJson bool, commitNow bool, ignoreIndexConflict bool,
 	ts uint64) ([]string, []string, uint64, error) {
 
 	queryParams := make([]string, 0)
@@ -157,15 +163,12 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	}
 	var keys []string
 	var preds []string
-	if isJson {
-		queryParams = append(queryParams, "mutationType=json")
-	}
 	if commitNow {
 		queryParams = append(queryParams, "commitNow=true")
 	}
 
 	url := addr + "/mutate?" + strings.Join(queryParams, "&")
-	_, body, err := runWithRetries("POST", url, m)
+	_, body, err := runWithRetries("POST", t, url, m)
 	if err != nil {
 		return keys, preds, 0, err
 	}
@@ -177,17 +180,23 @@ func mutationWithTs(m string, isJson bool, commitNow bool, ignoreIndexConflict b
 	return r.Extensions.Txn.Keys, r.Extensions.Txn.Preds, startTs, nil
 }
 
-func createRequest(method, url string, body string) (*http.Request,
-	error) {
+func createRequest(method, contentType, url string, body string) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		return nil, err
 	}
+
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
 	return req, nil
 }
 
-func runWithRetries(method, url string, body string) (*x.QueryResWithData, []byte, error) {
-	req, err := createRequest(method, url, body)
+func runWithRetries(method, contentType, url string, body string) (
+	*x.QueryResWithData, []byte, error) {
+
+	req, err := createRequest(method, contentType, url, body)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -200,7 +209,7 @@ func runWithRetries(method, url string, body string) (*x.QueryResWithData, []byt
 		})
 
 		// create a new request since the previous request would have been closed upon the err
-		retryReq, err := createRequest(method, url, body)
+		retryReq, err := createRequest(method, contentType, url, body)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -287,7 +296,7 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, 0)
+	_, ts, err := queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -300,7 +309,7 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, preds, mts, err := mutationWithTs(m1, false, false, true, ts)
+	keys, preds, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
@@ -313,18 +322,18 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
-	data, _, err := queryWithTs(q1, 0)
+	data, _, err := queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, ts)
+	data, _, err = queryWithTs(q1, "application/graphql", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(keys, preds, ts))
-	data, _, err = queryWithTs(q1, 0)
+	data, _, err = queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -341,7 +350,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, 0)
+	_, ts, err := queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -354,23 +363,23 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
 
-	data, _, err := queryWithTs(q1, 0)
+	data, _, err := queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, ts)
+	data, _, err = queryWithTs(q1, "application/graphql", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(keys, nil, ts))
-	data, _, err = queryWithTs(q1, 0)
+	data, _, err = queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -387,7 +396,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, 0)
+	_, ts, err := queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -400,23 +409,30 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
 
-	data, _, err := queryWithTs(q1, 0)
+	data, _, err := queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, ts)
+	data, _, err = queryWithTs(q1, "application/graphql", ts)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+
+	// One more time, with json content type this time.
+	d1, err := json.Marshal(params{Query: q1})
+	require.NoError(t, err)
+	data, _, err = queryWithTs(string(d1), "application/json", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit (using a list of keys instead of a map) and query.
 	require.NoError(t, commitWithTsKeysOnly(keys, ts))
-	data, _, err = queryWithTs(q1, 0)
+	data, _, err = queryWithTs(q1, "application/graphql", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -438,13 +454,20 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 }
 
 func TestHttpCompressionSupport(t *testing.T) {
-
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`name: string @index(term) .`))
 
 	q1 := `
 	{
 	  names(func: has(name), orderasc: name) {
+	    name
+	  }
+	}
+	`
+
+	q2 := `
+	query all($name: string) {
+	  names(func: eq(name, $name)) {
 	    name
 	  }
 	}
@@ -476,33 +499,53 @@ func TestHttpCompressionSupport(t *testing.T) {
 	err := runMutation(m1)
 	require.NoError(t, err)
 
-	data, resp, err := queryWithGz(q1, false, false, "")
+	data, resp, err := queryWithGz(q1, "application/graphql", false, false, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, false, true, "")
+	data, resp, err = queryWithGz(q1, "application/graphql", false, true, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, true, false, "")
+	data, resp, err = queryWithGz(q1, "application/graphql", true, false, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, true, true, "")
+	data, resp, err = queryWithGz(q1, "application/graphql", true, true, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, resp, err = queryWithGz(q1, false, false, "1ms")
+	data, resp, err = queryWithGz(q1, "application/graphql", false, false, "1ms")
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 
-	data, resp, err = queryWithGz(q1, false, false, "1s")
+	data, resp, err = queryWithGz(q1, "application/graphql", false, false, "1s")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	d1, err := json.Marshal(params{Query: q1})
+	require.NoError(t, err)
+	data, resp, err = queryWithGz(string(d1), "application/json", false, false, "1s")
+	require.NoError(t, err)
+	require.Equal(t, r1, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	d2, err := json.Marshal(params{
+		Query: q2,
+		Variables: map[string]string{
+			"$name": "Alice",
+		},
+	})
+	require.NoError(t, err)
+	data, resp, err = queryWithGz(string(d2), "application/json", false, false, "1s")
+	require.NoError(t, err)
+	fmt.Println(data)
+	require.Equal(t, `{"data":{"names":[{"name":"Alice"}]}}`, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 }
