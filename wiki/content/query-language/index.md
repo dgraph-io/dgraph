@@ -2049,11 +2049,11 @@ Query:
 
 ### Upsert directive
 
-Predicates can specify the `@upsert` directive in the schema if you want to do
-upsert operations against it. If the `@upsert` directive is specified then the
-index key for the predicate would be checked for conflict while committing a
-transaction. The `@upsert` directive helps enforce uniqueness constraints when
-running concurrent upserts.
+To use [upsert operations]({{< relref "howto/index.md#upserts">}}) on a
+predicate, specify the `@upsert` directive in the schema. When committing
+transactions involving predicates with the `@upsert` directive, Dgraph checks
+index keys for conflicts, helping to enforce uniqueness constraints when running
+concurrent upserts.
 
 This is how you specify the upsert directive for a predicate.
 ```
