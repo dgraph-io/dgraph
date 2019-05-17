@@ -121,23 +121,28 @@ func processToFastJSON(q string) string {
 	return string(buf)
 }
 
-func runQuery(q string) (string, error) {
-	output, _, err := queryWithTs(q, 0)
+func runGraphqlQuery(q string) (string, error) {
+	output, _, err := queryWithTs(q, "application/graphql", 0)
+	return string(output), err
+}
+
+func runJSONQuery(q string) (string, error) {
+	output, _, err := queryWithTs(q, "application/json", 0)
 	return string(output), err
 }
 
 func runMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, false, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, false, 0)
 	return err
 }
 
-func runJsonMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, true, true, false, 0)
+func runJSONMutation(m string) error {
+	_, _, _, err := mutationWithTs(m, "application/json", true, true, false, 0)
 	return err
 }
 
 func alterSchema(s string) error {
-	_, _, err := runWithRetries("PUT", addr+"/alter", s)
+	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
 	if err != nil {
 		return fmt.Errorf("error while running request with retries: %v", err)
 	}
@@ -156,13 +161,13 @@ func alterSchemaWithRetry(s string) error {
 
 func dropAll() error {
 	op := `{"drop_all": true}`
-	_, _, err := runWithRetries("PUT", addr+"/alter", op)
+	_, _, err := runWithRetries("PUT", "", addr+"/alter", op)
 	return err
 }
 
 func deletePredicate(pred string) error {
 	op := `{"drop_attr": "` + pred + `"}`
-	_, _, err := runWithRetries("PUT", addr+"/alter", op)
+	_, _, err := runWithRetries("PUT", "", addr+"/alter", op)
 	return err
 }
 
@@ -235,7 +240,7 @@ func TestDeletePredicate(t *testing.T) {
 	err = runMutation(m1)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	var m map[string]interface{}
 	err = json.Unmarshal([]byte(output), &m)
@@ -243,12 +248,12 @@ func TestDeletePredicate(t *testing.T) {
 	friends := m["data"].(map[string]interface{})["user"].([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
 	require.Equal(t, 2, len(friends))
 
-	output, err = runQuery(q2)
+	output, err = runGraphqlQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}}`,
 		output)
 
-	output, err = runQuery(q3)
+	output, err = runGraphqlQuery(q3)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}}`, output)
 
@@ -257,7 +262,7 @@ func TestDeletePredicate(t *testing.T) {
 	err = deletePredicate("salary")
 	require.NoError(t, err)
 
-	output, err = runQuery(`schema{}`)
+	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
 	z.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
@@ -266,15 +271,15 @@ func TestDeletePredicate(t *testing.T) {
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
 			"list":true}]}}`, output)
 
-	output, err = runQuery(q1)
+	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
-	output, err = runQuery(q2)
+	output, err = runGraphqlQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": [{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}}`, output)
 
-	output, err = runQuery(q4)
+	output, err = runGraphqlQuery(q4)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"age": "13"}]}}`, output)
 
@@ -320,7 +325,7 @@ func TestSchemaMutation(t *testing.T) {
 	err := alterSchemaWithRetry(m)
 	require.NoError(t, err)
 
-	output, err := runQuery("schema {}")
+	output, err := runGraphqlQuery("schema {}")
 	require.NoError(t, err)
 	got := make(map[string]Received)
 	require.NoError(t, json.Unmarshal([]byte(output), &got))
@@ -346,12 +351,11 @@ func TestSchemaMutation1(t *testing.T) {
 			<0x1234> <pred2> "12345" .
 		}
 	}
-
 `
 	err := runMutation(m)
 	require.NoError(t, err)
 
-	output, err := runQuery("schema {}")
+	output, err := runGraphqlQuery("schema {}")
 	require.NoError(t, err)
 	got := make(map[string]Received)
 	require.NoError(t, json.Unmarshal([]byte(output), &got))
@@ -503,7 +507,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
@@ -543,7 +547,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	err = runMutation(m)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
@@ -551,7 +555,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	_, err = runQuery(q1)
+	_, err = runGraphqlQuery(q1)
 	require.Error(t, err)
 }
 
@@ -587,7 +591,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	err = alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
@@ -631,7 +635,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
@@ -639,7 +643,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	err = alterSchemaWithRetry(s2)
 	require.NoError(t, err)
 
-	_, err = runQuery(q1)
+	_, err = runGraphqlQuery(q1)
 	require.Error(t, err)
 }
 
@@ -679,7 +683,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 }
@@ -730,10 +734,10 @@ func TestJsonMutation(t *testing.T) {
 	err := alterSchemaWithRetry(s1)
 	require.NoError(t, err)
 
-	err = runJsonMutation(m1)
+	err = runJSONMutation(m1)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	q1Result := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
@@ -753,10 +757,10 @@ func TestJsonMutation(t *testing.T) {
 	}
 	require.Equal(t, 1, count)
 
-	err = runJsonMutation(fmt.Sprintf(m2, uid))
+	err = runJSONMutation(fmt.Sprintf(m2, uid))
 	require.NoError(t, err)
 
-	output, err = runQuery(q2)
+	output, err = runGraphqlQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"q":[{"name":"Bob"}]}}`, output)
 }
@@ -782,10 +786,10 @@ func TestJsonMutationNumberParsing(t *testing.T) {
 	`
 	require.NoError(t, dropAll())
 	schema.ParseBytes([]byte(""), 1)
-	err := runJsonMutation(m1)
+	err := runJSONMutation(m1)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	var q1Result struct {
 		Data struct {
@@ -876,11 +880,11 @@ func TestDeleteAll(t *testing.T) {
 	err = runMutation(m1)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
-	output, err = runQuery(q2)
+	output, err = runGraphqlQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}}`,
 		output)
@@ -888,11 +892,11 @@ func TestDeleteAll(t *testing.T) {
 	err = runMutation(m2)
 	require.NoError(t, err)
 
-	output, err = runQuery(q1)
+	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 
-	output, err = runQuery(q2)
+	output, err = runGraphqlQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
@@ -929,7 +933,7 @@ var q5 = `
 func TestSchemaValidationError(t *testing.T) {
 	_, err := gql.Parse(gql.Request{Str: m5})
 	require.Error(t, err)
-	output, err := runQuery(strings.Replace(q5, "<id>", "0x8", -1))
+	output, err := runGraphqlQuery(strings.Replace(q5, "<id>", "0x8", -1))
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user": []}}`, output)
 }
@@ -1140,7 +1144,7 @@ func TestMultipleValues(t *testing.T) {
 				occupations
 			}
 		}`
-	res, err := runQuery(q)
+	res, err := runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 }
@@ -1172,7 +1176,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 				occupations
 			}
 		}`
-	res, err := runQuery(q)
+	res, err := runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 
@@ -1182,7 +1186,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 			}
 	}`
 
-	res, err = runQuery(q)
+	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 
@@ -1192,7 +1196,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 			}
 	}`
 
-	res, err = runQuery(q)
+	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 
@@ -1211,7 +1215,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, alterSchemaWithRetry(m))
 
 	q = `schema{}`
-	res, err = runQuery(q)
+	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	z.CompareJSON(t, `{"data":{"schema":[`+
 		x.AclPredicates+","+
@@ -1269,7 +1273,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	  }
 	}`, "0x12345")
 
-	output, err := runQuery(q)
+	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"July 3 2017","date":"2017-07-03T03:49:03+00:00","weight":"262.3","lifeLoad":"5","stressLevel":"3"}]}}`, output)
 
@@ -1283,7 +1287,7 @@ func TestDeleteAllSP2(t *testing.T) {
 	err = runMutation(m)
 	require.NoError(t, err)
 
-	output, err = runQuery(q)
+	output, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
@@ -1313,7 +1317,7 @@ func TestDeleteScalarValue(t *testing.T) {
 	  }
 	}`
 	for i := 0; i < 5; i++ {
-		output, err := runQuery(q)
+		output, err := runGraphqlQuery(q)
 		if err != nil || !assert.JSONEq(t, output, `{"data": {"me":[{"name":"xxx"}]}}`) {
 			time.Sleep(100 * time.Millisecond)
 			continue
@@ -1333,7 +1337,7 @@ func TestDeleteScalarValue(t *testing.T) {
 
 	// Verify triple was not deleted because the value in the request did
 	// not match the existing value.
-	output, err := runQuery(q)
+	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[{"name":"xxx"}]}}`, output)
 
@@ -1348,7 +1352,7 @@ func TestDeleteScalarValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify triple was actually deleted this time.
-	output, err = runQuery(q)
+	output, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[]}}`, output)
 }
@@ -1376,7 +1380,7 @@ func TestDeleteValueLang(t *testing.T) {
 		name@*
 	  }
 	}`
-	output, err := runQuery(q)
+	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"me":[
 		{"name@en":"Mark", "name@es":"Marco", "name@fr":"Marc"}]}}`, output)
@@ -1392,7 +1396,7 @@ func TestDeleteValueLang(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify only the specific tagged value was deleted.
-	output, err = runQuery(q)
+	output, err = runGraphqlQuery(q)
 	require.NoError(t, err)
 	require.JSONEq(t, output, `{"data": {"me":[{"name@en":"Mark", "name@es":"Marco"}]}}`)
 }
@@ -1419,7 +1423,7 @@ func TestDropAll(t *testing.T) {
 	err = runMutation(m1)
 	require.NoError(t, err)
 
-	output, err := runQuery(q1)
+	output, err := runGraphqlQuery(q1)
 	require.NoError(t, err)
 	q1Result := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(output), &q1Result))
@@ -1431,7 +1435,7 @@ func TestDropAll(t *testing.T) {
 	require.NoError(t, err)
 
 	q3 := "schema{}"
-	output, err = runQuery(q3)
+	output, err = runGraphqlQuery(q3)
 	require.NoError(t, err)
 	z.CompareJSON(t,
 		`{"data":{"schema":[`+
@@ -1450,7 +1454,7 @@ func TestDropAll(t *testing.T) {
 			name
 		}
 	}`
-	output, err = runQuery(q5)
+	output, err = runGraphqlQuery(q5)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"q":[]}}`, output)
 }
@@ -1465,7 +1469,7 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 			count
 		}
 	}`
-	_, err := runQuery(q)
+	_, err := runGraphqlQuery(q)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "count")
 	require.Contains(t, err.Error(), "zero")
@@ -1475,14 +1479,14 @@ func TestIllegalCountInQueryFn(t *testing.T) {
 // This test couldn't like in query package because that package tries to do some extra JSON
 // marshal, which causes issues for this case.
 func TestJsonUnicode(t *testing.T) {
-	err := runJsonMutation(`{
+	err := runJSONMutation(`{
   "set": [
   { "uid": "0x10", "log.message": "\u001b[32mHello World 1!\u001b[39m\n" }
   ]
 }`)
 	require.NoError(t, err)
 
-	output, err := runQuery(`{ node(func: uid(0x10)) { log.message }}`)
+	output, err := runGraphqlQuery(`{ node(func: uid(0x10)) { log.message }}`)
 	require.NoError(t, err)
 	require.Equal(t,
 		`{"data":{"node":[{"log.message":"\u001b[32mHello World 1!\u001b[39m\n"}]}}`, output)
@@ -1536,10 +1540,10 @@ func TestTypeMutationAndQuery(t *testing.T) {
 	err := alterSchemaWithRetry(s)
 	require.NoError(t, err)
 
-	err = runJsonMutation(m)
+	err = runJSONMutation(m)
 	require.NoError(t, err)
 
-	output, err := runQuery(q)
+	output, err := runGraphqlQuery(q)
 	require.NoError(t, err)
 	result := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(output), &result))
@@ -1586,6 +1590,82 @@ func TestIPStringParsing(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, net.IPv6zero, addrRange[0].Lower)
 	require.NotEqual(t, addrRange[0].Lower, addrRange[0].Upper)
+}
+
+func TestJSONQueryWithVariables(t *testing.T) {
+	schema.ParseBytes([]byte(""), 1)
+	m := `
+			user_id: string @index(exact) @upsert .
+			user_name: string @index(hash) .
+			follows: [uid] @reverse .
+`
+	err := alterSchemaWithRetry(m)
+	require.NoError(t, err)
+
+	m = `
+		{
+			set {
+				<0x1400> <user_id> "user1" .
+				<0x1400> <user_name> "first user" .
+				<0x1401> <user_id> "user2" .
+				<0x1401> <user_name> "second user" .
+				<0x1400> <follows> <0x1401> .
+				<0x1402> <user_id> "user3" .
+				<0x1402> <user_name> "third user" .
+				<0x1401> <follows> <0x1402> .
+				<0x1403> <user_id> "user4" .
+				<0x1403> <user_name> "fourth user" .
+				<0x1401> <follows> <0x1403> .
+			}
+		}
+	`
+
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	q1 := `query all($userID: string) {
+		q(func: eq(user_id, $userID)) {
+			user_id
+			user_name
+		}
+	}`
+	p1 := params{
+		Query: q1,
+		Variables: map[string]string{
+			"$userID": "user1",
+		},
+	}
+	data, err := json.Marshal(p1)
+	require.NoError(t, err)
+	res, err := runJSONQuery(string(data))
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data":{"q":[{"user_id":"user1","user_name":"first user"}]}}`, res)
+
+
+	q2 := `query all($userID: string, $userName: string) {
+		q(func: eq(user_id, $userID)) {
+			user_id
+			user_name
+			follows @filter(eq(user_name, $userName)) {
+				uid
+				user_id
+			}
+		}
+	}`
+	p2 := params{
+		Query: q2,
+		Variables: map[string]string{
+			"$userID": "user2",
+			"$userName": "fourth user",
+		},
+	}
+	data, err = json.Marshal(p2)
+	require.NoError(t, err)
+	res, err = runJSONQuery(string(data))
+	require.NoError(t, err)
+	exp := `{"data":{"q":[{"user_id":"user2","user_name":"second user",` +
+	`"follows":[{"uid":"0x1403","user_id":"user4"}]}]}}`
+	require.JSONEq(t, exp, res)
 }
 
 var addr = "http://localhost:8180"
