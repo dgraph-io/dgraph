@@ -32,12 +32,24 @@ fashion, resulting in an initially semi random predicate distribution.
 
 ### Transactions
 
-Clients perform mutations and queries on Dgraph using transactions. A
-transaction is a unit of work to be performed by Dgraph. A transaction commit
-has all-or-nothing semantics: either all the changes are accepted by Dgraph or
-none are. A transaction can be aborted when a concurrently running transaction
-was committed and mutated the same data. Transactions can also be manually
-aborted, in which case all the changes will be discarded.
+Dgraph clients perform mutations and queries using transactions. A
+transaction bounds a sequence of queries and mutations that are committed by
+Dgraph as a single unit: that is, on commit, either all the changes are accepted
+by Dgraph or none are. 
+
+A transaction always sees the database state at the moment it began, plus any 
+changes it makes --- changes from concurrent transactions aren't visible.
+
+On commit, Dgraph will abort a transaction, rather than committing changes, when
+a conflicting, concurrently running transaction has already been committed.  Two
+transactions conflict when both transactions: 
+
+- write values to the same scalar predicate of the same node (e.g both
+  attempting to set a particular node's `address` predicate); or
+- write to a singular `uid` predicate of the same node (changes to `[uid]` predicates can be concurrently written); or
+- write a value that conflicts on an index for a predicate with `@upsert` set in the schema (see [upserts]({{< relref "howto/index.md#upserts">}})).
+
+When a transaction is aborted, all its changes are discarded.  Transactions can be manually aborted.
 
 ## Go
 
