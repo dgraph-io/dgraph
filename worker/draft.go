@@ -930,6 +930,12 @@ func (n *node) Run() {
 				} else if entry.Index < applied {
 					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
 					n.Applied.Done(entry.Index)
+					proposal := &pb.Proposal{}
+					if err := proposal.Unmarshal(entry.Data); err == nil {
+						// If there's a pending proposal here, mark it as done.
+						n.elog.Printf("Marking proposal as done without applying: %s", proposal.Key)
+						n.Proposals.Done(proposal.Key, nil)
+					}
 
 				} else {
 					proposal := &pb.Proposal{}
