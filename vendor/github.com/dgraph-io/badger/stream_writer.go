@@ -144,9 +144,9 @@ func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 	return nil
 }
 
-// Done is called once we are done writing all the entries. It syncs DB directories. It also
+// Flush is called once we are done writing all the entries. It syncs DB directories. It also
 // updates Oracle with maxVersion found in all entries (if DB is not managed).
-func (sw *StreamWriter) Done() error {
+func (sw *StreamWriter) Flush() error {
 	defer sw.done()
 	for _, writer := range sw.writers {
 		if err := writer.Done(); err != nil {

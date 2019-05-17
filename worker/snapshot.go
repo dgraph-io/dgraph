@@ -69,7 +69,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 		writer = sw
 	} else {
-		// TODO: Get writer back.
 		writer = posting.NewTxnWriter(pstore)
 	}
 
@@ -102,9 +101,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
-	// if err := writer.Flush(); err != nil {
-	// 	return 0, err
-	// }
+
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Write an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
