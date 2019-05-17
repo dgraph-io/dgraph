@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -259,4 +260,21 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 		lc.maxVersions[key] = pl.maxVersion()
 	}
 	lc.plists = make(map[string]*List)
+}
+
+func (lc *LocalCache) FillPreds(ctx *api.TxnContext, gid uint32) {
+	lc.RLock()
+	defer lc.RUnlock()
+	for key := range lc.deltas {
+		pk := x.Parse([]byte(key))
+		if len(pk.Attr) == 0 {
+			continue
+		}
+		// Also send the group id that the predicate was being served by. This is useful when
+		// checking if Zero should allow a commit during a predicate move.
+		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
+		if !x.HasString(ctx.Preds, predKey) {
+			ctx.Preds = append(ctx.Preds, predKey)
+		}
+	}
 }

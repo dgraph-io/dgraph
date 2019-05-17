@@ -27,6 +27,18 @@
 			"revisionTime": "2017-07-02T08:40:17Z"
 		},
 		{
+			"checksumSHA1": "VHX4EEzgZdU9ZMQkSZSh+q2hYHE=",
+			"path": "github.com/DataDog/datadog-go/statsd",
+			"revision": "40bafcb5f6c1d49df36deaf4ab019e44961d5e36",
+			"revisionTime": "2019-04-25T16:34:47Z"
+		},
+		{
+			"checksumSHA1": "inH6AN0zVntZPS+XVOeQhWy64Ao=",
+			"path": "github.com/DataDog/opencensus-go-exporter-datadog",
+			"revision": "0f32ad59ab087b08465a23717814771f007bcb88",
+			"revisionTime": "2019-05-03T08:23:00Z"
+		},
+		{
 			"checksumSHA1": "XU5C0RvW/71AFqNVdmkzg4ByWB0=",
 			"path": "github.com/MakeNowJust/heredoc",
 			"revision": "1d91351acdc1cb2f2c995864674b754134b86ca7",
@@ -423,60 +435,46 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "isEREHNbgV3rAQ9WGCT3/3SKqnQ=",
+			"checksumSHA1": "fzZnUzHmwL4/i/EiRIlE0up4184=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
-			"revisionTime": "2019-05-16T23:35:11Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
+			"revisionTime": "2019-05-03T23:10:59Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
-			"revisionTime": "2019-05-16T23:35:11Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
+			"revisionTime": "2019-05-03T23:10:59Z"
 		},
 		{
-			"checksumSHA1": "SV7o4+eEK7/XNWC7H7Z5vWCoHP0=",
+			"checksumSHA1": "yu19DxVlBi/XuPl0SRV46bkBNUI=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
-			"revisionTime": "2019-05-16T23:35:11Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
+			"revisionTime": "2019-05-03T23:10:59Z"
 		},
 		{
 			"checksumSHA1": "d8wE18ae6lOhmJqh0jwwhmQCkII=",
 			"path": "github.com/dgraph-io/badger/protos",
 			"revision": "49a49e3217461bd89dba15c33edb90779bbfece2",
-			"revisionTime": "2018-11-26T21:07:12Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revisionTime": "2018-11-26T21:07:12Z"
 		},
 		{
 			"checksumSHA1": "00T6XbLV4d95J7hm6kTXDReaQHM=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
-			"revisionTime": "2019-05-16T23:35:11Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
+			"revisionTime": "2019-05-03T23:10:59Z"
 		},
 		{
 			"checksumSHA1": "ovAuDsGfn83KcTieKJjvx93TyUU=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
-			"revisionTime": "2019-05-16T23:35:11Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
+			"revisionTime": "2019-05-03T23:10:59Z"
 		},
 		{
-			"checksumSHA1": "KI48+d+XHzrlAenqQh/Re7swIWk=",
+			"checksumSHA1": "FKcWgmBresQu0pBFw+6SGC25pdE=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
-			"revisionTime": "2019-05-16T23:35:11Z",
-			"version": "HEAD",
-			"versionExact": "HEAD"
+			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
+			"revisionTime": "2019-05-03T23:10:59Z"
 		},
 		{
 			"checksumSHA1": "0hrzVs4TUnFfydHG0QidJYURqfg=",
@@ -525,6 +523,12 @@
 			"path": "github.com/go-ini/ini",
 			"revision": "9c8236e659b76e87bf02044d06fde8683008ff3e",
 			"revisionTime": "2018-10-14T23:42:04Z"
+		},
+		{
+			"checksumSHA1": "V0JNBANCSAzTqLq4ROu0WZOmc6Q=",
+			"path": "github.com/go-sql-driver/mysql",
+			"revision": "c0f6b444ad8f92ecd68f86b27635c1fccdede4c4",
+			"revisionTime": "2019-03-30T03:22:41Z"
 		},
 		{
 			"checksumSHA1": "FhEC1RwKSm/8jvTI2MKlzDVz+Vs=",
@@ -599,10 +603,10 @@
 			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
-			"checksumSHA1": "CGj8VcI/CpzxaNqlqpEVM7qElD4=",
+			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "b285ee9cfc6c881bb20c0d8dc73370ea9b9ec90f",
-			"revisionTime": "2019-05-17T06:12:10Z"
+			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
+			"revisionTime": "2019-04-09T05:09:43Z"
 		},
 		{
 			"checksumSHA1": "z4copNgeTN77OymdDKqLaIK/vSI=",
@@ -621,6 +625,12 @@
 			"path": "github.com/google/codesearch/sparse",
 			"revision": "a45d81b686e85d01f2838439deaf72126ccd5a96",
 			"revisionTime": "2015-06-17T15:18:51Z"
+		},
+		{
+			"checksumSHA1": "odfuEY+ZGEh8i9oFZOeVTY2iyC4=",
+			"path": "github.com/hashicorp/golang-lru/simplelru",
+			"revision": "ff8f6c969d733ea46290f5efc44a6b86da64e5d1",
+			"revisionTime": "2019-05-07T12:02:21Z"
 		},
 		{
 			"checksumSHA1": "HtpYAWHvd9mq+mHkpo7z8PGzMik=",
@@ -747,6 +757,12 @@
 			"path": "github.com/pelletier/go-toml",
 			"revision": "4e9e0ee19b60b13eb79915933f44d8ed5f268bdd",
 			"revisionTime": "2017-10-24T21:10:38Z"
+		},
+		{
+			"checksumSHA1": "8U5pEHFpXd1/Klgp+C/a6TqWoh8=",
+			"path": "github.com/philhofer/fwd",
+			"revision": "bb6d471dc95d4fe11e432687f8b70ff496cf3136",
+			"revisionTime": "2017-09-05T21:21:22Z"
 		},
 		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
@@ -887,6 +903,12 @@
 			"revisionTime": "2016-09-25T22:06:09Z"
 		},
 		{
+			"checksumSHA1": "XqGf8TvdzfKDhkE+HDZAT7RlERU=",
+			"path": "github.com/tinylib/msgp/msgp",
+			"revision": "ade0ca4ace05af96235d107023ab018ee921309c",
+			"revisionTime": "2019-01-03T19:08:39Z"
+		},
+		{
 			"checksumSHA1": "y1kH4pl3IjGHaWcNbk5bZe3nITY=",
 			"path": "github.com/twpayne/go-geom",
 			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
@@ -933,10 +955,10 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "KuIPOjsnzI5EZHQjUFK3sTiLCTM=",
+			"checksumSHA1": "/Ih6M1+XUakKt9tMxwgRlXN5bzw=",
 			"path": "go.opencensus.io",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
 			"checksumSHA1": "TA3C6+5PM7V2zbsnLMp13Efy/BA=",
@@ -951,40 +973,76 @@
 			"revisionTime": "2019-02-05T22:37:37Z"
 		},
 		{
-			"checksumSHA1": "i14BcfXTuovfz9TuShdFGtcuSC4=",
+			"checksumSHA1": "KLZy3Nh+8JlI04JmBa/Jc8fxrVQ=",
 			"path": "go.opencensus.io/internal",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
-			"checksumSHA1": "Vcwr4P/uIN4haoJPglU7liURepM=",
+			"checksumSHA1": "Dw3rpna1DwTa7TCzijInKcU49g4=",
 			"path": "go.opencensus.io/internal/tagencoding",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
-			"checksumSHA1": "iITJeCEWl7VUPxOB8ThLRAGYTJU=",
+			"checksumSHA1": "r6fbtPwxK4/TYUOWc7y0hXdAG4Q=",
+			"path": "go.opencensus.io/metric/metricdata",
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
+		},
+		{
+			"checksumSHA1": "kWj13srwY1SH5KgFecPhEfHnzVc=",
+			"path": "go.opencensus.io/metric/metricproducer",
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
+		},
+		{
+			"checksumSHA1": "q+y8X+5nDONIlJlxfkv+OtA18ds=",
+			"path": "go.opencensus.io/resource",
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
+		},
+		{
+			"checksumSHA1": "Cc4tRuW0IjlfAFY8BcdfMDqG0R8=",
 			"path": "go.opencensus.io/stats",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
-			"checksumSHA1": "SEHKoV2p561oIgFTqzQ67a/XU7I=",
+			"checksumSHA1": "oIo4NRi6AVCfcwVfHzCXAsoZsdI=",
 			"path": "go.opencensus.io/stats/internal",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
-			"checksumSHA1": "R26x5lc61+27q3Fd2SMGKJGj6kI=",
+			"checksumSHA1": "I164b6lSAxytTT8DFPe70hiQ7UQ=",
 			"path": "go.opencensus.io/stats/view",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
-			"checksumSHA1": "uGBQ6ZVQ7R2OpALxUZIaNXEkBSA=",
+			"checksumSHA1": "UZi4/aqibjJXY+mpNCqAS9rmxsY=",
 			"path": "go.opencensus.io/tag",
-			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
+		},
+		{
+			"checksumSHA1": "0O3djqX4bcg5O9LZdcinEoYeQKs=",
+			"path": "go.opencensus.io/trace",
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
+		},
+		{
+			"checksumSHA1": "JkvEb8oMEFjic5K/03Tyr5Lok+w=",
+			"path": "go.opencensus.io/trace/internal",
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
+		},
+		{
+			"checksumSHA1": "UHbxxaMqpEPsubh8kPwzSlyEwqI=",
+			"path": "go.opencensus.io/trace/tracestate",
+			"revision": "17d7955af9d42886455ce010dd46878208041a58",
+			"revisionTime": "2019-05-03T20:09:27Z"
 		},
 		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
@@ -1025,14 +1083,14 @@
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "3ec19112720433827bbce8be9342797f5a6aaaf9",
-			"revisionTime": "2019-05-12T12:16:34Z"
+			"revision": "f4e77d36d62c17c2336347bb2670ddbd02d092b7",
+			"revisionTime": "2019-05-02T22:26:14Z"
 		},
 		{
 			"checksumSHA1": "HvmG9LfStMLF+hIC7xR4SxegMis=",
 			"path": "golang.org/x/net/trace",
-			"revision": "3ec19112720433827bbce8be9342797f5a6aaaf9",
-			"revisionTime": "2019-05-12T12:16:34Z"
+			"revision": "f4e77d36d62c17c2336347bb2670ddbd02d092b7",
+			"revisionTime": "2019-05-02T22:26:14Z"
 		},
 		{
 			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
@@ -1093,6 +1151,12 @@
 			"path": "golang.org/x/text/unicode/norm",
 			"revision": "6f44c5a2ea40ee3593d98cdcc905cc1fdaa660e2",
 			"revisionTime": "2018-10-29T18:00:05Z"
+		},
+		{
+			"checksumSHA1": "GVErM8KgFMKvYUc9Eikdb4YKgO4=",
+			"path": "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext",
+			"revision": "eed4d38387cb9c74f7a29cb3eb9b06155a09d259",
+			"revisionTime": "2019-04-18T07:16:48Z"
 		},
 		{
 			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",

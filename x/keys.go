@@ -26,17 +26,27 @@ import (
 const (
 	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
-	ByteData     = byte(0x00)
-	ByteIndex    = byte(0x02)
-	ByteReverse  = byte(0x04)
-	ByteCount    = byte(0x08)
+
+	// ByteData indicates the key stores data.
+	ByteData = byte(0x00)
+	// ByteIndex indicates the key stores an index.
+	ByteIndex = byte(0x02)
+	// ByteReverse indicates the key stores a reverse index.
+	ByteReverse = byte(0x04)
+	// ByteCount indicates the key stores a count index.
+	ByteCount = byte(0x08)
+	// ByteCountRev indicates the key stores a reverse count index.
 	ByteCountRev = ByteCount | ByteReverse
-	// same prefix for data, index and reverse keys so that relative order of data doesn't change
-	// keys of same attributes are located together
+	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
+	// order of data doesn't change keys of same attributes are located together.
 	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-	ByteRaft      = byte(0xff)
+	// ByteSplit is a constant to specify a given key corresponds to a posting list split
+	// into multiple parts.
+	ByteSplit = byte(0x01)
+	// ByteRaft is a constant to specify a given key stores RAFT information.
+	ByteRaft = byte(0xff)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -49,6 +59,20 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
+// genKey creates the key and writes the initial bytes (type byte, length of attribute,
+// and the attribute itself). It leaves the rest of the key empty for further processing
+// if necessary.
+func generateKey(typeByte byte, attr string, totalLen int) []byte {
+	AssertTrue(totalLen >= 1+2+len(attr))
+
+	buf := make([]byte, totalLen)
+	buf[0] = typeByte
+	rest := buf[1:]
+
+	writeAttr(rest, attr)
+	return buf
+}
+
 func RaftKey() []byte {
 	buf := make([]byte, 5)
 	buf[0] = ByteRaft
@@ -58,90 +82,155 @@ func RaftKey() []byte {
 
 // SchemaKey returns schema key for given attribute. Schema keys are stored
 // separately with unique prefix, since we need to iterate over all schema keys.
+// The structure of a schema key is as follows:
+//
+// byte 0: key type prefix (set to byteSchema)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
 func SchemaKey(attr string) []byte {
-	buf := make([]byte, 1+2+len(attr))
-	buf[0] = byteSchema
-	rest := buf[1:]
-
-	writeAttr(rest, attr)
-	return buf
+	return generateKey(byteSchema, attr, 1+2+len(attr))
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
-// with unique prefix, since we need to iterate over all type keys.
+// with a unique prefix, since we need to iterate over all type keys.
+// The structure of a type key is as follows:
+//
+// byte 0: key type prefix (set to byteType)
+// byte 1-2: length of typeName
+// next len(attr) bytes: value of typeName
 func TypeKey(typeName string) []byte {
-	buf := make([]byte, 1+2+len(typeName))
-	buf[0] = byteType
-	rest := buf[1:]
-
-	writeAttr(rest, typeName)
-	return buf
+	return generateKey(byteType, typeName, 1+2+len(typeName))
 }
 
+// DataKey generates a data key with the given attribute and UID.
+// The structure of a data key is as follows:
+//
+// byte 0: key type prefix (set to DefaultPrefix)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
+// next byte: data type prefix (set to ByteData)
+// next byte: byte to determine if this key corresponds to a list that has been split
+//   into multiple parts
+// next eight bytes: value of uid
+// next eight bytes (optional): if the key corresponds to a split list, the startUid of
+//   the split stored in this key.
 func DataKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 2+len(attr)+2+8)
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + 8
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	rest[0] = ByteData
 
+	// By default, this key does not correspond to a part of a split key.
+	rest = rest[1:]
+	rest[0] = 0
+
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
 	return buf
 }
 
+// ReverseKey generates a reverse key with the given attribute and UID.
+// The structure of a reverse key is as follows:
+//
+// byte 0: key type prefix (set to DefaultPrefix)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
+// next byte: data type prefix (set to ByteReverse)
+// next byte: byte to determine if this key corresponds to a list that has been split
+//   into multiple parts
+// next eight bytes: value of uid
+// next eight bytes (optional): if the key corresponds to a split list, the startUid of
+//   the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 2+len(attr)+2+8)
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + 8
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	rest[0] = ByteReverse
 
+	// By default, this key does not correspond to a part of a split key.
+	rest = rest[1:]
+	rest[0] = 0
+
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
 	return buf
 }
 
+// IndexKey generates a index key with the given attribute and term.
+// The structure of an index key is as follows:
+//
+// byte 0: key type prefix (set to DefaultPrefix)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
+// next byte: data type prefix (set to ByteIndex)
+// next byte: byte to determine if this key corresponds to a list that has been split
+//   into multiple parts
+// next len(term) bytes: value of term
+// next eight bytes (optional): if the key corresponds to a split list, the startUid of
+//   the split stored in this key.
 func IndexKey(attr, term string) []byte {
-	buf := make([]byte, 2+len(attr)+2+len(term))
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + len(term)
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	rest[0] = ByteIndex
+
+	// By default, this key does not correspond to a part of a split key.
+	rest = rest[1:]
+	rest[0] = 0
 
 	rest = rest[1:]
 	AssertTrue(len(term) == copy(rest, term))
 	return buf
 }
 
+// CountKey generates a count key with the given attribute and uid.
+// The structure of a count key is as follows:
+//
+// byte 0: key type prefix (set to DefaultPrefix)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
+// next byte: data type prefix (set to ByteCount or ByteCountRev)
+// next byte: byte to determine if this key corresponds to a list that has been split
+//   into multiple parts. Since count indexes only store one number, this value will
+//   always be zero.
+// next four bytes: value of count.
 func CountKey(attr string, count uint32, reverse bool) []byte {
-	buf := make([]byte, 1+2+len(attr)+1+4)
-	buf[0] = DefaultPrefix
-	rest := buf[1:]
+	prefixLen := 1 + 2 + len(attr)
+	totalLen := prefixLen + 1 + 1 + 4
+	buf := generateKey(DefaultPrefix, attr, totalLen)
 
-	rest = writeAttr(rest, attr)
+	rest := buf[prefixLen:]
 	if reverse {
 		rest[0] = ByteCountRev
 	} else {
 		rest[0] = ByteCount
 	}
 
+	// By default, this key does not correspond to a part of a split key.
+	rest = rest[1:]
+	rest[0] = 0
+
 	rest = rest[1:]
 	binary.BigEndian.PutUint32(rest, count)
 	return buf
 }
 
+// ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
-	byteType   byte
-	Attr       string
-	Uid        uint64
-	StartUid   uint64
-	Term       string
-	Count      uint32
-	bytePrefix byte
+	byteType    byte
+	Attr        string
+	Uid         uint64
+	HasStartUid bool
+	StartUid    uint64
+	Term        string
+	Count       uint32
+	bytePrefix  byte
 }
 
 func (p ParsedKey) IsRaft() bool {
@@ -189,7 +278,7 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 }
 
 func (p ParsedKey) SkipPredicate() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
@@ -199,7 +288,7 @@ func (p ParsedKey) SkipPredicate() []byte {
 }
 
 func (p ParsedKey) SkipRangeOfSameType() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
@@ -222,49 +311,53 @@ func (p ParsedKey) SkipType() []byte {
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
+	buf := make([]byte, 1+2+len(p.Attr)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
+	AssertTrue(len(k) == 2)
 	k[0] = ByteData
+	k[1] = 0
 	return buf
 }
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
+	buf := make([]byte, 1+2+len(p.Attr)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
+	AssertTrue(len(k) == 2)
 	k[0] = ByteIndex
+	k[1] = 0
 	return buf
 }
 
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
+	buf := make([]byte, 1+2+len(p.Attr)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
+	AssertTrue(len(k) == 2)
 	k[0] = ByteReverse
+	k[1] = 0
 	return buf
 }
 
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
+	AssertTrue(len(k) == 2)
 	if reverse {
 		k[0] = ByteCountRev
 	} else {
 		k[0] = ByteCount
 	}
+	k[1] = 0
 	return buf
 }
 
@@ -282,8 +375,7 @@ func TypePrefix() []byte {
 	return buf[:]
 }
 
-// PredicatePrefix returns the prefix for all keys belonging
-// to this predicate except schema key.
+// PredicatePrefix returns the prefix for all keys belonging to this predicate except schema key.
 func PredicatePrefix(predicate string) []byte {
 	buf := make([]byte, 1+2+len(predicate))
 	buf[0] = DefaultPrefix
@@ -292,12 +384,19 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
-// GetSplitKey takes a data key baseKey and generates the key of the list split
-// that starts at startUid.
+// GetSplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
 func GetSplitKey(baseKey []byte, startUid uint64) []byte {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
+
+	p := Parse(baseKey)
+	index := 1 + 2 + len(p.Attr) + 1
+	if index >= len(keyCopy) {
+		panic("Cannot write to key. Key is too small")
+	}
+	keyCopy[index] = ByteSplit
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
+
 	return keyCopy
 }
 
@@ -326,6 +425,9 @@ func Parse(key []byte) *ParsedKey {
 	p.byteType = k[0]
 	k = k[1:]
 
+	p.HasStartUid = k[0] == ByteSplit
+	k = k[1:]
+
 	switch p.byteType {
 	case ByteData, ByteReverse:
 		if len(k) < 8 {
@@ -336,26 +438,37 @@ func Parse(key []byte) *ParsedKey {
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
 
-		if len(k) == 8 {
-			return p
+		if !p.HasStartUid {
+			break
 		}
+
+		if len(k) < 16 {
+			// TODO(martinmr): replace DebugMode with glog.vlog(2).
+			if Config.DebugMode {
+				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			}
+			return nil
+		}
+
 		k = k[8:]
+		p.StartUid = binary.BigEndian.Uint64(k)
+	case ByteIndex:
+		if !p.HasStartUid {
+			p.Term = string(k)
+			break
+		}
+
 		if len(k) < 8 {
 			if Config.DebugMode {
 				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
 			}
 			return nil
 		}
-		p.StartUid = binary.BigEndian.Uint64(k)
-		if p.StartUid == 0 {
-			if Config.DebugMode {
-				fmt.Printf("Error: StartUid must be greater than 0 for key %q, parsed key: %+v\n",
-					key, p)
-			}
-			return nil
-		}
-	case ByteIndex:
-		p.Term = string(k)
+
+		term := k[:len(k)-8]
+		startUid := k[len(k)-8:]
+		p.Term = string(term)
+		p.StartUid = binary.BigEndian.Uint64(startUid)
 	case ByteCount, ByteCountRev:
 		if len(k) < 4 {
 			if Config.DebugMode {
@@ -364,6 +477,20 @@ func Parse(key []byte) *ParsedKey {
 			return nil
 		}
 		p.Count = binary.BigEndian.Uint32(k)
+
+		if !p.HasStartUid {
+			break
+		}
+
+		if len(k) < 12 {
+			if Config.DebugMode {
+				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
+			}
+			return nil
+		}
+
+		k = k[4:]
+		p.StartUid = binary.BigEndian.Uint64(k)
 	default:
 		// Some other data type.
 		return nil
@@ -371,23 +498,38 @@ func Parse(key []byte) *ParsedKey {
 	return p
 }
 
-// IsReservedPredicate returns true if 'pred' is in the reserved predicate list.
+var reservedPredicateMap = map[string]struct{}{
+	"dgraph.type": {},
+}
+
+var aclPredicateMap = map[string]struct{}{
+	"dgraph.xid":        {},
+	"dgraph.password":   {},
+	"dgraph.user.group": {},
+	"dgraph.group.acl":  {},
+}
+
+// IsReservedPredicate returns true if the predicate is in the reserved predicate list.
 func IsReservedPredicate(pred string) bool {
-	var m = map[string]struct{}{
-		PredicateListAttr: {},
-		"dgraph.type":     {},
-	}
-	_, ok := m[strings.ToLower(pred)]
+	_, ok := reservedPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred)
 }
 
+// IsAclPredicate returns true if the predicate is in the list of reserved
+// predicates for the ACL feature.
 func IsAclPredicate(pred string) bool {
-	var m = map[string]struct{}{
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
-	}
-	_, ok := m[strings.ToLower(pred)]
+	_, ok := aclPredicateMap[strings.ToLower(pred)]
 	return ok
+}
+
+// ReservedPredicates returns the complete list of reserved predicates.
+func ReservedPredicates() []string {
+	var preds []string
+	for pred := range reservedPredicateMap {
+		preds = append(preds, pred)
+	}
+	for pred := range aclPredicateMap {
+		preds = append(preds, pred)
+	}
+	return preds
 }

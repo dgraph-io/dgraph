@@ -163,7 +163,7 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	}
 	var healthyPool *conn.Pool
 	for _, m := range members {
-		if pl, err := conn.Get().Get(m.Addr); err == nil {
+		if pl, err := conn.GetPools().Get(m.Addr); err == nil {
 			healthyPool = pl
 			if m.Leader {
 				return pl
@@ -213,7 +213,7 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	// Create connections to all members.
 	for _, g := range state.Groups {
 		for _, m := range g.Members {
-			conn.Get().Connect(m.Addr)
+			conn.GetPools().Connect(m.Addr)
 		}
 		if g.Tablets == nil {
 			g.Tablets = make(map[string]*pb.Tablet)
@@ -434,7 +434,7 @@ func (s *Server) Connect(ctx context.Context,
 			switch {
 			case member.Addr == m.Addr && m.Id == 0:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
-				conn.Get().Connect(m.Addr)
+				conn.GetPools().Connect(m.Addr)
 				return &pb.ConnectionState{
 					State:  ms,
 					Member: member,
@@ -448,7 +448,7 @@ func (s *Server) Connect(ctx context.Context,
 
 			case member.Addr != m.Addr && member.Id == m.Id:
 				// Same Id. Different address.
-				if pl, err := conn.Get().Get(member.Addr); err == nil && pl.IsHealthy() {
+				if pl, err := conn.GetPools().Get(member.Addr); err == nil && pl.IsHealthy() {
 					// Found a healthy connection.
 					return nil, x.Errorf("REUSE_RAFTID: Healthy connection to a member"+
 						" with same ID: %+v", member)
@@ -458,7 +458,7 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.
-	conn.Get().Connect(m.Addr)
+	conn.GetPools().Connect(m.Addr)
 
 	createProposal := func() *pb.ZeroProposal {
 		s.Lock()

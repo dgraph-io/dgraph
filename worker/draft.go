@@ -488,6 +488,7 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
 		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
 			glog.Warningf("Pending size should remain above zero: %d", sz)
@@ -545,7 +546,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.gid])
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -597,7 +598,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	addr := snap.Context.GetAddr()
 	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
 	if len(addr) > 0 {
-		p, err := conn.Get().Get(addr)
+		p, err := conn.GetPools().Get(addr)
 		if err != nil {
 			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
 		} else {
@@ -724,62 +725,26 @@ func (n *node) updateRaftProgress() error {
 	if err := txn.CommitAt(1, nil); err != nil {
 		return err
 	}
-	glog.V(1).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
 	return nil
 }
 
-func (n *node) Run() {
-	defer n.closer.Done() // CLOSER:1
-
-	firstRun := true
-	var leader bool
-	// See also our configuration of HeartbeatTick and ElectionTick.
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-
-	slowTicker := time.NewTicker(30 * time.Second)
+func (n *node) checkpointAndClose(done chan struct{}) {
+	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()
-
-	done := make(chan struct{})
-	go func() {
-		<-n.closer.HasBeenClosed()
-		glog.Infof("Stopping node.Run")
-		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-			n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
-			time.Sleep(time.Second) // Let transfer happen.
-		}
-		n.Raft().Stop()
-		close(done)
-	}()
-
-	applied, err := n.findRaftProgress()
-	if err != nil {
-		glog.Errorf("While trying to find raft progress: %v", err)
-	} else {
-		glog.Infof("Found Raft progress in p directory: %d", applied)
-	}
-	if !x.WorkerConfig.UseRaftProgress {
-		glog.Infof("Ignoring Raft progress made due to flag.")
-		applied = 0
-	}
 
 	for {
 		select {
-		case <-done:
-			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
-			// leadership in a goroutine. The push to n.applyCh happens in this loop, so the close
-			// should happen here too. Otherwise, race condition between push and close happens.
-			close(n.applyCh)
-			glog.Infoln("Raft node done.")
-			return
-
 		case <-slowTicker.C:
+			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
+			// be sent on time. Otherwise, followers would just keep running elections.
+
 			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
 			if err := n.updateRaftProgress(); err != nil {
 				glog.Errorf("While updating Raft progress: %v", err)
 			}
 
-			if leader {
+			if n.AmLeader() {
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
@@ -797,11 +762,63 @@ func (n *node) Run() {
 				go n.abortOldTransactions()
 			}
 
+		case <-n.closer.HasBeenClosed():
+			glog.Infof("Stopping node.Run")
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
+				time.Sleep(time.Second) // Let transfer happen.
+			}
+			n.Raft().Stop()
+			close(done)
+			return
+		}
+	}
+}
+
+func (n *node) Run() {
+	defer n.closer.Done() // CLOSER:1
+
+	firstRun := true
+	var leader bool
+	// See also our configuration of HeartbeatTick and ElectionTick.
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
+	done := make(chan struct{})
+	go n.checkpointAndClose(done)
+	go n.ReportRaftComms()
+
+	applied, err := n.findRaftProgress()
+	if err != nil {
+		glog.Errorf("While trying to find raft progress: %v", err)
+	} else {
+		glog.Infof("Found Raft progress in p directory: %d", applied)
+	}
+	if !x.WorkerConfig.UseRaftProgress {
+		glog.Infof("Ignoring Raft progress made due to flag.")
+		applied = 0
+	}
+
+	var timer x.Timer
+	for {
+		select {
+		case <-done:
+			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
+			// leadership in a goroutine. The push to n.applyCh happens in this loop, so the close
+			// should happen here too. Otherwise, race condition between push and close happens.
+			close(n.applyCh)
+			glog.Infoln("Raft node done.")
+			return
+
+			// Slow ticker can't be placed here because figuring out checkpoints and snapshots takes
+			// time and if the leader does not send heartbeats out during this time, the followers
+			// start an election process. And that election process would just continue to happen
+			// indefinitely because checkpoints and snapshots are being calculated indefinitely.
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			start := time.Now()
+			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
@@ -879,7 +896,13 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			diskDur := time.Since(start)
+			timer.Record("disk")
+			if rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %v", err)
+				}
+				timer.Record("sync")
+			}
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
@@ -963,8 +986,11 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Followed queued messages.")
 			}
+			timer.Record("proposals")
 
 			n.Raft().Advance()
+			timer.Record("advance")
+
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
@@ -974,14 +1000,13 @@ func (n *node) Run() {
 				span.End()
 				ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
-					x.LatencyMs.M(x.SinceMs(start)))
+					x.LatencyMs.M(float64(timer.Total())/1e6))
 			}
-			if time.Since(start) > 100*time.Millisecond {
+			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+					"Raft.Ready took too long to process: %s"+
 						" Num entries: %d. MustSync: %v",
-					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
-					len(rd.Entries), rd.MustSync)
+					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
 	}
@@ -1217,15 +1242,10 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	}
 	span.Annotatef(nil, "Found Raft entries: %d", last-first)
 
-	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
-	if err != nil {
-		span.Annotatef(nil, "Error: %v", err)
-		return nil, err
+	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 
-	if num := posting.Oracle().NumPendingTxns(); num > 0 {
-		glog.Infof("Num pending txns: %d", num)
-	}
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
@@ -1240,27 +1260,52 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	minPendingStart := posting.Oracle().MinPendingStartTs()
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
-	for _, entry := range entries {
-		if entry.Type != raftpb.EntryNormal {
-			continue
-		}
-		var proposal pb.Proposal
-		if err := proposal.Unmarshal(entry.Data); err != nil {
+
+	// Trying to retrieve all entries at once might cause out-of-memory issues in
+	// cases where the raft log is too big to fit into memory. Instead of retrieving
+	// all entries at once, retrieve it in batches of 64MB.
+	var lastEntry raftpb.Entry
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-		if proposal.Mutations != nil {
-			start := proposal.Mutations.StartTs
-			if start >= minPendingStart && snapshotIdx == 0 {
-				snapshotIdx = entry.Index - 1
-			}
+
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
 		}
-		if proposal.Delta != nil {
-			for _, txn := range proposal.Delta.GetTxns() {
-				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+
+		// Store the last entry (as it might be needed outside the loop) and set the
+		// start of the new batch at the entry following it. Also set foundEntries to
+		// true to indicate to the code outside the loop that entries were retrieved.
+		lastEntry = entries[len(entries)-1]
+		batchFirst = lastEntry.Index + 1
+
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal {
+				continue
+			}
+			var proposal pb.Proposal
+			if err := proposal.Unmarshal(entry.Data); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return nil, err
+			}
+			if proposal.Mutations != nil {
+				start := proposal.Mutations.StartTs
+				if start >= minPendingStart && snapshotIdx == 0 {
+					snapshotIdx = entry.Index - 1
+				}
+			}
+			if proposal.Delta != nil {
+				for _, txn := range proposal.Delta.GetTxns() {
+					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+				}
 			}
 		}
 	}
+
 	if maxCommitTs == 0 {
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
@@ -1268,9 +1313,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		if len(entries) > 0 {
-			snapshotIdx = entries[len(entries)-1].Index
-		}
+		snapshotIdx = lastEntry.Index
 		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
 

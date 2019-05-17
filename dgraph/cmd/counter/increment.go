@@ -64,7 +64,9 @@ type Counter struct {
 	Uid string `json:"uid"`
 	Val int    `json:"val"`
 
-	startTs uint64 // Only used for internal testing.
+	startTs  uint64 // Only used for internal testing.
+	qLatency time.Duration
+	mLatency time.Duration
 }
 
 func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
@@ -77,6 +79,11 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	if err != nil {
 		return counter, fmt.Errorf("Query error: %v", err)
 	}
+
+	// Total query latency is sum of encoding, parsing and processing latencies.
+	queryLatency := resp.Latency.GetEncodingNs() +
+		resp.Latency.GetParsingNs() + resp.Latency.GetProcessingNs()
+
 	m := make(map[string][]Counter)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
 		return counter, err
@@ -89,6 +96,7 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
 	}
 	counter.startTs = resp.GetTxn().GetStartTs()
+	counter.qLatency = time.Duration(queryLatency).Round(time.Millisecond)
 	return counter, nil
 }
 
@@ -118,20 +126,28 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 
 	counter.Val++
 	var mu api.Mutation
+	mu.CommitNow = true
 	if len(counter.Uid) == 0 {
 		counter.Uid = "_:new"
 	}
 	mu.SetNquads = []byte(fmt.Sprintf(`<%s> <%s> "%d"^^<xs:int> .`, counter.Uid, pred, counter.Val))
 
 	// Don't put any timeout for mutation.
-	_, err = txn.Mutate(context.Background(), &mu)
+	resp, err := txn.Mutate(context.Background(), &mu)
 	if err != nil {
 		return Counter{}, err
 	}
-	return counter, txn.Commit(context.Background())
+
+	mutationLatency := resp.Latency.GetProcessingNs() +
+		resp.Latency.GetParsingNs() + resp.Latency.GetEncodingNs()
+	counter.mLatency = time.Duration(mutationLatency).Round(time.Millisecond)
+	return counter, nil
 }
 
 func run(conf *viper.Viper) {
+	startTime := time.Now()
+	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()
+
 	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
@@ -156,6 +172,7 @@ retryConn:
 	}
 
 	for num > 0 {
+		txnStart := time.Now() // Start time of transaction
 		cnt, err := process(dg, conf)
 		now := time.Now().UTC().Format(format)
 		if err != nil {
@@ -163,7 +180,10 @@ retryConn:
 			time.Sleep(time.Second)
 			goto retryConn
 		}
-		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ]\n", now, cnt.Val, cnt.startTs)
+		serverLat := cnt.qLatency + cnt.mLatency
+		clientLat := time.Since(txnStart).Round(time.Millisecond)
+		fmt.Printf("%-17s Counter VAL: %d   [ Ts: %d ] Latency: Q %s M %s S %s C %s D %s\n", now, cnt.Val,
+			cnt.startTs, cnt.qLatency, cnt.mLatency, serverLat, clientLat, clientLat-serverLat)
 		num--
 		time.Sleep(waitDur)
 	}

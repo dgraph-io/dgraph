@@ -46,6 +46,8 @@ func populateClusterWithFacets() {
 
 		<1> <gender> "female" .
 		<23> <gender> "male" .
+
+		<202> <model> "Prius" (type = "Electric") .
 	`
 
 	friendFacets1 := "(since = 2006-01-02T15:04:05)"
@@ -901,4 +903,18 @@ func TestFacetsAlias2(t *testing.T) {
 
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data":{"me2":[{"friend":[{"friend|close":true,"f":false,"friend|since":"2005-05-02T15:04:05Z"},{"friend|since":"2006-01-02T15:04:05Z"},{"friend|since":"2006-01-02T15:04:05Z"},{"friend|close":true,"f":true,"friend|since":"2004-05-02T15:04:05Z","friend|tag":"Domain3"},{"friend|close":false,"f":true,"friend|since":"2007-05-02T15:04:05Z","friend|tag":34}]}],"me":[{"name":"Rick Grimes", "val(a)":"2006-01-02T15:04:05Z"}]}}`, js)
+}
+
+func TestTypeExpandFacets(t *testing.T) {
+	query := `{
+		q(func: eq(make, "Toyota")) {
+			expand(_all_) {
+				uid
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"q":[
+		{"make":"Toyota","model":"Prius", "model@jp":"プリウス", "model|type":"Electric",
+			"year":2009}]}}`, js)
 }

@@ -306,15 +306,14 @@ func TestTransactionBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
-	require.Equal(t, 3, len(preds))
+	require.Equal(t, 2, len(preds))
 	var parsedPreds []string
 	for _, pred := range preds {
 		parsedPreds = append(parsedPreds, strings.Join(strings.Split(pred, "-")[1:], "-"))
 	}
 	sort.Strings(parsedPreds)
-	require.Equal(t, "_predicate_", parsedPreds[0])
-	require.Equal(t, "balance", parsedPreds[1])
-	require.Equal(t, "name", parsedPreds[2])
+	require.Equal(t, "balance", parsedPreds[0])
+	require.Equal(t, "name", parsedPreds[1])
 
 	data, _, err := queryWithTs(q1, 0)
 	require.NoError(t, err)

@@ -208,13 +208,6 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 		m.addMapEntry(key, rev, shard)
 	}
 	m.addIndexMapEntries(nq, de)
-
-	if m.opt.ExpandEdges {
-		shard := m.state.shards.shardFor("_predicate_")
-		key = x.DataKey("_predicate_", sid)
-		pp := m.createPredicatePosting(nq.Predicate)
-		m.addMapEntry(key, pp, shard)
-	}
 }
 
 func (m *mapper) uid(xid string) uint64 {
@@ -246,16 +239,6 @@ func (m *mapper) lookupUid(xid string) uint64 {
 	}}
 	m.processNQuad(nq)
 	return uid
-}
-
-func (m *mapper) createPredicatePosting(predicate string) *pb.Posting {
-	fp := farm.Fingerprint64([]byte(predicate))
-	return &pb.Posting{
-		Uid:         fp,
-		Value:       []byte(predicate),
-		ValType:     pb.Posting_DEFAULT,
-		PostingType: pb.Posting_VALUE,
-	}
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,
