@@ -1065,7 +1065,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return writer.Send(&pb.KVS{Kv: list.Kv})
+		return writer.Write(list)
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err

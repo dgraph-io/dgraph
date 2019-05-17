@@ -48,7 +48,7 @@ func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 		return nil
 	}
 	writer := posting.NewTxnWriter(pstore)
-	if err := writer.Send(&pb.KVS{Kv: kvs}); err != nil {
+	if err := writer.Write(&bpb.KVList{Kv: kvs}); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {

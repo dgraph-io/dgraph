@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
 )
 
@@ -51,7 +51,7 @@ func (w *TxnWriter) cb(err error) {
 	}
 }
 
-func (w *TxnWriter) Write(kvs *pb.KVS) error {
+func (w *TxnWriter) Write(kvs *pb.KVList) error {
 	for _, kv := range kvs.Kv {
 		var meta byte
 		if len(kv.UserMeta) > 0 {

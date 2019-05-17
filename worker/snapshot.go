@@ -70,8 +70,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		writer = sw
 	} else {
 		// TODO: Get writer back.
-		w := posting.NewTxnWriter(pstore)
-		writer = w
+		writer = posting.NewTxnWriter(pstore)
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
@@ -95,12 +94,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		// if err := writer.Write(kvs); err != nil {
 		// 	return 0, err
 		// }
-		if err := sw.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
+		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
 			return 0, err
 		}
 		count += len(kvs.Kv)
 	}
-	if err := sw.Done(); err != nil {
+	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
 	// if err := writer.Flush(); err != nil {
