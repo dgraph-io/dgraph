@@ -39,6 +39,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/pkg/errors"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -61,7 +62,7 @@ func extractStartTs(urlPath string) (uint64, error) {
 		}
 		return ts, nil
 	default:
-		return 0, x.Errorf("Incorrect no. of path parameters. Expected 1 or 2. Got: %+v", l)
+		return 0, errors.Errorf("Incorrect no. of path parameters. Expected 1 or 2. Got: %+v", l)
 	}
 }
 

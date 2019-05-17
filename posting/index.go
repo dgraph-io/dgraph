@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var emptyCountParams countParams
@@ -53,11 +54,11 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
-		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
+		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 
 	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
@@ -365,7 +366,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	txn *Txn) error {
 	if len(edge.Attr) == 0 {
-		return x.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
+		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
 	}
 

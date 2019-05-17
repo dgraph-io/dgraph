@@ -19,6 +19,7 @@ package worker
 import (
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -224,7 +225,7 @@ func (w *grpcWorker) Schema(ctx context.Context, s *pb.SchemaRequest) (*pb.Schem
 	}
 
 	if !groups().ServesGroup(s.GroupId) {
-		return &emptySchemaResult, x.Errorf("This server doesn't serve group id: %v", s.GroupId)
+		return &emptySchemaResult, errors.Errorf("This server doesn't serve group id: %v", s.GroupId)
 	}
 	return getSchema(ctx, s)
 }

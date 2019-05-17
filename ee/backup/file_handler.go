@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // fileHandler is used for 'file:' URI scheme.
@@ -49,7 +50,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 
 	// check that the path exists and we can access it.
 	if !pathExist(uri.Path) {
-		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// Find the max version from the latest backup. This is done only when starting a new
@@ -103,7 +104,7 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 // Returns nil and the maximum Ts version on success, error otherwise.
 func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	if !pathExist(uri.Path) {
-		return 0, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// Get a lisst of all the manifest files at the location.
@@ -112,7 +113,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
 	if len(manifests) == 0 {
-		return 0, x.Errorf("No manifests found at path: %s", uri.Path)
+		return 0, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {
@@ -128,7 +129,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	for _, manifest := range manifests {
 		var m Manifest
 		if err := h.readManifest(manifest, &m); err != nil {
-			return 0, x.Wrapf(err, "While reading %q", manifest)
+			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
 		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
@@ -143,7 +144,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
 			fp, err := os.Open(file)
 			if err != nil {
-				return 0, x.Wrapf(err, "Failed to open %q", file)
+				return 0, errors.Wrapf(err, "Failed to open %q", file)
 			}
 			defer fp.Close()
 			if err = fn(fp, int(groupId)); err != nil {
@@ -158,7 +159,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 // ListManifests loads the manifests in the locations and returns them.
 func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
 	if !pathExist(uri.Path) {
-		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// Get a list of all the manifest files at the location.
@@ -167,7 +168,7 @@ func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
 	if len(manifests) == 0 {
-		return nil, x.Errorf("No manifests found at path: %s", uri.Path)
+		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {

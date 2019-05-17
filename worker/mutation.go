@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"errors"
 	"math"
 	"time"
 
@@ -36,12 +35,13 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
+	"github.com/pkg/errors"
 )
 
 var (
 	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
-	errNonExistentTablet        = x.Errorf(ErrNonExistentTabletMessage)
-	errUnservedTablet           = x.Errorf("Tablet isn't being served by this instance")
+	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
+	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
 )
 
 func isStarAll(v []byte) bool {
@@ -60,7 +60,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	su, ok := schema.State().Get(edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
-			return x.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}
 	}
 
@@ -116,7 +116,7 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	if tablet, err := groups().Tablet(update.Predicate); err != nil {
 		return err
 	} else if tablet.GetGroupId() != groups().groupId() {
-		return x.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+		return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 	}
 
 	if err := checkSchema(update); err != nil {
@@ -230,30 +230,30 @@ func hasEdges(attr string, startTs uint64) bool {
 }
 func checkSchema(s *pb.SchemaUpdate) error {
 	if len(s.Predicate) == 0 {
-		return x.Errorf("No predicate specified in schema mutation")
+		return errors.Errorf("No predicate specified in schema mutation")
 	}
 
 	if s.Directive == pb.SchemaUpdate_INDEX && len(s.Tokenizer) == 0 {
-		return x.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
+		return errors.Errorf("Tokenizer must be specified while indexing a predicate: %+v", s)
 	}
 
 	if len(s.Tokenizer) > 0 && s.Directive != pb.SchemaUpdate_INDEX {
-		return x.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
+		return errors.Errorf("Directive must be SchemaUpdate_INDEX when a tokenizer is specified")
 	}
 
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == pb.SchemaUpdate_INDEX {
 		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+		return errors.Errorf("Index not allowed on predicate of type uid on predicate %s",
 			s.Predicate)
 	} else if typ != types.UidID && s.Directive == pb.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
-		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
+		return errors.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
 
 	// If schema update has upsert directive, it should have index directive.
 	if s.Upsert && len(s.Tokenizer) == 0 {
-		return x.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
+		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
 			s.Predicate)
 	}
 
@@ -268,7 +268,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 	case t.IsScalar() && (t.Enum() == pb.Posting_PASSWORD || s.ValueType == pb.Posting_PASSWORD):
 		// can't change password -> x, x -> password
 		if t.Enum() != s.ValueType {
-			return x.Errorf("Schema change not allowed from %s to %s",
+			return errors.Errorf("Schema change not allowed from %s to %s",
 				t.Enum().String(), typ.Enum().String())
 		}
 
@@ -276,14 +276,14 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		// If old type was list and new type is non-list, we don't allow it until user
 		// has data.
 		if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate, math.MaxUint64) {
-			return x.Errorf("Schema change not allowed from [%s] => %s without"+
+			return errors.Errorf("Schema change not allowed from [%s] => %s without"+
 				" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
 		}
 
 	default:
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasEdges(s.Predicate, math.MaxUint64) {
-			return x.Errorf("Schema change not allowed from scalar to uid or vice versa"+
+			return errors.Errorf("Schema change not allowed from scalar to uid or vice versa"+
 				" while there is data for pred: %s", s.Predicate)
 		}
 	}
@@ -292,24 +292,24 @@ func checkSchema(s *pb.SchemaUpdate) error {
 
 func checkType(t *pb.TypeUpdate) error {
 	if len(t.TypeName) == 0 {
-		return x.Errorf("Type name must be specified in type update")
+		return errors.Errorf("Type name must be specified in type update")
 	}
 
 	for _, field := range t.Fields {
 		if len(field.Predicate) == 0 {
-			return x.Errorf("Field in type definition must have a name")
+			return errors.Errorf("Field in type definition must have a name")
 		}
 
 		if field.ValueType == pb.Posting_OBJECT && len(field.ObjectTypeName) == 0 {
-			return x.Errorf("Field with value type OBJECT must specify the name of the object type")
+			return errors.Errorf("Field with value type OBJECT must specify the name of the object type")
 		}
 
 		if field.Directive != pb.SchemaUpdate_NONE {
-			return x.Errorf("Field in type definition cannot have a directive")
+			return errors.Errorf("Field in type definition cannot have a directive")
 		}
 
 		if len(field.Tokenizer) > 0 {
-			return x.Errorf("Field in type definition cannot have tokenizers")
+			return errors.Errorf("Field in type definition cannot have tokenizers")
 		}
 	}
 
@@ -332,17 +332,17 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	// type checks
 	switch {
 	case edge.Lang != "" && !su.GetLang():
-		return x.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
 			edge.Attr, edge)
 
 	case !schemaType.IsScalar() && !storageType.IsScalar():
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		return errors.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return x.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
@@ -601,7 +601,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 		return txnCtx, ctx.Err()
 	}
 	if !groups().ServesGroup(m.GroupId) {
-		return txnCtx, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
+		return txnCtx, errors.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 
 	return txnCtx, w.proposeAndWait(ctx, txnCtx, m)

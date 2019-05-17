@@ -18,9 +18,10 @@ package x
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"strings"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -431,9 +432,7 @@ func Parse(key []byte) *ParsedKey {
 	switch p.byteType {
 	case ByteData, ByteReverse:
 		if len(k) < 8 {
-			if Config.DebugMode {
-				fmt.Printf("Error: Uid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			}
+			glog.V(2).Infof("Error: Uid length < 8 for key: %q, parsed key: %+v\n", key, p)
 			return nil
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
@@ -443,10 +442,7 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 16 {
-			// TODO(martinmr): replace DebugMode with glog.vlog(2).
-			if Config.DebugMode {
-				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			}
+			glog.V(2).Infof("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
 			return nil
 		}
 
@@ -459,9 +455,7 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 8 {
-			if Config.DebugMode {
-				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			}
+			glog.V(2).Infof("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
 			return nil
 		}
 
@@ -471,9 +465,7 @@ func Parse(key []byte) *ParsedKey {
 		p.StartUid = binary.BigEndian.Uint64(startUid)
 	case ByteCount, ByteCountRev:
 		if len(k) < 4 {
-			if Config.DebugMode {
-				fmt.Printf("Error: Count length < 4 for key: %q, parsed key: %+v\n", key, p)
-			}
+			glog.V(2).Infof("Error: Count length < 4 for key: %q, parsed key: %+v\n", key, p)
 			return nil
 		}
 		p.Count = binary.BigEndian.Uint32(k)
@@ -483,9 +475,7 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 12 {
-			if Config.DebugMode {
-				fmt.Printf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			}
+			glog.V(2).Infof("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
 			return nil
 		}
 

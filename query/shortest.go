@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type pathInfo struct {
@@ -54,8 +55,8 @@ var pathPool = sync.Pool{
 	},
 }
 
-var ErrStop = x.Errorf("STOP")
-var ErrFacet = x.Errorf("Skip the edge")
+var ErrStop = errors.Errorf("STOP")
+var ErrFacet = errors.Errorf("Skip the edge")
 
 type priorityQueue []*Item
 
@@ -114,7 +115,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 		return cost, fcs, rerr
 	}
 	if len(fcs.Facets) > 1 {
-		rerr = x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+		rerr = errors.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 		return cost, fcs, rerr
 	}
 	tv, err := facets.ValFor(fcs.Facets[0])
@@ -208,7 +209,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 
 		if numEdges > x.Config.QueryEdgeLimit {
 			// If we've seen too many edges, stop the query.
-			rch <- x.Errorf("Exceeded query edge limit = %v. Found %v edges.",
+			rch <- errors.Errorf("Exceeded query edge limit = %v. Found %v edges.",
 				x.Config.QueryEdgeLimit, numEdges)
 			return
 		}
@@ -264,7 +265,7 @@ func (sg *SubGraph) copyFiltersRecurse(otherSubgraph *SubGraph) {
 func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
-		return nil, x.Errorf("Invalid shortest path query")
+		return nil, errors.Errorf("Invalid shortest path query")
 	}
 
 	numPaths := sg.Params.numPaths
@@ -422,7 +423,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
-		return nil, x.Errorf("Invalid shortest path query")
+		return nil, errors.Errorf("Invalid shortest path query")
 	}
 	numPaths := sg.Params.numPaths
 	if numPaths == 0 {

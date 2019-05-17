@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/badger"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
@@ -85,7 +86,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 
 	span.Annotatef(nil, "Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
 	if gid != groups().groupId() {
-		return nil, x.Errorf("attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
+		return nil, errors.Errorf("attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
 	}
 
 	var reply *pb.SortResult
@@ -105,8 +106,8 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 }
 
 var (
-	errContinue = x.Errorf("Continue processing buckets")
-	errDone     = x.Errorf("Done processing buckets")
+	errContinue = errors.Errorf("Continue processing buckets")
+	errDone     = errors.Errorf("Done processing buckets")
 )
 
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
@@ -121,7 +122,7 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	sType, err := schema.State().TypeOf(ts.Order[0].Attr)
 	if err != nil || !sType.IsScalar() {
 		return &sortresult{&emptySortResult, nil,
-			x.Errorf("Cannot sort attribute %s of type object.", ts.Order[0].Attr)}
+			errors.Errorf("Cannot sort attribute %s of type object.", ts.Order[0].Attr)}
 	}
 
 	for i := 0; i < n; i++ {
@@ -172,7 +173,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(order.Attr) {
-		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute %s is not indexed.", order.Attr)}
+		return &sortresult{&emptySortResult, nil, errors.Errorf("Attribute %s is not indexed.", order.Attr)}
 	}
 
 	tokenizers := schema.State().Tokenizer(order.Attr)
@@ -190,11 +191,11 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// sortable.
 		if typ == types.StringID {
 			return &sortresult{&emptySortResult, nil,
-				x.Errorf("Attribute:%s does not have exact index for sorting.", order.Attr)}
+				errors.Errorf("Attribute:%s does not have exact index for sorting.", order.Attr)}
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute:%s is not sortable.", order.Attr)}
+		return &sortresult{&emptySortResult, nil, errors.Errorf("Attribute:%s is not sortable.", order.Attr)}
 	}
 
 	// Iterate over every bucket / token.
@@ -397,11 +398,11 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	span.Annotate(nil, "Done waiting")
 
 	if ts.Count < 0 {
-		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
+		return nil, errors.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
 	}
 	if schema.State().IsList(ts.Order[0].Attr) {
-		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
+		return nil, errors.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
 	}
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.
@@ -491,7 +492,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	order := ts.Order[0]
 	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
-		return x.Errorf("Cannot sort attribute %s of type object.", order.Attr)
+		return errors.Errorf("Cannot sort attribute %s of type object.", order.Attr)
 	}
 	scalar := sType
 

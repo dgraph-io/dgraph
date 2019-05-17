@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/geo/s2"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
@@ -138,7 +139,7 @@ func closed(coords []geom.Coord) bool {
 func convertToGeom(str string) (geom.T, error) {
 	s := x.WhiteSpace.Replace(str)
 	if len(s) < 5 { // [1,2]
-		return nil, x.Errorf("Invalid coordinates")
+		return nil, errors.Errorf("Invalid coordinates")
 	}
 	var g geojson.Geometry
 	var m json.RawMessage
@@ -148,22 +149,22 @@ func convertToGeom(str string) (geom.T, error) {
 		g.Type = "MultiPolygon"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		g1, err := g.Decode()
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		mp := g1.(*geom.MultiPolygon)
 		for i := 0; i < mp.NumPolygons(); i++ {
 			coords := mp.Polygon(i).Coords()
 			if len(coords) == 0 {
-				return nil, x.Errorf("Got empty polygon inside multi-polygon.")
+				return nil, errors.Errorf("Got empty polygon inside multi-polygon.")
 			}
 			// Check that first ring is closed.
 			if !closed(mp.Polygon(i).Coords()[0]) {
-				return nil, x.Errorf("Last coord not same as first")
+				return nil, errors.Errorf("Last coord not same as first")
 			}
 		}
 		return g1, nil
@@ -173,20 +174,20 @@ func convertToGeom(str string) (geom.T, error) {
 		g.Type = "Polygon"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		g1, err := g.Decode()
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		coords := g1.(*geom.Polygon).Coords()
 		if len(coords) == 0 {
-			return nil, x.Errorf("Got empty polygon.")
+			return nil, errors.Errorf("Got empty polygon.")
 		}
 		// Check that first ring is closed.
 		if !closed(coords[0]) {
-			return nil, x.Errorf("Last coord not same as first")
+			return nil, errors.Errorf("Last coord not same as first")
 		}
 		return g1, nil
 	}
@@ -195,10 +196,10 @@ func convertToGeom(str string) (geom.T, error) {
 		g.Type = "Point"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		return g.Decode()
 	}
-	return nil, x.Errorf("Invalid coordinates")
+	return nil, errors.Errorf("Invalid coordinates")
 }

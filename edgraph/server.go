@@ -45,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -287,7 +288,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
 		// to set a field but use the wrong name (could be decoded from JSON).
-		return nil, x.Errorf("Operation must have at least one field set")
+		return nil, errors.Errorf("Operation must have at least one field set")
 	}
 	empty := &api.Payload{}
 	if err := x.HealthCheck(); err != nil {
@@ -295,11 +296,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	if isDropAll(op) && op.DropOp == api.Operation_DATA {
-		return nil, x.Errorf("Only one of DropAll and DropData can be true")
+		return nil, errors.Errorf("Only one of DropAll and DropData can be true")
 	}
 
 	if !isMutationAllowed(ctx) {
-		return nil, x.Errorf("No mutations allowed by server.")
+		return nil, errors.Errorf("No mutations allowed by server.")
 	}
 	if err := isAlterAllowed(ctx); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
@@ -459,7 +460,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	}
 
 	if !isMutationAllowed(ctx) {
-		return nil, x.Errorf("No mutations allowed.")
+		return nil, errors.Errorf("No mutations allowed.")
 	}
 	if mu.StartTs == 0 {
 		mu.StartTs = State.getTimestamp(false)
@@ -634,7 +635,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if req.BestEffort {
 		// Sanity: check that request is read-only too.
 		if !req.ReadOnly {
-			return resp, x.Errorf("A best effort query must be read-only.")
+			return resp, errors.Errorf("A best effort query must be read-only.")
 		}
 		if req.StartTs == 0 {
 			req.StartTs = posting.Oracle().MaxAssigned()
@@ -739,7 +740,7 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-var errNoAuth = x.Errorf("No Auth Token found. Token needed for Alter operations.")
+var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
 
 func isAlterAllowed(ctx context.Context) error {
 	p, ok := peer.FromContext(ctx)
@@ -758,7 +759,7 @@ func isAlterAllowed(ctx context.Context) error {
 		return errNoAuth
 	}
 	if tokens[0] != Config.AuthToken {
-		return x.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
+		return errors.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
 	}
 	return nil
 }
@@ -860,10 +861,10 @@ func validateNQuads(set, del []*api.NQuad) error {
 			ostar = o.DefaultVal == x.Star
 		}
 		if nq.Subject == x.Star || nq.Predicate == x.Star || ostar {
-			return x.Errorf("Cannot use star in set n-quad: %+v", nq)
+			return errors.Errorf("Cannot use star in set n-quad: %+v", nq)
 		}
 		if err := validateKeys(nq); err != nil {
-			return x.Errorf("Key error: %s: %+v", err, nq)
+			return errors.Errorf("Key error: %s: %+v", err, nq)
 		}
 	}
 	for _, nq := range del {
@@ -875,7 +876,7 @@ func validateNQuads(set, del []*api.NQuad) error {
 			ostar = o.DefaultVal == x.Star
 		}
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
-			return x.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
+			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
 		// with bad predicate forms. ex: foo@bar ~something
@@ -886,11 +887,11 @@ func validateNQuads(set, del []*api.NQuad) error {
 func validateKey(key string) error {
 	switch {
 	case len(key) == 0:
-		return x.Errorf("Has zero length")
+		return errors.Errorf("Has zero length")
 	case strings.ContainsAny(key, "~@"):
-		return x.Errorf("Has invalid characters")
+		return errors.Errorf("Has invalid characters")
 	case strings.IndexFunc(key, unicode.IsSpace) != -1:
-		return x.Errorf("Must not contain spaces")
+		return errors.Errorf("Must not contain spaces")
 	}
 	return nil
 }
@@ -898,14 +899,14 @@ func validateKey(key string) error {
 // validateKeys checks predicate and facet keys in N-Quad for syntax errors.
 func validateKeys(nq *api.NQuad) error {
 	if err := validateKey(nq.Predicate); err != nil {
-		return x.Errorf("predicate %q %s", nq.Predicate, err)
+		return errors.Errorf("predicate %q %s", nq.Predicate, err)
 	}
 	for i := range nq.Facets {
 		if nq.Facets[i] == nil {
 			continue
 		}
 		if err := validateKey(nq.Facets[i].Key); err != nil {
-			return x.Errorf("Facet %q, %s", nq.Facets[i].Key, err)
+			return errors.Errorf("Facet %q, %s", nq.Facets[i].Key, err)
 		}
 	}
 	return nil

@@ -20,14 +20,14 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // ErrBackupNoChanges is returned when the manifest version is equal to the snapshot version.
 // This means that no data updates happened since the last backup.
-var ErrBackupNoChanges = x.Errorf("No changes since last backup, OK.")
+var ErrBackupNoChanges = errors.Errorf("No changes since last backup, OK.")
 
 // Request has all the information needed to perform a backup.
 type Request struct {

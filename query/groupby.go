@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type groupPair struct {
@@ -43,7 +43,7 @@ func (grp *groupResult) aggregateChild(child *SubGraph) error {
 	fieldName := child.Params.Alias
 	if child.Params.DoCount {
 		if child.Attr != "uid" {
-			return x.Errorf("Only uid predicate is allowed in count within groupby")
+			return errors.Errorf("Only uid predicate is allowed in count within groupby")
 		}
 		if fieldName == "" {
 			fieldName = "count"
@@ -348,12 +348,12 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 				continue
 			}
 			if len(grp.keys) > 1 {
-				return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
+				return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
 			}
 			uidVal := grp.keys[0].key.Value
 			uid, ok := uidVal.(uint64)
 			if !ok {
-				return x.Errorf("Vars can be assigned only when grouped by UID attribute")
+				return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
 			}
 			// grp.aggregates could be empty if schema conversion failed during aggregation
 			if len(grp.aggregates) > 0 {

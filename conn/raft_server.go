@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
 )
@@ -173,18 +174,18 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 
 	// Check that the new node is from the same group as me.
 	if rc.Group != node.RaftContext.Group {
-		return nil, x.Errorf("Raft group mismatch")
+		return nil, errors.Errorf("Raft group mismatch")
 	}
 	// Also check that the new node is not me.
 	if rc.Id == node.RaftContext.Id {
-		return nil, x.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
+		return nil, errors.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
 	}
 
 	// Check that the new node is not already part of the group.
 	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
 		// There exists a healthy connection to server with same id.
 		if _, err := GetPools().Get(addr); err == nil {
-			return &api.Payload{}, x.Errorf(
+			return &api.Payload{}, errors.Errorf(
 				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
 		}
 	}
@@ -223,7 +224,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			idx += 4
 			msg := raftpb.Message{}
 			if idx+sz > len(data) {
-				return x.Errorf(
+				return errors.Errorf(
 					"Invalid query. Specified size %v overflows slice [%v,%v)\n",
 					sz, idx, len(data))
 			}
@@ -248,7 +249,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			if err := raft.Step(ctx, msg); err != nil {
 				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
 					rc.GetId(), err)
-				return x.Errorf("Error while raft.Step from %#x: %v", rc.GetId(), err)
+				return errors.Errorf("Error while raft.Step from %#x: %v", rc.GetId(), err)
 			}
 			idx += sz
 		}

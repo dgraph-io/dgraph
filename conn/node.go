@@ -19,7 +19,6 @@ package conn
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -34,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
@@ -42,7 +42,7 @@ import (
 
 var (
 	// ErrNoNode is returned when no node has been set up.
-	ErrNoNode = x.Errorf("No node has been set up yet")
+	ErrNoNode = errors.Errorf("No node has been set up yet")
 )
 
 // Node represents a node participating in the RAFT protocol.
@@ -444,7 +444,7 @@ func (n *Node) streamMessages(to uint64, s *stream) {
 func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	addr, has := n.Peer(to)
 	if !has {
-		return x.Errorf("Do not have address of peer %#x", to)
+		return errors.Errorf("Do not have address of peer %#x", to)
 	}
 	pool, err := GetPools().Get(addr)
 	if err != nil {
@@ -610,7 +610,7 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 		return ErrNoNode
 	}
 	if _, ok := n.Peer(id); !ok && id != n.RaftContext.Id {
-		return x.Errorf("Node %#x not part of group", id)
+		return errors.Errorf("Node %#x not part of group", id)
 	}
 	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
@@ -628,7 +628,7 @@ type linReadReq struct {
 	indexCh chan<- uint64
 }
 
-var errReadIndex = x.Errorf("Cannot get linearized read (time expired or no configured leader)")
+var errReadIndex = errors.Errorf("Cannot get linearized read (time expired or no configured leader)")
 
 // WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {

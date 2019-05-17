@@ -18,12 +18,12 @@ package query
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {
@@ -163,7 +163,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 
 		if numEdges > x.Config.QueryEdgeLimit {
 			// If we've seen too many edges, stop the query.
-			return x.Errorf("Exceeded query edge limit = %v. Found %v edges.",
+			return errors.Errorf("Exceeded query edge limit = %v. Found %v edges.",
 				x.Config.QueryEdgeLimit, numEdges)
 		}
 
@@ -201,13 +201,13 @@ func expandChildren(ctx context.Context, sg *SubGraph, children []*SubGraph) ([]
 
 func Recurse(ctx context.Context, sg *SubGraph) error {
 	if !sg.Params.Recurse {
-		return x.Errorf("Invalid recurse path query")
+		return errors.Errorf("Invalid recurse path query")
 	}
 
 	depth := sg.Params.RecurseArgs.Depth
 	if depth == 0 {
 		if sg.Params.RecurseArgs.AllowLoop {
-			return x.Errorf("Depth must be > 0 when loop is true for recurse query")
+			return errors.Errorf("Depth must be > 0 when loop is true for recurse query")
 		}
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.
@@ -216,7 +216,7 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 
 	for _, child := range sg.Children {
 		if len(child.Children) > 0 {
-			return x.Errorf(
+			return errors.Errorf(
 				"recurse queries require that all predicates are specified in one level")
 		}
 	}

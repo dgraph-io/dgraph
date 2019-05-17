@@ -30,6 +30,7 @@ import (
 	"unicode"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -376,7 +377,7 @@ func (writer *fileWriter) Close() error {
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) error {
 	if in.GroupId != groups().groupId() {
-		return x.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
+		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
 			groups().groupId(), in.GroupId)
 	}
 	glog.Infof("Export requested at %d.", in.ReadTs)
@@ -552,7 +553,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 
 	pl := groups().Leader(in.GroupId)
 	if pl == nil {
-		return x.Errorf("Unable to find leader of group: %d\n", in.GroupId)
+		return errors.Errorf("Unable to find leader of group: %d\n", in.GroupId)
 	}
 
 	glog.Infof("Sending export request to group: %d, addr: %s\n", in.GroupId, pl.Addr)

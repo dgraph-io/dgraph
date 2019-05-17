@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
@@ -87,7 +88,7 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 			jsonValue = v
 			valueType = api.Facet_BOOL
 		default:
-			return nil, x.Errorf("Facet value for key: %s can only be string/float64/bool.",
+			return nil, errors.Errorf("Facet value for key: %s can only be string/float64/bool.",
 				fname)
 		}
 
@@ -153,7 +154,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_BoolVal{BoolVal: v}}
 
 	default:
-		return x.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
+		return errors.Errorf("Unexpected type for val for attr: %s while converting to nquad", k)
 	}
 	return nil
 
@@ -176,7 +177,7 @@ func handleGeoType(val map[string]interface{}, nq *api.NQuad) (bool, error) {
 	if len(val) == 2 && hasType && hasCoordinates {
 		b, err := json.Marshal(val)
 		if err != nil {
-			return false, x.Errorf("Error while trying to parse value: %+v as geo val", val)
+			return false, errors.Errorf("Error while trying to parse value: %+v as geo val", val)
 		}
 		ok, err := tryParseAsGeo(b, nq)
 		if err != nil && ok {
@@ -195,7 +196,7 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	if err == nil {
 		geo, err := types.ObjectValue(types.GeoID, g)
 		if err != nil {
-			return false, x.Errorf("Couldn't convert value: %s to geo type", string(b))
+			return false, errors.Errorf("Couldn't convert value: %s to geo type", string(b))
 		}
 
 		nq.ObjectValue = geo
@@ -238,7 +239,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 	if len(mr.uid) == 0 {
 		if op == DeleteNquads {
 			// Delete operations with a non-nil value must have a uid specified.
-			return mr, x.Errorf("UID must be present and non-zero while deleting edges.")
+			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
 		}
 
 		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
@@ -358,11 +359,11 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					mr.nquads = append(mr.nquads, cr.nquads...)
 				default:
 					return mr,
-						x.Errorf("Got unsupported type for list: %s", pred)
+						errors.Errorf("Got unsupported type for list: %s", pred)
 				}
 			}
 		default:
-			return mr, x.Errorf("Unexpected type for val for attr: %s while converting to nquad", pred)
+			return mr, errors.Errorf("Unexpected type for val for attr: %s while converting to nquad", pred)
 		}
 	}
 
@@ -401,7 +402,7 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
-				return nil, x.Errorf("Only array of map allowed at root.")
+				return nil, errors.Errorf("Only array of map allowed at root.")
 			}
 			mr, err := mapToNquads(obj.(map[string]interface{}), &idx, op, "")
 			if err != nil {

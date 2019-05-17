@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -46,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -542,7 +542,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		toDisk(status.StartTs, status.CommitTs)
 	}
 	if err := writer.Flush(); err != nil {
-		return x.Errorf("Error while flushing to disk: %v", err)
+		return errors.Errorf("Error while flushing to disk: %v", err)
 	}
 
 	g := groups()
@@ -757,7 +757,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
 				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
+					errors.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
 			}
@@ -1338,7 +1338,7 @@ func (n *node) joinPeers() error {
 	c := pb.NewRaftClient(gconn)
 	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
-		return x.Errorf("Error while joining cluster: %+v\n", err)
+		return errors.Errorf("Error while joining cluster: %+v\n", err)
 	}
 	glog.Infof("Done with JoinCluster call\n")
 	return nil
@@ -1356,7 +1356,7 @@ func (n *node) isMember() (bool, error) {
 	glog.Infof("Calling IsPeer")
 	pr, err := c.IsPeer(n.ctx, n.RaftContext)
 	if err != nil {
-		return false, x.Errorf("Error while joining cluster: %+v\n", err)
+		return false, errors.Errorf("Error while joining cluster: %+v\n", err)
 	}
 	glog.Infof("Done with IsPeer call\n")
 	return pr.Status, nil

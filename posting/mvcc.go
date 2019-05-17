@@ -28,10 +28,11 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 )
 
 var (
-	ErrTsTooOld = x.Errorf("Transaction is too old")
+	ErrTsTooOld = errors.Errorf("Transaction is too old")
 )
 
 func (txn *Txn) SetAbort() {
@@ -184,10 +185,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 		case BitSchemaPosting:
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
 		default:
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
 		if item.DiscardEarlierVersions() {

@@ -24,6 +24,7 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
@@ -35,9 +36,9 @@ import (
 )
 
 var (
-	errEmptyPredicate = x.Errorf("Predicate not specified")
-	errNotLeader      = x.Errorf("Server is not leader of this group")
-	errUnableToAbort  = x.Errorf("Unable to abort pending transactions")
+	errEmptyPredicate = errors.Errorf("Predicate not specified")
+	errNotLeader      = errors.Errorf("Server is not leader of this group")
+	errUnableToAbort  = errors.Errorf("Unable to abort pending transactions")
 	emptyPayload      = api.Payload{}
 )
 
@@ -71,7 +72,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 				// This only happens once.
 				pk = x.Parse(kv.Key)
 				if !pk.IsSchema() {
-					return x.Errorf("Expecting first key to be schema key: %+v", kv)
+					return errors.Errorf("Expecting first key to be schema key: %+v", kv)
 				}
 				// Delete on all nodes.
 				p := &pb.Proposal{CleanPredicate: pk.Attr}
@@ -106,7 +107,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 // for a predicate or not.
 func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) error {
 	if !groups().Node.AmLeader() {
-		return x.Errorf("ReceivePredicate failed: Not the leader of group")
+		return errors.Errorf("ReceivePredicate failed: Not the leader of group")
 	}
 	// No new deletion/background cleanup would start after we start streaming tablet,
 	// so all the proposals for a particular tablet would atmost wait for deletion of
@@ -172,7 +173,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	}
 	if groups().groupId() != in.SourceGid {
 		return &emptyPayload,
-			x.Errorf("Group id doesn't match, received request for %d, my gid: %d",
+			errors.Errorf("Group id doesn't match, received request for %d, my gid: %d",
 				in.SourceGid, groups().groupId())
 	}
 	if len(in.Predicate) == 0 {
@@ -184,7 +185,7 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, groups().Node.proposeAndWait(ctx, p)
 	}
 	if err := posting.Oracle().WaitForTs(ctx, in.TxnTs); err != nil {
-		return &emptyPayload, x.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
+		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
 	if gid, err := groups().BelongsTo(in.Predicate); err != nil {
 		return &emptyPayload, err
@@ -210,7 +211,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	pl := groups().Leader(in.DestGid)
 	if pl == nil {
-		return x.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
+		return errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
 	}
 	c := pb.NewWorkerClient(pl.Get())
 	s, err := c.ReceivePredicate(ctx)

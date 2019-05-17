@@ -25,8 +25,8 @@ package y
 //     more common in Go. If you want to check for boolean being true, use
 //		   x.Assert, x.Assertf.
 // (2) You receive an error from external lib, and would like to pass on with some
-//     stack trace information. In this case, use x.Wrap or x.Wrapf.
-// (3) You want to generate a new error with stack trace info. Use x.Errorf.
+//     stack trace information. In this case, use x.Wrap or errors.Wrapf.
+// (3) You want to generate a new error with stack trace info. Use errors.Errorf.
 
 import (
 	"fmt"

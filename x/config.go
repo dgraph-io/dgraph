@@ -22,7 +22,6 @@ import (
 )
 
 type Options struct {
-	DebugMode      bool
 	PortOffset     int
 	QueryEdgeLimit uint64
 }

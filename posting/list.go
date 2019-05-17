@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -39,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -632,7 +632,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 
 	deleteBelowTs, mposts := l.pickPostings(readTs)
 	if readTs < l.minTs {
-		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
+		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 
 	midx, mlen := 0, len(mposts)

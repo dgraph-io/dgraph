@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -32,6 +31,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"golang.org/x/net/context"
+	"github.com/pkg/errors"
 )
 
 const baseTimeout time.Duration = 4 * time.Second
@@ -124,7 +124,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	}()
 
 	if n.Raft() == nil {
-		return x.Errorf("Raft isn't initialized yet")
+		return errors.Errorf("Raft isn't initialized yet")
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -203,7 +203,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			return err
 		}
 		if err = n.Raft().Propose(cctx, data); err != nil {
-			return x.Wrapf(err, "While proposing")
+			return errors.Wrapf(err, "While proposing")
 		}
 
 		timer := time.NewTimer(timeout)
