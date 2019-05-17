@@ -628,7 +628,8 @@ type linReadReq struct {
 	indexCh chan<- uint64
 }
 
-var errReadIndex = errors.Errorf("Cannot get linearized read (time expired or no configured leader)")
+var errReadIndex = errors.Errorf(
+	"Cannot get linearized read (time expired or no configured leader)")
 
 // WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {

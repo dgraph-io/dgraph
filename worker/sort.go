@@ -62,9 +62,10 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return processSort(ctx, q)
 	}
 
-	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
-		return c.Sort(ctx, q)
-	})
+	result, err := processWithBackupRequest(
+		ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
+			return c.Sort(ctx, q)
+		})
 	if err != nil {
 		return &emptySortResult, err
 	}
@@ -86,7 +87,8 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 
 	span.Annotatef(nil, "Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
 	if gid != groups().groupId() {
-		return nil, errors.Errorf("attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
+		return nil, errors.Errorf("attr: %q groupId: %v Request sent to wrong server.",
+			s.Order[0].Attr, gid)
 	}
 
 	var reply *pb.SortResult
@@ -168,12 +170,14 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return &sortresult{&emptySortResult, nil, fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
+		return &sortresult{&emptySortResult, nil,
+			fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
 	}
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(order.Attr) {
-		return &sortresult{&emptySortResult, nil, errors.Errorf("Attribute %s is not indexed.", order.Attr)}
+		return &sortresult{&emptySortResult, nil,
+			errors.Errorf("Attribute %s is not indexed.", order.Attr)}
 	}
 
 	tokenizers := schema.State().Tokenizer(order.Attr)
@@ -195,7 +199,8 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return &sortresult{&emptySortResult, nil, errors.Errorf("Attribute:%s is not sortable.", order.Attr)}
+		return &sortresult{&emptySortResult, nil,
+			errors.Errorf("Attribute:%s is not sortable.", order.Attr)}
 	}
 
 	// Iterate over every bucket / token.
@@ -398,11 +403,13 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	span.Annotate(nil, "Done waiting")
 
 	if ts.Count < 0 {
-		return nil, errors.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
-			"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
+		return nil, errors.Errorf(
+			"We do not yet support negative or infinite count with sorting: %s %d. "+
+				"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
 	}
 	if schema.State().IsList(ts.Order[0].Attr) {
-		return nil, errors.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
+		return nil, errors.Errorf("Sorting not supported on attr: %s of type: [scalar]",
+			ts.Order[0].Attr)
 	}
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.

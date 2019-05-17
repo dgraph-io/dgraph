@@ -401,8 +401,8 @@ func (s *Server) Connect(ctx context.Context,
 	defer glog.Infof("Connected: %+v\n", m)
 
 	if ctx.Err() != nil {
-		errors.Errorf("Context has error: %v\n", ctx.Err())
-		return &emptyConnectionState, ctx.Err()
+		err := errors.Errorf("Context has error: %v\n", ctx.Err())
+		return &emptyConnectionState, err
 	}
 	ms, err := s.latestMembershipState(ctx)
 	if err != nil {

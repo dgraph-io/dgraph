@@ -638,7 +638,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 func (n *node) proposeSnapshot(discardN int) error {
 	snap, err := n.calculateSnapshot(discardN)
 	if err != nil {
-		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
 	}
 	if snap == nil {
@@ -757,7 +756,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
 				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
-					errors.Errorf("While calculating and proposing snapshot: %v", err)
+					glog.Errorf("While calculating and proposing snapshot: %v", err)
 				}
 				go n.abortOldTransactions()
 			}
