@@ -41,8 +41,8 @@ import (
 
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
-	"golang.org/x/net/context"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 var (

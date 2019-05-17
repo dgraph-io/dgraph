@@ -33,8 +33,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
-	"github.com/stretchr/testify/require"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 type Member struct {

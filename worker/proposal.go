@@ -30,8 +30,8 @@ import (
 	tag "go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
-	"golang.org/x/net/context"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 const baseTimeout time.Duration = 4 * time.Second

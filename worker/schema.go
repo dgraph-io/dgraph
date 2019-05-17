@@ -17,9 +17,9 @@
 package worker
 
 import (
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
-	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/conn"

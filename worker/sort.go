@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
-	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"

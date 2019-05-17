@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
-	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"

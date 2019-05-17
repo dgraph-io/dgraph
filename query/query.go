@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
-	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"

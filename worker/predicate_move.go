@@ -22,9 +22,9 @@ import (
 	"strconv"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
-	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
