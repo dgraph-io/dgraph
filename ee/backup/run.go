@@ -241,7 +241,7 @@ func runRestore(pdir, location string) (uint64, error) {
 				fmt.Println("Creating new db:", bo.Dir)
 			}
 		}
-		return db.Load(r)
+		return db.Load(r, 16)
 	})
 }
 

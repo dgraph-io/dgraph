@@ -85,7 +85,8 @@ type Entry struct {
 	meta      byte
 
 	// Fields maintained internally.
-	offset uint32
+	offset   uint32
+	skipVlog bool
 }
 
 func (e *Entry) estimateSize(threshold int) int {
