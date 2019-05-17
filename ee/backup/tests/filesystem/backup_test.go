@@ -47,14 +47,11 @@ import (
 )
 
 var (
-	dirs = []string{
-		"./data/restore",
-		"./data/backups",
-	}
+	backupDir  = "./data/backups"
+	restoreDir = "./data/restore"
+	dirs       = []string{backupDir, restoreDir}
 
-	alphaDirs = []string{
-		"/data/backups",
-	}
+	alphaBackupDir = "/data/backups"
 
 	alphaContainers = []string{
 		"alpha1",
@@ -91,46 +88,24 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
 	t.Log("Pausing to let zero move tablet...")
+	moveOk := false
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
-		state, err := getState()
+		state, err := z.GetState()
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
+			moveOk = true
 			break
 		}
 	}
+	require.True(t, moveOk)
 
 	// Setup test directories.
 	dirSetup()
 
 	// Send backup request.
-	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{"/data/backups"},
-	})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.NoError(t, getError(resp.Body))
-	time.Sleep(5 * time.Second)
-
-	// Verify that the right amount of files and directories were created.
-	copyToLocalFs()
-	files := x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup")
-	})
-	require.True(t, len(files) == 3)
-	dirs := x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
-	})
-	require.True(t, len(dirs) == 1)
-
-	t.Logf("--- Restoring from: %q", dirs[0])
-	_, err = backup.RunRestore("./data/restore", dirs[0])
-	require.NoError(t, err)
-
-	// Only p1 needs to be checked, since the predicate was moved here during setup.
-	restored, err := getPValues("./data/restore/p1", "movie", math.MaxUint64)
-	require.NoError(t, err)
-	t.Logf("--- Restored values: %+v\n", restored)
+	dirs := runBackup(t, 3, 1)
+	restored := runRestore(t, dirs[0], math.MaxUint64)
 
 	checks := []struct {
 		blank, expected string
@@ -158,31 +133,8 @@ func TestBackupFilesystem(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Perform first incremental backup.
-	resp, err = http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{"/data/backups"},
-	})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.NoError(t, getError(resp.Body))
-	time.Sleep(5 * time.Second)
-
-	copyToLocalFs()
-	files = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup")
-	})
-	require.True(t, len(files) == 6)
-	dirs = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
-	})
-	require.True(t, len(dirs) == 2)
-
-	t.Logf("--- Restoring from: %q", dirs[1])
-	_, err = backup.RunRestore("./data/restore", dirs[1])
-	require.NoError(t, err)
-
-	restored, err = getPValues("./data/restore/p1", "movie", incr1.Context.CommitTs)
-	require.NoError(t, err)
-	t.Logf("--- Restored values: %+v\n", restored)
+	dirs = runBackup(t, 6, 2)
+	restored = runRestore(t, dirs[1], incr1.Context.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -206,31 +158,8 @@ func TestBackupFilesystem(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// Perform second incremental backup.
-	resp, err = http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{"/data/backups"},
-	})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	require.NoError(t, getError(resp.Body))
-	time.Sleep(5 * time.Second)
-
-	copyToLocalFs()
-	files = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
-		return !isdir && strings.HasSuffix(path, ".backup")
-	})
-	require.True(t, len(files) == 9)
-	dirs = x.WalkPathFunc("./data/backups", func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
-	})
-	require.True(t, len(dirs) == 3)
-
-	t.Logf("--- Restoring from: %q", dirs[2])
-	_, err = backup.RunRestore("./data/restore", dirs[2])
-	require.NoError(t, err)
-
-	restored, err = getPValues("./data/restore/p1", "movie", incr2.Context.CommitTs)
-	require.NoError(t, err)
-	t.Logf("--- Restored values: %+v\n", restored)
+	dirs = runBackup(t, 9, 3)
+	restored = runRestore(t, dirs[2], incr2.Context.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -258,22 +187,7 @@ func getError(rc io.ReadCloser) error {
 	return nil
 }
 
-type response struct {
-	Groups map[string]struct {
-		Members map[string]interface{} `json:"members"`
-		Tablets map[string]struct {
-			GroupID   int    `json:"groupId"`
-			Predicate string `json:"predicate"`
-		} `json:"tablets"`
-	} `json:"groups"`
-	Removed []struct {
-		Addr    string `json:"addr"`
-		GroupID int    `json:"groupId"`
-		ID      string `json:"id"`
-	} `json:"removed"`
-}
-
-func getState() (*response, error) {
+func getState() (*z.StateResponse, error) {
 	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/state")
 	if err != nil {
 		return nil, err
@@ -289,7 +203,7 @@ func getState() (*response, error) {
 		return nil, fmt.Errorf("Failed to get state: %s", string(b))
 	}
 
-	var st response
+	var st z.StateResponse
 	if err := json.Unmarshal(b, &st); err != nil {
 		return nil, err
 	}
@@ -335,7 +249,7 @@ func getPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 			str, err := types.Convert(src, types.StringID)
 			if err != nil {
 				fmt.Println(err)
-				return nil
+				return err
 			}
 			value := strings.TrimRight(str.Value.(string), "\x00")
 			list.Kv = append(list.Kv, &bpb.KV{
@@ -358,16 +272,49 @@ func getPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 	return values, err
 }
 
+func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
+	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
+		"destination": []string{alphaBackupDir},
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.NoError(t, getError(resp.Body))
+	time.Sleep(5 * time.Second)
+
+	// Verify that the right amount of files and directories were created.
+	copyToLocalFs()
+	files := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+		return !isdir && strings.HasSuffix(path, ".backup")
+	})
+	require.True(t, len(files) == numExpectedFiles)
+	dirs := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
+	})
+	require.True(t, len(dirs) == numExpectedDirs)
+
+	return dirs
+}
+
+func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]string {
+	t.Logf("--- Restoring from: %q", restoreDir)
+	_, err := backup.RunRestore("./data/restore", restoreDir)
+	require.NoError(t, err)
+
+	restored, err := getPValues("./data/restore/p1", "movie", commitTs)
+	require.NoError(t, err)
+	t.Logf("--- Restored values: %+v\n", restored)
+
+	return restored
+}
+
 func dirSetup() {
 	for _, dir := range dirs {
 		x.Check(os.MkdirAll(dir, os.ModePerm))
 	}
 
 	for _, alpha := range alphaContainers {
-		for _, dir := range alphaDirs {
-			cmd := []string{"mkdir", "-p", dir}
-			x.Check(z.DockerExec(alpha, cmd...))
-		}
+		cmd := []string{"mkdir", "-p", alphaBackupDir}
+		x.Check(z.DockerExec(alpha, cmd...))
 	}
 }
 
@@ -380,6 +327,9 @@ func copyToLocalFs() {
 	x.Check(err)
 
 	for _, alpha := range alphaContainers {
+		// Because docker cp does not support the * notation, the directory is copied
+		// first to a temporary location in the local FS. Then all backup files are
+		// combined under data/backups.
 		tmpDir := "./data/backups/" + alpha
 		srcPath := fmt.Sprintf("%s:/data/backups", alpha)
 		x.Check(z.DockerCp(srcPath, tmpDir))

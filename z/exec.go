@@ -63,6 +63,8 @@ func Pipeline(cmds [][]string) error {
 // piplineInternal takes a list of commands and a list of options (one for each).
 // If opts is nil, all commands should be run with the default options.
 func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
+	x.AssertTrue(opts == nil || len(cmds) == len(opts))
+
 	var p io.ReadCloser
 	var numCmds = len(cmds)
 
@@ -78,7 +80,7 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
 		cmd[i] = exec.Command(c[0], c[1:]...)
 		cmd[i].Stdin = p
 
-		if len(opts) > 0 {
+		if opts != nil {
 			cmd[i].Dir = opts[i].Dir
 		}
 
