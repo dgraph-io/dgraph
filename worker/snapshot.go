@@ -90,9 +90,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		}
 
 		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
-		// if err := writer.Write(kvs); err != nil {
-		// 	return 0, err
-		// }
 		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
 			return 0, err
 		}
@@ -102,8 +99,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
+	glog.V(1).Infof("Flushed all writes to Badger. Flattening it now.")
+	if err := pstore.Flatten(1); err != nil {
+		return 0, err
+	}
 	glog.Infof("Snapshot writes DONE. Sending ACK")
-	// Write an acknowledgement back to the leader.
+	// Send an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
 		return 0, err
 	}
