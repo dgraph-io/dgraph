@@ -51,7 +51,7 @@ func (w *TxnWriter) cb(err error) {
 	}
 }
 
-func (w *TxnWriter) Send(kvs *pb.KVS) error {
+func (w *TxnWriter) Write(kvs *pb.KVS) error {
 	for _, kv := range kvs.Kv {
 		var meta byte
 		if len(kv.UserMeta) > 0 {
