@@ -435,22 +435,22 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "fzZnUzHmwL4/i/EiRIlE0up4184=",
+			"checksumSHA1": "isEREHNbgV3rAQ9WGCT3/3SKqnQ=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
-			"revisionTime": "2019-05-03T23:10:59Z"
+			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
+			"revisionTime": "2019-05-16T23:35:11Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
-			"revisionTime": "2019-05-03T23:10:59Z"
+			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
+			"revisionTime": "2019-05-16T23:35:11Z"
 		},
 		{
-			"checksumSHA1": "yu19DxVlBi/XuPl0SRV46bkBNUI=",
+			"checksumSHA1": "SV7o4+eEK7/XNWC7H7Z5vWCoHP0=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
-			"revisionTime": "2019-05-03T23:10:59Z"
+			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
+			"revisionTime": "2019-05-16T23:35:11Z"
 		},
 		{
 			"checksumSHA1": "d8wE18ae6lOhmJqh0jwwhmQCkII=",
@@ -461,20 +461,20 @@
 		{
 			"checksumSHA1": "00T6XbLV4d95J7hm6kTXDReaQHM=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
-			"revisionTime": "2019-05-03T23:10:59Z"
+			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
+			"revisionTime": "2019-05-16T23:35:11Z"
 		},
 		{
 			"checksumSHA1": "ovAuDsGfn83KcTieKJjvx93TyUU=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
-			"revisionTime": "2019-05-03T23:10:59Z"
+			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
+			"revisionTime": "2019-05-16T23:35:11Z"
 		},
 		{
-			"checksumSHA1": "FKcWgmBresQu0pBFw+6SGC25pdE=",
+			"checksumSHA1": "KI48+d+XHzrlAenqQh/Re7swIWk=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "d98dd6856e8eb7b02dab0a802624b58a79847678",
-			"revisionTime": "2019-05-03T23:10:59Z"
+			"revision": "7116e163e500f67a5a3c9fd80a170d365c8d8135",
+			"revisionTime": "2019-05-16T23:35:11Z"
 		},
 		{
 			"checksumSHA1": "0hrzVs4TUnFfydHG0QidJYURqfg=",
@@ -603,10 +603,10 @@
 			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
-			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
+			"checksumSHA1": "CGj8VcI/CpzxaNqlqpEVM7qElD4=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "e91709a02e0e8ff8b86b7aa913fdc9ae9498e825",
-			"revisionTime": "2019-04-09T05:09:43Z"
+			"revision": "b285ee9cfc6c881bb20c0d8dc73370ea9b9ec90f",
+			"revisionTime": "2019-05-17T06:12:10Z"
 		},
 		{
 			"checksumSHA1": "z4copNgeTN77OymdDKqLaIK/vSI=",
@@ -1083,14 +1083,14 @@
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "f4e77d36d62c17c2336347bb2670ddbd02d092b7",
-			"revisionTime": "2019-05-02T22:26:14Z"
+			"revision": "3ec19112720433827bbce8be9342797f5a6aaaf9",
+			"revisionTime": "2019-05-12T12:16:34Z"
 		},
 		{
 			"checksumSHA1": "HvmG9LfStMLF+hIC7xR4SxegMis=",
 			"path": "golang.org/x/net/trace",
-			"revision": "f4e77d36d62c17c2336347bb2670ddbd02d092b7",
-			"revisionTime": "2019-05-02T22:26:14Z"
+			"revision": "3ec19112720433827bbce8be9342797f5a6aaaf9",
+			"revisionTime": "2019-05-12T12:16:34Z"
 		},
 		{
 			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
