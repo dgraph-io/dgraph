@@ -794,6 +794,10 @@ func (n *node) Run() {
 	} else {
 		glog.Infof("Found Raft progress in p directory: %d", applied)
 	}
+	if !x.WorkerConfig.UseRaftProgress {
+		glog.Infof("Ignoring Raft progress made due to flag.")
+		applied = 0
+	}
 
 	var timer x.Timer
 	for {
