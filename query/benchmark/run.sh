@@ -19,7 +19,7 @@ dgraph -dumpsg dumpsg -port 8912 &
 sleep 2
 
 for ACTOR in $ACTORS; do
-  curl localhost:8912/query -XPOST -d "
+  curl -H "Content-Type: application/graphql" localhost:8912/query -XPOST -d "
   {
     me(_xid_:${ACTOR}) {
       type.object.name.en
@@ -42,7 +42,7 @@ done
 rm -f dumpsg/*
 
 for DIRECTOR in $DIRECTORS; do
-  curl localhost:8912/query -XPOST -d "
+  curl -H "Content-Type: application/graphql" localhost:8912/query -XPOST -d "
   {
     me(_xid_:${DIRECTOR}) {
       type.object.name.en

@@ -1,4 +1,4 @@
-curl localhost:8080/query -XPOST -d '{
+curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d '{
 me(_xid_: m.06pj8) {
         type.object.name.en
         film.director.film {

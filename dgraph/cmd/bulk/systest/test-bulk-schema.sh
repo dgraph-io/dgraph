@@ -99,7 +99,7 @@ predicate_with_default_type:default  .
 predicate_with_index_no_uid_count:string @index(exact) .
 ' &>/dev/null
 
-  curl localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
+  curl -H "Content-Type: application/rdf" localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
 {
   set {
     _:company1 <predicate_with_default_type> "CompanyABC" .
@@ -112,7 +112,7 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file="schema.out"
-  curl -sS localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
+  curl -sS -H "Content-Type: application/graphql" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
 }
 

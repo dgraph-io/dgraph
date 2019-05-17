@@ -12,7 +12,7 @@ rm -Rf dumpsg
 NUMS="10 56 300"
 
 for NUM in $NUMS; do
-	curl localhost:8912/query -XPOST -d "{
+	curl -H "Content-Type: application/graphql" localhost:8912/query -XPOST -d "{
 	        me(_xid_:m.08624h) {
 	         type.object.name.en
 	         film.actor.film(first: $NUM) {
@@ -42,7 +42,7 @@ rm -Rf dumpsg
 NUMS="10 31 100"
 
 for NUM in $NUMS; do
-	curl localhost:8912/query -XPOST -d "{
+	curl -H "Content-Type: application/graphql" localhost:8912/query -XPOST -d "{
         me(_xid_:m.05dxl_) {
           type.object.name.en
           film.director.film(first: $NUM)  {
