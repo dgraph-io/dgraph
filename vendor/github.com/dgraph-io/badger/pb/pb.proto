@@ -1,0 +1,52 @@
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Use protos/gen.sh to generate .pb.go files.
+syntax = "proto3";
+
+package pb;
+
+message KV {
+  bytes key = 1;
+  bytes value = 2;
+  bytes user_meta = 3;
+  uint64 version = 4;
+  uint64 expires_at = 5;
+  bytes meta = 6;
+
+  // Stream id is used to identify which stream the KV came from.
+  uint32 stream_id = 10;
+}
+
+message KVList {
+  repeated KV kv = 1;
+}
+
+message ManifestChangeSet {
+        // A set of changes that are applied atomically.
+        repeated ManifestChange changes = 1;
+}
+
+message ManifestChange {
+        uint64 Id = 1;
+        enum Operation {
+                CREATE = 0;
+                DELETE = 1;
+        }
+        Operation Op   = 2;
+        uint32 Level   = 3; // Only used for CREATE
+        bytes Checksum = 4; // Only used for CREATE
+}
