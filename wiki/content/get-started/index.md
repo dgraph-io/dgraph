@@ -201,7 +201,7 @@ Ratel's default port is 8081, so override it using -p 8000.
 ## Step 3: Run Queries
 {{% notice "tip" %}}Once Dgraph is running, you can access Ratel at [`http://localhost:8000`](http://localhost:8000). It allows browser-based queries, mutations and visualizations.
 
-The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
+The mutations and queries below can either be run from the command line using `curl -H "Content-Type: application/rdf" localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
 
 ### Dataset
 The dataset is a movie graph, where and the graph nodes are entities of the type directors, actors, genres, or movies.
@@ -211,7 +211,7 @@ Changing the data stored in Dgraph is a mutation.  The following mutation stores
 
 
 ```sh
-curl localhost:8080/mutate?commitNow=true -XPOST -d $'
+curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XPOST -d $'
 {
   set {
    _:luke <name> "Luke Skywalker" .
@@ -277,7 +277,7 @@ curl localhost:8080/alter -XPOST -d $'
 Run this query to get all the movies. The query works below all the movies have a starring edge
 
 ```sh
-curl localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'
 {
  me(func: has(starring)) {
    name
@@ -291,7 +291,7 @@ Run this query to get "Star Wars" movies released after "1980".  Try it in the u
 
 
 ```sh
-curl localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'
 {
   me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name

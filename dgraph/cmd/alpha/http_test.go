@@ -423,7 +423,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
-	// One more time, with json content type this time.
+	// One more time, with json body this time.
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
 	data, _, err = queryWithTs(string(d1), "application/json", ts)

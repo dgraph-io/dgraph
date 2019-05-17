@@ -200,7 +200,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		params.Query = string(body)
 
 	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content type")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type")
 		return
 	}
 
@@ -327,7 +327,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content type")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type")
 		return
 	}
 

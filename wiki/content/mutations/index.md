@@ -288,7 +288,7 @@ Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutat
 To run a `set` mutation:
 
 ```sh
-curl -X POST localhost:8080/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   set {
     _:alice <name> "Alice" .
@@ -299,7 +299,7 @@ curl -X POST localhost:8080/mutate?commitNow=true -d $'
 To run a `delete` mutation:
 
 ```sh
-curl -X POST localhost:8080/mutate?commitNow=true -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   delete {
     # Example: Alice's UID is 0x56f33
@@ -310,8 +310,8 @@ curl -X POST localhost:8080/mutate?commitNow=true -d $'
 
 To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
 
-```
-curl -X POST localhost:8080/mutate?commitNow=true --data-binary @mutation.txt
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true --data-binary @mutation.txt
 ```
 
 ## JSON Mutation Format
@@ -646,6 +646,12 @@ Deletion operations are the same as [Deleting literal values]({{< relref "#delet
 
 ### Using JSON operations via cURL
 
+First you have to configure the HTTP header to specify content-type.
+
+```sh
+-H 'Content-Type: application/json'
+```
+
 {{% notice "note" %}}
 In order to use `jq` for JSON formatting you need the `jq` package. See the
 [`jq` downloads](https://stedolan.github.io/jq/download/) page for installation
@@ -653,8 +659,8 @@ details. You can also use Python's built in `json.tool` module with `python -m
 json.tool` to do JSON formatting.
 {{% /notice %}}
 
-```BASH
-curl -X POST localhost:8080/mutate?mutationType=json&commitNow=true -d  $'
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
     {
       "set": [
         {
@@ -670,8 +676,8 @@ curl -X POST localhost:8080/mutate?mutationType=json&commitNow=true -d  $'
 
 To delete:
 
-```BASH
-curl -X POST localhost:8080/mutate?mutationType=json&commitNow=true -d  $'
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
     {
       "delete": [
         {
@@ -683,6 +689,6 @@ curl -X POST localhost:8080/mutate?mutationType=json&commitNow=true -d  $'
 
 Mutation with a JSON file:
 
-```
-curl -X POST localhost:8080/mutate?mutationType=json&commitNow=true -d @data.json
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
 ```
