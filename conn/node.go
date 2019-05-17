@@ -733,3 +733,32 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 		}
 	}
 }
+
+func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payload, error) {
+	// Only process one JoinCluster request at a time.
+	n.joinLock.Lock()
+	defer n.joinLock.Unlock()
+
+	// Check that the new node is from the same group as me.
+	if rc.Group != n.RaftContext.Group {
+		return nil, x.Errorf("Raft group mismatch")
+	}
+	// Also check that the new node is not me.
+	if rc.Id == n.RaftContext.Id {
+		return nil, x.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
+	}
+
+	// Check that the new node is not already part of the group.
+	if addr, ok := n.Peer(rc.Id); ok && rc.Addr != addr {
+		// There exists a healthy connection to server with same id.
+		if _, err := GetPools().Get(addr); err == nil {
+			return &api.Payload{}, x.Errorf(
+				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
+		}
+	}
+	n.Connect(rc.Id, rc.Addr)
+
+	err := n.addToCluster(context.Background(), rc.Id)
+	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
+	return &api.Payload{}, err
+}

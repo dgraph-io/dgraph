@@ -131,7 +131,7 @@ type RaftServer struct {
 func (w *RaftServer) UpdateNode(n *Node) {
 	w.m.Lock()
 	defer w.m.Unlock()
-
+	w.node = n
 }
 
 // GetNode safely retrieves the node.
@@ -147,21 +147,20 @@ func NewRaftServer(n *Node) *RaftServer {
 }
 
 // IsPeer checks whether this node is a peer of the node sending the request.
-func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (*pb.PeerResponse,
-	error) {
+func (w *RaftServer) IsPeer(ctx context.Context, rc *pb.RaftContext) (
+	*pb.PeerResponse, error) {
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
 		return &pb.PeerResponse{}, ErrNoNode
 	}
 
-	node.RLock()
-	defer node.RUnlock()
+	confState := node.ConfState()
 
-	if node._confState == nil {
+	if confState == nil {
 		return &pb.PeerResponse{}, nil
 	}
 
-	for _, raftIdx := range node._confState.Nodes {
+	for _, raftIdx := range confState.Nodes {
 		if rc.Id == raftIdx {
 			return &pb.PeerResponse{Status: true}, nil
 		}
@@ -175,38 +174,13 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	if ctx.Err() != nil {
 		return &api.Payload{}, ctx.Err()
 	}
-	// Commenting out the following checks for now, until we get rid of groups.
-	// TODO: Uncomment this after groups is removed.
+
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
 		return nil, ErrNoNode
 	}
-	// Only process one JoinCluster request at a time.
-	node.joinLock.Lock()
-	defer node.joinLock.Unlock()
 
-	// Check that the new node is from the same group as me.
-	if rc.Group != node.RaftContext.Group {
-		return nil, x.Errorf("Raft group mismatch")
-	}
-	// Also check that the new node is not me.
-	if rc.Id == node.RaftContext.Id {
-		return nil, x.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
-	}
-
-	// Check that the new node is not already part of the group.
-	if addr, ok := node.Peer(rc.Id); ok && rc.Addr != addr {
-		// There exists a healthy connection to server with same id.
-		if _, err := GetPools().Get(addr); err == nil {
-			return &api.Payload{}, x.Errorf(
-				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
-		}
-	}
-	node.Connect(rc.Id, rc.Addr)
-
-	err := node.addToCluster(context.Background(), rc.Id)
-	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
-	return &api.Payload{}, err
+	return node.joinCluster(ctx, rc)
 }
 
 // RaftMessage handles RAFT messages.
