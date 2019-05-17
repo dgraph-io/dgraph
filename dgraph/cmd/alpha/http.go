@@ -197,11 +197,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-	// when content type is marked as application/graphql
-	default:
-		// We do not allow any query variables in this case because the body contains the
-		// GraphQL query. And it is not pretty to encode the variables in the URL.
+	case "application/graphql":
 		params.Query = string(body)
+
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content type")
+		return
 	}
 
 	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
@@ -292,40 +293,20 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-
 	body := readRequest(w, r)
 	if body == nil {
 		return
-	}
-
-	var params struct {
-		Query []byte `json:"query"`
-	}
-
-	contentType := r.Header.Get("Content-Type")
-	switch strings.ToLower(contentType) {
-	case "application/json":
-		if err := json.Unmarshal(body, &params); err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Error while unmarshalling body into json object")
-			return
-		}
-
-	// when content type is marked as application/graphql
-	default:
-		params.Query = body
 	}
 
 	// start parsing the query
 	parseStart := time.Now()
 
 	var mu *api.Mutation
-	mutationType := r.URL.Query().Get("mutationType")
-	if mutationType == "json" {
-		// Parse JSON.
+	contentType := r.Header.Get("Content-Type")
+	switch strings.ToLower(contentType) {
+	case "application/json":
 		ms := make(map[string]*skipJSONUnmarshal)
-		err := json.Unmarshal(params.Query, &ms)
-		if err != nil {
+		if err := json.Unmarshal(body, &ms); err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
@@ -337,15 +318,21 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
 			mu.DeleteJson = delJSON.bs
 		}
-	} else {
+
+	case "application/rdf":
 		// Parse N-Quads.
-		mu, err = gql.ParseMutation(string(params.Query))
+		mu, err = gql.ParseMutation(string(body))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
 		}
+
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content type")
+		return
 	}
 
+	// end of query parsing
 	parseEnd := time.Now()
 
 	mu.StartTs = startTs
@@ -404,14 +391,14 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	aborted, err := parseBool(r, "aborted")
+	abort, err := parseBool(r, "abort")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
 	var response map[string]interface{}
-	if aborted {
+	if abort {
 		response, err = handleAbort(startTs)
 	} else {
 		// Keys are sent as an array in the body.
@@ -441,8 +428,7 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 		StartTs: startTs,
 		Aborted: true,
 	}
-	_, err := worker.CommitOverNetwork(context.Background(), tc)
-	if err != nil {
+	if _, err := worker.CommitOverNetwork(context.Background(), tc); err != nil {
 		return nil, err
 	}
 
@@ -515,16 +501,14 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body := readRequest(w, r)
-	if body == nil {
+	b := readRequest(w, r)
+	if b == nil {
 		return
 	}
 
 	op := &api.Operation{}
-	bodyStr := string(body)
-	err := jsonpb.UnmarshalString(bodyStr, op)
-	if err != nil {
-		op.Schema = bodyStr
+	if err := jsonpb.UnmarshalString(string(b), op); err != nil {
+		op.Schema = string(b)
 	}
 
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
@@ -538,7 +522,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = attachAccessJwt(ctx, r)
-	if _, err = (&edgraph.Server{}).Alter(ctx, op); err != nil {
+	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
