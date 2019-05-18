@@ -201,11 +201,6 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 			delete(group.Members, member.Id)
 			state.Removed = append(state.Removed, m)
 		}
-		// else already removed.
-		if len(group.Members) == 0 {
-			glog.V(3).Infof("Deleting group Id %d (no members) ...", member.GroupId)
-			delete(state.Groups, member.GroupId)
-		}
 		return nil
 	}
 	if !has && len(group.Members) >= n.server.NumReplicas {
