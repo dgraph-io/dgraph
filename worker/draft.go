@@ -730,7 +730,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// entries to process on a restart.
 				if calculate {
 					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
-						x.Errorf("While calculating and proposing snapshot: %v", err)
+						glog.Errorf("While calculating and proposing snapshot: %v", err)
 					}
 				}
 				go n.abortOldTransactions()
