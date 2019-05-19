@@ -760,7 +760,7 @@ func (n *node) Run() {
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
 	} else {
-		glog.Infof("Found Raft progress in p directory: %d", applied)
+		glog.Infof("Found Raft progress: %d", applied)
 	}
 
 	var timer x.Timer
