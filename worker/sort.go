@@ -116,6 +116,10 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
+func resultWithError(err error) *sortresult {
+	return &sortresult{&emptySortResult, nil, nil, err}
+}
+
 func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "sortWithoutIndex")
@@ -128,24 +132,24 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	// might have millions of keys just for retrieving some values.
 	sType, err := schema.State().TypeOf(ts.Order[0].Attr)
 	if err != nil || !sType.IsScalar() {
-		return &sortresult{&emptySortResult, nil, nil,
-			x.Errorf("Cannot sort attribute %s of type object.", ts.Order[0].Attr)}
+		return resultWithError(x.Errorf("Cannot sort attribute %s of type object.",
+			ts.Order[0].Attr))
 	}
 
 	for i := 0; i < n; i++ {
 		select {
 		case <-ctx.Done():
-			return &sortresult{&emptySortResult, nil, nil, ctx.Err()}
+			return resultWithError(ctx.Err())
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &pb.List{Uids: ts.UidMatrix[i].Uids}
 			var vals []types.Val
 			if vals, err = sortByValue(ctx, ts, tempList, sType); err != nil {
-				return &sortresult{&emptySortResult, nil, nil, err}
+				return resultWithError(err)
 			}
 			start, end, err := paginate(ts, tempList, vals)
 			if err != nil {
-				return &sortresult{&emptySortResult, nil, nil, err}
+				return resultWithError(err)
 			}
 			if len(ts.Order) > 1 {
 				var offset int32
@@ -185,14 +189,12 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return &sortresult{&emptySortResult, nil, nil,
-			fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
+		return resultWithError(fmt.Errorf("Attribute %s not defined in schema", order.Attr))
 	}
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(order.Attr) {
-		return &sortresult{&emptySortResult, nil, nil,
-			x.Errorf("Attribute %s is not indexed.", order.Attr)}
+		return resultWithError(x.Errorf("Attribute %s is not indexed.", order.Attr))
 	}
 
 	tokenizers := schema.State().Tokenizer(order.Attr)
@@ -209,13 +211,12 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// String type can have multiple tokenizers, only one of which is
 		// sortable.
 		if typ == types.StringID {
-			return &sortresult{&emptySortResult, nil, nil,
-				x.Errorf("Attribute:%s does not have exact index for sorting.", order.Attr)}
+			return resultWithError(x.Errorf("Attribute:%s does not have exact index for sorting.",
+				order.Attr))
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return &sortresult{&emptySortResult, nil, nil,
-			x.Errorf("Attribute:%s is not sortable.", order.Attr)}
+		return resultWithError(x.Errorf("Attribute:%s is not sortable.", order.Attr))
 	}
 
 	// Iterate over every bucket / token.
@@ -244,7 +245,7 @@ BUCKETS:
 		key := item.Key() // No need to copy.
 		select {
 		case <-ctx.Done():
-			return &sortresult{&emptySortResult, nil, nil, ctx.Err()}
+			return resultWithError(ctx.Err())
 		default:
 			k := x.Parse(key)
 			if k == nil {
@@ -262,7 +263,7 @@ BUCKETS:
 			case errContinue:
 				// Continue iterating over tokens / index buckets.
 			default:
-				return &sortresult{&emptySortResult, nil, nil, err}
+				return resultWithError(err)
 			}
 		}
 	}
@@ -279,7 +280,7 @@ BUCKETS:
 
 	select {
 	case <-ctx.Done():
-		return &sortresult{&emptySortResult, nil, nil, ctx.Err()}
+		return resultWithError(ctx.Err())
 	default:
 		return &sortresult{r, multiSortOffsets, values, nil}
 	}
@@ -576,7 +577,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 			if len(ts.Order) == 1 {
 				result.Uids = result.Uids[il.offset:n]
 			} else {
-				// Incase of multi sort we can't apply the offset yet, as the order might change
+				// In case of multi sort we can't apply the offset yet, as the order might change
 				// after other sort orders are applied. So we need to pick all the uids in the
 				// current bucket.
 				// Since we are picking all values in this bucket, we have to apply this remaining
