@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -670,32 +669,12 @@ func (n *node) rampMeter() {
 	}
 }
 
-func (n *node) findRaftProgress() (uint64, error) {
-	var applied uint64
-	err := pstore.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(x.RaftKey())
-		if err == badger.ErrKeyNotFound {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			var snap pb.Snapshot
-			if err := snap.Unmarshal(val); err != nil {
-				return err
-			}
-			applied = snap.Index
-			return nil
-		})
-	})
-	return applied, err
-}
-
 func (n *node) updateRaftProgress() error {
 	// Both leader and followers can independently update their Raft progress. We don't store
 	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
 	// has already applied, to speed up things on a restart.
+	//
+	// TODO: Only calculate snapshot from the last checkpoint to save resources.
 	snap, err := n.calculateSnapshot(10) // 10 is a randomly chosen small number.
 	if err != nil {
 		return err
@@ -706,23 +685,12 @@ func (n *node) updateRaftProgress() error {
 
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
-	applied, err := n.findRaftProgress()
-	if err != nil {
+	applied, err := n.Store.Checkpoint()
+	if err != nil || snap.Index <= applied {
 		return err
 	}
-	if snap.Index <= applied {
-		return nil
-	}
 
-	data, err := snap.Marshal()
-	x.Check(err)
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	if err := txn.SetWithMeta(x.RaftKey(), data, x.ByteRaft); err != nil {
-		return err
-	}
-	if err := txn.CommitAt(1, nil); err != nil {
+	if err := n.Store.UpdateCheckpoint(snap); err != nil {
 		return err
 	}
 	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
@@ -788,7 +756,7 @@ func (n *node) Run() {
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
-	applied, err := n.findRaftProgress()
+	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
 	} else {
@@ -1040,7 +1008,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			addTo(item.Key(), item.EstimatedSize())
 			return false
-		case x.ByteRaft:
+		case x.ByteUnused:
 			return false
 		default:
 			return true
