@@ -709,6 +709,14 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 
 			if n.AmLeader() {
+				var calculate bool
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// Save some cycles by only calculating snapshot if the checkpoint has gone
+						// quite a bit further than first index.
+						calculate = chk-first >= uint64(x.WorkerConfig.SnapshotAfter)
+					}
+				}
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
@@ -720,8 +728,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
+				if calculate {
+					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+						x.Errorf("While calculating and proposing snapshot: %v", err)
+					}
 				}
 				go n.abortOldTransactions()
 			}
