@@ -635,7 +635,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
-	snap, err := n.calculateSnapshot(discardN)
+	snap, err := n.calculateSnapshot(0, discardN)
 	if err != nil {
 		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
@@ -674,19 +674,15 @@ func (n *node) updateRaftProgress() error {
 	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
 	// has already applied, to speed up things on a restart.
 	//
-	// TODO: Only calculate snapshot from the last checkpoint to save resources.
-	snap, err := n.calculateSnapshot(10) // 10 is a randomly chosen small number.
-	if err != nil {
-		return err
-	}
-	if snap == nil {
-		return nil
-	}
-
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
 	applied, err := n.Store.Checkpoint()
-	if err != nil || snap.Index <= applied {
+	if err != nil {
+		return err
+	}
+
+	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
+	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
 
@@ -1163,8 +1159,9 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
-func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
-	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot")
+func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
+		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
 
 	// We do not need to block snapshot calculation because of a pending stream. Badger would have
@@ -1180,6 +1177,11 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 	span.Annotatef(nil, "First index: %d", first)
+	if startIdx > first {
+		// If we're starting from a higher index, set first to that.
+		first = startIdx
+		span.Annotatef(nil, "Setting first to: %d", startIdx)
+	}
 
 	rsnap, err := n.Store.Snapshot()
 	if err != nil {

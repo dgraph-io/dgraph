@@ -266,13 +266,7 @@ func RegisterExporters(conf *viper.Viper, service string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		trace.RegisterExporter(exporter)
-
-		// For demoing purposes, always sample.
-		trace.ApplyConfig(trace.Config{
-			DefaultSampler: trace.AlwaysSample(),
-		})
 	}
 
 	// Exclusively for stats, metrics, etc. Not for tracing.
