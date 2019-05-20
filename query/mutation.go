@@ -109,7 +109,9 @@ func verifyUid(ctx context.Context, uid uint64) error {
 // AssignUids tries to assign unique ids to each identity in the subjects and objects in the
 // format of _:xxx. An identity, e.g. _:a, will only be assigned one uid regardless how many times
 // it shows up in the subjects or objects
-func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, nquads []*api.NQuad, queryVars map[string][]string) (
+	map[string]uint64, error) {
+
 	newUids := make(map[string]uint64)
 	num := &pb.Num{}
 	var err error
@@ -117,6 +119,15 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		// We dont want to assign uids to these.
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			return newUids, errors.New("Predicate deletion should be called via alter")
+		}
+
+		// Here we check if we have defined a subject variable in the mutation.
+		// If we have a variable and it has a value, we assign the value to the Subject.
+		// If we don't have a value, the check below this will fail.
+		if queryVars != nil && nq.SubjectVar != "" {
+			if s, ok := queryVars[nq.SubjectVar]; ok {
+				nq.Subject = s[0]
+			}
 		}
 
 		if len(nq.Subject) == 0 {
@@ -130,6 +141,15 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		}
 		if err = verifyUid(ctx, uid); err != nil {
 			return newUids, err
+		}
+
+		// Here we check if we have defined an object varible in the mutation.
+		// If we have a variable and it has a value, we assign the value to the ObjectId.
+		// The next check will validate the value.
+		if queryVars != nil && nq.ObjectVar != "" {
+			if s, ok := queryVars[nq.ObjectVar]; ok {
+				nq.ObjectId = s[0]
+			}
 		}
 
 		if len(nq.ObjectId) > 0 {

@@ -17,23 +17,40 @@
 package gql
 
 import (
-	"errors"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// ParseMutation parses a block of text into a mutation.
+// Returns an object with a mutation or a transaction query
+// with mutation, otherwise returns nil with an error.
+// TODO (Aman): add examples.
 func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer := lex.NewLexer(mutation)
 	lexer.Run(lexInsideMutation)
 	it := lexer.NewIterator()
 	var mu api.Mutation
+	var inTxn bool
 
 	if !it.Next() {
-		return nil, errors.New("Invalid mutation")
+		return nil, x.Errorf("Invalid mutation")
 	}
 	item := it.Item()
+	// Inside txn{ ... } block.
+	// Here we switch into txn mode and try to fetch any query inside a txn block.
+	// If no query text is found, this txn is a no-op.
+	if item.Typ == itemMutationTxn {
+		var err error
+		// Get the query text: txn{ query { ... }}
+		mu.CondQuery, err = parseMutationCondQuery(it)
+		if err != nil {
+			return nil, err
+		}
+		inTxn = true
+		item = it.Item()
+		// fallthrough to regular mutation parsing.
+	}
 	if item.Typ != itemLeftCurl {
 		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
 	}
@@ -45,7 +62,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		}
 		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
-			if it.Next() && it.Item().Typ != lex.ItemEOF {
+			if !inTxn && it.Next() && it.Item().Typ != lex.ItemEOF {
 				return nil, x.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
 			}
 			return &mu, nil
@@ -56,7 +73,46 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 			}
 		}
 	}
-	return nil, x.Errorf("Invalid mutation.")
+	return nil, x.Errorf("Invalid mutation")
+}
+
+// parseMutationCondQuery gets the text inside a txn query block. It is possible that there's
+// no query to be found, in that case it's the caller's responsbility to fail.
+// Returns the query text if any is found, otherwise an empty string with error.
+func parseMutationCondQuery(it *lex.ItemIterator) (string, error) {
+	var query string
+	var parse bool
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemLeftCurl:
+			continue
+		case itemMutationOpContent:
+			if !parse {
+				return "", x.Errorf("Invalid query block.")
+			}
+			query = item.Val
+		case itemMutationTxnOp:
+			if item.Val == "query" {
+				if parse {
+					return "", x.Errorf("Too many query blocks in txn")
+				}
+				parse = true
+				continue
+			}
+			// TODO: mutation conditionals
+			if item.Val != "mutation" {
+				return "", x.Errorf("Invalid txn operator %q.", item.Val)
+			}
+			if !it.Next() {
+				return "", x.Errorf("Invalid mutation block")
+			}
+			return query, nil
+		default:
+			return "", x.Errorf("Unexpected %q inside of txn block.", item.Val)
+		}
+	}
+	return query, nil
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
@@ -73,7 +129,7 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 			}
 			parse = true
 		}
-		if item.Typ == itemMutationContent {
+		if item.Typ == itemMutationOpContent {
 			if !parse {
 				return x.Errorf("Mutation syntax invalid.")
 			}

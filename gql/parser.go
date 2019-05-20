@@ -586,8 +586,14 @@ func checkDependency(vl []*Vars) error {
 	}
 
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+		// NOTE: This error prevents conditional mutations to work, because we expect variables
+		//       created from a query that are used in a following mutation block. For now,
+		//       we notify the user in the output. I will revisit this later.
+		// return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+		// 	defines, needs)
+		glog.Warningf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
+		return nil
 	}
 
 	if len(defines) < len(needs) {

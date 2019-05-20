@@ -2598,6 +2598,28 @@ type QueryRequest struct {
 	vars map[string]varValue
 }
 
+// GetUids returns all uids matching a variable.
+// Returns nil if empty.
+func (req *QueryRequest) GetUids() map[string][]string {
+	var res map[string][]string
+	for name, v := range req.vars {
+		if v.Uids == nil {
+			continue
+		}
+		var uids []string
+		for _, uid := range v.Uids.Uids {
+			uids = append(uids, fmt.Sprintf("%#x", uid))
+		}
+		if len(uids) != 0 {
+			if res == nil {
+				res = make(map[string][]string)
+			}
+			res[name] = uids
+		}
+	}
+	return res
+}
+
 // ProcessQuery processes query part of the request (without mutations).
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.

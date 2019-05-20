@@ -17,7 +17,9 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl    = '{'
@@ -43,28 +45,54 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemEqual                                   // equals to symbol
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemColon                                   // Colon
-	itemAt                                      // @
-	itemPeriod                                  // .
-	itemDollar                                  // $
-	itemRegex                                   // /
-	itemBackslash                               // \
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
+	itemText              lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                  // left curly bracket
+	itemRightCurl                                 // right curly bracket
+	itemEqual                                     // equals to symbol
+	itemName                                      // [9] names
+	itemOpType                                    // operation type
+	itemString                                    // quoted string
+	itemLeftRound                                 // left round bracket
+	itemRightRound                                // right round bracket
+	itemColon                                     // Colon
+	itemAt                                        // @
+	itemPeriod                                    // .
+	itemDollar                                    // $
+	itemRegex                                     // /
+	itemBackslash                                 // \
+	itemMutationOp                                // mutation operation
+	itemMutationOpContent                         // mutation operation content (inc. query)
+	itemMutationTxn                               // mutation txn
+	itemMutationTxnOp                             // mutation txn operation
 	itemLeftSquare
 	itemRightSquare
 	itemComma
 	itemMathOp
 )
+
+func lexInsideTxn(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexInsideMutation
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.Depth--
+			l.Emit(itemRightCurl)
+		case r == leftCurl:
+			l.Depth++
+			l.Emit(itemLeftCurl)
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexMutationTxn
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Unclosed txn action")
+		default:
+			return l.Errorf("Unrecognized character in lexInsideTxn: %#U", r)
+		}
+	}
+}
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
@@ -377,10 +405,39 @@ func lexNameMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		if word == "txn" {
+			l.Emit(itemMutationTxn)
+			return lexInsideTxn
+		}
 		l.Emit(itemMutationOp)
 		break
 	}
 	return l.Mode
+}
+
+func lexMutationTxn(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		switch word {
+		case "query":
+			l.Emit(itemMutationTxnOp)
+			return lexTextCondQuery
+		case "mutation":
+			l.Depth = 0
+			l.Emit(itemMutationTxnOp)
+			return lexInsideMutation
+		default:
+			l.Errorf("Invalid operation type: %s", word)
+		}
+		break
+	}
+	return lexInsideTxn
 }
 
 // lexTextMutation lexes and absorbs the text inside a mutation operation block.
@@ -401,10 +458,41 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideMutation
+}
+
+func lexTextCondQuery(l *lex.Lexer) lex.StateFn {
+	depth := 0
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			return l.Errorf("Unclosed query text")
+		}
+		if isSpace(r) || lex.IsEndOfLine(r) {
+			if depth == 0 {
+				l.Ignore()
+			}
+			continue
+		}
+		if r == leftCurl {
+			depth++
+		}
+		if r == rightCurl {
+			depth--
+			if l.Depth < depth {
+				return l.Errorf("Unbalanced '}' found inside query text")
+			}
+		}
+		if depth > 0 {
+			continue
+		}
+		l.Emit(itemMutationOpContent)
+		break
+	}
+	return lexInsideTxn
 }
 
 // This function is used to absorb the object value.

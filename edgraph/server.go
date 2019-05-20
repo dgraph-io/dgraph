@@ -427,6 +427,61 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assign
 	return s.doMutate(ctx, mu)
 }
 
+// doCondQuery processes a conditional query within the same transaction of a mutation.
+// Returns a map with the vars created from the query, otherwise nil and an error.
+func doCondQuery(ctx context.Context, l *query.Latency, req *api.Request) (
+	map[string][]string, error) {
+
+	var queryVars map[string][]string
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	// Nothing to do
+	if req.Query == "" {
+		return queryVars, nil
+	}
+	x.AssertTruef(req.StartTs != 0, "Transaction timestamp should not be zero")
+
+	parsedReq, err := gql.Parse(gql.Request{
+		Str:       req.Query,
+		Variables: make(map[string]string),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := validateQuery(parsedReq.Query); err != nil {
+		return nil, err
+	}
+
+	qr := query.QueryRequest{
+		Latency:  l,
+		GqlQuery: &parsedReq,
+		ReadTs:   req.StartTs,
+	}
+	if err = qr.ProcessQuery(ctx); err != nil {
+		return nil, x.Wrapf(err, "while processing query: %q", req.Query)
+	}
+
+	queryVars = qr.GetUids()
+	if len(queryVars) == 0 {
+		glog.V(2).Infof("No variables defined in conditional query: %q", req.Query)
+		return nil, nil
+	}
+	glog.V(3).Infof("CondQuery: qr=%+v vars=%v", qr, queryVars)
+
+	// NOTE: This is a temporary check until the mutation logic is defined clearly.
+	for varName, uids := range queryVars {
+		if len(uids) > 1 {
+			return nil, x.Errorf("Too many Uids for %q, expected 1 got %d", varName, len(uids))
+		}
+	}
+
+	return queryVars, nil
+}
+
 func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -476,6 +531,17 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 
 	var l query.Latency
 	l.Start = time.Now()
+
+	// Parse query and process
+	queryVars, err := doCondQuery(ctx, &l, &api.Request{
+		StartTs: mu.StartTs,
+		Query:   mu.CondQuery,
+	})
+	// Quit early if we got an error or expected queryVars and got none.
+	if err != nil || (mu.CondQuery != "" && queryVars == nil) {
+		return resp, err
+	}
+
 	gmu, err := parseMutationObject(mu)
 	if err != nil {
 		return resp, err
@@ -492,7 +558,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		}
 	}()
 
-	newUids, err := query.AssignUids(ctx, gmu.Set)
+	newUids, err := query.AssignUids(ctx, gmu.Set, queryVars)
 	if err != nil {
 		return resp, err
 	}
@@ -568,6 +634,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+
 	startTime := time.Now()
 
 	var measurements []ostats.Measurement
@@ -612,7 +679,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		return resp, err
 	}
 
-	if err = validateQuery(parsedReq.Query); err != nil {
+	if err := validateQuery(parsedReq.Query); err != nil {
 		return resp, err
 	}
 

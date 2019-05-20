@@ -852,6 +852,7 @@ func TestParseQueryWithVarError1(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Some variables are defined but not used")
 }
@@ -869,6 +870,64 @@ func TestParseQueryWithVarError2(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Some variables are used but not defined")
+}
+
+func TestParseMutationError(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+	`
+	_, err := ParseMutation(query)
+	require.Error(t, err)
+	require.Equal(t, `Expected { at the start of block. Got: [mutation]`, err.Error())
+}
+
+func TestParseMutationError2(t *testing.T) {
+	query := `
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+	`
+	_, err := ParseMutation(query)
+	require.Error(t, err)
+	require.Equal(t, `Expected { at the start of block. Got: [set]`, err.Error())
+}
+
+func TestParseMutationAndQueryWithComments(t *testing.T) {
+	query := `
+	# Mutation
+		mutation {
+			# Set block
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san/francisco> .
+			}
+			# Delete block
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		# Query starts here.
+		query {
+			me(func: uid( 0x5)) { # now mention children
+				name		# Name
+				hometown # hometown of the person
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
 }
 
 func TestParseQueryFilterError1A(t *testing.T) {
@@ -1625,64 +1684,6 @@ func TestParseSchemaErrorMulti(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only one schema block allowed")
-}
-
-func TestParseMutationError(t *testing.T) {
-	query := `
-		mutation {
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san/francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-			}
-		}
-	`
-	_, err := ParseMutation(query)
-	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [mutation]`, err.Error())
-}
-
-func TestParseMutationError2(t *testing.T) {
-	query := `
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san/francisco> .
-			}
-			delete {
-				<name> <is> <something-else> .
-			}
-	`
-	_, err := ParseMutation(query)
-	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [set]`, err.Error())
-}
-
-func TestParseMutationAndQueryWithComments(t *testing.T) {
-	query := `
-	# Mutation
-		mutation {
-			# Set block
-			set {
-				<name> <is> <something> .
-				<hometown> <is> <san/francisco> .
-			}
-			# Delete block
-			delete {
-				<name> <is> <something-else> .
-			}
-		}
-		# Query starts here.
-		query {
-			me(func: uid( 0x5)) { # now mention children
-				name		# Name
-				hometown # hometown of the person
-			}
-		}
-	`
-	_, err := Parse(Request{Str: query})
-	require.Error(t, err)
 }
 
 func TestParseFragmentMultiQuery(t *testing.T) {

@@ -83,7 +83,13 @@ L:
 				return rnq, x.Errorf("Expected '(', found: %s", item.Val)
 			}
 			it.Next()
-			if item = it.Item(); item.Typ != itemVarName {
+			item = it.Item()
+			switch item.Typ {
+			case itemSubjectVarName:
+				rnq.SubjectVar = item.Val
+			case itemObjectVarName:
+				rnq.ObjectVar = item.Val
+			default:
 				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
 			}
 
@@ -188,14 +194,14 @@ L:
 	if seenOval && rnq.ObjectValue == nil {
 		rnq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: oval}}
 	}
-	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
+	if (len(rnq.Subject) == 0 && len(rnq.SubjectVar) == 0) || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil && len(rnq.ObjectVar) == 0 {
 		return rnq, x.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
-	if !sane(rnq.Subject) || !sane(rnq.Predicate) ||
-		!sane(rnq.ObjectId) || !sane(rnq.Label) {
+	if (!sane(rnq.Subject) && len(rnq.SubjectVar) == 0) || !sane(rnq.Predicate) ||
+		(!sane(rnq.ObjectId) && len(rnq.ObjectVar) == 0) || !sane(rnq.Label) {
 		return rnq, x.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 
