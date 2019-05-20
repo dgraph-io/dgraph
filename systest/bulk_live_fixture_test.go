@@ -93,13 +93,15 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
 		"-f", rdfFile,
 		"-s", schemaFile,
-		"--http", ":"+strconv.Itoa(freePort(0)),
+		"--http", "localhost:"+strconv.Itoa(freePort(0)),
 		"-j=1",
 		"-x=true",
+		"-z", z.SockAddrZero,
 	)
 	bulkCmd.Dir = bulkDir
-	if err := bulkCmd.Run(); err != nil {
+	if out, err := bulkCmd.Output(); err != nil {
 		s.cleanup()
+		s.t.Logf("%s", out)
 		s.t.Fatalf("Bulkloader didn't run: %v\n", err)
 	}
 
@@ -112,10 +114,12 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		"--files", rdfFile,
 		"--schema", schemaFile,
 		"--alpha", z.SockAddr,
+		"--zero", z.SockAddrZero,
 	)
 	liveCmd.Dir = liveDir
-	if err := liveCmd.Run(); err != nil {
+	if out, err := liveCmd.Output(); err != nil {
 		s.cleanup()
+		s.t.Logf("%s", out)
 		s.t.Fatalf("Live Loader didn't run: %v\n", err)
 	}
 }

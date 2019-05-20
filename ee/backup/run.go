@@ -30,7 +30,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Restore is the sub-command used to restore a backup.
 var Restore x.SubCommand
+
+// LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
 
 var opt struct {

@@ -488,6 +488,7 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
 		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
 			glog.Warningf("Pending size should remain above zero: %d", sz)
@@ -545,7 +546,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.gid])
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -597,7 +598,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	addr := snap.Context.GetAddr()
 	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
 	if len(addr) > 0 {
-		p, err := conn.Get().Get(addr)
+		p, err := conn.GetPools().Get(addr)
 		if err != nil {
 			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
 		} else {
@@ -891,13 +892,19 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			timer.Record("disk")
+			if rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %v", err)
+				}
+				timer.Record("sync")
+			}
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
-			timer.Record("disk")
 
 			// Now schedule or apply committed entries.
 			var proposals []*pb.Proposal
@@ -1225,15 +1232,10 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	}
 	span.Annotatef(nil, "Found Raft entries: %d", last-first)
 
-	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
-	if err != nil {
-		span.Annotatef(nil, "Error: %v", err)
-		return nil, err
-	}
-
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
 		glog.V(2).Infof("Num pending txns: %d", num)
 	}
+
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
@@ -1248,27 +1250,52 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	minPendingStart := posting.Oracle().MinPendingStartTs()
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
-	for _, entry := range entries {
-		if entry.Type != raftpb.EntryNormal {
-			continue
-		}
-		var proposal pb.Proposal
-		if err := proposal.Unmarshal(entry.Data); err != nil {
+
+	// Trying to retrieve all entries at once might cause out-of-memory issues in
+	// cases where the raft log is too big to fit into memory. Instead of retrieving
+	// all entries at once, retrieve it in batches of 64MB.
+	var lastEntry raftpb.Entry
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-		if proposal.Mutations != nil {
-			start := proposal.Mutations.StartTs
-			if start >= minPendingStart && snapshotIdx == 0 {
-				snapshotIdx = entry.Index - 1
-			}
+
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
 		}
-		if proposal.Delta != nil {
-			for _, txn := range proposal.Delta.GetTxns() {
-				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+
+		// Store the last entry (as it might be needed outside the loop) and set the
+		// start of the new batch at the entry following it. Also set foundEntries to
+		// true to indicate to the code outside the loop that entries were retrieved.
+		lastEntry = entries[len(entries)-1]
+		batchFirst = lastEntry.Index + 1
+
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal {
+				continue
+			}
+			var proposal pb.Proposal
+			if err := proposal.Unmarshal(entry.Data); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return nil, err
+			}
+			if proposal.Mutations != nil {
+				start := proposal.Mutations.StartTs
+				if start >= minPendingStart && snapshotIdx == 0 {
+					snapshotIdx = entry.Index - 1
+				}
+			}
+			if proposal.Delta != nil {
+				for _, txn := range proposal.Delta.GetTxns() {
+					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+				}
 			}
 		}
 	}
+
 	if maxCommitTs == 0 {
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
@@ -1276,9 +1303,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		if len(entries) > 0 {
-			snapshotIdx = entries[len(entries)-1].Index
-		}
+		snapshotIdx = lastEntry.Index
 		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
 
