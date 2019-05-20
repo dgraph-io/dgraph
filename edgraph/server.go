@@ -864,7 +864,7 @@ func validateNQuads(set, del []*api.NQuad) error {
 			return errors.Errorf("Cannot use star in set n-quad: %+v", nq)
 		}
 		if err := validateKeys(nq); err != nil {
-			return errors.Errorf("Key error: %s: %+v", err, nq)
+			return errors.Wrapf(err, "Key error:%+v", nq)
 		}
 	}
 	for _, nq := range del {
@@ -899,7 +899,7 @@ func validateKey(key string) error {
 // validateKeys checks predicate and facet keys in N-Quad for syntax errors.
 func validateKeys(nq *api.NQuad) error {
 	if err := validateKey(nq.Predicate); err != nil {
-		return errors.Errorf("predicate %q %s", nq.Predicate, err)
+		return errors.Wrapf(err, "predicate %q", nq.Predicate)
 	}
 	for i := range nq.Facets {
 		if nq.Facets[i] == nil {

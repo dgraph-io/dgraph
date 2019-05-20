@@ -348,7 +348,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			}
 			gid, err := strconv.Atoi(splits[0])
 			if err != nil {
-				return errors.Errorf("Unable to parse group id from %s. Error: %v", pkey, err)
+				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
 			pred := strings.Join(splits[1:], "-")
 			tablet := s.ServingTablet(pred)

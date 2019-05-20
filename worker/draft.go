@@ -1337,7 +1337,7 @@ func (n *node) joinPeers() error {
 	c := pb.NewRaftClient(gconn)
 	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
-		return errors.Errorf("Error while joining cluster: %+v\n", err)
+		return errors.Wrapf(err, "error while joining cluster")
 	}
 	glog.Infof("Done with JoinCluster call\n")
 	return nil
@@ -1355,7 +1355,7 @@ func (n *node) isMember() (bool, error) {
 	glog.Infof("Calling IsPeer")
 	pr, err := c.IsPeer(n.ctx, n.RaftContext)
 	if err != nil {
-		return false, errors.Errorf("Error while joining cluster: %+v\n", err)
+		return false, errors.Wrapf(err, "error while joining cluster")
 	}
 	glog.Infof("Done with IsPeer call\n")
 	return pr.Status, nil

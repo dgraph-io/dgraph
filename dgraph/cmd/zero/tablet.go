@@ -97,7 +97,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {
-		return errors.Errorf("Unable to reach quorum: %v", err)
+		return errors.Wrapf(err, "unable to reach quorum")
 	}
 	if !s.Node.AmLeader() {
 		return errors.Errorf("I am not the Zero leader")
@@ -119,7 +119,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	// predicate. Source Alpha leader must reach this timestamp before streaming the data.
 	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
 	if err != nil || ids.StartId == 0 {
-		return errors.Errorf("While leasing txn timestamp. Id: %+v Error: %v", ids, err)
+		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
 	}
 
 	// Get connection to leader of source group.
@@ -151,7 +151,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	span.Annotate(nil, msg)
 	glog.Info(msg)
 	if err := s.Node.proposeAndWait(ctx, p); err != nil {
-		return errors.Errorf("While proposing tablet reassignment. Proposal: %+v Error: %v", p, err)
+		return errors.Wrapf(err, "while proposing tablet reassignment. Proposal: %+v", p)
 	}
 	msg = fmt.Sprintf("Predicate move done for: [%v] from group %d to %d\n",
 		predicate, srcGroup, dstGroup)

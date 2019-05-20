@@ -151,7 +151,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	if opts.UserOwnership {
 		user, err := user.Current()
 		if err != nil {
-			x.CheckfNoTrace(errors.Errorf("unable to get current user: %v", err))
+			x.CheckfNoTrace(errors.Wrap(err, "unable to get current user"))
 		}
 		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)

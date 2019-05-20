@@ -249,7 +249,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			if err := raft.Step(ctx, msg); err != nil {
 				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
 					rc.GetId(), err)
-				return errors.Errorf("Error while raft.Step from %#x: %v", rc.GetId(), err)
+				return errors.Wrapf(err, "error while raft.Step from %#x", rc.GetId())
 			}
 			idx += sz
 		}

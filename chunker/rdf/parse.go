@@ -172,7 +172,7 @@ L:
 		case itemLeftRound:
 			it.Prev() // backup '('
 			if err := parseFacets(it, &rnq); err != nil {
-				return rnq, errors.Errorf(err.Error())
+				return rnq, errors.Wrap(err, "could not parse facet")
 			}
 		}
 	}
