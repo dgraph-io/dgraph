@@ -12,7 +12,6 @@ linters:
     - ineffassign
     - gas
     - gofmt
-    - goimports
     - golint
     - gosimple
     - govet
