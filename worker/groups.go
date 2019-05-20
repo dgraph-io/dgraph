@@ -190,6 +190,7 @@ func (g *groupi) proposeInitialSchema() {
 			g.upsertSchema(s)
 		} else {
 			// The schema for this predicate has already been proposed.
+			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
 			continue
 		}
 	}
