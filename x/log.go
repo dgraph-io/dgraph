@@ -38,4 +38,3 @@ func (rl *ToGlog) Fatal(v ...interface{})                   { glog.Fatal(v...) }
 func (rl *ToGlog) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
 func (rl *ToGlog) Panic(v ...interface{})                   { log.Panic(v...) }
 func (rl *ToGlog) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
-
