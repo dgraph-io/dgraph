@@ -894,20 +894,24 @@ func (req *request) Wait() error {
 	return err
 }
 
-// sync function syncs content of current value log file to disk.
-// syncing of value log directory is not required here as it happens
-// every time a new value log file is created(check createVlogFile function).
-func (vlog *valueLog) sync() error {
+// sync function syncs content of latest value log file to disk. Syncing of value log directory is
+// not required here as it happens every time a value log file rotation happens(check createVlogFile
+// function). During rotation, previous value log file also gets synced to disk. It only syncs file
+// if fid >= vlog.maxFid. In some cases such as replay(while openning db), it might be called with
+// fid < vlog.maxFid. To sync irrespective of file id just call it with math.MaxUint32.
+func (vlog *valueLog) sync(fid uint32) error {
 	if vlog.opt.SyncWrites {
 		return nil
 	}
 
 	vlog.filesLock.RLock()
-	if len(vlog.filesMap) == 0 {
+	maxFid := atomic.LoadUint32(&vlog.maxFid)
+	// During replay it is possible to get sync call with fid less than maxFid.
+	// Because older file has already been synced, we can return from here.
+	if fid < maxFid || len(vlog.filesMap) == 0 {
 		vlog.filesLock.RUnlock()
 		return nil
 	}
-	maxFid := atomic.LoadUint32(&vlog.maxFid)
 	curlf := vlog.filesMap[maxFid]
 	// Sometimes it is possible that vlog.maxFid has been increased but file creation
 	// with same id is still in progress and this function is called. In those cases

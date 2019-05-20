@@ -180,16 +180,19 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 			if err := h.readManifest(mc, lastManifest, &m); err != nil {
 				return err
 			}
-			// No new changes since last check
-			if m.Version >= req.Backup.SnapshotTs {
-				return ErrBackupNoChanges
-			}
+
 			// Return the version of last backup
 			req.Version = m.Version
 		}
 		objectName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
 	} else {
 		objectName = backupManifest
+	}
+
+	// If a full backup is being forced, force the version to zero to stream all
+	// the contents from the database.
+	if req.Backup.ForceFull {
+		req.Version = 0
 	}
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup

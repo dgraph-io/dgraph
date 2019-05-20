@@ -41,7 +41,6 @@ type WorkerOptions struct {
 	MyAddr              string
 	ZeroAddr            string
 	RaftId              uint64
-	ExpandEdge          bool
 	WhiteListedIPRanges []IPRange
 	MaxRetries          int
 	StrictMutations     bool

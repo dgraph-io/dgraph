@@ -44,19 +44,10 @@ func TestSnapshot(t *testing.T) {
 		Schema: "value: int .",
 	}))
 
-	for i := 1; i <= 10; i++ {
-		err := z.RetryMutation(dg1, &api.Mutation{
-			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
-			CommitNow: true,
-		})
-		require.NoError(t, err)
-	}
-	verifySnapshot(t, dg1, 10)
-
 	err := z.DockerStop("alpha2")
 	require.NoError(t, err)
 
-	for i := 11; i <= 600; i++ {
+	for i := 1; i <= 200; i++ {
 		err := z.RetryMutation(dg1, &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 			CommitNow: true,
@@ -69,25 +60,25 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	dg2 := z.DgraphClient("localhost:9182")
-	verifySnapshot(t, dg2, 600)
+	verifySnapshot(t, dg2, 200)
 
 	err = z.DockerStop("alpha2")
 	require.NoError(t, err)
 
-	for i := 601; i <= 1200; i++ {
+	for i := 201; i <= 400; i++ {
 		err := z.RetryMutation(dg1, &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 			CommitNow: true,
 		})
 		require.NoError(t, err)
 	}
-	snapshotTs = waitForSnapshot(t, snapshotTs)
+	_ = waitForSnapshot(t, snapshotTs)
 
 	err = z.DockerStart("alpha2")
 	require.NoError(t, err)
 
 	dg2 = z.DgraphClient("localhost:9182")
-	verifySnapshot(t, dg2, 1200)
+	verifySnapshot(t, dg2, 400)
 }
 
 func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {

@@ -117,7 +117,7 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 }
 
 func setBadgerOptions(opt badger.Options, dir string) badger.Options {
-	opt.SyncWrites = true
+	opt.SyncWrites = false
 	opt.Truncate = true
 	opt.Dir = dir
 	opt.ValueDir = dir

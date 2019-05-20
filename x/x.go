@@ -61,9 +61,6 @@ const (
 	// message sizes allowable on the client size when dialing.
 	GrpcMaxSize = 4 << 30
 
-	// The attr used to store list of predicates for a node.
-	PredicateListAttr = "_predicate_"
-
 	PortZeroGrpc = 5080
 	PortZeroHTTP = 6080
 	PortInternal = 7080
@@ -379,10 +376,14 @@ func (b *BytesBuffer) TruncateBy(n int) {
 	AssertTrue(b.off >= 0 && b.sz >= 0)
 }
 
+type record struct {
+	Name string
+	Dur  time.Duration
+}
 type Timer struct {
 	start   time.Time
 	last    time.Time
-	records []time.Duration
+	records []record
 }
 
 func (t *Timer) Start() {
@@ -391,18 +392,24 @@ func (t *Timer) Start() {
 	t.records = t.records[:0]
 }
 
-func (t *Timer) Record() {
+func (t *Timer) Record(name string) {
 	now := time.Now()
-	t.records = append(t.records, now.Sub(t.last))
+	t.records = append(t.records, record{
+		Name: name,
+		Dur:  now.Sub(t.last).Round(time.Millisecond),
+	})
 	t.last = now
 }
 
 func (t *Timer) Total() time.Duration {
-	return time.Since(t.start)
+	return time.Since(t.start).Round(time.Millisecond)
 }
 
-func (t *Timer) All() []time.Duration {
-	return t.records
+func (t *Timer) String() string {
+	sort.Slice(t.records, func(i, j int) bool {
+		return t.records[i].Dur > t.records[j].Dur
+	})
+	return fmt.Sprintf("Timer Total: %s. Breakdown: %v", t.Total(), t.records)
 }
 
 // PredicateLang extracts the language from a predicate (or facet) name.

@@ -65,7 +65,7 @@ func init() {
 	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	grpcPort = getPort("TEST_PORT_ZERO", 5180)
 	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
@@ -141,33 +141,6 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
-
-	nodes := DbNodeCount(t, dg)
-	// the only node left should be the groot node
-	require.Equal(t, 1, nodes)
-}
-
-func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
-	resp, err := dg.NewTxn().Query(context.Background(), `
-		{
-			q(func: has(_predicate_)) {
-				count(uid)
-			}
-		}
-	`)
-	require.NoError(t, err)
-
-	type count struct {
-		Count int
-	}
-	type root struct {
-		Q []count
-	}
-	var response root
-	err = json.Unmarshal(resp.GetJson(), &response)
-	require.NoError(t, err)
-
-	return response.Q[0].Count
 }
 
 // RetryQuery will retry a query until it succeeds or a non-retryable error is received.
@@ -320,6 +293,10 @@ func VerifyCurlCmd(t *testing.T, args []string,
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code
 		require.Error(t, err, "the curl command should have failed")
+		if ee, ok := err.(*exec.ExitError); ok {
+			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+				"the curl output does not contain the expected output")
+		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
 		verifyOutput(t, output, failureConfig)

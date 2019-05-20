@@ -38,12 +38,7 @@ type schemaStore struct {
 
 func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *schemaStore {
 	s := &schemaStore{
-		m: map[string]*pb.SchemaUpdate{
-			"_predicate_": {
-				ValueType: pb.Posting_STRING,
-				List:      true,
-			},
-		},
+		m:     map[string]*pb.SchemaUpdate{},
 		state: state,
 	}
 
@@ -65,7 +60,8 @@ func newSchemaStore(initial []*pb.SchemaUpdate, opt options, state *state) *sche
 		p := sch.Predicate
 		sch.Predicate = "" // Predicate is stored in the (badger) key, so not needed in the value.
 		if _, ok := s.m[p]; ok {
-			x.Check(fmt.Errorf("Predicate %q already exists in schema", p))
+			fmt.Printf("Predicate %q already exists in schema\n", p)
+			continue
 		}
 		s.m[p] = sch
 	}

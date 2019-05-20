@@ -54,7 +54,7 @@ var (
 
 func invokeNetworkRequest(ctx context.Context, addr string,
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
-	pl, err := conn.Get().Get(addr)
+	pl, err := conn.GetPools().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}

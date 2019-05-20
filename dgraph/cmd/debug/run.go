@@ -255,7 +255,7 @@ func showAllPostingsAt(db *badger.DB, readTs uint64) {
 		}
 
 		pk := x.Parse(item.Key())
-		if !pk.IsData() || pk.Attr == "_predicate_" {
+		if !pk.IsData() {
 			continue
 		}
 
@@ -697,8 +697,17 @@ func printAlphaProposal(buf *bytes.Buffer, pr pb.Proposal, pending map[uint64]bo
 		})
 		fmt.Fprintf(buf, " Max: %d .", pr.Delta.GetMaxAssigned())
 		for _, txn := range pr.Delta.Txns {
-			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
 			delete(pending, txn.StartTs)
+		}
+		// There could be many thousands of txns within a single delta. We
+		// don't need to print out every single entry, so just show the
+		// first 10.
+		if len(pr.Delta.Txns) >= 10 {
+			fmt.Fprintf(buf, " Num txns: %d .", len(pr.Delta.Txns))
+			pr.Delta.Txns = pr.Delta.Txns[:10]
+		}
+		for _, txn := range pr.Delta.Txns {
+			fmt.Fprintf(buf, " %d → %d .", txn.StartTs, txn.CommitTs)
 		}
 		fmt.Fprintf(buf, " Pending txns: %d .", len(pending))
 	case pr.Snapshot != nil:
