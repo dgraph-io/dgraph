@@ -17,7 +17,9 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl    = '{'
@@ -43,28 +45,154 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemEqual                                   // equals to symbol
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemColon                                   // Colon
-	itemAt                                      // @
-	itemPeriod                                  // .
-	itemDollar                                  // $
-	itemRegex                                   // /
-	itemBackslash                               // \
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
+	itemText              lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                  // left curly bracket
+	itemRightCurl                                 // right curly bracket
+	itemEqual                                     // equals to symbol
+	itemName                                      // [9] names
+	itemOpType                                    // operation type
+	itemString                                    // quoted string
+	itemLeftRound                                 // left round bracket
+	itemRightRound                                // right round bracket
+	itemColon                                     // Colon
+	itemAt                                        // @
+	itemPeriod                                    // .
+	itemDollar                                    // $
+	itemRegex                                     // /
+	itemBackslash                                 // \
+	itemMutationOp                                // mutation operation
+	itemMutationOpContent                         // mutation operation content (inc. query)
+	itemMutationUpsert                            // mutation upsert (upsert)
+	itemMutationUpsertOp                          // mutation upsert operation (query, mutate)
 	itemLeftSquare
 	itemRightSquare
 	itemComma
 	itemMathOp
 )
+
+// lexIdentifyMutationBlock identifies whether it is a mutation upsert block
+// If the block begins with "{" => mutation block
+// Else if the block begins with "upsert" => mutation upsert block
+func lexIdentifyMutationBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexIdentifyMutationBlock
+	for {
+		switch r := l.Next(); {
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			l.Backup()
+			return lexNameMutationBlock
+		case r == leftCurl:
+			l.Backup()
+			return lexInsideMutation
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Invalid mutation block")
+		default:
+			return l.Errorf("Unexpected character while identifying mutation block: %#U", r)
+		}
+	}
+}
+
+// lexNameMutationBlock lexes the mutation upsert block
+func lexNameMutationBlock(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		switch word := l.Input[l.Start:l.Pos]; word {
+		case "upsert":
+			l.Emit(itemMutationUpsert)
+			return lexMutationUpsert
+		default:
+			return l.Errorf("Invalid operation type: %s", word)
+		}
+	}
+}
+
+// lexMutationUpsert lexes the mutation upsert block
+func lexMutationUpsert(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexMutationUpsert
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.Depth--
+			l.Emit(itemRightCurl)
+		case r == leftCurl:
+			l.Depth++
+			l.Emit(itemLeftCurl)
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexInsideMutationUpsert
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Unclosed txn action")
+		default:
+			return l.Errorf("Unrecognized character in lexInsideTxn: %#U", r)
+		}
+	}
+}
+
+// lexInsideMutationUpsert parses the blocks inside mutation upsert block
+func lexInsideMutationUpsert(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		switch word {
+		case "query":
+			l.Emit(itemMutationUpsertOp)
+			return lexMutationUpsertQuery
+		case "mutation":
+			l.Depth = 0
+			l.Emit(itemMutationUpsertOp)
+			return lexInsideMutation
+		default:
+			return l.Errorf("Invalid operation type: %s", word)
+		}
+	}
+}
+
+// lexMutationUpsertQuery parses the query block for mutation upsert block
+func lexMutationUpsertQuery(l *lex.Lexer) lex.StateFn {
+	depth := 0
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			return l.Errorf("Unclosed query text")
+		}
+		if isSpace(r) || lex.IsEndOfLine(r) {
+			if depth == 0 {
+				l.Ignore()
+			}
+			continue
+		}
+		if r == leftCurl {
+			depth++
+		}
+		if r == rightCurl {
+			depth--
+			if l.Depth < depth {
+				return l.Errorf("Unbalanced '}' found inside query text")
+			}
+		}
+		if depth > 0 {
+			continue
+		}
+		l.Emit(itemMutationOpContent)
+		break
+	}
+	return lexInsideMutationUpsert
+}
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
@@ -401,7 +529,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideMutation
