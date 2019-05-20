@@ -58,7 +58,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	var writer badgerWriter
 	if snap.SinceTs == 0 {
-		//Before we write anything, we should drop all the data stored in ps.
+		// Before we write anything, we should drop all the data stored in ps.
 		if err := pstore.DropAll(); err != nil {
 			return 0, err
 		}
@@ -99,10 +99,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
-	glog.V(1).Infof("Flushed all writes to Badger. Flattening it now.")
-	if err := pstore.Flatten(1); err != nil {
-		return 0, err
-	}
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
