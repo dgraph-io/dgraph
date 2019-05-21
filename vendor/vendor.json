@@ -6,19 +6,25 @@
 			"checksumSHA1": "tI/c5HKXwzQ2Wm9VGfKuGHCDDCg=",
 			"path": "contrib.go.opencensus.io/exporter/jaeger",
 			"revision": "f3684086370a4b70671b0611a7d4ffd560eb3b54",
-			"revisionTime": "2019-04-25T16:23:33Z"
+			"revisionTime": "2019-04-25T16:23:33Z",
+			"version": "v0.1.0",
+			"versionExact": "v0.1.0"
 		},
 		{
 			"checksumSHA1": "dEUYUtCJR6KpoJOw0JT2NB+bs50=",
 			"path": "contrib.go.opencensus.io/exporter/jaeger/internal/gen-go/jaeger",
 			"revision": "f3684086370a4b70671b0611a7d4ffd560eb3b54",
-			"revisionTime": "2019-04-25T16:23:33Z"
+			"revisionTime": "2019-04-25T16:23:33Z",
+			"version": "v0.1.0",
+			"versionExact": "v0.1.0"
 		},
 		{
 			"checksumSHA1": "uiI28IZzp2d9iUEnQMWO6LxINLA=",
 			"path": "contrib.go.opencensus.io/exporter/prometheus",
-			"revision": "f6cda26f80a388eabda7766388c14e96370440e5",
-			"revisionTime": "2019-04-27T22:21:17Z"
+			"revision": "f4a2c1e53ec45636355d35fb9022b64e4bdd4a91",
+			"revisionTime": "2019-04-25T22:25:51Z",
+			"version": "v0.1.0",
+			"versionExact": "v0.1.0"
 		},
 		{
 			"checksumSHA1": "+Bo3QheGAtKFk7QPb+pdIEZNiYI=",
@@ -1021,124 +1027,164 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "/Ih6M1+XUakKt9tMxwgRlXN5bzw=",
+			"checksumSHA1": "OQj2e7eJl/r3Z+Sx3mwXRT8wYhM=",
 			"path": "go.opencensus.io",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "TA3C6+5PM7V2zbsnLMp13Efy/BA=",
 			"path": "go.opencensus.io/exemplar",
 			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revisionTime": "2019-02-05T22:37:37Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "2/AeXGzgJVVVn3HD6xyscTJydvg=",
 			"path": "go.opencensus.io/exporter/prometheus",
 			"revision": "ed9f155754b50f84f15997a4550ebd54667078e7",
-			"revisionTime": "2019-02-05T22:37:37Z"
+			"revisionTime": "2019-02-05T22:37:37Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "KLZy3Nh+8JlI04JmBa/Jc8fxrVQ=",
 			"path": "go.opencensus.io/internal",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "Dw3rpna1DwTa7TCzijInKcU49g4=",
 			"path": "go.opencensus.io/internal/tagencoding",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "r6fbtPwxK4/TYUOWc7y0hXdAG4Q=",
 			"path": "go.opencensus.io/metric/metricdata",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
-			"checksumSHA1": "DioptO0gMbOktX1LQkJiZQfWKI4=",
+			"checksumSHA1": "tCxrq95J2bnG5fvORCDxebawFx4=",
 			"path": "go.opencensus.io/metric/metricexport",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "kWj13srwY1SH5KgFecPhEfHnzVc=",
 			"path": "go.opencensus.io/metric/metricproducer",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
-			"checksumSHA1": "g4c1lOdUuhHzVaE3KmtvQT1O7mc=",
+			"checksumSHA1": "O3l9kyG3jFQTzkG+f2bjDjAwfbs=",
 			"path": "go.opencensus.io/plugin/ocgrpc",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "q+y8X+5nDONIlJlxfkv+OtA18ds=",
 			"path": "go.opencensus.io/resource",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "Cc4tRuW0IjlfAFY8BcdfMDqG0R8=",
 			"path": "go.opencensus.io/stats",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "oIo4NRi6AVCfcwVfHzCXAsoZsdI=",
 			"path": "go.opencensus.io/stats/internal",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
-			"checksumSHA1": "4VSlfYNT712K8cgGk9Pmhvt6eM8=",
+			"checksumSHA1": "I164b6lSAxytTT8DFPe70hiQ7UQ=",
 			"path": "go.opencensus.io/stats/view",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "UZi4/aqibjJXY+mpNCqAS9rmxsY=",
 			"path": "go.opencensus.io/tag",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "0O3djqX4bcg5O9LZdcinEoYeQKs=",
 			"path": "go.opencensus.io/trace",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "JkvEb8oMEFjic5K/03Tyr5Lok+w=",
 			"path": "go.opencensus.io/trace/internal",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "FHJParRi8f1GHO7Cx+lk3bMWBq0=",
 			"path": "go.opencensus.io/trace/propagation",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "UHbxxaMqpEPsubh8kPwzSlyEwqI=",
 			"path": "go.opencensus.io/trace/tracestate",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "ZqUSVujXDz8c2+5mG3eDgxPzaMs=",
 			"path": "go.opencensus.io/zpages",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "YJkst8EoqoOg9xtFHQE/YuLNfmI=",
 			"path": "go.opencensus.io/zpages/internal",
-			"revision": "f24e56296b3a742d13b8368bbb1e831f9b0d2c7f",
-			"revisionTime": "2019-05-13T20:13:55Z"
+			"revision": "df6e2001952312404b06f5f6f03fcb4aec1648e5",
+			"revisionTime": "2019-04-25T01:30:28Z",
+			"version": "v0.21.0",
+			"versionExact": "v0.21.0"
 		},
 		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
