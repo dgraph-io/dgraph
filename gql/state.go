@@ -17,7 +17,9 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl    = '{'
@@ -43,28 +45,124 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemEqual                                   // equals to symbol
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemColon                                   // Colon
-	itemAt                                      // @
-	itemPeriod                                  // .
-	itemDollar                                  // $
-	itemRegex                                   // /
-	itemBackslash                               // \
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
+	itemText               lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                   // left curly bracket
+	itemRightCurl                                  // right curly bracket
+	itemEqual                                      // equals to symbol
+	itemName                                       // [9] names
+	itemOpType                                     // operation type
+	itemString                                     // quoted string
+	itemLeftRound                                  // left round bracket
+	itemRightRound                                 // right round bracket
+	itemColon                                      // Colon
+	itemAt                                         // @
+	itemPeriod                                     // .
+	itemDollar                                     // $
+	itemRegex                                      // /
+	itemBackslash                                  // \
+	itemMutationOp                                 // mutation operation (set, delete)
+	itemMutationOpContent                          // mutation operation content (inc. query)
+	itemMutationTxnBLock                           // mutation txn block (txn)
+	itemMutationTxnBlockOp                         // mutation txn block operations (query, mutate)
 	itemLeftSquare
 	itemRightSquare
 	itemComma
 	itemMathOp
 )
+
+// lexIdentifyBlock identifies whether it is a mutation txn block
+// If the block begins with "{" => mutation block
+// Else if the block begins with "txn" => mutation txn block
+func lexIdentifyBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexIdentifyBlock
+	for {
+		switch r := l.Next(); {
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameBlock
+		case r == leftCurl:
+			l.Backup()
+			return lexInsideMutation
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Invalid mutation block")
+		default:
+			return l.Errorf("Unexpected character while identifying mutation block: %#U", r)
+		}
+	}
+}
+
+// lexNameBlock lexes the blocks, for now, only mutation txn block
+func lexNameBlock(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		switch word := l.Input[l.Start:l.Pos]; word {
+		case "txn":
+			l.Emit(itemMutationTxnBLock)
+			return lexMutationTxnBlock
+		default:
+			return l.Errorf("Invalid block: [%s]", word)
+		}
+	}
+}
+
+// lexMutationTxnBlock lexes the mutation txn block
+func lexMutationTxnBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexMutationTxnBlock
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.BlockDepth--
+			l.Emit(itemRightCurl)
+			if l.BlockDepth == 0 {
+				return lexTopLevel
+			}
+		case r == leftCurl:
+			l.BlockDepth++
+			l.Emit(itemLeftCurl)
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameTxnOp
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Unclosed mutation txn action")
+		default:
+			return l.Errorf("Unrecognized character in lexMutationTxnBlock: %#U", r)
+		}
+	}
+}
+
+// lexNameTxnOp parses the operation names inside mutation txn block
+func lexNameTxnOp(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		switch word {
+		case "query":
+			l.Emit(itemMutationTxnBlockOp)
+			return lexQuery
+		case "mutation":
+			l.Emit(itemMutationTxnBlockOp)
+			return lexInsideMutation
+		default:
+			return l.Errorf("Invalid operation type: %s", word)
+		}
+	}
+}
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
@@ -231,6 +329,11 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 }
 
 func lexTopLevel(l *lex.Lexer) lex.StateFn {
+	// TODO: we currently only have txn block, this won't work if we have other blocks too.
+	if l.BlockDepth != 0 {
+		return lexMutationTxnBlock
+	}
+
 	l.Mode = lexTopLevel
 Loop:
 	for {
@@ -401,7 +504,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideMutation

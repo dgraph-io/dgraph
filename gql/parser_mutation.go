@@ -17,22 +17,91 @@
 package gql
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// ParseMutation parses a block into a mutation. Returns an object with a mutation or
+// a txn block with mutation, otherwise returns nil with an error.
 func ParseMutation(mutation string) (*api.Mutation, error) {
 	lexer := lex.NewLexer(mutation)
-	lexer.Run(lexInsideMutation)
+	lexer.Run(lexIdentifyBlock)
+	if err := lexer.ValidateResult(); err != nil {
+		return nil, err
+	}
+
 	it := lexer.NewIterator()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid mutation")
+	}
+
+	item := it.Item()
+	switch item.Typ {
+	case itemMutationTxnBLock:
+		return ParseTxnBlock(it)
+	case itemLeftCurl:
+		return ParseMutationBlock(it)
+	default:
+		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+	}
+}
+
+// ParseTxnBlock parses the txn block
+func ParseTxnBlock(it *lex.ItemIterator) (*api.Mutation, error) {
+	var mu *api.Mutation
+	var res Result
+
+	// ==>txn<=== {...}
+	item := it.Item()
+	if item.Typ != itemMutationTxnBLock {
+		return nil, x.Errorf("Expected txn block. Got [%s]", item.Val)
+	}
+
+	// txn ===>{<=== ....}
+	it.Next()
+	item = it.Item()
+	if item.Typ != leftCurl {
+		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+	}
+
+	for it.Next() {
+		item = it.Item()
+		switch item.Typ {
+		// txn {... ===>}<===
+		case rightCurl:
+			// TODO
+			fmt.Printf("ready to return, but don't know what to do with res: %+v\n", res)
+			return mu, nil
+		// txn { ===>mutation<=== {...} query{...}}
+		// txn { mutation{...} ===>query<==={...}}
+		case itemMutationTxnBlockOp:
+			var err error
+			if item.Val == "query" {
+				if res, err = ParseQuery(it, nil); err != nil {
+					return nil, err
+				}
+			} else if item.Val == "mutation" {
+				if mu, err = ParseMutationBlock(it); err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, x.Errorf("should not reach here")
+			}
+		default:
+			return nil, x.Errorf("unexpected token in txn block [%s]", item.Val)
+		}
+	}
+
+	return nil, x.Errorf("Invalid txn block")
+}
+
+// ParseMutationBlock parses the mutation block
+func ParseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	var mu api.Mutation
 
-	if !it.Next() {
-		return nil, errors.New("Invalid mutation")
-	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
 		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
@@ -73,7 +142,7 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 			}
 			parse = true
 		}
-		if item.Typ == itemMutationContent {
+		if item.Typ == itemMutationOpContent {
 			if !parse {
 				return x.Errorf("Mutation syntax invalid.")
 			}

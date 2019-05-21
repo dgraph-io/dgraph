@@ -457,11 +457,9 @@ type Result struct {
 	Schema    *pb.SchemaRequest
 }
 
-// Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
-// from the lexed items.
+// Parse initializes and runs the lexer and parser.
 func Parse(r Request) (res Result, rerr error) {
 	query := r.Str
-	vmap := convertToVarMap(r.Variables)
 
 	lexer := lex.NewLexer(query)
 	lexer.Run(lexTopLevel)
@@ -469,8 +467,15 @@ func Parse(r Request) (res Result, rerr error) {
 		return res, err
 	}
 
+	return ParseQuery(lexer.NewIterator(), r.Variables)
+}
+
+// ParseQuery parses the given query.
+// It also constructs the GraphQuery subgraph from the lexed items.
+func ParseQuery(it *lex.ItemIterator, vars map[string]string) (res Result, rerr error) {
+	vmap := convertToVarMap(vars)
+
 	var qu *GraphQuery
-	it := lexer.NewIterator()
 	fmap := make(fragmentMap)
 	for it.Next() {
 		item := it.Item()
