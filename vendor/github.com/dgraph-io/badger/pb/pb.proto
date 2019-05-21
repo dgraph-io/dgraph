@@ -26,6 +26,9 @@ message KV {
   uint64 version = 4;
   uint64 expires_at = 5;
   bytes meta = 6;
+
+  // Stream id is used to identify which stream the KV came from.
+  uint32 stream_id = 10;
 }
 
 message KVList {
