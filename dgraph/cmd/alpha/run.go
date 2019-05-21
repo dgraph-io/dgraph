@@ -108,6 +108,9 @@ they form a Raft group and provide synchronous replication.
 	flag.String("abort_older_than", "5m",
 		"Abort any pending transactions older than this duration. The liveness of a"+
 			" transaction is determined by its last mutation.")
+	flag.Bool("use_raft_progress", true,
+		"When starting up, consider the Raft progress stored in p directory to skip"+
+			" over Raft entries")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -470,6 +473,7 @@ func run() {
 		StrictMutations:     opts.MutationsMode == edgraph.StrictMutations,
 		AclEnabled:          secretFile != "",
 		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
+		UseRaftProgress:     Alpha.Conf.GetBool("use_raft_progress"),
 		AbortOlderThan:      abortDur,
 	}
 

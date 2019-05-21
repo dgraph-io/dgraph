@@ -19,15 +19,17 @@ package badger
 import (
 	"sync"
 	"time"
+
+	"github.com/dgraph-io/badger/y"
 )
 
 // WriteBatch holds the necessary info to perform batched writes.
 type WriteBatch struct {
 	sync.Mutex
-	txn *Txn
-	db  *DB
-	wg  sync.WaitGroup
-	err error
+	txn      *Txn
+	db       *DB
+	throttle *y.Throttle
+	err      error
 }
 
 // NewWriteBatch creates a new WriteBatch. This provides a way to conveniently do a lot of writes,
@@ -36,7 +38,18 @@ type WriteBatch struct {
 // creating and committing transactions. Due to the nature of SSI guaratees provided by Badger,
 // blind writes can never encounter transaction conflicts (ErrConflict).
 func (db *DB) NewWriteBatch() *WriteBatch {
-	return &WriteBatch{db: db, txn: db.newTransaction(true, true)}
+	return &WriteBatch{
+		db:       db,
+		txn:      db.newTransaction(true, true),
+		throttle: y.NewThrottle(16),
+	}
+}
+
+// SetMaxPendingTxns sets a limit on maximum number of pending transactions while writing batches.
+// This function should be called before using WriteBatch. Default value of MaxPendingTxns is
+// 16 to minimise memory usage.
+func (wb *WriteBatch) SetMaxPendingTxns(max int) {
+	wb.throttle = y.NewThrottle(max)
 }
 
 // Cancel function must be called if there's a chance that Flush might not get
@@ -47,13 +60,15 @@ func (db *DB) NewWriteBatch() *WriteBatch {
 //
 // Note that any committed writes would still go through despite calling Cancel.
 func (wb *WriteBatch) Cancel() {
-	wb.wg.Wait()
+	if err := wb.throttle.Finish(); err != nil {
+		wb.db.opt.Errorf("WatchBatch.Cancel error while finishing: %v", err)
+	}
 	wb.txn.Discard()
 }
 
 func (wb *WriteBatch) callback(err error) {
 	// sync.WaitGroup is thread-safe, so it doesn't need to be run inside wb.Lock.
-	defer wb.wg.Done()
+	defer wb.throttle.Done(err)
 	if err == nil {
 		return
 	}
@@ -123,9 +138,9 @@ func (wb *WriteBatch) commit() error {
 	if wb.err != nil {
 		return wb.err
 	}
-	// Get a new txn before we commit this one. So, the new txn doesn't need
-	// to wait for this one to commit.
-	wb.wg.Add(1)
+	if err := wb.throttle.Do(); err != nil {
+		return err
+	}
 	wb.txn.CommitWith(wb.callback)
 	wb.txn = wb.db.newTransaction(true, true)
 	wb.txn.readTs = 0 // We're not reading anything.
@@ -140,8 +155,10 @@ func (wb *WriteBatch) Flush() error {
 	wb.txn.Discard()
 	wb.Unlock()
 
-	wb.wg.Wait()
-	// Safe to access error without any synchronization here.
+	if err := wb.throttle.Finish(); err != nil {
+		return err
+	}
+
 	return wb.err
 }
 

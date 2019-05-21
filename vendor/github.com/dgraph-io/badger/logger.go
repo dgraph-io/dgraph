@@ -54,7 +54,7 @@ func (opt *Options) Warningf(format string, v ...interface{}) {
 	opt.Logger.Warningf(format, v...)
 }
 
-// Warningf logs a WARNING message to the logger specified in opts.
+// Debugf logs a DEBUG message to the logger specified in opts.
 func (opt *Options) Debugf(format string, v ...interface{}) {
 	if opt.Logger == nil {
 		return

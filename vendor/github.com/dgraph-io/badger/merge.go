@@ -63,11 +63,11 @@ var errNoMerge = errors.New("No need for merge")
 func (op *MergeOperator) iterateAndMerge(txn *Txn) (val []byte, err error) {
 	opt := DefaultIteratorOptions
 	opt.AllVersions = true
-	it := txn.NewIterator(opt)
+	it := txn.NewKeyIterator(op.key, opt)
 	defer it.Close()
 
 	var numVersions int
-	for it.Rewind(); it.ValidForPrefix(op.key); it.Next() {
+	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
 		numVersions++
 		if numVersions == 1 {
@@ -107,8 +107,8 @@ func (op *MergeOperator) compact() error {
 		if err != nil {
 			return err
 		}
-
-		// Write value back to db
+		// Write value back to the DB. It is important that we do not set the bitMergeEntry bit
+		// here. When compaction happens, all the older merged entries will be removed.
 		return txn.SetWithDiscard(op.key, val, 0)
 	})
 
@@ -144,7 +144,7 @@ func (op *MergeOperator) runCompactions(dur time.Duration) {
 // routine into the values that were recorded by previous invocations to Add().
 func (op *MergeOperator) Add(val []byte) error {
 	return op.db.Update(func(txn *Txn) error {
-		return txn.Set(op.key, val)
+		return txn.setMergeEntry(op.key, val)
 	})
 }
 

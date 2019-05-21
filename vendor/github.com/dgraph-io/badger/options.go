@@ -53,6 +53,18 @@ type Options struct {
 	// How many versions to keep per key.
 	NumVersionsToKeep int
 
+	// Open the DB as read-only. With this set, multiple processes can
+	// open the same Badger DB. Note: if the DB being opened had crashed
+	// before and has vlog data to be replayed, ReadOnly will cause Open
+	// to fail with an appropriate message.
+	ReadOnly bool
+
+	// Truncate value log to delete corrupt data, if any. Would not truncate if ReadOnly is set.
+	Truncate bool
+
+	// DB-specific logger which will override the global logger.
+	Logger Logger
+
 	// 3. Flags that user might want to review
 	// ----------------------------------------
 	// The following affect all levels of LSM tree.
@@ -89,6 +101,13 @@ type Options struct {
 	// efficient when the DB is opened later.
 	CompactL0OnClose bool
 
+	// After this many number of value log file rotates, there would be a force flushing of memtable
+	// to disk. This is useful in write loads with fewer keys and larger values. This work load
+	// would fill up the value logs quickly, while not filling up the Memtables. Thus, on a crash
+	// and restart, the value log head could cause the replay of a good number of value log files
+	// which can slow things on start.
+	LogRotatesToFlush int32
+
 	// Transaction start and commit timestamps are managed by end-user.
 	// This is only useful for databases built on top of Badger (like Dgraph).
 	// Not recommended for most users.
@@ -99,17 +118,6 @@ type Options struct {
 	maxBatchCount int64 // max entries in batch
 	maxBatchSize  int64 // max batch size in bytes
 
-	// Open the DB as read-only. With this set, multiple processes can
-	// open the same Badger DB. Note: if the DB being opened had crashed
-	// before and has vlog data to be replayed, ReadOnly will cause Open
-	// to fail with an appropriate message.
-	ReadOnly bool
-
-	// Truncate value log to delete corrupt data, if any. Would not truncate if ReadOnly is set.
-	Truncate bool
-
-	// DB-specific logger which will override the global logger.
-	Logger Logger
 }
 
 // DefaultOptions sets a list of recommended options for good performance.
@@ -140,6 +148,7 @@ var DefaultOptions = Options{
 	ValueThreshold:     32,
 	Truncate:           false,
 	Logger:             defaultLogger,
+	LogRotatesToFlush:  2,
 }
 
 // LSMOnlyOptions follows from DefaultOptions, but sets a higher ValueThreshold

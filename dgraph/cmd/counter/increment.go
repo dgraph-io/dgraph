@@ -160,7 +160,7 @@ func run(conf *viper.Viper) {
 retryConn:
 	conn, err := x.SetupConnection(alpha, tlsCfg, false)
 	if err != nil {
-		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...",
+		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...\n",
 			time.Now().UTC().Format(format), err)
 		time.Sleep(time.Second)
 		goto retryConn
