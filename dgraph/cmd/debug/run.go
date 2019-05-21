@@ -497,9 +497,6 @@ func printKeys(db *badger.DB) {
 
 		// Don't use a switch case here. Because multiple of these can be true. In particular,
 		// IsSchema can be true alongside IsData.
-		if pk.IsRaft() {
-			buf.WriteString("{r}")
-		}
 		if pk.IsData() {
 			buf.WriteString("{d}")
 		}
