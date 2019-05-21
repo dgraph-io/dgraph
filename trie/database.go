@@ -17,8 +17,9 @@
 package trie
 
 import (
-	"github.com/ChainSafe/gossamer/polkadb"
 	"sync"
+
+	"github.com/ChainSafe/gossamer/polkadb"
 )
 
 // Database is a wrapper around a polkadb

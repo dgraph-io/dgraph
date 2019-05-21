@@ -69,7 +69,6 @@ func NewService(conf *ServiceConfig) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	h.SetStreamHandler(protocolPrefix, handleStream)
 
 	dstore := dsync.MutexWrap(ds.NewMapDatastore())
@@ -85,13 +84,14 @@ func NewService(conf *ServiceConfig) (*Service, error) {
 	}
 
 	bootstrapNodes, err := stringsToPeerInfos(conf.BootstrapNodes)
-	return &Service{
+	s := &Service{
 		ctx:            ctx,
 		host:           h,
 		hostAddr:       hostAddr,
 		dht:            dht,
 		bootstrapNodes: bootstrapNodes,
-	}, err
+	}
+	return s, err
 }
 
 // Start begins the p2p Service, including discovery
@@ -246,4 +246,10 @@ func handleStream(stream net.Stream) {
 	if err != nil {
 		return
 	}
+}
+
+// PeerCount returns the number of connected peers
+func (s *Service) PeerCount() int {
+	peers := s.host.Network().Peers()
+	return len(peers)
 }

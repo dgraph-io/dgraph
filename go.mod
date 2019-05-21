@@ -17,4 +17,5 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.0.2
 	github.com/multiformats/go-multiaddr v0.0.2
 	github.com/pkg/errors v0.8.1
+	golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
 )
