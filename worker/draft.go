@@ -713,7 +713,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				if chk, err := n.Store.Checkpoint(); err == nil {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
-						// quite a bit further than first index.
+						// quite a bit further than the first index.
 						calculate = chk-first >= uint64(x.WorkerConfig.SnapshotAfter)
 					}
 				}
@@ -1154,6 +1154,7 @@ func (n *node) abortOldTransactions() {
 // aborted. This way, we still keep all the mutations corresponding to this
 // start ts in the Raft logs. This is important, because we don't persist
 // pre-writes to disk in pstore.
+// - In simple terms, this means we MUST keep all pending transactions in the Raft logs.
 // - Find the maximum commit timestamp that we have seen.
 // That would tell us about the maximum timestamp used to do any commits. This
 // ts is what we can use for future reads of this snapshot.
@@ -1169,6 +1170,10 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
+//
+// This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
+// This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
+// until that last checkpoint) that we can use as a new start point for the snapshot calculation.
 func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
 	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
 		otrace.WithSampler(otrace.AlwaysSample()))
