@@ -17,7 +17,7 @@ function restartCluster {
   if [[ "$OSTYPE" == "darwin"* ]]; then
     (env GOOS=linux GOARCH=amd64 go build) && mv -f dgraph $GOPATH/bin/dgraph
   else
-    make install
+    make BUILD_RACE=Y install
   fi
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
   docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
