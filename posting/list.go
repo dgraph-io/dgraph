@@ -257,14 +257,14 @@ func (it *pIterator) posting() *pb.Posting {
 }
 
 // ListOptions is used in List.Uids (in posting) to customize our output list of
-// UIDs, for each posting list. It should be pb.to this package.
+// uids, for each posting list. It should be pb.to this package.
 type ListOptions struct {
 	ReadTs    uint64
-	AfterUID  uint64   // Any UID returned must be after this value.
-	Intersect *pb.List // Intersect results with this list of UIDs.
+	AfterUid  uint64   // Any uid returned must be after this value.
+	Intersect *pb.List // Intersect results with this list of uids.
 }
 
-// NewPosting takes the given edge an returns its equivalent representation as a posting.
+// NewPosting takes the given edge and returns its equivalent representation as a posting.
 func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	var op uint32
 	if t.Op == pb.DirectedEdge_SET {
@@ -429,7 +429,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	} else if x.Parse(l.key).IsData() {
 		// Unless upsert is specified, we don't check for index conflicts, only
 		// data conflicts.
-		// If the data is of type UID, then we use SPO for conflict detection.
+		// If the data is of type uid, then we use SPO for conflict detection.
 		// Otherwise, we use SP (for string, date, int, etc.).
 		typ, err := schema.State().TypeOf(t.Attr)
 		if err != nil {
@@ -521,7 +521,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 
 // Iterate will allow you to iterate over this posting List, while having acquired a read lock.
 // So, please keep this iteration cheap, otherwise mutations would get stuck.
-// The iteration will start after the provided UID. The results would not include this UID.
+// The iteration will start after the provided uid. The results would not include this uid.
 // The function will loop until either the posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
@@ -585,14 +585,14 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 		posts = result
 	}
 
-	// Sort all the postings by Uid (inc order), then by commit/startTs in dec order.
+	// Sort all the postings by uid (inc order), then by commit/startTs in dec order.
 	sort.Slice(posts, func(i, j int) bool {
 		pi := posts[i]
 		pj := posts[j]
 		if pi.Uid == pj.Uid {
 			ei := effective(pi.StartTs, pi.CommitTs)
 			ej := effective(pj.StartTs, pj.CommitTs)
-			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
+			return ei > ej // Pick the higher, so we can discard older commits for the same uid.
 		}
 		return pi.Uid < pj.Uid
 	})
@@ -892,9 +892,9 @@ func (l *List) ApproxLen() int {
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
-// Uids returns the UIDs given some query params.
+// Uids returns the uids given some query params.
 // We have to apply the filtering before applying (offset, count).
-// WARNING: Calling this function just to get Uids is expensive
+// WARNING: Calling this function just to get uids is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
@@ -906,12 +906,12 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			l.RUnlock()
 			return out, ErrTsTooOld
 		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUID, opt.Intersect, out)
+		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 		l.RUnlock()
 		return out, nil
 	}
 
-	err := l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) error {
+	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
 		}
@@ -936,7 +936,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
 
-	return l.iterate(opt.ReadTs, opt.AfterUID, func(p *pb.Posting) error {
+	return l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType != pb.Posting_REF {
 			return nil
 		}
@@ -1008,9 +1008,9 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 
 // ValueFor returns a value from posting list, according to preferred language list.
 // If list is empty, value without language is returned; if such value is not
-// available, value with smallest Uid is returned.
+// available, value with smallest uid is returned.
 // If list consists of one or more languages, first available value is returned.
-// If no language from list match the values, processing is the same as for empty list.
+// If no language from the list matches the values, processing is the same as for empty list.
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
 	l.RLock() // All public methods should acquire locks, while private ones should assert them.
 	defer l.RUnlock()
@@ -1071,7 +1071,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 	}
 
 	var found bool
-	// last resort - return value with smallest lang Uid
+	// last resort - return value with smallest lang uid.
 	if any {
 		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 			if p.PostingType == pb.Posting_VALUE_LANG {
@@ -1303,7 +1303,7 @@ func sortSplits(splits []uint64) {
 }
 
 // PartSplits returns an empty array if the list has not been split into multiple parts.
-// Otherwise, it returns an array containing the start UID of each part.
+// Otherwise, it returns an array containing the start uid of each part.
 func (l *List) PartSplits() []uint64 {
 	splits := make([]uint64, len(l.plist.Splits))
 	copy(splits, l.plist.Splits)

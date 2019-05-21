@@ -216,6 +216,7 @@ func (lc *LocalCache) getNoStore(key string) *List {
 }
 
 // Set sets a new entry in the cache to be associated with the given key.
+// If the key already exists, it returns the existing list without updating it.
 func (lc *LocalCache) Set(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
