@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -488,6 +487,7 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
 		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
 			glog.Warningf("Pending size should remain above zero: %d", sz)
@@ -545,7 +545,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.gid])
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -597,7 +597,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	addr := snap.Context.GetAddr()
 	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
 	if len(addr) > 0 {
-		p, err := conn.Get().Get(addr)
+		p, err := conn.GetPools().Get(addr)
 		if err != nil {
 			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
 		} else {
@@ -635,7 +635,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
-	snap, err := n.calculateSnapshot(discardN)
+	snap, err := n.calculateSnapshot(0, discardN)
 	if err != nil {
 		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
@@ -669,59 +669,24 @@ func (n *node) rampMeter() {
 	}
 }
 
-func (n *node) findRaftProgress() (uint64, error) {
-	var applied uint64
-	err := pstore.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(x.RaftKey())
-		if err == badger.ErrKeyNotFound {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			var snap pb.Snapshot
-			if err := snap.Unmarshal(val); err != nil {
-				return err
-			}
-			applied = snap.Index
-			return nil
-		})
-	})
-	return applied, err
-}
-
 func (n *node) updateRaftProgress() error {
 	// Both leader and followers can independently update their Raft progress. We don't store
 	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
 	// has already applied, to speed up things on a restart.
-	snap, err := n.calculateSnapshot(10) // 10 is a randomly chosen small number.
-	if err != nil {
-		return err
-	}
-	if snap == nil {
-		return nil
-	}
-
+	//
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
-	applied, err := n.findRaftProgress()
+	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		return err
 	}
-	if snap.Index <= applied {
-		return nil
-	}
 
-	data, err := snap.Marshal()
-	x.Check(err)
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	if err := txn.SetWithMeta(x.RaftKey(), data, x.ByteRaft); err != nil {
+	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
+	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
-	if err := txn.CommitAt(1, nil); err != nil {
+
+	if err := n.Store.UpdateCheckpoint(snap); err != nil {
 		return err
 	}
 	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
@@ -744,6 +709,14 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 
 			if n.AmLeader() {
+				var calculate bool
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// Save some cycles by only calculating snapshot if the checkpoint has gone
+						// quite a bit further than the first index.
+						calculate = chk-first >= uint64(x.WorkerConfig.SnapshotAfter)
+					}
+				}
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
@@ -755,8 +728,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
+				if calculate {
+					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+						glog.Errorf("While calculating and proposing snapshot: %v", err)
+					}
 				}
 				go n.abortOldTransactions()
 			}
@@ -787,11 +762,11 @@ func (n *node) Run() {
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
-	applied, err := n.findRaftProgress()
+	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
 	} else {
-		glog.Infof("Found Raft progress in p directory: %d", applied)
+		glog.Infof("Found Raft progress: %d", applied)
 	}
 
 	var timer x.Timer
@@ -891,13 +866,19 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			timer.Record("disk")
+			if rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %v", err)
+				}
+				timer.Record("sync")
+			}
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
 			}
-			timer.Record("disk")
 
 			// Now schedule or apply committed entries.
 			var proposals []*pb.Proposal
@@ -1033,7 +1014,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			addTo(item.Key(), item.EstimatedSize())
 			return false
-		case x.ByteRaft:
+		case x.ByteUnused:
 			return false
 		default:
 			return true
@@ -1058,7 +1039,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return writer.Send(&pb.KVS{Kv: list.Kv})
+		return writer.Write(list)
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
@@ -1173,6 +1154,7 @@ func (n *node) abortOldTransactions() {
 // aborted. This way, we still keep all the mutations corresponding to this
 // start ts in the Raft logs. This is important, because we don't persist
 // pre-writes to disk in pstore.
+// - In simple terms, this means we MUST keep all pending transactions in the Raft logs.
 // - Find the maximum commit timestamp that we have seen.
 // That would tell us about the maximum timestamp used to do any commits. This
 // ts is what we can use for future reads of this snapshot.
@@ -1188,8 +1170,13 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
-func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
-	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot")
+//
+// This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
+// This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
+// until that last checkpoint) that we can use as a new start point for the snapshot calculation.
+func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
+		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
 
 	// We do not need to block snapshot calculation because of a pending stream. Badger would have
@@ -1205,6 +1192,11 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 	span.Annotatef(nil, "First index: %d", first)
+	if startIdx > first {
+		// If we're starting from a higher index, set first to that.
+		first = startIdx
+		span.Annotatef(nil, "Setting first to: %d", startIdx)
+	}
 
 	rsnap, err := n.Store.Snapshot()
 	if err != nil {
@@ -1225,15 +1217,10 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	}
 	span.Annotatef(nil, "Found Raft entries: %d", last-first)
 
-	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
-	if err != nil {
-		span.Annotatef(nil, "Error: %v", err)
-		return nil, err
-	}
-
 	if num := posting.Oracle().NumPendingTxns(); num > 0 {
 		glog.V(2).Infof("Num pending txns: %d", num)
 	}
+
 	// We can't rely upon the Raft entries to determine the minPendingStart,
 	// because there are many cases during mutations where we don't commit or
 	// abort the transaction. This might happen due to an early error thrown.
@@ -1248,27 +1235,52 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	minPendingStart := posting.Oracle().MinPendingStartTs()
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
-	for _, entry := range entries {
-		if entry.Type != raftpb.EntryNormal {
-			continue
-		}
-		var proposal pb.Proposal
-		if err := proposal.Unmarshal(entry.Data); err != nil {
+
+	// Trying to retrieve all entries at once might cause out-of-memory issues in
+	// cases where the raft log is too big to fit into memory. Instead of retrieving
+	// all entries at once, retrieve it in batches of 64MB.
+	var lastEntry raftpb.Entry
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-		if proposal.Mutations != nil {
-			start := proposal.Mutations.StartTs
-			if start >= minPendingStart && snapshotIdx == 0 {
-				snapshotIdx = entry.Index - 1
-			}
+
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
 		}
-		if proposal.Delta != nil {
-			for _, txn := range proposal.Delta.GetTxns() {
-				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+
+		// Store the last entry (as it might be needed outside the loop) and set the
+		// start of the new batch at the entry following it. Also set foundEntries to
+		// true to indicate to the code outside the loop that entries were retrieved.
+		lastEntry = entries[len(entries)-1]
+		batchFirst = lastEntry.Index + 1
+
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal {
+				continue
+			}
+			var proposal pb.Proposal
+			if err := proposal.Unmarshal(entry.Data); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return nil, err
+			}
+			if proposal.Mutations != nil {
+				start := proposal.Mutations.StartTs
+				if start >= minPendingStart && snapshotIdx == 0 {
+					snapshotIdx = entry.Index - 1
+				}
+			}
+			if proposal.Delta != nil {
+				for _, txn := range proposal.Delta.GetTxns() {
+					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+				}
 			}
 		}
 	}
+
 	if maxCommitTs == 0 {
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
@@ -1276,9 +1288,7 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		if len(entries) > 0 {
-			snapshotIdx = entries[len(entries)-1].Index
-		}
+		snapshotIdx = lastEntry.Index
 		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
 

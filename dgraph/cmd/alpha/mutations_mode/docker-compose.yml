@@ -6,8 +6,8 @@ services:
     container_name: bank-dg0.1
     working_dir: /data/dg0.1
     ports:
-      - 5080:5080
-      - 6080:6080
+      - 5180:5180
+      - 6180:6180
     labels:
       cluster: test
     volumes:
@@ -15,7 +15,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 0 --my=zero1:5080 --replicas 1 --idx 1 --logtostderr
+    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --replicas 1 --idx 1 --logtostderr
 
   zero2:
     image: dgraph/dgraph:latest
@@ -23,8 +23,8 @@ services:
     depends_on:
       - zero1
     ports:
-      - 5082:5082
-      - 6082:6082
+      - 5182:5182
+      - 6182:6182
     labels:
       cluster: test
     volumes:
@@ -32,7 +32,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 1 --idx 2 --logtostderr --peer=zero1:5080
+    command: /gobin/dgraph zero -o 102 --my=zero2:5182 --replicas 1 --idx 2 --logtostderr --peer=zero1:5180
 
   zero3:
     image: dgraph/dgraph:latest
@@ -40,8 +40,8 @@ services:
     depends_on:
       - zero2
     ports:
-      - 5083:5083
-      - 6083:6083
+      - 5183:5183
+      - 6183:6183
     labels:
       cluster: test
     volumes:
@@ -49,7 +49,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 1 --idx 3 --logtostderr --peer=zero1:5080
+    command: /gobin/dgraph zero -o 103 --my=zero3:5183 --replicas 1 --idx 3 --logtostderr --peer=zero1:5180
 
   dg1:
     image: dgraph/dgraph:latest
@@ -65,7 +65,7 @@ services:
       - 9180:9180
     labels:
       cluster: test
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --logtostderr --mutations=disallow
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --logtostderr --mutations=disallow
 
   dg2:
     image: dgraph/dgraph:latest
@@ -83,7 +83,7 @@ services:
       - 9182:9182
     labels:
       cluster: test
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --logtostderr --mutations=strict
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --logtostderr --mutations=strict
 
   dg3:
     image: dgraph/dgraph:latest
@@ -101,4 +101,4 @@ services:
       - 9183:9183
     labels:
       cluster: test
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --logtostderr --mutations=strict
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr --mutations=strict
