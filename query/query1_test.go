@@ -1880,7 +1880,7 @@ func TestMultiSortPaginateWithOffset(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			js := processQueryNoErr(t, tt.query)
+			js := processToFastJsonNoErr(t, tt.query)
 			require.JSONEq(t, tt.result, js)
 		})
 	}
