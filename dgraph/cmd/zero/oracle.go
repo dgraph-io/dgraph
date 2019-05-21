@@ -48,7 +48,7 @@ type Oracle struct {
 	tmax uint64
 	// All transactions with startTs < startTxnTs return true for hasConflict.
 	startTxnTs  uint64
-	subscribers map[int]chan *pb.OracleDelta
+	subscribers map[int]chan pb.OracleDelta
 	updates     chan *pb.OracleDelta
 	doneUntil   y.WaterMark
 	syncMarks   []syncMark
@@ -57,7 +57,7 @@ type Oracle struct {
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.keyCommit = make(map[string]uint64)
-	o.subscribers = make(map[int]chan *pb.OracleDelta)
+	o.subscribers = make(map[int]chan pb.OracleDelta)
 	o.updates = make(chan *pb.OracleDelta, 100000) // Keeping 1 second worth of updates.
 	o.doneUntil.Init(nil)
 	go o.sendDeltasToSubscribers()
@@ -131,7 +131,7 @@ func (o *Oracle) currentState() *pb.OracleDelta {
 	return resp
 }
 
-func (o *Oracle) newSubscriber() (<-chan *pb.OracleDelta, int) {
+func (o *Oracle) newSubscriber() (<-chan pb.OracleDelta, int) {
 	o.Lock()
 	defer o.Unlock()
 	var id int
@@ -141,8 +141,12 @@ func (o *Oracle) newSubscriber() (<-chan *pb.OracleDelta, int) {
 			break
 		}
 	}
-	ch := make(chan *pb.OracleDelta, 1000)
-	ch <- o.currentState() // Queue up the full state as the first entry.
+
+	// The channel takes a delta instead of a pointer as the receiver needs to
+	// modify it by setting the group checksums. Passing a pointer previously
+	// resulted in a race condition.
+	ch := make(chan pb.OracleDelta, 1000)
+	ch <- *o.currentState() // Queue up the full state as the first entry.
 	o.subscribers[id] = ch
 	return ch, id
 }
@@ -211,7 +215,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		o.Lock()
 		for id, ch := range o.subscribers {
 			select {
-			case ch <- delta:
+			case ch <- *delta:
 			default:
 				close(ch)
 				delete(o.subscribers, id)
@@ -430,7 +434,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 			// Pass in the latest group checksum as well, so the Alpha can use that to determine
 			// when not to service a read.
 			delta.GroupChecksums = s.groupChecksums()
-			if err := server.Send(delta); err != nil {
+			if err := server.Send(&delta); err != nil {
 				return err
 			}
 		case <-ctx.Done():

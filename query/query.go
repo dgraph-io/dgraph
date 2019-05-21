@@ -1417,7 +1417,6 @@ func (sg *SubGraph) updateUidMatrix() {
 			algo.IntersectWith(l, sg.DestUIDs, l)
 		}
 	}
-
 }
 
 func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGraph) error {

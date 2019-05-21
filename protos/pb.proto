@@ -487,6 +487,11 @@ message BackupRequest {
   // True if no credentials should be used to access the S3 or minio bucket.
   // For example, when using a bucket with a public policy.
   bool anonymous = 10;
+
+  // If true, previous backups will be ignored and a new full backup will be
+  // created. If false, the backup will be full or incremental depending on
+  // the existing backups.
+  bool force_full = 11;
 }
 
 message ExportRequest {
