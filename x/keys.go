@@ -35,7 +35,8 @@ const (
 	defaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-	ByteRaft      = byte(0xff)
+	// ByteUnused is a constant to specify keys which need to be discarded.
+	ByteUnused = byte(0xff)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -48,16 +49,13 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
-func RaftKey() []byte {
-	buf := make([]byte, 5)
-	buf[0] = ByteRaft
-	AssertTrue(4 == copy(buf[1:5], []byte("raft")))
-	return buf
-}
-
-// SchemaKey returns schema key for given attribute,
-// schema keys are stored separately with unique prefix,
-// since we need to iterate over all schema keys
+// SchemaKey returns schema key for given attribute. Schema keys are stored
+// separately with unique prefix, since we need to iterate over all schema keys.
+// The structure of a schema key is as follows:
+//
+// byte 0: key type prefix (set to byteSchema)
+// byte 1-2: length of attr
+// next len(attr) bytes: value of attr
 func SchemaKey(attr string) []byte {
 	buf := make([]byte, 1+2+len(attr))
 	buf[0] = byteSchema
@@ -130,10 +128,6 @@ type ParsedKey struct {
 	Term       string
 	Count      uint32
 	bytePrefix byte
-}
-
-func (p ParsedKey) IsRaft() bool {
-	return p.bytePrefix == ByteRaft
 }
 
 func (p ParsedKey) IsData() bool {
@@ -269,7 +263,7 @@ func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
 	p.bytePrefix = key[0]
-	if p.bytePrefix == ByteRaft {
+	if p.bytePrefix == ByteUnused {
 		return p
 	}
 

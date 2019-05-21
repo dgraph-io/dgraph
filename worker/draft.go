@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -583,7 +582,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
-	snap, err := n.calculateSnapshot(discardN)
+	snap, err := n.calculateSnapshot(0, discardN)
 	if err != nil {
 		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
@@ -617,59 +616,24 @@ func (n *node) rampMeter() {
 	}
 }
 
-func (n *node) findRaftProgress() (uint64, error) {
-	var applied uint64
-	err := pstore.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(x.RaftKey())
-		if err == badger.ErrKeyNotFound {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		return item.Value(func(val []byte) error {
-			var snap pb.Snapshot
-			if err := snap.Unmarshal(val); err != nil {
-				return err
-			}
-			applied = snap.Index
-			return nil
-		})
-	})
-	return applied, err
-}
-
 func (n *node) updateRaftProgress() error {
 	// Both leader and followers can independently update their Raft progress. We don't store
 	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
 	// has already applied, to speed up things on a restart.
-	snap, err := n.calculateSnapshot(10) // 10 is a randomly chosen small number.
-	if err != nil {
-		return err
-	}
-	if snap == nil {
-		return nil
-	}
-
+	//
 	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
 	// stored applied.
-	applied, err := n.findRaftProgress()
+	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		return err
 	}
-	if snap.Index <= applied {
-		return nil
-	}
 
-	data, err := snap.Marshal()
-	x.Check(err)
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
-	defer txn.Discard()
-
-	if err := txn.SetWithMeta(x.RaftKey(), data, x.ByteRaft); err != nil {
+	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
+	if err != nil || snap == nil || snap.Index <= applied {
 		return err
 	}
-	if err := txn.CommitAt(1, nil); err != nil {
+
+	if err := n.Store.UpdateCheckpoint(snap); err != nil {
 		return err
 	}
 	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
@@ -692,6 +656,14 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 
 			if n.AmLeader() {
+				var calculate bool
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// Save some cycles by only calculating snapshot if the checkpoint has gone
+						// quite a bit further than the first index.
+						calculate = chk-first >= uint64(Config.SnapshotAfter)
+					}
+				}
 				// We keep track of the applied index in the p directory. Even if we don't take
 				// snapshot for a while and let the Raft logs grow and restart, we would not have to
 				// run all the log entries, because we can tell Raft.Config to set Applied to that
@@ -703,8 +675,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				// We use disk based storage for Raft. So, we're not too concerned about
 				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
 				// entries to process on a restart.
-				if err := n.proposeSnapshot(Config.SnapshotAfter); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
+				if calculate {
+					if err := n.proposeSnapshot(Config.SnapshotAfter); err != nil {
+						glog.Errorf("While calculating and proposing snapshot: %v", err)
+					}
 				}
 				go n.abortOldTransactions()
 			}
@@ -735,11 +709,11 @@ func (n *node) Run() {
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
-	applied, err := n.findRaftProgress()
+	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
 	} else {
-		glog.Infof("Found Raft progress in p directory: %d", applied)
+		glog.Infof("Found Raft progress: %d", applied)
 	}
 
 	var timer x.Timer
@@ -984,7 +958,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			addTo(item.Key(), item.EstimatedSize())
 			return false
-		case x.ByteRaft:
+		case x.ByteUnused:
 			return false
 		default:
 			return true
@@ -1117,6 +1091,7 @@ func (n *node) abortOldTransactions() {
 // aborted. This way, we still keep all the mutations corresponding to this
 // start ts in the Raft logs. This is important, because we don't persist
 // pre-writes to disk in pstore.
+// - In simple terms, this means we MUST keep all pending transactions in the Raft logs.
 // - Find the maximum commit timestamp that we have seen.
 // That would tell us about the maximum timestamp used to do any commits. This
 // ts is what we can use for future reads of this snapshot.
@@ -1132,8 +1107,13 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
-func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
-	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot")
+//
+// This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
+// This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
+// until that last checkpoint) that we can use as a new start point for the snapshot calculation.
+func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
+		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
 
 	// We do not need to block snapshot calculation because of a pending stream. Badger would have
@@ -1149,6 +1129,11 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 	span.Annotatef(nil, "First index: %d", first)
+	if startIdx > first {
+		// If we're starting from a higher index, set first to that.
+		first = startIdx
+		span.Annotatef(nil, "Setting first to: %d", startIdx)
+	}
 
 	rsnap, err := n.Store.Snapshot()
 	if err != nil {
