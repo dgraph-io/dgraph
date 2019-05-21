@@ -75,7 +75,7 @@ git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO 
 
 # - Do not import math/rand for real library code.  Use internal/grpcrand for
 #   thread safety.
-git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand\|wrr_test')
+git ls-files "*.go" | xargs grep -l '"math/rand"' 2>&1 | (! grep -v '^examples\|^stress\|grpcrand')
 
 # - Ensure all ptypes proto packages are renamed when importing.
 git ls-files "*.go" | (! xargs grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/")
@@ -88,7 +88,7 @@ go list -f {{.Dir}} ./... | xargs go run test/go_vet/vet.go
 gofmt -s -d -l . 2>&1 | fail_on_output
 goimports -l . 2>&1 | (! grep -vE "(_mock|\.pb)\.go:") | fail_on_output
 golint ./... 2>&1 | (! grep -vE "(_mock|\.pb)\.go:")
-go vet -all .
+go tool vet -all .
 
 # - Check that generated proto files are up to date.
 if [[ -z "${VET_SKIP_PROTO}" ]]; then

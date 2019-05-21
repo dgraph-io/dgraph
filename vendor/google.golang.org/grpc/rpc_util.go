@@ -694,34 +694,14 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 	return nil
 }
 
-// Information about RPC
 type rpcInfo struct {
-	failfast      bool
-	preloaderInfo *compressorInfo
-}
-
-// Information about Preloader
-// Responsible for storing codec, and compressors
-// If stream (s) has  context s.Context which stores rpcInfo that has non nil
-// pointers to codec, and compressors, then we can use preparedMsg for Async message prep
-// and reuse marshalled bytes
-type compressorInfo struct {
-	codec baseCodec
-	cp    Compressor
-	comp  encoding.Compressor
+	failfast bool
 }
 
 type rpcInfoContextKey struct{}
 
-func newContextWithRPCInfo(ctx context.Context, failfast bool, codec baseCodec, cp Compressor, comp encoding.Compressor) context.Context {
-	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{
-		failfast: failfast,
-		preloaderInfo: &compressorInfo{
-			codec: codec,
-			cp:    cp,
-			comp:  comp,
-		},
-	})
+func newContextWithRPCInfo(ctx context.Context, failfast bool) context.Context {
+	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{failfast: failfast})
 }
 
 func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
