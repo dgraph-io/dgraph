@@ -226,31 +226,38 @@ type ParsedKey struct {
 	bytePrefix  byte
 }
 
+// IsData returns whether the key is a data key.
 func (p ParsedKey) IsData() bool {
 	return p.bytePrefix == DefaultPrefix && p.byteType == ByteData
 }
 
+// IsReverse returns whether the key is a reverse key.
 func (p ParsedKey) IsReverse() bool {
 	return p.bytePrefix == DefaultPrefix && p.byteType == ByteReverse
 }
 
+// IsCount returns whether the key is a count key.
 func (p ParsedKey) IsCount() bool {
 	return p.bytePrefix == DefaultPrefix && (p.byteType == ByteCount ||
 		p.byteType == ByteCountRev)
 }
 
+// IsIndex returns whether the key is an index key.
 func (p ParsedKey) IsIndex() bool {
 	return p.bytePrefix == DefaultPrefix && p.byteType == ByteIndex
 }
 
+// IsSchema returns whether the key is a schema key.
 func (p ParsedKey) IsSchema() bool {
 	return p.bytePrefix == byteSchema
 }
 
+// IsType returns whether the key is a type key.
 func (p ParsedKey) IsType() bool {
 	return p.bytePrefix == byteType
 }
 
+// IsOfType checks whether the key is of the given type.
 func (p ParsedKey) IsOfType(typ byte) bool {
 	switch typ {
 	case ByteCount, ByteCountRev:
@@ -266,6 +273,8 @@ func (p ParsedKey) IsOfType(typ byte) bool {
 	return false
 }
 
+// SkipPredicate returns the first key after the keys corresponding to the predicate
+// of this key. Useful when iterating in the reverse order.
 func (p ParsedKey) SkipPredicate() []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
@@ -276,22 +285,14 @@ func (p ParsedKey) SkipPredicate() []byte {
 	return buf
 }
 
-func (p ParsedKey) SkipRangeOfSameType() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1)
-	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
-	k[0] = p.byteType + 1
-	return buf
-}
-
+// SkipSchema returns the first key after all the schema keys.
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
 	buf[0] = byteSchema + 1
 	return buf[:]
 }
 
+// SkipType returns the first key after all the type keys.
 func (p ParsedKey) SkipType() []byte {
 	var buf [1]byte
 	buf[0] = byteType + 1
