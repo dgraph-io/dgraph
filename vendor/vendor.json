@@ -899,14 +899,14 @@
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
 			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "f4e77d36d62c17c2336347bb2670ddbd02d092b7",
-			"revisionTime": "2019-05-02T22:26:14Z"
+			"revision": "3ec19112720433827bbce8be9342797f5a6aaaf9",
+			"revisionTime": "2019-05-12T12:16:34Z"
 		},
 		{
 			"checksumSHA1": "HvmG9LfStMLF+hIC7xR4SxegMis=",
 			"path": "golang.org/x/net/trace",
-			"revision": "f4e77d36d62c17c2336347bb2670ddbd02d092b7",
-			"revisionTime": "2019-05-02T22:26:14Z"
+			"revision": "3ec19112720433827bbce8be9342797f5a6aaaf9",
+			"revisionTime": "2019-05-12T12:16:34Z"
 		},
 		{
 			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
