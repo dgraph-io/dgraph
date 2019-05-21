@@ -204,10 +204,12 @@ message Mutations {
 
 message Snapshot {
 	RaftContext context = 1;
-	uint64 index        = 2;
-	uint64 read_ts      = 3;
+	uint64 index = 2;
+	uint64 read_ts = 3;
 	// done is used to indicate that snapshot stream was a success.
-	bool done           = 4;
+	bool done = 4;
+	// since_ts stores the ts of the last snapshot to support diff snap updates.
+	uint64 since_ts = 5;
 }
 
 message Proposal {
