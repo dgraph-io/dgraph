@@ -26,14 +26,14 @@ import (
 	"github.com/golang/glog"
 )
 
-type matchFn func(types.Val, stringFilter) bool
+type matchFunc func(types.Val, stringFilter) bool
 
 type stringFilter struct {
 	funcName  string
 	funcType  FuncType
 	lang      string
 	tokens    []string
-	match     matchFn
+	match     matchFunc
 	ineqValue types.Val
 	eqVals    []types.Val
 }
@@ -94,9 +94,9 @@ func ineqMatch(value types.Val, filter stringFilter) bool {
 func tokenizeValue(value types.Val, filter stringFilter) []string {
 	var tokName string
 	switch filter.funcType {
-	case StandardFn:
+	case standardFn:
 		tokName = "term"
-	case FullTextSearchFn:
+	case fullTextSearchFn:
 		tokName = "fulltext"
 	}
 
