@@ -33,25 +33,17 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 		glog.Errorf("Context error during backup: %v\n", err)
 		return err
 	}
+
 	g := groups()
-	// sanity, make sure this is our group.
 	if g.groupId() != req.GroupId {
 		return x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
 			g.groupId(), req.GroupId)
 	}
-	// wait for this node to catch-up.
+
 	if err := posting.Oracle().WaitForTs(ctx, req.ReadTs); err != nil {
 		return err
 	}
-	// Get snapshot to fill any gaps.
-	snap, err := g.Node.Snapshot()
-	if err != nil {
-		return err
-	}
-	glog.V(3).Infof("Backup group %d snapshot: %+v", req.GroupId, snap)
-	// Attach snapshot readTs to request to compare with any previous version.
-	req.SnapshotTs = snap.ReadTs
-	// create backup request and process it.
+
 	br := &backup.Request{DB: pstore, Backup: req}
 	return br.Process(ctx)
 }
@@ -103,6 +95,7 @@ func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 	secretKey := r.FormValue("secret_key")
 	sessionToken := r.FormValue("session_token")
 	anonymous := r.FormValue("anonymous") == "true"
+	forceFull := r.FormValue("force_full") == "true"
 
 	// Check that this node can accept requests.
 	if err := x.HealthCheck(); err != nil {
@@ -125,6 +118,8 @@ func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 		SecretKey:    secretKey,
 		SessionToken: sessionToken,
 		Anonymous:    anonymous,
+		// TODO(martinmr): Check if this field can be removed.
+		ForceFull: forceFull,
 	}
 	m := backup.Manifest{Groups: groups().KnownGroups()}
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
@@ -151,10 +146,6 @@ func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 
 	for range m.Groups {
 		if err := <-errCh; err != nil {
-			// No changes, nothing was done.
-			if err == backup.ErrBackupNoChanges {
-				return nil
-			}
 			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}

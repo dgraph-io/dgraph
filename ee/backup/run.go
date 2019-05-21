@@ -187,7 +187,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := runRestore(opt.pdir, opt.location)
+	version, err := RunRestore(opt.pdir, opt.location)
 	if err != nil {
 		return err
 	}
@@ -213,8 +213,8 @@ func runRestoreCmd() error {
 	return nil
 }
 
-// runRestore calls badger.Load and tries to load data into a new DB.
-func runRestore(pdir, location string) (uint64, error) {
+// RunRestore calls badger.Load and tries to load data into a new DB.
+func RunRestore(pdir, location string) (uint64, error) {
 	bo := badger.DefaultOptions
 	bo.SyncWrites = true
 	bo.TableLoadingMode = options.MemoryMap
