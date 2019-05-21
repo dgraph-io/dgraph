@@ -26,6 +26,7 @@ const (
 	pwdLenLimit = 6
 )
 
+// Encrypt encrypts the given plain-text password.
 func Encrypt(plain string) (string, error) {
 	if len(plain) < pwdLenLimit {
 		return "", x.Errorf("Password too short, i.e. should have at least 6 chars")
@@ -39,6 +40,7 @@ func Encrypt(plain string) (string, error) {
 	return string(encrypted), nil
 }
 
+// VerifyPassword checks that the plain-text password matches the encrypted password.
 func VerifyPassword(plain, encrypted string) error {
 	if len(plain) < pwdLenLimit || len(encrypted) == 0 {
 		return x.Errorf("Invalid password/crypted string")

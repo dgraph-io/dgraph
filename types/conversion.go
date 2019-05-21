@@ -520,6 +520,7 @@ func cantConvert(from TypeID, to TypeID) error {
 	return x.Errorf("Cannot convert %s to type %s", from.Name(), to.Name())
 }
 
+// MarshalJSON marshals a value into a valid JSON value.
 func (v Val) MarshalJSON() ([]byte, error) {
 	switch v.Tid {
 	case IntID:
