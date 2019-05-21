@@ -58,10 +58,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	var writer badgerWriter
 	if snap.SinceTs == 0 {
-		// Before we write anything, we should drop all the data stored in ps.
-		if err := pstore.DropAll(); err != nil {
-			return 0, err
-		}
 		sw := pstore.NewStreamWriter()
 		if err := sw.Prepare(); err != nil {
 			return 0, err
