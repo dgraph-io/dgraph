@@ -55,10 +55,9 @@ func TestRollupTimestamp(t *testing.T) {
 
 	// Now check that we don't lost the highest version during a rollup operation, despite the STAR
 	// delete marker being the most recent update.
-	require.NoError(t, nl.Rollup(11))
-	kv, err := nl.MarshalToKv()
+	kvs, err := nl.Rollup()
 	require.NoError(t, err)
-	require.Equal(t, uint64(10), kv.Version)
+	require.Equal(t, uint64(10), kvs[0].Version)
 }
 
 func TestPostingListRead(t *testing.T) {

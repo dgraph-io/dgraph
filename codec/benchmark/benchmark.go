@@ -144,7 +144,7 @@ func benchmarkUnpack(trials int, chunks *chunks) int {
 		start := time.Now()
 		for _, p := range packed {
 			dec := codec.Decoder{Pack: p}
-			for uids := dec.Seek(0); len(uids) > 0; uids = dec.Next() {
+			for uids := dec.Seek(0, 0); len(uids) > 0; uids = dec.Next() {
 			}
 		}
 		times[i] = int(time.Since(start).Nanoseconds())

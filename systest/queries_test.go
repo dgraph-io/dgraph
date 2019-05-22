@@ -332,11 +332,6 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
   {
     "schema": [` + x.AclPredicates + `,
       {
-        "predicate": "_predicate_",
-        "type": "string",
-        "list": true
-      },
-      {
         "predicate": "dgraph.type",
         "type": "string",
         "index": true,
@@ -398,9 +393,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       },
       {
         "predicate": "dgraph.user.group"
-      },
-      {
-        "predicate": "_predicate_"
       },
       {
         "predicate": "friends"
@@ -527,11 +519,6 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 	js := `
   {
     "schema": [` + x.AclPredicates + `,
-      {
-        "predicate": "_predicate_",
-        "type": "string",
-        "list": true
-      },
       {
         "index": true,
         "predicate": "dgraph.type",

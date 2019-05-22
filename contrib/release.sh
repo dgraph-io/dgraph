@@ -110,6 +110,11 @@ pushd $basedir/dgraph/dgraph
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
 
+pushd $basedir/badger/badger
+  xgo -go=$GOVERSION --targets=windows/amd64 .
+  mv badger-windows-4.0-amd64.exe $TMP/windows/badger
+popd
+
 pushd $basedir/ratel
 	xgo -go=$GOVERSION --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
 	mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
@@ -121,6 +126,11 @@ pushd $basedir/dgraph/dgraph
   "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
+popd
+
+pushd $basedir/badger/badger
+  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 .
+  mv badger-darwin-10.9-amd64 $TMP/darwin/badger
 popd
 
 pushd $basedir/ratel
@@ -135,6 +145,12 @@ pushd $basedir/dgraph/dgraph
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
   mv dgraph-linux-amd64 $TMP/linux/dgraph
+popd
+
+pushd $basedir/badger/badger
+  xgo -go=$GOVERSION --targets=linux/amd64 .
+  strip -x badger-linux-amd64
+  mv badger-linux-amd64 $TMP/linux/badger
 popd
 
 pushd $basedir/ratel

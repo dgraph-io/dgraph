@@ -41,7 +41,7 @@ var (
 	users   = flag.Int("users", 100, "Number of accounts.")
 	conc    = flag.Int("txns", 3, "Number of concurrent transactions per client.")
 	dur     = flag.String("dur", "1m", "How long to run the transactions.")
-	addr    = flag.String("addr", "localhost:9080", "Address of Dgraph alpha.")
+	alpha   = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
 	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
 )
 
@@ -293,7 +293,7 @@ func (s *State) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 func main() {
 	flag.Parse()
 
-	all := strings.Split(*addr, ",")
+	all := strings.Split(*alpha, ",")
 	x.AssertTrue(len(all) > 0)
 
 	var clients []*dgo.Dgraph

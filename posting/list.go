@@ -50,6 +50,7 @@ var (
 	ErrInvalidTxn    = fmt.Errorf("Invalid transaction")
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
+	maxListSize      = MB / 2
 )
 
 const (
@@ -84,7 +85,8 @@ func (l *List) maxVersion() uint64 {
 }
 
 type PIterator struct {
-	pl         *pb.PostingList
+	l          *List
+	plist      *pb.PostingList
 	uidPosting *pb.Posting
 	pidx       int // index of postings
 	plen       int
@@ -92,41 +94,153 @@ type PIterator struct {
 	dec  *codec.Decoder
 	uids []uint64
 	uidx int // Offset into the uids slice
+
+	afterUid uint64
+	splitIdx int
+	// The timestamp of a delete marker in the mutable layer. If this value is greater
+	// than zero, then the immutable posting list should not be traversed.
+	deleteBelowTs uint64
 }
 
-func (it *PIterator) Init(pl *pb.PostingList, afterUid uint64) {
-	it.pl = pl
-	it.uidPosting = &pb.Posting{}
+func (it *PIterator) Init(l *List, afterUid, deleteBelowTs uint64) error {
+	if deleteBelowTs > 0 && deleteBelowTs <= l.minTs {
+		return fmt.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
+			deleteBelowTs, l.minTs)
+	}
 
-	it.dec = &codec.Decoder{Pack: pl.Pack}
-	it.uids = it.dec.Seek(afterUid)
+	it.l = l
+	it.splitIdx = it.selectInitialSplit(afterUid)
+	if len(it.l.plist.Splits) > 0 {
+		plist, err := l.readListPart(it.l.plist.Splits[it.splitIdx])
+		if err != nil {
+			return err
+		}
+		it.plist = plist
+	} else {
+		it.plist = l.plist
+	}
+
+	it.afterUid = afterUid
+	it.deleteBelowTs = deleteBelowTs
+
+	it.uidPosting = &pb.Posting{}
+	it.dec = &codec.Decoder{Pack: it.plist.Pack}
+	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
 	it.uidx = 0
 
-	it.plen = len(pl.Postings)
+	it.plen = len(it.plist.Postings)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
-		p := pl.Postings[idx]
-		return afterUid < p.Uid
+		p := it.plist.Postings[idx]
+		return it.afterUid < p.Uid
 	})
+	return nil
 }
 
-func (it *PIterator) Next() {
+func (it *PIterator) selectInitialSplit(afterUid uint64) int {
+	if afterUid == 0 {
+		return 0
+	}
+
+	for i, startUid := range it.l.plist.Splits {
+		// If startUid == afterUid, the current block should be selected.
+		if startUid == afterUid {
+			return i
+		}
+		// If this split starts at an uid greater than afterUid, there might be
+		// elements in the previous split that need to be checked.
+		if startUid > afterUid {
+			return i - 1
+		}
+	}
+
+	// In case no split's startUid is greater or equal than afterUid, start the
+	// iteration at the start of the last split.
+	return len(it.l.plist.Splits) - 1
+}
+
+// moveToNextPart re-initializes the iterator at the start of the next list part.
+func (it *PIterator) moveToNextPart() error {
+	it.splitIdx++
+	plist, err := it.l.readListPart(it.l.plist.Splits[it.splitIdx])
+	if err != nil {
+		return err
+	}
+	it.plist = plist
+
+	it.dec = &codec.Decoder{Pack: it.plist.Pack}
+	// codec.SeekCurrent makes sure we skip returning afterUid during seek.
+	it.uids = it.dec.Seek(it.afterUid, codec.SeekCurrent)
+	it.uidx = 0
+
+	it.plen = len(it.plist.Postings)
+	it.pidx = sort.Search(it.plen, func(idx int) bool {
+		p := it.plist.Postings[idx]
+		return it.afterUid < p.Uid
+	})
+
+	return nil
+}
+
+// moveToNextValidPart moves the iterator to the next part that contains valid data.
+// This is used to skip over parts of the list that might not contain postings.
+func (it *PIterator) moveToNextValidPart() error {
+	// Not a multi-part list, the iterator has reached the end of the list.
+	if len(it.l.plist.Splits) == 0 {
+		return nil
+	}
+
+	// If there are no more uids to iterate over, move to the next part of the
+	// list that contains valid data.
+	if len(it.uids) == 0 {
+		for it.splitIdx <= len(it.l.plist.Splits)-2 {
+			// moveToNextPart will increment it.splitIdx. Therefore, the for loop must only
+			// continue until len(splits) - 2.
+			if err := it.moveToNextPart(); err != nil {
+				return err
+			}
+
+			if len(it.uids) > 0 {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (it *PIterator) Next() error {
+	if it.deleteBelowTs > 0 {
+		it.uids = nil
+		return nil
+	}
+
 	it.uidx++
 	if it.uidx < len(it.uids) {
-		return
+		return nil
 	}
 	it.uidx = 0
 	it.uids = it.dec.Next()
+
+	return it.moveToNextValidPart()
 }
 
-func (it *PIterator) Valid() bool {
-	return len(it.uids) > 0
+func (it *PIterator) Valid() (bool, error) {
+	if len(it.uids) > 0 {
+		return true, nil
+	}
+
+	if err := it.moveToNextValidPart(); err != nil {
+		return false, err
+	} else if len(it.uids) > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (it *PIterator) Posting() *pb.Posting {
 	uid := it.uids[it.uidx]
 
 	for it.pidx < it.plen {
-		p := it.pl.Postings[it.pidx]
+		p := it.plist.Postings[it.pidx]
 		if p.Uid > uid {
 			break
 		}
@@ -310,10 +424,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	var conflictKey string
-	if t.Attr == "_predicate_" {
-		// Don't check for conflict.
-
-	} else if schema.State().HasUpsert(t.Attr) {
+	if schema.State().HasUpsert(t.Attr) {
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.
@@ -348,7 +459,7 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 
 	l.updateMutationLayer(mpost)
 	atomic.AddInt32(&l.pendingTxns, 1)
-	txn.AddKeys(string(l.key), conflictKey)
+	txn.AddConflictKey(conflictKey)
 	return nil
 }
 
@@ -362,6 +473,15 @@ func (l *List) GetMutation(startTs uint64) []byte {
 		return data
 	}
 	return nil
+}
+
+func (l *List) SetMutation(startTs uint64, data []byte) {
+	pl := new(pb.PostingList)
+	x.Check(pl.Unmarshal(data))
+
+	l.Lock()
+	l.mutationMap[startTs] = pl
+	l.Unlock()
 }
 
 func (l *List) CommitMutation(startTs, commitTs uint64) error {
@@ -444,7 +564,11 @@ func (l *List) Conflicts(readTs uint64) []uint64 {
 	return conflicts
 }
 
-func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
+// pickPostings goes through the mutable layer and returns the appropriate postings,
+// along with the timestamp of the delete marker, if any. If this timestamp is greater
+// than zero, it indicates that the immutable layer should be ignored during traversals.
+// If greater than zero, this timestamp must thus be greater than l.minTs.
+func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// This function would return zero ts for entries above readTs.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
@@ -459,16 +583,16 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 	}
 
 	// First pick up the postings.
-	var deleteBelow uint64
+	var deleteBelowTs uint64
 	var posts []*pb.Posting
 	for startTs, plist := range l.mutationMap {
 		// Pick up the transactions which are either committed, or the one which is ME.
 		effectiveTs := effective(startTs, plist.CommitTs)
-		if effectiveTs > deleteBelow {
-			// We're above the deleteBelow marker. We wouldn't reach here if effectiveTs is zero.
+		if effectiveTs > deleteBelowTs {
+			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
 			for _, mpost := range plist.Postings {
 				if hasDeleteAll(mpost) {
-					deleteBelow = effectiveTs
+					deleteBelowTs = effectiveTs
 					continue
 				}
 				posts = append(posts, mpost)
@@ -476,19 +600,12 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 		}
 	}
 
-	storedList := l.plist
-	if deleteBelow > 0 {
+	if deleteBelowTs > 0 {
 		// There was a delete all marker. So, trim down the list of postings.
-
-		// Create an empty posting list at the same commit ts as the deletion marker. This is
-		// important, so that after rollup happens, we are left with a posting list at the
-		// highest commit timestamp.
-		storedList = &pb.PostingList{CommitTs: deleteBelow}
 		result := posts[:0]
-		// Trim the posts.
 		for _, post := range posts {
 			effectiveTs := effective(post.StartTs, post.CommitTs)
-			if effectiveTs < deleteBelow { // Do pick the posts at effectiveTs == deleteBelow.
+			if effectiveTs < deleteBelowTs { // Do pick the posts at effectiveTs == deleteBelowTs.
 				continue
 			}
 			result = append(result, post)
@@ -507,13 +624,13 @@ func (l *List) pickPostings(readTs uint64) (*pb.PostingList, []*pb.Posting) {
 		}
 		return pi.Uid < pj.Uid
 	})
-	return storedList, posts
+	return deleteBelowTs, posts
 }
 
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
-	plist, mposts := l.pickPostings(readTs)
+	deleteBelowTs, mposts := l.pickPostings(readTs)
 	if readTs < l.minTs {
 		return x.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -526,18 +643,25 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		})
 	}
 
-	var mp, pp *pb.Posting
-	var pitr PIterator
-	pitr.Init(plist, afterUid)
-	prevUid := uint64(0)
-	var err error
+	var (
+		mp, pp  *pb.Posting
+		pitr    PIterator
+		prevUid uint64
+		err     error
+	)
+	err = pitr.Init(l, afterUid, deleteBelowTs)
+	if err != nil {
+		return err
+	}
 	for err == nil {
 		if midx < mlen {
 			mp = mposts[midx]
 		} else {
 			mp = emptyPosting
 		}
-		if pitr.Valid() {
+		if valid, err := pitr.Valid(); err != nil {
+			return err
+		} else if valid {
 			pp = pitr.Posting()
 		} else {
 			pp = emptyPosting
@@ -554,7 +678,9 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			// Either mp is empty, or pp is lower than mp.
 			err = f(pp)
-			pitr.Next()
+			if err := pitr.Next(); err != nil {
+				return err
+			}
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			// Either pp is empty, or mp is lower than pp.
 			if mp.Op != Del {
@@ -567,7 +693,9 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 				err = f(mp)
 			}
 			prevUid = mp.Uid
-			pitr.Next()
+			if err := pitr.Next(); err != nil {
+				return err
+			}
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
@@ -613,26 +741,72 @@ func (l *List) Length(readTs, afterUid uint64) int {
 	return l.length(readTs, afterUid)
 }
 
-func (l *List) MarshalToKv() (*bpb.KV, error) {
-	l.Lock()
-	defer l.Unlock()
-	if err := l.rollup(math.MaxUint64); err != nil {
+// Rollup performs the rollup process, merging the immutable and mutable layers
+// and outputting the resulting list so it can be written to disk.
+// During this process, the list might be split into multiple lists if the main
+// list or any of the existing parts become too big.
+//
+// A normal list has the following format:
+// <key> -> <posting list with all the data for this list>
+//
+// A multi-part list is stored in multiple keys. The keys for the parts will be generated by
+// appending the first uid in the part to the key. The list will have the following format:
+// <key> -> <posting list that includes no postings but a list of each part's start uid>
+// <key, 1> -> <first part of the list with all the data for this part>
+// <key, next start uid> -> <second part of the list with all the data for this part>
+// ...
+// <key, last start uid> -> <last part of the list with all its data>
+//
+// The first part of a multi-part list always has start uid 1 and will be the last part
+// to be deleted, at which point the entire list will be marked for deletion.
+// As the list grows, existing parts might be split if they become too big.
+func (l *List) Rollup() ([]*bpb.KV, error) {
+	l.RLock()
+	defer l.RUnlock()
+	out, err := l.rollup(math.MaxUint64)
+	if err != nil {
 		return nil, err
 	}
+	if out == nil {
+		return nil, nil
+	}
 
+	var kvs []*bpb.KV
 	kv := &bpb.KV{}
-	kv.Version = l.minTs
+	kv.Version = out.newMinTs
 	kv.Key = l.key
-	val, meta := marshalPostingList(l.plist)
+	val, meta := marshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
-	return kv, nil
+	kvs = append(kvs, kv)
+
+	for startUid, plist := range out.parts {
+		// Any empty posting list would still have BitEmpty set. And the main posting list
+		// would NOT have that posting list startUid in the splits list.
+		kv := out.marshalPostingListPart(l.key, startUid, plist)
+		kvs = append(kvs, kv)
+	}
+
+	return kvs, nil
 }
 
-func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
-	if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
+func (out *rollupOutput) marshalPostingListPart(
+	baseKey []byte, startUid uint64, plist *pb.PostingList) *bpb.KV {
+	kv := &bpb.KV{}
+	kv.Version = out.newMinTs
+	kv.Key = x.GetSplitKey(baseKey, startUid)
+	val, meta := marshalPostingList(plist)
+	kv.UserMeta = []byte{meta}
+	kv.Value = val
+
+	return kv
+}
+
+func marshalPostingList(plist *pb.PostingList) ([]byte, byte) {
+	if isPlistEmpty(plist) {
 		return nil, BitEmptyPosting
 	}
+
 	data, err := plist.Marshal()
 	x.Check(err)
 	return data, BitCompletePosting
@@ -640,43 +814,81 @@ func marshalPostingList(plist *pb.PostingList) (data []byte, meta byte) {
 
 const blockSize int = 256
 
-func (l *List) Rollup(readTs uint64) error {
-	l.Lock()
-	defer l.Unlock()
-	return l.rollup(readTs)
+type rollupOutput struct {
+	plist    *pb.PostingList
+	parts    map[uint64]*pb.PostingList
+	newMinTs uint64
 }
 
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
 // directly. It should only serve as the read timestamp for iteration.
-func (l *List) rollup(readTs uint64) error {
-	l.AssertLock()
+func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
+	l.AssertRLock()
 
 	// Pick all committed entries
 	if l.minTs > readTs {
 		// If we are already past the readTs, then skip the rollup.
-		return nil
+		return nil, nil
 	}
 
-	final := new(pb.PostingList)
-	enc := codec.Encoder{BlockSize: blockSize}
-	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		// iterate already takes care of not returning entries whose commitTs is above l.commitTs.
-		// So, we don't need to do any filtering here. In fact, doing filtering here could result
-		// in a bug.
-		enc.Add(p.Uid)
+	out := &rollupOutput{
+		plist: &pb.PostingList{
+			Splits: l.plist.Splits,
+		},
+		parts: make(map[uint64]*pb.PostingList),
+	}
 
-		// We want to add the posting if it has facets or has a value.
+	var plist *pb.PostingList
+	var enc codec.Encoder
+	var startUid, endUid uint64
+	var splitIdx int
+
+	// Method to properly initialize all the variables described above.
+	init := func() {
+		enc = codec.Encoder{BlockSize: blockSize}
+
+		// If not a multi-part list, all uids go to the same encoder.
+		if len(l.plist.Splits) == 0 {
+			plist = out.plist
+			endUid = math.MaxUint64
+			return
+		}
+
+		// Otherwise, load the corresponding part and set endUid to correctly
+		// detect the end of the list.
+		startUid = l.plist.Splits[splitIdx]
+		if splitIdx+1 == len(l.plist.Splits) {
+			endUid = math.MaxUint64
+		} else {
+			endUid = l.plist.Splits[splitIdx+1] - 1
+		}
+
+		plist = &pb.PostingList{}
+	}
+
+	init()
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		if p.Uid > endUid {
+			plist.Pack = enc.Done()
+			out.parts[startUid] = plist
+
+			splitIdx++
+			init()
+		}
+
+		enc.Add(p.Uid)
 		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Label) != 0 {
-			// I think it's okay to take the pointer from the iterator, because we have a lock
-			// over List; which won't be released until final has been marshalled. Thus, the
-			// underlying data wouldn't be changed.
-			final.Postings = append(final.Postings, p)
+			plist.Postings = append(plist.Postings, p)
 		}
 		return nil
 	})
+	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
 	x.Check(err)
-	final.Pack = enc.Done()
+	plist.Pack = enc.Done()
+	if len(l.plist.Splits) > 0 {
+		out.parts[startUid] = plist
+	}
 
 	maxCommitTs := l.minTs
 	{
@@ -684,28 +896,21 @@ func (l *List) rollup(readTs uint64) error {
 		// postings which had deletions to provide a sorted view of the list. Therefore, the safest
 		// way to get the max commit timestamp is to pick all the relevant postings for the given
 		// readTs and calculate the maxCommitTs.
-		plist, mposts := l.pickPostings(readTs)
-		maxCommitTs = x.Max(maxCommitTs, plist.CommitTs)
+		// If deleteBelowTs is greater than zero, there was a delete all marker. The list of
+		// postings has been trimmed down.
+		deleteBelowTs, mposts := l.pickPostings(readTs)
+		maxCommitTs = x.Max(maxCommitTs, deleteBelowTs)
 		for _, mp := range mposts {
 			maxCommitTs = x.Max(maxCommitTs, mp.CommitTs)
 		}
 	}
 
-	// Keep all uncommitted Entries or postings with commitTs > l.commitTs
-	// in mutation map. Discard all else.
-	// TODO: This could be removed after LRU cache is removed.
-	for startTs, plist := range l.mutationMap {
-		cl := plist.CommitTs
-		if cl == 0 || cl > maxCommitTs {
-			// Keep this.
-		} else {
-			delete(l.mutationMap, startTs)
-		}
-	}
-
-	l.minTs = maxCommitTs
-	l.plist = final
-	return nil
+	// Check if the list (or any of it's parts if it's been previously split) have
+	// become too big. Split the list if that is the case.
+	out.newMinTs = maxCommitTs
+	out.splitUpList()
+	out.removeEmptySplits()
+	return out, nil
 }
 
 func (l *List) ApproxLen() int {
@@ -723,7 +928,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil {
+	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, ErrTsTooOld
@@ -959,4 +1164,172 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 		return nil, err
 	}
 	return facets.CopyFacets(p.Facets, param), nil
+}
+
+func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
+	key := x.GetSplitKey(l.key, startUid)
+	txn := pstore.NewTransactionAt(l.minTs, false)
+	item, err := txn.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	part := &pb.PostingList{}
+	if err := unmarshalOrCopy(part, item); err != nil {
+		return nil, err
+	}
+	return part, nil
+}
+
+// shouldSplit returns true if the given plist should be split in two.
+func shouldSplit(plist *pb.PostingList) bool {
+	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+}
+
+// splitUpList checks the list and splits it in smaller parts if needed.
+func (out *rollupOutput) splitUpList() {
+	// Contains the posting lists that should be split.
+	var lists []*pb.PostingList
+
+	// If list is not split yet, insert the main list.
+	if len(out.plist.Splits) == 0 {
+		lists = append(lists, out.plist)
+	}
+
+	// Insert the split lists if they exist.
+	for _, startUid := range out.splits() {
+		part := out.parts[startUid]
+		lists = append(lists, part)
+	}
+
+	// List of startUids for each list part after the splitting process is complete.
+	var newSplits []uint64
+
+	for i, list := range lists {
+		startUid := uint64(1)
+		// If the list is split, select the right startUid for this list.
+		if len(out.plist.Splits) > 0 {
+			startUid = out.plist.Splits[i]
+		}
+
+		if shouldSplit(list) {
+			// Split the list. Update out.splits with the new lists and add their
+			// start uids to the list of new splits.
+			startUids, pls := binSplit(startUid, list)
+			for i, startUid := range startUids {
+				out.parts[startUid] = pls[i]
+				newSplits = append(newSplits, startUid)
+			}
+		} else {
+			// No need to split the list. Add the startUid to the array of new splits.
+			newSplits = append(newSplits, startUid)
+		}
+	}
+
+	// No new lists were created so there's no need to update the list of splits.
+	if len(newSplits) == len(lists) {
+		return
+	}
+
+	// The splits changed so update them.
+	out.plist = &pb.PostingList{
+		Splits: newSplits,
+	}
+}
+
+// binSplit takes the given plist and returns two new plists, each with
+// half of the blocks and postings of the original as well as the new startUids
+// for each of the new parts.
+func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList) {
+	midBlock := len(plist.Pack.Blocks) / 2
+	midUid := plist.Pack.Blocks[midBlock].GetBase()
+
+	// Generate posting list holding the first half of the current list's postings.
+	lowPl := new(pb.PostingList)
+	lowPl.Pack = &pb.UidPack{
+		BlockSize: plist.Pack.BlockSize,
+		Blocks:    plist.Pack.Blocks[:midBlock],
+	}
+
+	// Generate posting list holding the second half of the current list's postings.
+	highPl := new(pb.PostingList)
+	highPl.Pack = &pb.UidPack{
+		BlockSize: plist.Pack.BlockSize,
+		Blocks:    plist.Pack.Blocks[midBlock:],
+	}
+
+	// Add elements in plist.Postings to the corresponding list.
+	for _, posting := range plist.Postings {
+		if posting.Uid < midUid {
+			lowPl.Postings = append(lowPl.Postings, posting)
+		} else {
+			highPl.Postings = append(highPl.Postings, posting)
+		}
+	}
+
+	return []uint64{lowUid, midUid}, []*pb.PostingList{lowPl, highPl}
+}
+
+// removeEmptySplits updates the split list by removing empty posting lists' startUids.
+func (out *rollupOutput) removeEmptySplits() {
+	var splits []uint64
+	for startUid, plist := range out.parts {
+		// Do not remove the first split for now, as every multi-part list should always
+		// have a split starting with uid 1.
+		if startUid == 1 {
+			splits = append(splits, startUid)
+			continue
+		}
+
+		if !isPlistEmpty(plist) {
+			splits = append(splits, startUid)
+		}
+	}
+	out.plist.Splits = splits
+	sortSplits(splits)
+
+	if len(out.plist.Splits) == 1 {
+		// Only the first split remains. If it's also empty, remove it as well.
+		// This should mark the entire list for deletion.
+		if isPlistEmpty(out.parts[1]) {
+			out.plist.Splits = []uint64{}
+		}
+	}
+}
+
+// Returns the sorted list of start uids based on the keys in out.parts.
+// out.parts is considered the source of truth so this method is considered
+// safer than using out.plist.Splits directly.
+func (out *rollupOutput) splits() []uint64 {
+	var splits []uint64
+	for startUid := range out.parts {
+		splits = append(splits, startUid)
+	}
+	sortSplits(splits)
+	return splits
+}
+
+// isPlistEmpty returns true if the given plist is empty. Plists with splits are
+// considered non-empty.
+func isPlistEmpty(plist *pb.PostingList) bool {
+	if len(plist.Splits) > 0 {
+		return false
+	}
+	if plist.Pack == nil || len(plist.Pack.Blocks) == 0 {
+		return true
+	}
+	return false
+}
+
+func sortSplits(splits []uint64) {
+	sort.Slice(splits, func(i, j int) bool {
+		return splits[i] < splits[j]
+	})
+}
+
+// PartSplits returns an empty array if the list has not been split into multiple parts.
+// Otherwise, it returns an array containing the start UID of each part.
+func (l *List) PartSplits() []uint64 {
+	splits := make([]uint64, len(l.plist.Splits))
+	copy(splits, l.plist.Splits)
+	return splits
 }

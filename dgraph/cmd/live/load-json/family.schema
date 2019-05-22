@@ -1,6 +1,6 @@
 name:string @index(term) .
 age: int .
-role:string @index(term) .
+role:string @index(term) @lang .
 aka:string @index(term) .
 carries:string @index(term) .
 parent_to: [uid] @reverse .

@@ -41,9 +41,14 @@ import (
 
 // socket addr = IP address and port number
 var (
-	SockAddr         string
-	SockAddrHttp     string
-	SockAddrZero     string
+
+	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
+	SockAddr string
+	// SockAddrHttp is the address to the HTTP of alpha used during tests.
+	SockAddrHttp string
+	// SockAddrZero is the address to the gRPC endpoint of the zero used during tests.
+	SockAddrZero string
+	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
 	SockAddrZeroHttp string
 )
 
@@ -53,24 +58,25 @@ func init() {
 	var grpcPort int
 
 	getPort := func(envVar string, dfault int) int {
-		if p := os.Getenv(envVar); p == "" {
+		p := os.Getenv(envVar)
+		if p == "" {
 			return dfault
-		} else {
-			port, _ := strconv.Atoi(p)
-			return port
 		}
+		port, _ := strconv.Atoi(p)
+		return port
 	}
 
 	grpcPort = getPort("TEST_PORT_ALPHA", 9180)
 	SockAddr = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrHttp = fmt.Sprintf("localhost:%d", grpcPort-1000)
 
-	grpcPort = getPort("TEST_PORT_ZERO", 5080)
+	grpcPort = getPort("TEST_PORT_ZERO", 5180)
 	SockAddrZero = fmt.Sprintf("localhost:%d", grpcPort)
 	SockAddrZeroHttp = fmt.Sprintf("localhost:%d", grpcPort+1000)
 }
 
-// DgraphClient is intended to be called from TestMain() to establish a Dgraph connection shared
+// DgraphClientDropAll creates a Dgraph client and drops all existing data.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
 // by all tests, so there is no testing.T instance for it to use.
 func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
 	dg := DgraphClient(serviceAddr)
@@ -88,6 +94,9 @@ func DgraphClientDropAll(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
+// DgraphClientWithGroot creates a Dgraph client with groot permissions set up.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
 	dg := DgraphClient(serviceAddr)
 
@@ -106,8 +115,9 @@ func DgraphClientWithGroot(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
-// DgraphClientNoDropAll is intended to be called from TestMain() to establish a Dgraph connection
-// shared by all tests, so there is no testing.T instance for it to use.
+// DgraphClient creates a Dgraph client.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	conn, err := grpc.Dial(serviceAddr, grpc.WithInsecure())
 	x.CheckfNoTrace(err)
@@ -118,6 +128,10 @@ func DgraphClient(serviceAddr string) *dgo.Dgraph {
 	return dg
 }
 
+// DgraphClientWithCerts creates a Dgraph client with TLS configured using the given
+// viper configuration.
+// It is intended to be called from TestMain() to establish a Dgraph connection shared
+// by all tests, so there is no testing.T instance for it to use.
 func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, error) {
 	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	if err != nil {
@@ -138,38 +152,39 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 	return dg, nil
 }
 
+// DropAll drops all the data in the Dgraph instance associated with the given client.
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
-
-	nodes := DbNodeCount(t, dg)
-	// the only node left should be the groot node
-	require.Equal(t, 1, nodes)
 }
 
-func DbNodeCount(t *testing.T, dg *dgo.Dgraph) int {
-	resp, err := dg.NewTxn().Query(context.Background(), `
-		{
-			q(func: has(_predicate_)) {
-				count(uid)
-			}
+// RetryQuery will retry a query until it succeeds or a non-retryable error is received.
+func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		resp, err := dg.NewTxn().Query(context.Background(), q)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
+			time.Sleep(10 * time.Millisecond)
+			continue
 		}
-	`)
-	require.NoError(t, err)
-
-	type count struct {
-		Count int
+		return resp, err
 	}
-	type root struct {
-		Q []count
-	}
-	var response root
-	err = json.Unmarshal(resp.GetJson(), &response)
-	require.NoError(t, err)
-
-	return response.Q[0].Count
 }
 
+// RetryMutation will retry a mutation until it succeeds or a non-retryable error is received.
+// The mutation should have CommitNow set to true.
+func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
+	for {
+		_, err := dg.NewTxn().Mutate(context.Background(), mu)
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "Tablet isn't being served by this instance")) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		return err
+	}
+}
+
+// LoginParams stores the information needed to perform a login request.
 type LoginParams struct {
 	Endpoint   string
 	UserID     string
@@ -213,6 +228,12 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 
 	var outputJson map[string]map[string]string
 	if err := json.Unmarshal(respBody, &outputJson); err != nil {
+		var errOutputJson map[string]interface{}
+		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
+			if _, ok := errOutputJson["errors"]; ok {
+				return "", "", fmt.Errorf("response error: %v", string(respBody))
+			}
+		}
 		return "", "", fmt.Errorf("unable to unmarshal the output to get JWTs: %v", err)
 	}
 
@@ -280,6 +301,8 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *FailureConfig) {
 	}
 }
 
+// VerifyCurlCmd executes the curl command with the given arguments and verifies
+// the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string,
 	failureConfig *FailureConfig) {
 	queryCmd := exec.Command("curl", args...)
@@ -288,6 +311,10 @@ func VerifyCurlCmd(t *testing.T, args []string,
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code
 		require.Error(t, err, "the curl command should have failed")
+		if ee, ok := err.(*exec.ExitError); ok {
+			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+				"the curl output does not contain the expected output")
+		}
 	} else {
 		require.NoError(t, err, "the curl command should have succeeded")
 		verifyOutput(t, output, failureConfig)

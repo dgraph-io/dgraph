@@ -23,6 +23,7 @@ import (
 	"github.com/golang/glog"
 	"go.etcd.io/etcd/raft"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -32,6 +33,11 @@ const (
 	// MB represents a megabyte.
 	MB = 1 << 20
 )
+
+type badgerWriter interface {
+	Write(kvs *bpb.KVList) error
+	Flush() error
+}
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
@@ -45,17 +51,25 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	if err := stream.Send(&snap); err != nil {
 		return 0, err
 	}
-	// Before we write anything, we should drop all the data stored in ps.
-	if err := pstore.DropAll(); err != nil {
-		return 0, err
+
+	var writer badgerWriter
+	if snap.SinceTs == 0 {
+		sw := pstore.NewStreamWriter()
+		if err := sw.Prepare(); err != nil {
+			return 0, err
+		}
+
+		writer = sw
+	} else {
+		writer = posting.NewTxnWriter(pstore)
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
-	writer := posting.NewTxnWriter(pstore)
 	for {
 		kvs, err := stream.Recv()
 		if err != nil {
@@ -72,7 +86,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		}
 
 		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
-		if err := writer.Send(kvs); err != nil {
+		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
 			return 0, err
 		}
 		count += len(kvs.Kv)
@@ -80,10 +94,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
-	glog.V(1).Infof("Flushed all writes to Badger. Flattening it now.")
-	if err := pstore.Flatten(1); err != nil {
-		return 0, err
-	}
+
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
@@ -126,6 +137,10 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		num += len(kvs.Kv)
 		return out.Send(kvs)
 	}
+	stream.ChooseKey = func(item *badger.Item) bool {
+		return item.Version() >= snap.SinceTs
+	}
+
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}

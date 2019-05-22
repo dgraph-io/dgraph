@@ -53,7 +53,7 @@ type options struct {
 	dataFiles           string
 	dataFormat          string
 	schemaFile          string
-	dgraph              string
+	alpha               string
 	zero                string
 	concurrent          int
 	batchSize           int
@@ -87,7 +87,7 @@ func init() {
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
-	flag.StringP("dgraph", "d", "127.0.0.1:9080",
+	flag.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
 	flag.IntP("conc", "c", 10,
@@ -97,7 +97,7 @@ func init() {
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.BoolP("ignore_index_conflict", "i", true,
 		"Ignores conflicts on index keys during transaction")
-	flag.StringP("auth_token", "a", "",
+	flag.StringP("auth_token", "t", "",
 		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
@@ -224,7 +224,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
 func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil && chunkBuf.Len() == 0 {
+	if chunkBuf == nil || chunkBuf.Len() == 0 {
 		return
 	}
 
@@ -302,7 +302,7 @@ func run() error {
 		dataFiles:           Live.Conf.GetString("files"),
 		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
-		dgraph:              Live.Conf.GetString("dgraph"),
+		alpha:               Live.Conf.GetString("alpha"),
 		zero:                Live.Conf.GetString("zero"),
 		concurrent:          Live.Conf.GetInt("conc"),
 		batchSize:           Live.Conf.GetInt("batch"),
@@ -327,7 +327,7 @@ func run() error {
 		MaxRetries:    math.MaxUint32,
 	}
 
-	ds := strings.Split(opt.dgraph, ",")
+	ds := strings.Split(opt.alpha, ",")
 	var clients []api.DgraphClient
 	for _, d := range ds {
 		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
@@ -362,9 +362,8 @@ func run() error {
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
 		return fmt.Errorf("No data files found in %s", opt.dataFiles)
-	} else {
-		fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 	}
+	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)

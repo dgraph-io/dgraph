@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 )
 
 type groupi struct {
@@ -69,6 +70,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr = &groupi{
 		blockDeletes: new(sync.Mutex),
+		tablets:      make(map[string]*pb.Tablet),
 	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -132,7 +134,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
-	raftServer.Node = gr.Node.Node
+	raftServer.UpdateNode(gr.Node.Node)
 	gr.Node.InitAndStartNode()
 	x.UpdateHealthStatus(true)
 	glog.Infof("Server is ready")
@@ -142,7 +144,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	go gr.receiveMembershipUpdates()
 	go gr.processOracleDeltaStream()
 
-	go gr.informZeroAboutTablets()
+	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
 }
 
@@ -175,14 +177,29 @@ func (g *groupi) informZeroAboutTablets() {
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
-		g.upsertSchema(s)
+		if gid, err := g.BelongsToReadOnly(s.Predicate); err != nil {
+			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
+				s.Predicate)
+			g.upsertSchema(s)
+		} else if gid == 0 {
+			g.upsertSchema(s)
+		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
+			!proto.Equal(s, &curr) {
+			// If this tablet is served to the group, do not upsert the schema unless the
+			// stored schema and the proposed one are different.
+			g.upsertSchema(s)
+		} else {
+			// The schema for this predicate has already been proposed.
+			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
+			continue
+		}
 	}
 }
 
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
-	// schema for _predicate_ is not changed once set.
+	// schema for a reserved predicate is not changed once set.
 	m.StartTs = 1
 	m.Schema = append(m.Schema, schema)
 
@@ -204,6 +221,7 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
+// MaxLeaseId returns the maximum UID that has been leased.
 func MaxLeaseId() uint64 {
 	g := groups()
 	g.RLock()
@@ -214,6 +232,7 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+// UpdateMembershipState contacts zero for an update on membership state.
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
@@ -252,20 +271,20 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				atomic.StoreUint32(&g.gid, gid)
 			}
 			if x.WorkerConfig.MyAddr != member.Addr {
-				conn.Get().Connect(member.Addr)
+				conn.GetPools().Connect(member.Addr)
 			}
 		}
 		for _, tablet := range group.Tablets {
 			g.tablets[tablet.Predicate] = tablet
 		}
-		if gid == g.gid {
-			glog.V(3).Infof("group %d checksum: %d", g.gid, group.Checksum)
+		if gid == g.groupId() {
+			glog.V(3).Infof("group %d checksum: %d", g.groupId(), group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
 	for _, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
-			conn.Get().Connect(member.Addr)
+			conn.GetPools().Connect(member.Addr)
 		}
 	}
 	if !foundSelf {
@@ -283,14 +302,12 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
 			}
 		}
-		conn.Get().RemoveInvalid(g.state)
+		conn.GetPools().RemoveInvalid(g.state)
 	}
 }
 
 func (g *groupi) ServesGroup(gid uint32) bool {
-	g.RLock()
-	defer g.RUnlock()
-	return g.gid == gid
+	return g.groupId() == gid
 }
 
 func (g *groupi) ChecksumsMatch(ctx context.Context) error {
@@ -306,7 +323,7 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 				return nil
 			}
 		case <-ctx.Done():
-			return fmt.Errorf("Group checksum mismatch for id: %d", g.gid)
+			return fmt.Errorf("Group checksum mismatch for id: %d", g.groupId())
 		}
 	}
 }
@@ -375,6 +392,8 @@ func (g *groupi) ServesTabletReadOnly(key string) (bool, error) {
 
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
+	emptyTablet := pb.Tablet{}
+
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
@@ -392,11 +411,16 @@ func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
-		return nil, err
+		return &emptyTablet, err
 	}
-	g.Lock()
-	g.tablets[key] = out
-	g.Unlock()
+
+	// Do not store tablets with group ID 0, as they are just dummy tablets for
+	// predicates that do no exist.
+	if out.GroupId > 0 {
+		g.Lock()
+		g.tablets[key] = out
+		g.Unlock()
+	}
 
 	if out.GroupId == groups().groupId() {
 		glog.Infof("Serving tablet for: %v\n", key)
@@ -463,7 +487,7 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	members := g.members(gid)
 	if members != nil {
 		for _, m := range members {
-			pl, err := conn.Get().Get(m.Addr)
+			pl, err := conn.GetPools().Get(m.Addr)
 			if err == nil {
 				return pl
 			}
@@ -493,7 +517,7 @@ func (g *groupi) Leader(gid uint32) *conn.Pool {
 	}
 	for _, m := range members {
 		if m.Leader {
-			if pl, err := conn.Get().Get(m.Addr); err == nil {
+			if pl, err := conn.GetPools().Get(m.Addr); err == nil {
 				return pl
 			}
 		}
@@ -542,7 +566,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		for _, mz := range connState.State.GetZeros() {
 			if mz.Leader {
-				return conn.Get().Connect(mz.GetAddr())
+				return conn.GetPools().Connect(mz.GetAddr())
 			}
 		}
 		return nil
@@ -558,7 +582,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 		}
 		pl := g.AnyServer(0)
 		if pl == nil {
-			pl = conn.Get().Connect(x.WorkerConfig.ZeroAddr)
+			pl = conn.GetPools().Connect(x.WorkerConfig.ZeroAddr)
 		}
 		if pl == nil {
 			glog.V(1).Infof("No healthy Zero server found. Retrying...")
@@ -874,12 +898,14 @@ func (g *groupi) processOracleDeltaStream() {
 				}
 			}
 			for {
-				// Block forever trying to propose this.
+				// Block forever trying to propose this. Also this proposal should not be counted
+				// towards num pending proposals and be proposed right away.
 				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
 				if err == nil {
 					break
 				}
-				glog.Errorf("While proposing delta: %v. Error=%v. Retrying...\n", delta, err)
+				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
+					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
 		}
 	}

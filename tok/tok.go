@@ -208,7 +208,7 @@ func (t YearTokenizer) Type() string { return "datetime" }
 func (t YearTokenizer) Tokens(v interface{}) ([]string, error) {
 	tval := v.(time.Time)
 	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.UTC().Year()))
 	return []string{string(buf)}, nil
 }
 func (t YearTokenizer) Identifier() byte { return IdentYear }
@@ -222,8 +222,8 @@ func (t MonthTokenizer) Type() string { return "datetime" }
 func (t MonthTokenizer) Tokens(v interface{}) ([]string, error) {
 	tval := v.(time.Time)
 	buf := make([]byte, 4)
-	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
-	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.UTC().Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.UTC().Month()))
 	return []string{string(buf)}, nil
 }
 func (t MonthTokenizer) Identifier() byte { return IdentMonth }
@@ -237,9 +237,9 @@ func (t DayTokenizer) Type() string { return "datetime" }
 func (t DayTokenizer) Tokens(v interface{}) ([]string, error) {
 	tval := v.(time.Time)
 	buf := make([]byte, 6)
-	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
-	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
-	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.UTC().Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.UTC().Month()))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.UTC().Day()))
 	return []string{string(buf)}, nil
 }
 func (t DayTokenizer) Identifier() byte { return IdentDay }
@@ -253,10 +253,10 @@ func (t HourTokenizer) Type() string { return "datetime" }
 func (t HourTokenizer) Tokens(v interface{}) ([]string, error) {
 	tval := v.(time.Time)
 	buf := make([]byte, 8)
-	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
-	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
-	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
-	binary.BigEndian.PutUint16(buf[6:8], uint16(tval.Hour()))
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.UTC().Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.UTC().Month()))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.UTC().Day()))
+	binary.BigEndian.PutUint16(buf[6:8], uint16(tval.UTC().Hour()))
 	return []string{string(buf)}, nil
 }
 func (t HourTokenizer) Identifier() byte { return IdentHour }

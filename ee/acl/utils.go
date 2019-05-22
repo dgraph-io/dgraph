@@ -186,18 +186,18 @@ type CloseFunc func()
 
 func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
 	opt = options{
-		dgraph: conf.GetString("dgraph"),
+		alpha: conf.GetString("alpha"),
 	}
-	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.dgraph)
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.alpha)
 
-	if len(opt.dgraph) == 0 {
-		glog.Fatalf("The --dgraph option must be set in order to connect to dgraph")
+	if len(opt.alpha) == 0 {
+		glog.Fatalf("The --alpha option must be set in order to connect to dgraph")
 	}
 
 	tlsCfg, err := x.LoadClientTLSConfig(conf)
 	x.Checkf(err, "While loading TLS configuration")
 
-	conn, err := x.SetupConnection(opt.dgraph, tlsCfg, false)
+	conn, err := x.SetupConnection(opt.alpha, tlsCfg, false)
 	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
 
 	dc := api.NewDgraphClient(conn)

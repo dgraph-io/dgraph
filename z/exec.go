@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -32,10 +33,38 @@ var (
 	ShowCommand bool = os.Getenv("DEBUG_SHOW_COMMAND") != ""
 )
 
+// CmdOpts sets the options to run a single command.
+type CmdOpts struct {
+	Dir string
+}
+
+// RepoPath converts a path relative to the root of the repo into an absolute path.
+func RepoPath(p string) string {
+	return path.Join(os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph"), p)
+}
+
+// Exec runs a single external command.
+func Exec(argv ...string) error {
+	return Pipeline([][]string{argv})
+}
+
+// ExecWithOpts runs a single external command with the given options.
+func ExecWithOpts(argv []string, opts CmdOpts) error {
+	return pipelineInternal([][]string{argv}, []CmdOpts{opts})
+}
+
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
 // TODO: allow capturing output, sending to terminal, etc
 func Pipeline(cmds [][]string) error {
+	return pipelineInternal(cmds, nil)
+}
+
+// piplineInternal takes a list of commands and a list of options (one for each).
+// If opts is nil, all commands should be run with the default options.
+func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
+	x.AssertTrue(opts == nil || len(cmds) == len(opts))
+
 	var p io.ReadCloser
 	var numCmds = len(cmds)
 
@@ -50,6 +79,11 @@ func Pipeline(cmds [][]string) error {
 
 		cmd[i] = exec.Command(c[0], c[1:]...)
 		cmd[i].Stdin = p
+
+		if opts != nil {
+			cmd[i].Dir = opts[i].Dir
+		}
+
 		if !lastCmd {
 			p, _ = cmd[i].StdoutPipe()
 		}

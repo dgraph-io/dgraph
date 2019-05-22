@@ -63,7 +63,7 @@ func dropPredicate(pred string) {
 	}
 }
 
-func processQuery(t *testing.T, ctx context.Context, query string) (string, error) {
+func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
 	txn := client.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -81,7 +81,7 @@ func processQuery(t *testing.T, ctx context.Context, query string) (string, erro
 }
 
 func processQueryNoErr(t *testing.T, query string) string {
-	res, err := processQuery(t, context.Background(), query)
+	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
 	return res
 }
@@ -215,6 +215,25 @@ type CarModel {
 	previous_model: CarModel
 }
 
+type SchoolInfo {
+	name: string
+	abbr: string
+	school: [uid]
+	district: [uid]
+	state: [uid]	
+	county: [uid]
+}
+
+type User {
+	name: string
+	password: password	
+}
+
+type Node {
+	node: uid
+	name: string
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
@@ -246,10 +265,12 @@ office.room                    : [uid] .
 best_friend                    : uid @reverse .
 pet                            : [uid] .
 node                           : [uid] .
-model                          : string @index(term) .
+model                          : string @index(term) @lang .
 make                           : string @index(term) .
 year                           : int .
 previous_model                 : uid @reverse .
+created_at                     : datetime @index(hour) .
+updated_at                     : datetime @index(year) .
 `
 
 func populateCluster() {
@@ -269,6 +290,7 @@ func populateCluster() {
 		<5> <name> "Garfield" .
 		<6> <name> "Bear" .
 		<7> <name> "Nemo" .
+		<11> <name> "name" .
 		<23> <name> "Rick Grimes" .
 		<24> <name> "Glenn Rhee" .
 		<25> <name> "Daryl Dixon" .
@@ -343,9 +365,9 @@ func populateCluster() {
 		<31> <friend> <24> .
 		<23> <friend> <1> .
 
-		<2> <best_friend> <64> .
-		<3> <best_friend> <64> .
-		<4> <best_friend> <64> .
+		<2> <best_friend> <64> (since=2019-03-28T14:41:57+30:00) .
+		<3> <best_friend> <64> (since=2018-03-24T14:41:57+05:30) .
+		<4> <best_friend> <64> (since=2019-03-27) .
 
 		<1> <age> "38" .
 		<23> <age> "15" .
@@ -489,6 +511,7 @@ func populateCluster() {
 		<23> <shadow_deep> "4" .
 		<24> <shadow_deep> "14" .
 
+		<1> <dgraph.type> "User" .
 		<2> <dgraph.type> "Person" .
 		<3> <dgraph.type> "Person" .
 		<4> <dgraph.type> "Person" .
@@ -496,6 +519,12 @@ func populateCluster() {
 		<5> <dgraph.type> "Pet" .
 		<6> <dgraph.type> "Animal" .
 		<6> <dgraph.type> "Pet" .
+		<32> <dgraph.type> "SchoolInfo" .
+		<33> <dgraph.type> "SchoolInfo" .
+		<34> <dgraph.type> "SchoolInfo" .
+		<35> <dgraph.type> "SchoolInfo" .
+		<36> <dgraph.type> "SchoolInfo" .
+		<11100> <dgraph.type> "Node" .
 
 		<2> <pet> <5> .
 		<3> <pet> <6> .
@@ -520,6 +549,12 @@ func populateCluster() {
 		<201> <year> "2009" .
 		<201> <dgraph.type> "CarModel" .
 		<201> <previous_model> <200> .
+
+		<202> <make> "Toyota" .
+		<202> <year> "2009" .
+		<202> <model> "Prius" .
+		<202> <model> "プリウス"@jp .
+		<202> <dgraph.type> "CarModel" .
 	`)
 
 	addGeoPointToCluster(1, "loc", []float64{1.1, 2.0})
@@ -570,4 +605,23 @@ func populateCluster() {
 		addTriplesToCluster(triples)
 		nextId++
 	}
+
+	// Add data for datetime tests
+	addTriplesToCluster(`
+		<301> <created_at> "2019-03-28T14:41:57+30:00" (modified_at=2019-05-28T14:41:57+30:00) .
+		<302> <created_at> "2019-03-28T13:41:57+29:00" (modified_at=2019-03-28T14:41:57+30:00) .
+		<303> <created_at> "2019-03-27T14:41:57+06:00" (modified_at=2019-03-29) .
+		<304> <created_at> "2019-03-28T15:41:57+30:00" (modified_at=2019-03-27T14:41:57+06:00) .
+		<305> <created_at> "2019-03-28T13:41:57+30:00" (modified_at=2019-03-28) .
+		<306> <created_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
+		<307> <created_at> "2019-05-28T14:41:57+30:00" .
+
+		<301> <updated_at> "2019-03-28T14:41:57+30:00" (modified_at=2019-05-28) .
+		<302> <updated_at> "2019-03-28T13:41:57+29:00" (modified_at=2019-03-28T14:41:57+30:00) .
+		<303> <updated_at> "2019-03-27T14:41:57+06:00" (modified_at=2019-03-28T13:41:57+29:00) .
+		<304> <updated_at> "2019-03-27T09:41:57" .
+		<305> <updated_at> "2019-03-28T13:41:57+30:00" (modified_at=2019-03-28T15:41:57+30:00) .
+		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
+		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
+	`)
 }

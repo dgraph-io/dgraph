@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var loginEndpoint = "http://"+z.SockAddrHttp +"/login"
+var loginEndpoint = "http://" + z.SockAddrHttp + "/login"
 
 func TestCurlAuthorization(t *testing.T) {
 	if testing.Short() {

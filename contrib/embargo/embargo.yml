@@ -1,0 +1,99 @@
+# Embargo config for testing network failures and network partiions.
+# Embargo (fork of blockade) docs: https://blockade.readthedocs.io
+# Usage:
+#   embargo up
+# To partition zero1 and dg1 from the rest of the cluster:
+#   embargo partition zero1,dg1
+
+containers:
+  zero1:
+    image: dgraph/dgraph:latest
+    hostname: "zero1"
+    # Needed for DNS with network set to udn
+    container_name: "zero1"
+    ports:
+      - 5080
+      - 6080
+    expose:
+      - 5080
+      - 6080
+    command: /gobin/dgraph zero --my=zero1:5080 --replicas 3 --idx 1 --bindall --expose_trace --logtostderr -v=3
+    volumes:
+      # Note: Any environment variables must use the ${} syntax.
+      # ${GOPATH} works, $GOPATH does not.
+      "${GOPATH}/bin": "/gobin"
+
+  zero2:
+    image: dgraph/dgraph:latest
+    hostname: "zero2"
+    container_name: "zero2"
+    ports:
+      - 5082
+      - 6082
+    expose:
+      - 5082
+      - 6082
+    command: /gobin/dgraph zero -o 2 --my=zero2:5082 --replicas 3 --peer=zero1:5080 --idx 2 --bindall --expose_trace --logtostderr -v=3
+    volumes:
+      "${GOPATH}/bin": "/gobin"
+
+  zero3:
+    image: dgraph/dgraph:latest
+    hostname: "zero3"
+    container_name: "zero3"
+    ports:
+      - 5083
+      - 6083
+    expose:
+      - 5083
+      - 6083
+    command: /gobin/dgraph zero -o 3 --my=zero3:5083 --replicas 3 --peer=zero1:5080 --idx 3 --bindall --expose_trace --logtostderr -v=3
+    volumes:
+      "${GOPATH}/bin": "/gobin"
+
+  dg1:
+    image: dgraph/dgraph:latest
+    hostname: "dg1"
+    container_name: "dg1"
+    ports:
+      - 8180
+      - 9180
+    expose:
+      - 8180
+      - 9180
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --logtostderr -v=3
+    volumes:
+      "${GOPATH}/bin": "/gobin"
+
+  dg2:
+    image: dgraph/dgraph:latest
+    hostname: "dg2"
+    container_name: "dg2"
+    ports:
+      - 8182
+      - 9182
+    expose:
+      - 8182
+      - 9182
+    start_delay: 8
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --logtostderr -v=3
+    volumes:
+      "${GOPATH}/bin": "/gobin"
+
+  dg3:
+    image: dgraph/dgraph:latest
+    hostname: "dg3"
+    container_name: "dg3"
+    ports:
+      - 8183
+      - 9183
+    expose:
+      - 8183
+      - 9183
+    start_delay: 16
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace  --trace 1.0 --logtostderr -v=3
+    volumes:
+      "${GOPATH}/bin": "/gobin"
+
+network:
+  driver: "udn"

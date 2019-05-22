@@ -411,7 +411,7 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1015,7 +1015,7 @@ func TestMultiQueryError1(t *testing.T) {
       }
     }
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1034,7 +1034,7 @@ func TestMultiQueryError2(t *testing.T) {
       }
     }
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1215,19 +1215,21 @@ func TestGeneratorMultiRoot(t *testing.T) {
       }
     }
   `
+
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},
+		{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestRootList(t *testing.T) {
-
 	query := `{
 	me(func: uid(1, 23, 24)) {
 		name
 	}
 }`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestRootList1(t *testing.T) {
@@ -1238,7 +1240,9 @@ func TestRootList1(t *testing.T) {
 	}
 }`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"}`+
+			`,{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
 }
 
 func TestRootList2(t *testing.T) {
@@ -1249,7 +1253,8 @@ func TestRootList2(t *testing.T) {
 	}
 }`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"}`+
+		`,{"name":"Glenn Rhee"},{"name":"Alice"}]}}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
@@ -1275,14 +1280,15 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
     }
   `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"}`+
+		`,{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestGeneratorMultiRootFilter3(t *testing.T) {
 
 	query := `
     {
-			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and ge(dob, "1909-01-10")) {
+		me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and ge(dob, "1909-01-10")) {
         name
       }
     }
@@ -1361,7 +1367,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
                 }
         `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.NotNil(t, err)
 }
 
@@ -1376,7 +1382,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
                 }
         `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.NotNil(t, err)
 }
 
@@ -1391,7 +1397,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
                 }
         `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1431,7 +1437,7 @@ func TestNearGeneratorError(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1444,7 +1450,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1457,7 +1463,7 @@ func TestWithinGeneratorError(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1505,7 +1511,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -2021,7 +2027,7 @@ func TestLangLossyIndex4(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 

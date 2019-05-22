@@ -7,8 +7,8 @@ services:
     container_name: bank-dg0.1
     working_dir: /data/dg0.1
     ports:
-      - 5080:5080
-      - 6080:6080
+      - 5180:5180
+      - 6180:6180
     labels:
       cluster: test
     volumes:
@@ -16,7 +16,7 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph zero --my=zero1:5080 --logtostderr --bindall
+    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --logtostderr --bindall
 
   dg1:
     image: dgraph/dgraph:latest
@@ -36,7 +36,7 @@ services:
     labels:
       cluster: test
     command: >
-      /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5080 -o 100 --logtostderr
+      /gobin/dgraph alpha --my=dg1:7180 --zero=zero1:5180 -o 100 --logtostderr
                           --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --lru_mb=1024
 
 volumes:

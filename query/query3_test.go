@@ -37,7 +37,7 @@ func TestRecurseError(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Depth must be > 0 when loop is true for recurse query")
 }
@@ -53,7 +53,7 @@ func TestRecurseNestedError1(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"recurse queries require that all predicates are specified in one level")
@@ -71,7 +71,7 @@ func TestRecurseNestedError2(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"recurse queries require that all predicates are specified in one level")
@@ -114,7 +114,7 @@ func TestRecurseExpandRepeatedPredError(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Repeated subgraph: [name] while using expand()")
 }
@@ -286,7 +286,7 @@ func TestShortestPath_ExpandError(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -568,7 +568,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -789,7 +789,7 @@ func TestDebug1(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, _ := processQuery(t, ctx, query)
+	buf, _ := processQuery(ctx, t, query)
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -836,7 +836,7 @@ func TestDebug3(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, err := processQuery(t, ctx, query)
+	buf, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 
 	var mp map[string]interface{}
@@ -902,7 +902,7 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -922,7 +922,7 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -938,7 +938,7 @@ func TestCountError3(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1025,7 +1025,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 		}
 	}
 `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1190,7 +1190,6 @@ func TestQueryPassword(t *testing.T) {
 }
 
 func TestPasswordExpandAll1(t *testing.T) {
-	// We ignore password in expand(_all_)
 	query := `
     {
         me(func: uid(0x01)) {
@@ -1199,7 +1198,7 @@ func TestPasswordExpandAll1(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"age":38,"full_name":"Michonne's large name for hashing","dob_day":"1910-01-01T00:00:00Z","_xid_":"mich","loc":{"type":"Point","coordinates":[1.1,2]},"address":"31, 32 street, Jupiter","graduation":["1932-01-01T00:00:00Z"],"dob":"1910-01-01T00:00:00Z","bin_data":"YmluLWRhdGE=","power":13.250000,"survival_rate":98.990000,"name":"Michonne","sword_present":"true","alive":true,"gender":"female","noindex_name":"Michonne's name not indexed"}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne"}]}}`, js)
 }
 
 func TestPasswordExpandAll2(t *testing.T) {
@@ -1212,7 +1211,7 @@ func TestPasswordExpandAll2(t *testing.T) {
     }
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"_xid_":"mich","address":"31, 32 street, Jupiter","path":[{"path|weight":0.200000},{"path|weight":0.100000,"path|weight1":0.200000}],"sword_present":"true","dob_day":"1910-01-01T00:00:00Z","gender":"female","dob":"1910-01-01T00:00:00Z","survival_rate":98.990000,"noindex_name":"Michonne's name not indexed","name":"Michonne","graduation":["1932-01-01T00:00:00Z"],"bin_data":"YmluLWRhdGE=","loc":{"type":"Point","coordinates":[1.1,2]},"age":38,"full_name":"Michonne's large name for hashing","alive":true,"power":13.250000,"checkpwd(password)":false}]}}`, js)
+	require.JSONEq(t, `{"data":{"me":[{"name":"Michonne", "checkpwd(password)":false}]}}`, js)
 }
 
 func TestPasswordExpandError(t *testing.T) {
@@ -1225,7 +1224,7 @@ func TestPasswordExpandError(t *testing.T) {
     }
 	`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Contains(t, err.Error(), "Repeated subgraph: [password]")
 }
 
@@ -1265,7 +1264,7 @@ func TestCheckPasswordParseError(t *testing.T) {
                         }
                 }
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1382,7 +1381,7 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: invalidfn1 is not valid.")
 }
@@ -1398,7 +1397,7 @@ func TestToSubgraphInvalidFnName2(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1414,7 +1413,7 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1431,7 +1430,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: invalidfn4 is not valid.")
 }
@@ -1448,7 +1447,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got invalid keyword: disorderasc")
 }
@@ -1465,7 +1464,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         }
                 }
         `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got invalid keyword: invalidorderasc")
 }
@@ -1547,7 +1546,7 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1585,7 +1584,7 @@ func TestInvalidStringIndex(t *testing.T) {
 		}
 	`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1622,7 +1621,7 @@ func TestFilterRegexError(t *testing.T) {
     }
 `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1868,7 +1867,7 @@ func TestFilterRegex14(t *testing.T) {
     }
 `
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1912,7 +1911,7 @@ func TestFilterRegex17(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function 'regexp' requires 2 arguments,")
 }
@@ -2018,7 +2017,7 @@ func TestMaxPredicateSize(t *testing.T) {
 		}
 	`, largePred)
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 }

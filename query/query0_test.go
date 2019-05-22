@@ -152,9 +152,9 @@ func TestQueryCountEmptyNames(t *testing.T) {
 		{in: `{q(func: has(name)) @filter(eq(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":2}]}}`},
 		{in: `{q(func: has(name)) @filter(gt(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":45}]}}`},
+			out: `{"data":{"q": [{"count":46}]}}`},
 		{in: `{q(func: has(name)) @filter(ge(name, "")) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":47}]}}`},
+			out: `{"data":{"q": [{"count":48}]}}`},
 		{in: `{q(func: has(name)) @filter(lt(name, "")) {count(uid)}}`,
 			out: `{"data":{"q": [{"count":0}]}}`},
 		{in: `{q(func: has(name)) @filter(le(name, "")) {count(uid)}}`,
@@ -165,12 +165,12 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			out: `{"data":{"q": [{"count":2}]}}`},
 		// NOTE: match with empty string filters values greater than the max distance.
 		{in: `{q(func: has(name)) @filter(match(name, "", 8)) {count(uid)}}`,
-			out: `{"data":{"q": [{"count":27}]}}`},
+			out: `{"data":{"q": [{"count":28}]}}`},
 		{in: `{q(func: has(name)) @filter(uid_in(name, "")) {count(uid)}}`,
 			failure: `Value "" in uid_in is not a number`},
 	}
 	for _, tc := range tests {
-		js, err := processQuery(t, context.Background(), tc.in)
+		js, err := processQuery(context.Background(), t, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
@@ -358,7 +358,7 @@ func TestGetUIDInDebugMode(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, DebugKey, "true")
-	js, err := processQuery(t, ctx, query)
+	js, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
@@ -986,7 +986,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
 }
@@ -1505,7 +1505,7 @@ func TestDoubleOrder(t *testing.T) {
 		}
 	}
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1545,7 +1545,7 @@ func TestVarInIneqError(t *testing.T) {
 			}
 		}
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1777,7 +1777,7 @@ func TestDefaultValueVar1(t *testing.T) {
 	{
 		var(func: has(pred)) {
 			n as uid
-			cnt as count(_predicate_)
+			cnt as count(nonexistent_pred)
 		}
 
 		data(func: uid(n)) @filter(gt(val(cnt), 4)) {
@@ -1792,7 +1792,7 @@ func TestDefaultValueVar2(t *testing.T) {
 	query := `
 	{
 		var(func: uid(0x1)) {
-			cnt as _predicate_
+			cnt as nonexistent_pred
 		}
 
 		data(func: uid(0x1)) {
@@ -1822,6 +1822,262 @@ func TestNonFlattenedResponse(t *testing.T) {
 		]}
 	]}}`, js)
 
+}
+
+func TestDateTimeQuery(t *testing.T) {
+	var query string
+
+	// Test 19
+	query = `
+{
+  q(func: has(created_at), orderdesc: created_at) {
+		uid
+		created_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"},{"uid":"0x130","created_at":"2019-03-28T15:41:57+30:00"},{"uid":"0x12d","created_at":"2019-03-28T14:41:57+30:00"},{"uid":"0x12e","created_at":"2019-03-28T13:41:57+29:00"},{"uid":"0x12f","created_at":"2019-03-27T14:41:57+06:00"},{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 18
+	query = `
+{
+	q(func: has(best_friend)) @cascade {
+		uid
+		best_friend @facets(lt(since, "2019-03-24")) @facets(since) {
+			uid
+		}
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x3","best_friend":{"uid":"0x40","best_friend|since":"2018-03-24T14:41:57+05:30"}}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 17
+	query = `
+{
+	q(func: has(best_friend)) @cascade {
+		uid
+		best_friend @facets(gt(since, "2019-03-27")) @facets(since) {
+			uid
+		}
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x2","best_friend":{"uid":"0x40","best_friend|since":"2019-03-28T14:41:57+30:00"}}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 16
+	query = `
+{
+	q(func: gt(created_at, "2019-03-28")) {
+		uid
+		created_at @facets(modified_at)
+		updated_at @facets(modified_at)
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00","updated_at|modified_at":"2019-03-24T14:41:57+05:30","updated_at":"2019-05-28T00:00:00Z"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 15
+	query = `
+{
+	q(func: gt(age, 15)) @filter(gt(graduation, "1932") AND lt(graduation, "1934")) {
+		uid
+		graduation
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1f","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 14
+	query = `
+{
+	q(func: gt(age, 15)) @filter(le(graduation, "1932") OR gt(graduation, "1936")) {
+		uid
+		graduation
+	}
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1","graduation":["1932-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 13
+	query = `
+	{
+		q(func: gt(age, 15)) @filter(lt(graduation, "1932") AND gt(graduation, "1936")) {
+			uid
+			graduation
+		}
+	}
+	`
+	require.JSONEq(t,
+		`{"data":{"q":[]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 12
+	query = `
+{
+  q(func: le(dob, "1909-05-05")) {
+    uid
+    dob
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x18","dob":"1909-05-05T00:00:00Z"},{"uid":"0x19","dob":"1909-01-10T00:00:00Z"},{"uid":"0x1f","dob":"1901-01-15T00:00:00Z"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 11
+	query = `
+{
+  q(func: le(dob, "1909-05-05T00:00:00+05:30")) {
+    uid
+    dob
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x19","dob":"1909-01-10T00:00:00Z"},{"uid":"0x1f","dob":"1901-01-15T00:00:00Z"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 10
+	query = `
+{
+  q(func: eq(graduation, "1932-01-01T00:00:00+05:30")) {
+    uid
+    graduation
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 9
+	query = `
+{
+  q(func: eq(graduation, "1932")) {
+    uid
+    graduation
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1","graduation":["1932-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 8
+	query = `
+{
+  q(func: lt(graduation, "1933")) {
+    uid
+    graduation
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1","graduation":["1932-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 7
+	query = `
+{
+  q(func: gt(graduation, "1932")) {
+    uid
+    graduation
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x1f","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 6
+	query = `
+{
+  q(func: le(updated_at, "2019-03-27T14:41:56+06:00")) {
+    uid
+    updated_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x131","updated_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","updated_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 5
+	query = `
+{
+  q(func: ge(updated_at, "2019-03-28T13:41:57+00:00")) {
+    uid
+    updated_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","updated_at":"2019-05-28T00:00:00Z"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 4
+	query = `
+{
+  q(func: ge(updated_at, "2019-03-28T13:41:57")) {
+    uid
+    updated_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","updated_at":"2019-05-28T00:00:00Z"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 3
+	query = `
+{
+  q(func: le(created_at, "2019-03-27T14:41:56+06:00")) {
+    uid
+    created_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x131","created_at":"2019-03-28T13:41:57+30:00"},{"uid":"0x132","created_at":"2019-03-24T14:41:57+05:30"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 2
+	query = `
+{
+  q(func: ge(created_at, "2019-03-28T13:41:57+00:00")) {
+    uid
+    created_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		processQueryNoErr(t, query))
+
+	// Test 1
+	query = `
+{
+  q(func: ge(created_at, "2019-03-28T13:41:57")) {
+    uid
+    created_at
+  }
+}
+`
+	require.JSONEq(t,
+		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T14:41:57+30:00"}]}}`,
+		processQueryNoErr(t, query))
 }
 
 var client *dgo.Dgraph

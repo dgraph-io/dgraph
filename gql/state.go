@@ -346,16 +346,8 @@ func lexDirectiveOrLangList(l *lex.Lexer) lex.StateFn {
 }
 
 func lexName(l *lex.Lexer) lex.StateFn {
-	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-		break
-	}
+	l.AcceptRun(isNameSuffix)
+	l.Emit(itemName)
 	return l.Mode
 }
 
@@ -452,45 +444,32 @@ LOOP:
 
 // lexOperationType lexes a query or mutation or schema operation type.
 func lexOperationType(l *lex.Lexer) lex.StateFn {
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue // absorb
-		}
-		l.Backup()
-		// l.Pos would be index of the end of operation type + 1.
-		word := l.Input[l.Start:l.Pos]
-		if word == "mutation" {
-			l.Emit(itemOpType)
-			return lexInsideMutation
-		} else if word == "fragment" {
-			l.Emit(itemOpType)
-			return lexQuery
-		} else if word == "query" {
-			l.Emit(itemOpType)
-			return lexQuery
-		} else if word == "schema" {
-			l.Emit(itemOpType)
-			return lexInsideSchema
-		} else {
-			l.Errorf("Invalid operation type: %s", word)
-		}
-		break
+	l.AcceptRun(isNameSuffix)
+	// l.Pos would be index of the end of operation type + 1.
+	word := l.Input[l.Start:l.Pos]
+	if word == "mutation" {
+		l.Emit(itemOpType)
+		return lexInsideMutation
+	} else if word == "fragment" {
+		l.Emit(itemOpType)
+		return lexQuery
+	} else if word == "query" {
+		l.Emit(itemOpType)
+		return lexQuery
+	} else if word == "schema" {
+		l.Emit(itemOpType)
+		return lexInsideSchema
+	} else {
+		l.Errorf("Invalid operation type: %s", word)
 	}
+
 	return lexQuery
 }
 
 // lexArgName lexes and emits the name part of an argument.
 func lexArgName(l *lex.Lexer) lex.StateFn {
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-		break
-	}
+	l.AcceptRun(isNameSuffix)
+	l.Emit(itemName)
 	return l.Mode
 }
 

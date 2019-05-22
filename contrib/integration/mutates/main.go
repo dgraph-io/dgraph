@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var addr = flag.String("addr", "localhost:9080", "Dgraph alpha addr")
+var alpha = flag.String("alpha", "localhost:9080", "Dgraph alpha addr")
 var insert = flag.Bool("add", false, "Insert")
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 
 	// Setup dgraph client
 	ctx := context.Background()
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*alpha, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}

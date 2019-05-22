@@ -424,6 +424,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	var preds []string
 	if len(op.DropAttr) > 0 {
 		preds = []string{op.DropAttr}
+	} else if op.DropOp == api.Operation_ATTR && len(op.DropValue) > 0 {
+		preds = []string{op.DropValue}
 	} else {
 		update, err := schema.Parse(op.Schema)
 		if err != nil {
@@ -459,7 +461,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 
 		// if we get here, we know the user is not Groot.
-		if op.DropAll {
+		if isDropAll(op) || op.DropOp == api.Operation_DATA {
 			return fmt.Errorf("only Groot is allowed to drop all data, but the current user is %s",
 				userId)
 		}
@@ -483,7 +485,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	}
 
 	err := doAuthorizeAlter()
-	if span := otrace.FromContext(ctx); span != nil {
+	span := otrace.FromContext(ctx)
+	if span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,
@@ -594,7 +597,8 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 	}
 
 	err = doAuthorizeMutation()
-	if span := otrace.FromContext(ctx); span != nil {
+	span := otrace.FromContext(ctx)
+	if span != nil {
 		span.Annotatef(nil, (&AccessEntry{
 			userId:    userId,
 			groups:    groupIds,

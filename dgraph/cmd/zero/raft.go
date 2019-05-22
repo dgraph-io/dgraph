@@ -107,9 +107,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		che := make(chan error, 1)
+		errCh := make(chan error, 1)
 		pctx := &conn.ProposalCtx{
-			Ch: che,
+			ErrCh: errCh,
 			// Don't use the original context, because that's not what we're passing to Raft.
 			Ctx: cctx,
 		}
@@ -131,7 +131,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 
 		// Wait for proposal to be applied or timeout.
 		select {
-		case err := <-che:
+		case err := <-errCh:
 			// We arrived here by a call to n.props.Done().
 			return err
 		case <-cctx.Done():
@@ -209,7 +209,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 
 	// Create a connection to this server.
-	go conn.Get().Connect(member.Addr)
+	go conn.GetPools().Connect(member.Addr)
 
 	group.Members[member.Id] = member
 	// Increment nextGroup when we have enough replicas
@@ -443,7 +443,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 
 	} else if len(opts.peer) > 0 {
-		p := conn.Get().Connect(opts.peer)
+		p := conn.GetPools().Connect(opts.peer)
 		if p == nil {
 			return x.Errorf("Unhealthy connection to %v", opts.peer)
 		}
@@ -539,7 +539,7 @@ func (n *node) checkQuorum(closer *y.Closer) {
 			n.lastQuorum = time.Now()
 			n.mu.Unlock()
 			// Also do some connection cleanup.
-			conn.Get().RemoveInvalid(state)
+			conn.GetPools().RemoveInvalid(state)
 			span.Annotate(nil, "Updated lastQuorum")
 
 		} else if glog.V(1) {
@@ -613,6 +613,7 @@ func (n *node) Run() {
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
+	var timer x.Timer
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
@@ -621,7 +622,7 @@ func (n *node) Run() {
 		case <-ticker.C:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
-			start := time.Now()
+			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Zero.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 			for _, rs := range rd.ReadStates {
@@ -648,8 +649,14 @@ func (n *node) Run() {
 				}
 			}
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
+			timer.Record("disk")
+			if rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %v", err)
+				}
+				timer.Record("sync")
+			}
 			span.Annotatef(nil, "Saved to storage")
-			diskDur := time.Since(start)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -684,16 +691,18 @@ func (n *node) Run() {
 				}
 			}
 			span.Annotate(nil, "Sent messages")
+			timer.Record("proposals")
 
 			n.Raft().Advance()
 			span.Annotate(nil, "Advanced Raft")
+			timer.Record("advance")
+
 			span.End()
-			if time.Since(start) > 100*time.Millisecond {
+			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
-					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
-					len(rd.Entries), rd.MustSync)
+					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
 	}

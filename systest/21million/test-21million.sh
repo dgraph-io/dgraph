@@ -19,9 +19,9 @@ function DockerCompose {
     docker-compose -p dgraph "$@"
 }
 
-HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY=
+HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY= QUIET=
 
-ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only,quiet" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
@@ -30,6 +30,7 @@ while true; do
         --cleanup)      CLEANUP=${2,,}; shift  ;;
         --savedir)      SAVEDIR=${2,,}; shift  ;;
         --load-only)    LOAD_ONLY=yes          ;;
+        --quiet)        QUIET=yes              ;;
         --)             shift; break           ;;
     esac
     shift
@@ -74,8 +75,20 @@ elif [[ $CLEANUP != all && $CLEANUP != servers && $CLEANUP != none ]]; then
     exit 1
 fi
 
-if [[ $SAVEDIR ]]; then
-    SAVEDIR="-savedir=$SAVEDIR"
+# default to quiet mode if diffs are being saved in a directory
+if [[ -n $SAVEDIR ]]; then
+    QUIET=yes
+fi
+
+# check data version to help distinguish diffs due to a change in the data
+# rather than a change in the code
+if [[ $LOADER != none ]]; then
+    Info "checking data set version"
+    VERSION_FILE=$(mktemp --tmpdir)
+    trap "rm -f $VERSION_FILE" EXIT
+    curl -LSs --head $SCHEMA_URL | awk 'toupper($0)~/^ETAG:/ {print "Schema:"$2}' >> $VERSION_FILE
+    curl -LSs --head $DATA_URL | awk 'toupper($0)~/^ETAG:/ {print "Data:"$2}' >> $VERSION_FILE
+    diff -bi $VERSION_FILE queries/data-version || true
 fi
 
 Info "entering directory $SRCDIR"
@@ -113,7 +126,7 @@ DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
     dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                --format=rdf --zero=:5080 --dgraph=:9180 --logtostderr
+                --format=rdf --zero=:5080 --alpha=:9180 --logtostderr
 fi
 
 if [[ $LOAD_ONLY ]]; then
@@ -121,8 +134,12 @@ if [[ $LOAD_ONLY ]]; then
     exit 0
 fi
 
+# replace variables if set with the corresponding option
+SAVEDIR=${SAVEDIR:+-savedir=$SAVEDIR}
+QUIET=${QUIET:+-quiet}
+
 Info "running benchmarks/regression queries"
-go test -v -tags standalone $SAVEDIR || FOUND_DIFFS=1
+go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
 if [[ $CLEANUP == all ]]; then
     Info "bringing down zero and alpha and data volumes"

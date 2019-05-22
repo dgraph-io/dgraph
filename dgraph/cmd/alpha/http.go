@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/jsonpb"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -212,6 +213,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
+
 	out.WriteRune('{')
 	writeEntry("data", resp.Json)
 	out.WriteRune(',')
@@ -459,7 +461,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := json.Unmarshal(b, &op)
+	err := jsonpb.UnmarshalString(string(b), op)
 	if err != nil {
 		op.Schema = string(b)
 	}

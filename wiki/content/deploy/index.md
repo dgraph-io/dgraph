@@ -1458,7 +1458,7 @@ $ dgraph live -f <file1.rdf, file2.rdf>
 $ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
 
 # Read RDFs and a schema file and send to Dgraph running at given address.
-$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -d <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
+$ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
 #### Other Live Loader options
@@ -1481,6 +1481,8 @@ Do not confuse with `-C`.
 
 `-C, --use_compression` (default: false): Enable compression for connections to and from the
 Alpha server.
+
+`-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
 
 ### Bulk Loader
 
@@ -1885,11 +1887,21 @@ can be initiated using the `--whitelist` flag on `dgraph alpha`.
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
-
 {{% notice "note" %}}An export file would be created on only the server which is the leader for a group
 and not on followers.{{% /notice %}}
 
-This triggers an export of all the groups spread across the entire cluster. Each Alpha leader for a group writes output as a gzipped RDF file to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed and an error is returned.
+This triggers an export of all the groups spread across the entire cluster. Each Alpha leader for
+a group writes output as a gzipped file to the export directory specified on startup by `--export`.
+If any of the groups fail, the entire export process is considered failed and an error is returned.
+
+The data is exported in RDF format by default. A different output format may be specified with the
+`format` URL parameter. For example:
+
+```sh
+$ curl 'localhost:8080/admin/export?format=json'
+```
+
+Currently, "rdf" and "json" are the only formats supported.
 
 {{% notice "note" %}}It is up to the user to retrieve the right export files from the Alphas in the cluster. Dgraph does not copy files to the Alpha that initiated the export.{{% /notice %}}
 

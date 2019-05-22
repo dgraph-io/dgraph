@@ -45,6 +45,7 @@ type certConfig struct {
 	force   bool
 	hosts   []string
 	client  string
+	curve   string
 }
 
 // generatePair makes a new key/cert pair from a request. This function
@@ -52,10 +53,11 @@ type certConfig struct {
 // It will generate two files, a key and cert, upon success.
 // Returns nil on success, or an error otherwise.
 func (c *certConfig) generatePair(keyFile, certFile string) error {
-	key, err := makeKey(keyFile, c.keySize, c.force)
+	priv, err := makeKey(keyFile, c)
 	if err != nil {
 		return err
 	}
+	key := priv.(crypto.Signer)
 
 	sn, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
@@ -117,7 +119,7 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		return err
 	}
 
-	f, err := safeCreate(certFile, c.force, 0666)
+	fp, err := safeCreate(certFile, c.force, 0666)
 	if err != nil {
 		// check the existing cert.
 		if os.IsExist(err) {
@@ -125,9 +127,9 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer fp.Close()
 
-	err = pem.Encode(f, &pem.Block{
+	err = pem.Encode(fp, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: der,
 	})

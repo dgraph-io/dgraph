@@ -1,0 +1,8 @@
+# CODEOWNERS info: https://help.github.com/en/articles/about-code-owners
+# Owners are automatically requested for review for PRs that changes code
+# that they own.
+* @manishrjain @dgraph-io/team
+/posting/ @manishrjain @martinmr
+/ee/acl/ @manishrjain @gitlw
+/wiki/ @danielmai @MichaelJCompton
+/contrib/config/ @danielmai

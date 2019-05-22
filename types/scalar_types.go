@@ -119,6 +119,10 @@ func (t TypeID) IsScalar() bool {
 	return t != UidID
 }
 
+func (t TypeID) IsNumber() bool {
+	return t == IntID || t == FloatID
+}
+
 // ValueForType returns the zero value for a type id
 func ValueForType(id TypeID) Val {
 	switch id {
@@ -167,6 +171,8 @@ func ValueForType(id TypeID) Val {
 	}
 }
 
+// ParseTime parses the time from string trying various datetime formats.
+// By default, Go parses time in UTC unless specified in the data itself.
 func ParseTime(val string) (time.Time, error) {
 	var t time.Time
 	if err := t.UnmarshalText([]byte(val)); err == nil {

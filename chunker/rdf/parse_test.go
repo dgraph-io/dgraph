@@ -22,8 +22,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var testNQuads = []struct {
@@ -903,14 +902,14 @@ func TestLex(t *testing.T) {
 		t.Logf("Testing %v", test.input)
 		rnq, err := Parse(test.input)
 		if test.expectedErr && test.shouldIgnore {
-			assert.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
+			require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
 				err.Error())
 		} else if test.expectedErr {
-			assert.Error(t, err, "Expected error for input: %q. Output: %+v",
+			require.Error(t, err, "Expected error for input: %q. Output: %+v",
 				test.input, rnq)
 		} else {
-			assert.NoError(t, err, "Got error for input: %q", test.input)
-			assert.Equal(t, test.nq, rnq, "Mismatch for input: %q", test.input)
+			require.NoError(t, err, "Got error for input: %q", test.input)
+			require.Equal(t, test.nq, rnq, "Mismatch for input: %q", test.input)
 		}
 	}
 }

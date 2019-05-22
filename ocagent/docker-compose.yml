@@ -1,0 +1,71 @@
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8180:8180
+    - 9180:9180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --jaeger.collector=http://ocagent:14268
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5180:5180
+    - 6180:6180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --replicas=3 --logtostderr --jaeger.collector=http://ocagent:14268 -v=2 --bindall
+  ocagent:
+    image: omnition/opencensus-agent:0.1.6
+    container_name: ocagent
+    labels:
+      cluster: test
+    ports:
+      - 14268
+      - 55678
+      - 55679:55679
+    volumes:
+    - type: bind
+      source: $GOPATH/src/github.com/dgraph-io/dgraph/ocagent/ocagent-config.yaml
+      target: /conf/ocagent-config.yaml
+      read_only: true
+    command: --config /conf/ocagent-config.yaml
+  datadog:
+    image: datadog/agent:latest
+    container_name: datadog
+    working_dir: /working/datadog
+    volumes:
+    - type: bind
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+      read_only: true
+    - type: bind
+      source: /proc/
+      target: /proc/
+      read_only: true
+    - type: bind
+      source: /sys/fs/cgroup/
+      target: /host/sys/fs/cgroup
+      read_only: true
+    environment:
+    - DD_API_KEY
+    - DD_APM_ENABLED=true
+    - DD_APM_NON_LOCAL_TRAFFIC=true
+    ports:
+    - 8126:8126
+volumes: {}

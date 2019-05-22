@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -62,12 +61,12 @@ type node struct {
 	gid      uint32
 	closer   *y.Closer
 
-	lastCommitTs uint64 // Only used to ensure that our commit Ts is monotonically increasing.
-
 	streaming int32 // Used to avoid calculating snapshot
 
 	canCampaign bool
 	elog        trace.EventLog
+
+	pendingSize int64
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -166,7 +165,13 @@ func detectPendingTxns(attr string) error {
 func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
 	span := otrace.FromContext(ctx)
 
-	if proposal.Mutations.DropAll {
+	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		// Ensures nothing get written to disk due to commit proposals.
+		posting.Oracle().ResetTxns()
+		return posting.DeleteData()
+	}
+
+	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
@@ -190,6 +195,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				}
 			}
 		}
+
+		return nil
+	}
+
+	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
+		return schema.State().DeleteType(proposal.Mutations.DropValue)
 	}
 
 	if proposal.Mutations.StartTs == 0 {
@@ -210,7 +221,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
-			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
+			if err := runTypeMutation(ctx, tupdate); err != nil {
 				return err
 			}
 		}
@@ -269,6 +280,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return dy.ErrConflict
 	}
+
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
 
 	sort.Slice(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
@@ -432,10 +446,12 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(proposals []*pb.Proposal) {
+		var totalSize int64
 		for _, proposal := range proposals {
 			// We use the size as a double check to ensure that we're
 			// working with the same proposal as before.
 			psz := proposal.Size()
+			totalSize += int64(psz)
 
 			var perr error
 			p, ok := previous[proposal.Key]
@@ -471,6 +487,10 @@ func (n *node) processApplyCh() {
 
 			n.Proposals.Done(proposal.Key, perr)
 			n.Applied.Done(proposal.Index)
+			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
+		}
+		if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
+			glog.Warningf("Pending size should remain above zero: %d", sz)
 		}
 	}
 
@@ -506,6 +526,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		if txn == nil {
 			return
 		}
+		txn.Update()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
@@ -517,19 +538,14 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	for _, status := range delta.Txns {
-		if status.CommitTs > 0 && status.CommitTs < n.lastCommitTs {
-			glog.Errorf("Lastcommit %d > current %d. This would cause some commits to be lost.",
-				n.lastCommitTs, status.CommitTs)
-		}
 		toDisk(status.StartTs, status.CommitTs)
-		n.lastCommitTs = status.CommitTs
 	}
 	if err := writer.Flush(); err != nil {
 		return x.Errorf("Error while flushing to disk: %v", err)
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.gid])
+	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -581,7 +597,7 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	addr := snap.Context.GetAddr()
 	glog.V(2).Infof("Snapshot.RaftContext.Addr: %q", addr)
 	if len(addr) > 0 {
-		p, err := conn.Get().Get(addr)
+		p, err := conn.GetPools().Get(addr)
 		if err != nil {
 			glog.V(2).Infof("conn.Get(%q) Error: %v", addr, err)
 		} else {
@@ -619,9 +635,13 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 }
 
 func (n *node) proposeSnapshot(discardN int) error {
-	snap, err := n.calculateSnapshot(discardN)
-	if err != nil || snap == nil {
+	snap, err := n.calculateSnapshot(0, discardN)
+	if err != nil {
+		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
+	}
+	if snap == nil {
+		return nil
 	}
 	proposal := &pb.Proposal{
 		Snapshot: snap,
@@ -630,6 +650,103 @@ func (n *node) proposeSnapshot(discardN int) error {
 	data, err := proposal.Marshal()
 	x.Check(err)
 	return n.Raft().Propose(n.ctx, data)
+}
+
+const maxPendingSize int64 = 64 << 20 // in bytes.
+
+func (n *node) rampMeter() {
+	start := time.Now()
+	defer func() {
+		if dur := time.Since(start); dur > time.Second {
+			glog.Infof("Blocked pushing to applyCh for %v", dur.Round(time.Millisecond))
+		}
+	}()
+	for {
+		if atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
+			return
+		}
+		time.Sleep(3 * time.Millisecond)
+	}
+}
+
+func (n *node) updateRaftProgress() error {
+	// Both leader and followers can independently update their Raft progress. We don't store
+	// this in Raft WAL. Instead, this is used to just skip over log records that this Alpha
+	// has already applied, to speed up things on a restart.
+	//
+	// Let's check what we already have. And only update if the new snap.Index is ahead of the last
+	// stored applied.
+	applied, err := n.Store.Checkpoint()
+	if err != nil {
+		return err
+	}
+
+	snap, err := n.calculateSnapshot(applied, 3) // 3 is a randomly chosen small number.
+	if err != nil || snap == nil || snap.Index <= applied {
+		return err
+	}
+
+	if err := n.Store.UpdateCheckpoint(snap); err != nil {
+		return err
+	}
+	glog.V(2).Infof("[%#x] Set Raft progress to index: %d.", n.Id, snap.Index)
+	return nil
+}
+
+func (n *node) checkpointAndClose(done chan struct{}) {
+	slowTicker := time.NewTicker(time.Minute)
+	defer slowTicker.Stop()
+
+	for {
+		select {
+		case <-slowTicker.C:
+			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
+			// be sent on time. Otherwise, followers would just keep running elections.
+
+			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
+			if err := n.updateRaftProgress(); err != nil {
+				glog.Errorf("While updating Raft progress: %v", err)
+			}
+
+			if n.AmLeader() {
+				var calculate bool
+				if chk, err := n.Store.Checkpoint(); err == nil {
+					if first, err := n.Store.FirstIndex(); err == nil {
+						// Save some cycles by only calculating snapshot if the checkpoint has gone
+						// quite a bit further than the first index.
+						calculate = chk-first >= uint64(x.WorkerConfig.SnapshotAfter)
+					}
+				}
+				// We keep track of the applied index in the p directory. Even if we don't take
+				// snapshot for a while and let the Raft logs grow and restart, we would not have to
+				// run all the log entries, because we can tell Raft.Config to set Applied to that
+				// index.
+				// This applied index tracking also covers the case when we have a big index
+				// rebuild. The rebuild would be tracked just like others and would not need to be
+				// replayed after a restart, because the Applied config would let us skip right
+				// through it.
+				// We use disk based storage for Raft. So, we're not too concerned about
+				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
+				// entries to process on a restart.
+				if calculate {
+					if err := n.proposeSnapshot(x.WorkerConfig.SnapshotAfter); err != nil {
+						glog.Errorf("While calculating and proposing snapshot: %v", err)
+					}
+				}
+				go n.abortOldTransactions()
+			}
+
+		case <-n.closer.HasBeenClosed():
+			glog.Infof("Stopping node.Run")
+			if peerId, has := groups().MyPeer(); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
+				time.Sleep(time.Second) // Let transfer happen.
+			}
+			n.Raft().Stop()
+			close(done)
+			return
+		}
+	}
 }
 
 func (n *node) Run() {
@@ -641,22 +758,18 @@ func (n *node) Run() {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 
-	slowTicker := time.NewTicker(30 * time.Second)
-	defer slowTicker.Stop()
-
 	done := make(chan struct{})
-	go func() {
-		<-n.closer.HasBeenClosed()
-		glog.Infof("Stopping node.Run")
-		if peerId, has := groups().MyPeer(); has && n.AmLeader() {
-			n.Raft().TransferLeadership(n.ctx, x.WorkerConfig.RaftId, peerId)
-			time.Sleep(time.Second) // Let transfer happen.
-		}
-		n.Raft().Stop()
-		close(done)
-	}()
+	go n.checkpointAndClose(done)
+	go n.ReportRaftComms()
 
-	var snapshotLoops uint64
+	applied, err := n.Store.Checkpoint()
+	if err != nil {
+		glog.Errorf("While trying to find raft progress: %v", err)
+	} else {
+		glog.Infof("Found Raft progress: %d", applied)
+	}
+
+	var timer x.Timer
 	for {
 		select {
 		case <-done:
@@ -667,35 +780,15 @@ func (n *node) Run() {
 			glog.Infoln("Raft node done.")
 			return
 
-		case <-slowTicker.C:
-			n.elog.Printf("Size of applyCh: %d", len(n.applyCh))
-			if leader {
-				// We try to take a snapshot every slow tick duration, with a 1000 discard entries.
-				// But, once a while, we take a snapshot with 10 discard entries. This avoids the
-				// scenario where after bringing up an Alpha, and doing a hundred schema updates, we
-				// don't take any snapshots because there are not enough updates (discardN=10),
-				// which then really slows down restarts. At the same time, by checking more
-				// frequently, we can quickly take a snapshot if a lot of mutations are coming in
-				// fast (discardN=1000).
-				discardN := 1000
-				if snapshotLoops%5 == 0 {
-					discardN = 10
-				}
-				snapshotLoops++
-				// We use disk based storage for Raft. So, we're not too concerned about
-				// snapshotting.  We just need to do enough, so that we don't have a huge backlog of
-				// entries to process on a restart.
-				if err := n.proposeSnapshot(discardN); err != nil {
-					x.Errorf("While calculating and proposing snapshot: %v", err)
-				}
-				go n.abortOldTransactions()
-			}
-
+			// Slow ticker can't be placed here because figuring out checkpoints and snapshots takes
+			// time and if the leader does not send heartbeats out during this time, the followers
+			// start an election process. And that election process would just continue to happen
+			// indefinitely because checkpoints and snapshots are being calculated indefinitely.
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			start := time.Now()
+			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
@@ -739,8 +832,19 @@ func (n *node) Run() {
 						" retrieving snapshot\n", maxIndex)
 					n.Applied.WaitForMark(context.Background(), maxIndex)
 
+					if currSnap, err := n.Snapshot(); err != nil {
+						// Retrieve entire snapshot from leader if node does not have
+						// a current snapshot.
+						glog.Errorf("Could not retrieve previous snapshot. Setting SinceTs to 0.")
+						snap.SinceTs = 0
+					} else {
+						snap.SinceTs = currSnap.ReadTs
+					}
+
 					// It's ok to block ticks while retrieving snapshot, since it's a follower.
-					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n", snap, n.gid, rc.Id)
+					glog.Infof("---> SNAPSHOT: %+v. Group %d from node id %#x\n",
+						snap, n.gid, rc.Id)
+
 					for {
 						err := n.retrieveSnapshot(snap)
 						if err == nil {
@@ -762,7 +866,13 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(rd.HardState, rd.Entries, rd.Snapshot)
-			diskDur := time.Since(start)
+			timer.Record("disk")
+			if rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %v", err)
+				}
+				timer.Record("sync")
+			}
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
@@ -791,6 +901,10 @@ func (n *node) Run() {
 					n.elog.Printf("Found empty data at index: %d", entry.Index)
 					n.Applied.Done(entry.Index)
 
+				} else if entry.Index < applied {
+					n.elog.Printf("Skipping over already applied entry: %d", entry.Index)
+					n.Applied.Done(entry.Index)
+
 				} else {
 					proposal := &pb.Proposal{}
 					if err := proposal.Unmarshal(entry.Data); err != nil {
@@ -808,6 +922,17 @@ func (n *node) Run() {
 			}
 			// Send the whole lot to applyCh in one go, instead of sending proposals one by one.
 			if len(proposals) > 0 {
+				// Apply the meter this before adding size to pending size so some crazy big
+				// proposal can be pushed to applyCh. If this do this after adding its size to
+				// pending size, we could block forever in rampMeter.
+				n.rampMeter()
+				var pendingSize int64
+				for _, p := range proposals {
+					pendingSize += int64(p.Size())
+				}
+				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
+					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
+				}
 				n.applyCh <- proposals
 			}
 
@@ -825,8 +950,11 @@ func (n *node) Run() {
 			if span != nil {
 				span.Annotate(nil, "Followed queued messages.")
 			}
+			timer.Record("proposals")
 
 			n.Raft().Advance()
+			timer.Record("advance")
+
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
@@ -836,14 +964,13 @@ func (n *node) Run() {
 				span.End()
 				ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
-					x.LatencyMs.M(x.SinceMs(start)))
+					x.LatencyMs.M(float64(timer.Total())/1e6))
 			}
-			if time.Since(start) > 100*time.Millisecond {
+			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(
-					"Raft.Ready took too long to process: %v. Most likely due to slow disk: %v."+
+					"Raft.Ready took too long to process: %s"+
 						" Num entries: %d. MustSync: %v",
-					time.Since(start).Round(time.Millisecond), diskDur.Round(time.Millisecond),
-					len(rd.Entries), rd.MustSync)
+					timer.String(), len(rd.Entries), rd.MustSync)
 			}
 		}
 	}
@@ -887,6 +1014,8 @@ func (n *node) rollupLists(readTs uint64) error {
 		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
 			addTo(item.Key(), item.EstimatedSize())
 			return false
+		case x.ByteUnused:
+			return false
 		default:
 			return true
 		}
@@ -898,12 +1027,19 @@ func (n *node) rollupLists(readTs uint64) error {
 			return nil, err
 		}
 		atomic.AddUint64(&numKeys, 1)
-		kv, err := l.MarshalToKv()
-		addTo(key, int64(kv.Size()))
-		return listWrap(kv), err
+		kvs, err := l.Rollup()
+
+		// If there are multiple keys, the posting list was split into multiple
+		// parts. The key of the first part is the right key to use for tablet
+		// size calculations.
+		for _, kv := range kvs {
+			addTo(kvs[0].Key, int64(kv.Size()))
+		}
+
+		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return writer.Send(&pb.KVS{Kv: list.Kv})
+		return writer.Write(list)
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
@@ -972,7 +1108,6 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 
 	// Let's propose the txn updates received from Zero. This is important because there are edge
 	// cases where a txn status might have been missed by the group.
-	glog.Infof("TryAbort returned with delta: %+v\n", delta)
 	aborted := &pb.OracleDelta{}
 	for _, txn := range delta.Txns {
 		// Only pick the aborts. DO NOT propose the commits. They must come in the right order via
@@ -1001,14 +1136,14 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	starts := posting.Oracle().TxnOlderThan(5 * time.Minute)
+	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
 		return
 	}
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
@@ -1019,6 +1154,7 @@ func (n *node) abortOldTransactions() {
 // aborted. This way, we still keep all the mutations corresponding to this
 // start ts in the Raft logs. This is important, because we don't persist
 // pre-writes to disk in pstore.
+// - In simple terms, this means we MUST keep all pending transactions in the Raft logs.
 // - Find the maximum commit timestamp that we have seen.
 // That would tell us about the maximum timestamp used to do any commits. This
 // ts is what we can use for future reads of this snapshot.
@@ -1034,14 +1170,21 @@ func (n *node) abortOldTransactions() {
 //
 // At i7, min pending start ts = S3, therefore snapshotIdx = i5 - 1 = i4.
 // At i7, max commit ts = C1, therefore readTs = C1.
-func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
-	_, span := otrace.StartSpan(n.ctx, "Propose.Snapshot")
+//
+// This function also takes a startIdx, which can be used an optimization to skip over Raft entries.
+// This is useful when we already have a previous snapshot checkpoint (all txns have concluded up
+// until that last checkpoint) that we can use as a new start point for the snapshot calculation.
+func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, error) {
+	_, span := otrace.StartSpan(n.ctx, "Calculate.Snapshot",
+		otrace.WithSampler(otrace.AlwaysSample()))
 	defer span.End()
 
-	if atomic.LoadInt32(&n.streaming) > 0 {
-		span.Annotate(nil, "Skipping calculateSnapshot due to streaming")
-		return nil, nil
-	}
+	// We do not need to block snapshot calculation because of a pending stream. Badger would have
+	// pending iterators which would ensure that the data above their read ts would not be
+	// discarded. Secondly, if a new snapshot does get calculated and applied, the follower can just
+	// ask for the new snapshot. Blocking snapshot calculation has caused us issues when a follower
+	// somehow kept streaming forever. Then, the leader didn't calculate snapshot, instead it
+	// kept appending to Raft logs forever causing group wide issues.
 
 	first, err := n.Store.FirstIndex()
 	if err != nil {
@@ -1049,6 +1192,23 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, err
 	}
 	span.Annotatef(nil, "First index: %d", first)
+	if startIdx > first {
+		// If we're starting from a higher index, set first to that.
+		first = startIdx
+		span.Annotatef(nil, "Setting first to: %d", startIdx)
+	}
+
+	rsnap, err := n.Store.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	var snap pb.Snapshot
+	if len(rsnap.Data) > 0 {
+		if err := snap.Unmarshal(rsnap.Data); err != nil {
+			return nil, err
+		}
+	}
+	span.Annotatef(nil, "Last snapshot: %+v", snap)
 
 	last := n.Applied.DoneUntil()
 	if int(last-first) < discardN {
@@ -1057,10 +1217,8 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	}
 	span.Annotatef(nil, "Found Raft entries: %d", last-first)
 
-	entries, err := n.Store.Entries(first, last+1, math.MaxUint64)
-	if err != nil {
-		span.Annotatef(nil, "Error: %v", err)
-		return nil, err
+	if num := posting.Oracle().NumPendingTxns(); num > 0 {
+		glog.V(2).Infof("Num pending txns: %d", num)
 	}
 
 	// We can't rely upon the Raft entries to determine the minPendingStart,
@@ -1075,29 +1233,54 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
 	minPendingStart := posting.Oracle().MinPendingStartTs()
-	var maxCommitTs, snapshotIdx, maxCommitIdx uint64
-	for _, entry := range entries {
-		if entry.Type != raftpb.EntryNormal {
-			continue
-		}
-		var proposal pb.Proposal
-		if err := proposal.Unmarshal(entry.Data); err != nil {
+	maxCommitTs := snap.ReadTs
+	var snapshotIdx uint64
+
+	// Trying to retrieve all entries at once might cause out-of-memory issues in
+	// cases where the raft log is too big to fit into memory. Instead of retrieving
+	// all entries at once, retrieve it in batches of 64MB.
+	var lastEntry raftpb.Entry
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		if err != nil {
 			span.Annotatef(nil, "Error: %v", err)
 			return nil, err
 		}
-		if proposal.Mutations != nil {
-			start := proposal.Mutations.StartTs
-			if start >= minPendingStart && snapshotIdx == 0 {
-				snapshotIdx = entry.Index - 1
-			}
+
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
 		}
-		if proposal.Delta != nil {
-			for _, txn := range proposal.Delta.GetTxns() {
-				maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+
+		// Store the last entry (as it might be needed outside the loop) and set the
+		// start of the new batch at the entry following it. Also set foundEntries to
+		// true to indicate to the code outside the loop that entries were retrieved.
+		lastEntry = entries[len(entries)-1]
+		batchFirst = lastEntry.Index + 1
+
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal {
+				continue
 			}
-			maxCommitIdx = entry.Index
+			var proposal pb.Proposal
+			if err := proposal.Unmarshal(entry.Data); err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return nil, err
+			}
+			if proposal.Mutations != nil {
+				start := proposal.Mutations.StartTs
+				if start >= minPendingStart && snapshotIdx == 0 {
+					snapshotIdx = entry.Index - 1
+				}
+			}
+			if proposal.Delta != nil {
+				for _, txn := range proposal.Delta.GetTxns() {
+					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
+				}
+			}
 		}
 	}
+
 	if maxCommitTs == 0 {
 		span.Annotate(nil, "maxCommitTs is zero")
 		return nil, nil
@@ -1105,8 +1288,8 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 	if snapshotIdx <= 0 {
 		// It is possible that there are no pending transactions. In that case,
 		// snapshotIdx would be zero.
-		span.Annotatef(nil, "Using maxCommitIdx as snapshotIdx: %d", maxCommitIdx)
-		snapshotIdx = maxCommitIdx
+		snapshotIdx = lastEntry.Index
+		span.Annotatef(nil, "snapshotIdx is zero. Using last entry's index: %d", snapshotIdx)
 	}
 
 	numDiscarding := snapshotIdx - first + 1
@@ -1121,13 +1304,13 @@ func (n *node) calculateSnapshot(discardN int) (*pb.Snapshot, error) {
 		return nil, nil
 	}
 
-	snap := &pb.Snapshot{
+	result := &pb.Snapshot{
 		Context: n.RaftContext,
 		Index:   snapshotIdx,
 		ReadTs:  maxCommitTs,
 	}
-	span.Annotatef(nil, "Got snapshot: %+v", snap)
-	return snap, nil
+	span.Annotatef(nil, "Got snapshot: %+v", result)
+	return result, nil
 }
 
 func (n *node) joinPeers() error {

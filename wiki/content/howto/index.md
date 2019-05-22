@@ -277,10 +277,10 @@ exist, then it will be created starting at counter 0.
 $ dgraph increment
 ```
 
-Increment the counter predicate against the Alpha running at address `--addr` (default: `localhost:9080`):
+Increment the counter predicate against the Alpha running at address `--alpha` (default: `localhost:9080`):
 
 ```sh
-$ dgraph increment --addr=192.168.1.10:9080
+$ dgraph increment --alpha=192.168.1.10:9080
 ```
 
 Increment the counter predicate specified by `--pred` (default: `counter.val`):

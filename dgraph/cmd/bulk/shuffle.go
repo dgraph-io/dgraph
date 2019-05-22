@@ -103,6 +103,7 @@ func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry) {
 		x.Check(proto.Unmarshal(unmarshalBuf[:sz], me))
 		mapEntryCh <- me
 	}
+
 	close(mapEntryCh)
 }
 

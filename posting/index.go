@@ -431,13 +431,30 @@ func deleteTokensFor(attr, tokenizerName string) error {
 		return fmt.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	prefix = append(prefix, tokenizer.Identifier())
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
 
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix = pk.IndexPrefix()
+	prefix[len(prefix)-1] = x.ByteSplit
+	prefix = append(prefix, tokenizer.Identifier())
 	return pstore.DropPrefix(prefix)
 }
 
 func deleteReverseEdges(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
+
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix = pk.ReversePrefix()
+	prefix[len(prefix)-1] = x.ByteSplit
+
 	return pstore.DropPrefix(prefix)
 }
 
@@ -446,7 +463,21 @@ func deleteCountIndex(attr string) error {
 	if err := pstore.DropPrefix(pk.CountPrefix(false)); err != nil {
 		return err
 	}
-	return pstore.DropPrefix(pk.CountPrefix(true))
+	if err := pstore.DropPrefix(pk.CountPrefix(true)); err != nil {
+		return err
+	}
+
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix := pk.CountPrefix(false)
+	prefix[len(prefix)-1] = x.ByteSplit
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
+
+	prefix = pk.CountPrefix(true)
+	prefix[len(prefix)-1] = x.ByteSplit
+	return pstore.DropPrefix(prefix)
 }
 
 // Index rebuilding logic here.
@@ -509,38 +540,20 @@ func (r *rebuild) Run(ctx context.Context) error {
 	}
 	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
-	// We must commit all the posting lists to memory, so they'd be picked up
-	// during posting list rollup below.
-	if err := txn.CommitToMemory(r.startTs); err != nil {
-		return err
-	}
+	txn.Update() // Convert data into deltas.
 
 	// Now we write all the created posting lists to disk.
 	writer := NewTxnWriter(pstore)
-	for key := range txn.deltas {
-		pl, err := txn.Get([]byte(key))
-		if err != nil {
-			return err
-		}
-
-		le := pl.Length(r.startTs, 0)
-		if le == 0 {
+	for key, delta := range txn.cache.deltas {
+		if len(delta) == 0 {
 			continue
-		}
-		kv, err := pl.MarshalToKv()
-		if err != nil {
-			return err
 		}
 		// We choose to write the PL at r.startTs, so it won't be read by txns,
 		// which occurred before this schema mutation. Typically, we use
 		// kv.Version as the timestamp.
-		if err = writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], r.startTs); err != nil {
+		if err := writer.SetAt([]byte(key), delta, BitDeltaPosting, r.startTs); err != nil {
 			return err
 		}
-		// This locking is just to catch any future issues.  We shouldn't need
-		// to release this lock, because each posting list must only be accessed
-		// once and never again.
-		pl.Lock()
 	}
 	glog.V(1).Infoln("Rebuild: Flushing all writes.")
 	return writer.Flush()
@@ -946,6 +959,11 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 // DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
 	return pstore.DropAll()
+}
+
+// DeleteData deletes all data but leaves types and schema intact.
+func DeleteData() error {
+	return pstore.DropPrefix([]byte{x.DefaultPrefix})
 }
 
 // DeletePredicate deletes all entries and indices for a given predicate.
