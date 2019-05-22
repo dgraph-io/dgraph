@@ -102,4 +102,7 @@ var (
 	// ErrBlockedWrites is returned if the user called DropAll. During the process of dropping all
 	// data from Badger, we stop accepting new writes, by returning this error.
 	ErrBlockedWrites = errors.New("Writes are blocked, possibly due to DropAll or Close")
+
+	// ErrNilCallback is returned when subscriber's callback is nil.
+	ErrNilCallback = errors.New("Callback cannot be nil")
 )

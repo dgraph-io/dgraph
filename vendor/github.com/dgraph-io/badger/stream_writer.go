@@ -27,6 +27,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const headStreamId uint32 = math.MaxUint32
+
 // StreamWriter is used to write data coming from multiple streams. The streams must not have any
 // overlapping key ranges. Within each stream, the keys must be sorted. Badger Stream framework is
 // capable of generating such an output. So, this StreamWriter can be used at the other end to build
@@ -157,7 +159,7 @@ func (sw *StreamWriter) Flush() error {
 	// Encode and write the value log head into a new table.
 	data := make([]byte, vptrSize)
 	sw.head.Encode(data)
-	headWriter := sw.newWriter(math.MaxUint32)
+	headWriter := sw.newWriter(headStreamId)
 	if err := headWriter.Add(
 		y.KeyWithTs(head, sw.maxVersion),
 		y.ValueStruct{Value: data}); err != nil {
@@ -195,13 +197,13 @@ type sortedWriter struct {
 
 	builder  *table.Builder
 	lastKey  []byte
-	streamID uint32
+	streamId uint32
 }
 
-func (sw *StreamWriter) newWriter(streamID uint32) *sortedWriter {
+func (sw *StreamWriter) newWriter(streamId uint32) *sortedWriter {
 	return &sortedWriter{
 		db:       sw.db,
-		streamID: streamID,
+		streamId: streamId,
 		throttle: sw.throttle,
 		builder:  table.NewTableBuilder(),
 	}
@@ -269,6 +271,10 @@ func (w *sortedWriter) createTable(data []byte) error {
 	lc := w.db.lc
 
 	var lhandler *levelHandler
+	// We should start the levels from 1, because we need level 0 to set the !badger!head key. We
+	// cannot mix up this key with other keys from the DB, otherwise we would introduce a range
+	// overlap violation.
+	y.AssertTrue(len(lc.levels) > 1)
 	for _, l := range lc.levels[1:] {
 		ratio := float64(l.getTotalSize()) / float64(l.maxTotalSize)
 		if ratio < 1.0 {
@@ -277,7 +283,14 @@ func (w *sortedWriter) createTable(data []byte) error {
 		}
 	}
 	if lhandler == nil {
+		// If we're exceeding the size of the lowest level, shove it in the lowest level. Can't do
+		// better than that.
 		lhandler = lc.levels[len(lc.levels)-1]
+	}
+	if w.streamId == headStreamId {
+		// This is a special !badger!head key. We should store it at level 0, separate from all the
+		// other keys to avoid an overlap.
+		lhandler = lc.levels[0]
 	}
 	// Now that table can be opened successfully, let's add this to the MANIFEST.
 	change := &pb.ManifestChange{
@@ -293,6 +306,6 @@ func (w *sortedWriter) createTable(data []byte) error {
 		return err
 	}
 	w.db.opt.Infof("Table created: %d at level: %d for stream: %d. Size: %s\n",
-		fileID, lhandler.level, w.streamID, humanize.Bytes(uint64(tbl.Size())))
+		fileID, lhandler.level, w.streamId, humanize.Bytes(uint64(tbl.Size())))
 	return nil
 }
