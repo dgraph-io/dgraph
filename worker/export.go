@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// DefaultExportFormat stores the name of the default format for exports.
 const DefaultExportFormat = "rdf"
 
 type exportFormat struct {

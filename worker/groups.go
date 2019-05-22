@@ -221,6 +221,7 @@ func (g *groupi) groupId() uint32 {
 	return atomic.LoadUint32(&g.gid)
 }
 
+// MaxLeaseId returns the maximum UID that has been leased.
 func MaxLeaseId() uint64 {
 	g := groups()
 	g.RLock()
@@ -231,6 +232,7 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+// UpdateMembershipState contacts zero for an update on membership state.
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)

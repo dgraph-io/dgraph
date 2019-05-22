@@ -212,71 +212,71 @@ func convertToType(v types.Val, typ types.TypeID) (*pb.TaskValue, error) {
 type FuncType int
 
 const (
-	NotAFunction FuncType = iota
-	AggregatorFn
-	CompareAttrFn
-	CompareScalarFn
-	GeoFn
-	PasswordFn
-	RegexFn
-	FullTextSearchFn
-	HasFn
-	UidInFn
-	CustomIndexFn
-	MatchFn
-	StandardFn = 100
+	notAFunction FuncType = iota
+	aggregatorFn
+	compareAttrFn
+	compareScalarFn
+	geoFn
+	passwordFn
+	regexFn
+	fullTextSearchFn
+	hasFn
+	uidInFn
+	customIndexFn
+	matchFn
+	standardFn = 100
 )
 
 func parseFuncType(srcFunc *pb.SrcFunction) (FuncType, string) {
 	if srcFunc == nil {
-		return NotAFunction, ""
+		return notAFunction, ""
 	}
 	ftype, fname := parseFuncTypeHelper(srcFunc.Name)
-	if srcFunc.IsCount && ftype == CompareAttrFn {
+	if srcFunc.IsCount && ftype == compareAttrFn {
 		// gt(release_date, "1990") is 'CompareAttr' which
 		//    takes advantage of indexed-attr
 		// gt(count(films), 0) is 'CompareScalar', we first do
 		//    counting on attr, then compare the result as scalar with int
-		return CompareScalarFn, fname
+		return compareScalarFn, fname
 	}
 	return ftype, fname
 }
 
 func parseFuncTypeHelper(name string) (FuncType, string) {
 	if len(name) == 0 {
-		return NotAFunction, ""
+		return notAFunction, ""
 	}
 	f := strings.ToLower(name)
 	switch f {
 	case "le", "ge", "lt", "gt", "eq":
-		return CompareAttrFn, f
+		return compareAttrFn, f
 	case "min", "max", "sum", "avg":
-		return AggregatorFn, f
+		return aggregatorFn, f
 	case "checkpwd":
-		return PasswordFn, f
+		return passwordFn, f
 	case "regexp":
-		return RegexFn, f
+		return regexFn, f
 	case "alloftext", "anyoftext":
-		return FullTextSearchFn, f
+		return fullTextSearchFn, f
 	case "has":
-		return HasFn, f
+		return hasFn, f
 	case "uid_in":
-		return UidInFn, f
+		return uidInFn, f
 	case "anyof", "allof":
-		return CustomIndexFn, f
+		return customIndexFn, f
 	case "match":
-		return MatchFn, f
+		return matchFn, f
 	default:
 		if types.IsGeoFunc(f) {
-			return GeoFn, f
+			return geoFn, f
 		}
-		return StandardFn, f
+		return standardFn, f
 	}
 }
 
 func needsIndex(fnType FuncType) bool {
 	switch fnType {
-	case CompareAttrFn, GeoFn, FullTextSearchFn, StandardFn, MatchFn:
+	case compareAttrFn, geoFn, fullTextSearchFn, standardFn, matchFn:
 		return true
 	}
 	return false
@@ -300,20 +300,20 @@ type funcArgs struct {
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
-	case AggregatorFn, PasswordFn:
+	case aggregatorFn, passwordFn:
 		return true, nil
-	case CompareAttrFn:
+	case compareAttrFn:
 		if len(srcFn.tokens) > 0 {
 			return false, nil
 		}
 		return true, nil
-	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn, CustomIndexFn, MatchFn:
+	case geoFn, regexFn, fullTextSearchFn, standardFn, hasFn, customIndexFn, matchFn:
 		// All of these require an index, hence would require fetching uid postings.
 		return false, nil
-	case UidInFn, CompareScalarFn:
+	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case NotAFunction:
+	case notAFunction:
 		return typ.IsScalar(), nil
 	}
 	return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
@@ -332,16 +332,16 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 
 	switch srcFn.fnType {
-	case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn:
 	default:
 		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 	}
 
-	if srcFn.atype == types.PasswordID && srcFn.fnType != PasswordFn {
+	if srcFn.atype == types.PasswordID && srcFn.fnType != passwordFn {
 		// Silently skip if the user is trying to fetch an attribute of type password.
 		return nil
 	}
-	if srcFn.fnType == PasswordFn && srcFn.atype != types.PasswordID {
+	if srcFn.fnType == passwordFn && srcFn.atype != types.PasswordID {
 		return x.Errorf("checkpwd fn can only be used on attr: [%s] with schema type password."+
 			" Got type: %s", q.Attr, types.TypeID(srcFn.atype).Name())
 	}
@@ -424,7 +424,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 				// This means we fetched the value directly instead of fetching index key and intersecting.
 				// Lets compare the value and add filter the uid.
-				if srcFn.fnType == CompareAttrFn {
+				if srcFn.fnType == compareAttrFn {
 					// Lets convert the val to its type.
 					if val, err = types.Convert(val, srcFn.atype); err != nil {
 						return err
@@ -465,10 +465,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.Counts = append(out.Counts, uint32(len))
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			case srcFn.fnType == AggregatorFn:
+			case srcFn.fnType == aggregatorFn:
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			case srcFn.fnType == PasswordFn:
+			case srcFn.fnType == passwordFn:
 				lastPos := len(out.ValueMatrix) - 1
 				if len(out.ValueMatrix[lastPos].Values) == 0 {
 					continue
@@ -565,14 +565,14 @@ func (qs *queryState) handleUidPostings(
 			}
 			var key []byte
 			switch srcFn.fnType {
-			case NotAFunction, CompareScalarFn, HasFn, UidInFn:
+			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
 					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
 				} else {
 					key = x.DataKey(q.Attr, q.UidList.Uids[i])
 				}
-			case GeoFn, RegexFn, FullTextSearchFn, StandardFn, CustomIndexFn, MatchFn,
-				CompareAttrFn:
+			case geoFn, regexFn, fullTextSearchFn, standardFn, customIndexFn, matchFn,
+				compareAttrFn:
 				key = x.IndexKey(q.Attr, srcFn.tokens[i])
 			default:
 				return x.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
@@ -596,7 +596,7 @@ func (qs *queryState) handleUidPostings(
 				out.Counts = append(out.Counts, uint32(len))
 				// Add an empty UID list to make later processing consistent
 				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			case srcFn.fnType == CompareScalarFn:
+			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
 				}
@@ -605,11 +605,11 @@ func (qs *queryState) handleUidPostings(
 					return posting.ErrTsTooOld
 				}
 				count := int64(len)
-				if EvalCompare(srcFn.fname, count, srcFn.threshold) {
+				if evalCompare(srcFn.fname, count, srcFn.threshold) {
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			case srcFn.fnType == HasFn:
+			case srcFn.fnType == hasFn:
 				if i == 0 {
 					span.Annotate(nil, "HasFn")
 				}
@@ -621,7 +621,7 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			case srcFn.fnType == UidInFn:
+			case srcFn.fnType == uidInFn:
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
@@ -809,7 +809,7 @@ func (qs *queryState) helpProcessTask(
 		AfterUID: q.AfterUid,
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
+	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
 		opts.Intersect = q.UidList
 	}
 
@@ -830,21 +830,21 @@ func (qs *queryState) helpProcessTask(
 		}
 	}
 
-	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
+	if srcFn.fnType == hasFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleHasFunction")
 		if err := qs.handleHasFunction(ctx, q, out); err != nil {
 			return nil, err
 		}
 	}
 
-	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
+	if srcFn.fnType == compareScalarFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleCompareScalarFunction")
 		if err := qs.handleCompareScalarFunction(funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
 
-	if srcFn.fnType == RegexFn {
+	if srcFn.fnType == regexFn {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		span.Annotate(nil, "handleRegexFunction")
@@ -853,7 +853,7 @@ func (qs *queryState) helpProcessTask(
 		}
 	}
 
-	if srcFn.fnType == MatchFn {
+	if srcFn.fnType == matchFn {
 		span.Annotate(nil, "handleMatchFunction")
 		if err := qs.handleMatchFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
@@ -862,7 +862,7 @@ func (qs *queryState) helpProcessTask(
 
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
-	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
+	if srcFn.fnType == compareAttrFn && len(srcFn.tokens) > 0 {
 		span.Annotate(nil, "handleCompareFunction")
 		if err := qs.handleCompareFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
@@ -897,8 +897,8 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 	}
 
 	return langForFunc(langs) != "." &&
-		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
-			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
+		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
+			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn)
 }
 
 func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
@@ -1349,14 +1349,14 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 	}
 
 	switch arg.srcFn.fnType {
-	case HasFn:
+	case hasFn:
 		// Dont do anything, as filtering based on lang is already
 		// done above.
-	case FullTextSearchFn, StandardFn:
+	case fullTextSearchFn, standardFn:
 		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filtered = matchStrings(filtered, values, filter)
-	case CompareAttrFn:
+	case compareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
 		filter.eqVals = arg.srcFn.eqTokens
 		filter.match = ineqMatch
@@ -1429,25 +1429,25 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	var err error
 
 	t, err := schema.State().TypeOf(attr)
-	if err == nil && fnType != NotAFunction && t.Name() == types.StringID.Name() {
+	if err == nil && fnType != notAFunction && t.Name() == types.StringID.Name() {
 		fc.isStringFn = true
 	}
 
 	switch fnType {
-	case NotAFunction:
+	case notAFunction:
 		fc.n = len(q.UidList.Uids)
-	case AggregatorFn:
+	case aggregatorFn:
 		// confirm agrregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
 			return nil, x.Errorf("Attribute %q is not scalar-type", attr)
 		}
-		if !CouldApplyAggregatorOn(f, typ) {
+		if !couldApplyAggregatorOn(f, typ) {
 			return nil, x.Errorf("Aggregator %q could not apply on %v",
 				f, attr)
 		}
 		fc.n = len(q.UidList.Uids)
-	case CompareAttrFn:
+	case compareAttrFn:
 		args := q.SrcFunc.Args
 		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == eq {
@@ -1491,7 +1491,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		} else {
 			fc.n = len(fc.tokens)
 		}
-	case CompareScalarFn:
+	case compareScalarFn:
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
@@ -1500,7 +1500,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 				q.SrcFunc.Name, q.SrcFunc.Args[0])
 		}
 		checkRoot(q, fc)
-	case GeoFn:
+	case geoFn:
 		// For geo functions, we get extra information used for filtering.
 		fc.tokens, fc.geoQuery, err = types.GetGeoTokens(q.SrcFunc)
 		tok.EncodeGeoTokens(fc.tokens)
@@ -1508,12 +1508,12 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = len(fc.tokens)
-	case PasswordFn:
+	case passwordFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
-	case StandardFn, FullTextSearchFn:
+	case standardFn, fullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
@@ -1528,7 +1528,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		}
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
-	case MatchFn:
+	case matchFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1550,7 +1550,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		fc.threshold = int64(max)
 		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
-	case CustomIndexFn:
+	case customIndexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1571,7 +1571,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			tok.GetLangTokenizer(tokenizer, langForFunc(q.Langs)))
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
-	case RegexFn:
+	case regexFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1592,12 +1592,12 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = 0
-	case HasFn:
+	case hasFn:
 		if err = ensureArgsCount(q.SrcFunc, 0); err != nil {
 			return nil, err
 		}
 		checkRoot(q, fc)
-	case UidInFn:
+	case uidInFn:
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
@@ -1687,7 +1687,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		}
 		fnType, fname := parseFuncTypeHelper(fname)
 		switch fnType {
-		case CompareAttrFn: // lt, gt, le, ge, eq
+		case compareAttrFn: // lt, gt, le, ge, eq
 			var err error
 			typId, err := facets.TypeIDFor(fc)
 			if err != nil {
@@ -1706,7 +1706,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 
 			return types.CompareVals(fname, fVal, v), nil
 
-		case StandardFn: // allofterms, anyofterms
+		case standardFn: // allofterms, anyofterms
 			facetType, err := facets.TypeIDFor(fc)
 			if err != nil {
 				return false, err
@@ -1810,9 +1810,9 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 		}
 
 		switch fnType {
-		case CompareAttrFn:
+		case compareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
-		case StandardFn:
+		case standardFn:
 			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
 				return nil, aerr
