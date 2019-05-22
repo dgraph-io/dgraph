@@ -17,24 +17,24 @@
 package trie
 
 import (
-	"fmt"
+	log "github.com/inconshreveable/log15"
 )
 
 // Print prints the trie through pre-order traversal
 func (t *Trie) Print() {
-	fmt.Println("printing trie...")
-	t.print(t.root)
+	log.Info("printing trie...")
+	t.print(t.root, nil)
 }
 
-func (t *Trie) print(current node) {
+func (t *Trie) print(current node, prefix []byte) {
 	switch c := current.(type) {
 	case *branch:
-		fmt.Printf("branch pk %x children %b value %s\n", c.key, c.childrenBitmap(), c.value)
-		for _, child := range c.children {
-			t.print(child)
+		log.Info("branch key %x children %b value %s\n", nibblesToKeyLE(append(prefix, c.key...)), c.childrenBitmap(), c.value)
+		for i, child := range c.children {
+			t.print(child, append(append(prefix, byte(i)), c.key...))
 		}
 	case *leaf:
-		fmt.Printf("leaf pk %x val %s\n", c.key, c.value)
+		log.Info("leaf key %x val %x\n", nibblesToKeyLE(append(prefix, c.key...)), c.value)
 	default:
 		// do nothing
 	}

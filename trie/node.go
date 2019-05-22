@@ -27,6 +27,7 @@ type node interface {
 	Encode() ([]byte, error)
 	isDirty() bool
 	setDirty(dirty bool)
+	setKey(key []byte)
 }
 
 type (
@@ -54,6 +55,16 @@ func (b *branch) childrenBitmap() uint16 {
 	return bitmap
 }
 
+func (b *branch) numChildren() int {
+	var i, count int
+	for i = 0; i < 16; i++ {
+		if b.children[i] != nil {
+			count++
+		}
+	}
+	return count
+}
+
 func (l *leaf) isDirty() bool {
 	return l.dirty
 }
@@ -70,6 +81,14 @@ func (b *branch) setDirty(dirty bool) {
 	b.dirty = dirty
 }
 
+func (l *leaf) setKey(key []byte) {
+	l.key = key
+}
+
+func (b *branch) setKey(key []byte) {
+	b.key = key
+}
+
 // Encode is the high-level function wrapping the encoding for different node types
 // encoding has the following format:
 // NodeHeader | Extra partial key length | Partial Key | Value
@@ -80,7 +99,7 @@ func Encode(n node) ([]byte, error) {
 	case *leaf:
 		return n.Encode()
 	case nil:
-		return nil, nil
+		return []byte{0}, nil
 	}
 
 	return nil, nil

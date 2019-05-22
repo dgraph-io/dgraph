@@ -68,6 +68,7 @@ func TestKeyToNibbles(t *testing.T) {
 		input    []byte
 		expected []byte
 	}{
+		{[]byte{0x0}, []byte{0, 0}},
 		{[]byte{0xFF}, []byte{0xF, 0xF}},
 		{[]byte{0x3a, 0x05}, []byte{0x3, 0xa, 0x5}},
 		{[]byte{0xAA, 0xFF, 0x01}, []byte{0xa, 0xa, 0xf, 0xf, 0x1}},
@@ -97,6 +98,26 @@ func TestNibblesToKey(t *testing.T) {
 
 	for _, test := range tests {
 		res := nibblesToKey(test.input)
+		if !bytes.Equal(test.expected, res) {
+			t.Errorf("Output doesn't match expected. got=%x expected=%x\n", res, test.expected)
+		}
+	}
+}
+
+func TestNibblesToKeyLE(t *testing.T) {
+	tests := []struct {
+		input    []byte
+		expected []byte
+	}{
+		{[]byte{0xF, 0xF}, []byte{0xFF}},
+		{[]byte{0x3, 0xa, 0x0, 0x5}, []byte{0x3a, 0x05}},
+		{[]byte{0xa, 0xa, 0xf, 0xf, 0x0, 0x1}, []byte{0xaa, 0xff, 0x01}},
+		{[]byte{0xa, 0xa, 0xf, 0xf, 0x0, 0x1, 0xc, 0x2}, []byte{0xaa, 0xff, 0x01, 0xc2}},
+		{[]byte{0xa, 0xa, 0xf, 0xf, 0x0, 0x1, 0xc}, []byte{0xaa, 0xff, 0x01, 0xc}},
+	}
+
+	for _, test := range tests {
+		res := nibblesToKeyLE(test.input)
 		if !bytes.Equal(test.expected, res) {
 			t.Errorf("Output doesn't match expected. got=%x expected=%x\n", res, test.expected)
 		}

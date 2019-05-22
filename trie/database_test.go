@@ -2,6 +2,8 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"testing"
 
 	db "github.com/ChainSafe/gossamer/polkadb"
@@ -29,6 +31,13 @@ func newTrie() (*Trie, error) {
 	trie.db.batch = trie.db.db.NewBatch()
 
 	return trie, nil
+}
+
+func (t *Trie) closeDb() {
+    t.db.db.Close()
+    if err := os.RemoveAll("./gossamer_data"); err != nil {
+        fmt.Println("removal of temp directory gossamer_data failed")
+    }
 }
 
 func TestWriteToDB(t *testing.T) {
@@ -63,7 +72,7 @@ func TestWriteToDB(t *testing.T) {
 		t.Errorf("Fail: could not commit (batch write) to DB: %s", err)
 	}
 
-	trie.db.db.Close()
+	trie.closeDb()
 }
 
 func TestWriteDirty(t *testing.T) {
@@ -87,4 +96,6 @@ func TestWriteDirty(t *testing.T) {
 	} else if written {
 		t.Errorf("Fail: wrote clean node to db")
 	}
+
+	trie.closeDb()
 }

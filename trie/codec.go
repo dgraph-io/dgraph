@@ -81,3 +81,27 @@ func nibblesToKey(in []byte) (res []byte) {
 
 	return res
 }
+
+// nibblesToKey turns a slice of nibbles w/ length k into a little endian byte array
+// assumes nibbles are already LE, does not rearrange nibbles
+// if the length of the input is odd, the result is [ in[0] in[1] | ... | 0000 in[k-1] ]
+// otherwise, res = [ in[0] in[1] | ... | in[k-2] in[k-1] ]
+func nibblesToKeyLE(in []byte) (res []byte) {
+	if len(in)%2 == 0 {
+		res = make([]byte, len(in)/2)
+		for i := 0; i < len(in); i += 2 {
+			res[i/2] = (in[i] << 4 & 0xf0) | (in[i+1] & 0xf)
+		}
+	} else {
+		res = make([]byte, len(in)/2+1)
+		for i := 0; i < len(in); i += 2 {
+			if i < len(in)-1 {
+				res[i/2] = (in[i] << 4 & 0xf0) | (in[i+1] & 0xf)
+			} else {
+				res[i/2] = (in[i] & 0xf)
+			}
+		}
+	}
+
+	return res
+}

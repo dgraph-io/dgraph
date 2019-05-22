@@ -45,6 +45,10 @@ func NewTrie(db *Database, root node) *Trie {
 	}
 }
 
+func (t *Trie) Encode() ([]byte, error) {
+	return Encode(t.root)
+}
+
 // Put inserts a key with value into the trie
 func (t *Trie) Put(key, value []byte) error {
 	if err := t.tryPut(key, value); err != nil {
@@ -89,25 +93,31 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 			ok = true
 		}
 	case *leaf:
-		// need to convert this into a branch
+		// need to convert this leaf into a branch
 		br := &branch{dirty: true}
 		length := lenCommonPrefix(key, p.key)
 
-		if len(key) < length {
-			br.key = nil
-			br.value = value.(*leaf).value
-			br.children[p.key[0]] = parent
-			return true, br, nil
+		if bytes.Equal(p.key, key) && len(key) == length {
+			return true, value, nil
 		}
 
 		br.key = key[:length]
+		parentKey := p.key
 
-		switch v := value.(type) {
-		case *leaf:
-			v.key = key[length+1:]
-		case *branch:
-			v.key = key[length+1:]
+		// value goes at this branch
+		if len(key) == length {
+			br.value = value.(*leaf).value
+
+			// if we are not replacing previous leaf, then add it as a child to the new branch
+			if len(parentKey) > len(key) {
+				p.key = p.key[length+1:]
+				br.children[parentKey[length]] = p
+			}
+
+			return true, br, nil
 		}
+
+		value.setKey(key[length+1:])
 
 		if length == len(p.key) {
 			// if leaf's key is covered by this branch, then make the leaf's
@@ -116,7 +126,6 @@ func (t *Trie) insert(parent node, key []byte, value node) (ok bool, n node, err
 			br.children[key[length]] = value
 		} else {
 			// otherwise, make the leaf a child of the branch and update its partial key
-			parentKey := p.key
 			p.key = p.key[length+1:]
 			br.children[parentKey[length]] = p
 			br.children[key[length]] = value
@@ -150,11 +159,11 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 		}
 
 		switch c := p.children[key[length]].(type) {
-		case *branch:
+		case *branch, *leaf:
 			_, n, err = t.insert(c, key[length+1:], value)
 			p.children[key[length]] = n
 			n = p
-		default: // nil or leaf
+		case nil:
 			// otherwise, add node as child of this branch
 			value.(*leaf).key = key[length+1:]
 			p.children[key[length]] = value
@@ -174,11 +183,10 @@ func (t *Trie) updateBranch(p *branch, key []byte, value node) (ok bool, n node,
 		return false, nil, err
 	}
 
-	if len(key) == 0 {
+	if len(key) <= length {
 		br.value = value.(*leaf).value
 	} else {
-		nodeIndex := key[length]
-		_, br.children[nodeIndex], err = t.insert(nil, key[length+1:], value)
+		_, br.children[key[length]], err = t.insert(nil, key[length+1:], value)
 		if err == nil {
 			ok = true
 		}
@@ -220,19 +228,16 @@ func (t *Trie) retrieve(parent node, key []byte) (value *leaf, err error) {
 			return &leaf{key: p.key, value: p.value, dirty: true}, nil
 		}
 
-		// if branch's child at the key is a leaf, return it if the key matches
-		switch v := p.children[key[length]].(type) {
-		case *leaf:
-			if bytes.Equal(v.key, key[length+1:]) {
-				value = v
-			} else {
-				value = nil
-			}
-		default:
-			value, err = t.retrieve(p.children[key[length]], key[length+1:])
+		// did not find value
+		if bytes.Equal(p.key[:length], key) && len(key) < len(p.key) {
+			return nil, nil
 		}
+
+		value, err = t.retrieve(p.children[key[length]], key[length+1:])
 	case *leaf:
-		value = p
+		if bytes.Equal(p.key, key) {
+			value = p
+		}
 	case nil:
 		return nil, nil
 	default:
@@ -253,7 +258,84 @@ func (t *Trie) Delete(key []byte) error {
 }
 
 func (t *Trie) delete(parent node, key []byte) (ok bool, n node, err error) {
-	return ok, nil, nil
+	switch p := parent.(type) {
+	case *branch:
+		length := lenCommonPrefix(p.key, key)
+
+		if bytes.Equal(p.key, key) || len(key) == 0 {
+			// found the value at this node
+			p.value = nil
+			n = p
+		} else {
+			_, n, err = t.delete(p.children[key[length]], key[length+1:])
+			if err != nil {
+				return false, p, err
+			}
+			p.children[key[length]] = n
+			n = p
+		}
+
+		ok, n, err = handleDeletion(p, n, key)
+	case *leaf:
+		if bytes.Equal(key, p.key) || len(key) == 0 {
+			ok = true
+		} else {
+			ok = true
+			n = p
+		}
+	case nil:
+		// do nothing
+	}
+	return ok, n, err
+}
+
+// handleDeletion is called when a value is deleted from a branch
+// if the updated branch only has 1 child, it should be combined with that child
+// if the upated branch only has a value, it should be turned into a leaf
+func handleDeletion(p *branch, n node, key []byte) (ok bool, nn node, err error) {
+	nn = n
+	length := lenCommonPrefix(p.key, key)
+	bitmap := p.childrenBitmap()
+
+	// if branch has no children, just a value, turn it into a leaf
+	if bitmap == 0 && p.value != nil {
+		nn = &leaf{key: key[:length], value: p.value}
+	} else if p.numChildren() == 1 && p.value == nil {
+		// there is only 1 child and no value, combine the child branch with this branch
+		// find index of child
+		var i int
+		for i = 0; i < 16; i++ {
+			bitmap = bitmap >> 1
+			if bitmap == 0 {
+				break
+			}
+		}
+
+		child := p.children[i]
+		switch c := child.(type) {
+		case *leaf:
+			nn = &leaf{key: append(append(p.key, []byte{byte(i)}...), c.key...), value: c.value}
+		case *branch:
+			br := new(branch)
+			br.key = append(p.key, append([]byte{byte(i)}, c.key...)...)
+
+			// adopt the grandchildren
+			for i, grandchild := range c.children {
+				if grandchild != nil {
+					br.children[i] = grandchild
+				}
+			}
+
+			br.value = c.value
+			nn = br
+		default:
+			// do nothing
+		}
+
+		ok = true
+	}
+
+	return ok, nn, err
 }
 
 // lenCommonPrefix returns the length of the common prefix between two keys

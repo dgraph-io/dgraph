@@ -20,7 +20,7 @@ import (
 	"hash"
 
 	"github.com/ChainSafe/gossamer/common"
-	"golang.org/x/crypto/blake2s"
+	"golang.org/x/crypto/blake2b"
 )
 
 // Hasher is a wrapper around a hash function
@@ -29,7 +29,7 @@ type Hasher struct {
 }
 
 func newHasher() (*Hasher, error) {
-	h, err := blake2s.New256(nil)
+	h, err := blake2b.New256(nil)
 	if err != nil {
 		return nil, err
 	}
