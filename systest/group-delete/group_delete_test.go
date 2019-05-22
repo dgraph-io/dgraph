@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,7 @@ func TestNodes(t *testing.T) {
 		{name: "test query 1", fn: NodesTestQuery},
 		{name: "move tablets from 2", fn: NodesMoveTablets2},
 		{name: "test query 2", fn: NodesTestQuery},
+		{name: "connect node back", fn: ConnectNode2},
 	}
 	for _, tc := range tests {
 		if !t.Run(tc.name, wrap(tc.fn)) {
@@ -164,7 +166,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	state2, err = z.GetState()
 	require.NoError(t, err)
 
-	if _, ok := state2.Groups["3"]; ok {
+	if state2.Groups["3"].Members != nil {
 		t.Errorf("node removal failed")
 	}
 }
@@ -196,7 +198,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 	state2, err = z.GetState()
 	require.NoError(t, err)
 
-	if _, ok := state2.Groups["2"]; ok {
+	if state2.Groups["2"].Members != nil {
 		t.Errorf("node removal failed")
 	}
 }
@@ -230,4 +232,19 @@ func NodesTestQuery(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`, string(resp.GetJson()))
+}
+
+func ConnectNode2(t *testing.T, c *dgo.Dgraph) {
+	// remove the old data and connect node back to cluster
+	cmd := exec.Command("docker-compose", "up", "--force-recreate", "--detach", "dg2")
+	_, err := cmd.Output()
+	require.NoError(t, err)
+	state1, err := z.GetState()
+	if member, ok := state1.Groups["2"]; ok {
+		if _, ok := member.Members["4"]; !ok {
+			t.Error("member 4 not found")
+		}
+		return
+	}
+	t.Error("group 2 not found")
 }
