@@ -885,14 +885,35 @@ type request struct {
 	Ptrs []valuePointer
 	Wg   sync.WaitGroup
 	Err  error
+	ref  int32
+}
+
+func (req *request) IncrRef() {
+	atomic.AddInt32(&req.ref, 1)
+}
+
+func (req *request) DecrRef() {
+	nRef := atomic.AddInt32(&req.ref, -1)
+	if nRef > 0 {
+		return
+	}
+	req.Entries = nil
+	requestPool.Put(req)
 }
 
 func (req *request) Wait() error {
 	req.Wg.Wait()
-	req.Entries = nil
 	err := req.Err
-	requestPool.Put(req)
+	req.DecrRef() // DecrRef after writing to DB.
 	return err
+}
+
+type requests []*request
+
+func (reqs requests) DecrRef() {
+	for _, req := range reqs {
+		req.DecrRef()
+	}
 }
 
 // sync function syncs content of latest value log file to disk. Syncing of value log directory is
