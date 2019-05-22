@@ -296,7 +296,7 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql", 0)
+	_, ts, err := queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -322,18 +322,18 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
-	data, _, err := queryWithTs(q1, "application/graphql", 0)
+	data, _, err := queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql", ts)
+	data, _, err = queryWithTs(q1, "application/graphqlpm", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(keys, preds, ts))
-	data, _, err = queryWithTs(q1, "application/graphql", 0)
+	data, _, err = queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -350,7 +350,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql", 0)
+	_, ts, err := queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -368,18 +368,18 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
 
-	data, _, err := queryWithTs(q1, "application/graphql", 0)
+	data, _, err := queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql", ts)
+	data, _, err = queryWithTs(q1, "application/graphqlpm", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(keys, nil, ts))
-	data, _, err = queryWithTs(q1, "application/graphql", 0)
+	data, _, err = queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -396,7 +396,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql", 0)
+	_, ts, err := queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -414,12 +414,12 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.Equal(t, mts, ts)
 	require.Equal(t, 3, len(keys))
 
-	data, _, err := queryWithTs(q1, "application/graphql", 0)
+	data, _, err := queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql", ts)
+	data, _, err = queryWithTs(q1, "application/graphqlpm", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
@@ -432,7 +432,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 
 	// Commit (using a list of keys instead of a map) and query.
 	require.NoError(t, commitWithTsKeysOnly(keys, ts))
-	data, _, err = queryWithTs(q1, "application/graphql", 0)
+	data, _, err = queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -499,32 +499,32 @@ func TestHttpCompressionSupport(t *testing.T) {
 	err := runMutation(m1)
 	require.NoError(t, err)
 
-	data, resp, err := queryWithGz(q1, "application/graphql", false, false, "")
+	data, resp, err := queryWithGz(q1, "application/graphqlpm", false, false, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql", false, true, "")
+	data, resp, err = queryWithGz(q1, "application/graphqlpm", false, true, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql", true, false, "")
+	data, resp, err = queryWithGz(q1, "application/graphqlpm", true, false, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql", true, true, "")
+	data, resp, err = queryWithGz(q1, "application/graphqlpm", true, true, "")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, resp, err = queryWithGz(q1, "application/graphql", false, false, "1ms")
+	data, resp, err = queryWithGz(q1, "application/graphqlpm", false, false, "1ms")
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 
-	data, resp, err = queryWithGz(q1, "application/graphql", false, false, "1s")
+	data, resp, err = queryWithGz(q1, "application/graphqlpm", false, false, "1s")
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))

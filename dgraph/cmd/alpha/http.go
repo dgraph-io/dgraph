@@ -196,7 +196,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-	case "application/graphql":
+	case "application/graphqlpm":
 		params.Query = string(body)
 
 	default:

@@ -503,7 +503,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 
 	var bb bytes.Buffer
 	bb.WriteString(`schema{}`)
-	res, err := http.Post("http://localhost:8180/query", "application/graphql", &bb)
+	res, err := http.Post("http://localhost:8180/query", "application/graphqlpm", &bb)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	defer res.Body.Close()

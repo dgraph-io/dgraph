@@ -1931,7 +1931,7 @@ For the purposes of debugging, you can attach a query parameter `debug=true` to 
 
 Query with debug as a query parameter
 ```sh
-curl -H "Content-Type: application/graphql" http://localhost:8080/query?debug=true -XPOST -d $'{
+curl -H "Content-Type: application/graphqlpm" http://localhost:8080/query?debug=true -XPOST -d $'{
   tbl(func: allofterms(name@en, "The Big Lebowski")) {
     name@en
   }
@@ -2902,7 +2902,7 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
 
 The shortest path between Alice and Mallory (assuming UIDs 0x2 and 0x5 respectively) can be found with query:
 ```sh
-curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
+curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5) {
   friend
  }
@@ -2940,7 +2940,7 @@ Which returns the following results. (Note, without considering the `weight` fac
 
 The shortest two paths are returned with:
 ```sh
-curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
+curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5, numpaths: 2) {
   friend
  }
@@ -2954,7 +2954,7 @@ Edges weights are included by using facets on the edges as follows.
 
 {{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
 ```sh
-curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
+curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5) {
   friend @facets(weight)
  }
@@ -3013,7 +3013,7 @@ curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
 
 Constraints can be applied to the intermediate nodes as follows.
 ```sh
-curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
+curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'{
   path as shortest(from: 0x2, to: 0x5) {
     friend @filter(not eq(name, "Bob")) @facets(weight)
     relative @facets(liking)
@@ -3028,7 +3028,7 @@ curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
 The k-shortest path algorithm (used when numPaths > 1)also accepts the arguments ```minweight``` and ```maxweight```, which take a float as their value. When they are passed, only paths within the weight range ```[minweight, maxweight]``` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
 
 ```sh
-curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'{
+curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'{
  path as shortest(from: 0x2, to: 0x5, numpaths: 2, minweight: 2, maxweight: 4) {
   friend
  }
@@ -3068,7 +3068,7 @@ Some points to keep in mind while using recurse queries are:
 `fragment` keyword allows you to define new fragments that can be referenced in a query, as per [GraphQL specification](https://facebook.github.io/graphql/#sec-Language.Fragments). The point is that if there are multiple parts which query the same set of fields, you can define a fragment and refer to it multiple times instead. Fragments can be nested inside fragments, but no cycles are allowed. Here is one contrived example.
 
 ```sh
-curl -H "Content-Type: application/graphql" localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'
 query {
   debug(func: uid(1)) {
     name@en
