@@ -18,6 +18,7 @@ package badger
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"expvar"
@@ -32,6 +33,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/skl"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
@@ -54,7 +56,10 @@ type closers struct {
 	memtable   *y.Closer
 	writes     *y.Closer
 	valueGC    *y.Closer
+	pub        *y.Closer
 }
+
+type callback func(kv *pb.KVList)
 
 // DB provides the various functions required to interact with Badger.
 // DB is thread-safe.
@@ -85,6 +90,8 @@ type DB struct {
 	blockWrites int32
 
 	orc *oracle
+
+	pub *publisher
 }
 
 const (
@@ -267,6 +274,7 @@ func Open(opt Options) (db *DB, err error) {
 		dirLockGuard:  dirLockGuard,
 		valueDirGuard: valueDirLockGuard,
 		orc:           newOracle(opt),
+		pub:           newPublisher(),
 	}
 
 	// Calculate initial size.
@@ -323,6 +331,9 @@ func Open(opt Options) (db *DB, err error) {
 	db.closers.valueGC = y.NewCloser(1)
 	go db.vlog.waitOnGC(db.closers.valueGC)
 
+	db.closers.pub = y.NewCloser(1)
+	go db.pub.listenForUpdates(db.closers.pub)
+
 	valueDirLockGuard = nil
 	dirLockGuard = nil
 	manifestFile = nil
@@ -341,6 +352,8 @@ func (db *DB) Close() (err error) {
 
 	// Stop writes next.
 	db.closers.writes.SignalAndWait()
+
+	db.closers.pub.SignalAndWait()
 
 	// Now close the value log.
 	if vlogErr := db.vlog.Close(); vlogErr != nil {
@@ -610,6 +623,8 @@ func (db *DB) writeRequests(reqs []*request) error {
 		return err
 	}
 
+	db.elog.Printf("Sending updates to subscribers")
+	db.pub.sendUpdates(reqs)
 	db.elog.Printf("Writing to memtable")
 	var count int
 	for _, b := range reqs {
@@ -662,6 +677,8 @@ func (db *DB) sendToWriteCh(entries []*Entry) (*request, error) {
 	req.Entries = entries
 	req.Wg = sync.WaitGroup{}
 	req.Wg.Add(1)
+	req.IncrRef()     // for db write
+	req.IncrRef()     // for publisher updates
 	db.writeCh <- req // Handled in doWrites.
 	y.NumPuts.Add(int64(len(entries)))
 
@@ -1408,4 +1425,47 @@ func (db *DB) DropPrefix(prefix []byte) error {
 	}
 	db.opt.Infof("DropPrefix done")
 	return nil
+}
+
+// Subscribe can be used watch key changes for the given key prefix.
+func (db *DB) Subscribe(ctx context.Context, cb callback, prefix []byte, prefixes ...[]byte) error {
+	if cb == nil {
+		return ErrNilCallback
+	}
+	prefixes = append(prefixes, prefix)
+	c := y.NewCloser(1)
+	recvCh, id := db.pub.newSubscriber(c, prefixes...)
+	slurp := func(batch *pb.KVList) {
+		defer func() {
+			if len(batch.GetKv()) > 0 {
+				cb(batch)
+			}
+		}()
+		for {
+			select {
+			case kvs := <-recvCh:
+				batch.Kv = append(batch.Kv, kvs.Kv...)
+			default:
+				return
+			}
+		}
+	}
+	for {
+		select {
+		case <-c.HasBeenClosed():
+			slurp(new(pb.KVList))
+			// Drain if any pending updates.
+			c.Done()
+			// No need to delete here. Closer will be called only while
+			// closing DB. Subscriber will be deleted by cleanSubscribers.
+			return nil
+		case <-ctx.Done():
+			c.Done()
+			db.pub.deleteSubscriber(id)
+			// Delete the subscriber to avoid further updates.
+			return ctx.Err()
+		case batch := <-recvCh:
+			slurp(batch)
+		}
+	}
 }

@@ -27,6 +27,10 @@ import (
 	"time"
 	"unicode"
 
+	pb2 "github.com/dgraph-io/badger/pb"
+
+	"github.com/Shopify/sarama"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -58,6 +62,7 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
+	kafkaTopic   = "dgraph"
 )
 
 type ServerState struct {
@@ -180,11 +185,48 @@ func (s *ServerState) initStorage() {
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
+	s.setupSubscriptions()
 
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
 	go s.runVlogGC(s.WALstore)
+}
+
+func (s *ServerState) setupSubscriptions() {
+	kafkaBrokers := Config.KafkaOpt.Brokers
+	if len(kafkaBrokers) > 0 {
+		glog.Infof("will publish to %v", kafkaBrokers)
+		// TODO: call badger DB Subscribe API
+		conf := sarama.NewConfig()
+		producer, err := sarama.NewSyncProducer(strings.Split(kafkaBrokers, ","), conf)
+		if err != nil {
+			glog.Errorf("unable to create the kafka sync producer: %v", err)
+			return
+		}
+
+		cb := func(kv *pb2.KVList) {
+			// TODO: produce to kafka
+			for _, oneKV := range kv.Kv {
+				bytes, err := oneKV.Marshal()
+				if err != nil {
+					glog.Errorf("unable to marshal the kv: %+v", oneKV)
+					continue
+				}
+
+				_, _, err = producer.SendMessage(&sarama.ProducerMessage{
+					Topic: kafkaTopic,
+					Value: sarama.ByteEncoder(bytes),
+				})
+
+				if err != nil {
+					glog.Errorf("error while producing to kafka: %v", err)
+				}
+			}
+			glog.V(1).Infof("produced %d messages to kafka", len(kv.Kv))
+		}
+		s.Pstore.Subscribe(context.Background(), cb, nil)
+	}
 }
 
 func (s *ServerState) Dispose() {

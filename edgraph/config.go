@@ -30,6 +30,10 @@ const (
 	StrictMutations
 )
 
+type KafkaOptions struct {
+	Brokers string
+}
+
 type Options struct {
 	PostingDir     string
 	BadgerTables   string
@@ -43,6 +47,8 @@ type Options struct {
 	AccessJwtTtl       time.Duration
 	RefreshJwtTtl      time.Duration
 	AclRefreshInterval time.Duration
+
+	KafkaOpt KafkaOptions
 }
 
 var Config Options

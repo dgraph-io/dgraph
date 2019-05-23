@@ -172,7 +172,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	flag.String("kafka_endpoint", "", "The Kafka endpoint to publish updates")
+	flag.String("kafka_brokers", "", "The Kafka brokers to publish updates")
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
@@ -414,6 +414,10 @@ func run() {
 		MutationsMode:  edgraph.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+
+		KafkaOpt: edgraph.KafkaOptions{
+			Brokers: Alpha.Conf.GetString("kafka_brokers"),
+		},
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -559,12 +563,4 @@ func run() {
 	aclCloser.SignalAndWait()
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
-}
-
-func setupSubscriptions() {
-	kafkaEndpoint := Alpha.Conf.GetString("kafka_endpoint")
-	if len(kafkaEndpoint) > 0 {
-		glog.Infof("will publish to %v", kafkaEndpoint)
-		// TODO: call badger DB Subscribe API
-	}
 }
