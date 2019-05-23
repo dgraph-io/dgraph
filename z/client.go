@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -319,4 +320,16 @@ func VerifyCurlCmd(t *testing.T, args []string,
 		require.NoError(t, err, "the curl command should have succeeded")
 		verifyOutput(t, output, failureConfig)
 	}
+}
+
+func GetError(rc io.ReadCloser) error {
+	defer rc.Close()
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return fmt.Errorf("Read failed: %v", err)
+	}
+	if bytes.Contains(b, []byte("Error")) {
+		return fmt.Errorf("%s", string(b))
+	}
+	return nil
 }

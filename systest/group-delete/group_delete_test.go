@@ -127,18 +127,6 @@ func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
-func getError(rc io.ReadCloser) error {
-	defer rc.Close()
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return fmt.Errorf("Read failed: %v", err)
-	}
-	if bytes.Contains(b, []byte("Error")) {
-		return fmt.Errorf("%s", string(b))
-	}
-	return nil
-}
-
 func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	state1, err := z.GetState()
 	require.NoError(t, err)
@@ -148,7 +136,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
-		require.NoError(t, getError(resp.Body))
+		require.NoError(t, z.GetError(resp.Body))
 		time.Sleep(time.Second)
 	}
 
@@ -161,7 +149,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=3&id=3")
 	require.NoError(t, err)
-	require.NoError(t, getError(resp.Body))
+	require.NoError(t, z.GetError(resp.Body))
 
 	state2, err = z.GetState()
 	require.NoError(t, err)
@@ -180,7 +168,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
-		require.NoError(t, getError(resp.Body))
+		require.NoError(t, z.GetError(resp.Body))
 		time.Sleep(time.Second)
 	}
 
@@ -193,7 +181,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 
 	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=2&id=2")
 	require.NoError(t, err)
-	require.NoError(t, getError(resp.Body))
+	require.NoError(t, z.GetError(resp.Body))
 
 	state2, err = z.GetState()
 	require.NoError(t, err)

@@ -1,0 +1,157 @@
+# This file sets up the cluster required by the tests in this directory.
+version: "3.5"
+services:
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg0.1
+    working_dir: /data/dg0.1
+    ports:
+      - 5180:5180
+      - 6180:6180
+    labels:
+      cluster: test
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --replicas=3 --bindall --logtostderr
+
+  dg1:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg1
+    working_dir: /data/dg1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8180:8180
+      - 9180:9180
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --logtostderr
+
+  dg2:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg2
+    working_dir: /data/dg2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8182:8182
+      - 9182:9182
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --logtostderr
+
+  dg3:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg3
+    working_dir: /data/dg3
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8183:8183
+      - 9183:9183
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
+  dg4:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg4
+    working_dir: /data/dg4
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8184:8184
+      - 9184:9184
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg4:7184 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr    
+  dg5:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg5
+    working_dir: /data/dg5
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8185:8185
+      - 9185:9185
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg5:7185 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
+  dg6:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg6
+    working_dir: /data/dg6
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8186:8186
+      - 9186:9186
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg6:7186 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
+  dg7:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg7
+    working_dir: /data/dg7
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8187:8187
+      - 9187:9187
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg7:7187 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
+  dg8:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg8
+    working_dir: /data/dg8
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8188:8188
+      - 9188:9188
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg8:7188 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
+  dg9:
+    image: dgraph/dgraph:latest
+    container_name: bank-dg9
+    working_dir: /data/dg9
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8189:8189
+      - 9189:9189
+    labels:
+      cluster: test
+    command: /gobin/dgraph alpha --my=dg9:7189 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr
+
