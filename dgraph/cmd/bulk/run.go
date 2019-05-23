@@ -93,6 +93,15 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 }
 
+// ensureExists makes sure the file or directory exists.
+// If it does not exist, it calls os.Exit to exit the program.
+func ensureExists(file string) {
+	if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Path (%v) does not exist.\n", file)
+		os.Exit(1)
+	}
+}
+
 func run() {
 	opt := options{
 		RDFDir:           Bulk.Conf.GetString("rdfs"),
@@ -123,22 +132,28 @@ func run() {
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "schema file must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.SchemaFile); err != nil && os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
-		os.Exit(1)
+	} else {
+		ensureExists(opt.SchemaFile)
 	}
-	if opt.RDFDir == "" && opt.JSONDir == "" {
+
+	// make sure one and only one of {RDFDir, JSONDir} is set
+	switch {
+	case opt.RDFDir == "" && opt.JSONDir == "":
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
 		os.Exit(1)
-	}
-	if opt.RDFDir != "" && opt.JSONDir != "" {
-		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
+	case opt.RDFDir != "" && opt.JSONDir != "":
+		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs (%q) or jsons (%q) "+
+			"may be specified.\n",
 			opt.RDFDir, opt.JSONDir)
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.RDFDir); err != nil && os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", opt.RDFDir)
-		os.Exit(1)
 	}
+
+	if len(opt.RDFDir) > 0 {
+		ensureExists(opt.RDFDir)
+	} else {
+		ensureExists(opt.JSONDir)
+	}
+
 	if opt.ReduceShards > opt.MapShards {
 		fmt.Fprintf(os.Stderr, "Invalid flags: reduce_shards(%d) should be <= map_shards(%d)\n",
 			opt.ReduceShards, opt.MapShards)
