@@ -197,15 +197,15 @@ func Max(a, b uint64) uint64 {
 }
 
 // RetryUntilSuccess runs the given function until it succeeds or can no longer be retried.
-func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
+func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {
 			return nil
 		}
-		if sleepDurationOnFailure > 0 {
-			time.Sleep(sleepDurationOnFailure)
+		if waitAfterFailure > 0 {
+			time.Sleep(waitAfterFailure)
 		}
 	}
 	return err

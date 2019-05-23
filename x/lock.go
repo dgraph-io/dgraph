@@ -21,7 +21,8 @@ import (
 	"sync/atomic"
 )
 
-// SafeMutex can be used in place of sync.RWMutex
+// SafeMutex can be used in place of sync.RWMutex. It allows code to assert
+// whether the mutex is locked.
 type SafeMutex struct {
 	m sync.RWMutex
 	// m deadlock.RWMutex // Useful during debugging and testing for detecting locking issues.

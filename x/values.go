@@ -23,9 +23,9 @@ type ValueTypeInfo int32
 const (
 	// ValueUnknown represents an unknown type of value.
 	ValueUnknown ValueTypeInfo = iota
-	// ValueEmpty represents a value with no UID and no value
+	// ValueEmpty represents a value with no UID and no value.
 	ValueEmpty
-	// ValueUid represents a value with an UID
+	// ValueUid represents a value with an UID.
 	ValueUid
 	// ValuePlain represents a plain old value without defined language tag.
 	ValuePlain
@@ -33,7 +33,7 @@ const (
 	ValueMulti
 )
 
-// ValueType is a helper function to decide value type of DirectedEdge/Posting/N-Quad
+// ValueType s a helper function to decide value type of DirectedEdge/Posting/N-Quad.
 func ValueType(hasValue, hasLang, hasSpecialId bool) ValueTypeInfo {
 	switch {
 	case hasValue && hasLang:
