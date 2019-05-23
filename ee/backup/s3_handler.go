@@ -132,8 +132,8 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	// verify the requested bucket exists.
 	found, err := mc.BucketExists(h.bucketName)
 	if err != nil {
-		return nil, errors.Errorf("Error while looking for bucket: %s at host: %s. Error: %v",
-			h.bucketName, uri.Host, err)
+		return nil, errors.Wrapf(err, "while looking for bucket %s at host %s",
+			h.bucketName, uri.Host)
 	}
 	if !found {
 		return nil, errors.Errorf("Bucket was not found: %s", h.bucketName)

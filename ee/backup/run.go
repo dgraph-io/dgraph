@@ -250,7 +250,7 @@ func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
 	manifests, err := ListManifests(opt.location)
 	if err != nil {
-		return errors.Errorf("Error while listing manifests: %v", err.Error())
+		return errors.Wrapf(err, "while listing manifests")
 	}
 
 	fmt.Printf("Name\tVersion\tReadTs\tGroups\n")
