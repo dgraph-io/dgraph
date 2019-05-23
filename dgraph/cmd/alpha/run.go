@@ -172,6 +172,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
+	flag.String("kafka_endpoint", "", "The Kafka endpoint to publish updates")
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
@@ -450,6 +451,7 @@ func run() {
 		os.Exit(1)
 	}
 
+	setupSubscriptions()
 	edgraph.SetConfiguration(opts)
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
@@ -557,4 +559,12 @@ func run() {
 	aclCloser.SignalAndWait()
 	worker.BlockingStop()
 	glog.Infoln("Server shutdown. Bye!")
+}
+
+func setupSubscriptions() {
+	kafkaEndpoint := Alpha.Conf.GetString("kafka_endpoint")
+	if len(kafkaEndpoint) > 0 {
+		glog.Infof("will publish to %v", kafkaEndpoint)
+		// TODO: call badger DB Subscribe API
+	}
 }
