@@ -28,6 +28,7 @@ type options struct {
 
 var (
 	opt    options
+	// CmdAcl is the sub-command used to manage the ACL system.
 	CmdAcl x.SubCommand
 )
 
