@@ -97,7 +97,7 @@ func init() {
 // If it does not exist, it calls os.Exit to exit the program.
 func ensureExists(file string) {
 	if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Path(%v) does not exist.\n", file)
+		fmt.Fprintf(os.Stderr, "Path (%v) does not exist.\n", file)
 		os.Exit(1)
 	}
 }
@@ -142,7 +142,8 @@ func run() {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) must be specified.\n")
 		os.Exit(1)
 	case opt.RDFDir != "" && opt.JSONDir != "":
-		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs(%q) of jsons(%q) may be specified.\n",
+		fmt.Fprintf(os.Stderr, "Invalid flags: only one of rdfs (%q) or jsons (%q) "+
+			"may be specified.\n",
 			opt.RDFDir, opt.JSONDir)
 		os.Exit(1)
 	}
