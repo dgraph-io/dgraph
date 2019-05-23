@@ -62,9 +62,8 @@ func DockerCp(srcPath, dstPath string) error {
 }
 
 // DockerExec executes a command inside the given container.
-func DockerExec(container, cmd string) error {
-	argv := []string{"docker", "exec", "-it"}
-	argv = append(argv, container)
-	argv = append(argv, cmd)
+func DockerExec(container string, cmd ...string) error {
+	argv := []string{"docker", "exec", container}
+	argv = append(argv, cmd...)
 	return Exec(argv...)
 }

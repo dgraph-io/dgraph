@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math/rand"
 	"strings"
 	"sync"
@@ -79,24 +78,6 @@ type Node struct {
 	heartbeatsIn  int64
 }
 
-// ToGlog is a logger that forwards the output to glog.
-// TODO(martinmr): move this to a more appropriate package.
-type ToGlog struct {
-}
-
-func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
-func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
-func (rl *ToGlog) Error(v ...interface{})                   { glog.Error(v...) }
-func (rl *ToGlog) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
-func (rl *ToGlog) Info(v ...interface{})                    { glog.Info(v...) }
-func (rl *ToGlog) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
-func (rl *ToGlog) Warning(v ...interface{})                 { glog.Warning(v...) }
-func (rl *ToGlog) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
-func (rl *ToGlog) Fatal(v ...interface{})                   { glog.Fatal(v...) }
-func (rl *ToGlog) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
-func (rl *ToGlog) Panic(v ...interface{})                   { log.Panic(v...) }
-func (rl *ToGlog) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
-
 // NewNode returns a new Node instance.
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
@@ -144,7 +125,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// snapshot.
 			Applied: snap.Metadata.Index,
 
-			Logger: &ToGlog{},
+			Logger: &x.ToGlog{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -733,4 +714,33 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			requests = requests[:0]
 		}
 	}
+}
+
+func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payload, error) {
+	// Only process one JoinCluster request at a time.
+	n.joinLock.Lock()
+	defer n.joinLock.Unlock()
+
+	// Check that the new node is from the same group as me.
+	if rc.Group != n.RaftContext.Group {
+		return nil, errors.Errorf("Raft group mismatch")
+	}
+	// Also check that the new node is not me.
+	if rc.Id == n.RaftContext.Id {
+		return nil, errors.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
+	}
+
+	// Check that the new node is not already part of the group.
+	if addr, ok := n.Peer(rc.Id); ok && rc.Addr != addr {
+		// There exists a healthy connection to server with same id.
+		if _, err := GetPools().Get(addr); err == nil {
+			return &api.Payload{}, errors.Errorf(
+				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
+		}
+	}
+	n.Connect(rc.Id, rc.Addr)
+
+	err := n.addToCluster(context.Background(), rc.Id)
+	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
+	return &api.Payload{}, err
 }

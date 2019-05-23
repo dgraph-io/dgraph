@@ -31,9 +31,9 @@ import (
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 	var requiredTokenizer tok.Tokenizer
 	switch funcType {
-	case FullTextSearchFn:
+	case fullTextSearchFn:
 		requiredTokenizer = tok.FullTextTokenizer{}
-	case MatchFn:
+	case matchFn:
 		requiredTokenizer = tok.TrigramTokenizer{}
 	default:
 		requiredTokenizer = tok.TermTokenizer{}
@@ -70,7 +70,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	if lang == "." {
 		lang = "en"
 	}
-	if funcType == FullTextSearchFn {
+	if funcType == fullTextSearchFn {
 		return tok.GetFullTextTokens(funcArgs, lang)
 	}
 	return tok.GetTermTokens(funcArgs)

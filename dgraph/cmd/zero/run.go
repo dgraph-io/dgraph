@@ -123,7 +123,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
 	// were calculated in a previous Zero leader.
 	m.Cfg.DisableProposalForwarding = true
-	st.rs = &conn.RaftServer{Node: m}
+	st.rs = conn.NewRaftServer(m)
 
 	st.node = &node{Node: m, ctx: context.Background(), closer: y.NewCloser(1)}
 	st.zero = &Server{NumReplicas: opts.numReplicas, Node: st.node}

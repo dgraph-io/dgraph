@@ -20,21 +20,20 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
-
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
 )
-
-// ErrBackupNoChanges is returned when the manifest version is equal to the snapshot version.
-// This means that no data updates happened since the last backup.
-var ErrBackupNoChanges = errors.Errorf("No changes since last backup, OK.")
 
 // Request has all the information needed to perform a backup.
 type Request struct {
 	DB       *badger.DB // Badger pstore managed by this node.
 	Backup   *pb.BackupRequest
 	Manifest *Manifest
-	Version  uint64
+
+	// Version indicates the beginning timestamp from which the backup should start.
+	// For a partial backup, the Version is the largest Version from the previous manifest
+	// files. For a full backup, Version is set to zero so that all data is included.
+	// TODO(martinmr): rename this field to Since both here and in the manifest.
+	Version uint64
 }
 
 // Process uses the request values to create a stream writer then hand off the data
@@ -48,9 +47,6 @@ func (r *Request) Process(ctx context.Context) error {
 
 	handler, err := r.newHandler()
 	if err != nil {
-		if err != ErrBackupNoChanges {
-			glog.Errorf("Unable to get handler for request: %+v. Error: %v", r.Backup, err)
-		}
 		return err
 	}
 	glog.V(3).Infof("Backup manifest version: %d", r.Version)

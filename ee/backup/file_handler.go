@@ -72,16 +72,19 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 			if err := h.readManifest(lastManifest, &m); err != nil {
 				return err
 			}
-			// No new changes since last check
-			if m.Version == req.Backup.SnapshotTs {
-				return ErrBackupNoChanges
-			}
+
 			// Return the version of last backup
 			req.Version = m.Version
 		}
 		fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
 	} else {
 		fileName = backupManifest
+	}
+
+	// If a full backup is being forced, force the version to zero to stream all
+	// the contents from the database.
+	if req.Backup.ForceFull {
+		req.Version = 0
 	}
 
 	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
@@ -107,7 +110,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Get a lisst of all the manifest files at the location.
+	// Get a list of all the manifest files at the location.
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
 	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, suffix)
