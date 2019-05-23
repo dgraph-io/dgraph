@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	"github.com/ChainSafe/gossamer/common"
@@ -108,15 +109,19 @@ func Encode(n node) ([]byte, error) {
 // Encode encodes a branch with the following format:
 // NodeHeader | Extra partial key length | Partial Key | Value
 // where NodeHeader is a byte:
-// bottom two bits of first byte: 10 if branch w/o value, 11 if branch w/ value
-// top six bits of first byte: if len(key) > 62, 0xff, otherwise len(key)
+// most significant two bits of first byte: 10 if branch w/o value, 11 if branch w/ value
+// least significant six bits of first byte: if len(key) > 62, 0x3f, otherwise len(key)
 // where Extra partial key length is included if len(key) > 63:
 // consists of the remaining key length
 // Partial Key is the branch's key
 // Value is:
 // Children Bitmap | Enc(Child[i_1]) | Enc(Child[i_2]) | ... | Enc(Child[i_n]) | SCALE Branch Node Value
 func (b *branch) Encode() ([]byte, error) {
-	encoding := b.header()
+	encoding, err := b.header()
+	if err != nil {
+		return nil, err
+	}
+
 	encoding = append(encoding, nibblesToKey(b.key)...)
 	encoding = append(encoding, common.Uint16ToBytes(b.childrenBitmap())...)
 
@@ -132,7 +137,7 @@ func (b *branch) Encode() ([]byte, error) {
 
 	buffer := bytes.Buffer{}
 	se := scale.Encoder{Writer: &buffer}
-	_, err := se.Encode(b.value)
+	_, err = se.Encode(b.value)
 	if err != nil {
 		return encoding, err
 	}
@@ -144,19 +149,23 @@ func (b *branch) Encode() ([]byte, error) {
 // Encode encodes a leaf with the following format:
 // NodeHeader | Extra partial key length | Partial Key | Value
 // where NodeHeader is a byte:
-// bottom two bits of first byte: 01
-// top six bits of first byte: if len(key) > 62, 0xff, otherwise len(key)
+// most significant two bits of first byte: 01
+// least signficant six bits of first byte: if len(key) > 62, 0x3f, otherwise len(key)
 // where Extra partial key length is included if len(key) > 63:
 // consists of the remaining key length
 // Partial Key is the leaf's key
 // Value is the leaf's SCALE encoded value
 func (l *leaf) Encode() ([]byte, error) {
-	encoding := l.header()
+	encoding, err := l.header()
+	if err != nil {
+		return nil, err
+	}
+
 	encoding = append(encoding, nibblesToKey(l.key)...)
 
 	buffer := bytes.Buffer{}
 	se := scale.Encoder{Writer: &buffer}
-	_, err := se.Encode(l.value)
+	_, err = se.Encode(l.value)
 	if err != nil {
 		return encoding, err
 	}
@@ -165,7 +174,7 @@ func (l *leaf) Encode() ([]byte, error) {
 	return encoding, nil
 }
 
-func (b *branch) header() []byte {
+func (b *branch) header() ([]byte, error) {
 	var header byte
 	if b.value == nil {
 		header = 2 << 6
@@ -173,37 +182,50 @@ func (b *branch) header() []byte {
 		header = 3 << 6
 	}
 	var encodePkLen []byte
+	var err error
 
 	if len(b.key) >= 63 {
 		header = header | 0x3f
-		encodePkLen = encodeExtraPartialKeyLength(len(b.key))
+		encodePkLen, err = encodeExtraPartialKeyLength(len(b.key))
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		header = header | byte(len(b.key))
 	}
 
 	fullHeader := append([]byte{header}, encodePkLen...)
-	return fullHeader
+	return fullHeader, nil
 }
 
-func (l *leaf) header() []byte {
+func (l *leaf) header() ([]byte, error) {
 	var header byte = 1 << 6
 	var encodePkLen []byte
+	var err error
 
 	if len(l.key) >= 63 {
 		header = header | 0x3f
-		encodePkLen = encodeExtraPartialKeyLength(len(l.key))
+		encodePkLen, err = encodeExtraPartialKeyLength(len(l.key))
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		header = header | byte(len(l.key))
 	}
 
 	fullHeader := append([]byte{header}, encodePkLen...)
-	return fullHeader
+	return fullHeader, nil
 }
 
-func encodeExtraPartialKeyLength(pkLen int) []byte {
+func encodeExtraPartialKeyLength(pkLen int) ([]byte, error) {
 	pkLen -= 63
 	fullHeader := []byte{}
-	for i := 0; i < 317; i++ {
+
+	if pkLen >= 1<<16 {
+		return nil, errors.New("partial key length greater than or equal to 2^16")
+	}
+
+	for i := 0; i < 1<<16; i++ {
 		if pkLen < 255 {
 			fullHeader = append(fullHeader, byte(pkLen))
 			break
@@ -213,5 +235,5 @@ func encodeExtraPartialKeyLength(pkLen int) []byte {
 		}
 	}
 
-	return fullHeader
+	return fullHeader, nil
 }

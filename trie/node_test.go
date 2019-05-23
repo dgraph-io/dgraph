@@ -85,10 +85,28 @@ func TestBranchHeader(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		res := test.br.header()
-		if !bytes.Equal(res, test.header) {
+		res, err := test.br.header()
+		if err != nil {
+			t.Fatalf("Error when encoding header: %s", err)
+		} else if !bytes.Equal(res, test.header) {
 			t.Errorf("Branch header fail case %v: got %x expected %x", test.br, res, test.header)
 		}
+	}
+}
+
+func TestFailingPk(t *testing.T) {
+	tests := []struct {
+		br     *branch
+		header []byte
+	}{
+		{&branch{byteArray(2<<16), [16]node{}, []byte{0x01}, true}, []byte{255, 254}},
+	}
+
+	for _, test := range tests {
+		_, err := test.br.header()
+		if err == nil {
+			t.Fatalf("should error when encoding node w pk length > 2^16")
+		} 
 	}
 }
 
@@ -109,8 +127,10 @@ func TestLeafHeader(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		res := test.br.header()
-		if !bytes.Equal(res, test.header) {
+		res, err := test.br.header()
+		if err != nil {
+			t.Fatalf("Error when encoding header: %s", err)
+		} else if !bytes.Equal(res, test.header) {
 			t.Errorf("Leaf header fail: got %x expected %x", res, test.header)
 		}
 	}
@@ -124,7 +144,12 @@ func TestBranchEncode(t *testing.T) {
 		b := &branch{key: testKey, children: [16]node{}, value: randVals[i]}
 		expected := []byte{}
 
-		expected = append(expected, b.header()...)
+		header, err := b.header()
+		if err != nil {
+			t.Fatalf("Error when encoding header: %s", err)
+		}
+
+		expected = append(expected, header...)
 		expected = append(expected, nibblesToKey(b.key)...)
 
 		expected = append(expected, common.Uint16ToBytes(b.childrenBitmap())...)
@@ -141,7 +166,7 @@ func TestBranchEncode(t *testing.T) {
 
 		buf := bytes.Buffer{}
 		encoder := &scale.Encoder{Writer: &buf}
-		_, err := encoder.Encode(b.value)
+		_, err = encoder.Encode(b.value)
 		if err != nil {
 			t.Fatalf("Fail when encoding value with scale: %s", err)
 		}
@@ -165,12 +190,16 @@ func TestLeafEncode(t *testing.T) {
 		l := &leaf{key: testKey, value: randVals[i]}
 		expected := []byte{}
 
-		expected = append(expected, l.header()...)
+		header, err := l.header()
+		if err != nil {
+			t.Fatalf("Error when encoding header: %s", err)
+		}
+		expected = append(expected, header...)
 		expected = append(expected, nibblesToKey(l.key)...)
 
 		buf := bytes.Buffer{}
 		encoder := &scale.Encoder{Writer: &buf}
-		_, err := encoder.Encode(l.value)
+		_, err = encoder.Encode(l.value)
 		if err != nil {
 			t.Fatalf("Fail when encoding value with scale: %s", err)
 		}
