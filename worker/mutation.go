@@ -269,7 +269,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		// can't change password -> x, x -> password
 		if t.Enum() != s.ValueType {
 			return errors.Errorf("Schema change not allowed from %s to %s",
-				t.Enum().String(), typ.Enum().String())
+				t.Enum(), typ.Enum())
 		}
 
 	case t.IsScalar() == typ.IsScalar():

@@ -321,7 +321,7 @@ func checkValueType(vm varMap) error {
 				}
 			case "string": // Value is a valid string. No checks required.
 			default:
-				return errors.Errorf("Type %v not supported", typ)
+				return errors.Errorf("Type %q not supported", typ)
 			}
 		}
 	}

@@ -652,7 +652,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	// Core processing happens here.
 	var er query.ExecutionResult
 	if er, err = queryRequest.Process(ctx); err != nil {
-		return resp, x.Wrap(err)
+		return resp, errors.Wrap(err, "")
 	}
 	var js []byte
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
@@ -864,7 +864,7 @@ func validateNQuads(set, del []*api.NQuad) error {
 			return errors.Errorf("Cannot use star in set n-quad: %+v", nq)
 		}
 		if err := validateKeys(nq); err != nil {
-			return errors.Wrapf(err, "Key error:%+v", nq)
+			return errors.Wrapf(err, "key error: %+v", nq)
 		}
 	}
 	for _, nq := range del {

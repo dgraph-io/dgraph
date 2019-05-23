@@ -179,7 +179,7 @@ func ToInternal(gmu *gql.Mutation,
 		var edge *pb.DirectedEdge
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
-			return x.Wrap(err)
+			return errors.Wrap(err, "")
 		}
 		edge.Op = op
 		edges = append(edges, edge)

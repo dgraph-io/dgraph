@@ -39,7 +39,7 @@ import (
 // Check logs fatal if err != nil.
 func Check(err error) {
 	if err != nil {
-		log.Fatalf("%+v", Wrap(err))
+		log.Fatalf("%+v", errors.Wrap(err, ""))
 	}
 }
 
@@ -93,11 +93,6 @@ func AssertTruefNoTrace(b bool, format string, args ...interface{}) {
 	if !b {
 		log.Fatalf("%+v", fmt.Errorf(format, args...))
 	}
-}
-
-// Wrap wraps errors from external lib.
-func Wrap(err error) error {
-	return errors.Wrap(err, "")
 }
 
 // Fatalf logs fatal.

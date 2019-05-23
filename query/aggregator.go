@@ -108,7 +108,7 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 	case "!=":
 		return !isEqual, nil
 	}
-	return false, errors.Errorf("Invalid compare function %v", ag)
+	return false, errors.Errorf("Invalid compare function %q", ag)
 }
 
 func (ag *aggregator) ApplyVal(v types.Val) error {
@@ -136,37 +136,37 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		switch ag.name {
 		case "ln":
 			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Log(l)
 			res = v
 		case "exp":
 			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Exp(l)
 			res = v
 		case "u-":
 			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = -l
 			res = v
 		case "sqrt":
 			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Sqrt(l)
 			res = v
 		case "floor":
 			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Floor(l)
 			res = v
 		case "ceil":
 			if !isIntOrFloat {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			v.Value = math.Ceil(l)
 			res = v
@@ -175,7 +175,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
 				v.Tid = types.FloatID
 			} else {
-				return errors.Errorf("Wrong type encountered for func %v", ag.name)
+				return errors.Errorf("Wrong type encountered for func %q", ag.name)
 			}
 			res = v
 		}
@@ -195,25 +195,25 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	switch ag.name {
 	case "+":
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v", ag.name)
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
 		va.Value = va.Value.(float64) + l
 		res = va
 	case "-":
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v", ag.name)
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
 		va.Value = va.Value.(float64) - l
 		res = va
 	case "*":
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v", ag.name)
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
 		va.Value = va.Value.(float64) * l
 		res = va
 	case "/":
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v %v %v", ag.name, va.Tid, v.Tid)
+			return errors.Errorf("Wrong type encountered for func %q %q %q", ag.name, va.Tid, v.Tid)
 		}
 		if l == 0 {
 			return errors.Errorf("Division by zero")
@@ -222,7 +222,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		res = va
 	case "%":
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v", ag.name)
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
 		if l == 0 {
 			return errors.Errorf("Division by zero")
@@ -231,7 +231,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		res = va
 	case "pow":
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v", ag.name)
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
 		va.Value = math.Pow(va.Value.(float64), l)
 		res = va
@@ -240,7 +240,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			return nil
 		}
 		if !isIntOrFloat {
-			return errors.Errorf("Wrong type encountered for func %v", ag.name)
+			return errors.Errorf("Wrong type encountered for func %q", ag.name)
 		}
 		va.Value = math.Log(va.Value.(float64)) / math.Log(l)
 		res = va
@@ -259,7 +259,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			res = va
 		}
 	default:
-		return errors.Errorf("Unhandled aggregator function %v", ag.name)
+		return errors.Errorf("Unhandled aggregator function %q", ag.name)
 	}
 	ag.result = res
 	return nil

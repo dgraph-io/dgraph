@@ -147,13 +147,13 @@ func waitForNodeToBeHealthy(t *testing.T, port int) {
 func restart(cmd *exec.Cmd) error {
 	cmd.Process.Signal(syscall.SIGINT)
 	if _, err := cmd.Process.Wait(); err != nil {
-		return errors.Errorf("Error while waiting for Dgraph process to be killed: %v", err)
+		return errors.Wrapf(err, "while waiting for Dgraph process to be killed")
 	}
 
 	cmd.Process = nil
 	glog.Infoln("Trying to restart Dgraph Alpha")
 	if err := cmd.Start(); err != nil {
-		return errors.Errorf("Couldn't start Dgraph alpha again: %v\n", err)
+		return errors.Wrapf(err, "couldn't start Dgraph alpha again")
 	}
 	return nil
 }

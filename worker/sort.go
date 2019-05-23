@@ -171,7 +171,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
 		return &sortresult{&emptySortResult, nil,
-			fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
+			errors.Errorf("Attribute %s not defined in schema", order.Attr)}
 	}
 
 	// Get the tokenizers and choose the corresponding one.
