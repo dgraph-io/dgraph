@@ -81,13 +81,13 @@ pushd $basedir/dgraph
 popd
 
 # Regenerate protos. Should not be different from what's checked in.
-# pushd $basedir/dgraph/protos
-#   make regenerate
-#   if [[ "$(git status --porcelain)" ]]; then
-#       echo >&2 "Generated protos different in release."
-#       exit 1
-#   fi
-# popd
+pushd $basedir/dgraph/protos
+  make regenerate
+  if [[ "$(git status --porcelain)" ]]; then
+      echo >&2 "Generated protos different in release."
+      exit 1
+  fi
+popd
 
 # Clone ratel repo.
 pushd $basedir
@@ -103,8 +103,8 @@ popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
-	env GOOS=windows GOARCH=amd64 go build -o dgraph-windows-amd64.exe -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+  env GOOS=windows GOARCH=amd64 go build -o dgraph-windows-amd64.exe -ldflags \
+      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-amd64.exe $TMP/windows/dgraph.exe
 popd
@@ -115,14 +115,14 @@ pushd $basedir/badger/badger
 popd
 
 pushd $basedir/ratel
-         env GOOS=windows GOARCH=amd64 go build -o ratel-windows-amd64.exe -v -ldflags "-X $ratel_release=$release_version" .
-	mv ratel-windows-amd64.exe $TMP/windows/dgraph-ratel.exe
+  env GOOS=windows GOARCH=amd64 go build -o ratel-windows-amd64.exe -v -ldflags "-X $ratel_release=$release_version" .
+  mv ratel-windows-amd64.exe $TMP/windows/dgraph-ratel.exe
 popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
   env GOOS=darwin GOARCH=amd64 go build -o dgraph-darwin-amd64 -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-amd64 $TMP/darwin/dgraph
 popd
@@ -139,8 +139,8 @@ popd
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
-        env GOOS=linux GOARCH=amd64 go build -o dgraph-linux-amd64 -ldflags \
-  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+  env GOOS=linux GOARCH=amd64 go build -o dgraph-linux-amd64 -ldflags \
+      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
   mv dgraph-linux-amd64 $TMP/linux/dgraph
@@ -154,7 +154,7 @@ popd
 
 pushd $basedir/ratel
   env GOOS=linux GOARCH=amd64 go build -o ratel-linux-amd64 -v -ldflags "-X $ratel_release=$release_version" .
-	mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
+  mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
 popd
 
 createSum () {
