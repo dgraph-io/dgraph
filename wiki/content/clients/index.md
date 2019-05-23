@@ -482,10 +482,10 @@ Similar to the Go client example, we use a bank account transfer example.
 
 A client built on top of the HTTP API will need to track three pieces of state
 for each transaction.
-  
+
 1. A start timestamp (`start_ts`). This uniquely identifies a transaction,
    and doesn't change over the transaction lifecycle.
-  
+
 2. The set of keys modified by the transaction (`keys`). This aids in
    transaction conflict detection.
 
@@ -547,12 +547,13 @@ new transaction is initiated.**
 
 ### Run a query
 
-To query the database, the `/query` endpoint is used.
+To query the database, the `/query` endpoint is used. Remember to set the `Content-Type` header
+to `application/graphqlpm` in order to ensure that the body of the request is correctly parsed.
 
 To get the balances for both accounts:
 
 ```sh
-$ curl -X POST localhost:8080/query -d $'
+$ curl -H "Content-Type: application/graphqlpm" -X POST localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -617,10 +618,12 @@ Note that we have to refer to the Alice and Bob nodes by UID in the RDF format.
 
 We now send the mutations via the `/mutate` endpoint. We need to provide our
 transaction start timestamp as a path parameter, so that Dgraph knows which
-transaction the mutation should be part of.
+transaction the mutation should be part of. We also need to set `Content-Type`
+header to `application/rdf` in order to specify that mutation is written in
+rdf format.
 
 ```sh
-$ curl -X POST localhost:8080/mutate/4 -d $'
+$ curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?startTs=4 -d $'
 {
   set {
     <0x1> <balance> "110" .
@@ -668,7 +671,7 @@ transaction state. We also get some `preds`, which should be added to the set of
 {{% notice "note" %}}
 It's possible to commit immediately after a mutation is made (without requiring
 to use the `/commit` endpoint as explained in this section). To do this, add
-the `X-Dgraph-CommitNow: true` header to the final `/mutate` call.
+the parameter `commitNow` in the URL `/mutate?commitNow=true`.
 {{% /notice %}}
 
 Finally, we can commit the transaction using the `/commit` endpoint. We need the
@@ -682,7 +685,7 @@ predicates are moved. This field is not required and the `/commit` endpoint also
 accepts the old format, which was a single array of keys.
 
 ```sh
-$ curl -X POST localhost:8080/commit/4 -d $'
+$ curl -X POST localhost:8080/commit?startTs=4 -d $'
 {
     "keys": [
 		"i4elpex2rwx3",
@@ -743,9 +746,9 @@ Example of a compressed request via curl:
 
 ```sh
 $ curl -X POST \
-  -H 'X-Dgraph-CommitNow: true' \
   -H 'Content-Encoding: gzip' \
-  localhost:8080/mutate --data-binary @mutation.gz
+  -H "Content-Type: application/rdf" \
+  localhost:8080/mutate?commitNow=true --data-binary @mutation.gz
 ```
 
 Example of a compressed request via curl:
@@ -753,6 +756,7 @@ Example of a compressed request via curl:
 ```sh
 $ curl -X POST \
   -H 'Accept-Encoding: gzip' \
+  -H "Content-Type: application/graphqlpm" \
   localhost:8080/query -d $'schema {}' | gzip --decompress
 ```
 
@@ -772,6 +776,7 @@ $ zcat query.gz # query.gz is gzipped compressed
 $ curl -X POST \
   -H 'Content-Encoding: gzip' \
   -H 'Accept-Encoding: gzip' \
+  -H "Content-Type: application/graphqlpm" \
   localhost:8080/query --data-binary @query.gz | gzip --decompress
 ```
 
@@ -779,6 +784,6 @@ $ curl -X POST \
 Curl has a `--compressed` option that automatically requests for a compressed response (`Accept-Encoding` header) and decompresses the compressed response.
 
 ```sh
-$ curl -X POST --compressed localhost:8080/query -d $'schema {}'
+$ curl -X POST --compressed -H "Content-Type: application/graphqlpm" localhost:8080/query -d $'schema {}'
 ```
 {{% /notice %}}
