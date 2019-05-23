@@ -167,6 +167,44 @@ func TestBackupFilesystem(t *testing.T) {
 		{blank: "x4", expected: "The Shape of Water"},
 		{blank: "x5", expected: "The Black Panther"},
 	}
+
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
+	}
+
+	// Add more data for a second full backup.
+	incr3, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`
+				<%s> <movie> "El laberinto del fauno" .
+				<%s> <movie> "Black Panther 2" .
+			`, original.Uids["x4"], original.Uids["x5"])),
+	})
+	require.NoError(t, err)
+	time.Sleep(5 * time.Second)
+
+	// Perform second full backup.
+	dirs = runBackupInternal(t, true, 12, 4)
+	// To make sure this backup contains all the data remove all the previous backups.
+	require.NoError(t, os.RemoveAll(dirs[0]))
+	require.NoError(t, os.RemoveAll(dirs[1]))
+	require.NoError(t, os.RemoveAll(dirs[2]))
+	// Also recreate the restore directory.
+	require.NoError(t, os.RemoveAll(restoreDir))
+	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
+	restored = runRestore(t, dirs[3], incr3.Context.CommitTs)
+
+	// Check all the values were restored to their most recent value.
+	checks = []struct {
+		blank, expected string
+	}{
+		{blank: "x1", expected: "Birdman or (The Unexpected Virtue of Ignorance)"},
+		{blank: "x2", expected: "Spotlight"},
+		{blank: "x3", expected: "Moonlight"},
+		{blank: "x4", expected: "El laberinto del fauno"},
+		{blank: "x5", expected: "Black Panther 2"},
+	}
+
 	for _, check := range checks {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
@@ -273,8 +311,19 @@ func getPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 }
 
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
+	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs)
+}
+
+func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
+	numExpectedDirs int) []string {
+	forceFullStr := "false"
+	if forceFull {
+		forceFullStr = "true"
+	}
+
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{alphaBackupDir},
+		"force_full":  []string{forceFullStr},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -308,6 +357,9 @@ func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]str
 }
 
 func dirSetup() {
+	// Clean up data from previous runs.
+	dirCleanup()
+
 	for _, dir := range dirs {
 		x.Check(os.MkdirAll(dir, os.ModePerm))
 	}
