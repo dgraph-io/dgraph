@@ -1,0 +1,87 @@
+version: "3.5"
+services:
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+      - 5180:5180
+      - 6180:6180
+    command: /gobin/dgraph zero --cwd=/data/zero1 --my=zero1:5180 -o 100 --bindall --logtostderr -v=0
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+    labels:
+      cluster: test
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8180:8180
+      - 9180:9180
+    command: /gobin/dgraph alpha --cwd=/data/alpha1 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+  alpha2:
+    image: dgraph/dgraph:latest
+    container_name: alpha2
+    working_dir: /data/alpha2
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+    labels:
+      cluster: test
+    depends_on:
+      - alpha1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8182:8182
+      - 9182:9182
+    command: /gobin/dgraph alpha --cwd=/data/alpha2 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+  alpha3:
+    image: dgraph/dgraph:latest
+    container_name: alpha3
+    working_dir: /data/alpha3
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+    labels:
+      cluster: test
+    depends_on:
+      - alpha2
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 8183:8183
+      - 9183:9183
+    command: /gobin/dgraph alpha --cwd=/data/alpha3 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+  minio1:
+    image: minio/minio:latest
+    container_name: minio1
+    env_file:
+      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
+    working_dir: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data/minio
+    ports:
+      - 9001:9001
+    labels:
+      cluster: test
+    command: minio server /data/minio --address :9001

@@ -118,7 +118,7 @@ $ curl localhost:8080/alter -d '
 ```
 
 ```sh
-$ curl -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d '{
+$ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -d '{
   set {
     _:dgraph <name> "Dgraph" .
     _:dgraph <url> "https://github.com/dgraph-io/dgraph" .
@@ -128,7 +128,7 @@ $ curl -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d '{
 ```
 
 ```sh
-$ curl -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d '{
+$ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -d '{
   set {
     _:badger <name> "Badger" .
     _:badger <url> "https://github.com/dgraph-io/badger" .

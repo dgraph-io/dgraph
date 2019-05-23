@@ -170,7 +170,7 @@ func TestQueryCountEmptyNames(t *testing.T) {
 			failure: `Value "" in uid_in is not a number`},
 	}
 	for _, tc := range tests {
-		js, err := processQuery(t, context.Background(), tc.in)
+		js, err := processQuery(context.Background(), t, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
@@ -358,7 +358,7 @@ func TestGetUIDInDebugMode(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, DebugKey, "true")
-	js, err := processQuery(t, ctx, query)
+	js, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 	require.JSONEq(t,
 		`{"data": {"me":[{"uid":"0x1","alive":true,"friend":[{"uid":"0x17","name":"Rick Grimes"},{"uid":"0x18","name":"Glenn Rhee"},{"uid":"0x19","name":"Daryl Dixon"},{"uid":"0x1f","name":"Andrea"},{"uid":"0x65"}],"gender":"female","name":"Michonne"}]}}`,
@@ -986,7 +986,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Cannot sort by unknown attribute n")
 }
@@ -1505,7 +1505,7 @@ func TestDoubleOrder(t *testing.T) {
 		}
 	}
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1545,7 +1545,7 @@ func TestVarInIneqError(t *testing.T) {
 			}
 		}
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 

@@ -94,7 +94,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -112,7 +112,7 @@ func TestMultipleSamePredicateInBlockFail(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -130,7 +130,7 @@ func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -150,7 +150,7 @@ func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -263,7 +263,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), q)
+	_, err := processQuery(context.Background(), t, q)
 	require.Error(t, err)
 }
 
@@ -298,7 +298,7 @@ func TestBoolSort(t *testing.T) {
 		}
 	`
 
-	_, err := processQuery(t, context.Background(), q)
+	_, err := processQuery(context.Background(), t, q)
 	require.Error(t, err)
 }
 
@@ -383,7 +383,7 @@ func TestHashTokGeqErr(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -401,7 +401,7 @@ func TestNameNotIndexed(t *testing.T) {
 		}
 	`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -439,7 +439,7 @@ func TestDuplicateAlias(t *testing.T) {
 			}
 		}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -476,7 +476,7 @@ func TestDebugUid(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	buf, err := processQuery(t, ctx, query)
+	buf, err := processQuery(ctx, t, query)
 	require.NoError(t, err)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf), &mp))
@@ -699,7 +699,7 @@ func TestMathVarCrash(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -849,7 +849,7 @@ func TestMultipleGtError(t *testing.T) {
 	}
 
   `
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -997,7 +997,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 }
 
@@ -1104,7 +1104,7 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 	}
 }`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
 
@@ -1236,7 +1236,7 @@ func TestAggregateRootError(t *testing.T) {
 			}
 		}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
 }
@@ -1332,7 +1332,7 @@ func TestUidAttr(t *testing.T) {
 			out: `{"data":{"q":[]}}`},
 	}
 	for _, tc := range tests {
-		js, err := processQuery(t, context.Background(), tc.in)
+		js, err := processQuery(context.Background(), t, tc.in)
 		if tc.failure != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.failure)
@@ -1424,7 +1424,7 @@ func TestMultipleValueSortError(t *testing.T) {
 		}
 	}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Sorting not supported on attr: graduation of type: [scalar]")
 }
@@ -1441,7 +1441,7 @@ func TestMultipleValueGroupByError(t *testing.T) {
 		}
 	}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
 }
@@ -1583,6 +1583,73 @@ func TestMultiSort7Paginate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
 }
 
+func TestMultiSortPaginateWithOffset(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		query  string
+		result string
+	}{
+		{
+			"Offset in middle of bucket",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 6, offset: 1) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`,
+		},
+		{
+			"Offset at boundary of bucket",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 4, offset: 3) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`,
+		},
+		{
+			"Offset in middle of second bucket",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 3, offset: 4) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`,
+		},
+		{
+			"Offset equal to number of uids",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 3, offset: 8) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[]}}`,
+		},
+		{
+			"Offset larger than records",
+			`{
+			me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 10, offset: 10000) {
+				name
+				age
+			}
+		}`,
+			`{"data": {"me":[]}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			js := processQueryNoErr(t, tt.query)
+			require.JSONEq(t, tt.result, js)
+		})
+	}
+}
+
 func TestFilterRootOverride(t *testing.T) {
 
 	query := `{
@@ -1655,7 +1722,7 @@ func TestMultipleValueVarError(t *testing.T) {
 		}
 	}`
 
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Value variables not supported for predicate with list type.")
 }
@@ -1716,7 +1783,7 @@ func TestPasswordError(t *testing.T) {
 		}
 	}
 	`
-	_, err := processQuery(t, context.Background(), query)
+	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t,
 		err.Error(), "checkpwd fn can only be used on attr: [name] with schema type password. Got type: string")

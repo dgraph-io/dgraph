@@ -44,6 +44,7 @@ func TestCurlAuthorization(t *testing.T) {
 	// test fail open with the accessJwt
 	queryArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
+			"-H", "Content-Type: application/graphqlpm",
 			"-d", query, curlQueryEndpoint}
 	}
 	z.VerifyCurlCmd(t, queryArgs(accessJwt), &z.FailureConfig{
@@ -52,6 +53,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	mutateArgs := func(jwt string) []string {
 		return []string{"-H", fmt.Sprintf("X-Dgraph-AccessToken:%s", jwt),
+			"-H", "Content-Type: application/rdf",
 			"-d", fmt.Sprintf(`{ set {
 	   _:a <%s>  "string" .
 	   }}`, predicateToWrite), curlMutateEndpoint}
