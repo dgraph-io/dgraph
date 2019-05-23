@@ -72,7 +72,7 @@ popd
 
 pushd $basedir/dgraph
   git pull
-  git checkout -b /$TAG $TAG
+  git checkout $TAG
   # HEAD here points to whatever is checked out.
   lastCommitSHA1=$(git rev-parse --short HEAD)
   gitBranch=$(git rev-parse --abbrev-ref HEAD)
