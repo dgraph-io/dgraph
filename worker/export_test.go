@@ -57,6 +57,7 @@ func populateGraphExport(t *testing.T) {
 		`<3> <name> "First Line\nSecondLine" .`,
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
+		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -64,6 +65,7 @@ func populateGraphExport(t *testing.T) {
 		"3": 3,
 		"4": 4,
 		"5": 5,
+		"6": 6,
 	}
 
 	for _, edge := range rdfEdges {
@@ -186,7 +188,7 @@ func TestExportRdf(t *testing.T) {
 	for scanner.Scan() {
 		nq, err := rdf.Parse(scanner.Text())
 		require.NoError(t, err)
-		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5"}, nq.Subject)
+		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6"}, nq.Subject)
 		if nq.ObjectValue != nil {
 			switch nq.Subject {
 			case "0x1", "0x2":
@@ -198,6 +200,8 @@ func TestExportRdf(t *testing.T) {
 			case "0x4":
 			case "0x5":
 				require.Equal(t, `<0x5> <name> "" .`, scanner.Text())
+			case "0x6":
+				require.Equal(t, `<0x6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`, scanner.Text())
 			default:
 				t.Errorf("Unexpected subject: %v", nq.Subject)
 			}
@@ -240,7 +244,7 @@ func TestExportRdf(t *testing.T) {
 	}
 	require.NoError(t, scanner.Err())
 	// This order will be preserved due to file naming.
-	require.Equal(t, 8, count)
+	require.Equal(t, 9, count)
 
 	checkExportSchema(t, schemaFileList)
 }
@@ -276,6 +280,7 @@ func TestExportJson(t *testing.T) {
   {"uid":"0x2","name@en":"pho\ton"},
   {"uid":"0x3","name":"First Line\nSecondLine"},
   {"uid":"0x5","name":""},
+  {"uid":"0x6","name":"Ding!\u0007Ding!\u0007Ding!\u0007"},
   {"uid":"0x1","friend":[{"uid":"0x5"}]},
   {"uid":"0x2","friend":[{"uid":"0x5"}]},
   {"uid":"0x3","friend":[{"uid":"0x5"}]},

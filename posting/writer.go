@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
 )
 
@@ -51,7 +51,7 @@ func (w *TxnWriter) cb(err error) {
 	}
 }
 
-func (w *TxnWriter) Send(kvs *pb.KVS) error {
+func (w *TxnWriter) Write(kvs *pb.KVList) error {
 	for _, kv := range kvs.Kv {
 		var meta byte
 		if len(kv.UserMeta) > 0 {
@@ -104,6 +104,11 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 }
 
 func (w *TxnWriter) Flush() error {
+	defer func() {
+		if err := w.db.Sync(); err != nil {
+			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
+		}
+	}()
 	w.wg.Wait()
 	select {
 	case err := <-w.che:

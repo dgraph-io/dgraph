@@ -20,11 +20,11 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// DefaultExportFormat stores the name of the default format for exports.
 const DefaultExportFormat = "rdf"
 
 type exportFormat struct {
@@ -131,6 +132,20 @@ func facetToString(fct *api.Facet) (string, error) {
 	return v2.Value.(string), nil
 }
 
+// escapedString converts a string into an escaped string for exports.
+func escapedString(str string) string {
+	// We use the Marshal function in the JSON package for all export formats
+	// because it properly escapes strings.
+	byt, err := json.Marshal(str)
+	if err != nil {
+		// All valid stings should be able to be escaped to a JSON string so
+		// it's safe to panic here. Marshal has to return an error because it
+		// accepts an interface.
+		panic("Could not marshal string to JSON string")
+	}
+	return string(byt)
+}
+
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
 
@@ -173,7 +188,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !val.Tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = escapedString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -195,7 +210,7 @@ func (e *exporter) toJSON() (*bpb.KVList, error) {
 			}
 
 			if !tid.IsNumber() {
-				str = strconv.Quote(str)
+				str = escapedString(str)
 			}
 
 			fmt.Fprint(bp, str)
@@ -227,7 +242,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
-			fmt.Fprintf(bp, "%q", str)
+			fmt.Fprintf(bp, "%s", escapedString(str))
 
 			tid := types.TypeID(p.ValType)
 			if p.PostingType == pb.Posting_VALUE_LANG {
@@ -262,7 +277,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				}
 
 				if tid == types.StringID {
-					str = strconv.Quote(str)
+					str = escapedString(str)
 				}
 				fmt.Fprint(bp, str)
 			}

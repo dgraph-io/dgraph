@@ -19,11 +19,17 @@ package x
 import (
 	"context"
 	"expvar"
+	"log"
 	"net/http"
 	"time"
 
+	"go.opencensus.io/trace"
+
+	"contrib.go.opencensus.io/exporter/jaeger"
 	"contrib.go.opencensus.io/exporter/prometheus"
+	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
 	"github.com/golang/glog"
+	"github.com/spf13/viper"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -57,6 +63,10 @@ var (
 		"Number of active mutations", stats.UnitDimensionless)
 	AlphaHealth = stats.Int64("alpha_health_status",
 		"Status of the alphas", stats.UnitDimensionless)
+	RaftAppliedIndex = stats.Int64("raft_applied_index",
+		"Latest applied Raft index", stats.UnitDimensionless)
+	MaxAssignedTs = stats.Int64("max_assigned_ts",
+		"Latest max assigned timestamp", stats.UnitDimensionless)
 
 	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -99,6 +109,20 @@ var (
 			Name:        NumEdges.Name(),
 			Measure:     NumEdges,
 			Description: NumEdges.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftAppliedIndex.Name(),
+			Measure:     RaftAppliedIndex,
+			Description: RaftAppliedIndex.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MaxAssignedTs.Name(),
+			Measure:     MaxAssignedTs,
+			Description: MaxAssignedTs.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
 		},
@@ -218,4 +242,43 @@ func WithMethod(parent context.Context, method string) context.Context {
 // SinceMs returns the time since startTime in milliseconds (as a float).
 func SinceMs(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
+}
+
+func RegisterExporters(conf *viper.Viper, service string) {
+	if collector := conf.GetString("jaeger.collector"); len(collector) > 0 {
+		// Port details: https://www.jaegertracing.io/docs/getting-started/
+		// Default collectorEndpointURI := "http://localhost:14268"
+		je, err := jaeger.NewExporter(jaeger.Options{
+			Endpoint:    collector,
+			ServiceName: service,
+		})
+		if err != nil {
+			log.Fatalf("Failed to create the Jaeger exporter: %v", err)
+		}
+		// And now finally register it as a Trace Exporter
+		trace.RegisterExporter(je)
+	}
+
+	if collector := conf.GetString("datadog.collector"); len(collector) > 0 {
+		exporter, err := datadog.NewExporter(datadog.Options{
+			Service:   service,
+			TraceAddr: collector,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		trace.RegisterExporter(exporter)
+
+		// For demoing purposes, always sample.
+		trace.ApplyConfig(trace.Config{
+			DefaultSampler: trace.AlwaysSample(),
+		})
+	}
+
+	// Exclusively for stats, metrics, etc. Not for tracing.
+	// var views = append(ocgrpc.DefaultServerViews, ocgrpc.DefaultClientViews...)
+	// if err := view.Register(views...); err != nil {
+	// 	glog.Fatalf("Unable to register OpenCensus stats: %v", err)
+	// }
 }
