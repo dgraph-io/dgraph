@@ -1,0 +1,65 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ template "dgraph.ratel.fullname" . }}
+  labels:
+    app: {{ template "dgraph.name" . }}
+    chart: {{ template "dgraph.chart" . }}
+    component: {{ .Values.ratel.name }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "dgraph.name" . }}
+      chart: {{ template "dgraph.chart" . }}
+      component: {{ .Values.ratel.name }}
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.ratel.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "dgraph.name" . }}
+        chart: {{ template "dgraph.chart" . }}
+        component: {{ .Values.ratel.name }}
+        release: {{ .Release.Name }}
+    spec:
+      {{- if .Values.ratel.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.ratel.securityContext.fsGroup }}
+        runAsUser: {{ .Values.ratel.securityContext.runAsUser }}    
+      {{- end }}
+{{- include "dgraph.imagePullSecrets" . | indent 6 }}
+      containers:
+      - name: "{{ template "dgraph.ratel.fullname" . }}"
+        image: "{{ template "dgraph.image" . }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+        command:
+          - dgraph-ratel
+        ports:
+        - name: http
+          containerPort: 8000
+        {{- if .Values.ratel.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            port: {{ .Values.ratel.livenessProbe.port }}
+            path: {{ .Values.ratel.livenessProbe.path }}
+          initialDelaySeconds: {{ .Values.ratel.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.ratel.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.ratel.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.ratel.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.ratel.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.ratel.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            port: {{ .Values.ratel.livenessProbe.port }}
+            path: {{ .Values.ratel.livenessProbe.path }}          
+          initialDelaySeconds: {{ .Values.ratel.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.ratel.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.ratel.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.ratel.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.ratel.readinessProbe.failureThreshold }}
+        {{- end }}
+        resources:
+{{ toYaml .Values.ratel.resources | indent 10 }}

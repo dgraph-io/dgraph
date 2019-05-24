@@ -50,6 +50,7 @@ func workerPort() int {
 	return x.Config.PortOffset + x.PortInternal
 }
 
+// Init initializes this package.
 func Init(ps *badger.DB) {
 	pstore = ps
 	// needs to be initialized after group config

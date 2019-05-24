@@ -34,7 +34,6 @@ import (
 
 	nqjson "github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -117,11 +116,11 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 }
 
 func setBadgerOptions(opt badger.Options, dir string) badger.Options {
-	opt.SyncWrites = true
+	opt.SyncWrites = false
 	opt.Truncate = true
 	opt.Dir = dir
 	opt.ValueDir = dir
-	opt.Logger = &conn.ToGlog{}
+	opt.Logger = &x.ToGlog{}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {

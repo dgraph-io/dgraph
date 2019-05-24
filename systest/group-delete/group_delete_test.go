@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -111,23 +110,8 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 }
 
-type response struct {
-	Groups map[string]struct {
-		Members map[string]interface{} `json:"members"`
-		Tablets map[string]struct {
-			GroupID   int    `json:"groupId"`
-			Predicate string `json:"predicate"`
-		} `json:"tablets"`
-	} `json:"groups"`
-	Removed []struct {
-		Addr    string `json:"addr"`
-		GroupID int    `json:"groupId"`
-		ID      string `json:"id"`
-	} `json:"removed"`
-}
-
 func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
-	state, err := getState()
+	state, err := z.GetState()
 	require.NoError(t, err)
 
 	// NOTE: in the rare occasion that we are in fact connected to node 2, skip this.
@@ -139,29 +123,6 @@ func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
 	}
 
 	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
-}
-
-func getState() (*response, error) {
-	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/state")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if bytes.Contains(b, []byte("Error")) {
-		return nil, fmt.Errorf("Failed to get state: %s", string(b))
-	}
-
-	var st response
-	if err := json.Unmarshal(b, &st); err != nil {
-		return nil, err
-	}
-	return &st, nil
 }
 
 func getError(rc io.ReadCloser) error {
@@ -177,7 +138,7 @@ func getError(rc io.ReadCloser) error {
 }
 
 func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
-	state1, err := getState()
+	state1, err := z.GetState()
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
@@ -189,7 +150,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 		time.Sleep(time.Second)
 	}
 
-	state2, err := getState()
+	state2, err := z.GetState()
 	require.NoError(t, err)
 
 	if len(state2.Groups["3"].Tablets) > 0 {
@@ -200,7 +161,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
-	state2, err = getState()
+	state2, err = z.GetState()
 	require.NoError(t, err)
 
 	if _, ok := state2.Groups["3"]; ok {
@@ -209,7 +170,7 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 }
 
 func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
-	state1, err := getState()
+	state1, err := z.GetState()
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
@@ -221,7 +182,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 		time.Sleep(time.Second)
 	}
 
-	state2, err := getState()
+	state2, err := z.GetState()
 	require.NoError(t, err)
 
 	if len(state2.Groups["2"].Tablets) > 0 {
@@ -232,7 +193,7 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
-	state2, err = getState()
+	state2, err = z.GetState()
 	require.NoError(t, err)
 
 	if _, ok := state2.Groups["2"]; ok {

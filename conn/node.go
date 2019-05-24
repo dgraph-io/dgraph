@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"strings"
 	"sync"
@@ -41,9 +40,11 @@ import (
 )
 
 var (
+	// ErrNoNode is returned when no node has been set up.
 	ErrNoNode = x.Errorf("No node has been set up yet")
 )
 
+// Node represents a node participating in the RAFT protocol.
 type Node struct {
 	x.SafeMutex
 
@@ -77,22 +78,7 @@ type Node struct {
 	heartbeatsIn  int64
 }
 
-type ToGlog struct {
-}
-
-func (rl *ToGlog) Debug(v ...interface{})                   { glog.V(3).Info(v...) }
-func (rl *ToGlog) Debugf(format string, v ...interface{})   { glog.V(3).Infof(format, v...) }
-func (rl *ToGlog) Error(v ...interface{})                   { glog.Error(v...) }
-func (rl *ToGlog) Errorf(format string, v ...interface{})   { glog.Errorf(format, v...) }
-func (rl *ToGlog) Info(v ...interface{})                    { glog.Info(v...) }
-func (rl *ToGlog) Infof(format string, v ...interface{})    { glog.Infof(format, v...) }
-func (rl *ToGlog) Warning(v ...interface{})                 { glog.Warning(v...) }
-func (rl *ToGlog) Warningf(format string, v ...interface{}) { glog.Warningf(format, v...) }
-func (rl *ToGlog) Fatal(v ...interface{})                   { glog.Fatal(v...) }
-func (rl *ToGlog) Fatalf(format string, v ...interface{})   { glog.Fatalf(format, v...) }
-func (rl *ToGlog) Panic(v ...interface{})                   { log.Panic(v...) }
-func (rl *ToGlog) Panicf(format string, v ...interface{})   { log.Panicf(format, v...) }
-
+// NewNode returns a new Node instance.
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	snap, err := store.Snapshot()
 	x.Check(err)
@@ -139,7 +125,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 			// snapshot.
 			Applied: snap.Metadata.Index,
 
-			Logger: &ToGlog{},
+			Logger: &x.ToGlog{},
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
@@ -158,6 +144,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 	return n
 }
 
+// ReportRaftComms periodically prints the state of the node (heartbeats in and out).
 func (n *Node) ReportRaftComms() {
 	if !glog.V(3) {
 		return
@@ -196,6 +183,8 @@ func (n *Node) SetConfState(cs *raftpb.ConfState) {
 	n._confState = cs
 }
 
+// DoneConfChange marks a configuration change as done and sends the given error to the
+// config channel.
 func (n *Node) DoneConfChange(id uint64, err error) {
 	n.Lock()
 	defer n.Unlock()
@@ -227,6 +216,7 @@ func (n *Node) ConfState() *raftpb.ConfState {
 	return n._confState
 }
 
+// Peer returns the address of the peer with the given id.
 func (n *Node) Peer(pid uint64) (string, bool) {
 	n.RLock()
 	defer n.RUnlock()
@@ -234,7 +224,7 @@ func (n *Node) Peer(pid uint64) (string, bool) {
 	return addr, ok
 }
 
-// addr must not be empty.
+// SetPeer sets the address of the peer with the given id. The address must not be empty.
 func (n *Node) SetPeer(pid uint64, addr string) {
 	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
 	n.Lock()
@@ -242,6 +232,7 @@ func (n *Node) SetPeer(pid uint64, addr string) {
 	n.peers[pid] = addr
 }
 
+// Send sends the given RAFT message from this node.
 func (n *Node) Send(msg raftpb.Message) {
 	x.AssertTruef(n.Id != msg.To, "Sending message to itself")
 	data, err := msg.Marshal()
@@ -274,6 +265,7 @@ func (n *Node) Send(msg raftpb.Message) {
 	n.messages <- sendmsg{to: msg.To, data: data}
 }
 
+// Snapshot returns the current snapshot.
 func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 	if n == nil || n.Store == nil {
 		return raftpb.Snapshot{}, errors.New("Uninitialized node or raft store")
@@ -281,6 +273,7 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 	return n.Store.Snapshot()
 }
 
+// SaveToStorage saves the hard state, entries, and snapshot to persistent storage, in that order.
 func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Snapshot) {
 	for {
 		if err := n.Store.Save(h, es, s); err != nil {
@@ -291,6 +284,8 @@ func (n *Node) SaveToStorage(h raftpb.HardState, es []raftpb.Entry, s raftpb.Sna
 	}
 }
 
+// PastLife returns the index of the snapshot before the restart (if any) and whether there was
+// a previous state that should be recovered after a restart.
 func (n *Node) PastLife() (uint64, bool, error) {
 	var (
 		sp      raftpb.Snapshot
@@ -335,14 +330,15 @@ const (
 	messageBatchSoftLimit = 10e6
 )
 
-type Stream struct {
+type stream struct {
 	msgCh chan []byte
 	alive int32
 }
 
+// BatchAndSendMessages sends messages in batches.
 func (n *Node) BatchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
-	streams := make(map[uint64]*Stream)
+	streams := make(map[uint64]*stream)
 
 	for {
 		totalSize := 0
@@ -379,29 +375,29 @@ func (n *Node) BatchAndSendMessages() {
 			if buf.Len() == 0 {
 				continue
 			}
-			stream, ok := streams[to]
-			if !ok || atomic.LoadInt32(&stream.alive) <= 0 {
-				stream = &Stream{
+			s, ok := streams[to]
+			if !ok || atomic.LoadInt32(&s.alive) <= 0 {
+				s = &stream{
 					msgCh: make(chan []byte, 100),
 					alive: 1,
 				}
-				go n.streamMessages(to, stream)
-				streams[to] = stream
+				go n.streamMessages(to, s)
+				streams[to] = s
 			}
 			data := make([]byte, buf.Len())
 			copy(data, buf.Bytes())
 			buf.Reset()
 
 			select {
-			case stream.msgCh <- data:
+			case s.msgCh <- data:
 			default:
 			}
 		}
 	}
 }
 
-func (n *Node) streamMessages(to uint64, stream *Stream) {
-	defer atomic.StoreInt32(&stream.alive, 0)
+func (n *Node) streamMessages(to uint64, s *stream) {
+	defer atomic.StoreInt32(&s.alive, 0)
 
 	// Exit after this deadline. Let BatchAndSendMessages create another goroutine, if needed.
 	// Let's set the deadline to 10s because if we increase it, then it takes longer to recover from
@@ -412,7 +408,7 @@ func (n *Node) streamMessages(to uint64, stream *Stream) {
 
 	var logged int
 	for range ticker.C { // Don't do this in an busy-wait loop, use a ticker.
-		if err := n.doSendMessage(to, stream.msgCh); err != nil {
+		if err := n.doSendMessage(to, s.msgCh); err != nil {
 			// Update lastLog so we print error only a few times if we are not able to connect.
 			// Otherwise, the log is polluted with repeated errors.
 			if logged == 0 {
@@ -431,7 +427,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	if !has {
 		return x.Errorf("Do not have address of peer %#x", to)
 	}
-	pool, err := Get().Get(addr)
+	pool, err := GetPools().Get(addr)
 	if err != nil {
 		return err
 	}
@@ -503,7 +499,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 	}
 }
 
-// Connects the node and makes its peerPool refer to the constructed pool and address
+// Connect connects the node and makes its peerPool refer to the constructed pool and address
 // (possibly updating ourselves from the old address.)  (Unless pid is ourselves, in which
 // case this does nothing.)
 func (n *Node) Connect(pid uint64, addr string) {
@@ -523,10 +519,11 @@ func (n *Node) Connect(pid uint64, addr string) {
 		n.SetPeer(pid, addr)
 		return
 	}
-	Get().Connect(addr)
+	GetPools().Connect(addr)
 	n.SetPeer(pid, addr)
 }
 
+// DeletePeer deletes the record of the peer with the given id.
 func (n *Node) DeletePeer(pid uint64) {
 	if pid == n.Id {
 		return
@@ -563,7 +560,7 @@ func (n *Node) proposeConfChange(ctx context.Context, pb raftpb.ConfChange) erro
 	}
 }
 
-func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
+func (n *Node) addToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.Peer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %#x", pid)
 	rc := &pb.RaftContext{
@@ -588,6 +585,7 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	return err
 }
 
+// ProposePeerRemoval proposes a new configuration with the peer with the given id removed.
 func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	if n.Raft() == nil {
 		return ErrNoNode
@@ -613,6 +611,7 @@ type linReadReq struct {
 
 var errReadIndex = x.Errorf("Cannot get linearized read (time expired or no configured leader)")
 
+// WaitLinearizableRead waits until a linearizable read can be performed.
 func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	span := otrace.FromContext(ctx)
 	span.Annotate(nil, "WaitLinearizableRead")
@@ -641,6 +640,7 @@ func (n *Node) WaitLinearizableRead(ctx context.Context) error {
 	}
 }
 
+// RunReadIndexLoop runs the RAFT index in a loop.
 func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadState) {
 	defer closer.Done()
 	readIndex := func(activeRctx []byte) (uint64, error) {
@@ -713,4 +713,33 @@ func (n *Node) RunReadIndexLoop(closer *y.Closer, readStateCh <-chan raft.ReadSt
 			requests = requests[:0]
 		}
 	}
+}
+
+func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payload, error) {
+	// Only process one JoinCluster request at a time.
+	n.joinLock.Lock()
+	defer n.joinLock.Unlock()
+
+	// Check that the new node is from the same group as me.
+	if rc.Group != n.RaftContext.Group {
+		return nil, x.Errorf("Raft group mismatch")
+	}
+	// Also check that the new node is not me.
+	if rc.Id == n.RaftContext.Id {
+		return nil, x.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
+	}
+
+	// Check that the new node is not already part of the group.
+	if addr, ok := n.Peer(rc.Id); ok && rc.Addr != addr {
+		// There exists a healthy connection to server with same id.
+		if _, err := GetPools().Get(addr); err == nil {
+			return &api.Payload{}, x.Errorf(
+				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
+		}
+	}
+	n.Connect(rc.Id, rc.Addr)
+
+	err := n.addToCluster(context.Background(), rc.Id)
+	glog.Infof("[%#x] Done joining cluster with err: %v", rc.Id, err)
+	return &api.Payload{}, err
 }
