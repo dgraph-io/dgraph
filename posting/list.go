@@ -149,7 +149,7 @@ func (it *pIterator) selectInitialSplit(afterUid uint64) int {
 		if startUid == afterUid {
 			return i
 		}
-		// If this split starts at an uid greater than afterUid, there might be
+		// If this split starts at an UID greater than afterUid, there might be
 		// elements in the previous split that need to be checked.
 		if startUid > afterUid {
 			return i - 1
@@ -192,7 +192,7 @@ func (it *pIterator) moveToNextValidPart() error {
 		return nil
 	}
 
-	// If there are no more uids to iterate over, move to the next part of the
+	// If there are no more UIDs to iterate over, move to the next part of the
 	// list that contains valid data.
 	if len(it.uids) == 0 {
 		for it.splitIdx <= len(it.l.plist.Splits)-2 {
@@ -257,11 +257,11 @@ func (it *pIterator) posting() *pb.Posting {
 }
 
 // ListOptions is used in List.Uids (in posting) to customize our output list of
-// uids, for each posting list. It should be pb.to this package.
+// UIDs, for each posting list. It should be pb.to this package.
 type ListOptions struct {
 	ReadTs    uint64
-	AfterUid  uint64   // Any uid returned must be after this value.
-	Intersect *pb.List // Intersect results with this list of uids.
+	AfterUid  uint64   // Any UIDs returned must be after this value.
+	Intersect *pb.List // Intersect results with this list of UIDs.
 }
 
 // NewPosting takes the given edge and returns its equivalent representation as a posting.
@@ -343,7 +343,7 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	// us a value = "en" for the same predicate. We would end up overwritting his older lang
 	// value.
 
-	// All edges with a value without LANGTAG, have the same uid. In other words,
+	// All edges with a value without LANGTAG, have the same UID. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	var id uint64 = math.MaxUint64
 
@@ -351,7 +351,7 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	if len(t.Lang) > 0 {
 		id = farm.Fingerprint64([]byte(t.Lang))
 	} else if schema.State().IsList(t.Attr) {
-		// TODO - When values are deleted for list type, then we should only delete the uid from
+		// TODO - When values are deleted for list type, then we should only delete the UID from
 		// index if no other values produces that index token.
 		// Value for list type.
 		id = farm.Fingerprint64(t.Value)
@@ -361,12 +361,12 @@ func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 
 // canMutateUid returns an error if all the following conditions are met.
 // * Predicate is of type UidID.
-// * Predicate is not set to a list of uids in the schema.
+// * Predicate is not set to a list of UIDs in the schema.
 // * The existing posting list has an entry that does not match the proposed
-//   mutation's uid.
+//   mutation's UID.
 // In this case, the user should delete the existing predicate and retry, or mutate
-// the schema to allow for multiple uids. This method is necessary to support uid
-// predicates with single values because previously all uid predicates were
+// the schema to allow for multiple UIDs. This method is necessary to support UID
+// predicates with single values because previously all UID predicates were
 // considered lists.
 // This functions returns a nil error in all other cases.
 func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
@@ -421,7 +421,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.
 		// Then keys are "<email> <uid>" and "<email> email@email.org"
-		// The first key won't conflict, because two different uids can try to
+		// The first key won't conflict, because two different UIDs can try to
 		// get the same email id. But, the second key would. Thus, we ensure
 		// that two users don't set the same email id.
 		conflictKey = getKey(l.key, 0)
@@ -429,7 +429,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	} else if x.Parse(l.key).IsData() {
 		// Unless upsert is specified, we don't check for index conflicts, only
 		// data conflicts.
-		// If the data is of type uid, then we use SPO for conflict detection.
+		// If the data is of type UID, then we use SPO for conflict detection.
 		// Otherwise, we use SP (for string, date, int, etc.).
 		typ, err := schema.State().TypeOf(t.Attr)
 		if err != nil {
@@ -521,7 +521,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 
 // Iterate will allow you to iterate over this posting List, while having acquired a read lock.
 // So, please keep this iteration cheap, otherwise mutations would get stuck.
-// The iteration will start after the provided uid. The results would not include this uid.
+// The iteration will start after the provided UID. The results would not include this uid.
 // The function will loop until either the posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
@@ -585,14 +585,14 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 		posts = result
 	}
 
-	// Sort all the postings by uid (inc order), then by commit/startTs in dec order.
+	// Sort all the postings by UID (inc order), then by commit/startTs in dec order.
 	sort.Slice(posts, func(i, j int) bool {
 		pi := posts[i]
 		pj := posts[j]
 		if pi.Uid == pj.Uid {
 			ei := effective(pi.StartTs, pi.CommitTs)
 			ej := effective(pj.StartTs, pj.CommitTs)
-			return ei > ej // Pick the higher, so we can discard older commits for the same uid.
+			return ei > ej // Pick the higher, so we can discard older commits for the same UID.
 		}
 		return pi.Uid < pj.Uid
 	})
@@ -722,14 +722,14 @@ func (l *List) Length(readTs, afterUid uint64) int {
 // <key> -> <posting list with all the data for this list>
 //
 // A multi-part list is stored in multiple keys. The keys for the parts will be generated by
-// appending the first uid in the part to the key. The list will have the following format:
-// <key> -> <posting list that includes no postings but a list of each part's start uid>
+// appending the first UID in the part to the key. The list will have the following format:
+// <key> -> <posting list that includes no postings but a list of each part's start UID>
 // <key, 1> -> <first part of the list with all the data for this part>
-// <key, next start uid> -> <second part of the list with all the data for this part>
+// <key, next start UID> -> <second part of the list with all the data for this part>
 // ...
-// <key, last start uid> -> <last part of the list with all its data>
+// <key, last start UID> -> <last part of the list with all its data>
 //
-// The first part of a multi-part list always has start uid 1 and will be the last part
+// The first part of a multi-part list always has start UID 1 and will be the last part
 // to be deleted, at which point the entire list will be marked for deletion.
 // As the list grows, existing parts might be split if they become too big.
 func (l *List) Rollup() ([]*bpb.KV, error) {
@@ -820,7 +820,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	init := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
 
-		// If not a multi-part list, all uids go to the same encoder.
+		// If not a multi-part list, all UIDs go to the same encoder.
 		if len(l.plist.Splits) == 0 {
 			plist = out.plist
 			endUid = math.MaxUint64
@@ -885,16 +885,16 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	return out, nil
 }
 
-// ApproxLen returns an approximate count of the uids in the posting list.
+// ApproxLen returns an approximate count of the UIDs in the posting list.
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
 	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
 }
 
-// Uids returns the uids given some query params.
+// Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
-// WARNING: Calling this function just to get uids is expensive
+// WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
@@ -931,7 +931,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 }
 
 // Postings calls postFn with the postings that are common with
-// uids in the opt ListOptions.
+// UIDs in the opt ListOptions.
 func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
@@ -1008,7 +1008,7 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 
 // ValueFor returns a value from posting list, according to preferred language list.
 // If list is empty, value without language is returned; if such value is not
-// available, value with smallest uid is returned.
+// available, value with smallest UID is returned.
 // If list consists of one or more languages, first available value is returned.
 // If no language from the list matches the values, processing is the same as for empty list.
 func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr error) {
@@ -1071,7 +1071,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 	}
 
 	var found bool
-	// last resort - return value with smallest lang uid.
+	// last resort - return value with smallest lang UID.
 	if any {
 		err := l.iterate(readTs, 0, func(p *pb.Posting) error {
 			if p.PostingType == pb.Posting_VALUE_LANG {
@@ -1118,7 +1118,7 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 }
 
 func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
-	// Iterate starts iterating after the given argument, so we pass uid - 1
+	// Iterate starts iterating after the given argument, so we pass UID - 1
 	err = l.iterate(readTs, uid-1, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			pos = p
@@ -1189,7 +1189,7 @@ func (out *rollupOutput) splitUpList() {
 
 		if shouldSplit(list) {
 			// Split the list. Update out.splits with the new lists and add their
-			// start uids to the list of new splits.
+			// start UIDs to the list of new splits.
 			startUids, pls := binSplit(startUid, list)
 			for i, startUid := range startUids {
 				out.parts[startUid] = pls[i]
@@ -1250,7 +1250,7 @@ func (out *rollupOutput) removeEmptySplits() {
 	var splits []uint64
 	for startUid, plist := range out.parts {
 		// Do not remove the first split for now, as every multi-part list should always
-		// have a split starting with uid 1.
+		// have a split starting with UID 1.
 		if startUid == 1 {
 			splits = append(splits, startUid)
 			continue
@@ -1272,7 +1272,7 @@ func (out *rollupOutput) removeEmptySplits() {
 	}
 }
 
-// Returns the sorted list of start uids based on the keys in out.parts.
+// Returns the sorted list of start UIDs based on the keys in out.parts.
 // out.parts is considered the source of truth so this method is considered
 // safer than using out.plist.Splits directly.
 func (out *rollupOutput) splits() []uint64 {
@@ -1303,7 +1303,7 @@ func sortSplits(splits []uint64) {
 }
 
 // PartSplits returns an empty array if the list has not been split into multiple parts.
-// Otherwise, it returns an array containing the start uid of each part.
+// Otherwise, it returns an array containing the start UID of each part.
 func (l *List) PartSplits() []uint64 {
 	splits := make([]uint64, len(l.plist.Splits))
 	copy(splits, l.plist.Splits)
