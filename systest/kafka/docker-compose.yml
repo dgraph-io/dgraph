@@ -2,22 +2,23 @@
 #
 version: "3.5"
 services:
-  alpha1:
-    image: dgraph/dgraph:latest
-    container_name: alpha1
-    working_dir: /data/alpha1
-    labels:
-      cluster: test
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    container_name: zookeeper
     ports:
-    - 8180:8180
-    - 9180:9180
-    volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --kafka_endpoint localhost:12345
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:latest'
+    container_name: kafka
+    ports:
+      - '9092:9092'
+    depends_on:
+      - zookeeper
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
@@ -34,4 +35,22 @@ services:
       read_only: true
     command: /gobin/dgraph zero -o 100 --idx=1 --my=zero1:5180 --logtostderr -v=2
       --bindall
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    depends_on:
+      - kafka
+    labels:
+      cluster: test
+    ports:
+    - 8180:8180
+    - 9180:9180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=1 --kafka_brokers kafka:9092
 volumes: {}

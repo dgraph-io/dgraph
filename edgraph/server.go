@@ -195,13 +195,27 @@ func (s *ServerState) initStorage() {
 
 func (s *ServerState) setupSubscriptions() {
 	kafkaBrokers := Config.KafkaOpt.Brokers
+	glog.Infof("kafka brokers: %v", kafkaBrokers)
 	if len(kafkaBrokers) > 0 {
 		glog.Infof("will publish to %v", kafkaBrokers)
 		// TODO: call badger DB Subscribe API
 		conf := sarama.NewConfig()
-		producer, err := sarama.NewSyncProducer(strings.Split(kafkaBrokers, ","), conf)
+		conf.Producer.Return.Successes = true
+
+		var producer sarama.SyncProducer
+		var err error
+		for i := 0; i < 10; i++ {
+			producer, err = sarama.NewSyncProducer(strings.Split(kafkaBrokers, ","), conf)
+			if err == nil {
+				break
+			} else {
+				glog.Errorf("unable to create the kafka sync producer, "+
+					"will retry in 5 seconds: %v", err)
+				time.Sleep(5 * time.Second)
+			}
+		}
 		if err != nil {
-			glog.Errorf("unable to create the kafka sync producer: %v", err)
+			glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
 			return
 		}
 
@@ -225,7 +239,10 @@ func (s *ServerState) setupSubscriptions() {
 			}
 			glog.V(1).Infof("produced %d messages to kafka", len(kv.Kv))
 		}
-		s.Pstore.Subscribe(context.Background(), cb, nil)
+		if err := s.Pstore.Subscribe(context.Background(), cb, nil); err != nil {
+			glog.Errorf("error while subscribing to the pstore: %v", err)
+		}
+		glog.V(1).Infof("subscribed to the pstore for updates")
 	}
 }
 

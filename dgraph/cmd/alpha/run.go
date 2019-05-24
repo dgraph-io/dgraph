@@ -455,7 +455,6 @@ func run() {
 		os.Exit(1)
 	}
 
-	setupSubscriptions()
 	edgraph.SetConfiguration(opts)
 
 	ips, err := getIPsFromString(Alpha.Conf.GetString("whitelist"))
