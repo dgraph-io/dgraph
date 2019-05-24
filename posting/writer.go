@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
 )
 
@@ -53,8 +53,8 @@ func (w *TxnWriter) cb(err error) {
 	}
 }
 
-// Send stores the given key-value pairs in badger.
-func (w *TxnWriter) Send(kvs *pb.KVS) error {
+// Write stores the given key-value pairs in badger.
+func (w *TxnWriter) Write(kvs *pb.KVList) error {
 	for _, kv := range kvs.Kv {
 		var meta byte
 		if len(kv.UserMeta) > 0 {
@@ -103,6 +103,11 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 
 // Flush waits until all operations are done and all data is written to disk.
 func (w *TxnWriter) Flush() error {
+	defer func() {
+		if err := w.db.Sync(); err != nil {
+			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
+		}
+	}()
 	w.wg.Wait()
 	select {
 	case err := <-w.che:

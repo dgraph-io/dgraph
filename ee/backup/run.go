@@ -30,7 +30,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Restore is the sub-command used to restore a backup.
 var Restore x.SubCommand
+
+// LsBackup is the sub-command used to list the backups in a folder.
 var LsBackup x.SubCommand
 
 var opt struct {
@@ -184,7 +187,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := runRestore(opt.pdir, opt.location)
+	version, err := RunRestore(opt.pdir, opt.location)
 	if err != nil {
 		return err
 	}
@@ -210,8 +213,8 @@ func runRestoreCmd() error {
 	return nil
 }
 
-// runRestore calls badger.Load and tries to load data into a new DB.
-func runRestore(pdir, location string) (uint64, error) {
+// RunRestore calls badger.Load and tries to load data into a new DB.
+func RunRestore(pdir, location string) (uint64, error) {
 	bo := badger.DefaultOptions
 	bo.SyncWrites = true
 	bo.TableLoadingMode = options.MemoryMap
@@ -238,7 +241,7 @@ func runRestore(pdir, location string) (uint64, error) {
 				fmt.Println("Creating new db:", bo.Dir)
 			}
 		}
-		return db.Load(r)
+		return db.Load(r, 16)
 	})
 }
 

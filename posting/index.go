@@ -429,13 +429,30 @@ func deleteTokensFor(attr, tokenizerName string) error {
 		return fmt.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	prefix = append(prefix, tokenizer.Identifier())
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
 
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix = pk.IndexPrefix()
+	prefix[len(prefix)-1] = x.ByteSplit
+	prefix = append(prefix, tokenizer.Identifier())
 	return pstore.DropPrefix(prefix)
 }
 
 func deleteReverseEdges(attr string) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
+
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix = pk.ReversePrefix()
+	prefix[len(prefix)-1] = x.ByteSplit
+
 	return pstore.DropPrefix(prefix)
 }
 
@@ -444,7 +461,21 @@ func deleteCountIndex(attr string) error {
 	if err := pstore.DropPrefix(pk.CountPrefix(false)); err != nil {
 		return err
 	}
-	return pstore.DropPrefix(pk.CountPrefix(true))
+	if err := pstore.DropPrefix(pk.CountPrefix(true)); err != nil {
+		return err
+	}
+
+	// Also delete all the parts of any list that has been split into multiple parts.
+	// Such keys have a different prefix (the last byte is set to 1).
+	prefix := pk.CountPrefix(false)
+	prefix[len(prefix)-1] = x.ByteSplit
+	if err := pstore.DropPrefix(prefix); err != nil {
+		return err
+	}
+
+	prefix = pk.CountPrefix(true)
+	prefix[len(prefix)-1] = x.ByteSplit
+	return pstore.DropPrefix(prefix)
 }
 
 // Index rebuilding logic here.

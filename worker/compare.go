@@ -16,7 +16,7 @@
 
 package worker
 
-func EvalCompare(cmp string, lv, rv int64) bool {
+func evalCompare(cmp string, lv, rv int64) bool {
 	switch cmp {
 	case "le":
 		return lv <= rv

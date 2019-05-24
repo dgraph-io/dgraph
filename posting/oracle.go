@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	ostats "go.opencensus.io/stats"
 )
 
 var o *oracle
@@ -232,6 +233,8 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		delete(o.waiters, startTs)
 	}
 	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
+	ostats.Record(context.Background(),
+		x.MaxAssignedTs.M(int64(delta.MaxAssigned))) // Can't access o.MaxAssigned without atomics.
 }
 
 func (o *oracle) ResetTxns() {

@@ -1,0 +1,282 @@
+## Global Docker image parameters
+## Please, note that this will override the image parameters, including dependencies, configured to use the global value
+## Current available global Docker image parameters: imageRegistry and imagePullSecrets
+##
+# global:
+#   imageRegistry: myRegistryName
+#   imagePullSecrets:
+#     - myRegistryKeySecretName
+  
+image:
+  registry: docker.io
+  repository: dgraph/dgraph
+  tag: latest
+  ## Specify a imagePullPolicy
+  ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ##
+  pullPolicy: Always
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistryKeySecretName
+  ## Set to true if you would like to see extra information on logs
+  ## It turns BASH and NAMI debugging in minideb
+  ## ref:  https://github.com/bitnami/minideb-extras/#turn-on-bash-debugging
+  ##
+  debug: false
+
+zero:
+  name: zero
+  ## StatefulSet controller supports automated updates. There are two valid update strategies: RollingUpdate and OnDelete
+  ## ref: https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
+  ##
+  updateStrategy: RollingUpdate
+
+  ## Partition update strategy
+  ## https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions
+  ##
+  # rollingUpdatePartition:
+
+  ## StatefulSet controller supports relax its ordering guarantees while preserving its uniqueness and identity guarantees. There are two valid pod management policies: OrderedReady and Parallel
+  ## ref: https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#pod-management-policy
+  ##
+  podManagementPolicy: OrderedReady
+
+  ## Number of dgraph  zero pods
+  ##
+  replicaCount: 3
+
+  ## zero server pod termination grace period
+  ##
+  terminationGracePeriodSeconds: 60
+
+  ## Hard means that by default pods will only be scheduled if there are enough nodes for them
+  ## and that they will never end up on the same node. Setting this to soft will do this "best effort"
+  antiAffinity: soft
+
+  # By default this will make sure two pods don't end up on the same node
+  # Changing this to a region would allow you to spread pods across regions
+  podAntiAffinitytopologyKey: "kubernetes.io/hostname"
+
+  ## This is the node affinity settings as defined in
+  ## https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-affinity-beta-feature
+  nodeAffinity: {}
+
+  ## Kubernetes configuration
+  ## For minikube, set this to NodePort, elsewhere use LoadBalancer
+  ##
+  service:
+    type: ClusterIP
+
+  ## dgraph Pod Security Context
+  securityContext:
+    enabled: false
+    fsGroup: 1001
+    runAsUser: 1001
+
+  ## dgraph data Persistent Volume Storage Class
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  persistence:
+    enabled: true
+    # storageClass: "-"
+    accessModes:
+      - ReadWriteOnce
+    size: 32Gi
+
+  ## Node labels and tolerations for pod assignment
+  ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
+  ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#taints-and-tolerations-beta-feature
+  ##
+  nodeSelector: {}
+  tolerations: []
+
+  ## Configure resource requests 
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  ##
+  resources:
+    requests:
+      memory: 100Mi
+
+  ## Configure extra options for liveness and readiness probes
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
+  ##
+  livenessProbe:
+    enabled: false
+    port: 6080
+    path: /state
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: false
+    port: 6080
+    path: /state
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+alpha:
+  name: alpha
+  ## StatefulSet controller supports automated updates. There are two valid update strategies: RollingUpdate and OnDelete
+  ## ref: https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
+  ##
+  updateStrategy: RollingUpdate
+
+  ## Partition update strategy
+  ## https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions
+  ##
+  # rollingUpdatePartition:
+
+  ## StatefulSet controller supports relax its ordering guarantees while preserving its uniqueness and identity guarantees. There are two valid pod management policies: OrderedReady and Parallel
+  ## ref: https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#pod-management-policy
+  ##
+  podManagementPolicy: OrderedReady
+
+  ## Number of dgraph nodes
+  ##
+  replicaCount: 3
+
+  ## zero server pod termination grace period
+  ##
+  terminationGracePeriodSeconds: 600
+
+  ## Hard means that by default pods will only be scheduled if there are enough nodes for them
+  ## and that they will never end up on the same node. Setting this to soft will do this "best effort"
+  antiAffinity: soft
+
+  # By default this will make sure two pods don't end up on the same node
+  # Changing this to a region would allow you to spread pods across regions
+  podAntiAffinitytopologyKey: "kubernetes.io/hostname"
+
+  ## This is the node affinity settings as defined in
+  ## https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-affinity-beta-feature
+  nodeAffinity: {}
+
+  ## Kubernetes configuration
+  ## For minikube, set this to NodePort, elsewhere use LoadBalancer
+  ##
+  service:
+    type: ClusterIP
+
+  ## dgraph Pod Security Context
+  securityContext:
+    enabled: false
+    fsGroup: 1001
+    runAsUser: 1001
+
+  ## dgraph data Persistent Volume Storage Class
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  persistence:
+    enabled: true
+    # storageClass: "-"
+    accessModes:
+      - ReadWriteOnce
+    size: 100Gi
+    annotations: {}
+
+  ## Node labels and tolerations for pod assignment
+  ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector
+  ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#taints-and-tolerations-beta-feature
+  ##
+  nodeSelector: {}
+  tolerations: []
+
+  ## Configure resource requests 
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  ##
+  resources:
+    requests:
+      memory: 100Mi
+  ## Configure value for lru_mb flag
+  ## Typically a third of available memory is recommended, keeping the default value to 2048mb
+  lru_mb: 2048
+
+  ## Configure extra options for liveness and readiness probes
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
+  ##
+  livenessProbe:
+    enabled: false
+    port: 8080
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: false
+    port: 8080
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+ratel:
+  name: ratel
+  ## Number of dgraph nodes
+  ##
+  replicaCount: 1
+
+  ## Kubernetes configuration
+  ## For minikube, set this to NodePort, elsewhere use ClusterIP or LoadBalancer
+  ##
+  service:
+    type: ClusterIP
+
+  ## dgraph Pod Security Context
+  securityContext:
+    enabled: false
+    fsGroup: 1001
+    runAsUser: 1001
+
+  ## Configure resource requests 
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  ##
+  ## resources:
+  ##   requests:
+  ##     memory: 256Mi
+  ##     cpu: 250m
+
+  ## Configure extra options for liveness and readiness probes
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
+  ##
+  livenessProbe:
+    enabled: false
+    port: 8000
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: flase
+    port: 8000
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
