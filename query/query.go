@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -27,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
@@ -2578,8 +2578,8 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
 	}
 }
 
-// ConvertUidsToHex converts the new UIDs to hex string.
-func ConvertUidsToHex(m map[string]uint64) map[string]string {
+// UidsToHex converts the new UIDs to hex string.
+func UidsToHex(m map[string]uint64) map[string]string {
 	res := make(map[string]string)
 	for k, v := range m {
 		res[k] = fmt.Sprintf("%#x", v)
@@ -2745,14 +2745,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	return nil
 }
 
-type internalError struct {
-	err error
-}
-
-func (e *internalError) Error() string {
-	return "pb.error: " + e.err.Error()
-}
-
 // ExecutionResult holds the result of running a query.
 type ExecutionResult struct {
 	Subgraphs  []*SubGraph
@@ -2770,10 +2762,10 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
-			return er, x.Wrapf(&internalError{err: err}, "error while fetching schema")
+			return er, errors.Wrapf(err, "while fetching schema")
 		}
 		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
-			return er, x.Wrapf(&internalError{err: err}, "error while fetching types")
+			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
 	return er, nil

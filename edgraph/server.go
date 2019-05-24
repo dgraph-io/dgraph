@@ -495,8 +495,8 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 	if err != nil {
 		return resp, err
 	}
-	resp.Uids = query.ConvertUidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToInternal(gmu, newUids)
+	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
+	edges, err := query.ToDirectedEdges(gmu, newUids)
 	if err != nil {
 		return resp, err
 	}

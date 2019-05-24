@@ -166,8 +166,8 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 	return newUids, nil
 }
 
-// ToInternal converts the gql.Mutation input into a set of directed edges.
-func ToInternal(gmu *gql.Mutation,
+// ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
+func ToDirectedEdges(gmu *gql.Mutation,
 	newUids map[string]uint64) (edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
