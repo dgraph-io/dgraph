@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
+	minio "github.com/minio/minio-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -41,7 +41,9 @@ var (
 	restoreDir = "./data/restore"
 	dirs       = []string{backupDir, restoreDir}
 
-	alphaBackupDir = "/data/backups"
+	mc                *minio.Client
+	bucketName        = "dgraph-backup"
+	backupDestination = "minio://minio1:9001/dgraph-backup?secure=false"
 
 	alphaContainers = []string{
 		"alpha1",
@@ -50,10 +52,13 @@ var (
 	}
 )
 
-func TestBackupFilesystem(t *testing.T) {
+func TestBackupMinio(t *testing.T) {
 	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
 	x.Check(err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	mc, err = z.NewMinioClient()
+	require.NoError(t, err)
+	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	// Add initial data.
 	ctx := context.Background()
@@ -215,7 +220,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	}
 
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{alphaBackupDir},
+		"destination": []string{backupDestination},
 		"force_full":  []string{forceFullStr},
 	})
 	require.NoError(t, err)
@@ -224,7 +229,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	time.Sleep(5 * time.Second)
 
 	// Verify that the right amount of files and directories were created.
-	copyToLocalFs()
+	copyToLocalFs(t)
 	files := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
@@ -256,41 +261,30 @@ func dirSetup() {
 	for _, dir := range dirs {
 		x.Check(os.MkdirAll(dir, os.ModePerm))
 	}
-
-	for _, alpha := range alphaContainers {
-		cmd := []string{"mkdir", "-p", alphaBackupDir}
-		x.Check(z.DockerExec(alpha, cmd...))
-	}
 }
 
 func dirCleanup() {
 	x.Check(os.RemoveAll("./data"))
 }
 
-func copyToLocalFs() {
-	cwd, err := os.Getwd()
-	x.Check(err)
+func copyToLocalFs(t *testing.T) {
+	// List all the folders in the bucket.
+	lsCh1 := make(chan struct{})
+	defer close(lsCh1)
+	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
+	for object := range objectCh1 {
+		require.NoError(t, object.Err)
+		dstDir := backupDir + "/" + object.Key
+		os.MkdirAll(dstDir, os.ModePerm)
 
-	for _, alpha := range alphaContainers {
-		// Because docker cp does not support the * notation, the directory is copied
-		// first to a temporary location in the local FS. Then all backup files are
-		// combined under data/backups.
-		tmpDir := "./data/backups/" + alpha
-		srcPath := fmt.Sprintf("%s:/data/backups", alpha)
-		x.Check(z.DockerCp(srcPath, tmpDir))
-
-		paths, err := filepath.Glob(tmpDir + "/*")
-		x.Check(err)
-
-		opts := z.CmdOpts{
-			Dir: cwd,
+		// Get all the files in that folder and
+		lsCh2 := make(chan struct{})
+		defer close(lsCh2)
+		objectCh2 := mc.ListObjectsV2(bucketName, "", true, lsCh2)
+		for object := range objectCh2 {
+			require.NoError(t, object.Err)
+			dstFile := backupDir + "/" + object.Key
+			mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
 		}
-		cpCmd := []string{"cp", "-r"}
-		cpCmd = append(cpCmd, paths...)
-		cpCmd = append(cpCmd, "./data/backups")
-
-		x.Check(z.ExecWithOpts([]string{"ls", "./data/backups/"}, opts))
-		x.Check(z.ExecWithOpts(cpCmd, opts))
-		x.Check(z.ExecWithOpts([]string{"rm", "-r", tmpDir}, opts))
 	}
 }
