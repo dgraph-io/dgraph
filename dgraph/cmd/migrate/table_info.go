@@ -32,12 +32,12 @@ const (
 	secondary
 )
 
-type DataType int
+type dataType int
 
 type columnInfo struct {
 	name     string
 	keyType  keyType
-	dataType DataType
+	dataType dataType
 }
 
 // fkConstraint represents a foreign key constraint
@@ -65,8 +65,9 @@ type sqlTable struct {
 	columns   map[string]*columnInfo
 
 	// The following 3 columns are used by the rowMeta when converting rows
-	columnDataTypes []DataType
+	columnDataTypes []dataType
 	columnNames     []string
+	isForeignKey    map[string]bool // whether a given column is a foreign key
 	predNames       []string
 
 	// the referenced tables by the current table through foreign key constraints
@@ -79,7 +80,7 @@ type sqlTable struct {
 	cstSources []*fkConstraint
 }
 
-func getDataType(dbType string) DataType {
+func getDataType(dbType string) dataType {
 	for prefix, goType := range sqlTypeToInternal {
 		if strings.HasPrefix(dbType, prefix) {
 			return goType
@@ -108,7 +109,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		tableName:             tableName,
 		columns:               make(map[string]*columnInfo),
 		columnNames:           make([]string, 0),
-		columnDataTypes:       make([]DataType, 0),
+		columnDataTypes:       make([]dataType, 0),
 		predNames:             make([]string, 0),
 		dstTables:             make(map[string]interface{}),
 		foreignKeyConstraints: make(map[string]*fkConstraint),
@@ -202,6 +203,8 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 			remoteTableName:  dstTable,
 			remoteColumnName: dstCol,
 		})
+
+		table.isForeignKey[col] = true
 	}
 	return table, nil
 }

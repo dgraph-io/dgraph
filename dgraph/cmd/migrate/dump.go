@@ -189,8 +189,11 @@ func (m *dumpMeta) dumpTableConstraints(table string) error {
 // is recorded through the person table's valuesRecorder.
 func (m *dumpMeta) outputRow(row *sqlRow, tableInfo *sqlTable) {
 	for i, colValue := range row.values {
-		predicate := tableInfo.predNames[i]
-		m.outputPlainCell(row.blankNodeLabel, predicate, tableInfo.columnDataTypes[i], colValue)
+		colName := tableInfo.columnNames[i]
+		if !tableInfo.isForeignKey[colName] {
+			predicate := tableInfo.predNames[i]
+			m.outputPlainCell(row.blankNodeLabel, predicate, tableInfo.columnDataTypes[i], colValue)
+		}
 	}
 }
 
@@ -218,7 +221,7 @@ func (m *dumpMeta) outputConstraints(row *sqlRow, tableInfo *sqlTable) {
 
 // outputPlainCell sends to the writer a RDF where the subject is the blankNode
 // the predicate is the predName, and the object is the colValue
-func (m *dumpMeta) outputPlainCell(blankNode string, predName string, dataType DataType,
+func (m *dumpMeta) outputPlainCell(blankNode string, predName string, dataType dataType,
 	colValue interface{}) {
 	// Each cell value should be stored under a predicate
 	m.buf.Reset()

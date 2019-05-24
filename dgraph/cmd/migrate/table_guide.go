@@ -157,7 +157,7 @@ func getCstColumns(cst *fkConstraint) map[string]interface{} {
 	return columnNames
 }
 
-func getValue(dataType DataType, value interface{}) (string, error) {
+func getValue(dataType dataType, value interface{}) (string, error) {
 	if value == nil {
 		return "", fmt.Errorf("nil value found")
 	}
@@ -252,8 +252,8 @@ func getPredFromConstraint(
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
 	}
-	return fmt.Sprintf("%s%s%s%s", tableName, separator,
-		strings.Join(columnNames, separator), separator)
+	return fmt.Sprintf("%s%s%s", tableName, separator,
+		strings.Join(columnNames, separator))
 }
 
 func predicateName(info *sqlTable, column string) string {
