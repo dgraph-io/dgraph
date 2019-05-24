@@ -43,3 +43,6 @@ docker:
 	docker build -t chainsafe/gossamer -f Dockerfile.dev .
 	@echo "  >  \033[32mRunning Docker Container...\033[0m "
 	docker run chainsafe/gossamer
+
+gossamer:
+	cd cmd/gossamer && go install

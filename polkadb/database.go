@@ -26,8 +26,13 @@ import (
 
 // BadgerDB struct contains directory path to data and db instance
 type BadgerDB struct {
-	path string
-	db   *badger.DB
+	config DbConfig
+	db      *badger.DB
+}
+
+//DbConfig struct defines configurations for BadgerDB instance
+type DbConfig struct {
+	Datadir string
 }
 
 // Iterable struct contains a transaction, iterator and context fields released, initialized
@@ -67,14 +72,16 @@ func NewBadgerDB(file string) (*BadgerDB, error) {
 	}
 
 	return &BadgerDB{
-		path: file,
-		db:   db,
+		config: DbConfig{
+			Datadir: file,
+		},
+		db:      db,
 	}, nil
 }
 
 // Path returns the path to the database directory.
 func (db *BadgerDB) Path() string {
-	return db.path
+	return db.config.Datadir
 }
 
 // NewBatch returns batchWriter with a badgerDB instance and an initialized mapping
