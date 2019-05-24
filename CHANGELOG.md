@@ -9,10 +9,56 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
+- bf4f3e022 Multiple fixes to improve cluster ops ([#3337](https://github.com/dgraph-io/dgraph/pull/3337))
+- c186edd77 Bug Fix: Avoid Dgraph cluster getting stuck in infinite leader election ([#3391](https://github.com/dgraph-io/dgraph/pull/3391))
+- Fix offset doesn't return correct results with multiple order statements. ([#3400](https://github.com/dgraph-io/dgraph/pull/3400))
+- 1e47988e5 Fixing a bug to support using json files in the bulk loader. ([#3464](https://github.com/dgraph-io/dgraph/pull/3464))
+
+- 5e75f6f09 Optimize mutation and delta application ([#2987](https://github.com/dgraph-io/dgraph/pull/2987))
+- 5aa24b6fd Fix OOM: Only keep deltas in memory for a pending txn ([#3349](https://github.com/dgraph-io/dgraph/pull/3349))
+
+- 2e5b04a4b Fix deadlock: Break circular lock acquisition ([#3393](https://github.com/dgraph-io/dgraph/pull/3393))
+
+- 7849edd3e Properly escape strings during export. ([#3429](https://github.com/dgraph-io/dgraph/pull/3429))
+- f24d2da93 Cherry-pick fix for offset not working with multiple order statements into release/v1.0 ([#3455](https://github.com/dgraph-io/dgraph/pull/3455))
+
+
+
 ### Changed
+
+- 3be380b8a Truncate Raft logs even when no txn commits are happening
+- 4a8be6a32 Set a limit on the size of committed entries that can be served per Ready. ([#3308](https://github.com/dgraph-io/dgraph/pull/3308))
+- b1901277a Limit num pending proposals in apply channel ([#3340](https://github.com/dgraph-io/dgraph/pull/3340))
+- ecb454754 Snapshot calculation must continue
+- 2377d9f56 Remove a log which spits out a lot during Raft replay.
+- 77b52aca1 Set deadline to 10s to allow quick recovery from partitions.
+
+- 4f23cb0b2 release/v1.0: Vendor in latest badger with nil pointer dereference fix. ([#3348](https://github.com/dgraph-io/dgraph/pull/3348))
+- 2762ffc11 Vendor in latest bug fixes from badger. ([#3371](https://github.com/dgraph-io/dgraph/pull/3371))
+- 827ef302c Vendor in latest badger with bug fix for StreamWriter. ([#3460](https://github.com/dgraph-io/dgraph/pull/3460))
+
+- eecc4e1bf Initialize tablets map when creating a group. ([#3360](https://github.com/dgraph-io/dgraph/pull/3360))
+- af3b035f3 Take snapshots less frequently ([#3367](https://github.com/dgraph-io/dgraph/pull/3367))
+
+- 9cd628f6f Expose Raft Comms
+- f60c9f2ae Report Heartbeat comms
+- a2c01a72d Revert "Report Heartbeat comms"
+
+- d63189e6b When calculating a snapshot, retrieve entries in batches. ([#3409](https://github.com/dgraph-io/dgraph/pull/3409)) (#3410)
+- 542df106c Call Sync explicitly to improve performance ([#3415](https://github.com/dgraph-io/dgraph/pull/3415)) (#3418)
+- 6e4b47b29 Cherry-pick diff snapshot change into release/v1.0 ([#3454](https://github.com/dgraph-io/dgraph/pull/3454))
+- 457891f36 Cherry pick the stream writer PR 3442 ([#3457](https://github.com/dgraph-io/dgraph/pull/3457))
+
+
 
 ### Added
 
+- 08d35a586 Add prometheus metrics for latest raft applied index and oracle max assigned ts. ([#3338](https://github.com/dgraph-io/dgraph/pull/3338))
+- 50a973b09 Move checkpoint key to WAL ([#3444](https://github.com/dgraph-io/dgraph/pull/3444))
+
+### Removed
+
+- 0716dc4e1 Remove size calculation in posting list.
 
 ## [1.0.14] - 2019-04-12
 [1.0.14]: https://github.com/dgraph-io/dgraph/compare/v1.0.13...v1.0.14
