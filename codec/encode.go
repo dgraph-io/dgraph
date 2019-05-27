@@ -38,9 +38,9 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 	case *big.Int:
 		n, err = se.encodeBigInteger(v)
 	case int16:
-		n, err = se.encodeInteger(int(v))
+		n, err = se.encodeFixedWidthInteger(int(v))
 	case int32:
-		n, err = se.encodeInteger(int(v))
+		n, err = se.encodeFixedWidthInteger(int(v))
 	case int64:
 		n, err = se.encodeInteger(int(v))
 	case string:
@@ -78,6 +78,25 @@ func (se *Encoder) encodeByteArray(b []byte) (bytesEncoded int, err error) {
 	bytesEncoded = bytesEncoded + n
 	n, err = se.Writer.Write(b)
 	return bytesEncoded + n, err
+}
+
+// encodeFixedWidthInteger encodes an int with size < 2**32 by putting it into little endian byte format
+func (se *Encoder) encodeFixedWidthInteger(i int) (bytesEncoded int, err error) {
+	if i >= 1<<32 {
+		return 0, errors.New("error encoding fixed width int: int greater than 32 bits")
+	}
+
+	if i < 1<<8 {
+		err = binary.Write(se.Writer, binary.LittleEndian, byte(i))
+		bytesEncoded = 1
+	} else if i < 1<<16 {
+		err = binary.Write(se.Writer, binary.LittleEndian, uint16(i))
+		bytesEncoded = 2
+	} else if i < 1<<32 {
+		err = binary.Write(se.Writer, binary.LittleEndian, uint32(i))
+		bytesEncoded = 4
+	}
+	return bytesEncoded, err
 }
 
 // encodeInteger performs the following on integer i:

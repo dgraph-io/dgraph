@@ -106,6 +106,7 @@ github.com/ipfs/go-cid v0.0.1/go.mod h1:GHWU/WuQdMPmIosc4Yn1bcCT7dSeX4lBafM7iqUP
 github.com/ipfs/go-cidutil v0.0.1 h1:UpDQI2LrihqOGY2mHaMhjrhh1DJ14N/58BQb7lKXvlQ=
 github.com/ipfs/go-cidutil v0.0.1/go.mod h1:/0H649ymJksNEZvBAkM18HIctk7tkONH9tspTeLok48=
 github.com/ipfs/go-datastore v0.0.1/go.mod h1:d4KVXhMt913cLBEI/PXAy6ko+W7e9AhyAKBGh803qeE=
+github.com/ipfs/go-datastore v0.0.2/go.mod h1:d4KVXhMt913cLBEI/PXAy6ko+W7e9AhyAKBGh803qeE=
 github.com/ipfs/go-datastore v0.0.3/go.mod h1:d4KVXhMt913cLBEI/PXAy6ko+W7e9AhyAKBGh803qeE=
 github.com/ipfs/go-datastore v0.0.4 h1:FZgezmkbkMGXal1nXXFMyCKkWNglxK1c4jVqO1Emlso=
 github.com/ipfs/go-datastore v0.0.4/go.mod h1:d4KVXhMt913cLBEI/PXAy6ko+W7e9AhyAKBGh803qeE=
@@ -117,6 +118,7 @@ github.com/ipfs/go-ds-leveldb v0.0.1/go.mod h1:feO8V3kubwsEF22n0YRQCffeb79OOYIyk
 github.com/ipfs/go-ds-leveldb v0.0.2/go.mod h1:CWFeBh5IAAscWyG/QRH+lJaAlnLWjsfPSNs4teyPUp0=
 github.com/ipfs/go-ds-measure v0.0.1/go.mod h1:wiH6bepKsgyNKpz3nyb4erwhhIVpIxnZbsjN1QpVbbE=
 github.com/ipfs/go-fs-lock v0.0.1/go.mod h1:DNBekbboPKcxs1aukPSaOtFA3QfSdi5C855v0i9XJ8Y=
+github.com/ipfs/go-ipfs v0.4.19-rc2.0.20190328185617-7aab3c29f9d4/go.mod h1:DFIxsej6CcoS2khQtTxNVZG6bZLluM/ff7+d01rjssE=
 github.com/ipfs/go-ipfs v0.4.20-rc2 h1:AIYn9tu6T1GRLWEfMlV0Hj/vtgdfcAzRIXJykHVXu08=
 github.com/ipfs/go-ipfs v0.4.20-rc2/go.mod h1:W8aP61Gt96DDfp7aaIyp1bz/Bqgx4z90uDjUoOhFGp4=
 github.com/ipfs/go-ipfs-addr v0.0.1 h1:DpDFybnho9v3/a1dzJ5KnWdThWD1HrFLpQ+tWIyBaFI=
@@ -127,6 +129,7 @@ github.com/ipfs/go-ipfs-blocksutil v0.0.1/go.mod h1:Yq4M86uIOmxmGPUHv/uI7uKqZNtL
 github.com/ipfs/go-ipfs-chunker v0.0.1 h1:cHUUxKFQ99pozdahi+uSC/3Y6HeRpi9oTeUHbE27SEw=
 github.com/ipfs/go-ipfs-chunker v0.0.1/go.mod h1:tWewYK0we3+rMbOh7pPFGDyypCtvGcBFymgY4rSDLAw=
 github.com/ipfs/go-ipfs-cmdkit v0.0.1/go.mod h1:9FtbMdUabcSqv/G4/8WCxSLxkZxn/aZEFrxxqnVcRbg=
+github.com/ipfs/go-ipfs-cmds v0.0.4/go.mod h1:1QVgxSgenZvOMGVC/XUTC7tJxRBGPLxYvpgPpCi3DUk=
 github.com/ipfs/go-ipfs-cmds v0.0.5/go.mod h1:1QVgxSgenZvOMGVC/XUTC7tJxRBGPLxYvpgPpCi3DUk=
 github.com/ipfs/go-ipfs-config v0.0.1 h1:6ED08emzI1imdsAjixFi2pEyZxTVD5ECKtCOxLBx+Uc=
 github.com/ipfs/go-ipfs-config v0.0.1/go.mod h1:KDbHjNyg4e6LLQSQpkgQMBz6Jf4LXiWAcmnkcwmH0DU=
@@ -180,6 +183,7 @@ github.com/ipfs/go-unixfs v0.0.4/go.mod h1:eIo/p9ADu/MFOuyxzwU+Th8D6xoxU//r590vU
 github.com/ipfs/go-verifcid v0.0.1 h1:m2HI7zIuR5TFyQ1b79Da5N9dnnCP1vcu2QqawmWlK2E=
 github.com/ipfs/go-verifcid v0.0.1/go.mod h1:5Hrva5KBeIog4A+UpqlaIU+DEstipcJYQQZc0g37pY0=
 github.com/ipfs/hang-fds v0.0.1/go.mod h1:U4JNbzwTpk/qP2Ms4VgrZ4HcgJGVosBJqMXvwe4udSY=
+github.com/ipfs/interface-go-ipfs-core v0.0.5/go.mod h1:VceUOYu+kPEy8Ev/gAhzXFTIfc/7xILKnL4fgZg8tZM=
 github.com/ipfs/interface-go-ipfs-core v0.0.6 h1:yf9D2cMLVgBMXHL+gs/HepDc/M7ZXQXYdoN0eXl7z9c=
 github.com/ipfs/interface-go-ipfs-core v0.0.6/go.mod h1:VceUOYu+kPEy8Ev/gAhzXFTIfc/7xILKnL4fgZg8tZM=
 github.com/ipfs/iptb v1.4.0/go.mod h1:1rzHpCYtNp87/+hTxG5TfCVn/yMY3dKnLn8tBiMfdmg=
@@ -224,6 +228,7 @@ github.com/libp2p/go-flow-metrics v0.0.1 h1:0gxuFd2GuK7IIP5pKljLwps6TvcuYgvG7Atq
 github.com/libp2p/go-flow-metrics v0.0.1/go.mod h1:Iv1GH0sG8DtYN3SVJ2eG221wMiNpZxBdp967ls1g+k8=
 github.com/libp2p/go-libp2p v0.0.1/go.mod h1:bmRs8I0vwn6iRaVssZnJx/epY6WPSKiLoK1vyle4EX0=
 github.com/libp2p/go-libp2p v0.0.2/go.mod h1:Qu8bWqFXiocPloabFGUcVG4kk94fLvfC8mWTDdFC9wE=
+github.com/libp2p/go-libp2p v0.0.3/go.mod h1:Qu8bWqFXiocPloabFGUcVG4kk94fLvfC8mWTDdFC9wE=
 github.com/libp2p/go-libp2p v0.0.4/go.mod h1:B9yfFVwbsEmGPlyJROAoqrjumbMB2n0YrgNm1intDOY=
 github.com/libp2p/go-libp2p v0.0.12/go.mod h1:l8kmLMc4DToz2TtA0aWEaE4/jVMALRKw8Kv2WTR0LHc=
 github.com/libp2p/go-libp2p v0.0.13 h1:F8EJzBX3eipwW1yrvlmpkpc3jh5YpGwZiG7zVAt8mjM=
@@ -255,6 +260,8 @@ github.com/libp2p/go-libp2p-interface-connmgr v0.0.1/go.mod h1:GarlRLH0LdeWcLnYM
 github.com/libp2p/go-libp2p-interface-pnet v0.0.1 h1:7GnzRrBTJHEsofi1ahFdPN9Si6skwXQE9UqR2S+Pkh8=
 github.com/libp2p/go-libp2p-interface-pnet v0.0.1/go.mod h1:el9jHpQAXK5dnTpKA4yfCNBZXvrzdOU75zz+C6ryp3k=
 github.com/libp2p/go-libp2p-kad-dht v0.0.4/go.mod h1:oaBflOQcuC8H+SVV0YN26H6AS+wcUEJyjUGV66vXuSY=
+github.com/libp2p/go-libp2p-kad-dht v0.0.5/go.mod h1:oaBflOQcuC8H+SVV0YN26H6AS+wcUEJyjUGV66vXuSY=
+github.com/libp2p/go-libp2p-kad-dht v0.0.6/go.mod h1:oaBflOQcuC8H+SVV0YN26H6AS+wcUEJyjUGV66vXuSY=
 github.com/libp2p/go-libp2p-kad-dht v0.0.7/go.mod h1:X90f4pG3MNZN9VeCX0rcH8AY9g3AspA2x5EJ9AvU/gM=
 github.com/libp2p/go-libp2p-kad-dht v0.0.8 h1:oUnAqkCAWYvAoF5TmnDIf4k1fIcipMAFec6sQlTXGKE=
 github.com/libp2p/go-libp2p-kad-dht v0.0.8/go.mod h1:fGQfSQWWOxQFB97kETE09lYRLPRKaZZdguIq98fE5PI=
@@ -292,6 +299,7 @@ github.com/libp2p/go-libp2p-pubsub v0.0.1/go.mod h1:fYKlZBOF2yrJzYlgeEVFSbYWfbS+
 github.com/libp2p/go-libp2p-pubsub-router v0.0.3 h1:2EF+8nueIsA9Unpj1MxdlS9+dX29kwCxSttchMMfXsI=
 github.com/libp2p/go-libp2p-pubsub-router v0.0.3/go.mod h1:h5z0kyMFRu2J46tt15eEuLHKEmu1MrFghsGHqTc/iII=
 github.com/libp2p/go-libp2p-quic-transport v0.0.0-20190301030811-862195d91de1/go.mod h1:bw/6H57fSVn44ldP1Js6hnzpoiUm9YgBDKSv+ch+hWc=
+github.com/libp2p/go-libp2p-quic-transport v0.0.1/go.mod h1:cvXrDn4PqAGKwQoxy7Xx2aVcO9TB1/thWZpz+eD5vAQ=
 github.com/libp2p/go-libp2p-quic-transport v0.0.3 h1:FGEPXsjpY9K6P3iMtJQPKGl45eXickBY1+xSJ84lVVI=
 github.com/libp2p/go-libp2p-quic-transport v0.0.3/go.mod h1:v2oVuaFLkxlFpkFbXUty3dfEYSlNb0sCzvf8cRi1m/k=
 github.com/libp2p/go-libp2p-record v0.0.1 h1:zN7AS3X46qmwsw5JLxdDuI43cH5UYwovKxHPjKBYQxw=
@@ -388,6 +396,10 @@ github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+W
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/opentracing/opentracing-go v1.0.2 h1:3jA2P6O1F9UOrWVpwrIo17pu01KWvNWg4X946/Y5Zwg=
 github.com/opentracing/opentracing-go v1.0.2/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
+github.com/perlin-network/life v0.0.0-20190402092845-c30697b41680 h1:4UXHUEwr0aE80GWFDob2IIgYWLfr7v9Fq7QON8/dLhM=
+github.com/perlin-network/life v0.0.0-20190402092845-c30697b41680/go.mod h1:z/EH0mO9zbeuTT5NX4u2VqVSG8y2vDQXz6iDKxikW2I=
+github.com/perlin-network/wagon v0.3.1-0.20180825141017-f8cb99b55a39 h1:CYHXy6CWxxL7ugjvCbTELOm2j5iRLEWGPl3AQYvretw=
+github.com/perlin-network/wagon v0.3.1-0.20180825141017-f8cb99b55a39/go.mod h1:zHOMvbitcZek8oshsMO5VpyBjWjV9X8cn8WTZwdebpM=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
@@ -411,6 +423,8 @@ github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpP
 github.com/texttheater/golang-levenshtein v0.0.0-20180516184445-d188e65d659e/go.mod h1:XDKHRm5ThF8YJjx001LtgelzsoaEcvnA7lVWz9EeX3g=
 github.com/urfave/cli v1.20.0 h1:fDqGv3UG/4jbVl/QkFwEdddtEDjh/5Ov6X+0B/3bPaw=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
+github.com/vmihailenco/msgpack v4.0.4+incompatible h1:dSLoQfGFAo3F6OoNhwUmLwVgaUXK79GlxNBwueZn0xI=
+github.com/vmihailenco/msgpack v4.0.4+incompatible/go.mod h1:fy3FlTQTDXWkZ7Bh6AcGMlsjHatGryHQYUTf1ShIgkk=
 github.com/warpfork/go-wish v0.0.0-20180510122957-5ad1f5abf436/go.mod h1:x6AKhvSSexNrVSrViXSHUEbICjmGXhtgABaHIySUSGw=
 github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc h1:BCPnHtcboadS0DvysUuJXZ4lWVv5Bh5i7+tbIyi+ck4=
 github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc/go.mod h1:r45hJU7yEoA81k6MWNhpMj/kms0n14dkzkxYHoB96UM=

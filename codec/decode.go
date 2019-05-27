@@ -34,7 +34,9 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 	switch t.(type) {
 	case *big.Int:
 		out, err = sd.DecodeBigInt()
-	case int8, int16, int32, int64:
+	case int8, int16, int32:
+		out, err = sd.DecodeFixedWidthInt(t)
+	case int64:
 		out, err = sd.DecodeInteger()
 	case []byte:
 		out, err = sd.DecodeByteArray()
@@ -83,6 +85,29 @@ func (sd *Decoder) decodeSmallInt(firstByte byte) (o int64, err error) {
 		err = errors.New("could not decode small int: mode not <= 2")
 	}
 
+	return o, err
+}
+
+// DecodeFixedWidthInt decodes integers < 2**32 by reading the bytes in little endian
+func (sd *Decoder) DecodeFixedWidthInt(t interface{}) (o int, err error) {
+	switch t.(type) {
+	case int8:
+		var b byte
+		b, err = sd.ReadByte()
+		o = int(b)
+	case int16:
+		buf := make([]byte, 2)
+		_, err = sd.Reader.Read(buf)
+		if err == nil {
+			o = int(binary.LittleEndian.Uint16(buf))
+		}
+	case int32:
+		buf := make([]byte, 4)
+		_, err = sd.Reader.Read(buf)
+		if err == nil {
+			o = int(binary.LittleEndian.Uint32(buf))
+		}
+	}
 	return o, err
 }
 
@@ -231,7 +256,34 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 			// get the pointer to the value and set the value
 			ptr := fieldValue.Addr().Interface().(*[]byte)
 			*ptr = o.([]byte)
-		case int8, int16, int32, int64:
+		case int8:
+			o, err = sd.DecodeFixedWidthInt(int8(0))
+			if err != nil {
+				break
+			}
+
+			ptr := fieldValue.Addr().Interface().(*int8)
+			oint := o.(int)
+			*ptr = int8(oint)
+		case int16:
+			o, err = sd.DecodeFixedWidthInt(int16(0))
+			if err != nil {
+				break
+			}
+
+			ptr := fieldValue.Addr().Interface().(*int16)
+			oint := o.(int)
+			*ptr = int16(oint)
+		case int32:
+			o, err = sd.DecodeFixedWidthInt(int32(0))
+			if err != nil {
+				break
+			}
+
+			ptr := fieldValue.Addr().Interface().(*int32)
+			oint := o.(int)
+			*ptr = int32(oint)
+		case int64:
 			o, err = sd.DecodeInteger()
 			if err != nil {
 				break

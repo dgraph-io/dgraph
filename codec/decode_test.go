@@ -28,6 +28,11 @@ type reverseByteTest struct {
 	output []byte
 }
 
+type decodeFixedWidthIntTest struct {
+	val    []byte
+	output int32
+}
+
 type decodeIntTest struct {
 	val    []byte
 	output int64
@@ -58,6 +63,18 @@ type decodeArrayTest struct {
 	val    []byte
 	t      interface{}
 	output interface{}
+}
+
+var decodeFixedWidthIntTests = []decodeFixedWidthIntTest{
+	{val: []byte{0x00}, output: int32(0)},
+	{val: []byte{0x01}, output: int32(1)},
+	{val: []byte{0x2a}, output: int32(42)},
+	{val: []byte{0x40}, output: int32(64)},
+	{val: []byte{0x45}, output: int32(69)},
+	{val: []byte{0xff, 0x3f}, output: int32(16383)},
+	{val: []byte{0x00, 0x40}, output: int32(16384)},
+	{val: []byte{0xff, 0xff, 0xff, 0x3f}, output: int32(1073741823)},
+	{val: []byte{0x00, 0x00, 0x00, 0x40}, output: int32(1073741824)},
 }
 
 var decodeIntTests = []decodeIntTest{
@@ -157,6 +174,36 @@ var decodeTupleTests = []decodeTupleTest{
 		Bo   bool
 		Noot int64
 	}{[]byte{0x01}, 16383, true, int64(1 << 32)}},
+
+	{val: []byte{0x04, 0x01, 0x04, 0x00}, t: &struct {
+		Foo  []byte
+		Bar  int8
+		Bo   bool
+	}{}, output: &struct {
+		Foo  []byte
+		Bar  int8
+		Bo   bool
+	}{[]byte{0x01}, 4, false}},
+
+	{val: []byte{0x04, 0x01, 0x05, 0x04, 0x00}, t: &struct {
+		Foo  []byte
+		Bar  int16
+		Bo   bool
+	}{}, output: &struct {
+		Foo  []byte
+		Bar  int16
+		Bo   bool
+	}{[]byte{0x01}, 1029, false}},
+
+	{val: []byte{0x04, 0x01, 0x02, 0xff, 0xff, 0x01, 0x00}, t: &struct {
+		Foo  []byte
+		Bar  int32
+		Bo   bool
+	}{}, output: &struct {
+		Foo  []byte
+		Bar  int32
+		Bo   bool
+	}{[]byte{0x01}, 33554178, false}},
 }
 
 var decodeArrayTests = []decodeArrayTest{
@@ -195,6 +242,21 @@ func TestReadByte(t *testing.T) {
 		t.Error(err)
 	} else if output != 0xff {
 		t.Errorf("Fail: got %x expected %x", output, 0xff)
+	}
+}
+
+func TestDecodeFixedWidthInts(t *testing.T) {
+	for _, test := range decodeFixedWidthIntTests {
+		buf := bytes.Buffer{}
+		sd := Decoder{&buf}
+		buf.Write(test.val)
+		var i int32
+		output, err := sd.Decode(i)
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != int(test.output) {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
 	}
 }
 

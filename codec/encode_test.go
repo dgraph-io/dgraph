@@ -30,6 +30,16 @@ type encodeTest struct {
 }
 
 var encodeTests = []encodeTest{
+	// fixed width
+	{val: int32(0), output: []byte{0x00}, bytesEncoded: 1},
+	{val: int32(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: int32(42), output: []byte{0x2a}, bytesEncoded: 1},
+	{val: int32(69), output: []byte{0x45}, bytesEncoded: 1},
+	{val: int32(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
+	{val: int32(16384), output: []byte{0x00, 0x40}, bytesEncoded: 2},
+	{val: int32(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f}, bytesEncoded: 4},
+	{val: int32(1073741824), output: []byte{0x00, 0x00, 0x00, 0x40}, bytesEncoded: 4},
+
 	// compact integers
 	{val: int64(0), output: []byte{0x00}, bytesEncoded: 1},
 	{val: int64(1), output: []byte{0x04}, bytesEncoded: 1},
