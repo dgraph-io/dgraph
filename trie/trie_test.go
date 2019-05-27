@@ -94,32 +94,37 @@ type trieTest struct {
 	op    int
 }
 
-func generateRandTest(size int) []trieTest {
+func generateRandomTests(size int) []trieTest {
 	rt := make([]trieTest, size)
-	r := *rand.New(rand.NewSource(rand.Int63()))
-	for i := range rt {
-		rt[i] = trieTest{}
-		buf := make([]byte, r.Intn(379)+1)
-		r.Read(buf)
-		if !keyExists(rt[0:i], buf) {
-			rt[i].key = buf
+	kv := make(map[string][]byte)
 
-			buf = make([]byte, r.Intn(128))
-			r.Read(buf)
-			rt[i].value = buf
-		}
+	for i := range rt {
+		test := generateRandomTest(kv)
+		rt[i] = test
+		kv[string(test.key)] = rt[i].value
 	}
+
 	return rt
 }
 
-func keyExists(rt []trieTest, key []byte) bool {
-	for _, test := range rt {
-		if bytes.Equal(test.key, key) {
-			return true
+func generateRandomTest(kv map[string][]byte) trieTest {
+	r := *rand.New(rand.NewSource(rand.Int63()))
+	test := trieTest{}
+
+	for {
+		buf := make([]byte, r.Intn(379)+1)
+		r.Read(buf)
+
+		if kv[string(buf)] == nil {
+			test.key = buf
+
+			buf = make([]byte, r.Intn(128))
+			r.Read(buf)
+			test.value = buf
+
+			return test
 		}
 	}
-
-	return false
 }
 
 func hexDecode(in string) []byte {
@@ -243,7 +248,7 @@ func TestPutAndGetOddKeyLengths(t *testing.T) {
 func TestPutAndGet(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		trie := newEmpty()
-		rt := generateRandTest(1000)
+		rt := generateRandomTests(10000)
 		for _, test := range rt {
 			err := trie.Put(test.key, test.value)
 			if err != nil {
@@ -474,7 +479,7 @@ func TestDeleteOddKeyLengths(t *testing.T) {
 func TestDelete(t *testing.T) {
 	trie := newEmpty()
 
-	rt := generateRandTest(1000)
+	rt := generateRandomTests(10000)
 	for _, test := range rt {
 		err := trie.Put(test.key, test.value)
 		if err != nil {

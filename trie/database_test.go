@@ -46,7 +46,7 @@ func TestWriteToDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := generateRandTest(20000)
+	rt := generateRandomTests(20000)
 	var val []byte
 	for _, test := range rt {
 		err = trie.Put(test.key, test.value)
