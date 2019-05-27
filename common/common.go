@@ -43,3 +43,20 @@ func AppendZeroes(input []byte, size int) []byte {
 		}
 	}
 }
+
+// SwapByteNibbles swaps the two nibbles of a byte
+func SwapByteNibbles(b byte) byte {
+	b1 := (uint(b) & 240) >> 4
+	b2 := (uint(b) & 15) << 4
+
+	return byte(b1 | b2)
+}
+
+// SwapNibbles swaps the nibbles for each byte in the byte array
+func SwapNibbles(k []byte) []byte {
+	result := make([]byte, len(k))
+	for i, b := range k {
+		result[i] = SwapByteNibbles(b)
+	}
+	return result
+}
