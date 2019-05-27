@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"log"
 	"testing"
 
 	datastore "github.com/ipfs/go-datastore"
@@ -30,10 +31,10 @@ import (
 )
 
 // This is used in the tests that are failing on CI
-// type Simulator struct {
-// 	nodes    []*Service
-// 	ipfsNode *ipfs.IpfsNode
-// }
+type Simulator struct {
+	nodes    []*Service
+	ipfsNode *ipfs.IpfsNode
+}
 
 var testIdentity = config.Identity{
 	PeerID:  "QmNgdzLieYi8tgfo2WfTUzNVH5hQK9oAYGVf6dxN12NrHt",
@@ -41,39 +42,39 @@ var testIdentity = config.Identity{
 }
 
 // This is used in the tests that are failing on CI
-// func NewSimulator(num int) (sim *Simulator, err error) {
-// 	sim = new(Simulator)
-// 	sim.nodes = make([]*Service, num)
+func NewSimulator(num int) (sim *Simulator, err error) {
+	sim = new(Simulator)
+	sim.nodes = make([]*Service, num)
 
-// 	// start local ipfs daemon
-// 	ipfsNode, err := StartIpfsNode()
-// 	if err != nil {
-// 		log.Fatalf("Could not start IPFS node: %s", err)
-// 	}
+	// start local ipfs daemon
+	ipfsNode, err := StartIpfsNode()
+	if err != nil {
+		log.Fatalf("Could not start IPFS node: %s", err)
+	}
 
-// 	sim.ipfsNode = ipfsNode
+	sim.ipfsNode = ipfsNode
 
-// 	ipfsAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/ipfs/%s", ipfsNode.Identity.String())
-// 	log.Println("ipfsAddr:", ipfsAddr)
+	ipfsAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/ipfs/%s", ipfsNode.Identity.String())
+	log.Println("ipfsAddr:", ipfsAddr)
 
-// 	// create all nodes, increment port by 1 each time
-// 	for i := 0; i < num; i++ {
-// 		// configure p2p service
-// 		conf := &ServiceConfig{
-// 			BootstrapNodes: []string{
-// 				ipfsAddr,
-// 			},
-// 			Port: 5000 + i,
-// 		}
-// 		sim.nodes[i] = new(Service)
-// 		sim.nodes[i], err = NewService(conf)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
+	// create all nodes, increment port by 1 each time
+	for i := 0; i < num; i++ {
+		// configure p2p service
+		conf := &ServiceConfig{
+			BootstrapNodes: []string{
+				ipfsAddr,
+			},
+			Port: 5000 + i,
+		}
+		sim.nodes[i] = new(Service)
+		sim.nodes[i], err = NewService(conf)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-// 	return sim, nil
-// }
+	return sim, nil
+}
 
 func StartIpfsNode() (*ipfs.IpfsNode, error) {
 	id := testIdentity
@@ -195,54 +196,54 @@ func TestService_PeerCount(t *testing.T) {
 }
 
 // TODO: TestSend and TestPing fail in CI, need to be fixed.
-// func TestSend(t *testing.T) {
-// 	sim, err := NewSimulator(2)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+func TestSend(t *testing.T) {
+	sim, err := NewSimulator(2)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer sim.ipfsNode.Close()
+	defer sim.ipfsNode.Close()
 
-// 	for _, node := range sim.nodes {
-// 		e := node.Start()
-// 		if <-e != nil {
-// 			log.Println("start err: ", err)
-// 		}
-// 	}
+	for _, node := range sim.nodes {
+		e := node.Start()
+		if <-e != nil {
+			log.Println("start err: ", err)
+		}
+	}
 
-// 	sa := sim.nodes[0]
-// 	sb := sim.nodes[1]
-// 	peer, err := sa.dht.FindPeer(sa.ctx, sb.host.ID())
-// 	if err != nil {
-// 		t.Fatalf("could not find peer: %s", err)
-// 	}
+	sa := sim.nodes[0]
+	sb := sim.nodes[1]
+	peer, err := sa.dht.FindPeer(sa.ctx, sb.host.ID())
+	if err != nil {
+		t.Fatalf("could not find peer: %s", err)
+	}
 
-// 	msg := []byte("hello there\n")
-// 	err = sa.Send(peer, msg)
-// 	if err != nil {
-// 		t.Errorf("Send error: %s", err)
-// 	}
-// }
+	msg := []byte("hello there\n")
+	err = sa.Send(peer, msg)
+	if err != nil {
+		t.Errorf("Send error: %s", err)
+	}
+}
 
-// func TestPing(t *testing.T) {
-// 	sim, err := NewSimulator(2)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+func TestPing(t *testing.T) {
+	sim, err := NewSimulator(2)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	defer sim.ipfsNode.Close()
+	defer sim.ipfsNode.Close()
 
-// 	for _, node := range sim.nodes {
-// 		e := node.Start()
-// 		if <-e != nil {
-// 			log.Println("start err: ", err)
-// 		}
-// 	}
+	for _, node := range sim.nodes {
+		e := node.Start()
+		if <-e != nil {
+			log.Println("start err: ", err)
+		}
+	}
 
-// 	sa := sim.nodes[0]
-// 	sb := sim.nodes[1]
-// 	err = sa.Ping(sb.host.ID())
-// 	if err != nil {
-// 		t.Errorf("Ping error: %s", err)
-// 	}
-// }
+	sa := sim.nodes[0]
+	sb := sim.nodes[1]
+	err = sa.Ping(sb.host.ID())
+	if err != nil {
+		t.Errorf("Ping error: %s", err)
+	}
+}
