@@ -17,11 +17,14 @@
 package graphql
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 
@@ -172,5 +175,41 @@ func initDgraph() error {
 	dgSchema := schemaB.String()
 	fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)
 
+	fmt.Printf("Loading schema into Dgraph at %q\n", opt.alpha)
+	dgraphClient, disconnect := connect()
+	defer disconnect()
+
+	// check the current schema, is it compatible with these additions?
+
+	op := &api.Operation{}
+	op.Schema = dgSchema
+
+	ctx := context.Background()
+	// plus auth token like live?
+	err = dgraphClient.Alter(ctx, op)
+	x.Checkf(err, "Error while writing schema to Dgraph")
+
 	return nil
+}
+
+func connect() (*dgo.Dgraph, func()) {
+	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
+	x.Checkf(err, "While trying to load tls config")
+
+	var clients []api.DgraphClient
+	disconnect := func() {}
+
+	ds := strings.Split(opt.alpha, ",")
+	for _, d := range ds {
+		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
+		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
+		disconnect = func(c func()) func() {
+			return func() { c(); conn.Close() }
+		}(disconnect)
+
+		dc := api.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+
+	return dgo.NewDgraphClient(clients...), disconnect
 }
