@@ -223,19 +223,16 @@ func createDgraphSchema(info *sqlTable) []string {
 	})
 
 	for _, column := range sqlIndexedColumns {
+		if info.isForeignKey[column.name] {
+			// we do not store the plain values in forign key columns
+			continue
+		}
 		predicate := fmt.Sprintf("%s%s%s", info.tableName, separator, column.name)
 
 		dataType := info.columns[column.name].dataType
 
-		var index string
-		if dataType == STRING {
-			index = "@index(exact)"
-		} else {
-			index = fmt.Sprintf("@index(%s)", dataType)
-		}
-
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s %s .\n",
-			predicate, dataType, index))
+		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
+			predicate, dataType))
 	}
 
 	for _, cst := range info.foreignKeyConstraints {

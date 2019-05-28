@@ -109,6 +109,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		tableName:             tableName,
 		columns:               make(map[string]*columnInfo),
 		columnNames:           make([]string, 0),
+		isForeignKey:          make(map[string]bool),
 		columnDataTypes:       make([]dataType, 0),
 		predNames:             make([]string, 0),
 		dstTables:             make(map[string]interface{}),
