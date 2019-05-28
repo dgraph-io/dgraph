@@ -47,16 +47,13 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 	var dir, path, fileName string
 
-	// check that the path exists and we can access it.
 	if !pathExist(uri.Path) {
 		return x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Find the max version from the latest backup. This is done only when starting a new
-	// backup, not when creating a manifest.
+	// Find the max Since value from the latest backup. This is done only when starting
+	// a new backup, not when creating a manifest.
 	if req.Manifest == nil {
-		// Walk the path and find the most recent backup.
-		// If we can't find a manifest file, this is a full backup.
 		var lastManifest string
 		suffix := filepath.Join(string(filepath.Separator), backupManifest)
 		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
@@ -65,25 +62,24 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 			}
 			return false
 		})
-		// Found a manifest now we extract the version to use in Backup().
+
 		if lastManifest != "" {
 			var m Manifest
 			if err := h.readManifest(lastManifest, &m); err != nil {
 				return err
 			}
 
-			// Return the version of last backup
-			req.Version = m.Version
+			req.Since = m.Since
 		}
 		fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
 	} else {
 		fileName = backupManifest
 	}
 
-	// If a full backup is being forced, force the version to zero to stream all
+	// If a full backup is being forced, force Since to zero to stream all
 	// the contents from the database.
 	if req.Backup.ForceFull {
-		req.Version = 0
+		req.Since = 0
 	}
 
 	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
@@ -103,13 +99,12 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 }
 
 // Load uses tries to load any backup files found.
-// Returns nil and the maximum Ts version on success, error otherwise.
+// Returns the maximum value of Since on success, error otherwise.
 func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	if !pathExist(uri.Path) {
 		return 0, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Get a list of all the manifest files at the location.
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
 	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, suffix)
@@ -122,25 +117,22 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		fmt.Printf("Found backup manifest(s): %v\n", manifests)
 	}
 
-	// version is returned with the max manifest version found.
-	var version uint64
-
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
+	var since uint64
 	for _, manifest := range manifests {
 		var m Manifest
 		if err := h.readManifest(manifest, &m); err != nil {
 			return 0, x.Wrapf(err, "While reading %q", manifest)
 		}
-		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
+		if m.ReadTs == 0 || m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
 				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
 			continue
 		}
 
-		// Check the files for each group in the manifest exist.
 		path := filepath.Dir(manifest)
 		for _, groupId := range m.Groups {
 			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
@@ -153,9 +145,9 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 				return 0, err
 			}
 		}
-		version = m.Version
+		since = m.Since
 	}
-	return version, nil
+	return since, nil
 }
 
 // ListManifests loads the manifests in the locations and returns them.
@@ -164,7 +156,6 @@ func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
 		return nil, x.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	// Get a list of all the manifest files at the location.
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
 	manifests := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, suffix)

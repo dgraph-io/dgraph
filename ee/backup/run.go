@@ -204,7 +204,6 @@ func runRestoreCmd() error {
 
 		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
 		if err != nil {
-			// Let the user know so they can do this manually.
 			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
 		}
 	}
@@ -252,11 +251,11 @@ func runLsbackupCmd() error {
 		return x.Errorf("Error while listing manifests: %v", err.Error())
 	}
 
-	fmt.Printf("Name\tVersion\tReadTs\tGroups\n")
+	fmt.Printf("Name\tSince\tReadTs\tGroups\n")
 	for _, manifest := range manifests {
 		fmt.Printf("%v\t%v\t%v\t%v\n",
 			manifest.FileName,
-			manifest.Version,
+			manifest.Since,
 			manifest.ReadTs,
 			manifest.Groups)
 	}

@@ -29,55 +29,54 @@ type Request struct {
 	Backup   *pb.BackupRequest
 	Manifest *Manifest
 
-	// Version indicates the beginning timestamp from which the backup should start.
-	// For a partial backup, the Version is the largest Version from the previous manifest
-	// files. For a full backup, Version is set to zero so that all data is included.
-	// TODO(martinmr): rename this field to Since both here and in the manifest.
-	Version uint64
+	// Since indicates the beginning timestamp from which the backup should start.
+	// For a partial backup, the value is the largest value from the previous manifest
+	// files. For a full backup, Since is set to zero so that all data is included.
+	Since uint64
 }
 
 // Process uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (r *Request) Process(ctx context.Context) error {
+func (r *Request) Process(ctx context.Context) (*pb.BackupResponse, error) {
+	var res pb.BackupResponse
+
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, err
 	}
 
 	handler, err := r.newHandler()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	glog.V(3).Infof("Backup manifest version: %d", r.Version)
+	glog.V(3).Infof("Backup manifest version: %d", r.Since)
 
 	stream := r.DB.NewStreamAt(r.Backup.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	// Here we return the max version in the original request obejct. We will use this
-	// to create our manifest to complete the backup.
-	r.Backup.Since, err = stream.Backup(handler, r.Version)
+	res.Since, err = stream.Backup(handler, r.Since)
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
-		return err
+		return nil, err
 	}
-	glog.V(2).Infof("Backup group %d version: %d", r.Backup.GroupId, r.Backup.Since)
+	glog.V(2).Infof("Backup group %d version: %d", r.Backup.GroupId, res.Since)
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
-		return err
+		return nil, err
 	}
 	glog.Infof("Backup complete: group %d at %d", r.Backup.GroupId, r.Backup.ReadTs)
-	return nil
+	return &res, nil
 }
 
 // Manifest records backup details, these are values used during restore.
-// Version is the maximum version seen.
+// Since is the timestamp from which the next incremental backup should start.
 // Groups are the IDs of the groups involved.
 // ReadTs is the original backup request timestamp.
 type Manifest struct {
 	sync.Mutex
-	Version uint64   `json:"version"`
-	ReadTs  uint64   `json:"read_ts"`
-	Groups  []uint32 `json:"groups"`
+	Since  uint64   `json:"since"`
+	ReadTs uint64   `json:"read_ts"`
+	Groups []uint32 `json:"groups"`
 }
 
 // ManifestStatus combines a manifest along with other information about it
@@ -90,8 +89,8 @@ type ManifestStatus struct {
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Version: %d, ReadTs: %d, Groups: %v}`,
-		m.Version, m.ReadTs, m.Groups)
+	return fmt.Sprintf(`Manifest{Since: %d, ReadTs: %d, Groups: %v}`,
+		m.Since, m.ReadTs, m.Groups)
 }
 
 // Complete will finalize a backup by writing the manifest at the backup destination.
@@ -103,7 +102,6 @@ func (r *Request) Complete(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Record the ReadTs from the request.
 	if r.Manifest.ReadTs == 0 {
 		r.Manifest.ReadTs = r.Backup.ReadTs
 	}
