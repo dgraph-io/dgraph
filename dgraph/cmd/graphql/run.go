@@ -18,10 +18,17 @@ package graphql
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
+
+	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/validator"
+	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 )
 
 type options struct {
@@ -93,9 +100,77 @@ func initDgraph() error {
 	}
 
 	fmt.Printf("\nProcessing schema file %q\n", opt.schemaFile)
-	fmt.Printf("Loading into Dgraph at %q\n", opt.alpha)
 
-	fmt.Printf("...Go make a cup of tea while I implement this\n")
+	f, err := os.Open(opt.schemaFile)
+	x.Checkf(err, "Unable to open schema file")
+	defer f.Close()
+
+	b, err := ioutil.ReadAll(f)
+	x.Checkf(err, "Error while reading schema file")
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(b)})
+	if gqlErr != nil {
+		x.Checkf(gqlErr, "Error parsing schema file")
+	}
+
+	schema, gqlErr := validator.ValidateSchemaDocument(doc)
+	if gqlErr != nil {
+		x.Checkf(gqlErr, "Error validating schema")
+	}
+
+	var schemaB strings.Builder
+	for _, def := range schema.Types {
+		switch def.Kind {
+		case ast.Object:
+			if def.Name == "Query" ||
+				def.Name == "Mutation" ||
+				((strings.HasPrefix(def.Name, "Add") ||
+					strings.HasPrefix(def.Name, "Delete") ||
+					strings.HasPrefix(def.Name, "Mutate")) &&
+					strings.HasSuffix(def.Name, "Payload")) {
+				continue
+			}
+
+			var ty, preds strings.Builder
+			fmt.Fprintf(&ty, "type %s {\n", def.Name)
+			for _, f := range def.Fields {
+				if f.Type.Name() == "ID" {
+					continue
+				}
+
+				switch schema.Types[f.Type.Name()].Kind {
+				case ast.Object:
+					// still need to write [] ! and reverse in here
+					fmt.Fprintf(&ty, "  %s.%s: uid\n", def.Name, f.Name)
+					fmt.Fprintf(&preds, "%s.%s: uid .\n", def.Name, f.Name)
+				case ast.Scalar:
+					// indexes needed here
+					fmt.Fprintf(&ty, "  %s.%s: %s\n", def.Name, f.Name, strings.ToLower(f.Type.Name()))
+					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, strings.ToLower(f.Type.Name()))
+				case ast.Enum:
+					fmt.Fprintf(&ty, "  %s.%s: string\n", def.Name, f.Name)
+					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)
+				}
+			}
+			fmt.Fprintf(&ty, "}\n")
+
+			fmt.Fprintf(&schemaB, "%s%s\n", ty.String(), preds.String())
+
+		case ast.Scalar:
+			// nothing to do here?  There should only be known scalars, and that
+			// should have been checked by the validation.
+			// fmt.Printf("Got a scalar: %v %v\n", name, def)
+		case ast.Enum:
+			// ignore this? it's handled by the edges
+			// fmt.Printf("Got an enum: %v %v\n", name, def)
+		default:
+			// ignore anything else?
+			// fmt.Printf("Got something else: %v %v\n", name, def)
+		}
+	}
+
+	dgSchema := schemaB.String()
+	fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)
 
 	return nil
 }
