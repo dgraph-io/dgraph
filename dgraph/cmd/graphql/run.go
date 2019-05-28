@@ -18,15 +18,19 @@ package graphql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/spf13/cobra"
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"
@@ -38,6 +42,16 @@ type options struct {
 	schemaFile     string
 	alpha          string
 	useCompression bool
+}
+
+type graphqlSchema struct {
+	Type   string    `json:"dgraph.type,omitempty"`
+	Schema string    `json:"dgraph.graphql.schema.schema,omitempty"`
+	Date   time.Time `json:"dgraph.graphql.schema.date,omitempty"`
+}
+
+type graphqlSchemas struct {
+	Schemas []graphqlSchema `json:"graphqlSchemas,omitempty"`
 }
 
 var opt options
@@ -91,8 +105,35 @@ func run() {
 		useCompression: GraphQL.Conf.GetBool("use_compression"),
 	}
 
-	fmt.Printf("Bringing up GraphQL API\n")
-	fmt.Printf("...Go make a cup of tea while I implement this\n")
+	glog.Infof("Bringing up GraphQL API for Dgraph at %s\n", opt.alpha)
+
+	dgraphClient, disconnect := connect()
+	defer disconnect()
+
+	q := `query {
+		graphqlSchemas(func: type(dgraph.graphql.schema)) {
+			dgraph.graphql.schema.schema
+			dgraph.graphql.schema.date
+		}
+	}`
+
+	ctx := context.Background()
+	resp, err := dgraphClient.NewTxn().Query(ctx, q)
+	x.Checkf(err, "Error querying GraphQL schema from Dgraph")
+
+	var schemas graphqlSchemas
+	err = json.Unmarshal(resp.Json, &schemas)
+	x.Checkf(err, "Error reading GraphQL schema")
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
+	if gqlErr != nil {
+		x.Checkf(gqlErr, "Error parsing GraphQL schema")
+	}
+
+	_, gqlErr = validator.ValidateSchemaDocument(doc)
+	if gqlErr != nil {
+		x.Checkf(gqlErr, "Error validating GraphQL schema")
+	}
 }
 
 func initDgraph() error {
@@ -110,8 +151,9 @@ func initDgraph() error {
 
 	b, err := ioutil.ReadAll(f)
 	x.Checkf(err, "Error while reading schema file")
+	gqlSchema := string(b)
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(b)})
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
 	if gqlErr != nil {
 		x.Checkf(gqlErr, "Error parsing schema file")
 	}
@@ -179,7 +221,10 @@ func initDgraph() error {
 	dgraphClient, disconnect := connect()
 	defer disconnect()
 
-	// check the current schema, is it compatible with these additions?
+	// check the current Dgraph schema, is it compatible with these additions.
+	// also need to check against any stored GraphQL schemas?
+	// - e.g. moving no ! to !, or redefining a type, or changing a relation's type
+	// ... need to allow for schema migrations, but probably should have some checks
 
 	op := &api.Operation{}
 	op.Schema = dgSchema
@@ -188,6 +233,24 @@ func initDgraph() error {
 	// plus auth token like live?
 	err = dgraphClient.Alter(ctx, op)
 	x.Checkf(err, "Error while writing schema to Dgraph")
+
+	s := graphqlSchema{
+		Type:   "dgraph.graphql.schema",
+		Schema: gqlSchema,
+		Date:   time.Now(),
+	}
+
+	mu := &api.Mutation{
+		CommitNow: true,
+	}
+	pb, err := json.Marshal(s)
+	x.Checkf(err, "Error while storing schema in Dgraph")
+	// But this would mean we are in an inconsistent state,
+	// so would that mean they just had to re-apply the same schema?
+
+	mu.SetJson = pb
+	_, err = dgraphClient.NewTxn().Mutate(ctx, mu)
+	x.Checkf(err, "Error while storing schema in Dgraph")
 
 	return nil
 }
