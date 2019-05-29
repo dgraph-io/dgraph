@@ -474,15 +474,6 @@ func (l *List) CommitMutation(startTs, commitTs uint64) error {
 func (l *List) commitMutation(startTs, commitTs uint64) error {
 	l.AssertLock()
 
-	// Check if we still have a pending txn when we return from this function.
-	defer func() {
-		for _, plist := range l.mutationMap {
-			if plist.CommitTs == 0 {
-				return // Got a pending txn.
-			}
-		}
-	}()
-
 	plist, ok := l.mutationMap[startTs]
 	if !ok {
 		// It was already committed, might be happening due to replay.
