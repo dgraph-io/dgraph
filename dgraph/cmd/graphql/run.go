@@ -20,23 +20,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-
+	"github.com/golang/glog"
+	"github.com/spf13/cobra"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
+
+	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
 type options struct {
@@ -132,10 +132,14 @@ func run() {
 		x.Checkf(gqlErr, "Error parsing GraphQL schema")
 	}
 
+	addScalars(doc)
+
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		x.Checkf(gqlErr, "Error validating GraphQL schema")
 	}
+
+	fullSchmea := gschema.GenerateCompleteSchema(schema)
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
