@@ -24,7 +24,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"sync/atomic"
 
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -73,9 +72,6 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
-
-	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
-	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 }
 
 func (l *List) maxVersion() uint64 {
@@ -292,17 +288,6 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	}
 }
 
-// SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
-// Ensure that we don't acquire any locks during a call to this function, so the LRU cache can
-// proceed smoothly.
-func (l *List) SetForDeletion() bool {
-	if atomic.LoadInt32(&l.pendingTxns) > 0 {
-		return false
-	}
-	atomic.StoreInt32(&l.deleteMe, 1)
-	return true
-}
-
 func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }
@@ -409,9 +394,6 @@ func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
 }
 
 func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		return ErrRetry
-	}
 	if txn.ShouldAbort() {
 		return y.ErrConflict
 	}
@@ -458,7 +440,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	}
 
 	l.updateMutationLayer(mpost)
-	atomic.AddInt32(&l.pendingTxns, 1)
 	txn.AddConflictKey(conflictKey)
 	return nil
 }
@@ -491,9 +472,6 @@ func (l *List) CommitMutation(startTs, commitTs uint64) error {
 }
 
 func (l *List) commitMutation(startTs, commitTs uint64) error {
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		return ErrRetry
-	}
 	l.AssertLock()
 
 	// Check if we still have a pending txn when we return from this function.
@@ -503,7 +481,6 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 				return // Got a pending txn.
 			}
 		}
-		atomic.StoreInt32(&l.pendingTxns, 0)
 	}()
 
 	plist, ok := l.mutationMap[startTs]
