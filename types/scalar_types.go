@@ -178,6 +178,9 @@ func ParseTime(val string) (time.Time, error) {
 	if err := t.UnmarshalText([]byte(val)); err == nil {
 		return t, err
 	}
+	if t, err := time.Parse(dateFormatYMDZone, val); err == nil {
+		return t, err
+	}
 	// try without timezone
 	if t, err := time.Parse(dateTimeFormat, val); err == nil {
 		return t, err
@@ -191,6 +194,8 @@ func ParseTime(val string) (time.Time, error) {
 	return time.Parse(dateFormatY, val)
 }
 
+//2017-07-04 12:54:54 +0000 UTC
+const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
 const dateFormatYMD = "2006-01-02"
 const dateFormatYM = "2006-01"
 const dateFormatY = "2006"
