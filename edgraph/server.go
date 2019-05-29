@@ -239,9 +239,15 @@ func (s *ServerState) setupSubscriptions() {
 			}
 			glog.V(1).Infof("produced %d messages to kafka", len(kv.Kv))
 		}
-		if err := s.Pstore.Subscribe(context.Background(), cb, nil); err != nil {
-			glog.Errorf("error while subscribing to the pstore: %v", err)
-		}
+
+		go func() {
+			// The Subscribe will go into an infinite loop,
+			// hence we need to run it inside a separate go routine
+			if err := s.Pstore.Subscribe(context.Background(), cb, nil); err != nil {
+				glog.Errorf("error while subscribing to the pstore: %v", err)
+			}
+		}()
+
 		glog.V(1).Infof("subscribed to the pstore for updates")
 	}
 }
