@@ -210,37 +210,30 @@ func createLabel(ref *ref) (string, error) {
 	return fmt.Sprintf("_:%s", strings.Join(parts, separator)), nil
 }
 
-// createDgraphSchema generates one Dgraph index per SQL primary key
-// or index. For a composite index in SQL, e.g. (fname, lname) in the person table, we will create
-// separate indices for each individual column within Dgraph, e.g.
-// person_fname: string @index(exact) .
-// person_lname: string @index(exact) .
-// The reason is that Dgraph does not support composite indices as of now.
+// createDgraphSchema generates one Dgraph predicate per SQL column
+// and the type of the predicate is inferred from the SQL column type.
 func createDgraphSchema(info *sqlTable) []string {
-	dgraphIndexes := make([]string, 0)
-	sqlIndexedColumns := getColumnIndices(info, func(info *sqlTable, column string) bool {
-		return info.columns[column].keyType != none
-	})
+	dgraphIndices := make([]string, 0)
 
-	for _, column := range sqlIndexedColumns {
-		if info.isForeignKey[column.name] {
-			// we do not store the plain values in forign key columns
+	for _, column := range info.columnNames {
+		if info.isForeignKey[column] {
+			// we do not store the plain values in foreign key columns
 			continue
 		}
-		predicate := fmt.Sprintf("%s%s%s", info.tableName, separator, column.name)
+		predicate := fmt.Sprintf("%s%s%s", info.tableName, separator, column)
 
-		dataType := info.columns[column.name].dataType
+		dataType := info.columns[column].dataType
 
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s .\n",
+		dgraphIndices = append(dgraphIndices, fmt.Sprintf("%s: %s .\n",
 			predicate, dataType))
 	}
 
 	for _, cst := range info.foreignKeyConstraints {
 		pred := getPredFromConstraint(info.tableName, separator, cst)
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: [%s] .\n",
+		dgraphIndices = append(dgraphIndices, fmt.Sprintf("%s: [%s] .\n",
 			pred, UID))
 	}
-	return dgraphIndexes
+	return dgraphIndices
 }
 
 func getPredFromConstraint(
