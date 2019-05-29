@@ -86,6 +86,7 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(GraphQL.Conf).Stop()
 			if err := initDgraph(); err != nil {
+				fmt.Printf("Error : %s\n", err)
 				os.Exit(1)
 			}
 		},
@@ -154,24 +155,29 @@ func initDgraph() error {
 		alpha:      GraphQL.Conf.GetString("alpha"),
 	}
 
-	fmt.Printf("\nProcessing schema file %q\n", opt.schemaFile)
+	fmt.Printf("Processing schema file %q\n", opt.schemaFile)
 
 	f, err := os.Open(opt.schemaFile)
-	x.Checkf(err, "Unable to open schema file")
+	if err != nil {
+		return err
+	}
+
 	defer f.Close()
 
 	b, err := ioutil.ReadAll(f)
-	x.Checkf(err, "Error while reading schema file")
+	if err != nil {
+		return err
+	}
 	gqlSchema := string(b)
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
 	if gqlErr != nil {
-		x.Checkf(gqlErr, "Error parsing schema file")
+		return fmt.Errorf("cannot parse schema %s", gqlErr)
 	}
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		x.Checkf(gqlErr, "Error validating schema")
+		return fmt.Errorf("schema is invalid %s", gqlErr)
 	}
 
 	var schemaB strings.Builder
@@ -243,7 +249,9 @@ func initDgraph() error {
 	ctx := context.Background()
 	// plus auth token like live?
 	err = dgraphClient.Alter(ctx, op)
-	x.Checkf(err, "Error while writing schema to Dgraph")
+	if err != nil {
+		return fmt.Errorf("failed to write Dgraph schema %s", err)
+	}
 
 	s := graphqlSchema{
 		Type:   "dgraph.graphql.schema",
@@ -255,13 +263,17 @@ func initDgraph() error {
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(s)
-	x.Checkf(err, "Error while storing schema in Dgraph")
-	// But this would mean we are in an inconsistent state,
-	// so would that mean they just had to re-apply the same schema?
+	if err != nil {
+		return fmt.Errorf("couldn't generate mutation to save schema %s", err)
+	}
 
 	mu.SetJson = pb
 	_, err = dgraphClient.NewTxn().Mutate(ctx, mu)
-	x.Checkf(err, "Error while storing schema in Dgraph")
+	if err != nil {
+		return fmt.Errorf("failed to save GraphQL schema to Dgraph %s", err)
+		// But this would mean we are in an inconsistent state,
+		// so would that mean they just had to re-apply the same schema?
+	}
 
 	return nil
 }
