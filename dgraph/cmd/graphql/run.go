@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -130,10 +131,20 @@ func run() {
 		x.Checkf(gqlErr, "Error parsing GraphQL schema")
 	}
 
-	_, gqlErr = validator.ValidateSchemaDocument(doc)
+	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		x.Checkf(gqlErr, "Error validating GraphQL schema")
 	}
+
+	handler := &graphqlHandler{
+		dgraphClient: dgraphClient,
+		schema:       schema,
+	}
+
+	http.Handle("/graphql", handler)
+
+	// the ports and urls etc that the endpoint serves should be input options
+	glog.Fatal(http.ListenAndServe(":8765", nil))
 }
 
 func initDgraph() error {
