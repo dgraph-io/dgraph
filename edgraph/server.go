@@ -27,10 +27,6 @@ import (
 	"time"
 	"unicode"
 
-	pb2 "github.com/dgraph-io/badger/pb"
-
-	"github.com/Shopify/sarama"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -63,6 +59,7 @@ const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
 	kafkaTopic   = "dgraph"
+	kafkaGroup   = "dgraph"
 )
 
 type ServerState struct {
@@ -185,71 +182,13 @@ func (s *ServerState) initStorage() {
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
-	s.setupSubscriptions()
+	s.setupKafkaTarget()
+	s.setupKafkaSource()
 
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)
 	go s.runVlogGC(s.Pstore)
 	go s.runVlogGC(s.WALstore)
-}
-
-func (s *ServerState) setupSubscriptions() {
-	kafkaBrokers := Config.KafkaOpt.Brokers
-	glog.Infof("kafka brokers: %v", kafkaBrokers)
-	if len(kafkaBrokers) > 0 {
-		glog.Infof("will publish to %v", kafkaBrokers)
-		// TODO: call badger DB Subscribe API
-		conf := sarama.NewConfig()
-		conf.Producer.Return.Successes = true
-
-		var producer sarama.SyncProducer
-		var err error
-		for i := 0; i < 10; i++ {
-			producer, err = sarama.NewSyncProducer(strings.Split(kafkaBrokers, ","), conf)
-			if err == nil {
-				break
-			} else {
-				glog.Errorf("unable to create the kafka sync producer, "+
-					"will retry in 5 seconds: %v", err)
-				time.Sleep(5 * time.Second)
-			}
-		}
-		if err != nil {
-			glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
-			return
-		}
-
-		cb := func(kv *pb2.KVList) {
-			// TODO: produce to kafka
-			for _, oneKV := range kv.Kv {
-				bytes, err := oneKV.Marshal()
-				if err != nil {
-					glog.Errorf("unable to marshal the kv: %+v", oneKV)
-					continue
-				}
-
-				_, _, err = producer.SendMessage(&sarama.ProducerMessage{
-					Topic: kafkaTopic,
-					Value: sarama.ByteEncoder(bytes),
-				})
-
-				if err != nil {
-					glog.Errorf("error while producing to kafka: %v", err)
-				}
-			}
-			glog.V(1).Infof("produced %d messages to kafka", len(kv.Kv))
-		}
-
-		go func() {
-			// The Subscribe will go into an infinite loop,
-			// hence we need to run it inside a separate go routine
-			if err := s.Pstore.Subscribe(context.Background(), cb, nil); err != nil {
-				glog.Errorf("error while subscribing to the pstore: %v", err)
-			}
-		}()
-
-		glog.V(1).Infof("subscribed to the pstore for updates")
-	}
 }
 
 func (s *ServerState) Dispose() {

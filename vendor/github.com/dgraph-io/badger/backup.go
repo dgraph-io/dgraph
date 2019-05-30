@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"github.com/golang/glog"
 	"io"
 
 	"github.com/dgraph-io/badger/pb"
@@ -183,39 +184,12 @@ func (l *loader) finish() error {
 	return l.throttle.Finish()
 }
 
-// Load reads a protobuf-encoded list of all entries from a reader and writes
-// them to the database. This can be used to restore the database from a backup
-// made by calling DB.Backup().
-//
-// DB.Load() should be called on a database that is not running any other
+// LoadLists reads the lists from the listCh channel, and writes them
+// to the database. The method should be called on a database that is not running any other
 // concurrent transactions while it is running.
-func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
-	br := bufio.NewReaderSize(r, 16<<10)
-	unmarshalBuf := make([]byte, 1<<10)
-
+func (db *DB) LoadLists(listCh chan *pb.KVList, maxPendingWrites int) error {
 	ldr := db.newLoader(maxPendingWrites)
-	for {
-		var sz uint64
-		err := binary.Read(br, binary.LittleEndian, &sz)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		if cap(unmarshalBuf) < int(sz) {
-			unmarshalBuf = make([]byte, sz)
-		}
-
-		if _, err = io.ReadFull(br, unmarshalBuf[:sz]); err != nil {
-			return err
-		}
-
-		list := &pb.KVList{}
-		if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
-			return err
-		}
-
+	for list := range listCh {
 		for _, kv := range list.Kv {
 			if err := ldr.set(kv); err != nil {
 				return err
@@ -234,4 +208,55 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 	}
 	db.orc.txnMark.Done(db.orc.nextTxnTs - 1)
 	return nil
+}
+
+// Load reads a protobuf-encoded list of all entries from a reader and writes
+// them to the database. This can be used to restore the database from a backup
+// made by calling DB.Backup().
+//
+// DB.Load() should be called on a database that is not running any other
+// concurrent transactions while it is running.
+func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
+	br := bufio.NewReaderSize(r, 16<<10)
+	unmarshalBuf := make([]byte, 1<<10)
+
+	listCh := make(chan *pb.KVList, 100)
+	produceLists := func() error {
+		defer close(listCh)
+		// this is the producer of KVLists
+		for {
+			var sz uint64
+			err := binary.Read(br, binary.LittleEndian, &sz)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+
+			if cap(unmarshalBuf) < int(sz) {
+				unmarshalBuf = make([]byte, sz)
+			}
+
+			if _, err = io.ReadFull(br, unmarshalBuf[:sz]); err != nil {
+				return err
+			}
+
+			list := &pb.KVList{}
+			if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
+				return err
+			}
+
+			listCh <- list
+		}
+
+		return nil
+	}
+
+	go func() {
+		if err := produceLists(); err != nil {
+			glog.Error("error while producing lists: %v", err)
+		}
+	}()
+
+	return db.LoadLists(listCh, maxPendingWrites)
 }

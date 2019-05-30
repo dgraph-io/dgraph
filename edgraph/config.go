@@ -31,7 +31,8 @@ const (
 )
 
 type KafkaOptions struct {
-	Brokers string
+	TargetBrokers string
+	SourceBrokers string
 }
 
 type Options struct {

@@ -172,7 +172,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	flag.String("kafka_brokers", "", "The Kafka brokers to publish updates")
+	flag.String("kafka_target_brokers", "", "The Kafka brokers to publish updates")
+	flag.String("kafka_source_brokers", "", "The Kafka brokers to receive updates")
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
@@ -416,7 +417,8 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 
 		KafkaOpt: edgraph.KafkaOptions{
-			Brokers: Alpha.Conf.GetString("kafka_brokers"),
+			TargetBrokers: Alpha.Conf.GetString("kafka_target_brokers"),
+			SourceBrokers: Alpha.Conf.GetString("kafka_source_brokers"),
 		},
 	}
 

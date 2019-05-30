@@ -81,6 +81,7 @@ type DB struct {
 	vhead     valuePointer // less than or equal to a pointer to the last vlog value put into mt
 	writeCh   chan *request
 	flushChan chan flushTask // For flushing memtables.
+	closeOnce sync.Once      // For closing DB only once.
 
 	// Number of log rotates since the last memtable flush. We will access this field via atomic
 	// functions. Since we are not going to use any 64bit atomic functions, there is no need for
@@ -340,10 +341,17 @@ func Open(opt Options) (db *DB, err error) {
 	return db, nil
 }
 
-// Close closes a DB. It's crucial to call it to ensure all the pending updates
-// make their way to disk. Calling DB.Close() multiple times is not safe and would
-// cause panic.
-func (db *DB) Close() (err error) {
+// Close closes a DB. It's crucial to call it to ensure all the pending updates make their way to
+// disk. Calling DB.Close() multiple times would still only close the DB once.
+func (db *DB) Close() error {
+	var err error
+	db.closeOnce.Do(func() {
+		err = db.close()
+	})
+	return err
+}
+
+func (db *DB) close() (err error) {
 	db.elog.Printf("Closing database")
 	atomic.StoreInt32(&db.blockWrites, 1)
 
