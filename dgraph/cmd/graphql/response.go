@@ -23,24 +23,17 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// FIXME:
-// based on https://github.com/99designs/gqlgen/blob/1617ff28daba04a67413ba9696c7650e718aa080/graphql/response.go#L14
-//
 // complete error format yet to be decided.
 // GraphQL spec on errors is here https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 //
 
-// Errors are intentionally serialized first based on the advice in
-// https://github.com/facebook/graphql/commit/7b40390d48680b15cb93e02d46ac5eb249689876#diff-757cea6edf0288677a9eea4cfc801d87R107
-// and https://github.com/facebook/graphql/pull/384
-
-type Response struct {
+type GraphQLResponse struct {
 	Errors gqlerror.List   `json:"errors,omitempty"`
 	Data   json.RawMessage `json:"data"`
 }
 
-func ErrorResponse(messagef string, args ...interface{}) *Response {
-	return &Response{
+func ErrorResponse(messagef string, args ...interface{}) *GraphQLResponse {
+	return &GraphQLResponse{
 		Errors: gqlerror.List{{Message: fmt.Sprintf(messagef, args...)}},
 	}
 }
