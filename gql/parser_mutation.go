@@ -22,15 +22,121 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ParseMutation(mutation string) (*api.Mutation, error) {
+// ParseMutation parses a block into a mutation. Returns an object with a mutation or
+// an upsert block with mutation, otherwise returns nil with an error.
+func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 	lexer := lex.NewLexer(mutation)
-	lexer.Run(lexInsideMutation)
+	lexer.Run(lexIdentifyBlock)
+	if err := lexer.ValidateResult(); err != nil {
+		return nil, err
+	}
+
 	it := lexer.NewIterator()
+	if !it.Next() {
+		return nil, errors.Errorf("Invalid mutation")
+	}
+
+	item := it.Item()
+	switch item.Typ {
+	case itemUpsertBlock:
+		if mu, err = ParseUpsertBlock(it); err != nil {
+			return nil, err
+		}
+	case itemLeftCurl:
+		if mu, err = ParseMutationBlock(it); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.Errorf("Unexpected token: [%s]", item.Val)
+	}
+
+	// mutations must be enclosed in a single block.
+	if it.Next() && it.Item().Typ != lex.ItemEOF {
+		return nil, errors.Errorf("Unexpected %s after the end of the block", it.Item().Val)
+	}
+
+	return mu, nil
+}
+
+// ParseUpsertBlock parses the upsert block
+func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
+	var mu *api.Mutation
+	var queryText string
+	var queryFound bool
+
+	// ==>upsert<=== {...}
+	if !it.Next() {
+		return nil, errors.Errorf("Unexpected end of upsert block")
+	}
+
+	// upsert ===>{<=== ....}
+	item := it.Item()
+	if item.Typ != itemLeftCurl {
+		return nil, errors.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+	}
+
+	for it.Next() {
+		item = it.Item()
+		switch {
+		// upsert {... ===>}<===
+		case item.Typ == itemRightCurl:
+			if mu == nil {
+				return nil, errors.Errorf("empty mutation block")
+			} else if !queryFound {
+				return nil, errors.Errorf("query op not found in upsert block")
+			} else {
+				mu.Query = queryText
+				return mu, nil
+			}
+
+		// upsert { ===>mutation<=== {...} query{...}}
+		case item.Typ == itemUpsertBlockOp && item.Val == "query":
+			if queryFound {
+				return nil, errors.Errorf("multiple query ops inside upsert block")
+			}
+			queryFound = true
+			if !it.Next() {
+				return nil, errors.Errorf("Unexpected end of upsert block")
+			}
+			item = it.Item()
+			if item.Typ != itemUpsertBlockOpContent {
+				return nil, errors.Errorf("expecting brace, found '%s'", item.Val)
+			}
+			queryText += item.Val
+
+		// upsert { mutation{...} ===>query<==={...}}
+		case item.Typ == itemUpsertBlockOp && item.Val == "mutation":
+			if !it.Next() {
+				return nil, errors.Errorf("Unexpected end of upsert block")
+			}
+			var err error
+			if mu, err = ParseMutationBlock(it); err != nil {
+				return nil, err
+			}
+
+		// upsert { mutation{...} ===>fragment<==={...}}
+		case item.Typ == itemUpsertBlockOp && item.Val == "fragment":
+			if !it.Next() {
+				return nil, errors.Errorf("Unexpected end of upsert block")
+			}
+			item = it.Item()
+			if item.Typ != itemUpsertBlockOpContent {
+				return nil, errors.Errorf("expecting brace, found '%s'", item.Val)
+			}
+			queryText += "fragment" + item.Val
+
+		default:
+			return nil, errors.Errorf("unexpected token in upsert block [%s]", item.Val)
+		}
+	}
+
+	return nil, errors.Errorf("Invalid upsert block")
+}
+
+// ParseMutationBlock parses the mutation block
+func ParseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	var mu api.Mutation
 
-	if !it.Next() {
-		return nil, errors.New("Invalid mutation")
-	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
 		return nil, errors.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
@@ -42,10 +148,6 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 			continue
 		}
 		if item.Typ == itemRightCurl {
-			// mutations must be enclosed in a single block.
-			if it.Next() && it.Item().Typ != lex.ItemEOF {
-				return nil, errors.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
-			}
 			return &mu, nil
 		}
 		if item.Typ == itemMutationOp {
@@ -71,7 +173,7 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 			}
 			parse = true
 		}
-		if item.Typ == itemMutationContent {
+		if item.Typ == itemMutationOpContent {
 			if !parse {
 				return errors.Errorf("Mutation syntax invalid.")
 			}
