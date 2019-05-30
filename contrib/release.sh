@@ -162,6 +162,7 @@ popd
 
 pushd $basedir/ratel
   env GOOS=linux GOARCH=amd64 go build -o ratel-linux-amd64 -v -ldflags "-X $ratel_release=$release_version" .
+  strip -x ratel-linux-amd64
   mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
 popd
 
