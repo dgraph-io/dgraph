@@ -61,7 +61,7 @@ func TestEncodeMemory(t *testing.T) {
 
 func TestNormalizeJSONLimit(t *testing.T) {
 	// Set default normalize limit.
-	x.Config.NormalizeNodeLimit = 1e5
+	x.Config.NormalizeNodeLimit = 1e4
 
 	if testing.Short() {
 		t.Skip("Skipping TestNormalizeJSONLimit")
@@ -97,7 +97,7 @@ func TestNormalizeJSONLimit(t *testing.T) {
 
 func TestNormalizeJSONUid1(t *testing.T) {
 	// Set default normalize limit.
-	x.Config.NormalizeNodeLimit = 1e5
+	x.Config.NormalizeNodeLimit = 1e4
 
 	n := (&fastJsonNode{}).New("root")
 	require.NotNil(t, n)
