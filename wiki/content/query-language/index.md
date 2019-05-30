@@ -98,7 +98,7 @@ brackets while asking for it in the query. E.g. `<first:name>`{{% /notice %}}
 
 A query expands edges from node to node by nesting query blocks with `{ }`.
 
-Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance,character` edges are expanded to find the actor names and roles for every actor in the movie.
+Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance.character` edges are expanded to find the actor names and roles for every actor in the movie.
 {{< runnable >}}
 {
   brCharacters(func: eq(name@en, "Blade Runner")) {
