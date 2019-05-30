@@ -480,7 +480,7 @@ func run() {
 	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
-	x.Config.NormalizeNodeLimit = cast.ToUint64(Alpha.Conf.GetString("normalize_node_limit"))
+	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 
 	x.PrintVersion()
 

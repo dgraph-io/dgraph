@@ -278,7 +278,7 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	for _, pa := range parent {
 		for _, ca := range child {
 			cnt += len(pa) + len(ca)
-			if cnt > int(x.Config.NormalizeNodeLimit) {
+			if cnt > x.Config.NormalizeNodeLimit {
 				return nil, x.Errorf("Couldn't evaluate @normalize directive - too many results")
 			}
 			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
