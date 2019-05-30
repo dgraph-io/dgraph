@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func makeFastJsonNode() *fastJsonNode {
@@ -59,6 +60,9 @@ func TestEncodeMemory(t *testing.T) {
 }
 
 func TestNormalizeJSONLimit(t *testing.T) {
+	// Set default normalize limit.
+	x.Config.NormalizeNodeLimit = 1e5
+
 	if testing.Short() {
 		t.Skip("Skipping TestNormalizeJSONLimit")
 	}
@@ -92,6 +96,9 @@ func TestNormalizeJSONLimit(t *testing.T) {
 }
 
 func TestNormalizeJSONUid1(t *testing.T) {
+	// Set default normalize limit.
+	x.Config.NormalizeNodeLimit = 1e5
+
 	n := (&fastJsonNode{}).New("root")
 	require.NotNil(t, n)
 	child1 := n.New("child1")
