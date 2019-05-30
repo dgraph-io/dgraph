@@ -29,11 +29,12 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -52,7 +53,7 @@ var (
 
 func TestBackupFilesystem(t *testing.T) {
 	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-	x.Check(err)
+	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	// Add initial data.
@@ -120,7 +121,6 @@ func TestBackupFilesystem(t *testing.T) {
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform first incremental backup.
 	dirs = runBackup(t, 6, 2)
@@ -145,7 +145,6 @@ func TestBackupFilesystem(t *testing.T) {
 			`, original.Uids["x4"], original.Uids["x5"])),
 	})
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform second incremental backup.
 	dirs = runBackup(t, 9, 3)
@@ -171,7 +170,6 @@ func TestBackupFilesystem(t *testing.T) {
 			`, original.Uids["x4"], original.Uids["x5"])),
 	})
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform second full backup.
 	dirs = runBackupInternal(t, true, 12, 4)
@@ -221,7 +219,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.NoError(t, z.GetError(resp.Body))
-	time.Sleep(5 * time.Second)
+	time.Sleep(time.Second)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs()
