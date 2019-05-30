@@ -139,7 +139,8 @@ func run() {
 		x.Checkf(gqlErr, "Error validating GraphQL schema")
 	}
 
-	fullSchmea := gschema.GenerateCompleteSchema(schema)
+	gschema.GenerateCompleteSchema(schema)
+	fmt.Println(fullSchmea)
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
