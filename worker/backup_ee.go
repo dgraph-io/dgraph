@@ -26,6 +26,7 @@ import (
 // Backup handles a request coming from another node.
 func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (
 	*pb.BackupResponse, error) {
+
 	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
 	res, err := backupCurrentGroup(ctx, req)
 	if err != nil {
