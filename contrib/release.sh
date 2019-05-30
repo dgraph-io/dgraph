@@ -119,7 +119,7 @@ popd
 
 pushd $basedir/badger/badger
   env GOOS=windows GOARCH=amd64 go build -o badger-windows-amd64.exe -v .
-  mv badger-windows-amd64.exe $TMP/windows/badger
+  mv badger-windows-amd64.exe $TMP/windows/badger.exe
 popd
 
 pushd $basedir/ratel
