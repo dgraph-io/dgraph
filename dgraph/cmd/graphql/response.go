@@ -27,13 +27,13 @@ import (
 // GraphQL spec on errors is here https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 //
 
-type GraphQLResponse struct {
+type graphQLResponse struct {
 	Errors gqlerror.List   `json:"errors,omitempty"`
 	Data   json.RawMessage `json:"data"`
 }
 
-func ErrorResponse(messagef string, args ...interface{}) *GraphQLResponse {
-	return &GraphQLResponse{
+func ErrorResponse(messagef string, args ...interface{}) *graphQLResponse {
+	return &graphQLResponse{
 		Errors: gqlerror.List{{Message: fmt.Sprintf(messagef, args...)}},
 	}
 }

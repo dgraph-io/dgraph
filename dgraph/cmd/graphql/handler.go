@@ -141,7 +141,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch op.Operation {
 	case ast.Query:
-		resp := &GraphQLResponse{
+		resp := &graphQLResponse{
 			Data: []byte(`{ "lifeQuery": [ { "meaning" : 42 } ] }`),
 		}
 
@@ -150,14 +150,20 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// error response - "data": null
 			return
 		}
-		w.Write(b)
+		_, err = w.Write(b)
+		if err != nil {
+			// nothing to do, just log?
+		}
 	case ast.Mutation:
 		b, err := json.Marshal(ErrorResponse("Not yet implemented"))
 		if err != nil {
 			// error response - "data": null
 			return
 		}
-		w.Write(b)
+		_, err = w.Write(b)
+		if err != nil {
+			// nothing to do, just log?
+		}
 	default:
 		// error response - no data
 		return
