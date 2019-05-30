@@ -25,6 +25,8 @@ type Options struct {
 	DebugMode      bool
 	PortOffset     int
 	QueryEdgeLimit uint64
+	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
+	NormalizeNodeLimit int
 }
 
 var Config Options
