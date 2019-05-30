@@ -17,7 +17,9 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl    = '{'
@@ -43,28 +45,153 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemEqual                                   // equals to symbol
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemColon                                   // Colon
-	itemAt                                      // @
-	itemPeriod                                  // .
-	itemDollar                                  // $
-	itemRegex                                   // /
-	itemBackslash                               // \
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
+	itemText                 lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                     // left curly bracket
+	itemRightCurl                                    // right curly bracket
+	itemEqual                                        // equals to symbol
+	itemName                                         // [9] names
+	itemOpType                                       // operation type
+	itemString                                       // quoted string
+	itemLeftRound                                    // left round bracket
+	itemRightRound                                   // right round bracket
+	itemColon                                        // Colon
+	itemAt                                           // @
+	itemPeriod                                       // .
+	itemDollar                                       // $
+	itemRegex                                        // /
+	itemBackslash                                    // \
+	itemMutationOp                                   // mutation operation (set, delete)
+	itemMutationOpContent                            // mutation operation content (inc. query)
+	itemUpsertBlock                                  // mutation upsert block
+	itemUpsertBlockOp                                // mutation upsert block operations (query, mutate, fragment)
+	itemUpsertBlockOpContent                         // mutation upsert block operations' content
 	itemLeftSquare
 	itemRightSquare
 	itemComma
 	itemMathOp
 )
+
+// lexIdentifyBlock identifies whether it is an upsert block
+// If the block begins with "{" => mutation block
+// Else if the block begins with "upsert" => upsert block
+func lexIdentifyBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexIdentifyBlock
+	for {
+		switch r := l.Next(); {
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameBlock
+		case r == leftCurl:
+			l.Backup()
+			return lexInsideMutation
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Invalid mutation block")
+		default:
+			return l.Errorf("Unexpected character while identifying mutation block: %#U", r)
+		}
+	}
+}
+
+// lexNameBlock lexes the blocks, for now, only upsert block
+func lexNameBlock(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		switch word := l.Input[l.Start:l.Pos]; word {
+		case "upsert":
+			l.Emit(itemUpsertBlock)
+			return lexUpsertBlock
+		default:
+			return l.Errorf("Invalid block: [%s]", word)
+		}
+	}
+}
+
+// lexUpsertBlock lexes the upsert block
+func lexUpsertBlock(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexUpsertBlock
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.BlockDepth--
+			l.Emit(itemRightCurl)
+			if l.BlockDepth == 0 {
+				return lexTopLevel
+			}
+		case r == leftCurl:
+			l.BlockDepth++
+			l.Emit(itemLeftCurl)
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameUpsertOp
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Unclosed upsert block")
+		default:
+			return l.Errorf("Unrecognized character in upsert block: %#U", r)
+		}
+	}
+}
+
+// lexNameUpsertOp parses the operation names inside upsert block
+func lexNameUpsertOp(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		word := l.Input[l.Start:l.Pos]
+		switch word {
+		case "query":
+			l.Emit(itemUpsertBlockOp)
+			return lexBlockContent
+		case "mutation":
+			l.Emit(itemUpsertBlockOp)
+			return lexInsideMutation
+		case "fragment":
+			l.Emit(itemUpsertBlockOp)
+			return lexBlockContent
+		default:
+			return l.Errorf("Invalid operation type: %s", word)
+		}
+	}
+}
+
+// lexBlockContent lexes and absorbs the text inside a block (covered by braces).
+func lexBlockContent(l *lex.Lexer) lex.StateFn {
+	depth := 0
+	for {
+		switch l.Next() {
+		case lex.EOF:
+			return l.Errorf("Unclosed block (matching braces not found)")
+		case quote:
+			if err := l.LexQuotedString(); err != nil {
+				return l.Errorf(err.Error())
+			}
+		case leftCurl:
+			depth++
+		case rightCurl:
+			depth--
+			if depth < 0 {
+				return l.Errorf("Unopened } found")
+			} else if depth == 0 {
+				l.Emit(itemUpsertBlockOpContent)
+				return lexUpsertBlock
+			}
+		}
+	}
+}
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
@@ -231,6 +358,12 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 }
 
 func lexTopLevel(l *lex.Lexer) lex.StateFn {
+	// TODO (Aman): we currently only have upsert block,
+	// this won't work if we have other blocks too.
+	if l.BlockDepth != 0 {
+		return lexUpsertBlock
+	}
+
 	l.Mode = lexTopLevel
 Loop:
 	for {
@@ -401,7 +534,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemMutationContent)
+		l.Emit(itemMutationOpContent)
 		break
 	}
 	return lexInsideMutation
