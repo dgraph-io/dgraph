@@ -1718,8 +1718,15 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 					//
 					// NOTE: If you need to make type assertions that might involve
 					// default value vars, use `Safe()` func and not val.Value directly.
-					mp[v.Name].Vals[0] = types.Val{}
-					sg.Params.uidToVal = mp[v.Name].Vals
+					varVal := mp[v.Name]
+					// Check for nil, seems to happen when aggregate is done on empty dataset.
+					// Issue #3470
+					if varVal.Vals == nil {
+						varVal.Vals = make(map[uint64]types.Val)
+						mp[v.Name] = varVal
+					}
+					varVal.Vals[0] = types.Val{}
+					sg.Params.uidToVal = varVal.Vals
 				}
 			}
 		}

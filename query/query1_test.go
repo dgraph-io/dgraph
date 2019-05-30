@@ -1220,7 +1220,6 @@ func TestAggregateRoot6(t *testing.T) {
 }
 
 func TestAggregateRootError(t *testing.T) {
-
 	query := `
 		{
 			var(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -1239,6 +1238,46 @@ func TestAggregateRootError(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}
+
+func TestAggregateEmpty1(t *testing.T) {
+	query := `
+		{
+			var(func: has(number)) {
+				number as number
+			}
+			var() {
+				highest as max(val(number))
+			}
+
+			all(func: eq(number, val(highest))) {
+				uid
+				number
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseInt: parsing")
+}
+
+func TestAggregateEmpty2(t *testing.T) {
+	query := `
+		{
+			var(func: has(number))
+			{
+				highest_number as number
+			}
+
+			all(func: eq(number, val(highest_number)))
+			{
+				uid
+			}
+		}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "strconv.ParseInt: parsing")
 }
 
 func TestFilterLang(t *testing.T) {
