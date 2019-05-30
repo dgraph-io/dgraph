@@ -6,6 +6,10 @@
 # binaries and prepare them such that any human or script can then pick these up
 # and use them as they deem fit.
 
+# Output colors
+RED='\033[91;1m'
+RESET='\033[0m'
+
 # Don't use standard GOPATH. Create a new one.
 GOPATH="/tmp/go"
 rm -Rf $GOPATH
@@ -13,7 +17,7 @@ mkdir $GOPATH
 # Necessary to pick up Gobin binaries like protoc-gen-gofast
 PATH="$GOPATH/bin:$PATH"
 
-# TODO(dmai): check Go version for release builds.
+# The Go version used for release builds must match this version.
 GOVERSION="1.12.5"
 
 TAG=$1
@@ -49,6 +53,10 @@ commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 
 echo "Using Go version"
 go version
+if [[ ! "$(go version)" =~ $GOVERSION ]]; then
+   echo -e "${RED}Go version is NOT expected. Should be $GOVERSION.${RESET}"
+   exit 1
+fi
 
 go get -u github.com/jteeuwen/go-bindata/...
 go get -d -u golang.org/x/net/context
