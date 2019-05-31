@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Sorts And validates the facets.
+// SortAndValidate sorts And validates the facets.
 func SortAndValidate(fs []*api.Facet) error {
 	if len(fs) == 0 {
 		return nil
@@ -148,6 +148,7 @@ func FacetFor(key, val string) (*api.Facet, error) {
 	return facet, err
 }
 
+// ToBinary converts the given value into a binary value.
 func ToBinary(key string, value interface{}, sourceType api.Facet_ValType) (
 	*api.Facet, error) {
 	// convert facet val interface{} to binary

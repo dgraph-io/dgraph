@@ -30,16 +30,27 @@ const nanoSecondsInSec = 1000000000
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	DefaultID   = TypeID(pb.Posting_DEFAULT)
-	BinaryID    = TypeID(pb.Posting_BINARY)
-	IntID       = TypeID(pb.Posting_INT)
-	FloatID     = TypeID(pb.Posting_FLOAT)
-	BoolID      = TypeID(pb.Posting_BOOL)
-	DateTimeID  = TypeID(pb.Posting_DATETIME)
-	GeoID       = TypeID(pb.Posting_GEO)
-	UidID       = TypeID(pb.Posting_UID)
-	PasswordID  = TypeID(pb.Posting_PASSWORD)
-	StringID    = TypeID(pb.Posting_STRING)
+	// DefaultID represents the default type.
+	DefaultID = TypeID(pb.Posting_DEFAULT)
+	// BinaryID represents the binary data type.
+	BinaryID = TypeID(pb.Posting_BINARY)
+	// IntID represents the integer type.
+	IntID = TypeID(pb.Posting_INT)
+	// FloatID represents the floating-point number type.
+	FloatID = TypeID(pb.Posting_FLOAT)
+	// FloatID represents the boolean type.
+	BoolID = TypeID(pb.Posting_BOOL)
+	// DateTimeID represents the datetime type.
+	DateTimeID = TypeID(pb.Posting_DATETIME)
+	// GeoID represents the geo-location data type.
+	GeoID = TypeID(pb.Posting_GEO)
+	// UidID represents the uid type.
+	UidID = TypeID(pb.Posting_UID)
+	// PasswordID represents the password type.
+	PasswordID = TypeID(pb.Posting_PASSWORD)
+	// StringID represents the string type.
+	StringID = TypeID(pb.Posting_STRING)
+	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
 )
 
@@ -56,12 +67,15 @@ var typeNameMap = map[string]TypeID{
 	"password": PasswordID,
 }
 
+// TypeID represents the type of the data.
 type TypeID pb.Posting_ValType
 
+// Enum takes a TypeID value and returns the corresponding ValType enum value.
 func (t TypeID) Enum() pb.Posting_ValType {
 	return pb.Posting_ValType(t)
 }
 
+// Name returns the name of the type.
 func (t TypeID) Name() string {
 	switch t {
 	case DefaultID:
@@ -115,10 +129,12 @@ func TypeForName(name string) (TypeID, bool) {
 	return t, ok
 }
 
+// IsScalar returns whether the type is a scalar type.
 func (t TypeID) IsScalar() bool {
 	return t != UidID
 }
 
+// IsNumber returns whether the type is a number type.
 func (t TypeID) IsNumber() bool {
 	return t == IntID || t == FloatID
 }

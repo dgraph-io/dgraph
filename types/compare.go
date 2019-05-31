@@ -18,6 +18,7 @@ package types
 
 import "github.com/dgraph-io/dgraph/x"
 
+// CompareVals compares two values using the given comparison type.
 // Should be used only in filtering arg1 by comparing with arg2.
 // arg2 is reference Val to which arg1 is compared.
 func CompareVals(op string, arg1, arg2 Val) bool {

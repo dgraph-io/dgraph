@@ -80,7 +80,8 @@ func (s byValue) Less(i, j int) bool {
 	return false
 }
 
-// Sort sorts the given array in-place.
+// SortWithFacet sorts the given array in-place and considers the given facets to calculate
+// the proper ordering.
 func SortWithFacet(v [][]Val, ul *pb.List, l []*pb.Facets, desc []bool) error {
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil

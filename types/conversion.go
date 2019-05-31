@@ -519,6 +519,7 @@ func cantConvert(from TypeID, to TypeID) error {
 	return errors.Errorf("Cannot convert %s to type %s", from.Name(), to.Name())
 }
 
+// MarshalJSON makes Val satisfy the json.Marshaler interface.
 func (v Val) MarshalJSON() ([]byte, error) {
 	switch v.Tid {
 	case IntID:
