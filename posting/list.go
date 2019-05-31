@@ -468,36 +468,6 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 	l.Unlock()
 }
 
-func (l *List) commitMutation(startTs, commitTs uint64) error {
-	l.Lock()
-	defer l.Unlock()
-
-	plist, ok := l.mutationMap[startTs]
-	if !ok {
-		// It was already committed, might be happening due to replay.
-		return nil
-	}
-	if commitTs == 0 {
-		// Abort mutation.
-		delete(l.mutationMap, startTs)
-		return nil
-	}
-
-	// We have a valid commit.
-	plist.CommitTs = commitTs
-	for _, mpost := range plist.Postings {
-		mpost.CommitTs = commitTs
-	}
-
-	// In general, a posting list shouldn't try to mix up it's job of keeping
-	// things in memory, with writing things to disk. A separate process can
-	// roll up and write them to disk. posting list should only keep things in
-	// memory, to make it available for transactions. So, all we need to do here
-	// is to roll them up periodically, now being done by draft.go.
-	// For the PLs in memory, we roll them up after we do the disk rollup.
-	return nil
-}
-
 // Iterate will allow you to iterate over this posting List, while having acquired a read lock.
 // So, please keep this iteration cheap, otherwise mutations would get stuck.
 // The iteration will start after the provided UID. The results would not include this uid.
