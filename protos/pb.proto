@@ -278,6 +278,11 @@ message UidBlock {
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
+	// uidNum is the number of UIDs in the block. We are including this because we want to 
+	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
+	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
+	// Default Blocksize is 256 so uint32 would be sufficient.
+	uint32 uidNum = 3;
 }
 
 message UidPack {

@@ -153,7 +153,6 @@ func benchmarkUnpack(trials int, chunks *chunks) int {
 	// Check if both input and output are equal
 	for i, c := range chunks.data {
 		out := codec.Decode(packed[i], 0)
-
 		for j := 0; j < len(c); j++ {
 			if c[j] != out[j] {
 				x.Fatalf("Something wrong %+v \n%+v\n %+v\n", len(c), len(out), j)

@@ -18,12 +18,11 @@ package codec
 
 import (
 	"bytes"
-	"encoding/binary"
 	"math"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-groupvarint"
 )
 
 type seekPos int
@@ -45,18 +44,34 @@ func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0]}
+	block := &pb.UidBlock{Base: e.uids[0], UidNum: uint32(len(e.uids))}
 	last := e.uids[0]
+	e.uids = e.uids[1:]
 
-	count := 1
-	var out bytes.Buffer
-	var buf [binary.MaxVarintLen64]byte
-	for _, uid := range e.uids[1:] {
-		n := binary.PutUvarint(buf[:], uid-last)
-		x.Check2(out.Write(buf[:n]))
-		last = uid
-		count++
+	// Padding e.uids to make it multiple of 4.
+	// GroupVarInt encodes 4 uids at a time. So total number of elements in
+	// e.uids should be multiple of 4. We will ignore these while decoding.
+	var padNum int
+	padNum = (4 - (len(e.uids) % 4)) % 4
+
+	for i := 0; i < padNum; i++ {
+		e.uids = append(e.uids, 0)
 	}
+
+	var out bytes.Buffer
+	var buf [17]byte
+	var tmpUids []uint32
+
+	for len(e.uids) > 0 {
+		for i := 0; i < 4; i++ {
+			tmpUids = append(tmpUids, uint32(e.uids[i]-last))
+			last = e.uids[i]
+		}
+		out.Write(groupvarint.Encode4(buf[:], tmpUids))
+		tmpUids = tmpUids[:0]
+		e.uids = e.uids[4:]
+	}
+
 	block.Deltas = out.Bytes()
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
@@ -64,6 +79,11 @@ func (e *Encoder) packBlock() {
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
+	}
+	siz := len(e.pack.Blocks)
+	if siz > 0 && !match32MSB(e.pack.Blocks[siz-1].Base, uid) {
+		e.packBlock()
+		e.uids = e.uids[:0]
 	}
 	e.uids = append(e.uids, uid)
 	if len(e.uids) >= e.BlockSize {
@@ -98,17 +118,24 @@ func (d *Decoder) unpackBlock() []uint64 {
 	last := block.Base
 	d.uids = append(d.uids, last)
 
+	var tmpUids [4]uint32
+	// The way I am iterating over deltas, if I use the original delta it will be permanently modified,
+	// that's why I am making a copy of it.
+	tmpBlockDelts := block.Deltas
+
 	// Read back the encoded varints.
-	var offset int
-	for offset < len(block.Deltas) {
-		delta, n := binary.Uvarint(block.Deltas[offset:])
-		x.AssertTrue(n > 0)
-		offset += n
-		uid := last + delta
-		d.uids = append(d.uids, uid)
-		last = uid
+	for len(tmpBlockDelts) >= 4 {
+		groupvarint.Decode4(tmpUids[:], tmpBlockDelts)
+		tmpBlockDelts = tmpBlockDelts[groupvarint.BytesUsed[tmpBlockDelts[0]]:]
+		for i := 0; i < 4; i++ {
+			d.uids = append(d.uids, uint64(tmpUids[i])+last)
+			last += uint64(tmpUids[i])
+		}
 	}
-	return d.uids
+
+	blockUids := make([]uint64, d.Pack.BlockSize)
+	copy(blockUids, d.uids[:block.UidNum])
+	return blockUids
 }
 
 func (d *Decoder) ApproxLen() int {
@@ -257,16 +284,10 @@ func ExactLen(pack *pb.UidPack) int {
 	if sz == 0 {
 		return 0
 	}
-	block := pack.Blocks[sz-1]
-	num := 1 // Count the base.
-	for _, b := range block.Deltas {
-		// If the MSB in varint encoding is zero, then it is the final byte, not a continuation of
-		// the integer. Thus, we can count it as one delta.
-		if b&0x80 == 0 {
-			num++
-		}
+	num := 0
+	for _, b := range pack.Blocks {
+		num += int(b.UidNum) // UidNum includes the base UID.
 	}
-	num += (sz - 1) * int(pack.BlockSize)
 	return num
 }
 
@@ -280,4 +301,11 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 		uids = append(uids, block...)
 	}
 	return uids
+}
+
+func match32MSB(num1, num2 uint64) bool {
+	// Binary representation of 18446744069414584320 is
+	// 0b1111111111111111111111111111111100000000000000000000000000000000
+	mask := uint64(18446744069414584320)
+	return (num1 & mask) == (num2 & mask)
 }
