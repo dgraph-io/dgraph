@@ -27,3 +27,4 @@
 trie/test_data
 /bin
 chaindata/
+runtime/polkadot_runtime*
