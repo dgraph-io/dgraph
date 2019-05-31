@@ -5,6 +5,7 @@
     "age":"83",
     "role":"father",
     "aka":"Grampa",
+    "dgraph.type": "familyMember",
     "parent_to": [
       { "uid":"_:h" }
     ]

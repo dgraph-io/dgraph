@@ -6,6 +6,7 @@
     "role":"father",
     "role|gender":"male",
     "role@es":"padre",
+    "dgraph.type": "familyMember",
     "parent_to": [
       { "uid":"_:b" },
       { "uid":"_:l" },
@@ -18,6 +19,7 @@
     "age":"34",
     "role":"mother",
     "aka":"Midge",
+    "dgraph.type": "familyMember",
     "parent_to": [
       { "uid":"_:b" },
       { "uid":"_:l" },

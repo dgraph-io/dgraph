@@ -1,7 +1,17 @@
+type familyMember {
+    name: string
+    age: int
+    role: string
+    aka: string
+    carries: string
+    parent_to: [familyMember]
+    sibling_of: [familyMember]
+}
+
 name:string @index(term) .
 age: int .
-role:string @index(term) @lang .
-aka:string @index(term) .
-carries:string @index(term) .
+role: string @index(term) @lang .
+aka: string @index(term) .
+carries: string @index(term) .
 parent_to: [uid] @reverse .
 sibling_of: [uid] @reverse .

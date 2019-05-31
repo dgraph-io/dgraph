@@ -8,6 +8,7 @@
     "role@es":"padre",
     "role@fr":"père",
     "role@hi":"पिता",
+    "dgraph.type": "familyMember",
     "parent_to":[
       { "uid":"_:b" },
       { "uid":"_:l" },
@@ -24,6 +25,7 @@
     "role@fr":"mère",
     "role@hi":"मां",
     "aka":"Midge",
+    "dgraph.type": "familyMember",
     "parent_to":[
       { "uid":"_:b" },
       { "uid":"_:l" },
@@ -41,6 +43,7 @@
     "role@hi":"बेटा",
     "aka":"El Barto",
     "carries":"slingshot",
+    "dgraph.type": "familyMember",
     "sibling_of":[
       { "uid":"_:l" },
       { "uid":"_:m2" }
@@ -56,6 +59,7 @@
     "role@fr":"fille",
     "role@hi":"बेटी",
     "carries":"saxomophone",
+    "dgraph.type": "familyMember",
     "sibling_of":[
       { "uid":"_:b" },
       { "uid":"_:m2" }
@@ -72,6 +76,7 @@
     "role@fr":"fille",
     "role@hi":"बेटी",
     "carries":"pacifier",
+    "dgraph.type": "familyMember",
     "sibling_of":[
       { "uid":"_:b" },
       { "uid":"_:l" }
@@ -87,6 +92,7 @@
     "role@fr":"grand-père",
     "role@hi":"दादा",
     "aka":"Grampa",
+    "dgraph.type": "familyMember",
     "parent_to":[
       { "uid":"_:h" }
     ]
