@@ -77,17 +77,17 @@ L:
 		case itemSubject:
 			rnq.Subject = strings.Trim(item.Val, " ")
 
-		case itemVarKeyword:
-			it.Next()
-			if item = it.Item(); item.Typ != itemLeftRound {
-				return rnq, x.Errorf("Expected '(', found: %s", item.Val)
-			}
-			it.Next()
-			if item = it.Item(); item.Typ != itemVarName {
-				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
+		case itemSubjectFunc:
+			var err error
+			if rnq.Subject, err = parseFunction(it); err != nil {
+				return rnq, err
 			}
 
-			it.Next() // parse ')'
+		case itemObjectFunc:
+			var err error
+			if rnq.ObjectId, err = parseFunction(it); err != nil {
+				return rnq, err
+			}
 
 		case itemPredicate:
 			// Here we split predicate and lang directive (ex: "name@en"), if needed.
@@ -200,6 +200,29 @@ L:
 	}
 
 	return rnq, nil
+}
+
+func parseFunction(it *lex.ItemIterator) (string, error) {
+	item := it.Item()
+	s := item.Val
+
+	it.Next()
+	if item = it.Item(); item.Typ != itemLeftRound {
+		return "", x.Errorf("Expected '(', found: %s", item.Val)
+	}
+
+	it.Next()
+	if item = it.Item(); item.Typ != itemVarName {
+		return "", x.Errorf("Expected variable name, found: %s", item.Val)
+	}
+	s += "(" + item.Val + ")"
+
+	it.Next()
+	if item = it.Item(); item.Typ != itemRightRound {
+		return "", x.Errorf("Expected ')', found: %s", item.Val)
+	}
+
+	return s, nil
 }
 
 func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
