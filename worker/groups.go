@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 type groupi struct {
@@ -237,7 +238,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return x.Errorf("Don't have the address of any dgraphzero server")
+		return errors.Errorf("Don't have the address of any dgraphzero server")
 	}
 
 	c := pb.NewZeroClient(p.Get())
@@ -632,7 +633,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 	if string(reply.GetData()) == "OK" {
 		return nil
 	}
-	return x.Errorf(string(reply.GetData()))
+	return errors.Errorf(string(reply.GetData()))
 }
 
 // sendMembershipUpdates sends the membership update to Zero leader. If this Alpha is the leader, it

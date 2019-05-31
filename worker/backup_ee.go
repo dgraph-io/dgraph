@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
@@ -36,7 +37,7 @@ func backupProcess(ctx context.Context, req *pb.BackupRequest) error {
 
 	g := groups()
 	if g.groupId() != req.GroupId {
-		return x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
+		return errors.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
 			g.groupId(), req.GroupId)
 	}
 
@@ -71,7 +72,7 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 	// send request to any node in the group.
 	pl := groups().AnyServer(in.GroupId)
 	if pl == nil {
-		return x.Errorf("Couldn't find a server in group %d", in.GroupId)
+		return errors.Errorf("Couldn't find a server in group %d", in.GroupId)
 	}
 	res, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {
@@ -88,7 +89,7 @@ func backupGroup(ctx context.Context, in *pb.BackupRequest) error {
 func BackupOverNetwork(ctx context.Context, r *http.Request) error {
 	destination := r.FormValue("destination")
 	if destination == "" {
-		return x.Errorf("You must specify a 'destination' value")
+		return errors.Errorf("You must specify a 'destination' value")
 	}
 
 	accessKey := r.FormValue("access_key")

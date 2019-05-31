@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
@@ -78,7 +79,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
@@ -100,7 +101,7 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 	// Should we return an error if we don't find a non-lossy tokenizer for eq function.
 	if f != "eq" {
-		return nil, x.Errorf("Attribute:%s does not have proper index for comparison", attr)
+		return nil, errors.Errorf("Attribute:%s does not have proper index for comparison", attr)
 	}
 
 	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
@@ -133,7 +134,7 @@ func getInequalityTokens(readTs uint64, attr, f string,
 		break
 
 	case len(ineqTokens) > 1:
-		return nil, "", x.Errorf("Attribute %s does not have a valid tokenizer.", attr)
+		return nil, "", errors.Errorf("Attribute %s does not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]
 

@@ -17,11 +17,9 @@
 package gql
 
 import (
-	"errors"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 func ParseMutation(mutation string) (*api.Mutation, error) {
@@ -35,7 +33,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 	}
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
-		return nil, x.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+		return nil, errors.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
 	}
 
 	for it.Next() {
@@ -46,7 +44,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 		if item.Typ == itemRightCurl {
 			// mutations must be enclosed in a single block.
 			if it.Next() && it.Item().Typ != lex.ItemEOF {
-				return nil, x.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
+				return nil, errors.Errorf("Unexpected %s after the end of the block.", it.Item().Val)
 			}
 			return &mu, nil
 		}
@@ -56,7 +54,7 @@ func ParseMutation(mutation string) (*api.Mutation, error) {
 			}
 		}
 	}
-	return nil, x.Errorf("Invalid mutation.")
+	return nil, errors.Errorf("Invalid mutation.")
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
@@ -69,29 +67,29 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *api.Mutation) error {
 		}
 		if item.Typ == itemLeftCurl {
 			if parse {
-				return x.Errorf("Too many left curls in set mutation.")
+				return errors.Errorf("Too many left curls in set mutation.")
 			}
 			parse = true
 		}
 		if item.Typ == itemMutationContent {
 			if !parse {
-				return x.Errorf("Mutation syntax invalid.")
+				return errors.Errorf("Mutation syntax invalid.")
 			}
 			if op == "set" {
 				mu.SetNquads = []byte(item.Val)
 			} else if op == "delete" {
 				mu.DelNquads = []byte(item.Val)
 			} else if op == "schema" {
-				return x.Errorf("Altering schema not supported through http client.")
+				return errors.Errorf("Altering schema not supported through http client.")
 			} else if op == "dropall" {
-				return x.Errorf("Dropall not supported through http client.")
+				return errors.Errorf("Dropall not supported through http client.")
 			} else {
-				return x.Errorf("Invalid mutation operation.")
+				return errors.Errorf("Invalid mutation operation.")
 			}
 		}
 		if item.Typ == itemRightCurl {
 			return nil
 		}
 	}
-	return x.Errorf("Invalid mutation formatting.")
+	return errors.Errorf("Invalid mutation formatting.")
 }

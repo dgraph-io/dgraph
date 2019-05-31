@@ -422,7 +422,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 		if len(pc.facetsMatrix) > 0 && len(pc.facetsMatrix) != len(pc.uidMatrix) {
-			return x.Errorf("Length of facetsMatrix and uidMatrix mismatch: %d vs %d",
+			return errors.Errorf("Length of facetsMatrix and uidMatrix mismatch: %d vs %d",
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
@@ -432,7 +432,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		if pc.Params.isGroupBy {
 			if len(pc.GroupbyRes) <= idx {
-				return x.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
+				return errors.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
 					idx, len(pc.GroupbyRes))
 			}
 			dst.addGroupby(pc, pc.GroupbyRes[idx], pc.fieldName())
@@ -547,7 +547,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 				if pc.Params.expandAll && len(pc.LangTags[idx].Lang) != 0 {
 					if i >= len(pc.LangTags[idx].Lang) {
-						return x.Errorf(
+						return errors.Errorf(
 							"pb.error: all lang tags should be either present or absent")
 					}
 					fieldNameWithTag := fieldName
@@ -602,7 +602,7 @@ func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 	// value would be in binary format with appropriate type
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
-		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+		return v, errors.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 	}
 
 	// creates appropriate type from binary format
@@ -635,7 +635,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	} else {
 		sg.Attr = ft.Func.Attr
 		if !isValidFuncName(ft.Func.Name) {
-			return x.Errorf("Invalid function name: %s", ft.Func.Name)
+			return errors.Errorf("Invalid function name: %s", ft.Func.Name)
 		}
 
 		if isUidFnWithoutVar(ft.Func) {
@@ -645,7 +645,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			}
 		} else {
 			if ft.Func.Attr == "uid" {
-				return x.Errorf(`Argument cannot be "uid"`)
+				return errors.Errorf(`Argument cannot be "uid"`)
 			}
 			sg.createSrcFunction(ft.Func)
 			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
@@ -707,7 +707,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 	for _, gchild := range gq.Children {
 		if sg.Params.Alias == "shortest" && gchild.Expand != "" {
-			return x.Errorf("expand() not allowed inside shortest")
+			return errors.Errorf("expand() not allowed inside shortest")
 		}
 
 		key := ""
@@ -717,7 +717,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			key = uniqueKey(gchild)
 		}
 		if _, ok := attrsSeen[key]; ok {
-			return x.Errorf("%s not allowed multiple times in same sub-query.",
+			return errors.Errorf("%s not allowed multiple times in same sub-query.",
 				key)
 		}
 		attrsSeen[key] = struct{}{}
@@ -753,7 +753,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		for argk := range gchild.Args {
 			if !isValidArg(argk) {
-				return x.Errorf("Invalid argument: %s", argk)
+				return errors.Errorf("Invalid argument: %s", argk)
 			}
 		}
 		if err := args.fill(gchild); err != nil {
@@ -761,7 +761,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		if len(args.Order) != 0 && len(args.FacetOrder) != 0 {
-			return x.Errorf("Cannot specify order at both args and facets")
+			return errors.Errorf("Cannot specify order at both args and facets")
 		}
 
 		dst := &SubGraph{
@@ -779,19 +779,19 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Func != nil &&
 			(gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
 			if len(gchild.Children) != 0 {
-				return x.Errorf("Node with %q cant have child attr", gchild.Func.Name)
+				return errors.Errorf("Node with %q cant have child attr", gchild.Func.Name)
 			}
 			// embedded filter will cause ambiguous output like following,
 			// director.film @filter(gt(initial_release_date, "2016")) {
 			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
 			// }
 			if gchild.Filter != nil {
-				return x.Errorf(
+				return errors.Errorf(
 					"Node with %q cant have filter, please place the filter on the upper level",
 					gchild.Func.Name)
 			}
 			if gchild.Func.Attr == "uid" {
-				return x.Errorf(`Argument cannot be "uid"`)
+				return errors.Errorf(`Argument cannot be "uid"`)
 			}
 			dst.createSrcFunction(gchild.Func)
 		}
@@ -970,7 +970,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
-			return nil, x.Errorf("Invalid argument: %s", argk)
+			return nil, errors.Errorf("Invalid argument: %s", argk)
 		}
 	}
 	if err := args.fill(gq); err != nil {
@@ -986,11 +986,11 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		} else {
 			// Disallow uid as attribute - issue#3110
 			if len(gq.Func.UID) == 0 {
-				return nil, x.Errorf(`Argument cannot be "uid"`)
+				return nil, errors.Errorf(`Argument cannot be "uid"`)
 			}
 		}
 		if !isValidFuncName(gq.Func.Name) {
-			return nil, x.Errorf("Invalid function name: %s", gq.Func.Name)
+			return nil, errors.Errorf("Invalid function name: %s", gq.Func.Name)
 		}
 
 		sg.createSrcFunction(gq.Func)
@@ -1025,7 +1025,7 @@ func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
 		return nil, nil
 	}
 	if gft.Func != nil && len(gft.Func.NeedsVar) != 0 {
-		return nil, x.Errorf("Variables not supported in pb.FilterTree")
+		return nil, errors.Errorf("Variables not supported in pb.FilterTree")
 	}
 	ftree := &pb.FilterTree{Op: gft.Op}
 	for _, gftc := range gft.Child {
@@ -1064,7 +1064,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		for _, arg := range sg.SrcFunc.Args {
 			srcFunc.Args = append(srcFunc.Args, arg.Value)
 			if arg.IsValueVar {
-				return nil, x.Errorf("Unsupported use of value var")
+				return nil, errors.Errorf("Unsupported use of value var")
 			}
 		}
 	}
@@ -1158,7 +1158,7 @@ func evalLevelAgg(
 		}
 	}
 	if relSG == nil {
-		return nil, x.Errorf("Invalid variable aggregation. Check the levels.")
+		return nil, errors.Errorf("Invalid variable aggregation. Check the levels.")
 	}
 
 	vals := doneVars[needsVar].Vals
@@ -1230,7 +1230,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 				continue
 			}
 			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
-				return nil, x.Errorf("Encountered non int/float type for summing")
+				return nil, errors.Errorf("Encountered non int/float type for summing")
 			}
 			for j := 0; j < len(ul.Uids); j++ {
 				dstUid := ul.Uids[j]
@@ -1368,7 +1368,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		// The value var can be empty. No need to check for nil.
 		sg.Params.uidToVal = srcMap.Vals
 	} else {
-		return x.Errorf("Unhandled pb.node %v with parent %v", sg.Attr, parent.Attr)
+		return errors.Errorf("Unhandled pb.node %v with parent %v", sg.Attr, parent.Attr)
 	}
 
 	return nil
@@ -1568,7 +1568,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 		for idx, uid := range sg.SrcUIDs.Uids {
 			if len(sg.valueMatrix[idx].Values) > 1 {
-				return x.Errorf("Value variables not supported for predicate with list type.")
+				return errors.Errorf("Value variables not supported for predicate with list type.")
 			}
 
 			if len(sg.valueMatrix[idx].Values) == 0 {
@@ -1640,7 +1640,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							}
 
 							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
-								return x.Errorf("Repeated id with non int/float value for facet var encountered.")
+								return errors.Errorf("Repeated id with non int/float value for facet var encountered.")
 							}
 							ag := aggregator{name: "sum"}
 							ag.Apply(pVal)
@@ -1706,7 +1706,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				lists = append(lists, &pb.List{Uids: uids})
 
 			case len(l.Vals) != 0 || l.Uids != nil:
-				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
+				return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 			default:
 				// This var does not match any uids or vals but we are still trying to access it.
@@ -1749,7 +1749,7 @@ func (sg *SubGraph) replaceVarInFunc() error {
 			continue
 		}
 		if len(sg.Params.uidToVal) == 0 {
-			return x.Errorf("No value found for value variable %q", arg.Value)
+			return errors.Errorf("No value found for value variable %q", arg.Value)
 		}
 		// We don't care about uids, just take all the values and put as args.
 		// There would be only one value var per subgraph as per current assumptions.
@@ -1786,7 +1786,7 @@ func (sg *SubGraph) applyIneqFunc() error {
 	src := types.Val{Tid: types.StringID, Value: []byte(val)}
 	dst, err := types.Convert(src, typ)
 	if err != nil {
-		return x.Errorf("Invalid argment %v. Comparing with different type", val)
+		return errors.Errorf("Invalid argment %v. Comparing with different type", val)
 	}
 	if sg.SrcUIDs != nil {
 		for _, uid := range sg.SrcUIDs.Uids {
@@ -1950,7 +1950,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
-					return out, x.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)
+					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)
 				}
 			}
 			out = append(out, temp)
@@ -2014,7 +2014,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		if sg.SrcUIDs == nil {
 			glog.Errorf("SrcUIDs is unexpectedly nil. Subgraph: %+v", sg)
-			rch <- x.Errorf("SrcUIDs shouldn't be nil.")
+			rch <- errors.Errorf("SrcUIDs shouldn't be nil.")
 			return
 		}
 		// If we have a filter SubGraph which only contains an operator,
@@ -2348,7 +2348,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		return nil
 	}
 	if len(sg.facetsMatrix) != len(sg.uidMatrix) {
-		return x.Errorf("Facet matrix and UID matrix mismatch: %d vs %d",
+		return errors.Errorf("Facet matrix and UID matrix mismatch: %d vs %d",
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
 	orderby := sg.Params.FacetOrder
@@ -2410,7 +2410,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	if len(sg.Params.uidToVal) == 0 {
-		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
+		return errors.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
 
 	for i := 0; i < len(sg.uidMatrix); i++ {
@@ -2618,7 +2618,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
-			return x.Errorf("Invalid query. No function used at root and no aggregation" +
+			return errors.Errorf("Invalid query. No function used at root and no aggregation" +
 				" or math variables found in the body.")
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -2733,7 +2733,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	// Ensure all the queries are executed.
 	for _, it := range hasExecuted {
 		if !it {
-			return x.Errorf("Query couldn't be executed")
+			return errors.Errorf("Query couldn't be executed")
 		}
 	}
 	req.Latency.Processing += time.Since(execStart)

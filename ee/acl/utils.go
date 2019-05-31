@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -82,7 +83,7 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 
 	err = json.Unmarshal(resp.GetJson(), &m)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal the query user response:%v", err)
+		return nil, errors.Wrapf(err, "unable to unmarshal the query user response")
 	}
 	users := m[userKey]
 	if len(users) == 0 {
@@ -90,7 +91,7 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 		return nil, nil
 	}
 	if len(users) > 1 {
-		return nil, x.Errorf("Found multiple users: %s", resp.GetJson())
+		return nil, errors.Errorf("Found multiple users: %s", resp.GetJson())
 	}
 	return &users[0], nil
 }

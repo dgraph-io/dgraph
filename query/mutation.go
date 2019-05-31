@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
@@ -38,7 +38,7 @@ import (
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	edges, err := expandEdges(ctx, m)
 	if err != nil {
-		return nil, x.Wrapf(err, "While adding pb.edges")
+		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
 	m.Edges = edges
 
@@ -98,7 +98,7 @@ func verifyUid(ctx context.Context, uid uint64) error {
 				return nil
 			}
 			if time.Now().After(deadline) {
-				err := x.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
+				err := errors.Errorf("Uid: [%d] cannot be greater than lease: [%d]", uid, lease)
 				glog.V(2).Infof("verifyUid returned error: %v", err)
 				return err
 			}
@@ -122,7 +122,7 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 		}
 
 		if len(nq.Subject) == 0 {
-			return nil, x.Errorf("Subject must not be empty for nquad: %+v", nq)
+			return nil, errors.Errorf("Subject must not be empty for nquad: %+v", nq)
 		}
 		var uid uint64
 		if strings.HasPrefix(nq.Subject, "_:") {
@@ -182,7 +182,7 @@ func ToDirectedEdges(gmu *gql.Mutation,
 		var edge *pb.DirectedEdge
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
-			return x.Wrap(err)
+			return errors.Wrap(err, "")
 		}
 		edge.Op = op
 		edges = append(edges, edge)
