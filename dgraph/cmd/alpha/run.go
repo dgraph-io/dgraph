@@ -150,8 +150,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
-	flag.Bool("debugmode", false,
-		"Enable debug mode for more debug information.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -477,7 +475,6 @@ func run() {
 
 	setupCustomTokenizers()
 	x.Init()
-	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))

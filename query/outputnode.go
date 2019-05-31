@@ -19,12 +19,12 @@ package query
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
@@ -279,7 +279,8 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 		for _, ca := range child {
 			cnt += len(pa) + len(ca)
 			if cnt > x.Config.NormalizeNodeLimit {
-				return nil, x.Errorf("Couldn't evaluate @normalize directive - too many results")
+				return nil, errors.Errorf(
+					"Couldn't evaluate @normalize directive - too many results")
 			}
 			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
 			list = append(list, pa...)
@@ -398,7 +399,7 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 		aggVal, ok := child.Params.uidToVal[0]
 		if !ok {
 			if len(child.Params.NeedsVar) == 0 {
-				return x.Errorf("Only aggregated variables allowed within empty block.")
+				return errors.Errorf("Only aggregated variables allowed within empty block.")
 			}
 			// the aggregation didn't happen, most likely was called with unset vars.
 			// See: query.go:fillVars
@@ -437,7 +438,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 
 	if sg.Params.isGroupBy {
 		if len(sg.GroupbyRes) == 0 {
-			return x.Errorf("Expected GroupbyRes to have length > 0.")
+			return errors.Errorf("Expected GroupbyRes to have length > 0.")
 		}
 		fj.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil

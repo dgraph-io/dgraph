@@ -6,6 +6,7 @@
     "role":"son",
     "aka":"El Barto",
     "carries":"slingshot",
+    "dgraph.type": "FamilyMember",
     "sibling_of": [
       { "uid":"_:l" },
       { "uid":"_:m2" }
@@ -17,6 +18,7 @@
     "age":"8",
     "role":"daughter",
     "carries":"saxomophone",
+    "dgraph.type": "FamilyMember",
     "sibling_of": [
       { "uid":"_:b" },
       { "uid":"_:m2" }
@@ -31,6 +33,7 @@
     "role|generation":3,
     "role@es":"hija",
     "carries":"pacifier",
+    "dgraph.type": "FamilyMember",
     "sibling_of": [
       { "uid":"_:b" },
       { "uid":"_:l" }

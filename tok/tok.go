@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 // Tokenizer identifiers are unique and can't be reused.
@@ -287,7 +288,7 @@ func (t ExactTokenizer) Tokens(v interface{}) ([]string, error) {
 	if term, ok := v.(string); ok {
 		return []string{term}, nil
 	}
-	return nil, x.Errorf("Exact indices only supported for string types")
+	return nil, errors.Errorf("Exact indices only supported for string types")
 }
 func (t ExactTokenizer) Identifier() byte { return IdentExact }
 func (t ExactTokenizer) IsSortable() bool { return true }
@@ -371,7 +372,7 @@ func (t TrigramTokenizer) Type() string { return "string" }
 func (t TrigramTokenizer) Tokens(v interface{}) ([]string, error) {
 	value, ok := v.(string)
 	if !ok {
-		return nil, x.Errorf("Trigram indices only supported for string types")
+		return nil, errors.Errorf("Trigram indices only supported for string types")
 	}
 	l := len(value) - 2
 	if l > 0 {
@@ -395,13 +396,13 @@ func (t HashTokenizer) Type() string { return "string" }
 func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 	term, ok := v.(string)
 	if !ok {
-		return nil, x.Errorf("Hash tokenizer only supported for string types")
+		return nil, errors.Errorf("Hash tokenizer only supported for string types")
 	}
 	// Blake2 is a hash function equivalent of SHA series, but faster. SHA is the best hash function
 	// for doing checksum of content, because they have low collision ratios. See issue #2776.
 	hash := blake2b.Sum256([]byte(term))
 	if len(hash) == 0 {
-		return nil, x.Errorf("Hash tokenizer failed to create hash")
+		return nil, errors.Errorf("Hash tokenizer failed to create hash")
 	}
 	return []string{string(hash[:])}, nil
 }

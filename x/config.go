@@ -23,7 +23,6 @@ import (
 
 // Options stores the options for this package.
 type Options struct {
-	DebugMode bool
 	// PortOffset will be used to determine the ports to use (port = default port + offset).
 	PortOffset int
 	// QueryEdgeLimit is the maximum number of edges that will be traversed during

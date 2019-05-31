@@ -31,7 +31,6 @@ import (
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // Convert converts the value to given scalar type.
@@ -41,7 +40,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	// sanity: we expect a value
 	data, ok := from.Value.([]byte)
 	if !ok {
-		return to, x.Errorf("Invalid data to convert to %s", toID.Name())
+		return to, errors.Errorf("Invalid data to convert to %s", toID.Name())
 	}
 	to = ValueForType(toID)
 	fromID := from.Tid
@@ -59,12 +58,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = string(data)
 			case IntID:
 				if len(data) < 8 {
-					return to, x.Errorf("Invalid data for int64 %v", data)
+					return to, errors.Errorf("Invalid data for int64 %v", data)
 				}
 				*res = int64(binary.LittleEndian.Uint64(data))
 			case FloatID:
 				if len(data) < 8 {
-					return to, x.Errorf("Invalid data for float %v", data)
+					return to, errors.Errorf("Invalid data for float %v", data)
 				}
 				i := binary.LittleEndian.Uint64(data)
 				*res = math.Float64frombits(i)
@@ -76,7 +75,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					*res = true
 					return to, nil
 				}
-				return to, x.Errorf("Invalid value for bool %v", data[0])
+				return to, errors.Errorf("Invalid value for bool %v", data[0])
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalBinary(data); err != nil {
@@ -151,7 +150,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case IntID:
 		{
 			if len(data) < 8 {
-				return to, x.Errorf("Invalid data for int64 %v", data)
+				return to, errors.Errorf("Invalid data for int64 %v", data)
 			}
 			vc := int64(binary.LittleEndian.Uint64(data))
 			switch toID {
@@ -176,7 +175,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 	case FloatID:
 		{
 			if len(data) < 8 {
-				return to, x.Errorf("Invalid data for float %v", data)
+				return to, errors.Errorf("Invalid data for float %v", data)
 			}
 			i := binary.LittleEndian.Uint64(data)
 			vc := math.Float64frombits(i)
@@ -190,7 +189,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = bs[:]
 			case IntID:
 				if vc > math.MaxInt64 || vc < math.MinInt64 || math.IsNaN(vc) {
-					return to, x.Errorf("Float out of int64 range")
+					return to, errors.Errorf("Float out of int64 range")
 				}
 				*res = int64(vc)
 			case BoolID:
@@ -210,7 +209,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 		{
 			var vc bool
 			if len(data) == 0 || data[0] > 1 {
-				return to, x.Errorf("Invalid value for bool %v", data)
+				return to, errors.Errorf("Invalid value for bool %v", data)
 			}
 			vc = data[0] == 1
 
@@ -312,7 +311,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 
 func Marshal(from Val, to *Val) error {
 	if to == nil {
-		return x.Errorf("Invalid conversion %s to nil", from.Tid.Name())
+		return errors.Errorf("Invalid conversion %s to nil", from.Tid.Name())
 	}
 
 	fromID := from.Tid
@@ -407,7 +406,7 @@ func Marshal(from Val, to *Val) error {
 	case GeoID:
 		vc, ok := val.(geom.T)
 		if !ok {
-			return x.Errorf("Expected a Geo type")
+			return errors.Errorf("Expected a Geo type")
 		}
 		switch toID {
 		case BinaryID:
@@ -450,37 +449,37 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 	case StringID:
 		var v string
 		if v, ok = value.(string); !ok {
-			return def, x.Errorf("Expected value of type string. Got : %v", value)
+			return def, errors.Errorf("Expected value of type string. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_StrVal{StrVal: v}}, nil
 	case DefaultID:
 		var v string
 		if v, ok = value.(string); !ok {
-			return def, x.Errorf("Expected value of type string. Got : %v", value)
+			return def, errors.Errorf("Expected value of type string. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_DefaultVal{DefaultVal: v}}, nil
 	case IntID:
 		var v int64
 		if v, ok = value.(int64); !ok {
-			return def, x.Errorf("Expected value of type int64. Got : %v", value)
+			return def, errors.Errorf("Expected value of type int64. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_IntVal{IntVal: v}}, nil
 	case FloatID:
 		var v float64
 		if v, ok = value.(float64); !ok {
-			return def, x.Errorf("Expected value of type float64. Got : %v", value)
+			return def, errors.Errorf("Expected value of type float64. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_DoubleVal{DoubleVal: v}}, nil
 	case BoolID:
 		var v bool
 		if v, ok = value.(bool); !ok {
-			return def, x.Errorf("Expected value of type bool. Got : %v", value)
+			return def, errors.Errorf("Expected value of type bool. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_BoolVal{BoolVal: v}}, nil
 	case BinaryID:
 		var v []byte
 		if v, ok = value.([]byte); !ok {
-			return def, x.Errorf("Expected value of type []byte. Got : %v", value)
+			return def, errors.Errorf("Expected value of type []byte. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_BytesVal{BytesVal: v}}, nil
 	// Geo and datetime are stored in binary format in the N-Quad, so lets
@@ -500,11 +499,11 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 	case PasswordID:
 		var v string
 		if v, ok = value.(string); !ok {
-			return def, x.Errorf("Expected value of type password. Got : %v", value)
+			return def, errors.Errorf("Expected value of type password. Got : %v", value)
 		}
 		return &api.Value{Val: &api.Value_PasswordVal{PasswordVal: v}}, nil
 	default:
-		return def, x.Errorf("ObjectValue not available for: %v", id)
+		return def, errors.Errorf("ObjectValue not available for: %v", id)
 	}
 }
 
@@ -517,9 +516,10 @@ func toBinary(id TypeID, b interface{}) ([]byte, error) {
 }
 
 func cantConvert(from TypeID, to TypeID) error {
-	return x.Errorf("Cannot convert %s to type %s", from.Name(), to.Name())
+	return errors.Errorf("Cannot convert %s to type %s", from.Name(), to.Name())
 }
 
+// MarshalJSON makes Val satisfy the json.Marshaler interface.
 func (v Val) MarshalJSON() ([]byte, error) {
 	switch v.Tid {
 	case IntID:
@@ -537,5 +537,5 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case PasswordID:
 		return json.Marshal(v.Value.(string))
 	}
-	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
+	return nil, errors.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
 }

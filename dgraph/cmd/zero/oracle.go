@@ -17,7 +17,6 @@
 package zero
 
 import (
-	"errors"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 )
@@ -344,23 +344,23 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		for pkey := range preds {
 			splits := strings.Split(pkey, "-")
 			if len(splits) < 2 {
-				return x.Errorf("Unable to find group id in %s", pkey)
+				return errors.Errorf("Unable to find group id in %s", pkey)
 			}
 			gid, err := strconv.Atoi(splits[0])
 			if err != nil {
-				return x.Errorf("Unable to parse group id from %s. Error: %v", pkey, err)
+				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
 			}
 			pred := strings.Join(splits[1:], "-")
 			tablet := s.ServingTablet(pred)
 			if tablet == nil {
-				return x.Errorf("Tablet for %s is nil", pred)
+				return errors.Errorf("Tablet for %s is nil", pred)
 			}
 			if tablet.GroupId != uint32(gid) {
-				return x.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
+				return errors.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
 					gid, pred, tablet.GroupId)
 			}
 			if s.isBlocked(pred) {
-				return x.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
+				return errors.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
 			}
 		}
 		return nil
@@ -402,7 +402,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 	defer span.End()
 
 	if !s.Node.AmLeader() {
-		return nil, x.Errorf("Only leader can decide to commit or abort")
+		return nil, errors.Errorf("Only leader can decide to commit or abort")
 	}
 	err := s.commit(ctx, src)
 	if err != nil {
