@@ -78,8 +78,6 @@ func init() {
 	flags := GraphQL.Cmd.Flags()
 	flags.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
-	flags.BoolP("use_compression", "C", false,
-		"Enable compression on connection to alpha server")
 	flags.StringP("schema", "s", "schema.graphql",
 		"Location of GraphQL schema file")
 
@@ -106,9 +104,8 @@ func init() {
 func run() error {
 	x.PrintVersion()
 	opt = options{
-		schemaFile:     GraphQL.Conf.GetString("schema"),
-		alpha:          GraphQL.Conf.GetString("alpha"),
-		useCompression: GraphQL.Conf.GetBool("use_compression"),
+		schemaFile: GraphQL.Conf.GetString("schema"),
+		alpha:      GraphQL.Conf.GetString("alpha"),
 	}
 
 	glog.Infof("Bringing up GraphQL API for Dgraph at %s\n", opt.alpha)
