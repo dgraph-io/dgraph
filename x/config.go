@@ -29,6 +29,8 @@ type Options struct {
 	// QueryEdgeLimit is the maximum number of edges that will be traversed during
 	// recurse and shortest-path queries.
 	QueryEdgeLimit uint64
+	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
+	NormalizeNodeLimit int
 }
 
 // Config stores the global instance of this package's options.

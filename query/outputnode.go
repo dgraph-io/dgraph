@@ -34,10 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	normalizeLimit = 10000
-)
-
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	sgr := &SubGraph{}
@@ -282,7 +278,7 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	for _, pa := range parent {
 		for _, ca := range child {
 			cnt += len(pa) + len(ca)
-			if cnt > normalizeLimit {
+			if cnt > x.Config.NormalizeNodeLimit {
 				return nil, x.Errorf("Couldn't evaluate @normalize directive - too many results")
 			}
 			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
