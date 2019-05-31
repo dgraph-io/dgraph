@@ -37,7 +37,6 @@ import (
 var (
 	errEmptyPredicate = x.Errorf("Predicate not specified")
 	errNotLeader      = x.Errorf("Server is not leader of this group")
-	errUnableToAbort  = x.Errorf("Unable to abort pending transactions")
 	emptyPayload      = api.Payload{}
 )
 

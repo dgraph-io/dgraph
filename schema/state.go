@@ -32,7 +32,6 @@ const (
 	itemComma
 	itemNewLine
 	itemDot
-	itemUnderscore
 	itemLeftSquare
 	itemRightSquare
 	itemExclamationMark
