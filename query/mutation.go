@@ -33,6 +33,8 @@ import (
 	"github.com/golang/glog"
 )
 
+// ApplyMutations performs the required edge expansions and forwards the results to the
+// worker to perform the mutations.
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	edges, err := expandEdges(ctx, m)
 	if err != nil {
@@ -164,7 +166,8 @@ func AssignUids(ctx context.Context, nquads []*api.NQuad) (map[string]uint64, er
 	return newUids, nil
 }
 
-func ToInternal(gmu *gql.Mutation,
+// ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
+func ToDirectedEdges(gmu *gql.Mutation,
 	newUids map[string]uint64) (edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad

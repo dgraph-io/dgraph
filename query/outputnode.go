@@ -486,6 +486,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
+// Extensions represents the extra information appended to query results.
 type Extensions struct {
 	Latency *api.Latency    `json:"server_latency,omitempty"`
 	Txn     *api.TxnContext `json:"txn,omitempty"`
