@@ -17,6 +17,7 @@
 package codec
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -27,6 +28,18 @@ import (
 // Decoder is a wrapping around io.Reader
 type Decoder struct {
 	Reader io.Reader
+}
+
+func Decode(in []byte, t interface{}) (interface{}, error) {
+	buf := &bytes.Buffer{}
+	sd := Decoder{Reader: buf}
+	_, err := buf.Write(in)
+	if err != nil {
+		return nil, err
+	}
+
+	output, err := sd.Decode(t)
+	return output, err
 }
 
 // Decode is the high level function wrapping the specific type decoding functions
@@ -49,7 +62,7 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 	case []*big.Int:
 		out, err = sd.DecodeBigIntArray()
 	case interface{}:
-		out, err = sd.DecodeTuple(t)
+		out, err = sd.DecodeInterface(t)
 	default:
 		return nil, errors.New("decode error: unsupported type")
 	}
@@ -223,17 +236,65 @@ func (sd *Decoder) DecodeBool() (bool, error) {
 	return false, errors.New("cannot decode invalid boolean")
 }
 
+func (sd *Decoder) DecodeInterface(t interface{}) (interface{}, error) {
+	switch reflect.ValueOf(t).Kind() {
+	case reflect.Slice, reflect.Array:
+		return sd.DecodeArray(t)
+	default:
+		return sd.DecodeTuple(t)
+	}
+}
+
+func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
+	v := reflect.ValueOf(t)
+
+	var err error
+	var o interface{}
+
+	length, err := sd.DecodeInteger()
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < int(length); i++ {
+		arrayValue := v.Index(i)
+
+		switch v.Index(i).Interface().(type) {
+		case []byte:
+			o, err = sd.DecodeByteArray()
+			if err != nil {
+				break
+			}
+
+			// get the pointer to the value and set the value
+			ptr := arrayValue.Addr().Interface().(*[]byte)
+			*ptr = o.([]byte)
+		case [32]byte:
+			buf := make([]byte, 32)
+			ptr := arrayValue.Addr().Interface().(*[32]byte)
+			_, err = sd.Reader.Read(buf)
+
+			var arr = [32]byte{}
+			copy(arr[:], buf)
+			*ptr = arr
+		default:
+			err = errors.New("could not decode invalid slice or array")
+		}
+
+		if err != nil {
+			break
+		}
+	}
+
+	return t, err
+}
+
 // DecodeTuple accepts a byte array representing the SCALE encoded tuple and an interface. This interface should be a pointer
 // to a struct which the encoded tuple should be marshalled into. If it is a valid encoding for the struct, it returns the
 // decoded struct, otherwise error,
 // Note that we return the same interface that was passed to this function; this is because we are writing directly to the
 // struct that is passed in, using reflect to get each of the fields.
 func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
-	switch reflect.ValueOf(t).Kind() {
-	case reflect.Slice, reflect.Array:
-		return nil, errors.New("cannot decode invalid tuple")
-	}
-
 	v := reflect.ValueOf(t).Elem()
 
 	var err error

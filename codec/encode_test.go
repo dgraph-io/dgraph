@@ -139,7 +139,6 @@ func setUpLargeStringTests() {
 }
 
 func TestEncode(t *testing.T) {
-
 	setUpStringTests()
 
 	if testing.Short() {

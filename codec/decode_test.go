@@ -23,6 +23,9 @@ import (
 	"testing"
 )
 
+var byteArray32 = [32]byte{}
+var byteArray64 = [64]byte{}
+
 type reverseByteTest struct {
 	val    []byte
 	output []byte
@@ -176,33 +179,33 @@ var decodeTupleTests = []decodeTupleTest{
 	}{[]byte{0x01}, 16383, true, int64(1 << 32)}},
 
 	{val: []byte{0x04, 0x01, 0x04, 0x00}, t: &struct {
-		Foo  []byte
-		Bar  int8
-		Bo   bool
+		Foo []byte
+		Bar int8
+		Bo  bool
 	}{}, output: &struct {
-		Foo  []byte
-		Bar  int8
-		Bo   bool
+		Foo []byte
+		Bar int8
+		Bo  bool
 	}{[]byte{0x01}, 4, false}},
 
 	{val: []byte{0x04, 0x01, 0x05, 0x04, 0x00}, t: &struct {
-		Foo  []byte
-		Bar  int16
-		Bo   bool
+		Foo []byte
+		Bar int16
+		Bo  bool
 	}{}, output: &struct {
-		Foo  []byte
-		Bar  int16
-		Bo   bool
+		Foo []byte
+		Bar int16
+		Bo  bool
 	}{[]byte{0x01}, 1029, false}},
 
 	{val: []byte{0x04, 0x01, 0x02, 0xff, 0xff, 0x01, 0x00}, t: &struct {
-		Foo  []byte
-		Bar  int32
-		Bo   bool
+		Foo []byte
+		Bar int32
+		Bo  bool
 	}{}, output: &struct {
-		Foo  []byte
-		Bar  int32
-		Bo   bool
+		Foo []byte
+		Bar int32
+		Bo  bool
 	}{[]byte{0x01}, 33554178, false}},
 }
 
@@ -216,6 +219,8 @@ var decodeArrayTests = []decodeArrayTest{
 	{val: []byte{0x00}, t: []bool{}, output: []bool{}},
 	{val: []byte{0x0c, 0x01, 0x00, 0x01}, t: []bool{}, output: []bool{true, false, true}},
 	{val: []byte{0x08, 0x00, 0x04}, t: []*big.Int{}, output: []*big.Int{big.NewInt(0), big.NewInt(1)}},
+	{val: append([]byte{0x8}, byteArray64[:]...), t: [][32]byte{{}, {}}, output: [][32]byte{byteArray32, byteArray32}},
+	{val: []byte{0x4, 0x04, 0x01}, t: [][]byte{{}}, output: [][]byte{{0x01}}},
 }
 
 var reverseByteTests = []reverseByteTest{
@@ -247,11 +252,7 @@ func TestReadByte(t *testing.T) {
 
 func TestDecodeFixedWidthInts(t *testing.T) {
 	for _, test := range decodeFixedWidthIntTests {
-		buf := bytes.Buffer{}
-		sd := Decoder{&buf}
-		buf.Write(test.val)
-		var i int32
-		output, err := sd.Decode(i)
+		output, err := Decode(test.val, int32(0))
 		if err != nil {
 			t.Error(err)
 		} else if output.(int) != int(test.output) {
@@ -262,11 +263,7 @@ func TestDecodeFixedWidthInts(t *testing.T) {
 
 func TestDecodeInts(t *testing.T) {
 	for _, test := range decodeIntTests {
-		buf := bytes.Buffer{}
-		sd := Decoder{&buf}
-		buf.Write(test.val)
-		var i int64
-		output, err := sd.Decode(i)
+		output, err := Decode(test.val, int64(0))
 		if err != nil {
 			t.Error(err)
 		} else if output != test.output {
@@ -277,11 +274,7 @@ func TestDecodeInts(t *testing.T) {
 
 func TestDecodeBigInts(t *testing.T) {
 	for _, test := range decodeBigIntTests {
-		buf := bytes.Buffer{}
-		sd := Decoder{&buf}
-		buf.Write(test.val)
-		var tmp *big.Int
-		output, err := sd.Decode(tmp)
+		output, err := Decode(test.val, big.NewInt(0))
 		if err != nil {
 			t.Error(err)
 		} else if output.(*big.Int).Cmp(test.output) != 0 {
@@ -295,11 +288,7 @@ func TestLargeDecodeByteArrays(t *testing.T) {
 		t.Skip("\033[33mSkipping memory intesive test for TestDecodeByteArrays in short mode\033[0m")
 	} else {
 		for _, test := range largeDecodeByteArrayTests {
-			buf := bytes.Buffer{}
-			sd := Decoder{&buf}
-			buf.Write(test.val)
-			var tmp []byte
-			output, err := sd.Decode(tmp)
+			output, err := Decode(test.val, []byte{})
 			if err != nil {
 				t.Error(err)
 			} else if !bytes.Equal(output.([]byte), test.output) {
@@ -311,11 +300,7 @@ func TestLargeDecodeByteArrays(t *testing.T) {
 
 func TestDecodeByteArrays(t *testing.T) {
 	for _, test := range decodeByteArrayTests {
-		buf := bytes.Buffer{}
-		sd := Decoder{&buf}
-		buf.Write(test.val)
-		var tmp []byte
-		output, err := sd.Decode(tmp)
+		output, err := Decode(test.val, []byte{})
 		if err != nil {
 			t.Error(err)
 		} else if !bytes.Equal(output.([]byte), test.output) {
@@ -326,11 +311,7 @@ func TestDecodeByteArrays(t *testing.T) {
 
 func TestDecodeBool(t *testing.T) {
 	for _, test := range decodeBoolTests {
-		buf := bytes.Buffer{}
-		sd := Decoder{&buf}
-		buf.Write([]byte{test.val})
-		var tmp bool
-		output, err := sd.Decode(tmp)
+		output, err := Decode([]byte{test.val}, true)
 		if err != nil {
 			t.Error(err)
 		} else if output != test.output {
@@ -338,23 +319,17 @@ func TestDecodeBool(t *testing.T) {
 		}
 	}
 
-	buf := bytes.Buffer{}
-	sd := Decoder{&buf}
-	buf.Write([]byte{0xff})
-	output, err := sd.DecodeBool()
+	output, err := Decode([]byte{0xff}, true)
 	if err == nil {
 		t.Error("did not error for invalid bool")
-	} else if output {
+	} else if output.(bool) {
 		t.Errorf("Fail: got %t expected false", output)
 	}
 }
 
 func TestDecodeTuples(t *testing.T) {
 	for _, test := range decodeTupleTests {
-		buf := bytes.Buffer{}
-		buf.Write(test.val)
-		sd := Decoder{&buf}
-		output, err := sd.Decode(test.t)
+		output, err := Decode(test.val, test.t)
 		if err != nil {
 			t.Error(err)
 		} else if !reflect.DeepEqual(output, test.output) {
@@ -365,10 +340,7 @@ func TestDecodeTuples(t *testing.T) {
 
 func TestDecodeArrays(t *testing.T) {
 	for _, test := range decodeArrayTests {
-		buf := bytes.Buffer{}
-		buf.Write(test.val)
-		sd := Decoder{&buf}
-		output, err := sd.Decode(test.t)
+		output, err := Decode(test.val, test.t)
 		if err != nil {
 			t.Error(err)
 		} else if !reflect.DeepEqual(output, test.output) {

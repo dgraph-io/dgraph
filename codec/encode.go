@@ -17,6 +17,7 @@
 package codec
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -27,6 +28,14 @@ import (
 // Encoder is a wrapping around io.Writer
 type Encoder struct {
 	Writer io.Writer
+}
+
+func Encode(in interface{}) ([]byte, error) {
+	buffer := bytes.Buffer{}
+	se := Encoder{&buffer}
+	_, err := se.Encode(in)
+	output := buffer.Bytes()
+	return output, err
 }
 
 // Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64,
