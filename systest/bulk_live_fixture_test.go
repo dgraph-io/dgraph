@@ -148,7 +148,7 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 		if err != nil {
 			t.Fatalf("Could not query: %v", err)
 		}
-		CompareJSON(t, wantResult, string(resp.GetJson()))
+		z.CompareJSON(t, wantResult, string(resp.GetJson()))
 	}
 }
 
