@@ -18,12 +18,13 @@ package graphql
 
 import (
 	"encoding/json"
+	"mime"
+	"net/http"
+
 	"github.com/dgraph-io/dgo"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
-	"mime"
-	"net/http"
 )
 
 // GraphQL spec:
