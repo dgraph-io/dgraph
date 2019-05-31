@@ -340,6 +340,55 @@ func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	return listWrap(kv), nil
 }
 
+func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("type %s {\n", attr))
+	for _, field := range update.Fields {
+		buf.WriteString(fieldToString(field))
+	}
+
+	buf.WriteString("}\n")
+
+	kv := &bpb.KV{
+		Value:   buf.Bytes(),
+		Version: 2, // Type value
+	}
+	return listWrap(kv), nil
+}
+
+func fieldToString(update *pb.SchemaUpdate) string {
+	var buf bytes.Buffer
+	buf.WriteString("\t")
+	buf.WriteString(update.Predicate)
+	buf.WriteString(": ")
+
+	if update.List {
+		buf.WriteString("[")
+	}
+
+	if update.ValueType == pb.Posting_OBJECT {
+		buf.WriteString(update.ObjectTypeName)
+	} else {
+		tid := types.TypeID(update.ValueType)
+		buf.WriteString(tid.Name())
+	}
+
+	if update.NonNullable {
+		buf.WriteString("!")
+	}
+
+	if update.List {
+		buf.WriteString("]")
+	}
+
+	if update.NonNullableList {
+		buf.WriteString("!")
+	}
+
+	buf.WriteString("\n")
+	return buf.String()
+}
+
 type fileWriter struct {
 	fd *os.File
 	bw *bufio.Writer
@@ -419,8 +468,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 	glog.Infof("Exporting schema for group: %d at %s\n", in.GroupId, schemaPath)
-	schemaWriter := &fileWriter{}
-	if err := schemaWriter.open(schemaPath); err != nil {
+	schemaTypeWriter := &fileWriter{}
+	if err := schemaTypeWriter.open(schemaPath); err != nil {
 		return err
 	}
 
@@ -439,12 +488,16 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		if pk.Attr == "_predicate_" {
 			return false
 		}
-		if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
-			return false
+
+		if !pk.IsType() {
+			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
+				return false
+			}
 		}
+
 		// We need to ensure that schema keys are separately identifiable, so they can be
 		// written to a different file.
-		return pk.IsData() || pk.IsSchema()
+		return pk.IsData() || pk.IsSchema() || pk.IsType()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
@@ -454,9 +507,10 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		e.uid = pk.Uid
 		e.attr = pk.Attr
 
+		// Schema and type keys should be handled first because schema keys are also
+		// considered data keys.
 		switch {
 		case pk.IsSchema():
-			// Schema should be handled first. Because schema keys are also considered data keys.
 			var update pb.SchemaUpdate
 			err := item.Value(func(val []byte) error {
 				return update.Unmarshal(val)
@@ -468,11 +522,24 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			}
 			return toSchema(pk.Attr, update)
 
+		case pk.IsType():
+			var update pb.TypeUpdate
+			err := item.Value(func(val []byte) error {
+				return update.Unmarshal(val)
+			})
+			if err != nil {
+				// Let's not propagate this error. We just log this and continue onwards.
+				glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
+				return nil, nil
+			}
+			return toType(pk.Attr, update)
+
 		case pk.IsData():
 			e.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
 			}
+
 			switch in.Format {
 			case "json":
 				return e.toJSON()
@@ -494,11 +561,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
-			case 2: // schema
-				writer = schemaWriter
+			case 2: // schema and types
+				writer = schemaTypeWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
+
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
@@ -520,7 +588,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	if err := dataWriter.Close(); err != nil {
 		return err
 	}
-	if err := schemaWriter.Close(); err != nil {
+	if err := schemaTypeWriter.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
