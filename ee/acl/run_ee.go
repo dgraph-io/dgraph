@@ -27,9 +27,9 @@ type options struct {
 }
 
 var (
-	opt     options
-	tlsConf x.TLSHelperConfig
-	CmdAcl  x.SubCommand
+	opt options
+	// CmdAcl is the sub-command used to manage the ACL system.
+	CmdAcl x.SubCommand
 )
 
 const gPassword = "gpassword"

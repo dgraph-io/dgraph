@@ -107,7 +107,7 @@ func processToFastJSON(q string) string {
 
 	var l query.Latency
 	ctx := defaultContext()
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res, ReadTs: timestamp()}
+	qr := query.Request{Latency: &l, GqlQuery: &res, ReadTs: timestamp()}
 	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
@@ -1641,7 +1641,6 @@ func TestJSONQueryWithVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"q":[{"user_id":"user1","user_name":"first user"}]}}`, res)
 
-
 	q2 := `query all($userID: string, $userName: string) {
 		q(func: eq(user_id, $userID)) {
 			user_id
@@ -1655,7 +1654,7 @@ func TestJSONQueryWithVariables(t *testing.T) {
 	p2 := params{
 		Query: q2,
 		Variables: map[string]string{
-			"$userID": "user2",
+			"$userID":   "user2",
 			"$userName": "fourth user",
 		},
 	}
@@ -1664,7 +1663,7 @@ func TestJSONQueryWithVariables(t *testing.T) {
 	res, err = runJSONQuery(string(data))
 	require.NoError(t, err)
 	exp := `{"data":{"q":[{"user_id":"user2","user_name":"second user",` +
-	`"follows":[{"uid":"0x1403","user_id":"user4"}]}]}}`
+		`"follows":[{"uid":"0x1403","user_id":"user4"}]}]}}`
 	require.JSONEq(t, exp, res)
 }
 

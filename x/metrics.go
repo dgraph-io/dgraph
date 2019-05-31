@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	// These are cumulative
+	// Cumulative metrics.
 	NumQueries = stats.Int64("num_queries_total",
 		"Total number of queries", stats.UnitDimensionless)
 	NumMutations = stats.Int64("num_mutations_total",
@@ -46,7 +46,7 @@ var (
 	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
 
-	// value at particular point of time
+	// Point-in-time metrics.
 	PendingQueries = stats.Int64("pending_queries_total",
 		"Number of pending queries", stats.UnitDimensionless)
 	PendingProposals = stats.Int64("pending_proposals_total",
@@ -68,11 +68,10 @@ var (
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
 
+	// Conf holds the metrics config.
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
-)
 
-var (
 	// Tag keys here
 	KeyStatus, _ = tag.NewKey("status")
 	KeyError, _  = tag.NewKey("error")
@@ -81,112 +80,112 @@ var (
 	// Tag values here
 	TagValueStatusOK    = "ok"
 	TagValueStatusError = "error"
+
+	defaultLatencyMsDistribution = view.Distribution(
+		0, 0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16,
+		20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500,
+		650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
+
+	allTagKeys = []tag.Key{
+		KeyStatus, KeyError, KeyMethod,
+	}
+
+	allViews = []*view.View{
+		{
+			Name:        LatencyMs.Name(),
+			Measure:     LatencyMs,
+			Description: LatencyMs.Description(),
+			Aggregation: defaultLatencyMsDistribution,
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        NumQueries.Name(),
+			Measure:     NumQueries,
+			Description: NumQueries.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        NumEdges.Name(),
+			Measure:     NumEdges,
+			Description: NumEdges.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        RaftAppliedIndex.Name(),
+			Measure:     RaftAppliedIndex,
+			Description: RaftAppliedIndex.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MaxAssignedTs.Name(),
+			Measure:     MaxAssignedTs,
+			Description: MaxAssignedTs.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+
+		// Last value aggregations
+		{
+			Name:        PendingQueries.Name(),
+			Measure:     PendingQueries,
+			Description: PendingQueries.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        PendingProposals.Name(),
+			Measure:     PendingProposals,
+			Description: PendingProposals.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        NumGoRoutines.Name(),
+			Measure:     NumGoRoutines,
+			Description: NumGoRoutines.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MemoryInUse.Name(),
+			Measure:     MemoryInUse,
+			Description: MemoryInUse.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MemoryIdle.Name(),
+			Measure:     MemoryIdle,
+			Description: MemoryIdle.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        MemoryProc.Name(),
+			Measure:     MemoryProc,
+			Description: MemoryProc.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        ActiveMutations.Name(),
+			Measure:     ActiveMutations,
+			Description: ActiveMutations.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        AlphaHealth.Name(),
+			Measure:     AlphaHealth,
+			Description: AlphaHealth.Description(),
+			Aggregation: view.LastValue(),
+			TagKeys:     allTagKeys,
+		},
+	}
 )
-
-var defaultLatencyMsDistribution = view.Distribution(
-	0, 0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16,
-	20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500,
-	650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
-
-var allTagKeys = []tag.Key{
-	KeyStatus, KeyError, KeyMethod,
-}
-
-var allViews = []*view.View{
-	{
-		Name:        LatencyMs.Name(),
-		Measure:     LatencyMs,
-		Description: LatencyMs.Description(),
-		Aggregation: defaultLatencyMsDistribution,
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        NumQueries.Name(),
-		Measure:     NumQueries,
-		Description: NumQueries.Description(),
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        NumEdges.Name(),
-		Measure:     NumEdges,
-		Description: NumEdges.Description(),
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        RaftAppliedIndex.Name(),
-		Measure:     RaftAppliedIndex,
-		Description: RaftAppliedIndex.Description(),
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MaxAssignedTs.Name(),
-		Measure:     MaxAssignedTs,
-		Description: MaxAssignedTs.Description(),
-		Aggregation: view.Count(),
-		TagKeys:     allTagKeys,
-	},
-
-	// Last value aggregations
-	{
-		Name:        PendingQueries.Name(),
-		Measure:     PendingQueries,
-		Description: PendingQueries.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        PendingProposals.Name(),
-		Measure:     PendingProposals,
-		Description: PendingProposals.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        NumGoRoutines.Name(),
-		Measure:     NumGoRoutines,
-		Description: NumGoRoutines.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MemoryInUse.Name(),
-		Measure:     MemoryInUse,
-		Description: MemoryInUse.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MemoryIdle.Name(),
-		Measure:     MemoryIdle,
-		Description: MemoryIdle.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        MemoryProc.Name(),
-		Measure:     MemoryProc,
-		Description: MemoryProc.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        ActiveMutations.Name(),
-		Measure:     ActiveMutations,
-		Description: ActiveMutations.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-	{
-		Name:        AlphaHealth.Name(),
-		Measure:     AlphaHealth,
-		Description: AlphaHealth.Description(),
-		Aggregation: view.LastValue(),
-		TagKeys:     allTagKeys,
-	},
-}
 
 func init() {
 	Conf = expvar.NewMap("dgraph_config")
@@ -233,12 +232,14 @@ func MetricsContext() context.Context {
 	return context.Background()
 }
 
+// WithMethod returns a new updated context with the tag KeyMethod set to the given value.
 func WithMethod(parent context.Context, method string) context.Context {
 	ctx, err := tag.New(parent, tag.Upsert(KeyMethod, method))
 	Check(err)
 	return ctx
 }
 
+// SinceMs returns the time since startTime in milliseconds (as a float).
 func SinceMs(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
 }

@@ -4,6 +4,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.0.15] - 2019-05-30
+[1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
+
+### Fixed
+
+- Fix bug that can cause a Dgraph cluster to get stuck in infinite leader election. ([#3391][])
+- Fix bug in bulk loader that prevented loading data from JSON files. ([#3464][])
+- Fix bug with a potential deadlock by breaking circular lock acquisition. ([#3393][])
+- Properly escape strings containing Unicode control characters for data exports. Fixes [#3383]. ([#3429][])
+- Initialize tablets map when creating a group. ([#3360][])
+- Fix queries with `offset` not working with multiple `orderasc` or `orderdesc` statements. Fixes [#3366][]. ([#3455][])
+- Vendor in bug fixes from badger. ([#3348][], [#3371][], [#3460][])
+
+### Changed
+
+- Use Go v1.12.5 to build Dgraph release binaries.
+- Truncate Raft logs even when no txn commits are happening. ([3be380b8a][])
+- Reduce memory usage by setting a limit on the size of committed entries that can be served per Ready. ([#3308][])
+- Reduce memory usage of pending txns by only keeping deltas in memory. ([#3349][])
+- Reduce memory usage by limiting the number of pending proposals in apply channel. ([#3340][])
+- Reduce memory usage when calculating snapshots by retrieving entries in batches. ([#3409][])
+- Allow snapshot calculations during snapshot streaming. ([ecb454754][])
+- Allow quick recovery from partitions by shortening the deadline of sending Raft messages to 10s. ([77b52aca1][])
+- Take snapshots less frequently so straggling Alpha followers can catch up to the leader. Snapshot frequency is configurable via a flag (see Added section). ([#3367][])
+- Allow partial snapshot streams to reduce the amount of data needed to be transferred between Alphas. ([#3454][])
+- Use Badger's StreamWriter to improve write speeds during snapshot streaming. ([#3457][]) ([#3442][])
+- Call file sync explicitly at the end of TxnWriter to improve performance. ([#3418][])
+- Optimize mutation and delta application. ([#2987][])
+- Add logs to show Dgraph config options. ([#3337][])
+- Add `-v=3` logs for reporting Raft communication for debugging. These logs start with `RaftComm:`. ([9cd628f6f][])
+
+### Added
+
+- Add Alpha flag `--snapshot_after` (default: 10000) to configure the number of Raft entries to keep before taking a snapshot. ([#3367][])
+- Add Alpha flag `--abort_older_than` (default: 5m) to configure the amount of time since a pending txn's last mutation until it is aborted. ([#3367][])
+- Add Alpha flag `--normalize_node_limit` (default: 10000) to configure the limit for the maximum number of nodes that can be returned in a query that uses the `@normalize` directive. Fixes [#3335][]. ([#3467][])
+- Add Prometheus metrics for latest Raft applied index (`dgraph_raft_applied_index`) and the max assigned txn timestamp (`dgraph_max_assigned_ts`). These are useful to track cluster progress. ([#3338][])
+- Add Raft checkpoint index to WAL for quicker recovery after restart. ([#3444][])
+
+### Removed
+
+- Remove size calculation in posting list. ([0716dc4e1][])
+- Remove a `-v=2` log which can be too noisy during Raft replay. ([2377d9f56][]).
+- Remove `dgraph_conf` from /debug/vars. Dgraph config options are available via logs. ([#3337][])
+
+[#3337]: https://github.com/dgraph-io/dgraph/pull/3337
+[#3391]: https://github.com/dgraph-io/dgraph/pull/3391
+[#3400]: https://github.com/dgraph-io/dgraph/pull/3400
+[#3464]: https://github.com/dgraph-io/dgraph/pull/3464
+[#2987]: https://github.com/dgraph-io/dgraph/pull/2987
+[#3349]: https://github.com/dgraph-io/dgraph/pull/3349
+[#3393]: https://github.com/dgraph-io/dgraph/pull/3393
+[#3429]: https://github.com/dgraph-io/dgraph/pull/3429
+[#3383]: https://github.com/dgraph-io/dgraph/pull/3383
+[#3455]: https://github.com/dgraph-io/dgraph/pull/3455
+[#3366]: https://github.com/dgraph-io/dgraph/pull/3366
+[#3308]: https://github.com/dgraph-io/dgraph/pull/3308
+[#3340]: https://github.com/dgraph-io/dgraph/pull/3340
+[#3348]: https://github.com/dgraph-io/dgraph/pull/3348
+[#3371]: https://github.com/dgraph-io/dgraph/pull/3371
+[#3460]: https://github.com/dgraph-io/dgraph/pull/3460
+[#3360]: https://github.com/dgraph-io/dgraph/pull/3360
+[#3335]: https://github.com/dgraph-io/dgraph/pull/3335
+[#3367]: https://github.com/dgraph-io/dgraph/pull/3367
+[#3409]: https://github.com/dgraph-io/dgraph/pull/3409
+[#3418]: https://github.com/dgraph-io/dgraph/pull/3418
+[#3454]: https://github.com/dgraph-io/dgraph/pull/3454
+[#3457]: https://github.com/dgraph-io/dgraph/pull/3457
+[#3442]: https://github.com/dgraph-io/dgraph/pull/3442
+[#3467]: https://github.com/dgraph-io/dgraph/pull/3467
+[#3338]: https://github.com/dgraph-io/dgraph/pull/3338
+[#3444]: https://github.com/dgraph-io/dgraph/pull/3444
+[3be380b8a]: https://github.com/dgraph-io/dgraph/commit/3be380b8a
+[ecb454754]: https://github.com/dgraph-io/dgraph/commit/ecb454754
+[77b52aca1]: https://github.com/dgraph-io/dgraph/commit/77b52aca1
+[9cd628f6f]: https://github.com/dgraph-io/dgraph/commit/9cd628f6f
+[0716dc4e1]: https://github.com/dgraph-io/dgraph/commit/0716dc4e1
+[2377d9f56]: https://github.com/dgraph-io/dgraph/commit/2377d9f56
+
 ## [1.0.14] - 2019-04-12
 [1.0.14]: https://github.com/dgraph-io/dgraph/compare/v1.0.13...v1.0.14
 

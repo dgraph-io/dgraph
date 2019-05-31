@@ -41,7 +41,7 @@ type route struct {
 	totalWeight float64
 }
 
-type Item struct {
+type queueItem struct {
 	uid   uint64  // uid of the node.
 	cost  float64 // cost of taking the path till this uid.
 	hop   int     // number of hops taken to reach this node.
@@ -55,10 +55,10 @@ var pathPool = sync.Pool{
 	},
 }
 
-var ErrStop = errors.Errorf("STOP")
-var ErrFacet = errors.Errorf("Skip the edge")
+var errStop = errors.Errorf("STOP")
+var errFacet = errors.Errorf("Skip the edge")
 
-type priorityQueue []*Item
+type priorityQueue []*queueItem
 
 func (h priorityQueue) Len() int           { return len(h) }
 func (h priorityQueue) Less(i, j int) bool { return h[i].cost < h[j].cost }
@@ -69,7 +69,7 @@ func (h priorityQueue) Swap(i, j int) {
 }
 func (h *priorityQueue) Push(x interface{}) {
 	n := len(*h)
-	item := x.(*Item)
+	item := x.(*queueItem)
 	item.index = n
 	*h = append(*h, item)
 }
@@ -94,7 +94,7 @@ type nodeInfo struct {
 	mapItem
 	parent uint64
 	// Pointer to the item in heap. Used to update priority
-	node *Item
+	node *queueItem
 }
 
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
@@ -106,12 +106,12 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	}
 	fcsList := sg.facetsMatrix[matrix].FacetsList
 	if len(fcsList) <= list {
-		rerr = ErrFacet
+		rerr = errFacet
 		return cost, fcs, rerr
 	}
 	fcs = fcsList[list]
 	if len(fcs.Facets) == 0 {
-		rerr = ErrFacet
+		rerr = errFacet
 		return cost, fcs, rerr
 	}
 	if len(fcs.Facets) > 1 {
@@ -127,7 +127,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	} else if tv.Tid == types.FloatID {
 		cost = float64(tv.Value.(float64))
 	} else {
-		rerr = ErrFacet
+		rerr = errFacet
 	}
 	return cost, fcs, rerr
 }
@@ -189,7 +189,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 						}
 						// The default cost we'd use is 1.
 						cost, facet, err := subgraph.getCost(mIdx, lIdx)
-						if err == ErrFacet {
+						if err == errFacet {
 							// Ignore the edge and continue.
 							continue
 						} else if err != nil {
@@ -243,7 +243,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		}
 
 		if len(out) == 0 {
-			rch <- ErrStop
+			rch <- errStop
 			return
 		}
 		rch <- nil
@@ -262,7 +262,7 @@ func (sg *SubGraph) copyFiltersRecurse(otherSubgraph *SubGraph) {
 	}
 }
 
-func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
@@ -274,7 +274,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	heap.Init(&pq)
 
 	// Initialize and push the source node.
-	srcNode := &Item{
+	srcNode := &queueItem{
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
@@ -299,7 +299,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
 	for pq.Len() > 0 {
-		item := heap.Pop(&pq).(*Item)
+		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
 			// Ignore paths that do not meet the minimum weight requirement.
 			if item.cost < minWeight {
@@ -323,7 +323,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				select {
 				case err = <-expandErr:
 					if err != nil {
-						if err == ErrStop {
+						if err == errStop {
 							stopExpansion = true
 						} else {
 							return nil, err
@@ -366,7 +366,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				attr:  info.attr,
 				facet: info.facet,
 			}
-			node := &Item{
+			node := &queueItem{
 				uid:  toUid,
 				cost: item.cost + cost,
 				hop:  item.hop + 1,
@@ -419,8 +419,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // 21                 Q.decrease_priority(v, alt)
 // 22
 // 23     return dist[], prev[]
-
-func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
@@ -432,13 +431,13 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 
 	if numPaths > 1 {
-		return KShortestPath(ctx, sg)
+		return runKShortestPaths(ctx, sg)
 	}
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
 
 	// Initialize and push the source node.
-	srcNode := &Item{
+	srcNode := &queueItem{
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
@@ -468,7 +467,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var stopExpansion bool
 	var totalWeight float64
 	for pq.Len() > 0 {
-		item := heap.Pop(&pq).(*Item)
+		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
 			totalWeight = item.cost
 			break
@@ -482,7 +481,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			select {
 			case err = <-expandErr:
 				if err != nil {
-					if err == ErrStop {
+					if err == errStop {
 						stopExpansion = true
 					} else {
 						return nil, err
@@ -508,7 +507,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					if !ok {
 						// This is the first time we're seeing this node. So
 						// create a new node and add it to the heap and map.
-						node := &Item{
+						node := &queueItem{
 							uid:  toUid,
 							cost: item.cost + cost,
 							hop:  item.hop + 1,

@@ -31,10 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/types"
-)
-
-const (
-	normalizeLimit = 10000
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
@@ -281,8 +278,9 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	for _, pa := range parent {
 		for _, ca := range child {
 			cnt += len(pa) + len(ca)
-			if cnt > normalizeLimit {
-				return nil, errors.Errorf("Couldn't evaluate @normalize directive - too many results")
+			if cnt > x.Config.NormalizeNodeLimit {
+				return nil, errors.Errorf(
+					"Couldn't evaluate @normalize directive - too many results")
 			}
 			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
 			list = append(list, pa...)
@@ -489,6 +487,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
+// Extensions represents the extra information appended to query results.
 type Extensions struct {
 	Latency *api.Latency    `json:"server_latency,omitempty"`
 	Txn     *api.TxnContext `json:"txn,omitempty"`

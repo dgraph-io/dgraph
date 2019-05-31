@@ -43,6 +43,7 @@ import (
 )
 
 const (
+	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
 	FacetDelimeter = "|"
 )
 
@@ -274,7 +275,9 @@ func getValue(tv *pb.TaskValue) (types.Val, error) {
 }
 
 var (
+	// ErrEmptyVal is returned when a value is empty.
 	ErrEmptyVal = errors.New("Query: harmless error, e.g. task.Val is nil")
+	// ErrWrongAgg is returned when value aggregation is attempted in the root level of a query.
 	ErrWrongAgg = errors.New("Wrong level for var aggregation")
 )
 
@@ -1768,7 +1771,7 @@ func (sg *SubGraph) replaceVarInFunc() error {
 	return nil
 }
 
-func (sg *SubGraph) ApplyIneqFunc() error {
+func (sg *SubGraph) applyIneqFunc() error {
 	if len(sg.Params.uidToVal) == 0 {
 		// Expected a valid value map. But got empty.
 		// Don't return error, return empty - issue #2610
@@ -2023,7 +2026,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	} else {
 		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsValueVar {
 			// This is a ineq function which uses a value variable.
-			err = sg.ApplyIneqFunc()
+			err = sg.applyIneqFunc()
 			if parent != nil {
 				rch <- err
 				return
@@ -2575,8 +2578,8 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]struct{}) {
 	}
 }
 
-// convert the new UIDs to hex string.
-func ConvertUidsToHex(m map[string]uint64) map[string]string {
+// UidsToHex converts the new UIDs to hex string.
+func UidsToHex(m map[string]uint64) map[string]string {
 	res := make(map[string]string)
 	for k, v := range m {
 		res[k] = fmt.Sprintf("%#x", v)
@@ -2584,10 +2587,10 @@ func ConvertUidsToHex(m map[string]uint64) map[string]string {
 	return res
 }
 
-// QueryRequest wraps the state that is used when executing query.
-// Initially Latency and GqlQuery needs to be set. Subgraphs, Vars
-// and schemaUpdate are filled when processing query.
-type QueryRequest struct {
+// Request wraps the state that is used when executing query.
+// Initially Latency and GqlQuery needs to be set. Subgraphs, Vars and schemaUpdate
+// are filled when processing query.
+type Request struct {
 	ReadTs   uint64
 	Cache    int
 	Latency  *Latency
@@ -2601,7 +2604,7 @@ type QueryRequest struct {
 // ProcessQuery processes query part of the request (without mutations).
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.
-func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
+func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "query.ProcessQuery")
 	defer stop()
@@ -2689,12 +2692,12 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 			if sg.Params.Alias == "shortest" {
 				// We allow only one shortest path block per query.
 				go func() {
-					shortestSg, err = ShortestPath(ctx, sg)
+					shortestSg, err = shortestPath(ctx, sg)
 					errChan <- err
 				}()
 			} else if sg.Params.Recurse {
 				go func() {
-					errChan <- Recurse(ctx, sg)
+					errChan <- recurse(ctx, sg)
 				}()
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
@@ -2742,31 +2745,15 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 	return nil
 }
 
-var MutationNotAllowedErr = errors.Errorf("Mutations are forbidden on this server.")
-
-type InvalidRequestError struct {
-	err error
-}
-
-func (e *InvalidRequestError) Error() string {
-	return "invalid request: " + e.err.Error()
-}
-
-type InternalError struct {
-	err error
-}
-
-func (e *InternalError) Error() string {
-	return "pb.error: " + e.err.Error()
-}
-
+// ExecutionResult holds the result of running a query.
 type ExecutionResult struct {
 	Subgraphs  []*SubGraph
 	SchemaNode []*api.SchemaNode
 	Types      []*pb.TypeUpdate
 }
 
-func (req *QueryRequest) Process(ctx context.Context) (er ExecutionResult, err error) {
+// Process handles a query request.
+func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error) {
 	err = req.ProcessQuery(ctx)
 	if err != nil {
 		return er, err
@@ -2775,15 +2762,16 @@ func (req *QueryRequest) Process(ctx context.Context) (er ExecutionResult, err e
 
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
-			return er, errors.Wrapf(&InternalError{err: err}, "error while fetching schema")
+			return er, errors.Wrapf(err, "while fetching schema")
 		}
 		if er.Types, err = worker.GetTypes(ctx, req.GqlQuery.Schema); err != nil {
-			return er, errors.Wrapf(&InternalError{err: err}, "error while fetching types")
+			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
 	return er, nil
 }
 
+// StripBlankNode returns a copy of the map where all the keys have the blank node prefix removed.
 func StripBlankNode(mp map[string]uint64) map[string]uint64 {
 	temp := make(map[string]uint64)
 	for k, v := range mp {

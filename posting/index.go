@@ -119,7 +119,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	}
 
 	x.AssertTrue(plist != nil)
-	if err = plist.AddMutation(ctx, txn, edge); err != nil {
+	if err = plist.addMutation(ctx, txn, edge); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -140,10 +140,9 @@ type countParams struct {
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
-	plist.Lock()
-	defer plist.Unlock()
+
 	if hasCountIndex {
-		countBefore = plist.length(txn.StartTs, 0)
+		countBefore = plist.Length(txn.StartTs, 0)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -152,7 +151,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		countAfter = plist.length(txn.StartTs, 0)
+		countAfter = plist.Length(txn.StartTs, 0)
 		if countAfter == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
@@ -250,8 +249,6 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 		}
 	}
 
-	l.Lock()
-	defer l.Unlock()
 	return l.addMutation(ctx, txn, edge)
 }
 
@@ -265,7 +262,7 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.AddMutation(ctx, txn, t); err != nil {
+	if err = plist.addMutation(ctx, txn, t); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -303,6 +300,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	t1 := time.Now()
 	l.Lock()
 	defer l.Unlock()
+
 	if dur := time.Since(t1); dur > time.Millisecond {
 		span := otrace.FromContext(ctx)
 		span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-lock", true)},
@@ -343,7 +341,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, ErrTsTooOld
 		}
 	}
-	if err = l.addMutation(ctx, txn, t); err != nil {
+	if err = l.addMutationInternal(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
 	if hasCountIndex {
@@ -361,7 +359,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	return val, found, emptyCountParams, nil
 }
 
-// AddMutationWithIndex is AddMutation with support for indexing. It also
+// AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	txn *Txn) error {
@@ -940,7 +938,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
 		txn.cache.Set(string(pl.key), pl)
-		if err := pl.AddMutation(ctx, txn, t); err != nil {
+		if err := pl.addMutation(ctx, txn, t); err != nil {
 			return err
 		}
 		// Add the new edge with the fingerprinted value id.
@@ -952,7 +950,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Label:     mpost.Label,
 			Facets:    mpost.Facets,
 		}
-		return pl.AddMutation(ctx, txn, newEdge)
+		return pl.addMutation(ctx, txn, newEdge)
 	}
 	return builder.Run(ctx)
 }

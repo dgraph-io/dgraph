@@ -35,9 +35,7 @@ import (
 )
 
 var (
-	emptyMembershipState pb.MembershipState
 	emptyConnectionState pb.ConnectionState
-	errInternalError     = errors.New("Internal server error")
 	errServerShutDown    = errors.New("Server is being shut down")
 )
 

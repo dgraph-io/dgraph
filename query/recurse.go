@@ -199,7 +199,7 @@ func expandChildren(ctx context.Context, sg *SubGraph, children []*SubGraph) ([]
 	return out, nil
 }
 
-func Recurse(ctx context.Context, sg *SubGraph) error {
+func recurse(ctx context.Context, sg *SubGraph) error {
 	if !sg.Params.Recurse {
 		return errors.Errorf("Invalid recurse path query")
 	}

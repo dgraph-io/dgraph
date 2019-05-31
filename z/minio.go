@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-package x
+package z
 
 import (
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/minio/minio-go"
 )
 
-// SubCommand a represents a sub-command in the command-line interface.
-type SubCommand struct {
-	Cmd  *cobra.Command
-	Conf *viper.Viper
+var (
+	accessKey     = "accesskey"
+	secretKey     = "secretkey"
+	minioEndpoint = "localhost:9001"
+)
 
-	EnvPrefix string
+// NewMinioClient returns a minio client.
+func NewMinioClient() (*minio.Client, error) {
+	return minio.New(minioEndpoint, accessKey, secretKey, false)
 }
