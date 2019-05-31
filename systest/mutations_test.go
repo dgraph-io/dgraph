@@ -79,6 +79,7 @@ func TestSystem(t *testing.T) {
 	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
+	t.Run("discard a txn", wrap(DiscardTxnTest))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -150,6 +151,36 @@ func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 		Schema: `pred: [string] @lang .`,
 	})
 	require.Error(t, err)
+}
+
+func DiscardTxnTest(t *testing.T, c *dgo.Dgraph) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err := c.Alter(ctx, &api.Operation{
+		Schema: `name: string @index(exact) .`,
+	})
+	require.NoError(t, err, "The alter should have succeeded")
+
+	txn := c.NewTxn()
+
+	_, err = txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`_:a <name> "Alice" .`),
+	})
+	require.NoError(t, err, "The mutation should have succeeded")
+	txn.Discard(ctx)
+
+	// now query the cluster and make sure that the data has made no effect
+	queryTxn := c.NewReadOnlyTxn()
+	query := `
+    {
+      q (func: eq(name, "Alice")) {
+        name
+      }
+    }`
+	resp, err := queryTxn.Query(ctx, query)
+	require.NoError(t, err, "The query should have succeeded")
+
+	CompareJSON(t, `{ "q": []}`, string(resp.Json))
 }
 
 func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {

@@ -219,11 +219,8 @@ func (txn *Txn) Commit(ctx context.Context) error {
 // is unavailable. In these cases, the server will eventually do the
 // transaction clean up.
 func (txn *Txn) Discard(ctx context.Context) error {
-	err := txn.commitOrAbort(ctx)
-	if err != nil {
-		txn.context.Aborted = true
-	}
-	return err
+	txn.context.Aborted = true
+	return txn.commitOrAbort(ctx)
 }
 
 func (txn *Txn) commitOrAbort(ctx context.Context) error {
