@@ -415,7 +415,8 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
-//authorizeAlter parses the Schema in the operation and authorizes the operation using the aclCachePtr
+// authorizeAlter parses the Schema in the operation and authorizes the operation
+// using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
