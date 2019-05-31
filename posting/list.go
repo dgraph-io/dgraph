@@ -24,7 +24,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"sync/atomic"
 
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -76,9 +75,6 @@ type List struct {
 	mutationMap map[uint64]*pb.PostingList
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
-
-	pendingTxns int32 // Using atomic for this, to avoid locking in SetForDeletion operation.
-	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 }
 
 func (l *List) maxVersion() uint64 {
@@ -401,9 +397,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
 
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		return ErrRetry
-	}
 	if txn.ShouldAbort() {
 		return y.ErrConflict
 	}
@@ -450,7 +443,6 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 
 	l.updateMutationLayer(mpost)
-	atomic.AddInt32(&l.pendingTxns, 1)
 	txn.addConflictKey(conflictKey)
 	return nil
 }
@@ -477,21 +469,8 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 }
 
 func (l *List) commitMutation(startTs, commitTs uint64) error {
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		return ErrRetry
-	}
 	l.Lock()
 	defer l.Unlock()
-
-	// Check if we still have a pending txn when we return from this function.
-	defer func() {
-		for _, plist := range l.mutationMap {
-			if plist.CommitTs == 0 {
-				return // Got a pending txn.
-			}
-		}
-		atomic.StoreInt32(&l.pendingTxns, 0)
-	}()
 
 	plist, ok := l.mutationMap[startTs]
 	if !ok {

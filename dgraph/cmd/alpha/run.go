@@ -162,6 +162,9 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
 			" This applies to shortest path and recursive queries.")
+	flag.Uint64("normalize_node_limit", 1e4,
+		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
+			"normalize directive.")
 
 	// TLS configurations
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
@@ -477,6 +480,7 @@ func run() {
 	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
+	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 
 	x.PrintVersion()
 
