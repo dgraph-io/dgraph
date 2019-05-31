@@ -1112,7 +1112,7 @@ func (seq *Sequence) Release() error {
 	err := seq.db.Update(func(txn *Txn) error {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], seq.next)
-		return txn.Set(seq.key, buf[:])
+		return txn.SetEntry(NewEntry(seq.key, buf[:]))
 	})
 	if err != nil {
 		return err
@@ -1142,7 +1142,7 @@ func (seq *Sequence) updateLease() error {
 		lease := seq.next + seq.bandwidth
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], lease)
-		if err = txn.Set(seq.key, buf[:]); err != nil {
+		if err = txn.SetEntry(NewEntry(seq.key, buf[:])); err != nil {
 			return err
 		}
 		seq.leased = lease

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package badger
 
 import (
@@ -78,12 +79,19 @@ func (p *publisher) publishUpdates(reqs requests) {
 		// Release all the request.
 		reqs.DecrRef()
 	}()
+
+	// TODO: Optimize this, so we can figure out key -> subscriber quickly, without iterating over
+	// all the prefixes.
+	// TODO: Use trie to find subscribers.
 	for _, s := range p.subscribers {
+		// BUG: This would send out the same entry multiple times on multiple matches for the same
+		// subscriber.
 		for _, prefix := range s.prefixes {
 			for _, req := range reqs {
 				for _, e := range req.Entries {
-					// TODO: Use trie to find subscribers.
 					if bytes.HasPrefix(e.Key, prefix) {
+						// TODO: Maybe we can optimize this by creating the KV once and sending it
+						// over to multiple subscribers.
 						k := y.SafeCopy(nil, e.Key)
 						kv := &pb.KV{
 							Key:       y.ParseKey(k),

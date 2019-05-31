@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/golang/glog"
 	"io"
 
 	"github.com/dgraph-io/badger/pb"
@@ -128,20 +127,20 @@ func writeTo(list *pb.KVList, w io.Writer) error {
 	return err
 }
 
-type loader struct {
+type Loader struct {
 	db       *DB
 	throttle *y.Throttle
 	entries  []*Entry
 }
 
-func (db *DB) newLoader(maxPendingWrites int) *loader {
-	return &loader{
+func (db *DB) NewLoader(maxPendingWrites int) *Loader {
+	return &Loader{
 		db:       db,
 		throttle: y.NewThrottle(maxPendingWrites),
 	}
 }
 
-func (l *loader) set(kv *pb.KV) error {
+func (l *Loader) Set(kv *pb.KV) error {
 	var userMeta, meta byte
 	if len(kv.UserMeta) > 0 {
 		userMeta = kv.UserMeta[0]
@@ -163,7 +162,7 @@ func (l *loader) set(kv *pb.KV) error {
 	return nil
 }
 
-func (l *loader) send() error {
+func (l *Loader) send() error {
 	if err := l.throttle.Do(); err != nil {
 		return err
 	}
@@ -175,39 +174,13 @@ func (l *loader) send() error {
 	return nil
 }
 
-func (l *loader) finish() error {
+func (l *Loader) Finish() error {
 	if len(l.entries) > 0 {
 		if err := l.send(); err != nil {
 			return err
 		}
 	}
 	return l.throttle.Finish()
-}
-
-// LoadLists reads the lists from the listCh channel, and writes them
-// to the database. The method should be called on a database that is not running any other
-// concurrent transactions while it is running.
-func (db *DB) LoadLists(listCh chan *pb.KVList, maxPendingWrites int) error {
-	ldr := db.newLoader(maxPendingWrites)
-	for list := range listCh {
-		for _, kv := range list.Kv {
-			if err := ldr.set(kv); err != nil {
-				return err
-			}
-
-			// Update nextTxnTs, memtable stores this
-			// timestamp in badger head when flushed.
-			if kv.Version >= db.orc.nextTxnTs {
-				db.orc.nextTxnTs = kv.Version + 1
-			}
-		}
-	}
-
-	if err := ldr.finish(); err != nil {
-		return err
-	}
-	db.orc.txnMark.Done(db.orc.nextTxnTs - 1)
-	return nil
 }
 
 // Load reads a protobuf-encoded list of all entries from a reader and writes
@@ -220,43 +193,45 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
-	listCh := make(chan *pb.KVList, 100)
-	produceLists := func() error {
-		defer close(listCh)
-		// this is the producer of KVLists
-		for {
-			var sz uint64
-			err := binary.Read(br, binary.LittleEndian, &sz)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
-
-			if cap(unmarshalBuf) < int(sz) {
-				unmarshalBuf = make([]byte, sz)
-			}
-
-			if _, err = io.ReadFull(br, unmarshalBuf[:sz]); err != nil {
-				return err
-			}
-
-			list := &pb.KVList{}
-			if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
-				return err
-			}
-
-			listCh <- list
+	loader := db.NewLoader(maxPendingWrites)
+	for {
+		var sz uint64
+		err := binary.Read(br, binary.LittleEndian, &sz)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
 		}
 
-		return nil
+		if cap(unmarshalBuf) < int(sz) {
+			unmarshalBuf = make([]byte, sz)
+		}
+
+		if _, err = io.ReadFull(br, unmarshalBuf[:sz]); err != nil {
+			return err
+		}
+
+		list := &pb.KVList{}
+		if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
+			return err
+		}
+
+		for _, kv := range list.Kv {
+			if err := loader.Set(kv); err != nil {
+				return err
+			}
+
+			// Update nextTxnTs, memtable stores this
+			// timestamp in badger head when flushed.
+			if kv.Version >= db.orc.nextTxnTs {
+				db.orc.nextTxnTs = kv.Version + 1
+			}
+		}
 	}
 
-	go func() {
-		if err := produceLists(); err != nil {
-			glog.Error("error while producing lists: %v", err)
-		}
-	}()
-
-	return db.LoadLists(listCh, maxPendingWrites)
+	if err := loader.Finish(); err != nil {
+		return err
+	}
+	db.orc.txnMark.Done(db.orc.nextTxnTs - 1)
+	return nil
 }
