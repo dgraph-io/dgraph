@@ -32,7 +32,7 @@ type graphQLResponse struct {
 	Data   json.RawMessage `json:"data"`
 }
 
-func ErrorResponse(messagef string, args ...interface{}) *graphQLResponse {
+func errorResponse(messagef string, args ...interface{}) *graphQLResponse {
 	return &graphQLResponse{
 		Errors: gqlerror.List{{Message: fmt.Sprintf(messagef, args...)}},
 	}

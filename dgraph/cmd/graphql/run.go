@@ -26,13 +26,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
-
-	"github.com/spf13/cobra"
-
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"
@@ -66,7 +66,10 @@ func init() {
 		Short: "Run the Dgraph GraphQL tool",
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(GraphQL.Conf).Stop()
-			run()
+			if err := run(); err != nil {
+				fmt.Printf("Error : %s\n", err)
+				os.Exit(1)
+			}
 		},
 	}
 
@@ -100,7 +103,7 @@ func init() {
 	x.RegisterClientTLSFlags(flags)
 }
 
-func run() {
+func run() error {
 	x.PrintVersion()
 	opt = options{
 		schemaFile:     GraphQL.Conf.GetString("schema"),
@@ -122,20 +125,24 @@ func run() {
 
 	ctx := context.Background()
 	resp, err := dgraphClient.NewTxn().Query(ctx, q)
-	x.Checkf(err, "Error querying GraphQL schema from Dgraph")
+	if err != nil {
+		return errors.Wrap(err, "Error querying GraphQL schema from Dgraph")
+	}
 
 	var schemas graphqlSchemas
 	err = json.Unmarshal(resp.Json, &schemas)
-	x.Checkf(err, "Error reading GraphQL schema")
+	if err != nil {
+		return errors.Wrap(err, "Error reading GraphQL schema")
+	}
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
 	if gqlErr != nil {
-		x.Checkf(gqlErr, "Error parsing GraphQL schema")
+		return errors.Wrap(gqlErr, "Error parsing GraphQL schema")
 	}
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		x.Checkf(gqlErr, "Error validating GraphQL schema")
+		return errors.Wrap(gqlErr, "Error validating GraphQL schema")
 	}
 
 	handler := &graphqlHandler{
@@ -146,7 +153,7 @@ func run() {
 	http.Handle("/graphql", handler)
 
 	// the ports and urls etc that the endpoint serves should be input options
-	glog.Fatal(http.ListenAndServe(":8765", nil))
+	return http.ListenAndServe(":8765", nil)
 }
 
 func initDgraph() error {
@@ -162,7 +169,6 @@ func initDgraph() error {
 	if err != nil {
 		return err
 	}
-
 	defer f.Close()
 
 	b, err := ioutil.ReadAll(f)
@@ -173,12 +179,12 @@ func initDgraph() error {
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
 	if gqlErr != nil {
-		return fmt.Errorf("cannot parse schema %s", gqlErr)
+		return errors.Wrap(gqlErr, "cannot parse schema")
 	}
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		return fmt.Errorf("schema is invalid %s", gqlErr)
+		return errors.Wrap(gqlErr, "schema is invalid")
 	}
 
 	var schemaB strings.Builder
@@ -251,7 +257,7 @@ func initDgraph() error {
 	// plus auth token like live?
 	err = dgraphClient.Alter(ctx, op)
 	if err != nil {
-		return fmt.Errorf("failed to write Dgraph schema %s", err)
+		return errors.Wrap(err, "failed to write Dgraph schema %s")
 	}
 
 	s := graphqlSchema{
@@ -265,13 +271,13 @@ func initDgraph() error {
 	}
 	pb, err := json.Marshal(s)
 	if err != nil {
-		return fmt.Errorf("couldn't generate mutation to save schema %s", err)
+		return errors.Wrap(err, "couldn't generate mutation to save schema")
 	}
 
 	mu.SetJson = pb
 	_, err = dgraphClient.NewTxn().Mutate(ctx, mu)
 	if err != nil {
-		return fmt.Errorf("failed to save GraphQL schema to Dgraph %s", err)
+		return errors.Wrap(err, "failed to save GraphQL schema to Dgraph")
 		// But this would mean we are in an inconsistent state,
 		// so would that mean they just had to re-apply the same schema?
 	}

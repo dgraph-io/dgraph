@@ -81,6 +81,9 @@ type graphqlRequest struct {
 	Variables     map[string]interface{} `json:"variables"`
 }
 
+// ServeHTTP handles GraphQL queries and mutations that get translated
+// like GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL json response
+// to w.
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -156,7 +159,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// nothing to do, just log?
 		}
 	case ast.Mutation:
-		b, err := json.Marshal(ErrorResponse("Not yet implemented"))
+		b, err := json.Marshal(errorResponse("Not yet implemented"))
 		if err != nil {
 			// error response - "data": null
 			return
