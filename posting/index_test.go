@@ -152,7 +152,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	if index {
 		require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 	} else {
-		err := l.AddMutation(context.Background(), txn, edge)
+		err := l.addMutation(context.Background(), txn, edge)
 		require.NoError(t, err)
 	}
 

@@ -44,7 +44,7 @@ var (
 )
 
 const (
-	MB = 1 << 20
+	mb = 1 << 20
 )
 
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
@@ -157,6 +157,7 @@ func Init(ps *badger.DB) {
 	go updateMemoryMetrics(closer)
 }
 
+// Cleanup waits until the closer has finished processing.
 func Cleanup() {
 	closer.SignalAndWait()
 }
@@ -175,6 +176,7 @@ func GetNoStore(key []byte) (rlist *List, err error) {
 	return getNew(key, pstore)
 }
 
+// LocalCache stores a cache of posting lists and deltas.
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks
 type LocalCache struct {
@@ -194,6 +196,7 @@ type LocalCache struct {
 	plists map[string]*List
 }
 
+// NewLocalCache returns a new LocalCache instance.
 func NewLocalCache(startTs uint64) *LocalCache {
 	return &LocalCache{
 		startTs:     startTs,
@@ -212,6 +215,7 @@ func (lc *LocalCache) getNoStore(key string) *List {
 	return nil
 }
 
+// TODO(martinmr): add documentation.
 func (lc *LocalCache) Set(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
@@ -222,6 +226,7 @@ func (lc *LocalCache) Set(key string, updated *List) *List {
 	return updated
 }
 
+// Get retrieves the cached version of the list associated with the given key.
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	if lc == nil {
 		return getNew(key, pstore)
@@ -239,12 +244,13 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 	// apply it before returning the list.
 	lc.RLock()
 	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
-		pl.SetMutation(lc.startTs, delta)
+		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
 	return lc.Set(skey, pl), nil
 }
 
+// UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
 func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.Lock()
 	defer lc.Unlock()
@@ -253,7 +259,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
-		data := pl.GetMutation(lc.startTs)
+		data := pl.getMutation(lc.startTs)
 		if len(data) > 0 {
 			lc.deltas[key] = data
 		}
@@ -262,7 +268,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.plists = make(map[string]*List)
 }
 
-func (lc *LocalCache) FillPreds(ctx *api.TxnContext, gid uint32) {
+func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 	lc.RLock()
 	defer lc.RUnlock()
 	for key := range lc.deltas {
