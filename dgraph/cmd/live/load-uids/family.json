@@ -4,7 +4,7 @@
     "name":"Homer",
     "age":"38",
     "role":"father",
-    "dgraph.type": "familyMember",
+    "dgraph.type": "FamilyMember",
     "parent_to": [
       { "uid":"0x3001" },
       { "uid":"0x3002" },
@@ -17,7 +17,7 @@
     "age":"34",
     "role":"mother",
     "aka":"Midge",
-    "dgraph.type": "familyMember",
+    "dgraph.type": "FamilyMember",
     "parent_to": [
       { "uid":"0x3001" },
       { "uid":"0x3002" },
@@ -31,7 +31,7 @@
     "role":"son",
     "aka":"El Barto",
     "carries":"slingshot",
-    "dgraph.type": "familyMember",
+    "dgraph.type": "FamilyMember",
     "sibling_of": [
       { "uid":"0x3002" },
       { "uid":"0x3003" }
@@ -43,7 +43,7 @@
     "age":"8",
     "role":"daughter",
     "carries":"saxomophone",
-    "dgraph.type": "familyMember",
+    "dgraph.type": "FamilyMember",
     "sibling_of": [
       { "uid":"0x3001" },
       { "uid":"0x3003" }
@@ -55,7 +55,7 @@
     "age":"1",
     "role":"daughter",
     "carries":"pacifier",
-    "dgraph.type": "familyMember",
+    "dgraph.type": "FamilyMember",
     "sibling_of": [
       { "uid":"0x3001" },
       { "uid":"0x3002" }
@@ -67,7 +67,7 @@
     "age":"83",
     "role":"father",
     "aka":"Grampa",
-    "dgraph.type": "familyMember",
+    "dgraph.type": "FamilyMember",
     "parent_to": [
       { "uid":"0x2001" }
     ]
