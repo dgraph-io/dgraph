@@ -895,6 +895,51 @@ var testNQuads = []struct {
 		input:       `<alice> <age> "13"^^<xs:double> (salary=NaN) .`,
 		expectedErr: true,
 	},
+	{
+		input: `uid(v) <lives> "\x02 wonderland" .`,
+		nq: api.NQuad{
+			Subject:     "uid(v)",
+			Predicate:   "lives",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "\x02 wonderland"}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `uid  (  v  ) <lives> "vrinadavan" .`,
+		nq: api.NQuad{
+			Subject:     "uid(v)",
+			Predicate:   "lives",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "vrinadavan"}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `uid  (  val  ) <lives> "vrinadavan" .`,
+		nq: api.NQuad{
+			Subject:     "uid(val)",
+			Predicate:   "lives",
+			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "vrinadavan"}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `uid  (  val  ) <lives> uid(g) .`,
+		nq: api.NQuad{
+			Subject:   "uid(val)",
+			Predicate: "lives",
+			ObjectId:  "uid(g)",
+		},
+		expectedErr: false,
+	},
+	{
+		input: `uid  (  val  ) <lives> uid ( g )  .`,
+		nq: api.NQuad{
+			Subject:   "uid(val)",
+			Predicate: "lives",
+			ObjectId:  "uid(g)",
+		},
+		expectedErr: false,
+	},
 }
 
 func TestLex(t *testing.T) {
