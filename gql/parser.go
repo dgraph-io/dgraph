@@ -585,17 +585,17 @@ func checkDependency(vl []*Vars) error {
 		return x.Errorf("Some variables are declared multiple times.")
 	}
 
-	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
-			defines, needs)
-	}
+	// if len(defines) > len(needs) {
+	// 	return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+	// 		defines, needs)
+	// }
 
 	if len(defines) < len(needs) {
 		return x.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
-	for i := 0; i < len(defines); i++ {
+	for i := 0; i < len(needs); i++ {
 		if defines[i] != needs[i] {
 			return x.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
 				defines, needs)

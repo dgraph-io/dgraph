@@ -494,6 +494,11 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		}
 	}()
 
+	vars, err := doQueryInUpsert(ctx, &l, mu.Query, mu.StartTs)
+	if err != nil {
+		return resp, err
+	}
+
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
 		return resp, err
@@ -551,6 +556,53 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	resp.Context.Keys = resp.Context.Keys[:0]
 	resp.Context.CommitTs = cts
 	return resp, nil
+}
+
+// doQueryInUpsert processes a query in the upsert block.
+func doQueryInUpsert(ctx context.Context, l *query.Latency, queryText string, startTs uint64) (
+	map[string][]string, error) {
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	var queryVars map[string][]string
+	if queryText == "" {
+		return queryVars, nil
+	}
+	x.AssertTruef(startTs != 0, "Transaction timestamp is zero")
+
+	parsedReq, err := gql.Parse(gql.Request{
+		Str:       queryText,
+		Variables: make(map[string]string),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err = validateQuery(parsedReq.Query); err != nil {
+		return nil, err
+	}
+
+	qr := query.QueryRequest{
+		Latency:  l,
+		GqlQuery: &parsedReq,
+		ReadTs:   startTs,
+	}
+	if err := qr.ProcessQuery(ctx); err != nil {
+		return nil, x.Wrapf(err, "while processing query: %q", queryText)
+	}
+
+	if len(vars) <= 0 {
+		return nil, fmt.Errorf("upsert query op has no variables")
+	}
+	// TODO (aman): allow multiple values for each variable
+	for v, l := range vars {
+		if len(l) > 1 {
+			return nil, fmt.Errorf("unsupported many values for var (%s)", v)
+		}
+	}
+
+	return nil, nil
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
