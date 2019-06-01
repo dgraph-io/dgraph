@@ -419,15 +419,28 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
 }
 
-func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, err error) {
-	if err := authorizeMutation(ctx, mu); err != nil {
-		return nil, err
-	}
-
-	return s.doMutate(ctx, mu)
+func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
+	return s.doMutate(ctx, mu, true)
 }
 
-func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assigned, rerr error) {
+func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool) (
+	resp *api.Assigned, rerr error) {
+
+	var l query.Latency
+	l.Start = time.Now()
+	gmu, err := parseMutationObject(mu)
+	if err != nil {
+		return resp, err
+	}
+	parseEnd := time.Now()
+	l.Parsing = parseEnd.Sub(l.Start)
+
+	if authorize {
+		if err := authorizeMutation(ctx, gmu); err != nil {
+			return nil, err
+		}
+	}
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -473,16 +486,6 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation) (resp *api.Assi
 		span.Annotate(nil, "Empty mutation")
 		return resp, fmt.Errorf("Empty mutation")
 	}
-
-	var l query.Latency
-	l.Start = time.Now()
-	gmu, err := parseMutationObject(mu)
-	if err != nil {
-		return resp, err
-	}
-
-	parseEnd := time.Now()
-	l.Parsing = parseEnd.Sub(l.Start)
 
 	defer func() {
 		l.Processing = time.Since(parseEnd)
