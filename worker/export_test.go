@@ -195,7 +195,6 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	initTestExport(t, "name:string @index .")
-	// initTypes(t)
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)

@@ -357,36 +357,36 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 }
 
 func fieldToString(update *pb.SchemaUpdate) string {
-	var buf bytes.Buffer
-	buf.WriteString("\t")
-	buf.WriteString(update.Predicate)
-	buf.WriteString(": ")
+	var builder strings.Builder
+	builder.WriteString("\t")
+	builder.WriteString(update.Predicate)
+	builder.WriteString(": ")
 
 	if update.List {
-		buf.WriteString("[")
+		builder.WriteString("[")
 	}
 
 	if update.ValueType == pb.Posting_OBJECT {
-		buf.WriteString(update.ObjectTypeName)
+		builder.WriteString(update.ObjectTypeName)
 	} else {
 		tid := types.TypeID(update.ValueType)
-		buf.WriteString(tid.Name())
+		builder.WriteString(tid.Name())
 	}
 
 	if update.NonNullable {
-		buf.WriteString("!")
+		builder.WriteString("!")
 	}
 
 	if update.List {
-		buf.WriteString("]")
+		builder.WriteString("]")
 	}
 
 	if update.NonNullableList {
-		buf.WriteString("!")
+		builder.WriteString("!")
 	}
 
-	buf.WriteString("\n")
-	return buf.String()
+	builder.WriteString("\n")
+	return builder.String()
 }
 
 type fileWriter struct {
@@ -468,8 +468,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 	glog.Infof("Exporting schema for group: %d at %s\n", in.GroupId, schemaPath)
-	schemaTypeWriter := &fileWriter{}
-	if err := schemaTypeWriter.open(schemaPath); err != nil {
+	schemaWriter := &fileWriter{}
+	if err := schemaWriter.open(schemaPath); err != nil {
 		return err
 	}
 
@@ -562,7 +562,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			case 1: // data
 				writer = dataWriter
 			case 2: // schema and types
-				writer = schemaTypeWriter
+				writer = schemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
@@ -588,7 +588,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	if err := dataWriter.Close(); err != nil {
 		return err
 	}
-	if err := schemaTypeWriter.Close(); err != nil {
+	if err := schemaWriter.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
