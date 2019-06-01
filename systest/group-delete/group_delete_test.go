@@ -90,7 +90,7 @@ func doTestQuery(t *testing.T, c *dgo.Dgraph) {
   }`)
 	require.NoError(t, err)
 
-	CompareJSON(t, `
+	z.CompareJSON(t, `
   {
     "q": [
       {
