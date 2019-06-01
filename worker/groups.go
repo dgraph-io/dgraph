@@ -538,6 +538,11 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
+// KnownGroups returns the known groups using the global groupi instance.
+func KnownGroups() []uint32 {
+	return groups().KnownGroups()
+}
+
 func (g *groupi) triggerMembershipSync() {
 	// It's ok if we miss the trigger, periodic membership sync runs every minute.
 	select {

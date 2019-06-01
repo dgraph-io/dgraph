@@ -441,7 +441,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (Num) {}
+	rpc Backup (BackupRequest)              returns (BackupResponse) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -477,21 +477,23 @@ message BackupRequest {
 	uint64 read_ts = 1;
 	uint32 group_id = 2;
 	string unix_ts = 3;
-	string location = 4;
-	uint64 since = 5;
-	uint64 snapshot_ts = 6;
-	string access_key = 7;
-	string secret_key = 8;
-	string session_token = 9;
+	string destination = 4;
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
 
   // True if no credentials should be used to access the S3 or minio bucket.
   // For example, when using a bucket with a public policy.
-  bool anonymous = 10;
+  bool anonymous = 8;
 
   // If true, previous backups will be ignored and a new full backup will be
   // created. If false, the backup will be full or incremental depending on
   // the existing backups.
-  bool force_full = 11;
+  bool force_full = 9;
+}
+
+message BackupResponse {
+	uint64 since = 1;
 }
 
 message ExportRequest {
