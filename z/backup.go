@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	"strings"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
@@ -36,6 +35,7 @@ import (
 
 // GetPValues reads the specified p directory and returns the values for the given
 // attribute in a map.
+// TODO(martinmr): See if this method can be simplified (e.g not use stream framework).
 func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 	opt := badger.DefaultOptions
 	opt.Dir = pdir
@@ -77,7 +77,7 @@ func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 				fmt.Println(err)
 				return err
 			}
-			value := strings.TrimRight(str.Value.(string), "\x00")
+			value := str.Value.(string)
 			list.Kv = append(list.Kv, &bpb.KV{
 				Key:   []byte(fmt.Sprintf("%#x", pk.Uid)),
 				Value: []byte(value),
