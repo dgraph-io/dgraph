@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -60,7 +61,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	destination := r.FormValue("destination")
 	if destination == "" {
-		return x.Errorf("You must specify a 'destination' value")
+		return errors.Errorf("You must specify a 'destination' value")
 	}
 
 	accessKey := r.FormValue("access_key")
