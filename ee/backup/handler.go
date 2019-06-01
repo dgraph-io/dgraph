@@ -16,7 +16,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -129,7 +129,7 @@ func (r *Request) newHandler() (handler, error) {
 
 	h = getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unable to handle url: %s", uri)
+		return nil, errors.Errorf("Unable to handle url: %s", uri)
 	}
 
 	if err = h.Create(uri, r); err != nil {
@@ -152,7 +152,7 @@ func Load(l string, fn loadFn) (since uint64, err error) {
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return 0, x.Errorf("Unsupported URI: %v", uri)
+		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
 	return h.Load(uri, fn)
@@ -167,7 +167,7 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unsupported URI: %v", uri)
+		return nil, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
 	paths, err := h.ListManifests(uri)
@@ -181,7 +181,7 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 		var ms ManifestStatus
 
 		if err := h.ReadManifest(path, &m); err != nil {
-			return nil, x.Wrapf(err, "While reading %q", path)
+			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
 		ms.Manifest = &m
 		ms.FileName = path

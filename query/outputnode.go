@@ -19,12 +19,12 @@ package query
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
@@ -32,10 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-const (
-	normalizeLimit = 10000
 )
 
 // ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
@@ -282,8 +278,9 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 	for _, pa := range parent {
 		for _, ca := range child {
 			cnt += len(pa) + len(ca)
-			if cnt > normalizeLimit {
-				return nil, x.Errorf("Couldn't evaluate @normalize directive - too many results")
+			if cnt > x.Config.NormalizeNodeLimit {
+				return nil, errors.Errorf(
+					"Couldn't evaluate @normalize directive - too many results")
 			}
 			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
 			list = append(list, pa...)
@@ -402,7 +399,7 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 		aggVal, ok := child.Params.uidToVal[0]
 		if !ok {
 			if len(child.Params.NeedsVar) == 0 {
-				return x.Errorf("Only aggregated variables allowed within empty block.")
+				return errors.Errorf("Only aggregated variables allowed within empty block.")
 			}
 			// the aggregation didn't happen, most likely was called with unset vars.
 			// See: query.go:fillVars
@@ -441,7 +438,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 
 	if sg.Params.isGroupBy {
 		if len(sg.GroupbyRes) == 0 {
-			return x.Errorf("Expected GroupbyRes to have length > 0.")
+			return errors.Errorf("Expected GroupbyRes to have length > 0.")
 		}
 		fj.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil
@@ -490,6 +487,7 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
+// Extensions represents the extra information appended to query results.
 type Extensions struct {
 	Latency *api.Latency    `json:"server_latency,omitempty"`
 	Txn     *api.TxnContext `json:"txn,omitempty"`

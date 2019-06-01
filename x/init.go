@@ -35,10 +35,13 @@ var (
 	lastCommitTime string
 )
 
+// SetTestRun sets a variable to indicate that the current execution is a test.
 func SetTestRun() {
 	isTest = true
 }
 
+// IsTestRun indicates whether a test is being executed. Useful to handle special
+// conditions during tests that differ from normal execution.
 func IsTestRun() bool {
 	return isTest
 }
@@ -60,6 +63,7 @@ func Init() {
 	}
 }
 
+// BuildDetails returns a string containing details about the Dgraph binary.
 func BuildDetails() string {
 	licenseInfo := `Licensed under the Apache Public License 2.0`
 	if !strings.HasSuffix(dgraphVersion, "-oss") {
@@ -83,11 +87,12 @@ Copyright 2015-2018 Dgraph Labs, Inc.
 		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version(), licenseInfo)
 }
 
-// PrintVersionOnly prints version and other helpful information if --version.
+// PrintVersion prints version and other helpful information if --version.
 func PrintVersion() {
 	glog.Infof("\n%s\n", BuildDetails())
 }
 
+// Version returns a string containing the dgraphVersion.
 func Version() string {
 	return dgraphVersion
 }

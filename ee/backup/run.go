@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -181,7 +182,7 @@ func runRestoreCmd() error {
 			grpc.WithBlock(),
 			grpc.WithInsecure())
 		if err != nil {
-			return x.Wrapf(err, "Unable to connect to %s", opt.zero)
+			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}
 		zc = pb.NewZeroClient(zero)
 	}
@@ -192,7 +193,7 @@ func runRestoreCmd() error {
 		return err
 	}
 	if version == 0 {
-		return x.Errorf("Failed to obtain a restore version")
+		return errors.Errorf("Failed to obtain a restore version")
 	}
 	if glog.V(2) {
 		fmt.Printf("Restore version: %d\n", version)
@@ -248,7 +249,7 @@ func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
 	manifests, err := ListManifests(opt.location)
 	if err != nil {
-		return x.Errorf("Error while listing manifests: %v", err.Error())
+		return errors.Wrapf(err, "while listing manifests")
 	}
 
 	fmt.Printf("Name\tSince\tReadTs\tGroups\n")

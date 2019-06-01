@@ -29,6 +29,7 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/credentials"
 	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -62,7 +63,7 @@ func (h *s3Handler) credentialsInRequest() bool {
 // Returns a new S3 minio client, otherwise a nil client with an error.
 func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	if len(uri.Path) < 1 {
-		return nil, x.Errorf("Invalid bucket: %q", uri.Path)
+		return nil, errors.Errorf("Invalid bucket: %q", uri.Path)
 	}
 
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
@@ -79,7 +80,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 				uri.Host = defaultEndpointS3
 			}
 			if !s3utils.IsAmazonEndpoint(*uri) {
-				return nil, x.Errorf("Invalid S3 endpoint %q", uri.Host)
+				return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
 			}
 			// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
 			// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
@@ -88,7 +89,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 
 		default: // minio
 			if uri.Host == "" {
-				return nil, x.Errorf("Minio handler requires a host")
+				return nil, errors.Errorf("Minio handler requires a host")
 			}
 			// Access Key ID:     MINIO_ACCESS_KEY.
 			// Secret Access Key: MINIO_SECRET_KEY.
@@ -131,11 +132,11 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	// verify the requested bucket exists.
 	found, err := mc.BucketExists(h.bucketName)
 	if err != nil {
-		return nil, x.Errorf("Error while looking for bucket: %s at host: %s. Error: %v",
-			h.bucketName, uri.Host, err)
+		return nil, errors.Wrapf(err, "while looking for bucket %s at host %s",
+			h.bucketName, uri.Host)
 	}
 	if !found {
-		return nil, x.Errorf("Bucket was not found: %s", h.bucketName)
+		return nil, errors.Errorf("Bucket was not found: %s", h.bucketName)
 	}
 	if len(parts) > 1 {
 		h.objectPrefix = filepath.Join(parts[1:]...)
@@ -237,7 +238,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		}
 	}
 	if len(manifests) == 0 {
-		return 0, x.Errorf("No manifests found at: %s", uri.String())
+		return 0, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {
@@ -253,7 +254,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	for _, manifest := range manifests {
 		var m Manifest
 		if err := h.readManifest(mc, manifest, &m); err != nil {
-			return 0, x.Wrapf(err, "While reading %q", manifest)
+			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
 		if m.ReadTs == 0 || m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
@@ -267,15 +268,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return 0, x.Wrapf(err, "Failed to get %q", object)
+				return 0, errors.Wrapf(err, "Failed to get %q", object)
 			}
 			defer reader.Close()
 			st, err := reader.Stat()
 			if err != nil {
-				return 0, x.Wrapf(err, "Stat failed %q", object)
+				return 0, errors.Wrapf(err, "Stat failed %q", object)
 			}
 			if st.Size <= 0 {
-				return 0, x.Errorf("Remote object is empty or inaccessible: %s", object)
+				return 0, errors.Errorf("Remote object is empty or inaccessible: %s", object)
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 			if err = fn(reader, int(groupId)); err != nil {
@@ -306,7 +307,7 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 		}
 	}
 	if len(manifests) == 0 {
-		return nil, x.Errorf("No manifests found at: %s", uri.String())
+		return nil, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {

@@ -18,9 +18,9 @@ import (
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 // Backup handles a request coming from another node.
@@ -46,7 +46,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (
 
 	g := groups()
 	if g.groupId() != req.GroupId {
-		return nil, x.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
+		return nil, errors.Errorf("Backup request group mismatch. Mine: %d. Requested: %d\n",
 			g.groupId(), req.GroupId)
 	}
 
@@ -68,7 +68,7 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse,
 	// This node is not part of the requested group, send the request over the network.
 	pl := groups().AnyServer(in.GroupId)
 	if pl == nil {
-		return nil, x.Errorf("Couldn't find a server in group %d", in.GroupId)
+		return nil, errors.Errorf("Couldn't find a server in group %d", in.GroupId)
 	}
 	res, err := pb.NewWorkerClient(pl.Get()).Backup(ctx, in)
 	if err != nil {

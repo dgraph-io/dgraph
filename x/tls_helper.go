@@ -28,20 +28,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-type tlsConfigType int8
-
-const (
-	TLSClientConfig tlsConfigType = iota
-	TLSServerConfig
-)
-
 const (
 	tlsRootCert = "ca.crt"
 )
 
 // TLSHelperConfig define params used to create a tls.Config
 type TLSHelperConfig struct {
-	ConfigType       tlsConfigType
 	CertDir          string
 	CertRequired     bool
 	Cert             string
@@ -52,6 +44,7 @@ type TLSHelperConfig struct {
 	UseSystemCACerts bool
 }
 
+// RegisterClientTLSFlags registers the required flags to set up a TLS client.
 func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 	flag.String("tls_cacert", "",
 		"The CA Cert file used to verify server certificates. Required for enabling TLS.")
@@ -62,6 +55,7 @@ func RegisterClientTLSFlags(flag *pflag.FlagSet) {
 		"provided by the client to the server.")
 }
 
+// LoadServerTLSConfig loads the TLS config into the server with the given parameters.
 func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) (*tls.Config,
 	error) {
 	conf := TLSHelperConfig{}
@@ -78,6 +72,7 @@ func LoadServerTLSConfig(v *viper.Viper, tlsCertFile string, tlsKeyFile string) 
 	return GenerateServerTLSConfig(&conf)
 }
 
+// LoadClientTLSConfig loads the TLS config into the client with the given parameters.
 func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	// When the --tls_cacert option is pecified, the connection will be set up using TLS instead of
 	// plaintext. However the client cert files are optional, depending on whether the server

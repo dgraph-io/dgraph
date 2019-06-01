@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -132,7 +133,7 @@ func initCmds() {
 		}
 		for _, sc := range subcommands {
 			sc.Conf.SetConfigFile(cfg)
-			x.Check(x.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
+			x.Check(errors.Wrapf(sc.Conf.ReadInConfig(), "reading config"))
 			setGlogFlags(sc.Conf)
 		}
 	})

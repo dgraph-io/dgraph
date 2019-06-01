@@ -251,7 +251,7 @@ func TestPopulateShard(t *testing.T) {
 	//			return err
 	//		}
 	//		if len(val) == 0 {
-	//			return x.Errorf("value for uid 1 predicate name not found\n")
+	//			return errors.Errorf("value for uid 1 predicate name not found\n")
 	//		}
 	//		return nil
 	//	})
@@ -285,7 +285,7 @@ func TestPopulateShard(t *testing.T) {
 	//	}
 	//	require.NoError(t, item.Value(func(val []byte) error {
 	//		if len(val) != 0 {
-	//			return x.Errorf("value for uid 1 predicate name shouldn't be present\n")
+	//			return errors.Errorf("value for uid 1 predicate name shouldn't be present\n")
 	//		}
 	//		return nil
 	//	}))
@@ -295,7 +295,7 @@ func TestPopulateShard(t *testing.T) {
 	//	}
 	//	require.NoError(t, item.Value(func(val []byte) error {
 	//		if len(val) != 0 {
-	//			return x.Errorf("value for uid 1 predicate name shouldn't be present\n")
+	//			return errors.Errorf("value for uid 1 predicate name shouldn't be present\n")
 	//		}
 	//		return nil
 	//	}))
