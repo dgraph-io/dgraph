@@ -137,7 +137,10 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		k := x.SchemaKey(pred)
 		v, err := sch.Marshal()
 		x.Check(err)
-		x.Check(txn.SetWithMeta(k, v, posting.BitCompletePosting))
+		x.Check(txn.SetEntry(&badger.Entry{
+			Key:      k,
+			Value:    v,
+			UserMeta: posting.BitCompletePosting}))
 	}
 
 	// Write schema always at timestamp 1, s.state.writeTs may not be equal to 1
