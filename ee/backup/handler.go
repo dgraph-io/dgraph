@@ -16,7 +16,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -36,12 +36,12 @@ const (
 	//
 	// Example manifest:
 	// {
-	//   "version": 2280,
+	//   "since": 2280,
 	//   "groups": [ 1, 2, 3 ],
 	//   "read_ts": 110001
 	// }
 	//
-	// "version" is the maximum data version, obtained from Backup() after it runs. This value
+	// "since" is the maximum data version, obtained from Backup() after it runs. This value
 	// is used for subsequent incremental backups.
 	// "groups" are the group IDs that participated.
 	// "read_ts" is the read timestamp used at the backup request.
@@ -122,15 +122,14 @@ func getHandler(scheme string) handler {
 func (r *Request) newHandler() (handler, error) {
 	var h handler
 
-	uri, err := url.Parse(r.Backup.Location)
+	uri, err := url.Parse(r.Backup.Destination)
 	if err != nil {
 		return nil, err
 	}
 
-	// find handler for this URI scheme
 	h = getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unable to handle url: %s", uri)
+		return nil, errors.Errorf("Unable to handle url: %s", uri)
 	}
 
 	if err = h.Create(uri, r); err != nil {
@@ -144,8 +143,8 @@ func (r *Request) newHandler() (handler, error) {
 type loadFn func(reader io.Reader, groupId int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
-// Returns the maximum Ts version on success, otherwise an error.
-func Load(l string, fn loadFn) (version uint64, err error) {
+// Returns the maximum Since value on success, otherwise an error.
+func Load(l string, fn loadFn) (since uint64, err error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return 0, err
@@ -153,7 +152,7 @@ func Load(l string, fn loadFn) (version uint64, err error) {
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return 0, x.Errorf("Unsupported URI: %v", uri)
+		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
 	return h.Load(uri, fn)
@@ -168,7 +167,7 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 
 	h := getHandler(uri.Scheme)
 	if h == nil {
-		return nil, x.Errorf("Unsupported URI: %v", uri)
+		return nil, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
 	paths, err := h.ListManifests(uri)
@@ -182,7 +181,7 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 		var ms ManifestStatus
 
 		if err := h.ReadManifest(path, &m); err != nil {
-			return nil, x.Wrapf(err, "While reading %q", path)
+			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
 		ms.Manifest = &m
 		ms.FileName = path

@@ -17,14 +17,13 @@
 package zero
 
 import (
-	"errors"
-
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 var emptyAssignedIds pb.AssignedIds
@@ -68,11 +67,11 @@ func (s *Server) lease(ctx context.Context, num *pb.Num, txn bool) (*pb.Assigned
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
 	// node would still think that it's the leader.
 	if !node.AmLeader() {
-		return &emptyAssignedIds, x.Errorf("Assigning IDs is only allowed on leader.")
+		return &emptyAssignedIds, errors.Errorf("Assigning IDs is only allowed on leader.")
 	}
 
 	if num.Val == 0 && !num.ReadOnly {
-		return &emptyAssignedIds, x.Errorf("Nothing to be leased")
+		return &emptyAssignedIds, errors.Errorf("Nothing to be leased")
 	}
 	if glog.V(3) {
 		glog.Infof("Got lease request for txn: %v. Num: %+v\n", txn, num)
@@ -175,12 +174,12 @@ func (s *Server) AssignUids(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 		// I'm not the leader and this request was forwarded to me by a peer, who thought I'm the
 		// leader.
 		if num.Forwarded {
-			return x.Errorf("Invalid Zero received AssignUids request forward. Please retry")
+			return errors.Errorf("Invalid Zero received AssignUids request forward. Please retry")
 		}
 		// This is an original request. Forward it to the leader.
 		pl := s.Leader(0)
 		if pl == nil {
-			return x.Errorf("No healthy connection found to Leader of group zero")
+			return errors.Errorf("No healthy connection found to Leader of group zero")
 		}
 		span.Annotatef(nil, "Sending request to %v", pl.Addr)
 		zc := pb.NewZeroClient(pl.Get())

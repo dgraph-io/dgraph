@@ -16,12 +16,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -31,19 +27,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
-	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/ee/backup"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 var (
@@ -62,7 +53,7 @@ var (
 
 func TestBackupFilesystem(t *testing.T) {
 	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-	x.Check(err)
+	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	// Add initial data.
@@ -130,7 +121,6 @@ func TestBackupFilesystem(t *testing.T) {
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform first incremental backup.
 	dirs = runBackup(t, 6, 2)
@@ -155,7 +145,6 @@ func TestBackupFilesystem(t *testing.T) {
 			`, original.Uids["x4"], original.Uids["x5"])),
 	})
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform second incremental backup.
 	dirs = runBackup(t, 9, 3)
@@ -167,6 +156,43 @@ func TestBackupFilesystem(t *testing.T) {
 		{blank: "x4", expected: "The Shape of Water"},
 		{blank: "x5", expected: "The Black Panther"},
 	}
+
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
+	}
+
+	// Add more data for a second full backup.
+	incr3, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`
+				<%s> <movie> "El laberinto del fauno" .
+				<%s> <movie> "Black Panther 2" .
+			`, original.Uids["x4"], original.Uids["x5"])),
+	})
+	require.NoError(t, err)
+
+	// Perform second full backup.
+	dirs = runBackupInternal(t, true, 12, 4)
+	// To make sure this backup contains all the data remove all the previous backups.
+	require.NoError(t, os.RemoveAll(dirs[0]))
+	require.NoError(t, os.RemoveAll(dirs[1]))
+	require.NoError(t, os.RemoveAll(dirs[2]))
+	// Also recreate the restore directory.
+	require.NoError(t, os.RemoveAll(restoreDir))
+	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
+	restored = runRestore(t, dirs[3], incr3.Context.CommitTs)
+
+	// Check all the values were restored to their most recent value.
+	checks = []struct {
+		blank, expected string
+	}{
+		{blank: "x1", expected: "Birdman or (The Unexpected Virtue of Ignorance)"},
+		{blank: "x2", expected: "Spotlight"},
+		{blank: "x3", expected: "Moonlight"},
+		{blank: "x4", expected: "El laberinto del fauno"},
+		{blank: "x5", expected: "Black Panther 2"},
+	}
+
 	for _, check := range checks {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
@@ -175,111 +201,25 @@ func TestBackupFilesystem(t *testing.T) {
 	dirCleanup()
 }
 
-func getError(rc io.ReadCloser) error {
-	defer rc.Close()
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return fmt.Errorf("Read failed: %v", err)
-	}
-	if bytes.Contains(b, []byte("Error")) {
-		return fmt.Errorf("%s", string(b))
-	}
-	return nil
-}
-
-func getState() (*z.StateResponse, error) {
-	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/state")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if bytes.Contains(b, []byte("Error")) {
-		return nil, fmt.Errorf("Failed to get state: %s", string(b))
-	}
-
-	var st z.StateResponse
-	if err := json.Unmarshal(b, &st); err != nil {
-		return nil, err
-	}
-	return &st, nil
-}
-
-func getPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
-	opt := badger.DefaultOptions
-	opt.Dir = pdir
-	opt.ValueDir = pdir
-	opt.TableLoadingMode = options.MemoryMap
-	opt.ReadOnly = true
-	db, err := badger.OpenManaged(opt)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-
-	values := make(map[string]string)
-
-	stream := db.NewStreamAt(math.MaxUint64)
-	stream.ChooseKey = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
-		switch {
-		case pk.Attr != attr:
-			return false
-		case pk.IsSchema():
-			return false
-		}
-		return pk.IsData()
-	}
-	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
-		pk := x.Parse(key)
-		pl, err := posting.ReadPostingList(key, it)
-		if err != nil {
-			return nil, err
-		}
-		var list bpb.KVList
-		err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
-			vID := types.TypeID(p.ValType)
-			src := types.ValueForType(vID)
-			src.Value = p.Value
-			str, err := types.Convert(src, types.StringID)
-			if err != nil {
-				fmt.Println(err)
-				return err
-			}
-			value := strings.TrimRight(str.Value.(string), "\x00")
-			list.Kv = append(list.Kv, &bpb.KV{
-				Key:   []byte(fmt.Sprintf("%#x", pk.Uid)),
-				Value: []byte(value),
-			})
-			return nil
-		})
-		return &list, err
-	}
-	stream.Send = func(list *bpb.KVList) error {
-		for _, kv := range list.Kv {
-			values[string(kv.Key)] = string(kv.Value)
-		}
-		return nil
-	}
-	if err := stream.Orchestrate(context.Background()); err != nil {
-		return nil, err
-	}
-	return values, err
-}
-
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
+	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs)
+}
+
+func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
+	numExpectedDirs int) []string {
+	forceFullStr := "false"
+	if forceFull {
+		forceFullStr = "true"
+	}
+
 	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
 		"destination": []string{alphaBackupDir},
+		"force_full":  []string{forceFullStr},
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.NoError(t, getError(resp.Body))
-	time.Sleep(5 * time.Second)
+	require.NoError(t, z.GetError(resp.Body))
+	time.Sleep(time.Second)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs()
@@ -300,7 +240,7 @@ func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]str
 	_, err := backup.RunRestore("./data/restore", restoreDir)
 	require.NoError(t, err)
 
-	restored, err := getPValues("./data/restore/p1", "movie", commitTs)
+	restored, err := z.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
@@ -308,6 +248,9 @@ func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]str
 }
 
 func dirSetup() {
+	// Clean up data from previous runs.
+	dirCleanup()
+
 	for _, dir := range dirs {
 		x.Check(os.MkdirAll(dir, os.ModePerm))
 	}

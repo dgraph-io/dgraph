@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	alpha     = flag.String("alpha", "localhost:9080", "Dgraph alpha address")
+	alpha     = flag.String("alpha", "localhost:9180", "Dgraph alpha address")
 	timeout   = flag.Int("timeout", 60, "query/mutation timeout")
 	numSents  = flag.Int("sentences", 100, "number of sentences")
 	numSwaps  = flag.Int("swaps", 1000, "number of swaps to attempt")
@@ -78,7 +78,7 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := z.DgraphClientWithGroot(":9180")
+	c := z.DgraphClientWithGroot(*alpha)
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.

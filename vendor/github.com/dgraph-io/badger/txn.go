@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/badger/y"
 	farm "github.com/dgryski/go-farm"
@@ -304,78 +303,6 @@ func (txn *Txn) checkSize(e *Entry) error {
 	return nil
 }
 
-// Set adds a key-value pair to the database.
-//
-// It will return ErrReadOnlyTxn if update flag was set to false when creating the
-// transaction.
-//
-// The current transaction keeps a reference to the key and val byte slice
-// arguments. Users must not modify key and val until the end of the transaction.
-func (txn *Txn) Set(key, val []byte) error {
-	e := &Entry{
-		Key:   key,
-		Value: val,
-	}
-	return txn.SetEntry(e)
-}
-
-// SetWithMeta adds a key-value pair to the database, along with a metadata
-// byte.
-//
-// This byte is stored alongside the key, and can be used as an aid to
-// interpret the value or store other contextual bits corresponding to the
-// key-value pair.
-//
-// The current transaction keeps a reference to the key and val byte slice
-// arguments. Users must not modify key and val until the end of the transaction.
-func (txn *Txn) SetWithMeta(key, val []byte, meta byte) error {
-	e := &Entry{Key: key, Value: val, UserMeta: meta}
-	return txn.SetEntry(e)
-}
-
-// SetWithDiscard acts like SetWithMeta, but adds a marker to discard earlier
-// versions of the key.
-//
-// This method is only useful if you have set a higher limit for
-// options.NumVersionsToKeep. The default setting is 1, in which case, this
-// function doesn't add any more benefit than just calling the normal
-// SetWithMeta (or Set) function. If however, you have a higher setting for
-// NumVersionsToKeep (in Dgraph, we set it to infinity), you can use this method
-// to indicate that all the older versions can be discarded and removed during
-// compactions.
-//
-// The current transaction keeps a reference to the key and val byte slice
-// arguments. Users must not modify key and val until the end of the
-// transaction.
-func (txn *Txn) SetWithDiscard(key, val []byte, meta byte) error {
-	e := &Entry{
-		Key:      key,
-		Value:    val,
-		UserMeta: meta,
-		meta:     bitDiscardEarlierVersions,
-	}
-	return txn.SetEntry(e)
-}
-
-// SetWithTTL adds a key-value pair to the database, along with a time-to-live
-// (TTL) setting. A key stored with a TTL would automatically expire after the
-// time has elapsed, and be eligible for garbage collection.
-//
-// The current transaction keeps a reference to the key and val byte slice
-// arguments. Users must not modify key and val until the end of the
-// transaction.
-func (txn *Txn) SetWithTTL(key, val []byte, dur time.Duration) error {
-	expire := time.Now().Add(dur).Unix()
-	e := &Entry{Key: key, Value: val, ExpiresAt: uint64(expire)}
-	return txn.SetEntry(e)
-}
-
-// setMergeEntry is similar to SetEntry but it sets the bitMergeEntry flag
-func (txn *Txn) setMergeEntry(key, val []byte) error {
-	e := &Entry{Key: key, Value: val, meta: bitMergeEntry}
-	return txn.SetEntry(e)
-}
-
 func exceedsSize(prefix string, max int64, key []byte) error {
 	return errors.Errorf("%s with size %d exceeded %d limit. %s:\n%s",
 		prefix, len(key), max, prefix, hex.Dump(key[:1<<10]))
@@ -409,6 +336,15 @@ func (txn *Txn) modify(e *Entry) error {
 	txn.writes = append(txn.writes, fp)
 	txn.pendingWrites[string(e.Key)] = e
 	return nil
+}
+
+// Set adds a key-value pair to the database.
+// It will return ErrReadOnlyTxn if update flag was set to false when creating the transaction.
+//
+// The current transaction keeps a reference to the key and val byte slice
+// arguments. Users must not modify key and val until the end of the transaction.
+func (txn *Txn) Set(key, val []byte) error {
+	return txn.SetEntry(NewEntry(key, val))
 }
 
 // SetEntry takes an Entry struct and adds the key-value pair in the struct,

@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	alpha   = flag.String("alpha", "localhost:9080", "dgraph alpha address")
+	alpha   = flag.String("alpha", "localhost:9180", "dgraph alpha address")
 	concurr = flag.Int("c", 3, "number of concurrent upserts per account")
 )
 
@@ -70,7 +70,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := z.DgraphClientWithGroot(":9180")
+	c := z.DgraphClientWithGroot(*alpha)
 	setup(c)
 	fmt.Println("Doing upserts")
 	doUpserts(c)

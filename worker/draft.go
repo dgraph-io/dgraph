@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -45,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -541,7 +541,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		toDisk(status.StartTs, status.CommitTs)
 	}
 	if err := writer.Flush(); err != nil {
-		return x.Errorf("Error while flushing to disk: %v", err)
+		return errors.Wrapf(err, "while flushing to disk")
 	}
 
 	g := groups()
@@ -637,7 +637,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 func (n *node) proposeSnapshot(discardN int) error {
 	snap, err := n.calculateSnapshot(0, discardN)
 	if err != nil {
-		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
 	}
 	if snap == nil {
@@ -1323,7 +1322,7 @@ func (n *node) joinPeers() error {
 	c := pb.NewRaftClient(gconn)
 	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
-		return x.Errorf("Error while joining cluster: %+v\n", err)
+		return errors.Wrapf(err, "error while joining cluster")
 	}
 	glog.Infof("Done with JoinCluster call\n")
 	return nil
@@ -1341,7 +1340,7 @@ func (n *node) isMember() (bool, error) {
 	glog.Infof("Calling IsPeer")
 	pr, err := c.IsPeer(n.ctx, n.RaftContext)
 	if err != nil {
-		return false, x.Errorf("Error while joining cluster: %+v\n", err)
+		return false, errors.Wrapf(err, "error while joining cluster")
 	}
 	glog.Infof("Done with IsPeer call\n")
 	return pr.Status, nil

@@ -29,6 +29,7 @@ import (
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/credentials"
 	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -62,7 +63,7 @@ func (h *s3Handler) credentialsInRequest() bool {
 // Returns a new S3 minio client, otherwise a nil client with an error.
 func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	if len(uri.Path) < 1 {
-		return nil, x.Errorf("Invalid bucket: %q", uri.Path)
+		return nil, errors.Errorf("Invalid bucket: %q", uri.Path)
 	}
 
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
@@ -79,7 +80,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 				uri.Host = defaultEndpointS3
 			}
 			if !s3utils.IsAmazonEndpoint(*uri) {
-				return nil, x.Errorf("Invalid S3 endpoint %q", uri.Host)
+				return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
 			}
 			// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
 			// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
@@ -88,7 +89,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 
 		default: // minio
 			if uri.Host == "" {
-				return nil, x.Errorf("Minio handler requires a host")
+				return nil, errors.Errorf("Minio handler requires a host")
 			}
 			// Access Key ID:     MINIO_ACCESS_KEY.
 			// Secret Access Key: MINIO_SECRET_KEY.
@@ -131,11 +132,11 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	// verify the requested bucket exists.
 	found, err := mc.BucketExists(h.bucketName)
 	if err != nil {
-		return nil, x.Errorf("Error while looking for bucket: %s at host: %s. Error: %v",
-			h.bucketName, uri.Host, err)
+		return nil, errors.Wrapf(err, "while looking for bucket %s at host %s",
+			h.bucketName, uri.Host)
 	}
 	if !found {
-		return nil, x.Errorf("Bucket was not found: %s", h.bucketName)
+		return nil, errors.Errorf("Bucket was not found: %s", h.bucketName)
 	}
 	if len(parts) > 1 {
 		h.objectPrefix = filepath.Join(parts[1:]...)
@@ -161,11 +162,7 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 		return err
 	}
 
-	// Find the max version from the latest backup. This is done only when starting a new
-	// backup, not when creating a manifest.
 	if req.Manifest == nil {
-		// Get list of objects inside the bucket and find the most recent backup.
-		// If we can't find a manifest file, this is a full backup.
 		var lastManifest string
 		done := make(chan struct{})
 		defer close(done)
@@ -181,18 +178,17 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 				return err
 			}
 
-			// Return the version of last backup
-			req.Version = m.Version
+			req.Since = m.Since
 		}
 		objectName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
 	} else {
 		objectName = backupManifest
 	}
 
-	// If a full backup is being forced, force the version to zero to stream all
+	// If a full backup is being forced, force the value of Since to zero to stream all
 	// the contents from the database.
 	if req.Backup.ForceFull {
-		req.Version = 0
+		req.Since = 0
 	}
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
@@ -223,7 +219,7 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
-// Returns nil and the maximum Ts version on success, error otherwise.
+// Returns nil and the maximum Since value on success, error otherwise.
 func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
@@ -242,15 +238,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		}
 	}
 	if len(manifests) == 0 {
-		return 0, x.Errorf("No manifests found at: %s", uri.String())
+		return 0, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {
 		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
 	}
 
-	// version is returned with the max manifest version found.
-	var version uint64
+	// since is returned with the max manifest Since value found.
+	var since uint64
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
@@ -258,39 +254,38 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	for _, manifest := range manifests {
 		var m Manifest
 		if err := h.readManifest(mc, manifest, &m); err != nil {
-			return 0, x.Wrapf(err, "While reading %q", manifest)
+			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
-		if m.ReadTs == 0 || m.Version == 0 || len(m.Groups) == 0 {
+		if m.ReadTs == 0 || m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
 				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
 			continue
 		}
 
-		// Load the backup for each group in manifest.
 		path := filepath.Dir(manifest)
 		for _, groupId := range m.Groups {
 			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return 0, x.Wrapf(err, "Failed to get %q", object)
+				return 0, errors.Wrapf(err, "Failed to get %q", object)
 			}
 			defer reader.Close()
 			st, err := reader.Stat()
 			if err != nil {
-				return 0, x.Wrapf(err, "Stat failed %q", object)
+				return 0, errors.Wrapf(err, "Stat failed %q", object)
 			}
 			if st.Size <= 0 {
-				return 0, x.Errorf("Remote object is empty or inaccessible: %s", object)
+				return 0, errors.Errorf("Remote object is empty or inaccessible: %s", object)
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 			if err = fn(reader, int(groupId)); err != nil {
 				return 0, err
 			}
 		}
-		version = m.Version
+		since = m.Since
 	}
-	return version, nil
+	return since, nil
 }
 
 // ListManifests loads the manifests in the locations and returns them.
@@ -312,7 +307,7 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 		}
 	}
 	if len(manifests) == 0 {
-		return nil, x.Errorf("No manifests found at: %s", uri.String())
+		return nil, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(manifests)
 	if glog.V(3) {
@@ -352,7 +347,7 @@ func (h *s3Handler) upload(mc *minio.Client, object string) error {
 }
 
 func (h *s3Handler) Close() error {
-	// we are done buffering, send EOF.
+	// Done buffering, send EOF.
 	if err := h.pwriter.CloseWithError(nil); err != nil && err != io.EOF {
 		glog.Errorf("Unexpected error when closing pipe: %v", err)
 	}

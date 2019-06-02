@@ -215,7 +215,7 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, fmt.Sprintf(queryFmt, tc.in))
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 }
 
@@ -306,7 +306,7 @@ func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
 	for _, tc := range tests {
 		resp, err := txn.Query(ctx, tc.in)
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 
 }
@@ -350,7 +350,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	CompareJSON(t, js, string(resp.Json))
+	z.CompareJSON(t, js, string(resp.Json))
 }
 
 func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
@@ -408,7 +408,7 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	CompareJSON(t, js, string(resp.Json))
+	z.CompareJSON(t, js, string(resp.Json))
 }
 
 func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
@@ -441,7 +441,7 @@ func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	CompareJSON(t, js, string(resp.Json))
+	z.CompareJSON(t, js, string(resp.Json))
 }
 
 func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
@@ -484,7 +484,7 @@ func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	CompareJSON(t, js, string(resp.Json))
+	z.CompareJSON(t, js, string(resp.Json))
 }
 
 func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
@@ -536,7 +536,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
       }
     ]
   }`
-	CompareJSON(t, js, string(m["data"]))
+	z.CompareJSON(t, js, string(m["data"]))
 }
 
 func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
@@ -672,7 +672,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			continue
 		}
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 }
 
@@ -785,7 +785,7 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 	for _, tc := range tests {
 		resp, err := c.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 }
 
@@ -834,7 +834,7 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	for _, tc := range tests {
 		resp, err := c.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
@@ -847,7 +847,7 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 	for _, tc := range tests {
 		resp, err := c.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 
 	require.NoError(t, c.Alter(ctx, &api.Operation{
@@ -903,6 +903,6 @@ func GroupByUidWorks(t *testing.T, c *dgo.Dgraph) {
 	for _, tc := range tests {
 		resp, err := c.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
-		CompareJSON(t, tc.out, string(resp.Json))
+		z.CompareJSON(t, tc.out, string(resp.Json))
 	}
 }

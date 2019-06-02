@@ -20,8 +20,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: alpha1
     working_dir: /data/alpha1
-    env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
     labels:
       cluster: test
     volumes:
@@ -38,8 +36,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: alpha2
     working_dir: /data/alpha2
-    env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
     labels:
       cluster: test
     depends_on:
@@ -58,8 +54,6 @@ services:
     image: dgraph/dgraph:latest
     container_name: alpha3
     working_dir: /data/alpha3
-    env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
     labels:
       cluster: test
     depends_on:
@@ -73,15 +67,3 @@ services:
       - 8183:8183
       - 9183:9183
     command: /gobin/dgraph alpha --cwd=/data/alpha3 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 -v=0 --enterprise_features --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-
-  minio1:
-    image: minio/minio:latest
-    container_name: minio1
-    env_file:
-      - $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/backup.env
-    working_dir: $GOPATH/src/github.com/dgraph-io/dgraph/ee/backup/data/minio
-    ports:
-      - 9001:9001
-    labels:
-      cluster: test
-    command: minio server /data/minio --address :9001
