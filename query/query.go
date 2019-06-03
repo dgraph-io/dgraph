@@ -344,9 +344,6 @@ func aggWithVarFieldName(pc *SubGraph) string {
 }
 
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
-	if len(pc.Params.uidToVal) == 0 {
-		return nil
-	}
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
@@ -1709,21 +1706,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 			default:
-				// This var does not match any uids or vals but we are still trying to access it.
-				if v.Typ == gql.ValueVar {
-					// * * * * * * * * * * * * * * * * * * *
-					// Default value vars
-					// * * * * * * * * * * * * * * * * * * *
-					//
-					// Provide a default value for valueVarAggregation() to eval val().
-					// This is a noop for aggregation funcs that would fail.
-					// The zero aggs won't show because there are no uids matched.
-					//
-					// NOTE: If you need to make type assertions that might involve
-					// default value vars, use `Safe()` func and not val.Value directly.
-					mp[v.Name].Vals[0] = types.Val{}
-					sg.Params.uidToVal = mp[v.Name].Vals
-				}
 			}
 		}
 	}
@@ -1749,7 +1731,9 @@ func (sg *SubGraph) replaceVarInFunc() error {
 			continue
 		}
 		if len(sg.Params.uidToVal) == 0 {
-			return errors.Errorf("No value found for value variable %q", arg.Value)
+			// This means that the variable didn't have any values and hence there is nothing to add
+			// to args. Setting isEmpty to true would mean that they query is not processed.
+			break
 		}
 		// We don't care about uids, just take all the values and put as args.
 		// There would be only one value var per subgraph as per current assumptions.
@@ -2683,8 +2667,12 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
-			// Doesn't need to be executed as it just does aggregation and math functions.
-			if sg.Params.IsEmpty {
+			// A query doesn't need to be executed if
+			// 1. It just does aggregation and math functions which is when sg.Params.IsEmpty is true.
+			// 2. Its has an inequality fn at root without any args which can happen when it uses
+			// value variables for args which don't expand to any value.
+			if sg.Params.IsEmpty ||
+				sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && len(sg.SrcFunc.Args) == 0 {
 				errChan <- nil
 				continue
 			}
