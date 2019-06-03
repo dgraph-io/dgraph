@@ -126,6 +126,7 @@ func getError(rc io.ReadCloser) error {
 
 func TestNodes(t *testing.T) {
 	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	NodesSetup(t, dg)
