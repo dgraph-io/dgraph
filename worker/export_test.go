@@ -173,7 +173,6 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
 
-	count := 0
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
 
@@ -182,14 +181,9 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
 		result.Schemas[1].Predicate)
 	require.Equal(t, "uid", types.TypeID(result.Schemas[1].ValueType).Name())
-	count = len(result.Schemas)
 
 	require.Equal(t, 1, len(result.Types))
 	require.True(t, proto.Equal(result.Types[0], personType))
-	count += len(result.Types)
-
-	// This order will be preserved due to file naming
-	require.Equal(t, 3, count)
 }
 
 func TestExportRdf(t *testing.T) {
