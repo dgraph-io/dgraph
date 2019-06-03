@@ -30,8 +30,8 @@ import (
 )
 
 var (
+	// ErrEmpty indicates that the parser encountered a harmless error (e.g empty line or comment).
 	ErrEmpty      = errors.New("RDF: harmless error, e.g. comment line")
-	ErrInvalidUID = errors.New("UID has to be greater than zero")
 )
 
 // Function to do sanity check for subject, predicate, object and label strings.
