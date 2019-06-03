@@ -450,7 +450,32 @@ type Result struct {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(r Request) (res Result, rerr error) {
+func Parse(r Request) (Result, error) {
+	return ParseWithNeedVars(r, nil)
+}
+
+// ParseWithNeedVars performing parsing of a query with given needVars.
+//
+// The needVars parameter is passed in the case of upsert block.
+// For example, when parsing the query block inside -
+// upsert {
+//  query {
+//    me(func: eq(email, "someone@gmail.com"), first: 1) {
+//      v as uid
+//    }
+//  }
+//
+//  mutation {
+//    set {
+//      uid(v) <name> "Some One" .
+//      uid(v) <email> "someone@gmail.com" .
+//    }
+//  }
+// }
+//
+// we need to pass the variable name v through the needVars parameter. Otherwise, an error
+// is reported complaining that the variable v is defined but not used in the query block.
+func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 	query := r.Str
 	vmap := convertToVarMap(r.Variables)
 
@@ -530,6 +555,12 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 
 		allVars := res.QueryVars
+		// Add the variables that are needed outside the query block.
+		// For example, mutation block in upsert block will be using
+		// variables from the query block that is getting parsed here.
+		if len(needVars) != 0 {
+			allVars = append(allVars, &Vars{Needs: needVars})
+		}
 		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
