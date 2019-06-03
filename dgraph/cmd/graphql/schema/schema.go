@@ -3,18 +3,8 @@ package schema
 import (
 	"strings"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-)
-
-const (
-	IntMask      = 1 << 0
-	FloatMask    = 1 << 1
-	StringMask   = 1 << 2
-	DatetimeMask = 1 << 3
-	IDMask       = 1 << 4
-	BooleanMask  = 1 << 5
 )
 
 type schRuleFunc func(schema *ast.Schema) *gqlerror.Error
@@ -56,44 +46,47 @@ func GenerateCompleteSchema(schema *ast.Schema) {
 
 	for _, defn := range schema.Types {
 		if defn.Kind == "OBJECT" {
-			extenderMap[defn.Name+"Input"] = genInputType(defn)
+			extenderMap[defn.Name+"Input"] = genInputType(schema, defn)
 			extenderMap[defn.Name+"Ref"] = genRefType(defn)
-			extenderMap[defn.Name+"Update"] = genUpdateType(defn)
-			extenderMap[def.Name+"Filter"] = genFilterType(defn)
-			extenderMap["Add"+def.Name+"Payload"] = genResultType(defn)
-			addQueryType(defn, schema.Query, extenderMap[def.Name+"Filter"])
+			extenderMap[defn.Name+"Update"] = genUpdateType(schema, defn)
+			extenderMap[defn.Name+"Filter"] = genFilterType(defn)
+			extenderMap["Add"+defn.Name+"Payload"] = genAddResultType(defn)
+			extenderMap["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
+			extenderMap["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
+			addQueryType(defn, schema.Query)
+			addMutationType(defn, schema.Mutation)
 		}
+	}
+
+	for name, extType := range extenderMap {
+		schema.Types[name] = extType
 	}
 }
 
-func genInputType(defn *ast.Definition) *ast.Definition {
+func genInputType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
 	inputDefn := &ast.Definition{
-		Kind: ast.InputObject,
-		Name: defn.Name + "Input",
+		Kind:   ast.InputObject,
+		Name:   defn.Name + "Input",
+		Fields: getNonIDFields(schema, defn),
 	}
-	inputDefn.Fields =
-		getFieldList(StringMask|FloatMask|BooleanMask|DatetimeMask|IntMask, defn)
-
 	return inputDefn
 }
 
 func genRefType(defn *ast.Definition) *ast.Definition {
 	refDefn := &ast.Definition{
-		Kind: ast.InputObject,
-		Name: defn.Name + "Ref",
+		Kind:   ast.InputObject,
+		Name:   defn.Name + "Ref",
+		Fields: getIDField(defn),
 	}
-	refDefn.Fields = getFieldList(IDMask, defn)
-
 	return refDefn
 }
 
-func genUpdateType(defn *ast.Definition) *ast.Definition {
+func genUpdateType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
 	updDefn := &ast.Definition{
-		Kind: ast.InputObject,
-		Name: defn.Name + "Update",
+		Kind:   ast.InputObject,
+		Name:   defn.Name + "Update",
+		Fields: getNonIDFields(schema, defn),
 	}
-	updDefn.Fields =
-		getFieldList(StringMask|FloatMask|BooleanMask|DatetimeMask|IntMask, defn)
 
 	for _, fld := range updDefn.Fields {
 		fld.Type.NonNull = false
@@ -106,181 +99,296 @@ func genFilterType(defn *ast.Definition) *ast.Definition {
 	fltrDefn := &ast.Definition{
 		Kind: ast.InputObject,
 		Name: defn.Name + "Filter",
+		// Fields: getFieldList(StringMask, defn),
+		// Do I have to take all the string fields ???
 	}
-	fltrDefn.Fields =
-		getFieldList(StringMask, defn)
+	return fltrDefn
 }
 
-func genResultType(defn *ast.Definition) *ast.Definition {
-	// @TODO: Need a bit of discussion around it. How exactly we
-	// decide name of the field that will be reutrned. For e.g.
-	// In refernce to what Michael has suggested
-	// type AddPostPayload {
-	//    post: Post! (Here what is significance of post?)
-	// }
+func genAddResultType(defn *ast.Definition) *ast.Definition {
+	addDefn := &ast.Definition{
+		Kind: ast.Object,
+		Name: "Add" + defn.Name + "Payload",
+	}
+	addFldList := make([]*ast.FieldDefinition, 0)
+	parentFld := &ast.FieldDefinition{ // Field type is same as the parent object type
+		Name: strings.ToLower(defn.Name),
+		Type: &ast.Type{
+			NamedType: defn.Name,
+			NonNull:   true, // Not sure if it should always be true
+		},
+	}
+	addFldList = append(addFldList, parentFld)
+	addDefn.Fields = addFldList
+	return addDefn
 }
 
-func addQuery(defn *ast.Definition, qry *ast.Query, filterDefn *ast.Definition) {
-	getDefn := &ast.FieldDefinition {
-		Description: "query function for " + defn.Name,
-		Name: "query" + defn.Name,
+func genUpdResultType(defn *ast.Definition) *ast.Definition {
+	updDefn := &ast.Definition{
+		Kind: ast.Object,
+		Name: "Update" + defn.Name + "Payload",
 	}
-	getDefn.Type = &ast.Type{
-		NamedType: defn.Name
-		NonNull: true // Idk why but it was in the ast.Schema object if I parse full schema
+	updFldList := make([]*ast.FieldDefinition, 0)
+	parentFld := &ast.FieldDefinition{ // Field type is same as the parent object type
+		Name: strings.ToLower(defn.Name),
+		Type: &ast.Type{
+			NamedType: defn.Name,
+			NonNull:   true, // Not sure if it should always be true
+		},
 	}
+	updFldList = append(updFldList, parentFld)
+	updDefn.Fields = updFldList
+	return updDefn
+}
+
+func genDelResultType(defn *ast.Definition) *ast.Definition {
+	delDefn := &ast.Definition{
+		Kind: ast.Object,
+		Name: "Delete" + defn.Name + "Payload",
+	}
+	delFldList := make([]*ast.FieldDefinition, 0)
+	delFld := &ast.FieldDefinition{
+		Name: "msg",
+		Type: &ast.Type{
+			NamedType: "String",
+			NonNull:   true,
+		},
+	}
+	delFldList = append(delFldList, delFld)
+	delDefn.Fields = delFldList
+	return delDefn
+}
+
+func addQueryType(defn *ast.Definition, qry *ast.Definition) {
+	getDefn := &ast.FieldDefinition{
+		Description: "ID based query function for " + defn.Name,
+		Name:        "get" + defn.Name,
+		Type: &ast.Type{
+			NamedType: defn.Name,
+			NonNull:   true, // Idk why but it was in the ast.Schema object if I parse full schema
+		},
+	}
+	getArgs := make([]*ast.ArgumentDefinition, 0)
+	getArg := &ast.ArgumentDefinition{
+		Name: "id",
+		Type: &ast.Type{
+			NamedType: "ID",
+			NonNull:   true,
+		},
+	}
+	getArgs = append(getArgs, getArg)
+	getDefn.Arguments = getArgs
 	qry.Fields = append(qry.Fields, getDefn)
 
-	qryDefn := &ast.FieldDefinition {
-		Description: ""
+	qryDefn := &ast.FieldDefinition{
+		Description: "Input Filter based query function for" + defn.Name,
+		Name:        "query" + defn.Name,
+		Type: &ast.Type{
+			NonNull: true,
+			Elem: &ast.Type{
+				NamedType: defn.Name,
+				NonNull:   true,
+			},
+		},
 	}
+	qryArgs := make([]*ast.ArgumentDefinition, 0)
+	qryArg := &ast.ArgumentDefinition{
+		Name: "input",
+		Type: &ast.Type{
+			NamedType: defn.Name + "Filter",
+			NonNull:   true, // Again not sure if this can be null
+		},
+	}
+	qryArgs = append(qryArgs, qryArg)
+	qry.Fields = append(qry.Fields, qryDefn)
+}
+
+func addMutationType(defn *ast.Definition, mutation *ast.Definition) {
+	addDefn := &ast.FieldDefinition{
+		Description: "Function for adding " + defn.Name,
+		Name:        "add" + defn.Name,
+		Type: &ast.Type{
+			NamedType: "Add" + defn.Name + "Payload",
+			NonNull:   true,
+		},
+	}
+	addArgs := make([]*ast.ArgumentDefinition, 0)
+	addArg := &ast.ArgumentDefinition{
+		Name: "input",
+		Type: &ast.Type{
+			NamedType: defn.Name + "Input",
+			NonNull:   true,
+		},
+	}
+	addArgs = append(addArgs, addArg)
+	addDefn.Arguments = addArgs
+	mutation.Fields = append(mutation.Fields, addDefn)
+
+	updDefn := &ast.FieldDefinition{
+		Description: "Function for updating " + defn.Name,
+		Name:        "update" + defn.Name,
+		Type: &ast.Type{
+			NamedType: "Update" + defn.Name + "Payload",
+			NonNull:   true,
+		},
+	}
+	updArgs := make([]*ast.ArgumentDefinition, 0)
+	updArg := &ast.ArgumentDefinition{
+		Name: "id",
+		Type: &ast.Type{
+			NamedType: "ID",
+			NonNull:   true,
+		},
+	}
+	updArgs = append(updArgs, updArg)
+	updArg = &ast.ArgumentDefinition{
+		Name: "input",
+		Type: &ast.Type{
+			NamedType: defn.Name + "Update",
+			NonNull:   false, // Becasue in example there was no nonnull sign
+		},
+	}
+	updArgs = append(updArgs, updArg)
+	updDefn.Arguments = updArgs
+	mutation.Fields = append(mutation.Fields, updDefn)
+
+	delDefn := &ast.FieldDefinition{
+		Description: "Function for deleting " + defn.Name,
+		Name:        "delete" + defn.Name,
+		Type: &ast.Type{
+			NamedType: "Delete" + defn.Name + "Payload",
+			NonNull:   true,
+		},
+	}
+	delArgs := make([]*ast.ArgumentDefinition, 0)
+	delArg := &ast.ArgumentDefinition{
+		Name: "id",
+		Type: &ast.Type{
+			NamedType: defn.Name + "ID",
+			NonNull:   true,
+		},
+	}
+	delArgs = append(delArgs, delArg)
+	delDefn.Arguments = delArgs
+	mutation.Fields = append(mutation.Fields, delDefn)
 }
 
 // getFieldList returns list of fields based on flag
-func getFieldList(flag int8, defn *ast.Definition) ast.FieldList {
+func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if fld.Type.Name() == graphql.ID && (flag & IDMask) {
-			fldList = append(fldList, fld)
-		} else if fld.Type.Name() == graphql.STRING && (flag & StringMask) {
-			fldList = append(fldList, fld)
-		} else if fld.Type.Name() == graphql.FLOAT && (flag & FloatMask) {
-			fldList = append(fldList, fld)
-		} else if fld.Type.Name() == graphql.BOOLEAN && (flag & BooleanMask) {
-			fldList = append(flag, fld)
-		} else if fld.Type.Name() == graphql.DATETIME && (flag & DatetimeMask) {
-			fldList = append(flag, fld)
-		} else if fld.Type.Name() == graphql.INT && (flag & IntMask) {
-			fldList = append(flag, fld)
+		if fld.Type.Name() == "ID" {
+			continue
+		}
+		if schema.Types[fld.Type.Name()].Kind == "OBJECT" {
+			newDefn := &ast.FieldDefinition{Name: fld.Type.Name() + "Ref"}
+			fldList = append(fldList, newDefn)
+		} else {
+			newFld := *fld
+			fldList = append(fldList, &newFld)
 		}
 	}
 	return fldList
 }
 
-// generateInitialSchema will generate the schema that was initially provided by the user
-func generateInitialSchema(schema *ast.Schema) string {
-	var sch strings.Builder
-
-	for name, defs := range schema.PossibleTypes {
-		defn := defs[0] // Again I don't have idea why this is an array. I am just using first val of array. It has only one element in it as far as I have seen.
-		sch.WriteString("type " + name + " {\n")
-		for _, fld := range defn.Fields {
-			sch.WriteString("\t" + fld.Name + ": " + fld.Type.String() + "\n") // Anonymus strings and other strings concatenation. How will this perform ?
+func getIDField(defn *ast.Definition) ast.FieldList {
+	fldList := make([]*ast.FieldDefinition, 0)
+	for _, fld := range defn.Fields {
+		if fld.Type.Name() == "ID" {
+			newFld := *fld // Deepcopy is not required because we will never modify values other than nonull
+			fldList = append(fldList, &newFld)
 		}
-		sch.WriteString("}\n")
 	}
-	return sch.String()
+	return fldList
 }
 
-// generateInputSchema will generate schema for all the input types
-// It won't have any type of ID because ID will be assigned internally by dgraph
-func generateInputSchema(schema *ast.Schema) string {
+func generateInputString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	for name, defs := range schema.PossibleTypes {
-		defn := defs[0]
-		sch.WriteString("type " + name + "Input {\n")
-		for _, fld := range defn.Fields {
-			if fld.Type.NamedType == "id" {
-				continue
-			}
-			sch.WriteString("\t" + fld.Name + ": " + fld.Type.String() + "\n")
-		}
-		sch.WriteString("}\n")
-	}
-	return sch.String()
-}
-
-// generateRefSchema will generate reference schema i.e. the fucntion
-// which will be able to refer to any object based on id
-func generateRefSchema(schema *ast.Schema) string {
-	var sch strings.Builder
-
-	for name, defs := range schema.PossibleTypes {
-		defn := defs[0]
-		sch.WriteString("type " + name + "Ref {\n")
-		for _, fld := range defn.Fields {
-			if fld.Type.NamedType != "id" {
-				continue
-			}
-			sch.WriteString("\t" + fld.Name + ": ID!\n")
-		}
-		sch.WriteString("}\n")
-	}
-	return sch.String()
-}
-
-// generateUpdateSchema will generate schema for all functions which will be
-// used to update a particular type. It shouldn't have ID type as ID can't be udpated.
-// Also none of the fields should have '!' because nothing should be compulsory for update.
-func generateUpdateSchema(schema *ast.Schema) string {
-	var sch strings.Builder
-
-	for name, defs := range schema.PossibleTypes {
-		defn := defs[0]
-		sch.WriteString("type " + name + "Update {\n")
-		for _, fld := range defn.Fields {
-			if fld.Type.NamedType == "id" {
-				continue
-			}
-			sch.WriteString("\t" + fld.Name + ": " + fld.Type.Name() + "\n")
-		}
-		sch.WriteString("}\n")
-	}
-	return sch.String()
-}
-
-// generateFilterSchema will generate schema for filter functions which can be used to
-// search based on filter given.
-func generateFilterSchema(schema *ast.Schema) string {
-	var sch strings.Builder
-
-	for name, defs := range schema.PossibleTypes {
-		defn := defs[0]
-		sch.WriteString("type " + name + "Filter {\n")
-		for _, fld := range defn.Fields {
-			if fld.Type.NamedType != "string" {
-				continue
-			}
-			sch.WriteString("\t" + fld.Name + ": " + fld.Type.Name() + "\n")
-		}
-		sch.WriteString("}\n")
-	}
-	return sch.String()
-}
-
-// generateTypeSchema will generate shema for return types of mutations
-func generateTypeSchema(schema *ast.Schema) string {
-	var sch strings.Builder
-
-	for name := range schema.PossibleTypes {
-		sch.WriteString("type Add" + name + "Payload {\n")
-		sch.WriteString("\t" + strings.ToLower(name) + ": " + name + "!\n}\n")
-	}
-	return sch.String()
-}
-
-// generateQuerySchema will generate schema for the functions which will be used
-// to query data.
-func generateQuerySchema(schema *ast.Schema) string {
-	var sch strings.Builder
-
-	for name, defs := range schema.PossibleTypes {
-		defn := defs[0] // Again I don't have idea why this is an array. I am just using first val of array. It has only one element in it as far as I have seen.
-		sch.WriteString("\tget" + name + "(")
-		for _, fld := range defn.Fields {
-			if fld.Type.NamedType == "id" {
-				sch.WriteString(fld.Name + ": ID!): ")
-				break
-			}
-		}
-		sch.WriteString(name + "!\n") // Why this can even be empty in case of invalid id
+	sch.WriteString("input " + typ.Name + " {\n")
+	for _, fld := range typ.Fields {
+		sch.WriteString("\t" + fld.Name + ": " + fld.Type.String() + "\n")
 	}
 	sch.WriteString("}\n")
 	return sch.String()
 }
 
-// generateMutationSchema will generate schema for mutation on objects specified in schema
-func generateMutationSchema(schema *ast.Schema) string {
-	return ""
+func generateObjectString(typ *ast.Definition) string {
+	var sch strings.Builder
+
+	sch.WriteString("type " + typ.Name + " {\n")
+	for _, fld := range typ.Fields {
+		sch.WriteString("\t" + fld.Name + ":" + fld.Type.String() + "\n")
+	}
+	sch.WriteString("}\n")
+
+	return sch.String()
+}
+
+func generateScalarString(typ *ast.Definition) string {
+	var sch strings.Builder
+
+	sch.WriteString("Scalar " + typ.Name + "\n")
+	return sch.String()
+}
+
+func generateQMString(flag bool, qry *ast.Definition) string {
+	var sch strings.Builder
+	var opType string
+	if flag {
+		opType = "Query"
+	} else {
+		opType = "Mutation"
+	}
+
+	sch.WriteString("type " + opType + " {\n")
+	for _, fld := range qry.Fields {
+		sch.WriteString("\t" + fld.Name + "(")
+		argLen := len(fld.Arguments) // I hope it returns size of array
+		for idx, arg := range fld.Arguments {
+			sch.WriteString(arg.Name + ":" + arg.Type.String())
+			if idx != argLen-1 {
+				sch.WriteString(",")
+			}
+		}
+		sch.WriteString("): " + fld.Type.String() + "\n")
+	}
+	sch.WriteString("}\n")
+
+	return sch.String()
+}
+
+// Stringify will return entire schema in string format
+func Stringify(schema *ast.Schema) string {
+	var sch, object, scalar, input, ref, filter, payload, query, mutation strings.Builder
+
+	for _, typ := range schema.Types {
+		if typ.Kind == ast.Object {
+			object.WriteString(generateObjectString(typ))
+		} else if typ.Kind == ast.Scalar {
+			scalar.WriteString(generateScalarString(typ))
+		} else if typ.Kind == ast.InputObject {
+			input.WriteString(generateInputString(typ))
+		} else if string(typ.Kind)[len(string(typ.Kind))-6:len(string(typ.Kind))] == "Filter" {
+			filter.WriteString(generateInputString(typ))
+		} else if string(typ.Kind)[len(string(typ.Kind))-7:len(string(typ.Kind))] == "Payload" {
+			payload.WriteString(generateObjectString(typ))
+		} else if string(typ.Kind)[len(string(typ.Kind))-3:len(string(typ.Kind))] == "Ref" {
+			ref.WriteString(generateInputString(typ))
+		}
+	}
+
+	query.WriteString(generateQMString(true, schema.Query))
+	mutation.WriteString(generateQMString(false, schema.Mutation))
+
+	sch.WriteString(object.String())
+	sch.WriteString(scalar.String())
+	sch.WriteString(input.String())
+	sch.WriteString(ref.String())
+	sch.WriteString(filter.String())
+	sch.WriteString(payload.String())
+	sch.WriteString(query.String())
+	sch.WriteString(mutation.String())
+
+	return sch.String()
 }
