@@ -2401,9 +2401,9 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 }
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
-	// nil has a different from an initialized map of zero length here. If the variable didn't return
-	// any values then uidToVal would be an empty with zero length. If the variable was used before
-	// definition, the uidToVal would be nil.
+	// nil has a different meaning from an initialized map of zero length here. If the variable
+	// didn't return any values then uidToVal would be an empty with zero length. If the variable
+	// was used before definition, uidToVal would be nil.
 	if sg.Params.uidToVal == nil {
 		return errors.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
