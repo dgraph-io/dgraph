@@ -495,6 +495,33 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		}
 	}()
 
+	needVars := findVars(gmu)
+	varToUID, err := doQueryInUpsert(ctx, &l, mu.Query, needVars, mu.StartTs)
+	if err != nil {
+		return resp, err
+	}
+
+	// update the values in mutation block from the query block.
+	for _, nq := range append(gmu.Set, gmu.Del...) {
+		if strings.HasPrefix(nq.Subject, "uid(") {
+			varName := nq.Subject[4 : len(nq.Subject)-1]
+			if uid, ok := varToUID[varName]; ok {
+				nq.Subject = uid
+			} else {
+				nq.Subject = "_:" + nq.Subject
+			}
+		}
+
+		if strings.HasPrefix(nq.ObjectId, "uid(") {
+			varName := nq.ObjectId[4 : len(nq.ObjectId)-1]
+			if uid, ok := varToUID[varName]; ok {
+				nq.ObjectId = uid
+			} else {
+				nq.ObjectId = "_:" + nq.ObjectId
+			}
+		}
+	}
+
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
 		return resp, err
@@ -554,13 +581,92 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	return resp, nil
 }
 
+// findVars finds all the variables used in mutation block
+func findVars(gmu *gql.Mutation) []string {
+	vars := make(map[string]struct{})
+	updateVars := func(s string) {
+		if strings.HasPrefix(s, "uid(") {
+			varName := s[4 : len(s)-1]
+			vars[varName] = struct{}{}
+		}
+	}
+	for _, nq := range gmu.Set {
+		updateVars(nq.Subject)
+		updateVars(nq.ObjectId)
+	}
+	for _, nq := range gmu.Del {
+		updateVars(nq.Subject)
+		updateVars(nq.ObjectId)
+	}
+
+	varsList := make([]string, 0, len(vars))
+	for v := range vars {
+		varsList = append(varsList, v)
+	}
+	glog.V(3).Infof("Variables used in mutation block: %v", varsList)
+
+	return varsList
+}
+
+// doQueryInUpsert processes a query in the upsert block.
+func doQueryInUpsert(ctx context.Context, l *query.Latency, queryText string,
+	needsVar []string, startTs uint64) (map[string]string, error) {
+
+	varToUID := make(map[string]string)
+	if queryText == "" {
+		return varToUID, nil
+	}
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	x.AssertTruef(startTs != 0, "Transaction timestamp is zero")
+
+	parsedReq, err := gql.Parse(gql.Request{
+		Str:       queryText,
+		Variables: make(map[string]string),
+	}, needsVar)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateQuery(parsedReq.Query); err != nil {
+		return nil, err
+	}
+
+	qr := query.Request{
+		Latency:  l,
+		GqlQuery: &parsedReq,
+		ReadTs:   startTs,
+	}
+	if err := qr.ProcessQuery(ctx); err != nil {
+		return nil, errors.Wrapf(err, "while processing query: %q", queryText)
+	}
+
+	if len(qr.GetVars()) <= 0 {
+		return nil, fmt.Errorf("upsert query op has no variables")
+	}
+
+	// TODO(Aman): allow multiple values for each variable.
+	// If a variable doesn't have any UID, we generate one ourselves later.
+	for name, v := range qr.GetVars() {
+		if v.Uids == nil {
+			continue
+		}
+		if len(v.Uids.Uids) > 1 {
+			return nil, fmt.Errorf("unsupported many values for var (%s)", name)
+		} else if len(v.Uids.Uids) == 1 {
+			varToUID[name] = fmt.Sprintf("%d", v.Uids.Uids[0])
+		}
+	}
+
+	return varToUID, nil
+}
+
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
-	if glog.V(3) {
-		glog.Infof("Got a query: %+v", req)
-	}
+	glog.V(3).Infof("Got a query: %+v", req)
 
 	return s.doQuery(ctx, req)
 }
@@ -610,7 +716,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
-	})
+	}, nil)
 	if err != nil {
 		return resp, err
 	}

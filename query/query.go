@@ -2601,6 +2601,11 @@ type Request struct {
 	vars map[string]varValue
 }
 
+// GetVars returns the vars stored in Request object.
+func (req *Request) GetVars() map[string]varValue {
+	return req.vars
+}
+
 // ProcessQuery processes query part of the request (without mutations).
 // Fills Subgraphs and Vars.
 // It optionally also returns a map of the allocated uids in case of an upsert request.

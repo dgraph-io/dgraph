@@ -658,7 +658,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 	parsedReq, err := gql.Parse(gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
-	})
+	}, nil)
 	if err != nil {
 		return err
 	}
