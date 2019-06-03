@@ -249,7 +249,13 @@ For a particular node `N`, all data for predicate `P` (and corresponding indexin
 }
 ```
 
-The pattern `S * *` deletes all edges out of a node (the node itself may remain as the target of edges), any reverse edges corresponding to the removed edges and any indexing for the removed data.
+The pattern `S * *` deletes all known edges out of a node (the node itself may
+remain as the target of edges), any reverse edges corresponding to the removed
+edges and any indexing for the removed data. The predicates to delete are
+derived from the type information for that node (the value of the `dgraph.type`
+edges on that node and their corresponding definitions in the schema). If that
+information is missing, this operation will be a no-op.
+
 ```
 {
   delete {
@@ -283,12 +289,12 @@ Other tagged values are left untouched.
 
 ## Mutations using cURL
 
-Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the HTTP header `X-DgraphCommitNow: true`.
+Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the parameter `commitNow=true` in the URL.
 
 To run a `set` mutation:
 
 ```sh
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   set {
     _:alice <name> "Alice" .
@@ -299,7 +305,7 @@ curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 To run a `delete` mutation:
 
 ```sh
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
 {
   delete {
     # Example: Alice's UID is 0x56f33
@@ -310,8 +316,8 @@ curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate -d $'
 
 To run an RDF mutation stored in a file, use curl's `--data-binary` option so that, unlike the `-d` option, the data is not URL encoded.
 
-```
-curl -X POST -H 'X-Dgraph-CommitNow: true' localhost:8080/mutate --data-binary @mutation.txt
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true --data-binary @mutation.txt
 ```
 
 ## JSON Mutation Format
@@ -517,8 +523,12 @@ All edges for a predicate emanating from a single node can be deleted at once
 }
 ```
 
-If no predicates specified, then all of the nodes outbound edges are deleted
-(corresponding to deleting `S * *`):
+If no predicates specified, then all of the node's known outbound edges are
+deleted (corresponding to deleting `S * *`). The predicates to delete are
+derived using the type system. Refer to the [RDF format]({{< relref "#delete" >}})
+documentation and the section on the [type system]({{< relref "query-language/index.md#type-system" >}})
+for more information:
+
 ```json
 {
   "uid": "0x123"
@@ -646,12 +656,10 @@ Deletion operations are the same as [Deleting literal values]({{< relref "#delet
 
 ### Using JSON operations via cURL
 
-First you have to configure the HTTP headers. There are two in this case. One to
-inform Dgraph that is a JSON mutation and another to commit now.
+First you have to configure the HTTP header to specify content-type.
 
-```BASH
--H 'X-Dgraph-MutationType: json'
--H 'X-Dgraph-CommitNow: true'
+```sh
+-H 'Content-Type: application/json'
 ```
 
 {{% notice "note" %}}
@@ -661,8 +669,8 @@ details. You can also use Python's built in `json.tool` module with `python -m
 json.tool` to do JSON formatting.
 {{% /notice %}}
 
-```BASH
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
     {
       "set": [
         {
@@ -678,8 +686,8 @@ curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph
 
 To delete:
 
-```BASH
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d  $'
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d  $'
     {
       "delete": [
         {
@@ -691,6 +699,6 @@ curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph
 
 Mutation with a JSON file:
 
-```
-curl -X POST localhost:8080/mutate -H 'X-Dgraph-MutationType: json' -H 'X-Dgraph-CommitNow: true' -d @data.json
+```sh
+curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
 ```

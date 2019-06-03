@@ -19,16 +19,17 @@ package types
 import (
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 const (
 	pwdLenLimit = 6
 )
 
+// Encrypt encrypts the given plain-text password.
 func Encrypt(plain string) (string, error) {
 	if len(plain) < pwdLenLimit {
-		return "", x.Errorf("Password too short, i.e. should have at least 6 chars")
+		return "", errors.Errorf("Password too short, i.e. should have at least 6 chars")
 	}
 
 	encrypted, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
@@ -39,9 +40,10 @@ func Encrypt(plain string) (string, error) {
 	return string(encrypted), nil
 }
 
+// VerifyPassword checks that the plain-text password matches the encrypted password.
 func VerifyPassword(plain, encrypted string) error {
 	if len(plain) < pwdLenLimit || len(encrypted) == 0 {
-		return x.Errorf("Invalid password/crypted string")
+		return errors.Errorf("Invalid password/crypted string")
 	}
 
 	return bcrypt.CompareHashAndPassword([]byte(encrypted), []byte(plain))

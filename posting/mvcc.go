@@ -28,16 +28,15 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 )
 
 var (
-	ErrTsTooOld = x.Errorf("Transaction is too old")
+	// ErrTsTooOld is returned when a transaction is too old to be applied.
+	ErrTsTooOld = errors.Errorf("Transaction is too old")
 )
 
-func (txn *Txn) SetAbort() {
-	atomic.StoreUint32(&txn.shouldAbort, 1)
-}
-
+// ShouldAbort returns whether the transaction should be aborted.
 func (txn *Txn) ShouldAbort() bool {
 	if txn == nil {
 		return false
@@ -45,7 +44,7 @@ func (txn *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&txn.shouldAbort) > 0
 }
 
-func (txn *Txn) AddConflictKey(conflictKey string) {
+func (txn *Txn) addConflictKey(conflictKey string) {
 	txn.Lock()
 	defer txn.Unlock()
 	if txn.conflicts == nil {
@@ -71,12 +70,13 @@ func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
 	txn.Unlock()
 
 	txn.Update()
-	txn.cache.FillPreds(ctx, gid)
+	txn.cache.fillPreds(ctx, gid)
 }
 
-// Don't call this for schema mutations. Directly commit them.
+// CommitToDisk commits a transaction to disk.
 // This function only stores deltas to the commit timestamps. It does not try to generate a state.
 // State generation is done via rollups, which happen when a snapshot is created.
+// Don't call this for schema mutations. Directly commit them.
 func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	if commitTs == 0 {
 		return nil
@@ -93,10 +93,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 
 	var idx int
 	for idx < len(keys) {
-		// writer.Update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
-		// that error, writer.Update would still commit the transaction and return any error. If
+		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
+		// that error, writer.update would still commit the transaction and return any error. If
 		// nil, we continue to process the remaining keys.
-		err := writer.Update(commitTs, func(btxn *badger.Txn) error {
+		err := writer.update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
 				data := cache.deltas[key]
@@ -137,11 +137,9 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	})
 }
 
-// constructs the posting list from the disk using the passed iterator.
+// ReadPostingList constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
-//
-// key would now be owned by the posting list. So, ensure that it isn't reused
-// elsewhere.
+// key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
@@ -189,10 +187,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 		case BitSchemaPosting:
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
 		default:
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
 		if item.DiscardEarlierVersions() {

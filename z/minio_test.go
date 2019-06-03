@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 
-package x
+package z
 
 import (
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-// SubCommand a represents a sub-command in the command-line interface.
-type SubCommand struct {
-	Cmd  *cobra.Command
-	Conf *viper.Viper
+var (
+	bucketName = "dgraph-test"
+)
 
-	EnvPrefix string
+func TestCreateBucket(t *testing.T) {
+	client, err := NewMinioClient()
+	require.NoError(t, err)
+	if found, _ := client.BucketExists(bucketName); found {
+		require.NoError(t, client.RemoveBucket(bucketName))
+	}
+	require.NoError(t, client.MakeBucket(bucketName, ""))
 }

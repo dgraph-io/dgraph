@@ -24,14 +24,12 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -97,7 +95,7 @@ func makeKey(keyFile string, c *certConfig) (crypto.PrivateKey, error) {
 			Bytes: x509.MarshalPKCS1PrivateKey(k),
 		})
 	}
-	return nil, x.Errorf("Unsupported key type: %T", key)
+	return nil, errors.Errorf("Unsupported key type: %T", key)
 }
 
 // readKey tries to read and decode the contents of a private key file.

@@ -377,7 +377,7 @@ func ResetAcl() {
 			Set:       createUserNQuads,
 		}
 
-		if _, err := (&Server{}).doMutate(context.Background(), mu); err != nil {
+		if _, err := (&Server{}).doMutate(context.Background(), mu, false); err != nil {
 			return err
 		}
 		glog.Infof("Successfully upserted the groot account")
@@ -541,17 +541,12 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 }
 
 // authorizeMutation authorizes the mutation using the aclCache
-func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	// parse predicates from the mutation object
-	gmu, err := parseMutationObject(mu)
-	if err != nil {
-		return err
-	}
 	preds := parsePredsFromMutation(gmu.Set)
 
 	var userId string
@@ -596,7 +591,7 @@ func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
 		return nil
 	}
 
-	err = doAuthorizeMutation()
+	err := doAuthorizeMutation()
 	span := otrace.FromContext(ctx)
 	if span != nil {
 		span.Annotatef(nil, (&AccessEntry{

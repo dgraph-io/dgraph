@@ -19,19 +19,18 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math"
 	"sync"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/trace"
-
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type DiskStorage struct {
@@ -341,7 +340,7 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s raftpb.Snapshot) e
 	}
 	data, err := s.Marshal()
 	if err != nil {
-		return x.Wrapf(err, "wal.Store: While marshal snapshot")
+		return errors.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
 	if err := batch.Set(w.snapshotKey(), data, 0); err != nil {
 		return err
@@ -377,7 +376,7 @@ func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st raftpb.HardState
 	}
 	data, err := st.Marshal()
 	if err != nil {
-		return x.Wrapf(err, "wal.Store: While marshal hardstate")
+		return errors.Wrapf(err, "wal.Store: While marshal hardstate")
 	}
 	return batch.Set(w.HardStateKey(), data, 0)
 }
@@ -397,7 +396,7 @@ func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	for _, e := range es {
 		data, err := e.Marshal()
 		if err != nil {
-			return x.Wrapf(err, "wal.Store: While marshal entry")
+			return errors.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.EntryKey(e.Index)
 		if err := batch.Set(k, data, 0); err != nil {
@@ -661,7 +660,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entr
 		k := w.EntryKey(e.Index)
 		data, err := e.Marshal()
 		if err != nil {
-			return x.Wrapf(err, "wal.Append: While marshal entry")
+			return errors.Wrapf(err, "wal.Append: While marshal entry")
 		}
 		if err := batch.Set(k, data, 0); err != nil {
 			return err
