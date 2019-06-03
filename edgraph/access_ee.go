@@ -432,7 +432,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			return err
 		}
 
-		for _, u := range update.Schemas {
+		for _, u := range update.Preds {
 			preds = append(preds, u.Predicate)
 		}
 	}

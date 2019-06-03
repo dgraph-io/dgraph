@@ -40,7 +40,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 		return err
 	}
 
-	for _, update := range result.Schemas {
+	for _, update := range result.Preds {
 		State().Set(update.Predicate, *update)
 	}
 	return nil
@@ -397,10 +397,10 @@ func getType(typeName string) pb.Posting_ValType {
 	return pb.Posting_OBJECT
 }
 
-// SchemasAndTypes represents the parsed schema and type updates.
-type SchemasAndTypes struct {
-	Schemas []*pb.SchemaUpdate
-	Types   []*pb.TypeUpdate
+// ParsedSchema represents the parsed schema and type updates.
+type ParsedSchema struct {
+	Preds []*pb.SchemaUpdate
+	Types []*pb.TypeUpdate
 }
 
 func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
@@ -424,8 +424,8 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) (*SchemasAndTypes, error) {
-	var result SchemasAndTypes
+func Parse(s string) (*ParsedSchema, error) {
+	var result ParsedSchema
 
 	l := lex.NewLexer(s)
 	l.Run(lexText)
@@ -437,7 +437,7 @@ func Parse(s string) (*SchemasAndTypes, error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
-			if err := resolveTokenizers(result.Schemas); err != nil {
+			if err := resolveTokenizers(result.Preds); err != nil {
 				return nil, errors.Wrapf(err, "failed to enrich schema")
 			}
 			return &result, nil
@@ -456,7 +456,7 @@ func Parse(s string) (*SchemasAndTypes, error) {
 			if err != nil {
 				return nil, err
 			}
-			result.Schemas = append(result.Schemas, schema)
+			result.Preds = append(result.Preds, schema)
 		case itemNewLine:
 			// pass empty line
 
