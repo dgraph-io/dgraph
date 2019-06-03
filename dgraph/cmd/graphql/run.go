@@ -67,7 +67,11 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(GraphQL.Conf).Stop()
 			if err := run(); err != nil {
-				fmt.Printf("Error : %s\n", err)
+				if glog.V(2) {
+					fmt.Printf("Error : %+v\n", err)
+				} else {
+					fmt.Printf("Error : %s\n", err)
+				}
 				os.Exit(1)
 			}
 		},
@@ -88,7 +92,11 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(GraphQL.Conf).Stop()
 			if err := initDgraph(); err != nil {
-				fmt.Printf("Error : %s\n", err)
+				if glog.V(2) {
+					fmt.Printf("Error : %+v\n", err)
+				} else {
+					fmt.Printf("Error : %s\n", err)
+				}
 				os.Exit(1)
 			}
 		},
@@ -110,7 +118,10 @@ func run() error {
 
 	glog.Infof("Bringing up GraphQL API for Dgraph at %s\n", opt.alpha)
 
-	dgraphClient, disconnect := connect()
+	dgraphClient, disconnect, err := connect()
+	if err != nil {
+		return err
+	}
 	defer disconnect()
 
 	q := `query {
@@ -123,23 +134,23 @@ func run() error {
 	ctx := context.Background()
 	resp, err := dgraphClient.NewTxn().Query(ctx, q)
 	if err != nil {
-		return errors.Wrap(err, "Error querying GraphQL schema from Dgraph")
+		return errors.Wrap(err, "while querying GraphQL schema from Dgraph")
 	}
 
 	var schemas graphqlSchemas
 	err = json.Unmarshal(resp.Json, &schemas)
 	if err != nil {
-		return errors.Wrap(err, "Error reading GraphQL schema")
+		return errors.Wrap(err, "while reading GraphQL schema")
 	}
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
 	if gqlErr != nil {
-		return errors.Wrap(gqlErr, "Error parsing GraphQL schema")
+		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		return errors.Wrap(gqlErr, "Error validating GraphQL schema")
+		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
 	handler := &graphqlHandler{
@@ -150,7 +161,7 @@ func run() error {
 	http.Handle("/graphql", handler)
 
 	// the ports and urls etc that the endpoint serves should be input options
-	return http.ListenAndServe(":8765", nil)
+	return errors.Wrap(http.ListenAndServe(":8765", nil), "GraphQL server failed")
 }
 
 func initDgraph() error {
@@ -176,12 +187,12 @@ func initDgraph() error {
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
 	if gqlErr != nil {
-		return errors.Wrap(gqlErr, "cannot parse schema")
+		return fmt.Errorf("cannot parse schema %s", gqlErr)
 	}
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		return errors.Wrap(gqlErr, "schema is invalid")
+		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
 	}
 
 	var schemaB strings.Builder
@@ -236,10 +247,13 @@ func initDgraph() error {
 	}
 
 	dgSchema := schemaB.String()
-	fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)
+	glog.V(2).Infof("Built Dgraph schema:\n\n%s\n", dgSchema)
 
 	fmt.Printf("Loading schema into Dgraph at %q\n", opt.alpha)
-	dgraphClient, disconnect := connect()
+	dgraphClient, disconnect, err := connect()
+	if err != nil {
+		return err
+	}
 	defer disconnect()
 
 	// check the current Dgraph schema, is it compatible with these additions.
@@ -254,7 +268,7 @@ func initDgraph() error {
 	// plus auth token like live?
 	err = dgraphClient.Alter(ctx, op)
 	if err != nil {
-		return errors.Wrap(err, "failed to write Dgraph schema %s")
+		return errors.Wrap(err, "failed to write Dgraph schema")
 	}
 
 	s := graphqlSchema{
@@ -282,24 +296,28 @@ func initDgraph() error {
 	return nil
 }
 
-func connect() (*dgo.Dgraph, func()) {
-	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
-	x.Checkf(err, "While trying to load tls config")
-
+func connect() (*dgo.Dgraph, func(), error) {
 	var clients []api.DgraphClient
 	disconnect := func() {}
+
+	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	ds := strings.Split(opt.alpha, ",")
 	for _, d := range ds {
 		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
-		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
-		disconnect = func(c func()) func() {
-			return func() { c(); conn.Close() }
+		if err != nil {
+			disconnect()
+			return nil, nil, fmt.Errorf("couldn't connect to %s, %s", d, err)
+		}
+		disconnect = func(dis func()) func() {
+			return func() { dis(); conn.Close() }
 		}(disconnect)
 
-		dc := api.NewDgraphClient(conn)
-		clients = append(clients, dc)
+		clients = append(clients, api.NewDgraphClient(conn))
 	}
 
-	return dgo.NewDgraphClient(clients...), disconnect
+	return dgo.NewDgraphClient(clients...), disconnect, nil
 }
