@@ -555,6 +555,12 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 		}
 
 		allVars := res.QueryVars
+		// Add the variables that are needed outside the query block.
+		// For example, mutation block in upsert block will be using
+		// variables from the query block that is getting parsed here.
+		if len(needVars) != 0 {
+			allVars = append(allVars, &Vars{Needs: needVars})
+		}
 		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
