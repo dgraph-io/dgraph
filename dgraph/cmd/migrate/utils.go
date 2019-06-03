@@ -93,7 +93,7 @@ func getFileWriter(filename string) (*bufio.Writer, func(), error) {
 	return bufio.NewWriter(output), func() { output.Close() }, nil
 }
 
-func getColumnValues(columns []string, dataTypes []DataType,
+func getColumnValues(columns []string, dataTypes []dataType,
 	rows *sql.Rows) ([]interface{}, error) {
 	// ptrToValues takes a slice of pointers, deference them, and return the values referenced
 	// by these pointers
