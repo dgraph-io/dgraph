@@ -1740,7 +1740,7 @@ func (sg *SubGraph) replaceVarInFunc() error {
 		}
 		if len(sg.Params.uidToVal) == 0 {
 			// This means that the variable didn't have any values and hence there is nothing to add
-			// to args. Setting isEmpty to true would mean that they query is not processed.
+			// to args.
 			break
 		}
 		// We don't care about uids, just take all the values and put as args.
