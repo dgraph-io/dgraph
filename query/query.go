@@ -1491,7 +1491,7 @@ AssignStep:
 
 // Updates the doneVars map by picking up uid/values from the current Subgraph
 func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	// NOTE: although we initialize doneVars (req.vars) in ProcessQuery, this nil check is for
+	// NOTE: although we initialize doneVars (req.Vars) in ProcessQuery, this nil check is for
 	// non-root lookups that happen to other nodes. Don't use len(doneVars) == 0 !
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
@@ -2593,7 +2593,7 @@ type Request struct {
 
 	Subgraphs []*SubGraph
 
-	vars map[string]varValue
+	Vars map[string]varValue
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2605,7 +2605,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	defer stop()
 
 	// doneVars stores the processed variables.
-	req.vars = make(map[string]varValue)
+	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query
 	for i := 0; i < len(queries); i++ {
@@ -2647,7 +2647,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// The variable should be defined in this block or should have already been
 			// populated by some other block, otherwise we are not ready to execute yet.
-			_, ok := req.vars[v]
+			_, ok := req.Vars[v]
 			if !ok && !selfDep {
 				return false
 			}
@@ -2671,7 +2671,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
-			err = sg.recursiveFillVars(req.vars)
+			err = sg.recursiveFillVars(req.Vars)
 			if err != nil {
 				return err
 			}
@@ -2719,10 +2719,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			sg := req.Subgraphs[idx]
 
 			var sgPath []*SubGraph
-			if err := sg.populateVarMap(req.vars, sgPath); err != nil {
+			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
 				return err
 			}
-			if err := sg.populatePostAggregation(req.vars, []*SubGraph{}, nil); err != nil {
+			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
 		}
