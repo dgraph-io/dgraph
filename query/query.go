@@ -1661,6 +1661,9 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 	return nil
 }
 
+// recursiveFillVars fills the value of variables before a query is to be processed using the result
+// of the values (doneVars) which were computed by other queries which could be run before this
+// query.
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	err := sg.fillVars(doneVars)
 	if err != nil {
@@ -1693,7 +1696,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 				lists = append(lists, l.Uids)
 
-			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar) && len(l.Vals) != 0:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
 				// This should happen only once.
 				// TODO: This allows only one value var per subgraph, change it later
 				sg.Params.uidToVal = l.Vals
@@ -2398,7 +2401,10 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 }
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
-	if len(sg.Params.uidToVal) == 0 {
+	// nil has a different from an initialized map of zero length here. If the variable didn't return
+	// any values then uidToVal would be an empty with zero length. If the variable was used before
+	// definition, the uidToVal would be nil.
+	if sg.Params.uidToVal == nil {
 		return errors.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
 
