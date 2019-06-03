@@ -343,6 +343,11 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	return fieldName
 }
 
+func emptyIneqFnWithVar(sg *SubGraph) bool {
+	return sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && len(sg.SrcFunc.Args) == 0 &&
+		len(sg.Params.NeedsVar) > 0
+}
+
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {
@@ -2671,8 +2676,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// 1. It just does aggregation and math functions which is when sg.Params.IsEmpty is true.
 			// 2. Its has an inequality fn at root without any args which can happen when it uses
 			// value variables for args which don't expand to any value.
-			if sg.Params.IsEmpty ||
-				sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && len(sg.SrcFunc.Args) == 0 {
+			if sg.Params.IsEmpty || emptyIneqFnWithVar(sg) {
 				errChan <- nil
 				continue
 			}
