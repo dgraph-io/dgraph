@@ -176,11 +176,11 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	result, err := schema.Parse(buf.String())
 	require.NoError(t, err)
 
-	require.Equal(t, 2, len(result.Schemas))
-	require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
+	require.Equal(t, 2, len(result.Preds))
+	require.Equal(t, "uid", types.TypeID(result.Preds[0].ValueType).Name())
 	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
-		result.Schemas[1].Predicate)
-	require.Equal(t, "uid", types.TypeID(result.Schemas[1].ValueType).Name())
+		result.Preds[1].Predicate)
+	require.Equal(t, "uid", types.TypeID(result.Preds[1].ValueType).Name())
 
 	require.Equal(t, 1, len(result.Types))
 	require.True(t, proto.Equal(result.Types[0], personType))
