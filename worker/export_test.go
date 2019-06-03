@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"io/ioutil"
@@ -29,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -44,6 +46,30 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+var personType = &pb.TypeUpdate{
+	TypeName: "Person",
+	Fields: []*pb.SchemaUpdate{
+		{
+			Predicate:   "name",
+			ValueType:   pb.Posting_STRING,
+			NonNullable: true,
+		},
+		{
+			Predicate:       "friend",
+			ValueType:       pb.Posting_UID,
+			List:            true,
+			NonNullable:     true,
+			NonNullableList: true,
+		},
+		{
+			Predicate:      "friend_not_served",
+			ValueType:      pb.Posting_OBJECT,
+			List:           true,
+			ObjectTypeName: "Person",
+		},
+	},
+}
 
 func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
@@ -102,6 +128,16 @@ func initTestExport(t *testing.T, schemaStr string) {
 	txn.Set(x.SchemaKey("friend_not_served"), val)
 	require.NoError(t, txn.CommitAt(1, nil))
 	txn.Discard()
+
+	val, err = personType.Marshal()
+	require.NoError(t, err)
+
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	txn.Set(x.TypeKey("Person"), val)
+	require.NoError(t, err)
+	require.NoError(t, txn.CommitAt(1, nil))
+	txn.Discard()
+
 	populateGraphExport(t)
 }
 
@@ -134,32 +170,26 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 	r, err := gzip.NewReader(f)
 	require.NoError(t, err)
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
 
-	scanner := bufio.NewScanner(r)
-	count := 0
-	for scanner.Scan() {
-		result, err := schema.Parse(scanner.Text())
-		require.NoError(t, err)
-		require.Equal(t, 1, len(result.Schemas))
-		// We wrote schema for only two predicates
-		if result.Schemas[0].Predicate == "friend" {
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		} else {
-			require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
-				result.Schemas[0].Predicate)
-			require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
-		}
-		count = len(result.Schemas)
-	}
-	require.NoError(t, scanner.Err())
-	// This order will be preserved due to file naming
-	require.Equal(t, 1, count)
+	result, err := schema.Parse(buf.String())
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(result.Schemas))
+	require.Equal(t, "uid", types.TypeID(result.Schemas[0].ValueType).Name())
+	require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range",
+		result.Schemas[1].Predicate)
+	require.Equal(t, "uid", types.TypeID(result.Schemas[1].ValueType).Name())
+
+	require.Equal(t, 1, len(result.Types))
+	require.True(t, proto.Equal(result.Types[0], personType))
 }
 
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	initTestExport(t, "name:string @index .")
-	// Remove already existing export folders is any.
+
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
@@ -250,6 +280,9 @@ func TestExportRdf(t *testing.T) {
 }
 
 func TestExportJson(t *testing.T) {
+	// Index the name predicate. We ensure it doesn't show up on export.
+	initTestExport(t, "name:string @index .")
+
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
