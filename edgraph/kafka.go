@@ -45,6 +45,9 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 		glog.V(1).Infof("Message stored: value = %+v, timestamp = %v, topic = %s",
 			list, message.Timestamp, message.Topic)
 
+		// marking of the message must be done after the message has been permanently stored
+		// in badger. Otherwise marking a message prematurely may result in message loss
+		// if the server crashes right after the message is marked.
 		session.MarkMessage(message, "")
 	}
 
@@ -79,6 +82,9 @@ func (s *ServerState) setupKafkaSource() {
 	}
 }
 
+// getKafkaConsumer tries to create a consumer by connecting to Kafka at the specified brokers.
+// If an error errors while creating the consumer, this function will wait and retry up to 10 times
+// before giving up and returning an error
 func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_2_0_0
@@ -137,6 +143,9 @@ func (s *ServerState) setupKafkaTarget() {
 	}
 }
 
+// getKafkaProducer tries to create a producer by connecting to Kafka at the specified brokers.
+// If an error errors while creating the producer, this function will wait and retry up to 10 times
+// before giving up and returning an error
 func getKafkaProducer(targetBrokers string) (sarama.SyncProducer, error) {
 	conf := sarama.NewConfig()
 	conf.Producer.Return.Successes = true

@@ -173,8 +173,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
-	flag.String("kafka_target_brokers", "", "The Kafka brokers to publish updates")
-	flag.String("kafka_source_brokers", "", "The Kafka brokers to receive updates")
+	flag.String("kafka_target_brokers", "", "The Kafka brokers to publish updates to")
+	flag.String("kafka_source_brokers", "", "The Kafka brokers to receive updates from")
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
