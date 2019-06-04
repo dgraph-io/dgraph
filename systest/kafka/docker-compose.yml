@@ -3,28 +3,30 @@
 version: "3.5"
 services:
   zookeeper:
-    image: 'bitnami/zookeeper:latest'
     container_name: zookeeper
+    image: wurstmeister/zookeeper
     ports:
-      - '2181:2181'
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      - "2181:2181"
   kafka:
-    image: 'bitnami/kafka:latest'
+    image: wurstmeister/kafka
     container_name: kafka
     ports:
-      - '9092:9092'
+      - "9092:9092"
     depends_on:
       - zookeeper
     environment:
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
     working_dir: /data/zero1
     labels:
       cluster: test
+    depends_on:
+      - kafka
     ports:
     - 5180:5180
     - 6180:6180
@@ -52,5 +54,41 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=1 --kafka_brokers kafka:9092
+      --logtostderr -v=1 --kafka_target_brokers kafka:9092
+  zero2:
+    image: dgraph/dgraph:latest
+    container_name: zero2
+    working_dir: /data/zero2
+    labels:
+      cluster: test
+    depends_on:
+      - kafka
+    ports:
+    - 5280:5280
+    - 6280:6280
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 200 --idx=1 --my=zero1:5280 --logtostderr -v=2
+      --bindall
+  alpha2:
+    image: dgraph/dgraph:latest
+    container_name: alpha2
+    working_dir: /data/alpha2
+    depends_on:
+      - kafka
+    labels:
+      cluster: test
+    ports:
+    - 8280:8280
+    - 9280:9280
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 200 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5280
+      --logtostderr -v=1 --kafka_source_brokers kafka:9092
 volumes: {}

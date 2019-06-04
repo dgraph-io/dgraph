@@ -29,23 +29,18 @@ func (consumer *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-
-	// NOTE:
-	// Do not move the code below to a goroutine.
-	// The `ConsumeClaim` itself is called within a goroutine, see:
-	// https://github.com/Shopify/sarama/blob/master/consumer_group.go#L27-L29
 	for message := range claim.Messages() {
-
 		var list pb.KVList
 		if err := list.Unmarshal(message.Value); err != nil {
 			glog.Errorf("error while unmarshaling from consumed message: %v", err)
 			return err
 		}
 
-		listCh := make(chan *pb.KVList, 1)
-		listCh <- &list
-		close(listCh)
-		State.Pstore.LoadLists(listCh, 16)
+		loader := State.Pstore.NewLoader(16)
+		for _, kv := range list.Kv {
+			loader.Set(kv)
+		}
+		loader.Finish()
 
 		glog.V(1).Infof("Message stored: value = %+v, timestamp = %v, topic = %s",
 			list, message.Timestamp, message.Topic)
@@ -71,7 +66,20 @@ func (s *ServerState) setupKafkaSource() {
 		}
 
 		ctx := context.Background()
-		client, err := sarama.NewConsumerGroup(strings.Split(sourceBrokers, ","), kafkaGroup, config)
+
+		var client sarama.ConsumerGroup
+		var err error
+		for i := 0; i < 10; i++ {
+			client, err = sarama.NewConsumerGroup(strings.Split(sourceBrokers, ","), kafkaGroup, config)
+			if err == nil {
+				break
+			} else {
+				glog.Errorf("unable to create the kafka consumer, "+
+					"will retry in 5 seconds: %v", err)
+				time.Sleep(5 * time.Second)
+			}
+		}
+
 		if err != nil {
 			panic(err)
 		}
