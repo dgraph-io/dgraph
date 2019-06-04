@@ -435,6 +435,13 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	data, _, err = queryWithTs(q1, "application/graphqlpm", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+
+	// Aborting a transaction
+	url := fmt.Sprintf("%s/commit?startTs=%d&abort=true", addr, ts)
+	req, err := http.NewRequest("POST", url, nil)
+	require.NoError(t, err)
+	_, _, err = runRequest(req)
+	require.NoError(t, err)
 }
 
 func TestAlterAllFieldsShouldBeSet(t *testing.T) {
