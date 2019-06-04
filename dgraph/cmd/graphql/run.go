@@ -132,7 +132,7 @@ func run() {
 		x.Checkf(gqlErr, "Error parsing GraphQL schema")
 	}
 
-	addScalars(doc)
+	gschema.AddScalars(doc)
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
@@ -140,7 +140,7 @@ func run() {
 	}
 
 	gschema.GenerateCompleteSchema(schema)
-	fmt.Println(schema.Stringify(fullSchmea))
+	fmt.Println(gschema.Stringify(schema))
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,

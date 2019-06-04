@@ -7,6 +7,9 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
+// SupportedScalars will be the list of scalar types that we will support.
+type SupportedScalars string
+
 type schRuleFunc func(schema *ast.Schema) *gqlerror.Error
 
 type schRule struct {
@@ -15,6 +18,35 @@ type schRule struct {
 }
 
 var schRules []schRule
+
+const (
+	INT      SupportedScalars = "Int"
+	FLOAT    SupportedScalars = "Float"
+	STRING   SupportedScalars = "String"
+	DATETIME SupportedScalars = "DateTime"
+	ID       SupportedScalars = "ID"
+	BOOLEAN  SupportedScalars = "Boolean"
+)
+
+// AddScalars adds simply adds all the supported scalars in the schema
+func AddScalars(doc *ast.SchemaDocument) {
+	addScalarInSchema(INT, doc)
+	addScalarInSchema(FLOAT, doc)
+	addScalarInSchema(ID, doc)
+	addScalarInSchema(DATETIME, doc)
+	addScalarInSchema(STRING, doc)
+	addScalarInSchema(BOOLEAN, doc)
+}
+
+func addScalarInSchema(sType SupportedScalars, doc *ast.SchemaDocument) {
+	for _, def := range doc.Definitions {
+		if def.Kind == "SCALAR" && def.Name == string(sType) { // Just to check if it is already added
+			return
+		}
+	}
+
+	doc.Definitions = append(doc.Definitions, &ast.Definition{Kind: ast.Scalar, Name: string(sType)})
+}
 
 // AddSchRule function adds a new schema rule to the global array schRules
 func AddSchRule(name string, f schRuleFunc) {
@@ -44,6 +76,20 @@ func ValidateSchema(schema *ast.Schema) gqlerror.List {
 func GenerateCompleteSchema(schema *ast.Schema) {
 	extenderMap := make(map[string]*ast.Definition)
 
+	schema.Query = &ast.Definition{
+		Kind:        ast.Object,
+		Description: "Query object contains all the query functions",
+		Name:        "Query",
+		Fields:      make([]*ast.FieldDefinition, 0),
+	}
+
+	schema.Mutation = &ast.Definition{
+		Kind:        ast.Object,
+		Description: "Mutation object contains all the mutation functions",
+		Name:        "Mutation",
+		Fields:      make([]*ast.FieldDefinition, 0),
+	}
+
 	for _, defn := range schema.Types {
 		if defn.Kind == "OBJECT" {
 			extenderMap[defn.Name+"Input"] = genInputType(schema, defn)
@@ -53,6 +99,7 @@ func GenerateCompleteSchema(schema *ast.Schema) {
 			extenderMap["Add"+defn.Name+"Payload"] = genAddResultType(defn)
 			extenderMap["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
 			extenderMap["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
+
 			addQueryType(defn, schema.Query)
 			addMutationType(defn, schema.Mutation)
 		}
@@ -281,10 +328,18 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 		if schema.Types[fld.Type.Name()].Kind == "OBJECT" {
-			newDefn := &ast.FieldDefinition{Name: fld.Type.Name() + "Ref"}
+			newDefn := &ast.FieldDefinition{
+				Name: fld.Name,
+				Type: &ast.Type{
+					NamedType: fld.Type.Name() + "Ref",
+					NonNull:   fld.Type.NonNull,
+				},
+			}
 			fldList = append(fldList, newDefn)
 		} else {
 			newFld := *fld
+			newFldType := *fld.Type
+			newFld.Type = &newFldType
 			fldList = append(fldList, &newFld)
 		}
 	}
@@ -318,7 +373,7 @@ func generateObjectString(typ *ast.Definition) string {
 
 	sch.WriteString("type " + typ.Name + " {\n")
 	for _, fld := range typ.Fields {
-		sch.WriteString("\t" + fld.Name + ":" + fld.Type.String() + "\n")
+		sch.WriteString("\t" + fld.Name + ": " + fld.Type.String() + "\n")
 	}
 	sch.WriteString("}\n")
 
@@ -328,7 +383,7 @@ func generateObjectString(typ *ast.Definition) string {
 func generateScalarString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	sch.WriteString("Scalar " + typ.Name + "\n")
+	sch.WriteString("scalar " + typ.Name + "\n")
 	return sch.String()
 }
 
@@ -346,7 +401,7 @@ func generateQMString(flag bool, qry *ast.Definition) string {
 		sch.WriteString("\t" + fld.Name + "(")
 		argLen := len(fld.Arguments) // I hope it returns size of array
 		for idx, arg := range fld.Arguments {
-			sch.WriteString(arg.Name + ":" + arg.Type.String())
+			sch.WriteString(arg.Name + ": " + arg.Type.String())
 			if idx != argLen-1 {
 				sch.WriteString(",")
 			}
@@ -362,27 +417,36 @@ func generateQMString(flag bool, qry *ast.Definition) string {
 func Stringify(schema *ast.Schema) string {
 	var sch, object, scalar, input, ref, filter, payload, query, mutation strings.Builder
 
-	for _, typ := range schema.Types {
+	if schema.Types == nil {
+		return ""
+	}
+
+	for name, typ := range schema.Types {
 		if typ.Kind == ast.Object {
-			object.WriteString(generateObjectString(typ))
+			object.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Scalar {
 			scalar.WriteString(generateScalarString(typ))
 		} else if typ.Kind == ast.InputObject {
-			input.WriteString(generateInputString(typ))
-		} else if string(typ.Kind)[len(string(typ.Kind))-6:len(string(typ.Kind))] == "Filter" {
-			filter.WriteString(generateInputString(typ))
-		} else if string(typ.Kind)[len(string(typ.Kind))-7:len(string(typ.Kind))] == "Payload" {
-			payload.WriteString(generateObjectString(typ))
-		} else if string(typ.Kind)[len(string(typ.Kind))-3:len(string(typ.Kind))] == "Ref" {
-			ref.WriteString(generateInputString(typ))
+			input.WriteString(generateInputString(typ) + "\n")
+		} else if len(name) >= 6 && name[len(name)-6:len(name)] == "Filter" {
+			filter.WriteString(generateInputString(typ) + "\n")
+		} else if len(name) >= 7 && name[len(name)-7:len(name)] == "Payload" {
+			payload.WriteString(generateObjectString(typ) + "\n")
+		} else if len(name) >= 3 && name[len(name)-3:len(name)] == "Ref" {
+			ref.WriteString(generateInputString(typ) + "\n")
 		}
 	}
 
-	query.WriteString(generateQMString(true, schema.Query))
-	mutation.WriteString(generateQMString(false, schema.Mutation))
+	if schema.Query != nil {
+		query.WriteString(generateQMString(true, schema.Query))
+	}
+
+	if schema.Mutation != nil {
+		mutation.WriteString(generateQMString(false, schema.Mutation))
+	}
 
 	sch.WriteString(object.String())
-	sch.WriteString(scalar.String())
+	sch.WriteString(scalar.String() + "\n")
 	sch.WriteString(input.String())
 	sch.WriteString(ref.String())
 	sch.WriteString(filter.String())
