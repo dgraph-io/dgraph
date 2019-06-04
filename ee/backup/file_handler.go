@@ -43,45 +43,8 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 	return json.Unmarshal(b, m)
 }
 
-// Create prepares the a path to save backup files.
-// Returns error on failure, nil on success.
-func (h *fileHandler) Create(uri *url.URL, req *Request) error {
-	var dir, path, fileName string
-
-	if !pathExist(uri.Path) {
-		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
-	}
-
-	// Find the max Since value from the latest backup. This is done only when starting
-	// a new backup, not when creating a manifest.
-	if req.Manifest == nil {
-		var lastManifest string
-		suffix := filepath.Join(string(filepath.Separator), backupManifest)
-		_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
-			if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
-				lastManifest = path
-			}
-			return false
-		})
-
-		if lastManifest != "" {
-			var m Manifest
-			if err := h.readManifest(lastManifest, &m); err != nil {
-				return err
-			}
-
-			req.Since = m.Since
-		}
-		fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
-	} else {
-		fileName = backupManifest
-	}
-
-	// If a full backup is being forced, force Since to zero to stream all
-	// the contents from the database.
-	if req.Backup.ForceFull {
-		req.Since = 0
-	}
+func (h *fileHandler) createFiles(uri *url.URL, req *Request, fileName string) error {
+	var dir, path string
 
 	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
 	err := os.Mkdir(dir, 0700)
@@ -95,8 +58,54 @@ func (h *fileHandler) Create(uri *url.URL, req *Request) error {
 		return err
 	}
 	glog.V(2).Infof("Using file path: %q", path)
-
 	return nil
+}
+
+// CreateBackupFiles prepares the a path to save backup files and computes the timestamp
+// from which to start the backup.
+func (h *fileHandler) CreateBackupFiles(uri *url.URL, req *Request) error {
+	var fileName string
+
+	if !pathExist(uri.Path) {
+		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	// Find the max Since value from the latest backup.
+	var lastManifest string
+	suffix := filepath.Join(string(filepath.Separator), backupManifest)
+	_ = x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+		if !isdir && strings.HasSuffix(path, suffix) && path > lastManifest {
+			lastManifest = path
+		}
+		return false
+	})
+
+	if lastManifest != "" {
+		var m Manifest
+		if err := h.readManifest(lastManifest, &m); err != nil {
+			return err
+		}
+
+		req.Since = m.Since
+	}
+	fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
+
+	// If a full backup is being forced, force Since to zero to stream all
+	// the contents from the database.
+	if req.Backup.ForceFull {
+		req.Since = 0
+	}
+
+	return h.createFiles(uri, req, fileName)
+}
+
+// CreateManifest creates the backup manifest file.
+func (h *fileHandler) CreateManifest(uri *url.URL, req *Request, manifest *Manifest) error {
+	if !pathExist(uri.Path) {
+		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	return h.createFiles(uri, req, backupManifest)
 }
 
 // Load uses tries to load any backup files found.
@@ -127,7 +136,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		if err := h.readManifest(manifest, &m); err != nil {
 			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
-		if m.ReadTs == 0 || m.Since == 0 || len(m.Groups) == 0 {
+		if m.Since == 0 || m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
 				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
@@ -136,7 +145,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 		path := filepath.Dir(manifest)
 		for _, groupId := range m.Groups {
-			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.Since, groupId))
 			fp, err := os.Open(file)
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to open %q", file)

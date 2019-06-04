@@ -38,19 +38,19 @@ const (
 	// {
 	//   "since": 2280,
 	//   "groups": [ 1, 2, 3 ],
-	//   "read_ts": 110001
 	// }
 	//
-	// "since" is the maximum data version, obtained from Backup() after it runs. This value
-	// is used for subsequent incremental backups.
+	// "since" is the read timestamp used at the backup request. This value is called "since"
+	// because it used by subsequent incremental backups.
 	// "groups" are the group IDs that participated.
-	// "read_ts" is the read timestamp used at the backup request.
 	backupManifest = `manifest.json`
 )
 
 // handler interface is implemented by URI scheme handlers.
 // When adding new scheme handles, for example 'azure://', an object will implement
 // this interface to supply Dgraph with a way to create or load backup files into DB.
+// For all methods below, the URL object is parsed as described in `newHandler' and
+// the Request object has the DB, estimated tablets size, and backup parameters.
 type handler interface {
 	// Handlers must know how to Write to their URI location.
 	// These function calls are used by both Create and Load.
@@ -59,24 +59,18 @@ type handler interface {
 	// Create prepares the location for write operations. This function is defined for
 	// creating new backup files at a location described by the URL. The caller of this
 	// comes from an HTTP request.
-	//
-	// The URL object is parsed as described in `newHandler`.
-	// The Request object has the DB, estimated tablets size, and backup parameters.
-	Create(*url.URL, *Request) error
+	CreateBackupFiles(*url.URL, *Request) error
+
+	// CreateManifest prepares the manifest for writing.
+	CreateManifest(*url.URL, *Request, *Manifest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
-	//
-	// The URL object is parsed as described in `newHandler`.
-	// The loadFn receives the files as they are processed by a handler, to do the actual
-	// load to DB.
 	Load(*url.URL, loadFn) (uint64, error)
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
-	//
-	// The URL object is parsed as described in `newHandler`.
 	ListManifests(*url.URL) ([]string, error)
 
 	// ReadManifest will read the manifest at the given location and load it into the given
@@ -96,7 +90,7 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
-// newHandler parses the requested URI, finds a handler and then tries to create a session.
+// newHandler parses the requested URI and finds the corresponding handler.
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -119,22 +113,14 @@ func getHandler(scheme string) handler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func (r *Request) newHandler() (handler, error) {
+func (r *Request) newHandler(uri *url.URL) (handler, error) {
 	var h handler
-
-	uri, err := url.Parse(r.Backup.Destination)
-	if err != nil {
-		return nil, err
-	}
 
 	h = getHandler(uri.Scheme)
 	if h == nil {
 		return nil, errors.Errorf("Unable to handle url: %s", uri)
 	}
 
-	if err = h.Create(uri, r); err != nil {
-		return nil, err
-	}
 	return h, nil
 }
 

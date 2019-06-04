@@ -89,10 +89,11 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		SecretKey:    secretKey,
 		SessionToken: sessionToken,
 		Anonymous:    anonymous,
-		// TODO(martinmr): Check if this field can be removed.
-		ForceFull: forceFull,
+		ForceFull:    forceFull,
 	}
+
 	m := backup.Manifest{Groups: worker.KnownGroups()}
+	m.Since = req.ReadTs
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -103,15 +104,8 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		req := req
 		req.GroupId = gid
 		go func(req *pb.BackupRequest) {
-			res, err := worker.BackupGroup(ctx, req)
+			_, err := worker.BackupGroup(ctx, req)
 			errCh <- err
-
-			// Update manifest if appropriate.
-			m.Lock()
-			if res.Since > m.Since {
-				m.Since = res.Since
-			}
-			m.Unlock()
 		}(&req)
 	}
 
@@ -122,6 +116,6 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	br := &backup.Request{Backup: &req, Manifest: &m}
-	return br.Complete(ctx)
+	br := &backup.Request{Backup: &req}
+	return br.Complete(ctx, &m)
 }

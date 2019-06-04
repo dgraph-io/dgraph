@@ -252,12 +252,11 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tSince\tReadTs\tGroups\n")
+	fmt.Printf("Name\tSince\tGroups\n")
 	for _, manifest := range manifests {
 		fmt.Printf("%v\t%v\t%v\t%v\n",
 			manifest.FileName,
 			manifest.Since,
-			manifest.ReadTs,
 			manifest.Groups)
 	}
 

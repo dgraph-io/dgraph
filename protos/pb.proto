@@ -492,8 +492,8 @@ message BackupRequest {
   bool force_full = 9;
 }
 
+// Dummy empty response
 message BackupResponse {
-	uint64 since = 1;
 }
 
 message ExportRequest {

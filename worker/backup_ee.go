@@ -28,12 +28,7 @@ func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (
 	*pb.BackupResponse, error) {
 
 	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
-	res, err := backupCurrentGroup(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
+	return backupCurrentGroup(ctx, req)
 }
 
 func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (
@@ -76,6 +71,5 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.BackupResponse,
 		return nil, err
 	}
 
-	glog.V(2).Infof("Backup request to gid=%d, since=%d. OK\n", in.GroupId, res.Since)
 	return res, nil
 }

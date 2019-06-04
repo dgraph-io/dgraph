@@ -145,55 +145,11 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	return mc, err
 }
 
-// Create creates a new session and sends our data stream to an object.
-// URI formats:
-//   minio://<host>/bucket/folder1.../folderN?secure=true|false
-//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
-//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
-//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
-func (h *s3Handler) Create(uri *url.URL, req *Request) error {
-	var objectName string
-
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
-
-	h.req = req
-	mc, err := h.setup(uri)
-	if err != nil {
-		return err
-	}
-
-	if req.Manifest == nil {
-		var lastManifest string
-		done := make(chan struct{})
-		defer close(done)
-		suffix := "/" + backupManifest
-		for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
-			if strings.HasSuffix(object.Key, suffix) && object.Key > lastManifest {
-				lastManifest = object.Key
-			}
-		}
-		if lastManifest != "" {
-			var m Manifest
-			if err := h.readManifest(mc, lastManifest, &m); err != nil {
-				return err
-			}
-
-			req.Since = m.Since
-		}
-		objectName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
-	} else {
-		objectName = backupManifest
-	}
-
-	// If a full backup is being forced, force the value of Since to zero to stream all
-	// the contents from the database.
-	if req.Backup.ForceFull {
-		req.Since = 0
-	}
+func (h *s3Handler) createObject(uri *url.URL, req *Request, mc *minio.Client,
+	objectName string) {
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-	object := filepath.Join(h.objectPrefix,
-		fmt.Sprintf(backupPathFmt, req.Backup.UnixTs),
+	object := filepath.Join(h.objectPrefix, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs),
 		objectName)
 	glog.V(2).Infof("Sending data to %s blob %q ...", uri.Scheme, object)
 
@@ -202,7 +158,64 @@ func (h *s3Handler) Create(uri *url.URL, req *Request) error {
 	go func() {
 		h.cerr <- h.upload(mc, object)
 	}()
+}
 
+// CreateBackupFiles creates a new session and prepares the data stream for the
+// backup. It also computes the timestamp from which to start the backup.
+// URI formats:
+//   minio://<host>/bucket/folder1.../folderN?secure=true|false
+//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
+//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
+//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
+func (h *s3Handler) CreateBackupFiles(uri *url.URL, req *Request) error {
+	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
+
+	h.req = req
+	mc, err := h.setup(uri)
+	if err != nil {
+		return err
+	}
+
+	// Find the max Since value from the latest backup.
+	var lastManifest string
+	done := make(chan struct{})
+	defer close(done)
+	suffix := "/" + backupManifest
+	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, done) {
+		if strings.HasSuffix(object.Key, suffix) && object.Key > lastManifest {
+			lastManifest = object.Key
+		}
+	}
+	if lastManifest != "" {
+		var m Manifest
+		if err := h.readManifest(mc, lastManifest, &m); err != nil {
+			return err
+		}
+		req.Since = m.Since
+	}
+
+	// If a full backup is being forced, force the value of Since to zero to stream all
+	// the contents from the database.
+	if req.Backup.ForceFull {
+		req.Since = 0
+	}
+
+	objectName := fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
+	h.createObject(uri, req, mc, objectName)
+	return nil
+}
+
+// CreateManifest creates an object to store the backup manifest file.
+func (h *s3Handler) CreateManifest(uri *url.URL, req *Request, manifest *Manifest) error {
+	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
+
+	h.req = req
+	mc, err := h.setup(uri)
+	if err != nil {
+		return err
+	}
+
+	h.createObject(uri, req, mc, backupManifest)
 	return nil
 }
 
@@ -256,7 +269,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		if err := h.readManifest(mc, manifest, &m); err != nil {
 			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
-		if m.ReadTs == 0 || m.Since == 0 || len(m.Groups) == 0 {
+		if m.Since == 0 || m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
 				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
@@ -265,7 +278,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 		path := filepath.Dir(manifest)
 		for _, groupId := range m.Groups {
-			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.ReadTs, groupId))
+			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)
