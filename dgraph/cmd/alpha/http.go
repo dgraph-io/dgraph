@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
@@ -39,6 +40,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/pkg/errors"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -429,14 +431,19 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 		StartTs: startTs,
 		Aborted: true,
 	}
-	if _, err := worker.CommitOverNetwork(context.Background(), tc); err != nil {
+
+	_, err := worker.CommitOverNetwork(context.Background(), tc)
+	switch err {
+	case y.ErrAborted:
+		return map[string]interface{}{
+			"code":    x.Success,
+			"message": "Done",
+		}, nil
+	case nil:
+		return nil, errors.Errorf("transaction could not be aborted")
+	default:
 		return nil, err
 	}
-
-	response := map[string]interface{}{}
-	response["code"] = x.Success
-	response["message"] = "Done"
-	return response, nil
 }
 
 func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
