@@ -28,7 +28,8 @@ func (consumer *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 }
 
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
-func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
+	claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
 		var list pb.KVList
 		if err := list.Unmarshal(message.Value); err != nil {
@@ -38,9 +39,13 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 
 		loader := State.Pstore.NewLoader(16)
 		for _, kv := range list.Kv {
-			loader.Set(kv)
+			if err := loader.Set(kv); err != nil {
+				glog.Errorf("error while setting kv %v to loader: %v", kv, err)
+			}
 		}
-		loader.Finish()
+		if err := loader.Finish(); err != nil {
+			glog.Errorf("error while finishing the loader: %v", err)
+		}
 
 		glog.V(1).Infof("Message stored: value = %+v, timestamp = %v, topic = %s",
 			list, message.Timestamp, message.Topic)
@@ -66,7 +71,7 @@ func (s *ServerState) setupKafkaSource() {
 		}
 
 		consumer := Consumer{
-			ready: make(chan bool, 0),
+			ready: make(chan bool),
 		}
 		go func() {
 			for {
@@ -127,6 +132,10 @@ func (s *ServerState) setupKafkaTarget() {
 				Topic: kafkaTopic,
 				Value: sarama.ByteEncoder(listBytes),
 			})
+			if err != nil {
+				glog.Errorf("error while producing list %v to kafka: %v", list, err)
+				return
+			}
 
 			glog.V(1).Infof("produced a list with %d messages to kafka", len(list.Kv))
 		}
