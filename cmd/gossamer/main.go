@@ -46,7 +46,7 @@ func init() {
 	app.Author = "Chainsafe Systems 2019"
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
-		//place for commands such as dumpConfig,
+		dumpConfigCommand,
 	}
 	app.Flags = append(app.Flags, nodeFlags...)
 	app.Flags = append(app.Flags, rpcFlags...)
