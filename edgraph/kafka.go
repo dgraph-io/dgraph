@@ -56,37 +56,18 @@ func (s *ServerState) setupKafkaSource() {
 	sourceBrokers := Config.KafkaOpt.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
 	if len(sourceBrokers) > 0 {
-		config := sarama.NewConfig()
-		config.Version = sarama.V2_2_0_0
-		/**
-		 * Setup a new Sarama consumer group
-		 */
+		client, err := getKafkaConsumer(sourceBrokers)
+		if err != nil {
+			glog.Errorf("unable to get kafka consumer and will not receive updates: %v", err)
+			return
+		}
+
 		consumer := Consumer{
 			ready: make(chan bool, 0),
 		}
-
-		ctx := context.Background()
-
-		var client sarama.ConsumerGroup
-		var err error
-		for i := 0; i < 10; i++ {
-			client, err = sarama.NewConsumerGroup(strings.Split(sourceBrokers, ","), kafkaGroup, config)
-			if err == nil {
-				break
-			} else {
-				glog.Errorf("unable to create the kafka consumer, "+
-					"will retry in 5 seconds: %v", err)
-				time.Sleep(5 * time.Second)
-			}
-		}
-
-		if err != nil {
-			panic(err)
-		}
-
 		go func() {
 			for {
-				err := client.Consume(ctx, []string{kafkaTopic}, &consumer)
+				err := client.Consume(context.Background(), []string{kafkaTopic}, &consumer)
 				if err != nil {
 					glog.Errorf("error while consuming from kafka: %v", err)
 				}
@@ -98,27 +79,32 @@ func (s *ServerState) setupKafkaSource() {
 	}
 }
 
+func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
+	config := sarama.NewConfig()
+	config.Version = sarama.V2_2_0_0
+
+	var client sarama.ConsumerGroup
+	var err error
+	for i := 0; i < 10; i++ {
+		client, err = sarama.NewConsumerGroup(strings.Split(sourceBrokers, ","), kafkaGroup, config)
+		if err == nil {
+			break
+		} else {
+			glog.Errorf("unable to create the kafka consumer, "+
+				"will retry in 5 seconds: %v", err)
+			time.Sleep(5 * time.Second)
+		}
+	}
+	return client, err
+}
+
 // setupKafkaTarget will create a kafka producer and use it to send updates to
 // the kafka cluster
 func (s *ServerState) setupKafkaTarget() {
 	targetBrokers := Config.KafkaOpt.TargetBrokers
 	glog.Infof("target kafka brokers: %v", targetBrokers)
 	if len(targetBrokers) > 0 {
-		conf := sarama.NewConfig()
-		conf.Producer.Return.Successes = true
-
-		var producer sarama.SyncProducer
-		var err error
-		for i := 0; i < 10; i++ {
-			producer, err = sarama.NewSyncProducer(strings.Split(targetBrokers, ","), conf)
-			if err == nil {
-				break
-			} else {
-				glog.Errorf("unable to create the kafka sync producer, "+
-					"will retry in 5 seconds: %v", err)
-				time.Sleep(5 * time.Second)
-			}
-		}
+		producer, err := getKafkaProducer(targetBrokers)
 		if err != nil {
 			glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
 			return
@@ -149,4 +135,22 @@ func (s *ServerState) setupKafkaTarget() {
 
 		glog.V(1).Infof("subscribed to the pstore for updates")
 	}
+}
+
+func getKafkaProducer(targetBrokers string) (sarama.SyncProducer, error) {
+	conf := sarama.NewConfig()
+	conf.Producer.Return.Successes = true
+	var producer sarama.SyncProducer
+	var err error
+	for i := 0; i < 10; i++ {
+		producer, err = sarama.NewSyncProducer(strings.Split(targetBrokers, ","), conf)
+		if err == nil {
+			break
+		} else {
+			glog.Errorf("unable to create the kafka sync producer, "+
+				"will retry in 5 seconds: %v", err)
+			time.Sleep(5 * time.Second)
+		}
+	}
+	return producer, err
 }
