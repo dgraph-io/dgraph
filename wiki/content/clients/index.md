@@ -644,18 +644,17 @@ The result:
   },
   "extensions": {
     "server_latency": {
-      "parsing_ns": 17000,
-      "processing_ns": 4722207
+      "parsing_ns": 50901,
+      "processing_ns": 14631082
     },
     "txn": {
       "start_ts": 4,
       "keys": [
-        "i4elpex2rwx3",
-        "nkvfdz3ltmvv"
-      ]
+        "2ahy9oh4s9csc",
+        "3ekeez23q5149"
+      ],
       "preds": [
-        "1-balance",
-        "1-_predicate_"
+        "1-balance"
       ]
     }
   }
@@ -687,16 +686,17 @@ accepts the old format, which was a single array of keys.
 ```sh
 $ curl -X POST localhost:8080/commit?startTs=4 -d $'
 {
-    "keys": [
-		"i4elpex2rwx3",
-		"nkvfdz3ltmvv"
+  "keys": [
+		"2ahy9oh4s9csc",
+		"3ekeez23q5149"
 	],
-	"preds": [
-		"1-predicate",
-		"1-name"
+  "preds": [
+    "1-balance"
 	]
 }' | jq
 ```
+
+The result:
 
 ```json
 {
@@ -731,6 +731,23 @@ successful.  This is indicated in the response when the commit is attempted.
 
 In this case, it should be up to the user of the client to decide if they wish
 to retry the transaction.
+
+### Aborting the transaction
+If the transaction needs to be aborted, we can use the same `/commit` endpoint with the
+`abort=true` parameter while specifying the `startTs` value for the transaction.
+
+```sh
+$ curl -X POST "localhost:8080/commit?startTs=4&abort=true" | jq
+```
+
+The result:
+
+```json
+{
+  "code": "Success",
+  "message": "Done"
+}
+```
 
 ### Compression via HTTP
 
