@@ -56,7 +56,6 @@ const (
 
 const (
 	lsThan     = '<'
-	grThan     = '>'
 	underscore = '_'
 	colon      = ':'
 	dash       = '-'
@@ -462,10 +461,6 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	l.Depth++
 
 	return lexText
-}
-
-func isClosingBracket(r rune) bool {
-	return r == grThan
 }
 
 // isSpace returns true if the rune is a tab or space.

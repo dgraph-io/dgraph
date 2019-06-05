@@ -482,11 +482,6 @@ func isEndLiteral(r rune) bool {
 	return r == '"' || r == '\u000d' || r == '\u000a'
 }
 
-// isEndArg returns true if rune is a comma or right round bracket.
-func isEndArg(r rune) bool {
-	return r == comma || r == ')'
-}
-
 func isLangOrDirective(r rune) bool {
 	if isNameBegin(r) {
 		return true

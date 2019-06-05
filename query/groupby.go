@@ -28,9 +28,8 @@ import (
 )
 
 type groupPair struct {
-	key   types.Val
-	attr  string
-	alias string
+	key  types.Val
+	attr string
 }
 
 type groupResult struct {
