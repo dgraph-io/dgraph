@@ -136,7 +136,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		if err := h.readManifest(manifest, &m); err != nil {
 			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
-		if m.Since == 0 || m.Since == 0 || len(m.Groups) == 0 {
+		if m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
 				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
 			}
