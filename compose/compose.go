@@ -128,7 +128,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	})
 
 	switch {
-	case opts.DataVol == true:
+	case opts.DataVol:
 		svc.Volumes = append(svc.Volumes, Volume{
 			Type:   "volume",
 			Source: "data",
@@ -302,8 +302,6 @@ func addMetrics(cfg *ComposeConfig) {
 			Target: "/var/lib/grafana",
 		}},
 	}
-
-	return
 }
 
 func warning(str string) {

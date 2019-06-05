@@ -69,12 +69,13 @@ func convertGeoFile(input string, output string) error {
 	defer f.Close()
 
 	var gz io.Reader
-	gz = f
 	if filepath.Ext(input) == ".gz" {
 		gz, err = gzip.NewReader(f)
 		if err != nil {
 			return err
 		}
+	} else {
+		gz = f
 	}
 
 	// TODO - This might not be a good idea for large files. Use json.Decode to read features.

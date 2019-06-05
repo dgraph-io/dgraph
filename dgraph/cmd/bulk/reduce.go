@@ -82,7 +82,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 	for _, mapEntry := range job.mapEntries {
 		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
-		if bytes.Compare(mapEntry.Key, currentKey) != 0 && currentKey != nil {
+		if !bytes.Equal(mapEntry.Key, currentKey) && currentKey != nil {
 			outputPostingList()
 		}
 		currentKey = mapEntry.Key

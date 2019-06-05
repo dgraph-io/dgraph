@@ -331,7 +331,7 @@ func (b *BytesBuffer) grow(n int) {
 		n = 128
 	}
 	if len(b.data) == 0 {
-		b.data = append(b.data, make([]byte, n, n))
+		b.data = append(b.data, make([]byte, n))
 	}
 
 	last := len(b.data) - 1
@@ -348,7 +348,7 @@ func (b *BytesBuffer) grow(n int) {
 	}
 	b.data[last] = b.data[last][:b.off]
 	b.sz += len(b.data[last])
-	b.data = append(b.data, make([]byte, sz, sz))
+	b.data = append(b.data, make([]byte, sz))
 	b.off = 0
 }
 

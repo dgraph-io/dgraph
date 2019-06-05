@@ -147,7 +147,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: v}}
 
 	case bool:
-		if v == false && op == DeleteNquads {
+		if !v && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}

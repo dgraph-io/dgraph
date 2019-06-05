@@ -102,7 +102,7 @@ func run(conf *viper.Viper) error {
 		return err
 	}
 
-	tableInfos := make(map[string]*sqlTable, 0)
+	tableInfos := make(map[string]*sqlTable)
 	for _, table := range tablesToRead {
 		tableInfo, err := parseTables(pool, table, db)
 		if err != nil {

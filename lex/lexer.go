@@ -80,10 +80,7 @@ func (p *ItemIterator) Errorf(format string, args ...interface{}) error {
 // Next advances the iterator by one.
 func (p *ItemIterator) Next() bool {
 	p.idx++
-	if p.idx >= len(p.l.items) {
-		return false
-	}
-	return true
+	return p.idx < len(p.l.items)
 }
 
 // Item returns the current item.
