@@ -52,7 +52,8 @@ const (
 	ErrorInvalidRequest = "ErrorInvalidRequest"
 	Error               = "Error"
 	ErrorNoData         = "ErrorNoData"
-	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
+		"|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 

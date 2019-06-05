@@ -109,7 +109,9 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 
 var emptyEdge pb.DirectedEdge
 
-func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*pb.DirectedEdge, error) {
+func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (
+	*pb.DirectedEdge, error) {
+
 	var err error
 	var objectUid uint64
 
