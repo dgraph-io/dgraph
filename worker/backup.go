@@ -26,12 +26,7 @@ import (
 )
 
 // Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Num, error) {
+func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupResponse, error) {
 	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
 	return nil, x.ErrNotSupported
-}
-
-// BackupOverNetwork handles a request coming from an HTTP client.
-func BackupOverNetwork(ctx context.Context, destination string) error {
-	return x.ErrNotSupported
 }

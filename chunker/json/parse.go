@@ -373,10 +373,14 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 }
 
 const (
+	// SetNquads is the constant used to indicate that the parsed NQuads are meant to be added.
 	SetNquads = iota
+	// DeleteNquads is the constant used to indicate that the parsed NQuads are meant to be
+	// deleted.
 	DeleteNquads
 )
 
+// Parse converts the given byte slice into a slice of NQuads.
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)

@@ -17,7 +17,7 @@
 package migrate
 
 const (
-	UNKNOWN DataType = iota
+	UNKNOWN dataType = iota
 	INT
 	STRING
 	FLOAT
@@ -27,13 +27,13 @@ const (
 )
 
 // the typeToString map is used to generate the Dgraph schema file
-var typeToString map[DataType]string
+var typeToString map[dataType]string
 
 // the sqlTypeToInternal map is used to parse date types in SQL schema
-var sqlTypeToInternal map[string]DataType
+var sqlTypeToInternal map[string]dataType
 
 func initDataTypes() {
-	typeToString = make(map[DataType]string)
+	typeToString = make(map[dataType]string)
 	typeToString[UNKNOWN] = "unknown"
 	typeToString[INT] = "int"
 	typeToString[STRING] = "string"
@@ -42,7 +42,7 @@ func initDataTypes() {
 	typeToString[DATETIME] = "datetime"
 	typeToString[UID] = "uid"
 
-	sqlTypeToInternal = make(map[string]DataType)
+	sqlTypeToInternal = make(map[string]dataType)
 	sqlTypeToInternal["int"] = INT
 	sqlTypeToInternal["varchar"] = STRING
 	sqlTypeToInternal["text"] = STRING
@@ -54,6 +54,6 @@ func initDataTypes() {
 	sqlTypeToInternal["decimal"] = FLOAT
 }
 
-func (t DataType) String() string {
+func (t dataType) String() string {
 	return typeToString[t]
 }

@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -37,34 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
-
-func TestNodes(t *testing.T) {
-	wrap := func(fn func(*testing.T, *dgo.Dgraph)) func(*testing.T) {
-		return func(t *testing.T) {
-			conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-			require.NoError(t, err)
-			dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-			fn(t, dg)
-		}
-	}
-
-	tests := []struct {
-		name string
-		fn   func(*testing.T, *dgo.Dgraph)
-	}{
-		{name: "setup test data", fn: NodesSetup},
-		{name: "move tablets from 3", fn: NodesMoveTablets3},
-		{name: "test query 1", fn: NodesTestQuery},
-		{name: "move tablets from 2", fn: NodesMoveTablets2},
-		{name: "test query 2", fn: NodesTestQuery},
-	}
-	for _, tc := range tests {
-		if !t.Run(tc.name, wrap(tc.fn)) {
-			break
-		}
-	}
-	t.Run("cleanup", wrap(NodesCleanup))
-}
 
 func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
@@ -110,19 +81,35 @@ func NodesSetup(t *testing.T, c *dgo.Dgraph) {
 	}
 }
 
-func NodesCleanup(t *testing.T, c *dgo.Dgraph) {
-	state, err := z.GetState()
+func doTestQuery(t *testing.T, c *dgo.Dgraph) {
+	resp, err := c.NewTxn().Query(context.Background(), `
+  {
+  q(func:anyofterms(name@en, "good bad"), first: -5) {
+    name@en
+  }
+  }`)
 	require.NoError(t, err)
 
-	// NOTE: in the rare occasion that we are in fact connected to node 2, skip this.
-	for i := range state.Removed {
-		if strings.HasSuffix(state.Removed[i].Addr, "7180") {
-			t.Log("skipping cleanup, we are connected to a removed node.")
-			return
-		}
-	}
-
-	require.NoError(t, c.Alter(context.Background(), &api.Operation{DropAll: true}))
+	z.CompareJSON(t, `
+  {
+    "q": [
+      {
+        "name@en": "Good Grief"
+      },
+      {
+        "name@en": "Half Good Killer"
+      },
+      {
+        "name@en": "Bad Friend"
+      },
+      {
+        "name@en": "Ace of Spades: Bad Destiny"
+      },
+      {
+        "name@en": "Bad Girls 6"
+      }
+    ]
+  }`, string(resp.GetJson()))
 }
 
 func getError(rc io.ReadCloser) error {
@@ -137,7 +124,13 @@ func getError(rc io.ReadCloser) error {
 	return nil
 }
 
-func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
+func TestNodes(t *testing.T) {
+	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	NodesSetup(t, dg)
+
 	state1, err := z.GetState()
 	require.NoError(t, err)
 
@@ -167,10 +160,10 @@ func NodesMoveTablets3(t *testing.T, c *dgo.Dgraph) {
 	if _, ok := state2.Groups["3"]; ok {
 		t.Errorf("node removal failed")
 	}
-}
 
-func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
-	state1, err := z.GetState()
+	doTestQuery(t, dg)
+
+	state1, err = z.GetState()
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
@@ -182,14 +175,14 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 		time.Sleep(time.Second)
 	}
 
-	state2, err := z.GetState()
+	state2, err = z.GetState()
 	require.NoError(t, err)
 
 	if len(state2.Groups["2"].Tablets) > 0 {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=2&id=2")
+	resp, err = http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=2&id=2")
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
@@ -199,35 +192,6 @@ func NodesMoveTablets2(t *testing.T, c *dgo.Dgraph) {
 	if _, ok := state2.Groups["2"]; ok {
 		t.Errorf("node removal failed")
 	}
-}
 
-func NodesTestQuery(t *testing.T, c *dgo.Dgraph) {
-	resp, err := c.NewTxn().Query(context.Background(), `
-  {
-  q(func:anyofterms(name@en, "good bad"), first: -5) {
-    name@en
-  }
-  }`)
-	require.NoError(t, err)
-
-	CompareJSON(t, `
-  {
-    "q": [
-      {
-        "name@en": "Good Grief"
-      },
-      {
-        "name@en": "Half Good Killer"
-      },
-      {
-        "name@en": "Bad Friend"
-      },
-      {
-        "name@en": "Ace of Spades: Bad Destiny"
-      },
-      {
-        "name@en": "Bad Girls 6"
-      }
-    ]
-  }`, string(resp.GetJson()))
+	doTestQuery(t, dg)
 }

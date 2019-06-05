@@ -36,12 +36,12 @@ const (
 	//
 	// Example manifest:
 	// {
-	//   "version": 2280,
+	//   "since": 2280,
 	//   "groups": [ 1, 2, 3 ],
 	//   "read_ts": 110001
 	// }
 	//
-	// "version" is the maximum data version, obtained from Backup() after it runs. This value
+	// "since" is the maximum data version, obtained from Backup() after it runs. This value
 	// is used for subsequent incremental backups.
 	// "groups" are the group IDs that participated.
 	// "read_ts" is the read timestamp used at the backup request.
@@ -122,12 +122,11 @@ func getHandler(scheme string) handler {
 func (r *Request) newHandler() (handler, error) {
 	var h handler
 
-	uri, err := url.Parse(r.Backup.Location)
+	uri, err := url.Parse(r.Backup.Destination)
 	if err != nil {
 		return nil, err
 	}
 
-	// find handler for this URI scheme
 	h = getHandler(uri.Scheme)
 	if h == nil {
 		return nil, errors.Errorf("Unable to handle url: %s", uri)
@@ -144,8 +143,8 @@ func (r *Request) newHandler() (handler, error) {
 type loadFn func(reader io.Reader, groupId int) error
 
 // Load will scan location l for backup files, then load them sequentially through reader.
-// Returns the maximum Ts version on success, otherwise an error.
-func Load(l string, fn loadFn) (version uint64, err error) {
+// Returns the maximum Since value on success, otherwise an error.
+func Load(l string, fn loadFn) (since uint64, err error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return 0, err

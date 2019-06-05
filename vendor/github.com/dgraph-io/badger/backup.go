@@ -127,20 +127,20 @@ func writeTo(list *pb.KVList, w io.Writer) error {
 	return err
 }
 
-type loader struct {
+type Loader struct {
 	db       *DB
 	throttle *y.Throttle
 	entries  []*Entry
 }
 
-func (db *DB) newLoader(maxPendingWrites int) *loader {
-	return &loader{
+func (db *DB) NewLoader(maxPendingWrites int) *Loader {
+	return &Loader{
 		db:       db,
 		throttle: y.NewThrottle(maxPendingWrites),
 	}
 }
 
-func (l *loader) set(kv *pb.KV) error {
+func (l *Loader) Set(kv *pb.KV) error {
 	var userMeta, meta byte
 	if len(kv.UserMeta) > 0 {
 		userMeta = kv.UserMeta[0]
@@ -162,7 +162,7 @@ func (l *loader) set(kv *pb.KV) error {
 	return nil
 }
 
-func (l *loader) send() error {
+func (l *Loader) send() error {
 	if err := l.throttle.Do(); err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func (l *loader) send() error {
 	return nil
 }
 
-func (l *loader) finish() error {
+func (l *Loader) Finish() error {
 	if len(l.entries) > 0 {
 		if err := l.send(); err != nil {
 			return err
@@ -193,7 +193,7 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
-	ldr := db.newLoader(maxPendingWrites)
+	loader := db.NewLoader(maxPendingWrites)
 	for {
 		var sz uint64
 		err := binary.Read(br, binary.LittleEndian, &sz)
@@ -217,7 +217,7 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 		}
 
 		for _, kv := range list.Kv {
-			if err := ldr.set(kv); err != nil {
+			if err := loader.Set(kv); err != nil {
 				return err
 			}
 
@@ -229,7 +229,7 @@ func (db *DB) Load(r io.Reader, maxPendingWrites int) error {
 		}
 	}
 
-	if err := ldr.finish(); err != nil {
+	if err := loader.Finish(); err != nil {
 		return err
 	}
 	db.orc.txnMark.Done(db.orc.nextTxnTs - 1)

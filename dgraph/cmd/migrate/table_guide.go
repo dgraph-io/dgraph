@@ -157,7 +157,7 @@ func getCstColumns(cst *fkConstraint) map[string]interface{} {
 	return columnNames
 }
 
-func getValue(dataType DataType, value interface{}) (string, error) {
+func getValue(dataType dataType, value interface{}) (string, error) {
 	if value == nil {
 		return "", fmt.Errorf("nil value found")
 	}
@@ -210,40 +210,30 @@ func createLabel(ref *ref) (string, error) {
 	return fmt.Sprintf("_:%s", strings.Join(parts, separator)), nil
 }
 
-// createDgraphSchema generates one Dgraph index per SQL primary key
-// or index. For a composite index in SQL, e.g. (fname, lname) in the person table, we will create
-// separate indices for each individual column within Dgraph, e.g.
-// person_fname: string @index(exact) .
-// person_lname: string @index(exact) .
-// The reason is that Dgraph does not support composite indices as of now.
+// createDgraphSchema generates one Dgraph predicate per SQL column
+// and the type of the predicate is inferred from the SQL column type.
 func createDgraphSchema(info *sqlTable) []string {
-	dgraphIndexes := make([]string, 0)
-	sqlIndexedColumns := getColumnIndices(info, func(info *sqlTable, column string) bool {
-		return info.columns[column].keyType != none
-	})
+	dgraphIndices := make([]string, 0)
 
-	for _, column := range sqlIndexedColumns {
-		predicate := fmt.Sprintf("%s%s%s", info.tableName, separator, column.name)
-
-		dataType := info.columns[column.name].dataType
-
-		var index string
-		if dataType == STRING {
-			index = "@index(exact)"
-		} else {
-			index = fmt.Sprintf("@index(%s)", dataType)
+	for _, column := range info.columnNames {
+		if info.isForeignKey[column] {
+			// we do not store the plain values in foreign key columns
+			continue
 		}
+		predicate := fmt.Sprintf("%s%s%s", info.tableName, separator, column)
 
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: %s %s .\n",
-			predicate, dataType, index))
+		dataType := info.columns[column].dataType
+
+		dgraphIndices = append(dgraphIndices, fmt.Sprintf("%s: %s .\n",
+			predicate, dataType))
 	}
 
 	for _, cst := range info.foreignKeyConstraints {
 		pred := getPredFromConstraint(info.tableName, separator, cst)
-		dgraphIndexes = append(dgraphIndexes, fmt.Sprintf("%s: [%s] .\n",
+		dgraphIndices = append(dgraphIndices, fmt.Sprintf("%s: [%s] .\n",
 			pred, UID))
 	}
-	return dgraphIndexes
+	return dgraphIndices
 }
 
 func getPredFromConstraint(
@@ -252,8 +242,8 @@ func getPredFromConstraint(
 	for _, part := range constraint.parts {
 		columnNames = append(columnNames, part.columnName)
 	}
-	return fmt.Sprintf("%s%s%s%s", tableName, separator,
-		strings.Join(columnNames, separator), separator)
+	return fmt.Sprintf("%s%s%s", tableName, separator,
+		strings.Join(columnNames, separator))
 }
 
 func predicateName(info *sqlTable, column string) string {

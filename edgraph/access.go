@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
@@ -52,7 +53,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	return nil
 }
 
-func authorizeMutation(ctx context.Context, mu *api.Mutation) error {
+func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return nil
 }
 

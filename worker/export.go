@@ -341,6 +341,55 @@ func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	return listWrap(kv), nil
 }
 
+func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("type %s {\n", attr))
+	for _, field := range update.Fields {
+		buf.WriteString(fieldToString(field))
+	}
+
+	buf.WriteString("}\n")
+
+	kv := &bpb.KV{
+		Value:   buf.Bytes(),
+		Version: 2, // Type value
+	}
+	return listWrap(kv), nil
+}
+
+func fieldToString(update *pb.SchemaUpdate) string {
+	var builder strings.Builder
+	builder.WriteString("\t")
+	builder.WriteString(update.Predicate)
+	builder.WriteString(": ")
+
+	if update.List {
+		builder.WriteString("[")
+	}
+
+	if update.ValueType == pb.Posting_OBJECT {
+		builder.WriteString(update.ObjectTypeName)
+	} else {
+		tid := types.TypeID(update.ValueType)
+		builder.WriteString(tid.Name())
+	}
+
+	if update.NonNullable {
+		builder.WriteString("!")
+	}
+
+	if update.List {
+		builder.WriteString("]")
+	}
+
+	if update.NonNullableList {
+		builder.WriteString("!")
+	}
+
+	builder.WriteString("\n")
+	return builder.String()
+}
+
 type fileWriter struct {
 	fd *os.File
 	bw *bufio.Writer
@@ -440,12 +489,16 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		if pk.Attr == "_predicate_" {
 			return false
 		}
-		if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
-			return false
+
+		if !pk.IsType() {
+			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
+				return false
+			}
 		}
+
 		// We need to ensure that schema keys are separately identifiable, so they can be
 		// written to a different file.
-		return pk.IsData() || pk.IsSchema()
+		return pk.IsData() || pk.IsSchema() || pk.IsType()
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
@@ -455,9 +508,10 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		e.uid = pk.Uid
 		e.attr = pk.Attr
 
+		// Schema and type keys should be handled first because schema keys are also
+		// considered data keys.
 		switch {
 		case pk.IsSchema():
-			// Schema should be handled first. Because schema keys are also considered data keys.
 			var update pb.SchemaUpdate
 			err := item.Value(func(val []byte) error {
 				return update.Unmarshal(val)
@@ -469,11 +523,24 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			}
 			return toSchema(pk.Attr, update)
 
+		case pk.IsType():
+			var update pb.TypeUpdate
+			err := item.Value(func(val []byte) error {
+				return update.Unmarshal(val)
+			})
+			if err != nil {
+				// Let's not propagate this error. We just log this and continue onwards.
+				glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
+				return nil, nil
+			}
+			return toType(pk.Attr, update)
+
 		case pk.IsData():
 			e.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
 			}
+
 			switch in.Format {
 			case "json":
 				return e.toJSON()
@@ -495,11 +562,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
-			case 2: // schema
+			case 2: // schema and types
 				writer = schemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
+
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
