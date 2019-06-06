@@ -30,8 +30,8 @@ type StateResponse struct {
 	Groups map[string]struct {
 		Members map[string]struct {
 			Addr       string `json:"addr"`
-			GroupId    int    `json:"groupId"`
-			Id         string `json:"id"`
+			GroupID    int    `json:"groupId"`
+			ID         string `json:"id"`
 			LastUpdate string `json:"lastUpdate"`
 			Leader     bool   `json:"leader"`
 		} `json:"members"`
