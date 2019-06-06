@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/query"
@@ -32,6 +33,16 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
+
+func stripSpaces(str string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+
+		return r
+	}, str)
+}
 
 func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
@@ -134,6 +145,13 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
+		// Handle the uid function in upsert block
+		s := stripSpaces(v)
+		if strings.HasPrefix(s, "uid(") {
+			nq.ObjectId = s
+			return nil
+		}
+
 		// In RDF, we assume everything is default (types.DefaultID), but in JSON we assume string
 		// (StringID). But this value will be checked against the schema so we don't overshadow a
 		// password value (types.PasswordID) - Issue#2623
@@ -222,10 +240,13 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			uid = uint64(ui)
 
 		case string:
+			s := stripSpaces(uidVal)
 			if len(uidVal) == 0 {
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
 				mr.uid = uidVal
+			} else if ok := strings.HasPrefix(s, "uid("); ok {
+				mr.uid = s
 			} else if u, err := strconv.ParseUint(uidVal, 0, 64); err == nil {
 				uid = u
 			} else {
