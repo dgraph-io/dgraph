@@ -537,6 +537,12 @@
 			"revisionTime": "2015-09-09T17:09:13Z"
 		},
 		{
+			"checksumSHA1": "ECbM44U/bpyQjtSG5y2sjjQ80ls=",
+			"path": "github.com/dgryski/go-groupvarint",
+			"revision": "5ce5df8ca4e1994e4f90374734b86ed9e0be7454",
+			"revisionTime": "2019-03-18T18:18:31Z"
+		},
+		{
 			"checksumSHA1": "tJd2T/eyW6ejAev7WzGxTeUVOPQ=",
 			"path": "github.com/dustin/go-humanize",
 			"revision": "bb3d318650d48840a39aa21a027c6630e198e626",
