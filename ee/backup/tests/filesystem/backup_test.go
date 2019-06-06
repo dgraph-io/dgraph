@@ -265,7 +265,8 @@ func dirCleanup() {
 	x.Check(os.RemoveAll(restoreDir))
 	x.Check(os.RemoveAll(localBackupDir))
 
-	cmd := []string{"rm", "-rf", "/data/backups/dgraph.*"}
+
+	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
 	x.Check(z.DockerExec(alphaContainers[0], cmd...))
 }
 
