@@ -561,7 +561,6 @@ $ curl -H "Content-Type: application/graphqlpm" -X POST localhost:8080/query -d 
     balance
   }
 }' | jq
-
 ```
 
 The result should look like this:
