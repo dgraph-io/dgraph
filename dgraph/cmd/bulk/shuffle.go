@@ -128,13 +128,13 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *pb.MapEntry, ci *countInd
 			heap.Pop(&ph)
 		}
 
-		keyChanged := bytes.Compare(prevKey, me.Key) != 0
+		keyChanged := !bytes.Equal(prevKey, me.Key)
 		if keyChanged && plistLen > 0 {
 			ci.addUid(prevKey, plistLen)
 			plistLen = 0
 		}
 
-		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
+		if len(batch) >= batchSize && !bytes.Equal(prevKey, me.Key) {
 			s.output <- shuffleOutput{mapEntries: batch, db: ci.db}
 			NumQueuedReduceJobs.Add(1)
 			batch = make([]*pb.MapEntry, 0, batchAlloc)

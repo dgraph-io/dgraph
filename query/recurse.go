@@ -149,7 +149,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error
 		var out []*SubGraph
 		var exp []*SubGraph
 		for _, sg := range exec {
-			if sg.UnknownAttr == true {
+			if sg.UnknownAttr {
 				continue
 			}
 			if len(sg.DestUIDs.Uids) == 0 {

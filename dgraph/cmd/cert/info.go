@@ -68,9 +68,7 @@ func getFileInfo(file string) *certInfo {
 			for _, ip := range cert.IPAddresses {
 				info.hosts = append(info.hosts, ip.String())
 			}
-			for _, name := range cert.DNSNames {
-				info.hosts = append(info.hosts, name)
-			}
+			info.hosts = append(info.hosts, cert.DNSNames...)
 
 		case strings.HasPrefix(file, "client."):
 			info.commonName = fmt.Sprintf("%s client certificate: %s",
