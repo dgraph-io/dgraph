@@ -19,7 +19,7 @@ package handler
 import (
 	"fmt"
 
-	"github.com/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"
@@ -36,7 +36,7 @@ type Request struct {
 // Validate validates r as a valid GraphQL request for GraphQL schema s.
 // If the request is GraphQL valid, it must contain a valid Operation, which is returned,
 // otherwise an error is returned.
-func (r *Request) Validate(s schema.Schema) (*Operation, error) {
+func (r *Request) Validate(s schema.Schema) (*schema.Operation, error) {
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: r.Query})
 	if gqlErr != nil {
 		return nil, gqlErr

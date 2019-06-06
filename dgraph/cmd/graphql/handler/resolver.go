@@ -18,6 +18,7 @@ package handler
 
 import (
 	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/ast"
 )
 
@@ -67,8 +68,8 @@ import (
 // RequestHandler can process GraphQL requests and write JSON responses.
 type RequestHandler struct {
 	GqlReq       *Request
-	op           *Operation
-	schema       *schema
+	op           *schema.Operation
+	schema       *schema.Schema
 	dgraphClient *dgo.Dgraph
 	err          error
 }

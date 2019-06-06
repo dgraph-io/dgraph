@@ -25,7 +25,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph/dgraph/cmd/graphql/handler"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/handler"
 	"github.com/vektah/gqlparser/ast"
 )
 
