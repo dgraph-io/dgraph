@@ -78,19 +78,19 @@ func GetState() (*StateResponse, error) {
 	return &st, nil
 }
 
-func GetClientToGroup(groupId string) (*dgo.Dgraph, error) {
+func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
 	state, err := z.GetState()
 	if err != nil {
 		return nil, err
 	}
 
-	group, ok := state.Groups[groupId]
+	group, ok := state.Groups[groupID]
 	if !ok {
-		return nil, fmt.Errorf("group %s does not exist", groupId)
+		return nil, fmt.Errorf("group %s does not exist", groupID)
 	}
 
 	if len(group.Members) == 0 {
-		return nil, fmt.Errorf("the group %s has no members", groupId)
+		return nil, fmt.Errorf("the group %s has no members", groupID)
 	}
 
 	member := group.Members["1"]
