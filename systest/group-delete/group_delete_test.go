@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,10 +126,45 @@ func getError(rc io.ReadCloser) error {
 	return nil
 }
 
+func getClientToGroup(groupId string) (*dgo.Dgraph, error) {
+	state, err := z.GetState()
+	if err != nil {
+		return nil, err
+	}
+
+	group, ok := state.Groups[groupId]
+	if !ok {
+		return nil, fmt.Errorf("group %s does not exist", groupId)
+	}
+
+	if len(group.Members) == 0 {
+		return nil, fmt.Errorf("the group %s has no members", groupId)
+	}
+
+	member := group.Members["1"]
+	parts := strings.Split(member.Addr, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("the member has an invalid address: %v", member.Addr)
+	}
+	// internalPort is used for communication between alpha nodes
+	internalPort, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse the port number from %s", parts[1])
+	}
+
+	// externalPort is for handling connections from clients
+	externalPort := internalPort + 2000
+
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", externalPort), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	return dgo.NewDgraphClient(api.NewDgraphClient(conn)), nil
+}
+
 func TestNodes(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	dg, err := getClientToGroup("1")
+	require.NoError(t, err, "error while getting connection to group 1")
 
 	NodesSetup(t, dg)
 

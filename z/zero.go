@@ -28,7 +28,13 @@ import (
 // the /state endpoint in zero.
 type StateResponse struct {
 	Groups map[string]struct {
-		Members map[string]interface{} `json:"members"`
+		Members map[string]struct {
+			Addr       string `json:"addr"`
+			GroupId    int    `json:"groupId"`
+			Id         string `json:"id"`
+			LastUpdate string `json:"lastUpdate"`
+			Leader     bool   `json:"leader"`
+		} `json:"members"`
 		Tablets map[string]struct {
 			GroupID   int    `json:"groupId"`
 			Predicate string `json:"predicate"`
