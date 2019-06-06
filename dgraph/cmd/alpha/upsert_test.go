@@ -18,8 +18,10 @@ package alpha
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/dgraph-io/dgo/y"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,4 +157,558 @@ func TestUpsertExample0JSON(t *testing.T) {
 	res, _, err = queryWithTs(q1, "application/graphql+-", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
+}
+
+func TestUpsertNoVarErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+friend: uid @reverse .`))
+
+	m1 := `
+upsert {
+  mutation {
+    set {
+      _:user1 <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) {
+      ...fragmentA
+      friend {
+        ...fragmentA
+        age
+      }
+    }
+  }
+
+  fragment fragmentA {
+    uid
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "upsert query op has no variables")
+}
+
+func TestUpsertWithFragment(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+friend: uid @reverse .`))
+
+	m1 := `
+upsert {
+  mutation {
+    set {
+      uid(variable) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) {
+      friend {
+        ...fragmentA
+      }
+    }
+  }
+
+  fragment fragmentA {
+    variable as uid
+  }
+}`
+	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, 0 == len(keys))
+	require.True(t, contains(preds, "age"))
+
+	keys, preds, _, err = mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, 0 == len(keys))
+	require.True(t, contains(preds, "age"))
+}
+
+func TestUpsertInvalidErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+name: string @index(exact) .
+friend: uid @reverse .`))
+
+	m1 := `
+{
+  set {
+    uid(variable) <age> "45" .
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "invalid syntax")
+}
+
+func TestUpsertUndefinedVarErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+name: string @index(exact) .
+friend: uid @reverse .`))
+
+	m1 := `
+upsert {
+  mutation {
+    set {
+      uid(42) <age> "45" .
+      uid(variable) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) {
+      friend {
+        ...fragmentA
+      }
+    }
+  }
+
+  fragment fragmentA {
+    variable as uid
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Some variables are used but not defined")
+}
+
+func TestUpsertUnusedVarErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+name: string @index(exact) .
+friend: uid @reverse .`))
+
+	m1 := `
+upsert {
+  mutation {
+    set {
+      uid(var2) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) {
+      var2 as uid
+      friend {
+        ...fragmentA
+      }
+    }
+  }
+
+  fragment fragmentA {
+    var1 as uid
+    name
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Some variables are defined but not used")
+}
+
+func TestUpsertExample1(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+name: string @index(exact) @lang .
+friend: uid @reverse .`))
+
+	m0 := `
+{
+  set {
+    _:user1 <age> "23" .
+    _:user1 <name@en> "user1" .
+    _:user2 <age> "34" .
+    _:user2 <name@en> "user2" .
+    _:user3 <age> "56" .
+    _:user3 <name@en> "user3" .
+  }
+}`
+	_, _, _, err := mutationWithTs(m0, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	m1 := `
+upsert {
+  mutation {
+    set {
+      uid(	u) <oldest> "true" .
+    }
+  }
+
+  query {
+    var(func: has(age)) {
+      a as age
+    }
+
+    oldest(func: uid(a), orderdesc: val(a), first: 1) {
+      u as uid
+      name
+      age
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(oldest)) {
+    name@en
+    age
+    oldest
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "user3")
+	require.Contains(t, res, "56")
+	require.Contains(t, res, "true")
+
+	m2 := `
+upsert {
+  mutation {
+    set {
+      uid ( u1 ) <friend> uid ( u2 ) .
+    }
+  }
+
+  query {
+    user1(func: eq(name@en, "user1")) {
+      u1 as uid
+    }
+
+    user2(func: eq(name@en, "user2")) {
+      u2 as uid
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q2 := `
+{
+  q(func: eq(name@en, "user1")) {
+    friend {
+      name@en
+    }
+  }
+}`
+	res, _, err = queryWithTs(q2, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "user2")
+
+	m3 := `
+upsert {
+  mutation {
+    set {
+      uid ( u3 ) <friend> uid ( u3 ) .
+    }
+  }
+
+  query {
+    user3(func: eq(name@en, "user3")) {
+      u3 as uid
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	m4 := `
+upsert {
+  mutation {
+    delete {
+      uid (u1) <friend> uid ( u2 ) .
+    }
+  }
+
+  query {
+    user1(func: eq(name@en, "user1")) {
+      u1 as uid
+    }
+
+    user2(func: eq(name@en, "user2")) {
+      u2 as uid
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m4, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q4 := `
+{
+  q(func: eq(name@en, "user1")) {
+    friend {
+      name@en
+    }
+  }
+}`
+	res, _, err = queryWithTs(q4, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "user2")
+
+	m5 := `
+upsert {
+  mutation {
+    delete {
+      uid (u1) <name> * .
+    }
+  }
+
+  query {
+    user1(func: eq(name@en, "user1")) {
+      u1 as uid
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m5, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q5 := `
+{
+  q(func: eq(name@en, "user1")) {
+    name@en
+    age
+  }
+}`
+	res, _, err = queryWithTs(q5, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "user1")
+}
+
+func TestUpsertExample1JSON(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+age: int @index(int) .
+name: string @index(exact) @lang .
+friend: uid @reverse .`))
+
+	m0 := `
+{
+  set {
+    _:user1 <age> "23" .
+    _:user1 <name@en> "user1" .
+    _:user2 <age> "34" .
+    _:user2 <name@en> "user2" .
+    _:user3 <age> "56" .
+    _:user3 <name@en> "user3" .
+  }
+}`
+	_, _, _, err := mutationWithTs(m0, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	m1 := `
+{
+  "set": [
+    {
+      "uid": "uid(u)",
+      "oldest": "true"
+    }
+  ],
+
+  "query": "{var(func: has(age)) {a as age} oldest(func: uid(a), orderdesc: val(a), first: 1) {u as uid}}"
+}`
+	_, _, _, err = mutationWithTs(m1, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(oldest)) {
+    name@en
+    age
+    oldest
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "user3")
+	require.Contains(t, res, "56")
+	require.Contains(t, res, "true")
+
+	m2 := `
+{
+  "set": [
+      {
+        "uid": "uid(u1)",
+        "friend": "uid  (u2 ) "
+    }
+  ],
+
+  "query": "{user1(func: eq(name@en, \"user1\")) {u1 as uid} user2(func: eq(name@en, \"user2\")) {u2 as uid}}"
+}`
+	_, _, _, err = mutationWithTs(m2, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+
+	q2 := `
+{
+  q(func: eq(name@en, "user1")) {
+    friend {
+      name@en
+    }
+  }
+}`
+	res, _, err = queryWithTs(q2, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "user2")
+
+	m4 := `
+{
+  "delete": [
+    {
+      "uid": "uid (u1)",
+      "friend": "uid ( u2 )"
+    }
+  ],
+
+  "query": "{user1(func: eq(name@en, \"user1\")) {u1 as uid} user2(func: eq(name@en, \"user2\")) {u2 as uid}}"
+}`
+	_, _, _, err = mutationWithTs(m4, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+
+	q4 := `
+{
+  q(func: eq(name@en, "user1")) {
+    friend {
+      name@en
+    }
+  }
+}`
+	res, _, err = queryWithTs(q4, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "user2")
+
+	m5 := `
+{
+  "delete": [
+    {
+      "uid": "uid (u1)",
+      "name": null
+    }
+  ],
+
+  "query": "{user1(func: eq(name@en, \"user1\")) {u1 as uid}}"
+}`
+	_, _, _, err = mutationWithTs(m5, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+
+	q5 := `
+{
+  q(func: eq(name@en, "user1")) {
+    name@en
+    age
+  }
+}`
+	res, _, err = queryWithTs(q5, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "user1")
+}
+
+func TestUpsertBlankNodeWithVar(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(exact) @lang .`))
+
+	m := `
+upsert {
+  mutation {
+    set {
+      uid(u) <name> "user1" .
+      _:u <name> "user2" .
+    }
+  }
+
+  query {
+    users(func: eq(name, "user1")) {
+      u as uid
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q := `
+{
+  users(func: has(name)) {
+    uid
+    name
+  }
+}`
+	res, _, err := queryWithTs(q, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "user1")
+	require.Contains(t, res, "user2")
+}
+
+func TestUpsertParallel(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+email: string @index(exact) @upsert .
+name: string @index(exact) @lang .
+friend: uid @reverse .`))
+
+	m := `
+upsert {
+  mutation {
+    set {
+      uid(u1) <email> "user1@dgraph.io" .
+      uid(u1) <name> "user1" .
+      uid(u2) <email> "user2@dgraph.io" .
+      uid(u2) <name> "user2" .
+      uid(u1) <friend> uid(u2) .
+    }
+  }
+
+  query {
+    user1(func: eq(email, "user1@dgraph.io")) {
+      u1 as uid
+    }
+
+    user2(func: eq(email, "user2@dgraph.io")) {
+      u2 as uid
+    }
+  }
+}`
+	doUpsert := func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		for i := 0; i < 10; i++ {
+			err := y.ErrAborted
+			for err != nil && strings.Contains(err.Error(), "Transaction has been aborted. Please retry") {
+				_, _, _, err = mutationWithTs(m, "application/rdf", false, true, true, 0)
+			}
+
+			require.NoError(t, err)
+		}
+	}
+
+	// 10 routines each doing parallel upsert 10 times
+	var wg sync.WaitGroup
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go doUpsert(&wg)
+	}
+	wg.Wait()
+
+	q := `
+{
+  user1(func: eq(email, "user1@dgraph.io")) {
+    uid
+    name
+    email
+    friend {
+      uid
+      name
+      email
+    }
+  }
+}`
+	res, _, err := queryWithTs(q, "application/graphql+-", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "user1")
+	require.Contains(t, res, "user2")
+	require.Contains(t, res, "user1@dgraph.io")
+	require.Contains(t, res, "user2@dgraph.io")
+	require.True(t, len(strings.Split(res, "user")) == 6)
 }
