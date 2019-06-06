@@ -200,7 +200,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		params.Query = string(body)
 
 	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content type. "+
+			"Currently supported content types are application/json, application/graphqlpm")
 		return
 	}
 
@@ -327,7 +328,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported content type. "+
+			"Currently supported content types are application/json, application/rdf")
 		return
 	}
 
