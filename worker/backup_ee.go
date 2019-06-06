@@ -49,8 +49,8 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (
 		return nil, err
 	}
 
-	br := &backup.Request{DB: pstore, Backup: req}
-	return br.Process(ctx)
+	bp := &backup.Processor{DB: pstore, Request: req}
+	return bp.RunBackup(ctx)
 }
 
 // BackupGroup backs up the group specified in the backup request.

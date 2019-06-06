@@ -43,10 +43,10 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 	return json.Unmarshal(b, m)
 }
 
-func (h *fileHandler) createFiles(uri *url.URL, req *Request, fileName string) error {
+func (h *fileHandler) createFiles(uri *url.URL, req *Processor, fileName string) error {
 	var dir, path string
 
-	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Backup.UnixTs))
+	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Request.UnixTs))
 	err := os.Mkdir(dir, 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
@@ -61,9 +61,9 @@ func (h *fileHandler) createFiles(uri *url.URL, req *Request, fileName string) e
 	return nil
 }
 
-// CreateBackupFiles prepares the a path to save backup files and computes the timestamp
+// SetupBackup prepares the a path to save backup files and computes the timestamp
 // from which to start the backup.
-func (h *fileHandler) CreateBackupFiles(uri *url.URL, req *Request) error {
+func (h *fileHandler) SetupBackup(uri *url.URL, req *Processor) error {
 	var fileName string
 
 	if !pathExist(uri.Path) {
@@ -88,19 +88,19 @@ func (h *fileHandler) CreateBackupFiles(uri *url.URL, req *Request) error {
 
 		req.Since = m.Since
 	}
-	fileName = fmt.Sprintf(backupNameFmt, req.Backup.ReadTs, req.Backup.GroupId)
+	fileName = fmt.Sprintf(backupNameFmt, req.Request.ReadTs, req.Request.GroupId)
 
 	// If a full backup is being forced, force Since to zero to stream all
 	// the contents from the database.
-	if req.Backup.ForceFull {
+	if req.Request.ForceFull {
 		req.Since = 0
 	}
 
 	return h.createFiles(uri, req, fileName)
 }
 
-// CreateManifest creates the backup manifest file.
-func (h *fileHandler) CreateManifest(uri *url.URL, req *Request, manifest *Manifest) error {
+// CompleteBackup completes the backup by writing the manifest to a file.
+func (h *fileHandler) CompleteBackup(uri *url.URL, req *Processor, manifest *Manifest) error {
 	if !pathExist(uri.Path) {
 		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}

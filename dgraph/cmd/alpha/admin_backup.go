@@ -116,6 +116,6 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	br := &backup.Request{Backup: &req}
-	return br.Complete(ctx, &m)
+	bp := &backup.Processor{Request: &req}
+	return bp.Complete(ctx, &m)
 }

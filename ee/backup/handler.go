@@ -50,7 +50,7 @@ const (
 // When adding new scheme handles, for example 'azure://', an object will implement
 // this interface to supply Dgraph with a way to create or load backup files into DB.
 // For all methods below, the URL object is parsed as described in `newHandler' and
-// the Request object has the DB, estimated tablets size, and backup parameters.
+// the Processor object has the DB, estimated tablets size, and backup parameters.
 type handler interface {
 	// Handlers must know how to Write to their URI location.
 	// These function calls are used by both Create and Load.
@@ -59,10 +59,10 @@ type handler interface {
 	// Create prepares the location for write operations. This function is defined for
 	// creating new backup files at a location described by the URL. The caller of this
 	// comes from an HTTP request.
-	CreateBackupFiles(*url.URL, *Request) error
+	SetupBackup(*url.URL, *Processor) error
 
-	// CreateManifest prepares the manifest for writing.
-	CreateManifest(*url.URL, *Request, *Manifest) error
+	// CompleteBackup prepares the manifest for writing.
+	CompleteBackup(*url.URL, *Processor, *Manifest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
@@ -113,7 +113,7 @@ func getHandler(scheme string) handler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func (r *Request) newHandler(uri *url.URL) (handler, error) {
+func (r *Processor) newHandler(uri *url.URL) (handler, error) {
 	var h handler
 
 	h = getHandler(uri.Scheme)
