@@ -110,7 +110,8 @@ func TestQuery3Quads(ctx context.Context, c *dgo.Dgraph) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	fmt.Printf("Response JSON: %q\n", resp.Json)
-	x.AssertTrue(bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"ok 200\"},{\"name\":\"ok 300\"},{\"name\":\"ok 400\"}]}")))
+	x.AssertTrue(bytes.Equal(resp.Json, []byte(
+		"{\"me\":[{\"name\":\"ok 200\"},{\"name\":\"ok 300\"},{\"name\":\"ok 400\"}]}")))
 	x.AssertTrue(resp.Txn.StartTs > 0)
 	x.Check(txn.Commit(ctx))
 }
