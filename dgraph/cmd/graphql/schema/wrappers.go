@@ -16,12 +16,15 @@
 
 package schema
 
-import "github.com/vektah/gqlparser/ast"
+import (
+	"github.com/vektah/gqlparser/ast"
+)
 
 // wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
 // algorithm and interface is dependent on behaviours not the exact structure in there.
 
 type Schema interface {
+	Operation(r *Request) (Operation, *Response)
 }
 
 type Operation interface {
@@ -60,4 +63,8 @@ func (*operation) Queries() []Query {
 func (*operation) Mutations() []Mutation {
 	// TODO:
 	return nil
+}
+
+func AsSchema(s *ast.Schema) Schema {
+	return &schema{schema: s}
 }

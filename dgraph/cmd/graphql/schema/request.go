@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-package handler
+package schema
 
 import (
-	"fmt"
-
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-
 	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 )
@@ -33,33 +30,34 @@ type Request struct {
 	Variables     map[string]interface{} `json:"variables"`
 }
 
-// Validate validates r as a valid GraphQL request for GraphQL schema s.
-// If the request is GraphQL valid, it must contain a valid Operation, which is returned,
-// otherwise an error is returned.
-func (r *Request) Validate(s schema.Schema) (*schema.Operation, error) {
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: r.Query})
+// Operation finds the operation in req, if it is a valid request for GraphQL schema s.
+// If the request is GraphQL valid, it must contain a single valid Operation.
+// If either the request is malformed or doesn't contain a valid operation, a GraphQL
+// response containing all errors encountered is returned.
+func (s schema) Operation(req *Request) (Operation, *Response) {
+	if req == nil || req.Query == "" {
+		return nil, ErrorResponsef("No query string supplied in request")
+	}
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: req.Query})
 	if gqlErr != nil {
-		return nil, gqlErr
+		return nil, &Response{Errors: gqlerror.List{gqlErr}}
 	}
 
-	listErr := validator.Validate(rh.schema.schema, doc)
+	listErr := validator.Validate(s.schema, doc)
 	if len(listErr) != 0 {
-		rh.err = fmt.Errorf("Invalid request")
-		rh.resp = &graphQLResponse{Errors: listErr}
-		return
+		return nil, &Response{Errors: listErr}
 	}
 
-	op := doc.Operations.ForName(rh.gqlReq.OperationName)
+	op := doc.Operations.ForName(req.OperationName)
 	if op == nil {
-		rh.err = fmt.Errorf("Unable to find operation to resolve")
-		return
+		return nil, ErrorResponsef("Unable to find operation to resolve")
 	}
 
-	vars, err := validator.VariableValues(rh.schema.schema, op, rh.gqlReq.Variables)
-	if err != nil {
-		rh.err = err
-		return
+	vars, gqlErr := validator.VariableValues(s.schema, op, req.Variables)
+	if gqlErr != nil {
+		return nil, &Response{Errors: gqlerror.List{gqlErr}}
 	}
 
-	rh.op = &operation{op: op, vars: vars}
+	return &operation{op: op, vars: vars}, nil
 }

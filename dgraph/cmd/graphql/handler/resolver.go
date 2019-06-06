@@ -19,7 +19,7 @@ package handler
 import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // GraphQL spec:
@@ -67,29 +67,32 @@ import (
 
 // RequestHandler can process GraphQL requests and write JSON responses.
 type RequestHandler struct {
-	GqlReq       *Request
-	op           *schema.Operation
-	schema       *schema.Schema
-	dgraphClient *dgo.Dgraph
-	err          error
-}
-
-// WithAstSchema sets the schema a rh uses.
-func (rh *RequestHandler) WithAstSchema(s *ast.Schema) {
-	rh.schema.schema = s
-}
-
-// WithDgoBackend sets rh to use dc as its Dgraph backend for
-// resolving GraphQL queries and mutations.
-func (rh *RequestHandler) WithDgoBackend(dc *dgo.Dgraph) {
-	rh.dgraphClient = dc
+	GqlReq       *schema.Request
+	Schema       schema.Schema
+	Errors       gqlerror.List
+	DgraphClient *dgo.Dgraph
+	op           schema.Operation
 }
 
 // Resolve processes rh.GqlReq and returns a GraphQL response.
 // rh.GqlReq should be set with a request before Resolve is called
 // and a schema and backend should have been added.
 // Resolve records any errors in the response's error field.
-func (rh *RequestHandler) Resolve() *Response {
+func (rh *RequestHandler) Resolve() *schema.Response {
+	if rh.Errors != nil {
+		errResp := &schema.Response{Errors: rh.Errors}
+		errResp.WithNullData()
+		return errResp
+	}
+
+	op, resp := rh.Schema.Operation(rh.GqlReq)
+	if resp != nil {
+		return resp
+	}
+
+	_ = op.Mutations
+	// now do the operation processing
+
 	// TODO: fill in with previous http response code
 	return nil
 }

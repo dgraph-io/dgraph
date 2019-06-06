@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package handler
+package schema
 
 import (
 	"encoding/json"
 	"io"
 
 	"github.com/golang/glog"
-
+	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
@@ -37,7 +37,7 @@ type Response struct {
 // obtained by Sprintf-ing the argugments
 func ErrorResponsef(format string, args ...interface{}) *Response {
 	return &Response{
-		Errors: gqlerror.List{gqlerror.Errorf(messagef, args...)},
+		Errors: gqlerror.List{gqlerror.Errorf(format, args...)},
 	}
 }
 
@@ -49,19 +49,21 @@ func (r *Response) WithNullData() {
 
 // WriteTo writes the GraphQL response as unindented JSON to w
 // and returns the number of bytes written and error, if any.
-func (r *Response) WriteTo(w io.Writer) (n int64, err error) {
+func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	b, err := json.Marshal(r)
 	if err != nil {
 		// probably indicatesa bug that's written invalid bytes to r.Data
 		// should I even do it this way - why not just write the bytes directly to w?
 		msg := "Failed to write a valid GraphQL JSON response"
 		glog.Errorf(msg, err) // dump r in for debugging as well? only in V(2) ?
-		errResp := ErrorResponsef(msg).WithNullData()
+		errResp := ErrorResponsef(msg)
+		errResp.WithNullData()
 		b, err = json.Marshal(errResp)
 		if err != nil {
-			return 0, errors.wrap(err)
+			return 0, errors.Wrap(err, "filed to marshal json")
 		}
 	}
 
-	return w.Write(b)
+	n, err := w.Write(b)
+	return int64(n), err
 }

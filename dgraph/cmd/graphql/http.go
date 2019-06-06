@@ -18,7 +18,6 @@ package graphql
 
 import (
 	"encoding/json"
-	"fmt"
 	"mime"
 	"net/http"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/handler"
 	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
 )
 
 type graphqlHTTPHandler struct {
@@ -50,9 +50,10 @@ func (gh *graphqlHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 }
 
 func (gh *graphqlHTTPHandler) handlerForRequest(r *http.Request) (rh *handler.RequestHandler) {
-	rh = &handlerRequestHandler{}
-		.WithAstSchema(gh.schema)
-		.WithDgoBackend(gh.dgraphClient)
+	rh = &handler.RequestHandler{
+		Schema: schema.AsSchema(gh.schema)
+		DgraphClient: gh.dgraphClient
+	}
 
 	switch r.Method {
 	case http.MethodGet:
@@ -60,26 +61,26 @@ func (gh *graphqlHTTPHandler) handlerForRequest(r *http.Request) (rh *handler.Re
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			rh.err = fmt.Errorf("Unable to parse media type: %s", err)
+			rh.Errors = gqlerror.List{gqlerror.Errorf("Unable to parse media type: %s", err)}
 			return
 		}
 
 		switch mediaType {
 		case "application/json":
 			if err = json.NewDecoder(r.Body).Decode(&rh.gqlReq); err != nil {
-				rh.err = fmt.Errorf("Not a valid GraphQL request body: %s", err)
+				rh.Errors = gqlerror.List{gqlerror.Errorf("Not a valid GraphQL request body: %s", err)}
 				return
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
 			// "A standard GraphQL POST request should use the application/json content type ..."
-			rh.err = fmt.Errorf(
-				"Unrecognised Content-Type.  Please use application/json for GraphQL requests")
+			rh.Errors = gqlerror.List{gqlerror.Errorf(
+				"Unrecognised Content-Type.  Please use application/json for GraphQL requests")}
 			return
 		}
 	default:
-		rh.err = fmt.Errorf(
-			"Unrecognised request method.  Please use GET or POST for GraphQL requests")
+		rh.Errors = gqlerror.List{gqlerror.Errorf(
+			"Unrecognised request method.  Please use GET or POST for GraphQL requests")}
 		return
 	}
 	return
