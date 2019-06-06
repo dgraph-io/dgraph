@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -39,8 +38,9 @@ import (
 
 var (
 	backupDir  = "./data/backups"
+	localBackupDir = "./data/backups_local"
 	restoreDir = "./data/restore"
-	dirs       = []string{backupDir, restoreDir}
+	dirs       = []string{restoreDir}
 
 	alphaBackupDir = "/data/backups"
 
@@ -223,12 +223,12 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs()
-	files := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+	files := x.WalkPathFunc(localBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.True(t, len(files) == numExpectedFiles)
-	dirs := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
+	dirs := x.WalkPathFunc(localBackupDir, func(path string, isdir bool) bool {
+		return isdir && strings.HasPrefix(path, "data/backups_local/dgraph.")
 	})
 	require.True(t, len(dirs) == numExpectedDirs)
 
@@ -262,33 +262,19 @@ func dirSetup() {
 }
 
 func dirCleanup() {
-	x.Check(os.RemoveAll("./data"))
+	x.Check(os.RemoveAll(restoreDir))
+	x.Check(os.RemoveAll(localBackupDir))
+
+
+	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
+	x.Check(z.DockerExec(alphaContainers[0], cmd...))
 }
 
 func copyToLocalFs() {
-	cwd, err := os.Getwd()
-	x.Check(err)
-
-	for _, alpha := range alphaContainers {
-		// Because docker cp does not support the * notation, the directory is copied
-		// first to a temporary location in the local FS. Then all backup files are
-		// combined under data/backups.
-		tmpDir := "./data/backups/" + alpha
-		srcPath := fmt.Sprintf("%s:/data/backups", alpha)
-		x.Check(z.DockerCp(srcPath, tmpDir))
-
-		paths, err := filepath.Glob(tmpDir + "/*")
-		x.Check(err)
-
-		opts := z.CmdOpts{
-			Dir: cwd,
-		}
-		cpCmd := []string{"cp", "-r"}
-		cpCmd = append(cpCmd, paths...)
-		cpCmd = append(cpCmd, "./data/backups")
-
-		x.Check(z.ExecWithOpts([]string{"ls", "./data/backups/"}, opts))
-		x.Check(z.ExecWithOpts(cpCmd, opts))
-		x.Check(z.ExecWithOpts([]string{"rm", "-r", tmpDir}, opts))
-	}
+	// The original backup files are not accessible because docker creates all files in
+	// the shared volume as the root user. This restriction is circumvented by using
+	// "docker cp" to create a copy that is not owned by the root user.
+	x.Check(os.RemoveAll(localBackupDir))
+	srcPath := "alpha1:/data/backups"
+	x.Check(z.DockerCp(srcPath, localBackupDir))
 }
