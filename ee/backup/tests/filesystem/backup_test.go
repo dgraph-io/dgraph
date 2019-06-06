@@ -37,10 +37,10 @@ import (
 )
 
 var (
-	backupDir  = "./data/backups"
+	backupDir      = "./data/backups"
 	localBackupDir = "./data/backups_local"
-	restoreDir = "./data/restore"
-	dirs       = []string{restoreDir}
+	restoreDir     = "./data/restore"
+	dirs           = []string{restoreDir}
 
 	alphaBackupDir = "/data/backups"
 
@@ -264,7 +264,6 @@ func dirSetup() {
 func dirCleanup() {
 	x.Check(os.RemoveAll(restoreDir))
 	x.Check(os.RemoveAll(localBackupDir))
-
 
 	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
 	x.Check(z.DockerExec(alphaContainers[0], cmd...))
