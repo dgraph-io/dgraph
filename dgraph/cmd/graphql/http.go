@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
+	"github.com/dgraph/dgraph/cmd/graphql/handler"
 	"github.com/vektah/gqlparser/ast"
 )
 
@@ -41,7 +42,6 @@ func (gh *graphqlHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 
 	rh := gh.handlerForRequest(r)
-	rh.Validate()
 	res := rh.Resolve()
 	_, err := res.WriteTo(w)
 	if err != nil {
@@ -49,11 +49,10 @@ func (gh *graphqlHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (gh *graphqlHTTPHandler) handlerForRequest(r *http.Request) (rh *requestHandler) {
-	rh = &requestHandler{
-		dgraphClient: gh.dgraphClient,
-		schema:       &schema{schema: gh.schema},
-	}
+func (gh *graphqlHTTPHandler) handlerForRequest(r *http.Request) (rh *handler.RequestHandler) {
+	rh = &handlerRequestHandler{}
+		.WithAstSchema(gh.schema)
+		.WithDgoBackend(gh.dgraphClient)
 
 	switch r.Method {
 	case http.MethodGet:
