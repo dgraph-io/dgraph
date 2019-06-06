@@ -787,3 +787,17 @@ Curl has a `--compressed` option that automatically requests for a compressed re
 $ curl -X POST --compressed -H "Content-Type: application/graphqlpm" localhost:8080/query -d $'schema {}'
 ```
 {{% /notice %}}
+
+### Get Alpha Version
+
+`/version` endpoint returns the current version of running alpha.
+
+```sh
+$ curl localhost:8080/version
+```
+
+```json
+{
+  "alpha_version": "v1.0.12"
+}
+```
