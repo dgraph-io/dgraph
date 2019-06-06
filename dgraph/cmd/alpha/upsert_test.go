@@ -98,3 +98,62 @@ func TestUpsertMutation(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
+
+func TestUpsertMutationJSON(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+
+	// Mutation with wrong name
+	m1 := `{
+    "query": "{me(func: eq(email, \"ashish@dgraph.io\")) {v as uid}}",
+    "set": [
+      {
+        "uid": "uid(v)",
+        "name": "Ashihs"
+      },
+      {
+        "uid": "uid(v)",
+        "email": "ashish@dgraph.io"
+      }
+    ]
+  }`
+	keys, preds, _, err := mutationWithTs(m1, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+
+	// query should return the wrong name
+	q1 := `
+  {
+    q(func: has(email)) {
+      uid
+      name
+      email
+    }
+  }`
+	res, _, err := queryWithTs(q1, "application/graphqlpm", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Ashihs")
+	require.True(t, contains(preds, "email"))
+	require.True(t, contains(preds, "name"))
+
+	// mutation with correct name
+	m2 := `{
+    "query": "{me(func: eq(email, \"ashish@dgraph.io\")) {v as uid}}",
+    "set": [
+      {
+        "uid": "uid(v)",
+        "name": "Ashish"
+      }
+    ]
+  }`
+	keys, preds, _, err = mutationWithTs(m2, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	t.Log(preds)
+	require.True(t, contains(preds, "name"))
+
+	// query should return correct name
+	res, _, err = queryWithTs(q1, "application/graphqlpm", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Ashish")
+}

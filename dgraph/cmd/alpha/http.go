@@ -320,6 +320,13 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
 			mu.DeleteJson = delJSON.bs
 		}
+		if queryText, ok := ms["query"]; ok && queryText != nil {
+			mu.Query, err = strconv.Unquote(string(queryText.bs))
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+		}
 
 	case "application/rdf":
 		// Parse N-Quads.
