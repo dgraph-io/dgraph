@@ -27,7 +27,6 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
 	"google.golang.org/grpc"
 )
 
@@ -79,7 +78,7 @@ func GetState() (*StateResponse, error) {
 }
 
 func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
-	state, err := z.GetState()
+	state, err := GetState()
 	if err != nil {
 		return nil, err
 	}
