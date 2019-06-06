@@ -30,10 +30,6 @@ type Processor struct {
 	DB *badger.DB
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
-	// Since indicates the beginning timestamp from which the backup should start.
-	// For a partial backup, the value is the largest value from the previous manifest
-	// files. For a full backup, Since is set to zero so that all data is included.
-	Since uint64
 }
 
 // Manifest records backup details, these are values used during restore.
@@ -46,73 +42,73 @@ type Manifest struct {
 	Groups []uint32 `json:"groups"`
 }
 
-// RunBackup uses the request values to create a stream writer then hand off the data
+// WriteBackup uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (r *Processor) RunBackup(ctx context.Context) (*pb.BackupResponse, error) {
+func (pr *Processor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error) {
 	var emptyRes pb.BackupResponse
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	uri, err := url.Parse(r.Request.Destination)
+	uri, err := url.Parse(pr.Request.Destination)
 	if err != nil {
 		return &emptyRes, err
 	}
 
-	handler, err := r.newHandler(uri)
+	handler, err := NewUriHandler(uri)
 	if err != nil {
 		return &emptyRes, err
 	}
 
-	if err := handler.SetupBackup(uri, r); err != nil {
+	if err := handler.CreateBackupFile(uri, pr.Request); err != nil {
 		return &emptyRes, err
 	}
 
-	glog.V(3).Infof("Backup manifest version: %d", r.Since)
+	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
-	stream := r.DB.NewStreamAt(r.Request.ReadTs)
+	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	newSince, err := stream.Backup(handler, r.Since)
+	newSince, err := stream.Backup(handler, pr.Request.SinceTs)
 
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return &emptyRes, err
 	}
 
-	if newSince > r.Request.ReadTs {
+	if newSince > pr.Request.ReadTs {
 		glog.Errorf("Max timestamp seen during backup (%d) is greater than readTs (%d)",
-			newSince, r.Request.ReadTs)
+			newSince, pr.Request.ReadTs)
 	}
 
-	glog.V(2).Infof("Backup group %d version: %d", r.Request.GroupId, r.Request.ReadTs)
+	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return &emptyRes, err
 	}
-	glog.Infof("Backup complete: group %d at %d", r.Request.GroupId, r.Request.ReadTs)
+	glog.Infof("Backup complete: group %d at %d", pr.Request.GroupId, pr.Request.ReadTs)
 	return &emptyRes, nil
 }
 
-// Complete will finalize a backup by writing the manifest at the backup destination.
-func (r *Processor) Complete(ctx context.Context, manifest *Manifest) error {
+// CompleteBackup will finalize a backup by writing the manifest at the backup destination.
+func (pr *Processor) CompleteBackup(ctx context.Context, manifest *Manifest) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	uri, err := url.Parse(r.Request.Destination)
+	uri, err := url.Parse(pr.Request.Destination)
 	if err != nil {
 		return err
 	}
 
-	handler, err := r.newHandler(uri)
+	handler, err := NewUriHandler(uri)
 	if err != nil {
 		return err
 	}
 
-	if err := handler.CompleteBackup(uri, r, manifest); err != nil {
+	if err := handler.CreateManifest(uri, pr.Request); err != nil {
 		return err
 	}
 

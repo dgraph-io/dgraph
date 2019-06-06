@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -43,10 +44,10 @@ func (h *fileHandler) readManifest(path string, m *Manifest) error {
 	return json.Unmarshal(b, m)
 }
 
-func (h *fileHandler) createFiles(uri *url.URL, req *Processor, fileName string) error {
+func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName string) error {
 	var dir, path string
 
-	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.Request.UnixTs))
+	dir = filepath.Join(uri.Path, fmt.Sprintf(backupPathFmt, req.UnixTs))
 	err := os.Mkdir(dir, 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
@@ -61,13 +62,11 @@ func (h *fileHandler) createFiles(uri *url.URL, req *Processor, fileName string)
 	return nil
 }
 
-// SetupBackup prepares the a path to save backup files and computes the timestamp
-// from which to start the backup.
-func (h *fileHandler) SetupBackup(uri *url.URL, req *Processor) error {
-	var fileName string
-
+// GetSinceTs reads the manifests at the given URL and returns the appropriate
+// timestamp from which the current backup should be started.
+func (h *fileHandler) GetSinceTs(uri *url.URL) (uint64, error) {
 	if !pathExist(uri.Path) {
-		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// Find the max Since value from the latest backup.
@@ -80,27 +79,29 @@ func (h *fileHandler) SetupBackup(uri *url.URL, req *Processor) error {
 		return false
 	})
 
-	if lastManifest != "" {
-		var m Manifest
-		if err := h.readManifest(lastManifest, &m); err != nil {
-			return err
-		}
-
-		req.Since = m.Since
-	}
-	fileName = fmt.Sprintf(backupNameFmt, req.Request.ReadTs, req.Request.GroupId)
-
-	// If a full backup is being forced, force Since to zero to stream all
-	// the contents from the database.
-	if req.Request.ForceFull {
-		req.Since = 0
+	if lastManifest == "" {
+		return 0, nil
 	}
 
+	var m Manifest
+	if err := h.readManifest(lastManifest, &m); err != nil {
+		return 0, err
+	}
+	return m.Since, nil
+}
+
+// CreateBackupFile prepares the a path to save the backup file.
+func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
+	if !pathExist(uri.Path) {
+		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+	}
+
+	fileName := fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId)
 	return h.createFiles(uri, req, fileName)
 }
 
-// CompleteBackup completes the backup by writing the manifest to a file.
-func (h *fileHandler) CompleteBackup(uri *url.URL, req *Processor, manifest *Manifest) error {
+// CreateManifest completes the backup by writing the manifest to a file.
+func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
 	if !pathExist(uri.Path) {
 		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}

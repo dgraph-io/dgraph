@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -50,12 +51,12 @@ type s3Handler struct {
 	pwriter                  *io.PipeWriter
 	preader                  *io.PipeReader
 	cerr                     chan error
-	req                      *Processor
+	req                      *pb.BackupRequest
 	uri                      *url.URL
 }
 
 func (h *s3Handler) credentialsInRequest() bool {
-	return h.req.Request.GetAccessKey() != "" && h.req.Request.GetSecretKey() != ""
+	return h.req.GetAccessKey() != "" && h.req.GetSecretKey() != ""
 }
 
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
@@ -69,7 +70,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
 
 	var creds credentials.Value
-	if h.req.Request.GetAnonymous() {
+	if h.req.GetAnonymous() {
 		// No need to setup credentials.
 	} else if !h.credentialsInRequest() {
 		var provider credentials.Provider
@@ -100,9 +101,9 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		// with no credentials will be made.
 		creds, _ = provider.Retrieve() // error is always nil
 	} else {
-		creds.AccessKeyID = h.req.Request.GetAccessKey()
-		creds.SecretAccessKey = h.req.Request.GetSecretKey()
-		creds.SessionToken = h.req.Request.GetSessionToken()
+		creds.AccessKeyID = h.req.GetAccessKey()
+		creds.SecretAccessKey = h.req.GetSecretKey()
+		creds.SessionToken = h.req.GetSessionToken()
 	}
 
 	secure := uri.Query().Get("secure") != "false" // secure by default
@@ -145,11 +146,11 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	return mc, err
 }
 
-func (h *s3Handler) createObject(uri *url.URL, req *Processor, mc *minio.Client,
+func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.Client,
 	objectName string) {
 
 	// The backup object is: folder1...folderN/dgraph.20181106.0113/r110001-g1.backup
-	object := filepath.Join(h.objectPrefix, fmt.Sprintf(backupPathFmt, req.Request.UnixTs),
+	object := filepath.Join(h.objectPrefix, fmt.Sprintf(backupPathFmt, req.UnixTs),
 		objectName)
 	glog.V(2).Infof("Sending data to %s blob %q ...", uri.Scheme, object)
 
@@ -160,20 +161,12 @@ func (h *s3Handler) createObject(uri *url.URL, req *Processor, mc *minio.Client,
 	}()
 }
 
-// SetupBackup creates a new session and prepares the data stream for the
-// backup. It also computes the timestamp from which to start the backup.
-// URI formats:
-//   minio://<host>/bucket/folder1.../folderN?secure=true|false
-//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
-//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
-//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
-func (h *s3Handler) SetupBackup(uri *url.URL, req *Processor) error {
-	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
-
-	h.req = req
+// GetSinceTs reads the manifests at the given URL and returns the appropriate
+// timestamp from which the current backup should be started.
+func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Find the max Since value from the latest backup.
@@ -186,27 +179,40 @@ func (h *s3Handler) SetupBackup(uri *url.URL, req *Processor) error {
 			lastManifest = object.Key
 		}
 	}
-	if lastManifest != "" {
-		var m Manifest
-		if err := h.readManifest(mc, lastManifest, &m); err != nil {
-			return err
-		}
-		req.Since = m.Since
+
+	if lastManifest == "" {
+		return 0, nil
 	}
 
-	// If a full backup is being forced, force the value of Since to zero to stream all
-	// the contents from the database.
-	if req.Request.ForceFull {
-		req.Since = 0
+	var m Manifest
+	if err := h.readManifest(mc, lastManifest, &m); err != nil {
+		return 0, err
+	}
+	return m.Since, nil
+}
+
+// CreateBackupFile creates a new session and prepares the data stream for the backup.
+// URI formats:
+//   minio://<host>/bucket/folder1.../folderN?secure=true|false
+//   minio://<host:port>/bucket/folder1.../folderN?secure=true|false
+//   s3://<s3 region endpoint>/bucket/folder1.../folderN?secure=true|false
+//   s3:///bucket/folder1.../folderN?secure=true|false (use default S3 endpoint)
+func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error {
+	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
+
+	h.req = req
+	mc, err := h.setup(uri)
+	if err != nil {
+		return err
 	}
 
-	objectName := fmt.Sprintf(backupNameFmt, req.Request.ReadTs, req.Request.GroupId)
+	objectName := fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId)
 	h.createObject(uri, req, mc, objectName)
 	return nil
 }
 
-// CompleteBackup finishes a backup by creating an object to store the manifest.
-func (h *s3Handler) CompleteBackup(uri *url.URL, req *Processor, manifest *Manifest) error {
+// CreateManifest finishes a backup by creating an object to store the manifest.
+func (h *s3Handler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error {
 	glog.V(2).Infof("S3Handler got uri: %+v. Host: %s. Path: %s\n", uri, uri.Host, uri.Path)
 
 	h.req = req

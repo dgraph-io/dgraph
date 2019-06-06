@@ -16,6 +16,8 @@ import (
 	"io"
 	"net/url"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
+
 	"github.com/pkg/errors"
 )
 
@@ -46,23 +48,25 @@ const (
 	backupManifest = `manifest.json`
 )
 
-// handler interface is implemented by URI scheme handlers.
+// UriHandler interface is implemented by URI scheme handlers.
 // When adding new scheme handles, for example 'azure://', an object will implement
 // this interface to supply Dgraph with a way to create or load backup files into DB.
 // For all methods below, the URL object is parsed as described in `newHandler' and
 // the Processor object has the DB, estimated tablets size, and backup parameters.
-type handler interface {
+type UriHandler interface {
 	// Handlers must know how to Write to their URI location.
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// Create prepares the location for write operations. This function is defined for
-	// creating new backup files at a location described by the URL. The caller of this
-	// comes from an HTTP request.
-	SetupBackup(*url.URL, *Processor) error
+	// GetSinceTs reads the manifests at the given URL and returns the appropriate
+	// timestamp from which the current backup should be started.
+	GetSinceTs(*url.URL) (uint64, error)
 
-	// CompleteBackup prepares the manifest for writing.
-	CompleteBackup(*url.URL, *Processor, *Manifest) error
+	// CreateBackupFile prepares the object or file to save the backup file.
+	CreateBackupFile(*url.URL, *pb.BackupRequest) error
+
+	// CreateManifest prepares the manifest for writing.
+	CreateManifest(*url.URL, *pb.BackupRequest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
@@ -78,9 +82,8 @@ type handler interface {
 	ReadManifest(string, *Manifest) error
 }
 
-// getHandler returns a handler for the URI scheme.
-// Returns new handler on success, nil otherwise.
-func getHandler(scheme string) handler {
+// getHandler returns a UriHandler for the URI scheme.
+func getHandler(scheme string) UriHandler {
 	switch scheme {
 	case "file", "":
 		return &fileHandler{}
@@ -90,7 +93,7 @@ func getHandler(scheme string) handler {
 	return nil
 }
 
-// newHandler parses the requested URI and finds the corresponding handler.
+// NewUriHandler parses the requested URI and finds the corresponding UriHandler.
 // Target URI formats:
 //   [scheme]://[host]/[path]?[args]
 //   [scheme]:///[path]?[args]
@@ -113,8 +116,8 @@ func getHandler(scheme string) handler {
 //   minio://localhost:9000/dgraph?secure=true
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
-func (r *Processor) newHandler(uri *url.URL) (handler, error) {
-	var h handler
+func NewUriHandler(uri *url.URL) (UriHandler, error) {
+	var h UriHandler
 
 	h = getHandler(uri.Scheme)
 	if h == nil {
