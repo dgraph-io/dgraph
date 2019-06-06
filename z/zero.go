@@ -22,6 +22,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/z"
+	"google.golang.org/grpc"
 )
 
 // StateResponse represents the structure of the JSON object returned by calling
@@ -69,4 +76,40 @@ func GetState() (*StateResponse, error) {
 		return nil, err
 	}
 	return &st, nil
+}
+
+func GetClientToGroup(groupId string) (*dgo.Dgraph, error) {
+	state, err := z.GetState()
+	if err != nil {
+		return nil, err
+	}
+
+	group, ok := state.Groups[groupId]
+	if !ok {
+		return nil, fmt.Errorf("group %s does not exist", groupId)
+	}
+
+	if len(group.Members) == 0 {
+		return nil, fmt.Errorf("the group %s has no members", groupId)
+	}
+
+	member := group.Members["1"]
+	parts := strings.Split(member.Addr, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("the member has an invalid address: %v", member.Addr)
+	}
+	// internalPort is used for communication between alpha nodes
+	internalPort, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse the port number from %s", parts[1])
+	}
+
+	// externalPort is for handling connections from clients
+	externalPort := internalPort + 2000
+
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", externalPort), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	return dgo.NewDgraphClient(api.NewDgraphClient(conn)), nil
 }
