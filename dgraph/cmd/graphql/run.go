@@ -153,7 +153,7 @@ func run() error {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	handler := &graphqlHandler{
+	handler := &graphqlHTTPHandler{
 		dgraphClient: dgraphClient,
 		schema:       schema,
 	}
