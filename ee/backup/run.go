@@ -253,11 +253,8 @@ func runLsbackupCmd() error {
 	}
 
 	fmt.Printf("Name\tSince\tGroups\n")
-	for _, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\n",
-			manifest.FileName,
-			manifest.Since,
-			manifest.Groups)
+	for path, manifest := range manifests {
+		fmt.Printf("%v\t%v\t%v\n", path, manifest.Since, manifest.Groups)
 	}
 
 	return nil

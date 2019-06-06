@@ -46,14 +46,6 @@ type Manifest struct {
 	Groups []uint32 `json:"groups"`
 }
 
-// ManifestStatus combines a manifest along with other information about it
-// that should not be inside the Manifest struct since it should not be
-// recorded in manifest files.
-type ManifestStatus struct {
-	*Manifest
-	FileName string
-}
-
 // Process uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.

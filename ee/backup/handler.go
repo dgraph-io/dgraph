@@ -145,7 +145,7 @@ func Load(l string, fn loadFn) (since uint64, err error) {
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
-func ListManifests(l string) ([]*ManifestStatus, error) {
+func ListManifests(l string) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err
@@ -161,17 +161,13 @@ func ListManifests(l string) ([]*ManifestStatus, error) {
 		return nil, err
 	}
 
-	var listedManifests []*ManifestStatus
+	listedManifests := make(map[string]*Manifest)
 	for _, path := range paths {
 		var m Manifest
-		var ms ManifestStatus
-
 		if err := h.ReadManifest(path, &m); err != nil {
 			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
-		ms.Manifest = &m
-		ms.FileName = path
-		listedManifests = append(listedManifests, &ms)
+		listedManifests[path] = &m
 	}
 
 	return listedManifests, nil
