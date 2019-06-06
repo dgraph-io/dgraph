@@ -546,9 +546,10 @@ func (s *Server) ShouldServe(
 		// serving.
 		return tab, nil
 	}
-	if tab == nil && tablet.ReadOnly {
-		// Read-only requests should return an empty tablet instead of asking zero to serve
-		// the predicate.
+
+	// Read-only requests should return an empty tablet instead of asking zero
+	// to serve the predicate.
+	if tablet.ReadOnly {
 		return &pb.Tablet{}, nil
 	}
 
