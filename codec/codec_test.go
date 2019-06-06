@@ -59,9 +59,6 @@ func TestUidPack(t *testing.T) {
 
 		expected := getUids(size)
 		pack := Encode(expected, 256)
-		for _, block := range pack.Blocks {
-			require.True(t, len(block.Deltas) <= 255)
-		}
 		require.Equal(t, len(expected), ExactLen(pack))
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)

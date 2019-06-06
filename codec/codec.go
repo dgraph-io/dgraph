@@ -18,12 +18,11 @@ package codec
 
 import (
 	"bytes"
-	"encoding/binary"
 	"math"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-groupvarint"
 )
 
 type seekPos int
@@ -45,18 +44,37 @@ func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0]}
+	block := &pb.UidBlock{Base: e.uids[0], UidNum: uint32(len(e.uids))}
 	last := e.uids[0]
+	e.uids = e.uids[1:]
 
-	count := 1
 	var out bytes.Buffer
-	var buf [binary.MaxVarintLen64]byte
-	for _, uid := range e.uids[1:] {
-		n := binary.PutUvarint(buf[:], uid-last)
-		x.Check2(out.Write(buf[:n]))
-		last = uid
-		count++
+	buf := make([]byte, 17)
+	tmpUids := make([]uint32, 4)
+	for {
+		i := 0
+		for ; i < 4; i++ {
+			if i >= len(e.uids) {
+				// Padding with '0' because Encode4 encodes only in batch of 4.
+				tmpUids[i] = 0
+			} else {
+				tmpUids[i] = uint32(e.uids[i] - last)
+				last = e.uids[i]
+			}
+		}
+
+		data := groupvarint.Encode4(buf, tmpUids)
+		out.Write(data)
+
+		if len(e.uids) <= 4 {
+			e.uids = e.uids[:0]
+			break
+		}
+		e.uids = e.uids[4:]
 	}
+
+	// TODO(Animesh): put comment
+
 	block.Deltas = out.Bytes()
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
@@ -65,6 +83,13 @@ func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
+
+	size := len(e.pack.Blocks)
+	if size > 0 && !match32MSB(e.pack.Blocks[size-1].Base, uid) {
+		e.packBlock()
+		e.uids = e.uids[:0]
+	}
+
 	e.uids = append(e.uids, uid)
 	if len(e.uids) >= e.BlockSize {
 		e.packBlock()
@@ -98,16 +123,24 @@ func (d *Decoder) unpackBlock() []uint64 {
 	last := block.Base
 	d.uids = append(d.uids, last)
 
+	var tmpUids [4]uint32
+	deltas := block.Deltas
+	// TODO(Animesh): Explain this padding
+	deltas = append(deltas, 0, 0, 0)
+
 	// Read back the encoded varints.
-	var offset int
-	for offset < len(block.Deltas) {
-		delta, n := binary.Uvarint(block.Deltas[offset:])
-		x.AssertTrue(n > 0)
-		offset += n
-		uid := last + delta
-		d.uids = append(d.uids, uid)
-		last = uid
+	// Because 4 integers are encoded in atleast 5 bytes.
+	// TODO(Animesh): explain more about condition
+	for len(deltas) > 5 {
+		groupvarint.Decode4(tmpUids[:], deltas)
+		deltas = deltas[groupvarint.BytesUsed[deltas[0]]:]
+		for i := 0; i < 4; i++ {
+			d.uids = append(d.uids, uint64(tmpUids[i])+last)
+			last += uint64(tmpUids[i])
+		}
 	}
+
+	d.uids = d.uids[:block.UidNum]
 	return d.uids
 }
 
@@ -255,16 +288,10 @@ func ExactLen(pack *pb.UidPack) int {
 	if sz == 0 {
 		return 0
 	}
-	block := pack.Blocks[sz-1]
-	num := 1 // Count the base.
-	for _, b := range block.Deltas {
-		// If the MSB in varint encoding is zero, then it is the final byte, not a continuation of
-		// the integer. Thus, we can count it as one delta.
-		if b&0x80 == 0 {
-			num++
-		}
+	num := 0
+	for _, b := range pack.Blocks {
+		num += int(b.UidNum) // UidNum includes the base UID.
 	}
-	num += (sz - 1) * int(pack.BlockSize)
 	return num
 }
 
@@ -278,4 +305,9 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 		uids = append(uids, block...)
 	}
 	return uids
+}
+
+func match32MSB(num1, num2 uint64) bool {
+	mask := uint64(0xffffffff00000000)
+	return (num1 & mask) == (num2 & mask)
 }
