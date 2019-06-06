@@ -42,11 +42,9 @@ import (
 
 type node struct {
 	*conn.Node
-	server      *Server
-	ctx         context.Context
-	reads       map[uint64]chan uint64
-	subscribers map[uint32]chan struct{}
-	closer      *y.Closer // to stop Run.
+	server *Server
+	ctx    context.Context
+	closer *y.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex

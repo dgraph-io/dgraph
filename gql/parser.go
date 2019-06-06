@@ -257,16 +257,6 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	return nil
 }
 
-type query struct {
-	Variables map[string]string `json:"variables"`
-	Query     string            `json:"query"`
-}
-
-type queryAlt struct {
-	Variables string `json:"variables"`
-	Query     string `json:"query"`
-}
-
 func convertToVarMap(variables map[string]string) (vm varMap) {
 	vm = make(map[string]varInfo)
 	for k, v := range variables {

@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sort"
 	"sync"
@@ -95,27 +94,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		closer:   y.NewCloser(3), // Matches CLOSER:1
 	}
 	return n
-}
-
-type header struct {
-	proposalId uint32
-	msgId      uint16
-}
-
-func (h *header) Length() int {
-	return 6 // 4 bytes for proposalId, 2 bytes for msgId.
-}
-
-func (h *header) Encode() []byte {
-	result := make([]byte, h.Length())
-	binary.LittleEndian.PutUint32(result[0:4], h.proposalId)
-	binary.LittleEndian.PutUint16(result[4:6], h.msgId)
-	return result
-}
-
-func (h *header) Decode(in []byte) {
-	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
-	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
 func (n *node) Ctx(key string) context.Context {
@@ -550,12 +528,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
-}
-
-func (n *node) applyAllMarks(ctx context.Context) {
-	// Get index of last committed.
-	lastIndex := n.Applied.LastIndex()
-	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
 func (n *node) leaderBlocking() (*conn.Pool, error) {

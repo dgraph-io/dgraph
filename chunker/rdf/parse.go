@@ -271,10 +271,6 @@ func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
 	return nil
 }
 
-func isNewline(r rune) bool {
-	return r == '\n' || r == '\r'
-}
-
 var typeMap = map[string]types.TypeID{
 	"xs:password":        types.PasswordID,
 	"xs:string":          types.StringID,
