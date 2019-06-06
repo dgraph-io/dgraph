@@ -48,25 +48,24 @@ func (e *Encoder) packBlock() {
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
-	// Padding e.uids to make it multiple of 4.
-	// GroupVarInt encodes 4 uids at a time. So total number of elements in
-	// e.uids should be multiple of 4. We will ignore these while decoding.
-	var padNum int
-	padNum = (4 - (len(e.uids) % 4)) % 4
-
-	for i := 0; i < padNum; i++ {
-		e.uids = append(e.uids, 0)
-	}
-
 	var out bytes.Buffer
 	var buf [17]byte
 	var tmpUids []uint32
 
 	for len(e.uids) > 0 {
-		for i := 0; i < 4; i++ {
-			tmpUids = append(tmpUids, uint32(e.uids[i]-last))
+		for i := 0; i < 4 && i < len(e.uids); i++ {
+			tmpUids = append(tmpUids, uint32(e.uids[i]-last)) // Append with zeros otherwise it might get -ve numbers
 			last = e.uids[i]
 		}
+
+		// Number of uids to pad to make total number of uids a multiple of 4.
+		// Groupvarint which is used takes 4 uids and encodes them.
+		// The append will only happen at last when we are left with < 4 uids.
+		padNum := (4 - (len(tmpUids) % 4)) % 4
+		for i := 0; i < padNum; i++ {
+			tmpUids = append(tmpUids, 0)
+		}
+
 		out.Write(groupvarint.Encode4(buf[:], tmpUids))
 		tmpUids = tmpUids[:0]
 		e.uids = e.uids[4:]
@@ -80,11 +79,13 @@ func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
+
 	siz := len(e.pack.Blocks)
 	if siz > 0 && !match32MSB(e.pack.Blocks[siz-1].Base, uid) {
 		e.packBlock()
 		e.uids = e.uids[:0]
 	}
+
 	e.uids = append(e.uids, uid)
 	if len(e.uids) >= e.BlockSize {
 		e.packBlock()
@@ -124,7 +125,7 @@ func (d *Decoder) unpackBlock() []uint64 {
 	tmpBlockDelts := block.Deltas
 
 	// Read back the encoded varints.
-	for len(tmpBlockDelts) >= 4 {
+	for len(tmpBlockDelts) > 0 { // Because 4 integers are encoded in atleast 5 bytes. This should go to > 0 if encoding is done correctly.
 		groupvarint.Decode4(tmpUids[:], tmpBlockDelts)
 		tmpBlockDelts = tmpBlockDelts[groupvarint.BytesUsed[tmpBlockDelts[0]]:]
 		for i := 0; i < 4; i++ {
@@ -134,7 +135,9 @@ func (d *Decoder) unpackBlock() []uint64 {
 	}
 
 	blockUids := make([]uint64, d.Pack.BlockSize)
-	copy(blockUids, d.uids[:block.UidNum])
+
+	// 1 is subtracted because we have encoded UidNum-1 uids only. Base isn't encoded
+	copy(blockUids, d.uids[:block.UidNum-1])
 	return blockUids
 }
 
