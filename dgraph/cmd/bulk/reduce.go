@@ -160,6 +160,9 @@ func (r *reducer) encodeAndWrite(
 					streamId = atomic.AddUint32(&r.streamId, 1)
 					preds[pk.Attr] = streamId
 				}
+				// TODO: Having many stream ids can cause memory issues with StreamWriter. So, we
+				// should build a way in StreamWriter to indicate that the stream is over, so the
+				// table for that stream can be flushed and memory released.
 				kv.StreamId = streamId
 			}
 			x.Check(writer.Write(list))
