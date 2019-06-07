@@ -173,11 +173,8 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Perform second full backup.
 	dirs = runBackupInternal(t, true, 12, 4)
-	// To make sure this backup contains all the data remove all the previous backups.
-	require.NoError(t, os.RemoveAll(dirs[0]))
-	require.NoError(t, os.RemoveAll(dirs[1]))
-	require.NoError(t, os.RemoveAll(dirs[2]))
-	// Also recreate the restore directory.
+	// Recreate the restore directory to make sure there's no previous data when
+	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 	restored = runRestore(t, dirs[3], incr3.Context.CommitTs)

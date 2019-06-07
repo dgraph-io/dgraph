@@ -245,7 +245,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		return 0, err
 	}
 
-	var manifests []string
+	var manifestPaths []string
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -253,36 +253,47 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
-			manifests = append(manifests, object.Key)
+			manifestPaths = append(manifestPaths, object.Key)
 		}
 	}
-	if len(manifests) == 0 {
+	if len(manifestPaths) == 0 {
 		return 0, errors.Errorf("No manifests found at: %s", uri.String())
 	}
-	sort.Strings(manifests)
+	sort.Strings(manifestPaths)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifestPaths)
 	}
 
 	// since is returned with the max manifest Since value found.
 	var since uint64
 
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
-	// otherwise this is a failure and the user must remedy.
-	for _, manifest := range manifests {
+	// Read and filter the manifests to get the list of manifests to considered
+	// for this restore operation.
+	var manifests []*Manifest
+	for _, manifest := range manifestPaths {
 		var m Manifest
 		if err := h.readManifest(mc, manifest, &m); err != nil {
 			return 0, errors.Wrapf(err, "While reading %q", manifest)
 		}
+		manifests = append(manifests, &m)
+	}
+	manifests, manifestPaths, err = filterManifests(manifests, manifestPaths)
+	if err != nil {
+		return 0, err
+	}
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup files for each group exist. Each group in manifest must have a backup file,
+	// otherwise this is a failure and the user must remedy.
+	for i, m := range manifests {
 		if m.Since == 0 || len(m.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
+				fmt.Printf("Restore: skip backup: %s: %#v\n", manifestPaths[i], m)
 			}
 			continue
 		}
 
-		path := filepath.Dir(manifest)
+		path := filepath.Dir(manifestPaths[i])
 		for _, groupId := range m.Groups {
 			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
