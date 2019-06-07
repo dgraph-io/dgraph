@@ -1,3 +1,8 @@
+// Decode function of groupvarint is written in assembly
+// which is only supported on amd64.
+// +build amd64
+// +build !noasm
+
 /*
  * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
@@ -34,6 +39,10 @@ const (
 	SeekCurrent
 )
 
+var (
+	bitMask uint64 = 0xffffffff00000000
+)
+
 type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
@@ -66,14 +75,13 @@ func (e *Encoder) packBlock() {
 		data := groupvarint.Encode4(buf, tmpUids)
 		out.Write(data)
 
+		// e.uids has ended and we have padded tmpUids with 0s
 		if len(e.uids) <= 4 {
 			e.uids = e.uids[:0]
 			break
 		}
 		e.uids = e.uids[4:]
 	}
-
-	// TODO(Animesh): put comment
 
 	block.Deltas = out.Bytes()
 	e.pack.Blocks = append(e.pack.Blocks, block)
@@ -84,8 +92,8 @@ func (e *Encoder) Add(uid uint64) {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
 
-	size := len(e.pack.Blocks)
-	if size > 0 && !match32MSB(e.pack.Blocks[size-1].Base, uid) {
+	size := len(e.uids)
+	if size > 0 && !match32MSB(e.uids[size-1], uid) {
 		e.packBlock()
 		e.uids = e.uids[:0]
 	}
@@ -125,13 +133,17 @@ func (d *Decoder) unpackBlock() []uint64 {
 
 	var tmpUids [4]uint32
 	deltas := block.Deltas
-	// TODO(Animesh): Explain this padding
+
+	// Decoding always expects the encoded byte array to be of
+	// length >= 4. Padding doesn't affect the decoded values.
 	deltas = append(deltas, 0, 0, 0)
 
 	// Read back the encoded varints.
-	// Because 4 integers are encoded in atleast 5 bytes.
-	// TODO(Animesh): explain more about condition
-	for len(deltas) > 5 {
+	// Due to padding of 3 '0's, it might be the case that we don't
+	// completely consume the byte array. We are encoding uids in group
+	// of 4, that requires atleast 5 bytes. So if we are left with deltas
+	// of length < 5, those are probably the padded 0s.
+	for len(deltas) >= 5 {
 		groupvarint.Decode4(tmpUids[:], deltas)
 		deltas = deltas[groupvarint.BytesUsed[deltas[0]]:]
 		for i := 0; i < 4; i++ {
@@ -308,6 +320,5 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 }
 
 func match32MSB(num1, num2 uint64) bool {
-	mask := uint64(0xffffffff00000000)
-	return (num1 & mask) == (num2 & mask)
+	return (num1 & bitMask) == (num2 & bitMask)
 }
