@@ -206,7 +206,8 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 }
 
 // TODO - Abstract these parameters to a struct.
-func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (mapResponse, error) {
+func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
+	mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
