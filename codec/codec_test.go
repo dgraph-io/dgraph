@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -217,5 +219,50 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = Decode(pack, 0)
+	}
+}
+
+type UInts []uint64
+
+func (u UInts) Len() int { return len(u) }
+
+func (u UInts) Less(i, j int) bool { return u[i] < u[j] }
+
+func (u UInts) Swap(i, j int) {
+	u[i], u[j] = u[j], u[i]
+}
+
+func TestEncoding(t *testing.T) {
+	bigInts := make([]uint64, 5)
+	bigInts[0] = 0xf000000000000000
+	bigInts[1] = 0xf00f000000000000
+	bigInts[2] = 0x00f00f0000000000
+	bigInts[3] = 0x000f0f0000000000
+	bigInts[4] = 0x0f0f0f0f00000000
+
+	rand.Seed(time.Now().UnixNano())
+	var testNums = []int{0, 1, 2, 3, 5, 13, 18, 100, 99, 98}
+
+	for tc := 0; tc < len(testNums); tc++ {
+		ints := make([]uint64, testNums[tc])
+		for i := 0; i < 50 && i < testNums[tc]; i++ {
+			ints[i] = uint64(rand.Uint32())
+		}
+
+		for i := 50; i < testNums[tc]; i++ {
+			ints[i] = uint64(rand.Uint32()) + bigInts[rand.Intn(5)]
+		}
+
+		sort.Sort(UInts(ints))
+
+		encodedInts := Encode(ints, 256)
+		decodedInts := Decode(encodedInts, 0)
+
+		for i := 0; i < testNums[tc]; i++ {
+			if ints[i] != decodedInts[i] {
+				fmt.Println(ints[i], decodedInts[i])
+				t.Errorf("Test failed")
+			}
+		}
 	}
 }
