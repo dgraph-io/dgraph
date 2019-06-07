@@ -117,9 +117,7 @@ func getHandler(scheme string) UriHandler {
 //   file:///tmp/dgraph/backups
 //   /tmp/dgraph/backups?compress=gzip
 func NewUriHandler(uri *url.URL) (UriHandler, error) {
-	var h UriHandler
-
-	h = getHandler(uri.Scheme)
+	h := getHandler(uri.Scheme)
 	if h == nil {
 		return nil, errors.Errorf("Unable to handle url: %s", uri)
 	}
