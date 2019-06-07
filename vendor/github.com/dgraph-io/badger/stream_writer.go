@@ -17,15 +17,11 @@
 package badger
 
 import (
-	"bytes"
-	"encoding/hex"
-	"fmt"
 	"math"
 
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
-	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
@@ -179,7 +175,10 @@ func (sw *StreamWriter) Flush() error {
 			return err
 		}
 	}
-	return syncDir(sw.db.opt.Dir)
+	if err := syncDir(sw.db.opt.Dir); err != nil {
+		return err
+	}
+	return sw.db.lc.validate()
 }
 
 type sortedWriter struct {
@@ -260,27 +259,19 @@ func (w *sortedWriter) handleRequests(closer *y.Closer) {
 // Add adds key and vs to sortedWriter.
 func (w *sortedWriter) Add(key []byte, vs y.ValueStruct) error {
 	if len(w.lastKey) > 0 && y.CompareKeys(key, w.lastKey) <= 0 {
-		if bytes.Equal(key, w.lastKey) {
-			fmt.Println("EQUAL")
-		}
-		pk1 := x.Parse(key)
-		pk2 := x.Parse(w.lastKey)
-		fmt.Printf("Cur: %+v\n", pk1)
-		fmt.Printf("Lastkey: %+v\n", pk2)
-
-		return errors.Wrapf(ErrUnsortedKey, "key: %s lastKey: %s", hex.Dump(key), hex.Dump(w.lastKey))
+		return ErrUnsortedKey
 	}
+
 	sameKey := y.SameKey(key, w.lastKey)
 	// Same keys should go into the same SSTable.
 	if !sameKey && w.builder.ReachedCapacity(w.db.opt.MaxTableSize) {
-		return w.send()
+		if err := w.send(); err != nil {
+			return err
+		}
 	}
 
 	w.lastKey = y.SafeCopy(w.lastKey, key)
-	if err := w.builder.Add(key, vs); err != nil {
-		return err
-	}
-	return nil
+	return w.builder.Add(key, vs)
 }
 
 func (w *sortedWriter) send() error {

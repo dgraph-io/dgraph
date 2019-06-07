@@ -113,11 +113,14 @@ func (m *Manifest) clone() Manifest {
 
 // openOrCreateManifestFile opens a Badger manifest file if it exists, or creates on if
 // one doesn’t.
-func openOrCreateManifestFile(dir string, readOnly bool) (ret *manifestFile, result Manifest, err error) {
+func openOrCreateManifestFile(dir string, readOnly bool) (
+	ret *manifestFile, result Manifest, err error) {
 	return helpOpenOrCreateManifestFile(dir, readOnly, manifestDeletionsRewriteThreshold)
 }
 
-func helpOpenOrCreateManifestFile(dir string, readOnly bool, deletionsThreshold int) (ret *manifestFile, result Manifest, err error) {
+func helpOpenOrCreateManifestFile(dir string, readOnly bool, deletionsThreshold int) (
+	ret *manifestFile, result Manifest, err error) {
+
 	path := filepath.Join(dir, ManifestFilename)
 	var flags uint32
 	if readOnly {
