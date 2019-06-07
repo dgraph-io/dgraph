@@ -40,6 +40,7 @@ import (
 
 type reducer struct {
 	*state
+	streamId uint32
 }
 
 func (r *reducer) run() error {
@@ -56,10 +57,10 @@ func (r *reducer) run() error {
 			defer thr.Done(nil)
 
 			mapFiles := filenamesInTree(shardDirs[shardId])
-			mapEntryChs := make([]chan *pb.MapEntry, len(mapFiles))
-			for i, mapFile := range mapFiles {
-				mapEntryChs[i] = make(chan *pb.MapEntry, 1000)
-				go readMapOutput(mapFile, mapEntryChs[i])
+			var mapItrs []*mapIterator
+			for _, mapFile := range mapFiles {
+				itr := newMapIterator(mapFile)
+				mapItrs = append(mapItrs, itr)
 			}
 
 			writer := db.NewStreamWriter()
@@ -67,14 +68,18 @@ func (r *reducer) run() error {
 				panic(err)
 			}
 			defer func() {
-				fmt.Println("Calling writer.Flush")
 				if err := writer.Flush(); err != nil {
 					panic(err)
 				}
+				for _, itr := range mapItrs {
+					if err := itr.Close(); err != nil {
+						fmt.Printf("Error while closing iterator: %v", err)
+					}
+				}
 			}()
 
-			ci := &countIndexer{state: r.state, writer: writer}
-			r.reduce(mapEntryChs, ci)
+			ci := &countIndexer{reducer: r, writer: writer}
+			r.reduce(mapItrs, ci)
 			ci.wait()
 		}(i, r.createBadger(i))
 	}
@@ -88,42 +93,51 @@ func (s *reducer) createBadger(i int) *badger.DB {
 	opt.ValueThreshold = 1 << 10 // 1 KB.
 	opt.Dir = s.opt.shardOutputDirs[i]
 	opt.ValueDir = opt.Dir
+	opt.Logger = nil
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 	s.dbs = append(s.dbs, db)
 	return db
 }
 
-func readMapOutput(filename string, mapEntryCh chan<- *pb.MapEntry) {
+type mapIterator struct {
+	fd     *os.File
+	reader *bufio.Reader
+	tmpBuf []byte
+}
+
+func (mi *mapIterator) Close() error {
+	return mi.fd.Close()
+}
+
+func (mi *mapIterator) Next() *pb.MapEntry {
+	r := mi.reader
+	buf, err := r.Peek(binary.MaxVarintLen64)
+	if err == io.EOF {
+		return nil
+	}
+	x.Check(err)
+	sz, n := binary.Uvarint(buf)
+	if n <= 0 {
+		log.Fatalf("Could not read uvarint: %d", n)
+	}
+	x.Check2(r.Discard(n))
+
+	for cap(mi.tmpBuf) < int(sz) {
+		mi.tmpBuf = make([]byte, sz)
+	}
+	x.Check2(io.ReadFull(r, mi.tmpBuf[:sz]))
+
+	me := new(pb.MapEntry)
+	x.Check(proto.Unmarshal(mi.tmpBuf[:sz], me))
+	return me
+}
+
+func newMapIterator(filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
-	defer fd.Close()
-	r := bufio.NewReaderSize(fd, 16<<10)
 
-	unmarshalBuf := make([]byte, 1<<10)
-	for {
-		buf, err := r.Peek(binary.MaxVarintLen64)
-		if err == io.EOF {
-			break
-		}
-		x.Check(err)
-		sz, n := binary.Uvarint(buf)
-		if n <= 0 {
-			log.Fatalf("Could not read uvarint: %d", n)
-		}
-		x.Check2(r.Discard(n))
-
-		for cap(unmarshalBuf) < int(sz) {
-			unmarshalBuf = make([]byte, sz)
-		}
-		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
-
-		me := new(pb.MapEntry)
-		x.Check(proto.Unmarshal(unmarshalBuf[:sz], me))
-		mapEntryCh <- me
-	}
-
-	close(mapEntryCh)
+	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(fd, 16<<10)}
 }
 
 type entryBatch struct {
@@ -134,11 +148,25 @@ func (r *reducer) encodeAndWrite(
 	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
 	defer closer.Done()
 
+	preds := make(map[string]uint32)
+
 	var listSize int
 	list := &bpb.KVList{}
 	for batch := range entryCh {
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
+			for _, kv := range list.Kv {
+				pk := x.Parse(kv.Key)
+				if len(pk.Attr) == 0 {
+					continue
+				}
+				streamId := preds[pk.Attr]
+				if streamId == 0 {
+					streamId = atomic.AddUint32(&r.streamId, 1)
+					preds[pk.Attr] = streamId
+				}
+				kv.StreamId = streamId
+			}
 			x.Check(writer.Write(list))
 			list = &bpb.KVList{}
 			listSize = 0
@@ -149,31 +177,35 @@ func (r *reducer) encodeAndWrite(
 	}
 }
 
-func (r *reducer) reduce(mapEntryChs []chan *pb.MapEntry, ci *countIndexer) {
+func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
 	closer := y.NewCloser(1)
 	defer closer.SignalAndWait()
-	defer close(entryCh)
 
 	var ph postingHeap
-	for _, ch := range mapEntryChs {
-		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
+	for _, itr := range mapItrs {
+		me := itr.Next()
+		if me != nil {
+			heap.Push(&ph, heapNode{mapEntry: me, itr: itr})
+		} else {
+			fmt.Printf("INVALID first map entry for %s", itr.fd.Name())
+		}
 	}
 
 	writer := ci.writer
 	go r.encodeAndWrite(writer, entryCh, closer)
 
-	const batchSize = 100000
+	const batchSize = 10000
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	var prevKey []byte
 	var plistLen int
 
 	for len(ph.nodes) > 0 {
-		me := ph.nodes[0].mapEntry
-		var ok bool
-		ph.nodes[0].mapEntry, ok = <-ph.nodes[0].ch
-		if ok {
+		node0 := &ph.nodes[0]
+		me := node0.mapEntry
+		node0.mapEntry = node0.itr.Next()
+		if node0.mapEntry != nil {
 			heap.Fix(&ph, 0)
 		} else {
 			heap.Pop(&ph)
@@ -199,11 +231,12 @@ func (r *reducer) reduce(mapEntryChs []chan *pb.MapEntry, ci *countIndexer) {
 	if plistLen > 0 {
 		ci.addUid(prevKey, plistLen)
 	}
+	close(entryCh)
 }
 
 type heapNode struct {
 	mapEntry *pb.MapEntry
-	ch       <-chan *pb.MapEntry
+	itr      *mapIterator
 }
 
 type postingHeap struct {

@@ -18,7 +18,6 @@ package bulk
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -38,12 +37,11 @@ type current struct {
 }
 
 type countIndexer struct {
-	*state
-	writer   *badger.StreamWriter
-	cur      current
-	counts   map[int][]uint64
-	streamId uint32
-	wg       sync.WaitGroup
+	*reducer
+	writer *badger.StreamWriter
+	cur    current
+	counts map[int][]uint64
+	wg     sync.WaitGroup
 }
 
 // addUid adds the uid from rawKey to a count index if a count index is
@@ -96,7 +94,6 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 			StreamId: streamId,
 		})
 	}
-	fmt.Printf("Outputing counts for pred: %s. Rev: %v. StreamId: %d\n", pred, rev, streamId)
 	sort.Slice(list.Kv, func(i, j int) bool {
 		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
 	})
