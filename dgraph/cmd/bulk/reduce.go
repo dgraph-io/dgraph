@@ -183,7 +183,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		if me != nil {
 			heap.Push(&ph, heapNode{mapEntry: me, itr: itr})
 		} else {
-			fmt.Printf("INVALID first map entry for %s", itr.fd.Name())
+			fmt.Printf("NIL first map entry for %s", itr.fd.Name())
 		}
 	}
 
