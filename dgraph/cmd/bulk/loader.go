@@ -52,7 +52,7 @@ type options struct {
 	MapBufSize       int64
 	SkipMapPhase     bool
 	CleanupTmp       bool
-	NumShufflers     int
+	NumReducers      int
 	Version          bool
 	StoreXids        bool
 	ZeroAddr         string
@@ -227,8 +227,8 @@ type shuffleOutput struct {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuf := shuffler{state: ld.state}
-	shuf.run()
+	r := reducer{state: ld.state}
+	r.run()
 }
 
 func (ld *loader) writeSchema() {

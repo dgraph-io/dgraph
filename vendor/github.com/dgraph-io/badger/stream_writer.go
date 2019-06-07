@@ -259,7 +259,7 @@ func (w *sortedWriter) handleRequests(closer *y.Closer) {
 
 // Add adds key and vs to sortedWriter.
 func (w *sortedWriter) Add(key []byte, vs y.ValueStruct) error {
-	if bytes.Compare(key, w.lastKey) <= 0 {
+	if len(w.lastKey) > 0 && y.CompareKeys(key, w.lastKey) <= 0 {
 		if bytes.Equal(key, w.lastKey) {
 			fmt.Println("EQUAL")
 		}
