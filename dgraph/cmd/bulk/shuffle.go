@@ -21,12 +21,14 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"log"
 	"os"
 
 	"github.com/dgraph-io/badger"
 	bo "github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
@@ -34,7 +36,6 @@ import (
 
 type shuffler struct {
 	*state
-	output chan<- shuffleOutput
 }
 
 func (s *shuffler) run() {
@@ -60,7 +61,6 @@ func (s *shuffler) run() {
 		}(i, s.createBadger(i))
 	}
 	thr.Wait()
-	close(s.output)
 }
 
 func (s *shuffler) createBadger(i int) *badger.DB {
@@ -113,10 +113,22 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *pb.MapEntry, ci *countInd
 		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
 	}
 
+	db := ci.db
+	writer := db.NewStreamWriter()
+	if err := writer.Prepare(); err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := writer.Flush(); err != nil {
+			panic(err)
+		}
+	}()
+
 	const batchSize = 1000
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*pb.MapEntry, 0, batchAlloc)
 	var prevKey []byte
+	var slast []byte
 	var plistLen int
 	for len(ph.nodes) > 0 {
 		me := ph.nodes[0].mapEntry
@@ -127,15 +139,26 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *pb.MapEntry, ci *countInd
 		} else {
 			heap.Pop(&ph)
 		}
-
-		keyChanged := !bytes.Equal(prevKey, me.Key)
-		if keyChanged && plistLen > 0 {
-			ci.addUid(prevKey, plistLen)
-			plistLen = 0
+		if bytes.Compare(me.Key, prevKey) < 0 {
+			panic("what")
 		}
 
-		if len(batch) >= batchSize && !bytes.Equal(prevKey, me.Key) {
-			s.output <- shuffleOutput{mapEntries: batch, db: ci.db}
+		keyChanged := !bytes.Equal(prevKey, me.Key)
+		// TODO: Bring this back.
+		// if keyChanged && plistLen > 0 {
+		// 	ci.addUid(prevKey, plistLen)
+		// 	plistLen = 0
+		// }
+
+		if len(batch) >= batchSize && keyChanged {
+			list := reduce(batch)
+			for _, kv := range list.Kv {
+				if bytes.Compare(kv.Key, slast) <= 0 {
+					panic("wrong")
+				}
+				slast = y.Copy(kv.Key)
+			}
+			x.Check(writer.Write(list))
 			NumQueuedReduceJobs.Add(1)
 			batch = make([]*pb.MapEntry, 0, batchAlloc)
 		}
@@ -143,13 +166,16 @@ func (s *shuffler) shufflePostings(mapEntryChs []chan *pb.MapEntry, ci *countInd
 		batch = append(batch, me)
 		plistLen++
 	}
+	fmt.Println("Done with ph.nodes")
 	if len(batch) > 0 {
-		s.output <- shuffleOutput{mapEntries: batch, db: ci.db}
+		// reduce(shuffleOutput{mapEntries: batch, writer: writer})
+		// x.Check(job.writer.Write(list))
 		NumQueuedReduceJobs.Add(1)
 	}
 	if plistLen > 0 {
 		ci.addUid(prevKey, plistLen)
 	}
+	fmt.Println("Done shuffling.")
 }
 
 type heapNode struct {

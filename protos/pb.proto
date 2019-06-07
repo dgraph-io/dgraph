@@ -291,6 +291,8 @@ message PostingList {
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
   repeated uint64 splits = 4;
+
+	repeated uint64 longterm_uids = 21;
 }
 
 message FacetParam {

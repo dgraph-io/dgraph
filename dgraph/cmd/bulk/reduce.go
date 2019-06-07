@@ -18,9 +18,10 @@ package bulk
 
 import (
 	"bytes"
-	"sync/atomic"
+	"fmt"
 
-	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
@@ -28,62 +29,46 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type reducer struct {
-	*state
-	input     <-chan shuffleOutput
-	writesThr *x.Throttle
-}
-
-func (r *reducer) run() {
-	thr := x.NewThrottle(r.opt.NumGoroutines)
-	for reduceJob := range r.input {
-		thr.Start()
-		NumReducers.Add(1)
-		NumQueuedReduceJobs.Add(-1)
-		r.writesThr.Start()
-		go func(job shuffleOutput) {
-			r.reduce(job)
-			thr.Done()
-			NumReducers.Add(-1)
-		}(reduceJob)
-	}
-	thr.Wait()
-	r.writesThr.Wait()
-}
-
-func (r *reducer) reduce(job shuffleOutput) {
+func reduce(mapEntries []*pb.MapEntry) *bpb.KVList {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(pb.PostingList)
-	txn := job.db.NewTransactionAt(r.state.writeTs, true)
 
-	outputPostingList := func() {
-		atomic.AddInt64(&r.prog.reduceKeyCount, 1)
+	list := &bpb.KVList{}
+	appendToList := func() {
+		// TODO: Bring this back.
+		// atomic.AddInt64(&r.prog.reduceKeyCount, 1)
 
 		// For a UID-only posting list, the badger value is a delta packed UID
 		// list. The UserMeta indicates to treat the value as a delta packed
 		// list when the value is read by dgraph.  For a value posting list,
 		// the full pb.Posting type is used (which pb.y contains the
 		// delta packed UID list).
-		meta := posting.BitCompletePosting
+		if len(uids) == 0 {
+			return
+		}
 		pl.Pack = codec.Encode(uids, 256)
 		val, err := pl.Marshal()
 		x.Check(err)
-		x.Check(txn.SetEntry(&badger.Entry{
-			Key:      currentKey,
+		list.Kv = append(list.Kv, &bpb.KV{
+			Key:      y.Copy(currentKey),
 			Value:    val,
-			UserMeta: meta,
-		}))
+			UserMeta: []byte{posting.BitCompletePosting},
+			Version:  1,
+		})
+		pk := x.Parse(currentKey)
+		fmt.Printf("append pk: %+v\n", pk)
 
 		uids = uids[:0]
 		pl.Reset()
 	}
 
-	for _, mapEntry := range job.mapEntries {
-		atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
+	for _, mapEntry := range mapEntries {
+		// TODO: Bring this back.
+		// atomic.AddInt64(&r.prog.reduceEdgeCount, 1)
 
 		if !bytes.Equal(mapEntry.Key, currentKey) && currentKey != nil {
-			outputPostingList()
+			appendToList()
 		}
 		currentKey = mapEntry.Key
 
@@ -99,12 +84,20 @@ func (r *reducer) reduce(job shuffleOutput) {
 			pl.Postings = append(pl.Postings, mapEntry.Posting)
 		}
 	}
-	outputPostingList()
+	appendToList()
+	return list
 
-	NumBadgerWrites.Add(1)
-	x.Check(txn.CommitAt(r.state.writeTs, func(err error) {
-		x.Check(err)
-		NumBadgerWrites.Add(-1)
-		r.writesThr.Done()
-	}))
+	// NumBadgerWrites.Add(1)
+
+	// TODO: Bring this back.
+	// for _, kv := range list.Kv {
+	// 	pk := x.Parse(kv.Key)
+	// 	fmt.Printf("pk: %+v\n", pk)
+	// }
+	// x.Check(job.writer.Write(list))
+
+	// x.Check(txn.CommitAt(r.state.writeTs, func(err error) {
+	// 	x.Check(err)
+	// 	NumBadgerWrites.Add(-1)
+	// }))
 }
