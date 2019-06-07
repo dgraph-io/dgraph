@@ -86,17 +86,17 @@ func (r *reducer) run() error {
 	return thr.Finish()
 }
 
-func (s *reducer) createBadger(i int) *badger.DB {
+func (r *reducer) createBadger(i int) *badger.DB {
 	opt := badger.DefaultOptions
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.ValueThreshold = 1 << 10 // 1 KB.
-	opt.Dir = s.opt.shardOutputDirs[i]
+	opt.Dir = r.opt.shardOutputDirs[i]
 	opt.ValueDir = opt.Dir
 	opt.Logger = nil
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
-	s.dbs = append(s.dbs, db)
+	r.dbs = append(r.dbs, db)
 	return db
 }
 
@@ -138,10 +138,6 @@ func newMapIterator(filename string) *mapIterator {
 	x.Check(err)
 
 	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(fd, 16<<10)}
-}
-
-type entryBatch struct {
-	entries []*pb.MapEntry
 }
 
 func (r *reducer) encodeAndWrite(
@@ -285,7 +281,7 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 			Key:      y.Copy(currentKey),
 			Value:    val,
 			UserMeta: []byte{posting.BitCompletePosting},
-			Version:  1, // Should probably be writeTs TODO
+			Version:  r.state.writeTs,
 		}
 		size += kv.Size()
 		list.Kv = append(list.Kv, kv)
@@ -315,18 +311,4 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 	}
 	appendToList()
 	return size
-
-	// NumBadgerWrites.Add(1)
-
-	// TODO: Bring this back.
-	// for _, kv := range list.Kv {
-	// 	pk := x.Parse(kv.Key)
-	// 	fmt.Printf("pk: %+v\n", pk)
-	// }
-	// x.Check(job.writer.Write(list))
-
-	// x.Check(txn.CommitAt(r.state.writeTs, func(err error) {
-	// 	x.Check(err)
-	// 	NumBadgerWrites.Add(-1)
-	// }))
 }

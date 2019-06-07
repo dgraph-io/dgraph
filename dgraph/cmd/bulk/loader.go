@@ -228,7 +228,7 @@ func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
 	r := reducer{state: ld.state}
-	r.run()
+	x.Check(r.run())
 }
 
 func (ld *loader) writeSchema() {
