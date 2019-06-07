@@ -67,20 +67,19 @@ func (r *reducer) run() error {
 			if err := writer.Prepare(); err != nil {
 				panic(err)
 			}
-			defer func() {
-				if err := writer.Flush(); err != nil {
-					panic(err)
-				}
-				for _, itr := range mapItrs {
-					if err := itr.Close(); err != nil {
-						fmt.Printf("Error while closing iterator: %v", err)
-					}
-				}
-			}()
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			r.reduce(mapItrs, ci)
 			ci.wait()
+
+			if err := writer.Flush(); err != nil {
+				panic(err)
+			}
+			for _, itr := range mapItrs {
+				if err := itr.Close(); err != nil {
+					fmt.Printf("Error while closing iterator: %v", err)
+				}
+			}
 		}(i, r.createBadger(i))
 	}
 	return thr.Finish()
