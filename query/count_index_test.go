@@ -72,6 +72,14 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	err = txn1.Commit(ctxb)
 	check(err)
 	err = txn2.Commit(ctxb)
+	require.Error(t, err,
+		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
+
+	// retry the mutatiton
+	txn3 := dg.NewTxn()
+	_, err = txn3.Mutate(ctxb, &mu)
+	check(err)
+	err = txn3.Commit(ctxb)
 	check(err)
 
 	// Verify count queries
