@@ -52,7 +52,8 @@ const (
 	ErrorInvalidRequest = "ErrorInvalidRequest"
 	Error               = "Error"
 	ErrorNoData         = "ErrorNoData"
-	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
+		"|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
@@ -331,7 +332,7 @@ func (b *BytesBuffer) grow(n int) {
 		n = 128
 	}
 	if len(b.data) == 0 {
-		b.data = append(b.data, make([]byte, n, n))
+		b.data = append(b.data, make([]byte, n))
 	}
 
 	last := len(b.data) - 1
@@ -348,7 +349,7 @@ func (b *BytesBuffer) grow(n int) {
 	}
 	b.data[last] = b.data[last][:b.off]
 	b.sz += len(b.data[last])
-	b.data = append(b.data, make([]byte, sz, sz))
+	b.data = append(b.data, make([]byte, sz))
 	b.off = 0
 }
 

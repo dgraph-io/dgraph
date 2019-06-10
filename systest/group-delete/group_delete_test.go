@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func NodesSetup(t *testing.T, c *dgo.Dgraph) {
@@ -125,8 +124,8 @@ func getError(rc io.ReadCloser) error {
 }
 
 func TestNodes(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	dg, err := z.GetClientToGroup("1")
+	require.NoError(t, err, "error while getting connection to group 1")
 
 	NodesSetup(t, dg)
 

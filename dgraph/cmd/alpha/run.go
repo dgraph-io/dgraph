@@ -200,11 +200,11 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 	rangeStrings := strings.Split(str, ",")
 
 	for _, s := range rangeStrings {
-		isIPv6 := strings.Index(s, "::") >= 0
+		isIPv6 := strings.Contains(s, "::")
 		tuple := strings.Split(s, ":")
 		switch {
 		case isIPv6 || len(tuple) == 1:
-			if strings.Index(s, "/") < 0 {
+			if !strings.Contains(s, "/") {
 				// string is hostname like host.docker.internal,
 				// or IPv4 address like 144.124.126.254,
 				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
@@ -521,23 +521,17 @@ func run() {
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		var numShutDownSig int
-		for {
+		for range sdCh {
 			select {
-			case _, ok := <-sdCh:
-				if !ok {
-					return
-				}
-				select {
-				case <-shutdownCh:
-				default:
-					close(shutdownCh)
-				}
-				numShutDownSig++
-				glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-				if numShutDownSig == 3 {
-					glog.Infoln("Signaled thrice. Aborting!")
-					os.Exit(1)
-				}
+			case <-shutdownCh:
+			default:
+				close(shutdownCh)
+			}
+			numShutDownSig++
+			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+			if numShutDownSig == 3 {
+				glog.Infoln("Signaled thrice. Aborting!")
+				os.Exit(1)
 			}
 		}
 	}()

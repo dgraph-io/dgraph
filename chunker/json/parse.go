@@ -147,7 +147,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 		nq.ObjectValue = &api.Value{Val: &api.Value_DoubleVal{DoubleVal: v}}
 
 	case bool:
-		if v == false && op == DeleteNquads {
+		if !v && op == DeleteNquads {
 			nq.ObjectValue = &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}}
 			return nil
 		}
@@ -206,7 +206,8 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 }
 
 // TODO - Abstract these parameters to a struct.
-func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (mapResponse, error) {
+func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
+	mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
 	if uidVal, ok := m["uid"]; ok {
@@ -373,10 +374,14 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 }
 
 const (
+	// SetNquads is the constant used to indicate that the parsed NQuads are meant to be added.
 	SetNquads = iota
+	// DeleteNquads is the constant used to indicate that the parsed NQuads are meant to be
+	// deleted.
 	DeleteNquads
 )
 
+// Parse converts the given byte slice into a slice of NQuads.
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)

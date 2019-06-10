@@ -42,7 +42,8 @@ type directoryLockGuard struct {
 // acquireDirectoryLock gets a lock on the directory (using flock). If
 // this is not read-only, it will also write our pid to
 // dirPath/pidFileName for convenience.
-func acquireDirectoryLock(dirPath string, pidFileName string, readOnly bool) (*directoryLockGuard, error) {
+func acquireDirectoryLock(dirPath string, pidFileName string, readOnly bool) (
+	*directoryLockGuard, error) {
 	// Convert to absolute path so that Release still works even if we do an unbalanced
 	// chdir in the meantime.
 	absPidFilePath, err := filepath.Abs(filepath.Join(dirPath, pidFileName))

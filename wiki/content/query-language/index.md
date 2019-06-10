@@ -2219,7 +2219,8 @@ Query:
 ```
 {
   q(func: alloftext(<公司>@zh, "夏新科技有限责任公司")) {
-    _predicate_
+    uid
+    <公司>@.
   }
 }
 ```

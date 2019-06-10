@@ -130,7 +130,7 @@ func printRaft(db *badger.DB, store *raftwal.DiskStorage) {
 				if err != nil {
 					log.Fatalf("Unable to marshal entry: %+v. Error: %v", ent, err)
 				}
-				if err := batch.Set(k, data, 0); err != nil {
+				if err := batch.Set(k, data); err != nil {
 					log.Fatalf("Unable to set data: %+v", err)
 				}
 			default:

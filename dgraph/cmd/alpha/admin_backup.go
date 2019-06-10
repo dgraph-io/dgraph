@@ -21,6 +21,7 @@ package alpha
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/dgraph-io/dgraph/ee/backup"
@@ -89,39 +90,49 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		SecretKey:    secretKey,
 		SessionToken: sessionToken,
 		Anonymous:    anonymous,
-		// TODO(martinmr): Check if this field can be removed.
-		ForceFull: forceFull,
 	}
-	m := backup.Manifest{Groups: worker.KnownGroups()}
-	glog.Infof("Created backup request: %s. Groups=%v\n", &req, m.Groups)
 
+	// Read the manifests to get the right timestamp from which to start the backup.
+	uri, err := url.Parse(req.Destination)
+	if err != nil {
+		return err
+	}
+	handler, err := backup.NewUriHandler(uri)
+	if err != nil {
+		return err
+	}
+	req.SinceTs, err = handler.GetSinceTs(uri)
+	if err != nil {
+		return err
+	}
+	if forceFull {
+		req.SinceTs = 0
+	}
+
+	groups := worker.KnownGroups()
+	glog.Infof("Created backup request: %s. Groups=%v\n", &req, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error, len(m.Groups))
-	for _, gid := range m.Groups {
+	errCh := make(chan error, len(groups))
+	for _, gid := range groups {
 		req := req
 		req.GroupId = gid
 		go func(req *pb.BackupRequest) {
-			res, err := worker.BackupGroup(ctx, req)
+			_, err := worker.BackupGroup(ctx, req)
 			errCh <- err
-
-			// Update manifest if appropriate.
-			m.Lock()
-			if res.Since > m.Since {
-				m.Since = res.Since
-			}
-			m.Unlock()
 		}(&req)
 	}
 
-	for range m.Groups {
+	for range groups {
 		if err := <-errCh; err != nil {
 			glog.Errorf("Error received during backup: %v", err)
 			return err
 		}
 	}
 
-	br := &backup.Request{Backup: &req, Manifest: &m}
-	return br.Complete(ctx)
+	m := backup.Manifest{Groups: groups}
+	m.Since = req.ReadTs
+	bp := &backup.Processor{Request: &req}
+	return bp.CompleteBackup(ctx, &m)
 }

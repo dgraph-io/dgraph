@@ -236,16 +236,10 @@ func run() {
 
 	// handle signals
 	go func() {
-		for {
-			select {
-			case sig, ok := <-sdCh:
-				if !ok {
-					return
-				}
-				glog.Infof("--- Received %s signal", sig)
-				signal.Stop(sdCh)
-				st.zero.closer.Signal()
-			}
+		for sig := range sdCh {
+			glog.Infof("--- Received %s signal", sig)
+			signal.Stop(sdCh)
+			st.zero.closer.Signal()
 		}
 	}()
 

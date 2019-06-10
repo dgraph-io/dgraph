@@ -35,8 +35,8 @@ var (
 	// ErrTxnTooBig is returned if too many writes are fit into a single transaction.
 	ErrTxnTooBig = errors.New("Txn is too big to fit into one request")
 
-	// ErrConflict is returned when a transaction conflicts with another transaction. This can happen if
-	// the read rows had been updated concurrently by another transaction.
+	// ErrConflict is returned when a transaction conflicts with another transaction. This can
+	// happen if the read rows had been updated concurrently by another transaction.
 	ErrConflict = errors.New("Transaction Conflict. Please retry")
 
 	// ErrReadOnlyTxn is returned if an update function is called on a read-only transaction.
@@ -97,7 +97,8 @@ var (
 
 	// ErrTruncateNeeded is returned when the value log gets corrupt, and requires truncation of
 	// corrupt data to allow Badger to run properly.
-	ErrTruncateNeeded = errors.New("Value log truncate required to run DB. This might result in data loss")
+	ErrTruncateNeeded = errors.New(
+		"Value log truncate required to run DB. This might result in data loss")
 
 	// ErrBlockedWrites is returned if the user called DropAll. During the process of dropping all
 	// data from Badger, we stop accepting new writes, by returning this error.

@@ -475,25 +475,21 @@ message Status {
 
 message BackupRequest {
 	uint64 read_ts = 1;
-	uint32 group_id = 2;
-	string unix_ts = 3;
-	string destination = 4;
-	string access_key = 5;
-	string secret_key = 6;
-	string session_token = 7;
+  uint64 since_ts = 2;
+	uint32 group_id = 3;
+	string unix_ts = 4;
+	string destination = 5;
+	string access_key = 6;
+	string secret_key = 7;
+	string session_token = 8;
 
   // True if no credentials should be used to access the S3 or minio bucket.
   // For example, when using a bucket with a public policy.
-  bool anonymous = 8;
-
-  // If true, previous backups will be ignored and a new full backup will be
-  // created. If false, the backup will be full or incremental depending on
-  // the existing backups.
-  bool force_full = 9;
+  bool anonymous = 9;
 }
 
+// Dummy empty response
 message BackupResponse {
-	uint64 since = 1;
 }
 
 message ExportRequest {

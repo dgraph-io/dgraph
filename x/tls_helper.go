@@ -151,7 +151,8 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 		if v, has := auth[strings.ToUpper(authType)]; has {
 			return v, nil
 		}
-		return tls.NoClientCert, fmt.Errorf("Invalid client auth. Valid values [REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
+		return tls.NoClientCert, fmt.Errorf("Invalid client auth. Valid values " +
+			"[REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
 	}
 
 	return tls.NoClientCert, nil
