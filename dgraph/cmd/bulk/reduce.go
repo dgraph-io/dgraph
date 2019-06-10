@@ -44,8 +44,8 @@ type reducer struct {
 }
 
 func (r *reducer) run() error {
-	shardDirs := shardDirs(r.opt.TmpDir)
-	x.AssertTrue(len(shardDirs) == r.opt.ReduceShards)
+	dirs := shardDirs(r.opt.TmpDir)
+	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
 	thr := y.NewThrottle(r.opt.NumReducers)
@@ -56,7 +56,7 @@ func (r *reducer) run() error {
 		go func(shardId int, db *badger.DB) {
 			defer thr.Done(nil)
 
-			mapFiles := filenamesInTree(shardDirs[shardId])
+			mapFiles := filenamesInTree(dirs[shardId])
 			var mapItrs []*mapIterator
 			for _, mapFile := range mapFiles {
 				itr := newMapIterator(mapFile)
@@ -65,7 +65,7 @@ func (r *reducer) run() error {
 
 			writer := db.NewStreamWriter()
 			if err := writer.Prepare(); err != nil {
-				panic(err)
+				x.Check(err)
 			}
 
 			ci := &countIndexer{reducer: r, writer: writer}
@@ -73,7 +73,7 @@ func (r *reducer) run() error {
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
-				panic(err)
+				x.Check(err)
 			}
 			for _, itr := range mapItrs {
 				if err := itr.Close(); err != nil {
@@ -210,6 +210,9 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		}
 
 		keyChanged := !bytes.Equal(prevKey, me.Key)
+		// Note that the keys are coming in sorted order from the heap. So, if
+		// we see a new key, we should push out the number of entries we got
+		// for the current key, so the count index can register that.
 		if keyChanged && plistLen > 0 {
 			ci.addUid(prevKey, plistLen)
 			plistLen = 0

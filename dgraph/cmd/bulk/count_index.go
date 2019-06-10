@@ -98,7 +98,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		return bytes.Compare(list.Kv[i].Key, list.Kv[j].Key) < 0
 	})
 	if err := c.writer.Write(list); err != nil {
-		panic(err)
+		x.Check(err)
 	}
 }
 
