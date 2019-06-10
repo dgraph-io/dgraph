@@ -13,8 +13,10 @@
 package backup
 
 import (
+	"fmt"
 	"io"
 	"net/url"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 
@@ -69,9 +71,11 @@ type UriHandler interface {
 	CreateManifest(*url.URL, *pb.BackupRequest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
+	// It optionally takes the name of the last directory to consider. Any backup directories
+	// created after will be ignored.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
-	Load(*url.URL, loadFn) (uint64, error)
+	Load(*url.URL, string, loadFn) (uint64, error)
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
@@ -129,10 +133,11 @@ func NewUriHandler(uri *url.URL) (UriHandler, error) {
 // A reader and the backup groupId are passed as arguments.
 type loadFn func(reader io.Reader, groupId int) error
 
-// Load will scan location l for backup files, then load them sequentially through reader.
+// Load will scan location l for backup files (not including any directories
+// created after lastDir), then load them sequentially through reader.
 // Returns the maximum Since value on success, otherwise an error.
-func Load(l string, fn loadFn) (since uint64, err error) {
-	uri, err := url.Parse(l)
+func Load(location, lastDir string, fn loadFn) (since uint64, err error) {
+	uri, err := url.Parse(location)
 	if err != nil {
 		return 0, err
 	}
@@ -142,7 +147,7 @@ func Load(l string, fn loadFn) (since uint64, err error) {
 		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, fn)
+	return h.Load(uri, lastDir, fn)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
@@ -176,7 +181,9 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 
 // filterManifests takes a list of manifests, their paths, and returns the list of manifests
 // that should be considered during a restore.
-func filterManifests(manifests []*Manifest, paths []string) ([]*Manifest, []string, error) {
+func filterManifests(manifests []*Manifest, paths []string, lastDir string) (
+	[]*Manifest, []string, error) {
+
 	if len(manifests) != len(paths) {
 		return nil, nil, errors.Errorf("lengths of manifest and paths slice differ")
 	}
@@ -185,6 +192,13 @@ func filterManifests(manifests []*Manifest, paths []string) ([]*Manifest, []stri
 	var filteredManifests []*Manifest
 	var filteredPaths []string
 	for i := len(manifests) - 1; i >= 0; i-- {
+		parts := strings.Split(paths[i], "/")
+		dir := parts[len(parts)-2]
+		if len(lastDir) > 0 && dir > lastDir {
+			fmt.Printf("Restore: skip directory %s because it's newer than %s.\n", dir, lastDir)
+			continue
+		}
+
 		filteredManifests = append(filteredManifests, manifests[i])
 		filteredPaths = append(filteredPaths, paths[i])
 		if manifests[i].Type == "full" {
