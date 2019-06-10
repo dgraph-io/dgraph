@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,13 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/z"
 	"google.golang.org/grpc"
 )
-
-func assignUids(num uint64) {
-	_, err := http.Get(fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
-	if err != nil {
-		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
-	}
-}
 
 func getNewClient() *dgo.Dgraph {
 	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
@@ -280,7 +272,7 @@ func populateCluster() {
 	}
 
 	setSchema(testSchema)
-	assignUids(100000)
+	z.AssignUids(100000)
 
 	addTriplesToCluster(`
 		<1> <name> "Michonne" .

@@ -320,3 +320,10 @@ func VerifyCurlCmd(t *testing.T, args []string,
 		verifyOutput(t, output, failureConfig)
 	}
 }
+
+func AssignUids(num uint64) {
+	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
+	if err != nil {
+		panic(fmt.Sprintf("Could not assign uids. Got error %v", err.Error()))
+	}
+}
