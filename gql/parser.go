@@ -450,7 +450,32 @@ type Result struct {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(r Request) (res Result, rerr error) {
+func Parse(r Request) (Result, error) {
+	return ParseWithNeedVars(r, nil)
+}
+
+// ParseWithNeedVars performs parsing of a query with given needVars.
+//
+// The needVars parameter is passed in the case of upsert block.
+// For example, when parsing the query block inside -
+// upsert {
+//   query {
+//     me(func: eq(email, "someone@gmail.com"), first: 1) {
+//       v as uid
+//     }
+//   }
+//
+//   mutation {
+//     set {
+//       uid(v) <name> "Some One" .
+//       uid(v) <email> "someone@gmail.com" .
+//     }
+//   }
+// }
+//
+// The variable name v needs to be passed through the needVars parameter. Otherwise, an error
+// is reported complaining that the variable v is defined but not used in the query block.
+func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 	query := r.Str
 	vmap := convertToVarMap(r.Variables)
 
@@ -575,12 +600,10 @@ func checkDependency(vl []*Vars) error {
 	if len(defines) != lenBefore {
 		return errors.Errorf("Some variables are declared multiple times.")
 	}
-
 	if len(defines) > len(needs) {
 		return errors.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
-
 	if len(defines) < len(needs) {
 		return errors.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
