@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -555,4 +556,23 @@ func TestHttpCompressionSupport(t *testing.T) {
 	fmt.Println(data)
 	require.Equal(t, `{"data":{"names":[{"name":"Alice"}]}}`, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
+}
+
+func TestHealth(t *testing.T) {
+	url := fmt.Sprintf("%s/health", addr)
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var info struct {
+		Version  string        `json:"version"`
+		Instance string        `json:"instance"`
+		Uptime   time.Duration `json:"uptime"`
+	}
+	require.NoError(t, json.Unmarshal(data, &info))
+	require.Equal(t, "alpha", info.Instance)
+	require.True(t, info.Uptime > time.Duration(1))
 }

@@ -804,3 +804,19 @@ Curl has a `--compressed` option that automatically requests for a compressed re
 $ curl -X POST --compressed -H "Content-Type: application/graphqlpm" localhost:8080/query -d $'schema {}'
 ```
 {{% /notice %}}
+
+### Health Check and Alpha Info
+
+`/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
+The body of the response contains information about the running alpha and its version.
+
+```sh
+$ curl localhost:8080/health
+```
+
+```json
+{
+  "version": "v1.0.12",
+  "instance": "alpha"
+}
+```
