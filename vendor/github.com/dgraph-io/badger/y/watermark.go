@@ -164,8 +164,8 @@ func (w *WaterMark) process(closer *Closer) {
 		loop++
 		if len(indices) > 0 && loop%10000 == 0 {
 			min := indices[0]
-			w.elog.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d. Value: %d\n",
-				w.Name, index, len(indices), w.DoneUntil(), min, pending[min])
+			w.elog.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: "+
+				"%-4d. Value: %d\n", w.Name, index, len(indices), w.DoneUntil(), min, pending[min])
 		}
 
 		// Update mark by going through all indices in order; and checking if they have

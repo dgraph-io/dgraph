@@ -52,7 +52,7 @@ type options struct {
 	MapBufSize       int64
 	SkipMapPhase     bool
 	CleanupTmp       bool
-	NumShufflers     int
+	NumReducers      int
 	Version          bool
 	StoreXids        bool
 	ZeroAddr         string
@@ -220,25 +220,15 @@ func (ld *loader) mapStage() {
 }
 
 type shuffleOutput struct {
-	db         *badger.DB
+	writer     *badger.StreamWriter
 	mapEntries []*pb.MapEntry
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuffleOutputCh := make(chan shuffleOutput, 100)
-	go func() {
-		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
-		shuf.run()
-	}()
-
-	redu := reducer{
-		state:     ld.state,
-		input:     shuffleOutputCh,
-		writesThr: x.NewThrottle(100),
-	}
-	redu.run()
+	r := reducer{state: ld.state}
+	x.Check(r.run())
 }
 
 func (ld *loader) writeSchema() {

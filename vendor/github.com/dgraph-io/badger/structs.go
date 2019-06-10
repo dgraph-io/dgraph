@@ -77,7 +77,8 @@ func (h *header) Decode(buf []byte) {
 	h.userMeta = buf[17]
 }
 
-// Entry provides Key, Value, UserMeta and ExpiresAt. This struct can be used by the user to set data.
+// Entry provides Key, Value, UserMeta and ExpiresAt. This struct can be used by
+// the user to set data.
 type Entry struct {
 	Key       []byte
 	Value     []byte
