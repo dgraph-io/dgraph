@@ -107,6 +107,24 @@ func TestSeek(t *testing.T) {
 			require.Equal(t, tc.out, uids[0])
 		}
 	}
+
+	dec.blockIdx = 0
+	var found bool
+	for i := 200; i < 10000; i += 100 {
+		found = false
+		uids := dec.LinearSeek(uint64(i))
+
+		for _, uid := range uids {
+			if uid == uint64(i) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Errorf("Couldn't find %d using LinearSeek\n", i)
+		}
+	}
 }
 
 func TestLinearSeek(t *testing.T) {
@@ -288,7 +306,7 @@ func TestEncoding(t *testing.T) {
 		for i := 0; i < testNums[tc]; i++ {
 			if ints[i] != decodedInts[i] {
 				fmt.Println(ints[i], decodedInts[i])
-				t.Errorf("Test failed")
+				t.Errorf("Expected: %d Actual: %d", ints[i], decodedInts[i])
 			}
 		}
 	}
