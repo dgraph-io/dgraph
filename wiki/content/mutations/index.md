@@ -702,3 +702,211 @@ Mutation with a JSON file:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
 ```
+
+## Upsert Block
+
+The Upsert block allows performing queries and mutations in single mutation. The Upsert
+block contains one query block and one mutation block. Variables can be defined in the
+query block and then, can be used in the mutation block.
+
+### Update Use Case
+
+Consider the example with following schema -
+
+```sh
+curl localhost:8080/alter -X POST -d $'
+  name: string @index(term) .
+  email: string @index(exact) .
+  age: int @index(int) .
+  friend: uid @reverse .
+' | jq
+```
+
+Now, let's say we want to create a new user with `email` and `name` information. We can
+do this using a mutation as follows -
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  set {
+    _:user <name> "first last" .
+    _:user <email> "user@dgraph.io" .
+  }
+}
+' | jq
+```
+
+Now, we want to store the `age` of the same user in the database. In order to write a
+mutation, we first need to query the uid of the user. We can write the query as follows -
+
+```sh
+curl -H "Content-Type: application/graphqlpm" -X POST localhost:8080/query -d $'
+{
+  me(func: eq(email, "user@dgraph.io")) {
+    uid
+  }
+}' | jq
+```
+
+Result -
+
+```json
+{
+  "data": {
+    "me": [
+      {
+        "uid": "0x2"
+      }
+    ]
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 8380,
+      "processing_ns": 4374419,
+      "encoding_ns": 486133
+    },
+    "txn": {
+      "start_ts": 8
+    }
+  }
+}
+```
+
+Now that we know the uid of the user, we can add the age information as follows -
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+{
+  set {
+    <0x2> <age> "26" .
+  }
+}
+' | jq
+```
+
+This required us to first query the user, and then run mutation. The Upsert block allows
+us to do this in single step.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    me(func: eq(email, "user@dgraph.io")) {
+      v as uid
+    }
+  }
+
+  mutation {
+    set {
+      uid(v) <age> "28" .
+    }
+  }
+}
+' | jq
+```
+
+Result -
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 16780,
+      "processing_ns": 7967087
+    },
+    "txn": {
+      "start_ts": 15,
+      "commit_ts": 16,
+      "preds": [
+        "1-age"
+      ]
+    }
+  }
+}
+```
+
+The query block queries for a user with `email` as `user@dgraph.io`. It stores the
+`uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user. The `uid` function extracts the uid from the variable `v`.
+
+### Insert Use Case
+
+The Upsert block creates new UIDs when the variable in the query block returns no results.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    me(func: eq(email, "user2@dgraph.io")) {
+      v as uid
+    }
+  }
+
+  mutation {
+    set {
+      uid(v) <age> "30" .
+      uid(v) <name> "first2 last2" .
+      uid(v) <email> "user2@dgraph.io" .
+    }
+  }
+}
+' | jq
+```
+
+Result -
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "uid(v)": "0x4"
+    }
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 23130,
+      "processing_ns": 8181048
+    },
+    "txn": {
+      "start_ts": 18,
+      "commit_ts": 19,
+      "preds": [
+        "1-age",
+        "1-email",
+        "1-name"
+      ]
+    }
+  }
+}
+```
+
+Because, the user with email `user2@dgraph.io` doesn't exist in the database, the `uid`
+function return a new but same UID for the variable `v`.
+
+### Summary
+
+In general, the structure of the Upsert block is as follows -
+```
+upsert {
+  query <query block>
+  [fragment <fragment block>]
+  mutation <mutation block>
+}
+```
+
+The Mutation block currently only allows the `uid` function, which allows extracting UIDs
+from variables defined in the query block. There are 3 possible outcomes based on the
+results of executing the query block:
+  * If the variable is empty i.e. has no value, the `uid` function returns a new UID and
+  is treated similar to a blank node.
+  * If the variable stores exactly one UID, the `uid` function returns the uid stored in
+  the variable.
+  * If the variable stores more than one UIDs, the mutation fails. We plan to support
+  this use case in the future.
