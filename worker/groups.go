@@ -300,7 +300,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go func() { g.Node.ProposePeerRemoval(context.Background(), member.Id) }()
+				go func() { _ = g.Node.ProposePeerRemoval(context.Background(), member.Id) }()
 			}
 		}
 		conn.GetPools().RemoveInvalid(g.state)
