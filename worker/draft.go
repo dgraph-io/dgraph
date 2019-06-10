@@ -105,7 +105,7 @@ func (n *node) Ctx(key string) context.Context {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	cc.Unmarshal(e.Data)
+	_ = cc.Unmarshal(e.Data)
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
@@ -460,7 +460,7 @@ func (n *node) processApplyCh() {
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 				}
 				ms := x.SinceMs(start)
-				ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(proposal.Key, perr)

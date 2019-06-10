@@ -297,7 +297,7 @@ func run() error {
 		return err
 	}
 
-	go http.ListenAndServe("localhost:6060", nil)
+	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,

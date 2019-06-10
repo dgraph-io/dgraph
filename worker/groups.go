@@ -300,7 +300,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+				go func() { g.Node.ProposePeerRemoval(context.Background(), member.Id) }()
 			}
 		}
 		conn.GetPools().RemoveInvalid(g.state)
@@ -748,10 +748,10 @@ OUTER:
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():
-			stream.CloseSend()
+			_ = stream.CloseSend()
 			break OUTER
 		case <-ctx.Done():
-			stream.CloseSend()
+			_ = stream.CloseSend()
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
@@ -760,7 +760,7 @@ OUTER:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
+				_ = stream.CloseSend()
 				break OUTER
 			}
 		}

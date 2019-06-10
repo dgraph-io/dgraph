@@ -182,7 +182,7 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	updateSchema(attr, s)
+	_ = updateSchema(attr, s)
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {

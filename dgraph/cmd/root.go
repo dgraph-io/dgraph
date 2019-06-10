@@ -103,8 +103,8 @@ func initCmds() {
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
-		sc.Conf.BindPFlags(sc.Cmd.Flags())
-		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
+		_ = sc.Conf.BindPFlags(sc.Cmd.Flags())
+		_ = sc.Conf.BindPFlags(RootCmd.PersistentFlags())
 		sc.Conf.AutomaticEnv()
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 		// Options that contain a "." should use "_" in its place when provided as an
