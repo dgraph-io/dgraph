@@ -1,11 +1,11 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
-	"os"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/parser"
@@ -13,14 +13,9 @@ import (
 )
 
 func TestSchemaString(t *testing.T) {
-	numTests := 2
+	numTests := 1
 
 	for i := 0; i < numTests; i++ {
-		ans, er := os.Getwd()
-		if er == nil {
-			t.Errorf(ans)
-		}
-
 		fileName := "../testdata/schema" + strconv.Itoa(i+1) + ".txt" // run from pwd
 		str, err := ioutil.ReadFile(fileName)
 		if err != nil {
@@ -44,7 +39,6 @@ func TestSchemaString(t *testing.T) {
 
 		GenerateCompleteSchema(schema)
 		newSchemaStr := Stringify(schema)
-		fmt.Println(newSchemaStr)
 
 		newDoc, gqlerr := parser.ParseSchema(&ast.Source{Input: newSchemaStr})
 		if gqlerr != nil {
@@ -58,6 +52,13 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		fmt.Println("Success!! New schema valdiated")
+		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
+		str, err = ioutil.ReadFile(outFile)
+		if err != nil {
+			t.Errorf("Unable to read output file " + outFile)
+			continue
+		}
+
+		require.Equal(t, newSchemaStr, string(str))
 	}
 }

@@ -3,7 +3,6 @@ type Post {
   title: String!
   text: String
   author: Author!
-  postedAt: DateTime!
   postType: PostType!
 }
 
@@ -11,7 +10,7 @@ type Author {
   id: ID!
   name: String!
   posts(filter: String): [Post!]!
-  friends: Author
+  friends: [Author!]!
 }
 
 enum PostType {
