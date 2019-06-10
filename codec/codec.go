@@ -1,8 +1,3 @@
-// Decode function of groupvarint is written in assembly
-// which is only supported on amd64.
-// +build amd64
-// +build !noasm
-
 /*
  * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
@@ -283,7 +278,7 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	return enc.Done()
 }
 
-// ApproxNum would indicate the total number of UIDs in the pack. Can be used for int slice
+// ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
 	if pack == nil {
