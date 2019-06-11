@@ -61,7 +61,7 @@ input AuthorRef {
 }
 
 input PostRef {
-    postId: ID!
+    id: ID!
 }
 
 type AddPostPayload {
@@ -100,16 +100,16 @@ type Query {
   getAuthor(id: ID!): Author!
   getPost(id: ID!): Post!
 
-  queryAuthor(filter: AuthorFilter): [Author!]!
-  queryPost(filter: PostFilter): [Post!]!
+  queryAuthor(filter: AuthorFilter!): [Author!]!
+  queryPost(filter: PostFilter!): [Post!]!
 }
 
 type Mutation {
   addAuthor(input: AuthorInput!): AddAuthorPayload!
-  updateAuthor(id: ID!, input: AuthorInput!): UpdateAuthorPayload!
+  updateAuthor(id: ID!,input: AuthorUpdate): UpdateAuthorPayload!
   deleteAuthor(id: ID!): DeleteAuthorPayload!
 
   addPost(input: PostInput!): AddPostPayload!
-  updatePost(id: ID!, input: PostInput!): UpdatePostPayload!
+  updatePost(id: ID!,input: PostUpdate): UpdatePostPayload!
   deletePost(id: ID!): DeletePostPayload!
 }

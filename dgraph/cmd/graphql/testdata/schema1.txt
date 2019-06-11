@@ -9,7 +9,7 @@ type Post {
 type Author { 
   id: ID!
   name: String!
-  posts(filter: String): [Post!]!
+  posts: [Post!]!
   friends: [Author!]!
 }
 
