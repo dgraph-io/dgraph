@@ -59,8 +59,6 @@ import (
 const (
 	methodMutate = "Server.Mutate"
 	methodQuery  = "Server.Query"
-	kafkaTopic   = "dgraph"
-	kafkaGroup   = "dgraph"
 )
 
 type ServerState struct {
@@ -183,8 +181,6 @@ func (s *ServerState) initStorage() {
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
-	s.setupKafkaTarget()
-	s.setupKafkaSource()
 
 	s.vlogTicker = time.NewTicker(1 * time.Minute)
 	s.mandatoryVlogTicker = time.NewTicker(10 * time.Minute)

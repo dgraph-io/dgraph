@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/kafka"
+
 	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -415,11 +417,10 @@ func run() {
 		MutationsMode:  edgraph.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-
-		KafkaOpt: edgraph.KafkaOptions{
-			TargetBrokers: Alpha.Conf.GetString("kafka_target_brokers"),
-			SourceBrokers: Alpha.Conf.GetString("kafka_source_brokers"),
-		},
+	}
+	kafka.Config = kafka.KafkaOptions{
+		TargetBrokers: Alpha.Conf.GetString("kafka_target_brokers"),
+		SourceBrokers: Alpha.Conf.GetString("kafka_source_brokers"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -513,6 +514,7 @@ func run() {
 	// schema before calling posting.Init().
 	schema.Init(edgraph.State.Pstore)
 	posting.Init(edgraph.State.Pstore)
+	kafka.Init(edgraph.State.Pstore)
 	defer posting.Cleanup()
 	worker.Init(edgraph.State.Pstore)
 

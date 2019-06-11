@@ -1,14 +1,26 @@
-package edgraph
+package kafka
 
 import (
 	"strings"
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
+
+var pstore *badger.DB
+
+const (
+	kafkaTopic = "dgraph"
+	kafkaGroup = "dgraph"
+)
+
+func Init(db *badger.DB) {
+	pstore = db
+}
 
 // Consumer represents a Sarama consumer group consumer
 type Consumer struct {
@@ -37,7 +49,7 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			return err
 		}
 
-		loader := State.Pstore.NewLoader(16)
+		loader := pstore.NewLoader(16)
 		for _, kv := range list.Kv {
 			if err := loader.Set(kv); err != nil {
 				glog.Errorf("error while setting kv %v to loader: %v", kv, err)
@@ -60,8 +72,8 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 }
 
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
-func (s *ServerState) setupKafkaSource() {
-	sourceBrokers := Config.KafkaOpt.SourceBrokers
+func SetupKafkaSource() {
+	sourceBrokers := Config.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
 	if len(sourceBrokers) > 0 {
 		client, err := getKafkaConsumer(sourceBrokers)
@@ -111,8 +123,8 @@ func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
 
 // setupKafkaTarget will create a kafka producer and use it to send updates to
 // the kafka cluster
-func (s *ServerState) setupKafkaTarget() {
-	targetBrokers := Config.KafkaOpt.TargetBrokers
+func SetupKafkaTarget() {
+	targetBrokers := Config.TargetBrokers
 	glog.Infof("target kafka brokers: %v", targetBrokers)
 	if len(targetBrokers) > 0 {
 		producer, err := getKafkaProducer(targetBrokers)
@@ -143,7 +155,7 @@ func (s *ServerState) setupKafkaTarget() {
 		go func() {
 			// The Subscribe will go into an infinite loop,
 			// hence we need to run it inside a separate go routine
-			if err := s.Pstore.Subscribe(context.Background(), cb, nil); err != nil {
+			if err := pstore.Subscribe(context.Background(), cb, nil); err != nil {
 				glog.Errorf("error while subscribing to the pstore: %v", err)
 			}
 		}()

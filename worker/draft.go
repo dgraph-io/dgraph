@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/kafka"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -792,8 +793,15 @@ func (n *node) Run() {
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
+				leaderNow := rd.RaftState == raft.StateLeader
+				if !leader && leaderNow {
+					onBecomeLeader()
+				} else if leader && !leaderNow {
+					onBecomeFollower()
+				}
+
 				groups().triggerMembershipSync()
-				leader = rd.RaftState == raft.StateLeader
+				leader = leaderNow
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
@@ -958,6 +966,7 @@ func (n *node) Run() {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
+
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
@@ -973,6 +982,16 @@ func (n *node) Run() {
 			}
 		}
 	}
+}
+
+func onBecomeLeader() {
+	glog.Infof("onBecomeLeader setting up kafka")
+	kafka.SetupKafkaTarget()
+	kafka.SetupKafkaSource()
+}
+
+func onBecomeFollower() {
+	glog.Infof("onBecomeFollower")
 }
 
 func listWrap(kv *bpb.KV) *bpb.KVList {
