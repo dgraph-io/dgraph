@@ -139,7 +139,11 @@ func run() {
 		x.Checkf(gqlErr, "Error validating GraphQL schema")
 	}
 
-	gschema.GenerateCompleteSchema(schema)
+	gqlErr = gschema.GenerateCompleteSchema(schema)
+	if gqlErr != nil {
+		x.Checkf(gqlErr, "Error while generating complete schema")
+	}
+
 	fmt.Println(gschema.Stringify(schema))
 
 	handler := &graphqlHandler{

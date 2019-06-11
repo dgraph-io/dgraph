@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"testing"
@@ -37,9 +38,14 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		GenerateCompleteSchema(schema)
-		newSchemaStr := Stringify(schema)
+		gqlerr = GenerateCompleteSchema(schema)
+		if gqlerr != nil {
+			t.Errorf("Error while generating complete schema " + gqlerr.Message)
+			continue
+		}
 
+		newSchemaStr := Stringify(schema)
+		fmt.Println(newSchemaStr)
 		newDoc, gqlerr := parser.ParseSchema(&ast.Source{Input: newSchemaStr})
 		if gqlerr != nil {
 			t.Errorf("Unable to parse new schema "+gqlerr.Message+" %+v", gqlerr.Locations[0])
