@@ -816,7 +816,10 @@ $ curl localhost:8080/health
 
 ```json
 {
-  "version": "v1.0.12",
-  "instance": "alpha"
+  "version": "v1.1.0",
+  "instance": "alpha",
+  "uptime": 1928423
 }
 ```
+
+Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
