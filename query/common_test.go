@@ -220,13 +220,13 @@ type SchoolInfo {
 	abbr: string
 	school: [uid]
 	district: [uid]
-	state: [uid]	
+	state: [uid]
 	county: [uid]
 }
 
 type User {
 	name: string
-	password: password	
+	password: password
 }
 
 type Node {
@@ -271,6 +271,7 @@ year                           : int .
 previous_model                 : uid @reverse .
 created_at                     : datetime @index(hour) .
 updated_at                     : datetime @index(year) .
+number                         : int @index(int) .
 `
 
 func populateCluster() {
