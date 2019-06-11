@@ -204,6 +204,28 @@ Now you can create new persons and attach its type using upsert transaction.
     }
 ```
 
+You can also delete a person and detattach the relation between Type and Person Node. Is the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remains but "`Robin Wright`" will be deleted.
+
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          delete {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
 Query by user.
 ```
 {
