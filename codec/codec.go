@@ -48,7 +48,7 @@ func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0], UidNum: uint32(len(e.uids))}
+	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
 	last := e.uids[0]
 	e.uids = e.uids[1:]
 
@@ -56,8 +56,7 @@ func (e *Encoder) packBlock() {
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
-		i := 0
-		for ; i < 4; i++ {
+		for i := 0; i < 4; i++ {
 			if i >= len(e.uids) {
 				// Padding with '0' because Encode4 encodes only in batch of 4.
 				tmpUids[i] = 0
@@ -126,28 +125,29 @@ func (d *Decoder) unpackBlock() []uint64 {
 	last := block.Base
 	d.uids = append(d.uids, last)
 
-	var tmpUids [4]uint32
-	deltas := block.Deltas
+	tmpUids := make([]uint32, 4)
+	var sum uint64
+	encData := block.Deltas
 
-	// Decoding always expects the encoded byte array to be of
-	// length >= 4. Padding doesn't affect the decoded values.
-	deltas = append(deltas, 0, 0, 0)
+	for uint32(len(d.uids)) < block.NumUids {
 
-	// Read back the encoded varints.
-	// Due to padding of 3 '0's, it might be the case that we don't
-	// completely consume the byte array. We are encoding uids in group
-	// of 4, that requires atleast 5 bytes. So if we are left with deltas
-	// of length < 5, those are probably the padded 0s.
-	for len(deltas) >= 5 {
-		groupvarint.Decode4(tmpUids[:], deltas)
-		deltas = deltas[groupvarint.BytesUsed[deltas[0]]:]
+		if len(encData) < 17 {
+			// Decode4 decodes 4 uids from encData. It moves slice(encData) forward while
+			// decoding and expects it to be of length >= 4 at all the stages. Padding
+			// with zero to make sure lenght is always >= 4.
+			encData = append(encData, 0, 0, 0)
+		}
+
+		groupvarint.Decode4(tmpUids[:], encData)
+		encData = encData[groupvarint.BytesUsed[encData[0]]:]
 		for i := 0; i < 4; i++ {
-			d.uids = append(d.uids, uint64(tmpUids[i])+last)
-			last += uint64(tmpUids[i])
+			sum = last + uint64(tmpUids[i])
+			d.uids = append(d.uids, sum)
+			last = sum
 		}
 	}
 
-	d.uids = d.uids[:block.UidNum]
+	d.uids = d.uids[:block.NumUids]
 	return d.uids
 }
 
@@ -297,7 +297,7 @@ func ExactLen(pack *pb.UidPack) int {
 	}
 	num := 0
 	for _, b := range pack.Blocks {
-		num += int(b.UidNum) // UidNum includes the base UID.
+		num += int(b.NumUids) // NumUids includes the base UID.
 	}
 	return num
 }
