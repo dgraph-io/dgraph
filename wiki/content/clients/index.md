@@ -548,12 +548,12 @@ new transaction is initiated.**
 ### Run a query
 
 To query the database, the `/query` endpoint is used. Remember to set the `Content-Type` header
-to `application/graphqlpm` in order to ensure that the body of the request is correctly parsed.
+to `application/graphql+-` in order to ensure that the body of the request is correctly parsed.
 
 To get the balances for both accounts:
 
 ```sh
-$ curl -H "Content-Type: application/graphqlpm" -X POST localhost:8080/query -d $'
+$ curl -H "Content-Type: application/graphql+-" -X POST localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -773,7 +773,7 @@ Example of a compressed request via curl:
 ```sh
 $ curl -X POST \
   -H 'Accept-Encoding: gzip' \
-  -H "Content-Type: application/graphqlpm" \
+  -H "Content-Type: application/graphql+-" \
   localhost:8080/query -d $'schema {}' | gzip --decompress
 ```
 
@@ -793,7 +793,7 @@ $ zcat query.gz # query.gz is gzipped compressed
 $ curl -X POST \
   -H 'Content-Encoding: gzip' \
   -H 'Accept-Encoding: gzip' \
-  -H "Content-Type: application/graphqlpm" \
+  -H "Content-Type: application/graphql+-" \
   localhost:8080/query --data-binary @query.gz | gzip --decompress
 ```
 
@@ -801,7 +801,7 @@ $ curl -X POST \
 Curl has a `--compressed` option that automatically requests for a compressed response (`Accept-Encoding` header) and decompresses the compressed response.
 
 ```sh
-$ curl -X POST --compressed -H "Content-Type: application/graphqlpm" localhost:8080/query -d $'schema {}'
+$ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8080/query -d $'schema {}'
 ```
 {{% /notice %}}
 
