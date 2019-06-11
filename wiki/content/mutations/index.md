@@ -163,7 +163,61 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
+## External IDs and Upsert Transaction
 
+Due to the new transaction type the option of using External IDs is even easier.
+
+Set your schema
+
+```
+xid: string @index(exact) .
+<http://schema.org/name>: string @index(exact) .
+<http://schema.org/type>: [uid] @reverse .
+```
+
+Set your Type first of all.
+```
+{
+  set {
+    _:blank <xid> "http://schema.org/Person" .
+  }
+}
+```
+Now you can create new persons and attach its type using upsert transaction.
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          set {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+Query by user.
+```
+{
+  q(func: eq(<http://schema.org/name>, "Robin Wright")) {
+    uid
+    xid
+    <http://schema.org/name>
+    <http://schema.org/type> {
+      uid
+      xid
+    }
+  }
+}
+```
 
 ## Language and RDF Types
 
