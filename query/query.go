@@ -317,10 +317,12 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	return fieldName
 }
 
+func isEmptyIneqFnWithVar(sg *SubGraph) bool {
+	return sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && len(sg.SrcFunc.Args) == 0 &&
+		len(sg.Params.NeedsVar) > 0
+}
+
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
-	if len(pc.Params.uidToVal) == 0 {
-		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
-	}
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
@@ -1556,6 +1558,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 	return nil
 }
 
+// recursiveFillVars fills the value of variables before a query is to be processed using the result
+// of the values (doneVars) computed by other queries that were successfully run before this query.
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	err := sg.fillVars(doneVars)
 	if err != nil {
@@ -1588,7 +1592,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 				lists = append(lists, l.Uids)
 
-			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar) && len(l.Vals) != 0:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
 				// This should happen only once.
 				// TODO: This allows only one value var per subgraph, change it later
 				sg.Params.uidToVal = l.Vals
@@ -1606,14 +1610,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 			default:
-				// This var does not match any uids or vals but we are still trying to access it.
-				if v.Typ == gql.ValueVar {
-					// Provide a default value for valueVarAggregation() to eval val().
-					// This is a noop for aggregation funcs that would fail.
-					// The zero aggs won't show because there are no uids matched.
-					mp[v.Name].Vals[0] = types.Val{}
-					sg.Params.uidToVal = mp[v.Name].Vals
-				}
+				glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
 			}
 		}
 	}
@@ -1639,7 +1636,9 @@ func (sg *SubGraph) replaceVarInFunc() error {
 			continue
 		}
 		if len(sg.Params.uidToVal) == 0 {
-			return x.Errorf("No value found for value variable %q", arg.Value)
+			// This means that the variable didn't have any values and hence there is nothing to add
+			// to args.
+			break
 		}
 		// We don't care about uids, just take all the values and put as args.
 		// There would be only one value var per subgraph as per current assumptions.
@@ -2304,7 +2303,10 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 }
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
-	if len(sg.Params.uidToVal) == 0 {
+	// nil has a different meaning from an initialized map of zero length here. If the variable
+	// didn't return any values then uidToVal would be an empty with zero length. If the variable
+	// was used before definition, uidToVal would be nil.
+	if sg.Params.uidToVal == nil {
 		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
 
@@ -2533,8 +2535,11 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) (err error) {
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
-			// Doesn't need to be executed as it just does aggregation and math functions.
-			if sg.Params.IsEmpty {
+			// A query doesn't need to be executed if
+			// 1. It just does aggregation and math functions which is when sg.Params.IsEmpty is true.
+			// 2. Its has an inequality fn at root without any args which can happen when it uses
+			// value variables for args which don't expand to any value.
+			if sg.Params.IsEmpty || isEmptyIneqFnWithVar(sg) {
 				errChan <- nil
 				continue
 			}
