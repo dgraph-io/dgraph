@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"testing"
@@ -38,8 +39,9 @@ func TestSchemaString(t *testing.T) {
 		}
 
 		GenerateCompleteSchema(schema)
-		newSchemaStr := Stringify(schema)
 
+		newSchemaStr := Stringify(schema)
+		fmt.Println(newSchemaStr)
 		newDoc, gqlerr := parser.ParseSchema(&ast.Source{Input: newSchemaStr})
 		if gqlerr != nil {
 			t.Errorf("Unable to parse new schema "+gqlerr.Message+" %+v", gqlerr.Locations[0])
@@ -59,6 +61,18 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		require.Equal(t, newSchemaStr, string(str))
+		doc, gqlerr = parser.ParseSchema(&ast.Source{Input: string(str)})
+		if gqlerr != nil {
+			t.Errorf("Unable to parse file" + fileName + " " + gqlerr.Message)
+			continue
+		}
+
+		outputSchema, gqlerr := validator.ValidateSchemaDocument(doc)
+		if gqlerr != nil {
+			t.Errorf("Unable to validate schema for " + fileName + " " + gqlerr.Message)
+			continue
+		}
+
+		require.Equal(t, true, AreEqualSchema(schema, outputSchema))
 	}
 }

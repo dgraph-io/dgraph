@@ -140,6 +140,7 @@ func run() {
 	}
 
 	gschema.GenerateCompleteSchema(schema)
+
 	fmt.Println(gschema.Stringify(schema))
 
 	handler := &graphqlHandler{
