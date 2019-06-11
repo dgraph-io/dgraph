@@ -343,7 +343,7 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	return fieldName
 }
 
-func emptyIneqFnWithVar(sg *SubGraph) bool {
+func isEmptyIneqFnWithVar(sg *SubGraph) bool {
 	return sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && len(sg.SrcFunc.Args) == 0 &&
 		len(sg.Params.NeedsVar) > 0
 }
@@ -1662,8 +1662,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 }
 
 // recursiveFillVars fills the value of variables before a query is to be processed using the result
-// of the values (doneVars) which were computed by other queries which could be run before this
-// query.
+// of the values (doneVars) computed by other queries that were successfully run before this query.
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	err := sg.fillVars(doneVars)
 	if err != nil {
@@ -1714,6 +1713,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 			default:
+				glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
 			}
 		}
 	}
@@ -2682,7 +2682,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// 1. It just does aggregation and math functions which is when sg.Params.IsEmpty is true.
 			// 2. Its has an inequality fn at root without any args which can happen when it uses
 			// value variables for args which don't expand to any value.
-			if sg.Params.IsEmpty || emptyIneqFnWithVar(sg) {
+			if sg.Params.IsEmpty || isEmptyIneqFnWithVar(sg) {
 				errChan <- nil
 				continue
 			}
