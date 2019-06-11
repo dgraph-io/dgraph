@@ -720,8 +720,6 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	err = txn0.Commit(ctxb)
 	x.Check(err)
 
-	// Expected edge count of 0x1: 2
-	// This should NOT appear in the query result
 	// The following two mutations are in separate interleaved txns.
 	txn1 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
