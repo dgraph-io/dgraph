@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -109,21 +108,9 @@ func TestSeek(t *testing.T) {
 	}
 
 	dec.blockIdx = 0
-	var found bool
-	for i := 200; i < 10000; i += 100 {
-		found = false
+	for i := 100; i < 10000; i += 100 {
 		uids := dec.LinearSeek(uint64(i))
-
-		for _, uid := range uids {
-			if uid == uint64(i) {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			t.Errorf("Couldn't find %d using LinearSeek\n", i)
-		}
+		require.Contains(t, uids, uint64(i))
 	}
 }
 
@@ -267,16 +254,6 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 	}
 }
 
-type UInts []uint64
-
-func (u UInts) Len() int { return len(u) }
-
-func (u UInts) Less(i, j int) bool { return u[i] < u[j] }
-
-func (u UInts) Swap(i, j int) {
-	u[i], u[j] = u[j], u[i]
-}
-
 func TestEncoding(t *testing.T) {
 	bigInts := make([]uint64, 5)
 	bigInts[0] = 0xf000000000000000
@@ -286,28 +263,24 @@ func TestEncoding(t *testing.T) {
 	bigInts[4] = 0x0f0f0f0f00000000
 
 	rand.Seed(time.Now().UnixNano())
-	var testNums = []int{0, 1, 2, 3, 5, 13, 18, 100, 99, 98}
+	var lengths = []int{0, 1, 2, 3, 5, 13, 18, 100, 99, 98}
 
-	for tc := 0; tc < len(testNums); tc++ {
-		ints := make([]uint64, testNums[tc])
-		for i := 0; i < 50 && i < testNums[tc]; i++ {
+	for tc := 0; tc < len(lengths); tc++ {
+		ints := make([]uint64, lengths[tc])
+
+		for i := 0; i < 50 && i < lengths[tc]; i++ {
 			ints[i] = uint64(rand.Uint32())
 		}
 
-		for i := 50; i < testNums[tc]; i++ {
+		for i := 50; i < lengths[tc]; i++ {
 			ints[i] = uint64(rand.Uint32()) + bigInts[rand.Intn(5)]
 		}
 
-		sort.Sort(UInts(ints))
+		sort.Slice(ints, func(i, j int) bool { return ints[i] < ints[j] })
 
 		encodedInts := Encode(ints, 256)
 		decodedInts := Decode(encodedInts, 0)
 
-		for i := 0; i < testNums[tc]; i++ {
-			if ints[i] != decodedInts[i] {
-				fmt.Println(ints[i], decodedInts[i])
-				t.Errorf("Expected: %d Actual: %d", ints[i], decodedInts[i])
-			}
-		}
+		require.Equal(t, ints, decodedInts)
 	}
 }
