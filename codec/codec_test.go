@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -242,10 +241,8 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 
 type UInts []uint64
 
-func (u UInts) Len() int { return len(u) }
-
+func (u UInts) Len() int           { return len(u) }
 func (u UInts) Less(i, j int) bool { return u[i] < u[j] }
-
 func (u UInts) Swap(i, j int) {
 	u[i], u[j] = u[j], u[i]
 }
@@ -278,7 +275,6 @@ func TestEncoding(t *testing.T) {
 
 		for i := 0; i < testNums[tc]; i++ {
 			if ints[i] != decodedInts[i] {
-				fmt.Println(ints[i], decodedInts[i])
 				t.Errorf("Expected: %d Actual: %d", ints[i], decodedInts[i])
 			}
 		}

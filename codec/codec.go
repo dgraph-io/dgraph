@@ -56,8 +56,7 @@ func (e *Encoder) packBlock() {
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
-		i := 0
-		for ; i < 4; i++ {
+		for i := 0; i < 4; i++ {
 			if i >= len(e.uids) {
 				// Padding with '0' because Encode4 encodes only in batch of 4.
 				tmpUids[i] = 0
@@ -127,23 +126,31 @@ func (d *Decoder) unpackBlock() []uint64 {
 	d.uids = append(d.uids, last)
 
 	var tmpUids [4]uint32
-	deltas := block.Deltas
+	var sum uint64
+	encData := block.Deltas
 
-	// Decoding always expects the encoded byte array to be of
-	// length >= 4. Padding doesn't affect the decoded values.
-	deltas = append(deltas, 0, 0, 0)
+	// Encoding is done in group of 4. Encoding 4 uids requires
+	// minimum 5 bytes. If len(encData) < 5, bytes left in
+	// encData(if any) are the padded 0s. They can be ignored.
+	for len(encData) >= 5 {
 
-	// Read back the encoded varints.
-	// Due to padding of 3 '0's, it might be the case that we don't
-	// completely consume the byte array. We are encoding uids in group
-	// of 4, that requires atleast 5 bytes. So if we are left with deltas
-	// of length < 5, those are probably the padded 0s.
-	for len(deltas) >= 5 {
-		groupvarint.Decode4(tmpUids[:], deltas)
-		deltas = deltas[groupvarint.BytesUsed[deltas[0]]:]
+		if len(encData) < 17 {
+			// Decoding always expects the encoded byte array to be of
+			// length >= 4. Decoder keeps shifting the slice(encData)
+			// forward as it decodes a uid. In case when the last uid
+			// is encoded in < 4 bytes and there are no extra padded
+			// bytes, decoder might panic. if len(encData) < 17, it might
+			// be the case that while decoding last uid, we are not
+			// left with 4 bytes in encData.
+			encData = append(encData, 0, 0, 0)
+		}
+
+		groupvarint.Decode4(tmpUids[:], encData)
+		encData = encData[groupvarint.BytesUsed[encData[0]]:]
 		for i := 0; i < 4; i++ {
-			d.uids = append(d.uids, uint64(tmpUids[i])+last)
-			last += uint64(tmpUids[i])
+			sum = last + uint64(tmpUids[i])
+			d.uids = append(d.uids, sum)
+			last = sum
 		}
 	}
 

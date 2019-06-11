@@ -282,7 +282,7 @@ message UidBlock {
 	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
 	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
 	// Default Blocksize is 256 so uint32 would be sufficient.
-	uint32 uidNum = 3;
+	uint32 uid_num = 3;
 }
 
 message UidPack {
