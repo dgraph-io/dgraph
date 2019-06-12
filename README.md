@@ -35,7 +35,7 @@ go 1.12
 ## Install
 
 ```
-go get -u github.com/ChainSafeSystems/gossamer
+go get -u github.com/ChainSafe/gossamer
 ```
 
 ## Usage 
@@ -58,7 +58,7 @@ make docker
 To build the image, run this command:
 
 ```
-docker build -t chainsafe/gossamer -f Docerfile.dev
+docker build -t chainsafe/gossamer -f Dockerfile.dev
 ```
 
 Start an instance with:
