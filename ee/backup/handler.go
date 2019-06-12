@@ -211,3 +211,7 @@ func filterManifests(files []*manifestFile, lastDir string) ([]*manifestFile, er
 
 	return filteredManifests, nil
 }
+
+func backupName(since uint64, groupId uint32) string {
+	return fmt.Sprintf(backupNameFmt, since, groupId)
+}
