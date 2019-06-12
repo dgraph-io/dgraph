@@ -116,7 +116,7 @@ _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
 ```
 
-As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+As Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
 
 ```
 <0x123> <xid> "http://schema.org/Person" .
@@ -165,9 +165,9 @@ Query Example: Robin Wright by external ID.
 
 ## External IDs and Upsert Transaction
 
-Due to the new transaction type the option of using External IDs is even easier.
+The upsert transaction makes managing external IDs easy.
 
-Set your schema
+Set the schema.
 
 ```
 xid: string @index(exact) .
@@ -175,7 +175,7 @@ xid: string @index(exact) .
 <http://schema.org/type>: [uid] @reverse .
 ```
 
-Set your Type first of all.
+Set the Type first of all.
 ```
 {
   set {
@@ -183,7 +183,7 @@ Set your Type first of all.
   }
 }
 ```
-Now you can create new persons and attach its type using upsert transaction.
+Now you can create a new person and attach its type using upsert transaction.
 ```
    upsert {
       query {
