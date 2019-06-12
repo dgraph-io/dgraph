@@ -249,7 +249,13 @@ For a particular node `N`, all data for predicate `P` (and corresponding indexin
 }
 ```
 
-The pattern `S * *` deletes all edges out of a node (the node itself may remain as the target of edges), any reverse edges corresponding to the removed edges and any indexing for the removed data.
+The pattern `S * *` deletes all known edges out of a node (the node itself may
+remain as the target of edges), any reverse edges corresponding to the removed
+edges and any indexing for the removed data. The predicates to delete are
+derived from the type information for that node (the value of the `dgraph.type`
+edges on that node and their corresponding definitions in the schema). If that
+information is missing, this operation will be a no-op.
+
 ```
 {
   delete {
@@ -517,8 +523,12 @@ All edges for a predicate emanating from a single node can be deleted at once
 }
 ```
 
-If no predicates specified, then all of the nodes outbound edges are deleted
-(corresponding to deleting `S * *`):
+If no predicates specified, then all of the node's known outbound edges are
+deleted (corresponding to deleting `S * *`). The predicates to delete are
+derived using the type system. Refer to the [RDF format]({{< relref "#delete" >}})
+documentation and the section on the [type system]({{< relref "query-language/index.md#type-system" >}})
+for more information:
+
 ```json
 {
   "uid": "0x123"

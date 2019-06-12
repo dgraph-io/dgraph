@@ -17,11 +17,11 @@
 package lex
 
 import (
-	"errors"
 	"fmt"
 	"unicode/utf8"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 const EOF = -1
@@ -80,10 +80,7 @@ func (p *ItemIterator) Errorf(format string, args ...interface{}) error {
 // Next advances the iterator by one.
 func (p *ItemIterator) Next() bool {
 	p.idx++
-	if p.idx >= len(p.l.items) {
-		return false
-	}
-	return true
+	return p.idx < len(p.l.items)
 }
 
 // Item returns the current item.
@@ -120,7 +117,7 @@ func (p *ItemIterator) Save() int {
 // Peek returns the next n items without consuming them.
 func (p *ItemIterator) Peek(num int) ([]Item, error) {
 	if (p.idx + num + 1) > len(p.l.items) {
-		return nil, x.Errorf("Out of range for peek")
+		return nil, errors.Errorf("Out of range for peek")
 	}
 	return p.l.items[p.idx+1 : p.idx+num+1], nil
 }
@@ -378,17 +375,17 @@ func (l *Lexer) LexQuotedString() error {
 	l.Backup()
 	r := l.Next()
 	if r != quote {
-		return x.Errorf("String should start with quote.")
+		return errors.Errorf("String should start with quote.")
 	}
 	for {
 		r := l.Next()
 		if r == EOF {
-			return x.Errorf("Unexpected end of input.")
+			return errors.Errorf("Unexpected end of input.")
 		}
 		if r == '\\' {
 			r := l.Next()
 			if !l.IsEscChar(r) {
-				return x.Errorf("Not a valid escape char: '%c'", r)
+				return errors.Errorf("Not a valid escape char: '%c'", r)
 			}
 			continue // eat the next char
 		}

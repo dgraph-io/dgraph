@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -167,7 +168,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	if schema, ok := s.predicate[pred]; ok {
 		return types.TypeID(schema.ValueType), nil
 	}
-	return types.UndefinedID, x.Errorf("Schema not defined for predicate: %v.", pred)
+	return types.UndefinedID, errors.Errorf("Schema not defined for predicate: %v.", pred)
 }
 
 // IsIndexed returns whether the predicate is indexed or not
@@ -306,7 +307,7 @@ func Init(ps *badger.DB) {
 
 func Load(predicate string) error {
 	if len(predicate) == 0 {
-		return x.Errorf("Empty predicate")
+		return errors.Errorf("Empty predicate")
 	}
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(1, false)

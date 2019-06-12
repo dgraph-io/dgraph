@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
 )
@@ -211,7 +212,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			idx += 4
 			msg := raftpb.Message{}
 			if idx+sz > len(data) {
-				return x.Errorf(
+				return errors.Errorf(
 					"Invalid query. Specified size %v overflows slice [%v,%v)\n",
 					sz, idx, len(data))
 			}
@@ -236,7 +237,7 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 			if err := raft.Step(ctx, msg); err != nil {
 				glog.Warningf("Error while raft.Step from %#x: %v. Closing RaftMessage stream.",
 					rc.GetId(), err)
-				return x.Errorf("Error while raft.Step from %#x: %v", rc.GetId(), err)
+				return errors.Wrapf(err, "error while raft.Step from %#x", rc.GetId())
 			}
 			idx += sz
 		}

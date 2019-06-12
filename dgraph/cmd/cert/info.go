@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type certInfo struct {
@@ -68,9 +68,7 @@ func getFileInfo(file string) *certInfo {
 			for _, ip := range cert.IPAddresses {
 				info.hosts = append(info.hosts, ip.String())
 			}
-			for _, name := range cert.DNSNames {
-				info.hosts = append(info.hosts, name)
-			}
+			info.hosts = append(info.hosts, cert.DNSNames...)
 
 		case strings.HasPrefix(file, "client."):
 			info.commonName = fmt.Sprintf("%s client certificate: %s",
@@ -125,7 +123,7 @@ func getFileInfo(file string) *certInfo {
 		}
 		key, ok := priv.(crypto.Signer)
 		if !ok {
-			info.err = x.Errorf("Unknown private key type: %T", key)
+			info.err = errors.Errorf("Unknown private key type: %T", key)
 		}
 		switch k := key.(type) {
 		case *ecdsa.PrivateKey:

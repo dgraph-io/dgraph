@@ -52,7 +52,8 @@ const (
 	ErrorInvalidRequest = "ErrorInvalidRequest"
 	Error               = "Error"
 	ErrorNoData         = "ErrorNoData"
-	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
+		"|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
@@ -85,6 +86,7 @@ var (
 	Nilbyte        []byte
 )
 
+// ShouldCrash returns true if the error should cause the process to crash.
 func ShouldCrash(err error) bool {
 	if err == nil {
 		return false
@@ -126,6 +128,7 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 	SetStatus(w, "error", msg)
 }
 
+// AddCorsHeaders adds the CORS headers to an HTTP response.
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
@@ -136,11 +139,14 @@ func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
+// QueryResWithData represents a response that holds errors as well as data.
 type QueryResWithData struct {
 	Errors []errRes `json:"errors"`
 	Data   *string  `json:"data"`
 }
 
+// SetStatusWithData sets the errors in the response and ensures that the data key
+// in the data is present with value nil.
 // In case an error was encountered after the query execution started, we have to return data
 // key with null value according to GraphQL spec.
 func SetStatusWithData(w http.ResponseWriter, code, msg string) {
@@ -154,6 +160,7 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	}
 }
 
+// Reply sets the body of an HTTP response to the JSON representation of the given reply.
 func Reply(w http.ResponseWriter, rep interface{}) {
 	if js, err := json.Marshal(rep); err == nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -163,6 +170,7 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 	}
 }
 
+// ParseRequest parses the body of the given request.
 func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
@@ -173,6 +181,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
+// Min returns the minimum of the two given numbers.
 func Min(a, b uint64) uint64 {
 	if a < b {
 		return a
@@ -180,6 +189,7 @@ func Min(a, b uint64) uint64 {
 	return b
 }
 
+// Max returns the maximum of the two given numbers.
 func Max(a, b uint64) uint64 {
 	if a > b {
 		return a
@@ -187,20 +197,22 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
-func RetryUntilSuccess(maxRetries int, sleepDurationOnFailure time.Duration,
+// RetryUntilSuccess runs the given function until it succeeds or can no longer be retried.
+func RetryUntilSuccess(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
 	var err error
 	for retry := maxRetries; retry != 0; retry-- {
 		if err = f(); err == nil {
 			return nil
 		}
-		if sleepDurationOnFailure > 0 {
-			time.Sleep(sleepDurationOnFailure)
+		if waitAfterFailure > 0 {
+			time.Sleep(waitAfterFailure)
 		}
 	}
 	return err
 }
 
+// HasString returns whether the slice contains the given string.
 func HasString(a []string, b string) bool {
 	for _, k := range a {
 		if k == b {
@@ -210,7 +222,7 @@ func HasString(a []string, b string) bool {
 	return false
 }
 
-// Reads a single line from a buffered reader. The line is read into the
+// ReadLine reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred
 // method for loading long lines which could be longer than the buffer
 // size of bufio.Scanner.
@@ -231,6 +243,7 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	return err
 }
 
+// FixedDuration returns the given duration as a string of fixed length.
 func FixedDuration(d time.Duration) string {
 	str := fmt.Sprintf("%02ds", int(d.Seconds())%60)
 	if d >= time.Minute {
@@ -294,8 +307,8 @@ func ValidateAddress(addr string) bool {
 	return regExpHostName.MatchString(host)
 }
 
-// sorts the slice of strings and removes duplicates. changes the input slice.
-// this function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+// RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
+// This function should be called like: someSlice = x.RemoveDuplicates(someSlice)
 func RemoveDuplicates(s []string) (out []string) {
 	sort.Strings(s)
 	out = s[:0]
@@ -319,7 +332,7 @@ func (b *BytesBuffer) grow(n int) {
 		n = 128
 	}
 	if len(b.data) == 0 {
-		b.data = append(b.data, make([]byte, n, n))
+		b.data = append(b.data, make([]byte, n))
 	}
 
 	last := len(b.data) - 1
@@ -336,7 +349,7 @@ func (b *BytesBuffer) grow(n int) {
 	}
 	b.data[last] = b.data[last][:b.off]
 	b.sz += len(b.data[last])
-	b.data = append(b.data, make([]byte, sz, sz))
+	b.data = append(b.data, make([]byte, sz))
 	b.off = 0
 }
 

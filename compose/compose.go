@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/user"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -127,7 +128,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	})
 
 	switch {
-	case opts.DataVol == true:
+	case opts.DataVol:
 		svc.Volumes = append(svc.Volumes, Volume{
 			Type:   "volume",
 			Source: "data",
@@ -150,7 +151,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	if opts.UserOwnership {
 		user, err := user.Current()
 		if err != nil {
-			x.CheckfNoTrace(x.Errorf("unable to get current user: %v", err))
+			x.CheckfNoTrace(errors.Wrap(err, "unable to get current user"))
 		}
 		svc.User = fmt.Sprintf("${UID:-%s}", user.Uid)
 		svc.WorkingDir = fmt.Sprintf("/working/%s", svc.name)
@@ -301,8 +302,6 @@ func addMetrics(cfg *ComposeConfig) {
 			Target: "/var/lib/grafana",
 		}},
 	}
-
-	return
 }
 
 func warning(str string) {

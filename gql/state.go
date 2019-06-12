@@ -28,16 +28,12 @@ const (
 	rightSquare = ']'
 	period      = '.'
 	comma       = ','
-	bang        = '!'
-	dollar      = '$'
 	slash       = '/'
-	backslash   = '\\'
 	equal       = '='
 	quote       = '"'
 	at          = '@'
 	colon       = ':'
 	lsThan      = '<'
-	grThan      = '>'
 	star        = '*'
 )
 
@@ -49,7 +45,6 @@ const (
 	itemEqual                                   // equals to symbol
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
-	itemString                                  // quoted string
 	itemLeftRound                               // left round bracket
 	itemRightRound                              // right round bracket
 	itemColon                                   // Colon
@@ -57,7 +52,6 @@ const (
 	itemPeriod                                  // .
 	itemDollar                                  // $
 	itemRegex                                   // /
-	itemBackslash                               // \
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemLeftSquare
@@ -486,11 +480,6 @@ func isSpace(r rune) bool {
 // isEndLiteral returns true if rune is quotation mark.
 func isEndLiteral(r rune) bool {
 	return r == '"' || r == '\u000d' || r == '\u000a'
-}
-
-// isEndArg returns true if rune is a comma or right round bracket.
-func isEndArg(r rune) bool {
-	return r == comma || r == ')'
 }
 
 func isLangOrDirective(r rune) bool {

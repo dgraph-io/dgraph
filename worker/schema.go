@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
@@ -175,7 +176,9 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *pb.SchemaRequest, 
 
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
-func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) ([]*api.SchemaNode, error) {
+func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) (
+	[]*api.SchemaNode, error) {
+
 	ctx, span := otrace.StartSpan(ctx, "worker.GetSchemaOverNetwork")
 	defer span.End()
 
@@ -224,7 +227,7 @@ func (w *grpcWorker) Schema(ctx context.Context, s *pb.SchemaRequest) (*pb.Schem
 	}
 
 	if !groups().ServesGroup(s.GroupId) {
-		return &emptySchemaResult, x.Errorf("This server doesn't serve group id: %v", s.GroupId)
+		return &emptySchemaResult, errors.Errorf("This server doesn't serve group id: %v", s.GroupId)
 	}
 	return getSchema(ctx, s)
 }

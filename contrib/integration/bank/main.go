@@ -137,9 +137,7 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 }
 
 func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
-	// query := fmt.Sprintf(`{ q(func: eq(key, %d)) @filter(eq(typ, "ba")) { key, uid, bal, typ }}`, key)
 	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, typ }}`, key)
-	// log.Printf("findACcount: %s\n", query)
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
 		return Account{}, err
@@ -163,7 +161,6 @@ func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
 }
 
 func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
-	// w := os.Stdout
 	w := bufio.NewWriter(buf)
 	fmt.Fprintf(w, "==>\n")
 	defer func() {

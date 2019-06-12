@@ -17,7 +17,6 @@
 package badger
 
 import (
-	"bytes"
 	"math"
 
 	"github.com/dgraph-io/badger/pb"
@@ -26,6 +25,8 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
+
+const headStreamId uint32 = math.MaxUint32
 
 // StreamWriter is used to write data coming from multiple streams. The streams must not have any
 // overlapping key ranges. Within each stream, the keys must be sorted. Badger Stream framework is
@@ -42,9 +43,9 @@ type StreamWriter struct {
 	db         *DB
 	done       func()
 	throttle   *y.Throttle
-	head       valuePointer
 	maxVersion uint64
 	writers    map[uint32]*sortedWriter
+	closer     *y.Closer
 }
 
 // NewStreamWriter creates a StreamWriter. Right after creating StreamWriter, Prepare must be
@@ -58,6 +59,7 @@ func (db *DB) NewStreamWriter() *StreamWriter {
 		// concurrent streams being processed.
 		throttle: y.NewThrottle(16),
 		writers:  make(map[uint32]*sortedWriter),
+		closer:   y.NewCloser(0),
 	}
 }
 
@@ -72,9 +74,12 @@ func (sw *StreamWriter) Prepare() error {
 }
 
 // Write writes KVList to DB. Each KV within the list contains the stream id which StreamWriter
-// would use to demux the writes.
+// would use to demux the writes. Write is not thread safe and it should NOT be called concurrently.
 func (sw *StreamWriter) Write(kvs *pb.KVList) error {
-	var entries []*Entry
+	if len(kvs.GetKv()) == 0 {
+		return nil
+	}
+	streamReqs := make(map[uint32]*request)
 	for _, kv := range kvs.Kv {
 		var meta, userMeta byte
 		if len(kv.Meta) > 0 {
@@ -96,50 +101,28 @@ func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 		// If the value can be colocated with the key in LSM tree, we can skip
 		// writing the value to value log.
 		e.skipVlog = sw.db.shouldWriteValueToLSM(*e)
-		entries = append(entries, e)
+		req := streamReqs[kv.StreamId]
+		if req == nil {
+			req = &request{}
+			streamReqs[kv.StreamId] = req
+		}
+		req.Entries = append(req.Entries, e)
 	}
-	req := &request{
-		Entries: entries,
+	var all []*request
+	for _, req := range streamReqs {
+		all = append(all, req)
 	}
-	y.AssertTrue(len(kvs.Kv) == len(req.Entries))
-	if err := sw.db.vlog.write([]*request{req}); err != nil {
+	if err := sw.db.vlog.write(all); err != nil {
 		return err
 	}
 
-	for i, kv := range kvs.Kv {
-		e := req.Entries[i]
-		vptr := req.Ptrs[i]
-		if !vptr.IsZero() {
-			y.AssertTrue(sw.head.Less(vptr))
-			sw.head = vptr
-		}
-
-		writer, ok := sw.writers[kv.StreamId]
+	for streamId, req := range streamReqs {
+		writer, ok := sw.writers[streamId]
 		if !ok {
-			writer = sw.newWriter(kv.StreamId)
-			sw.writers[kv.StreamId] = writer
+			writer = sw.newWriter(streamId)
+			sw.writers[streamId] = writer
 		}
-
-		var vs y.ValueStruct
-		if e.skipVlog {
-			vs = y.ValueStruct{
-				Value:     e.Value,
-				Meta:      e.meta,
-				UserMeta:  e.UserMeta,
-				ExpiresAt: e.ExpiresAt,
-			}
-		} else {
-			vbuf := make([]byte, vptrSize)
-			vs = y.ValueStruct{
-				Value:     vptr.Encode(vbuf),
-				Meta:      e.meta | bitValuePointer,
-				UserMeta:  e.UserMeta,
-				ExpiresAt: e.ExpiresAt,
-			}
-		}
-		if err := writer.Add(e.Key, vs); err != nil {
-			return err
-		}
+		writer.reqCh <- req
 	}
 	return nil
 }
@@ -148,16 +131,22 @@ func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 // updates Oracle with maxVersion found in all entries (if DB is not managed).
 func (sw *StreamWriter) Flush() error {
 	defer sw.done()
+
+	sw.closer.SignalAndWait()
+	var maxHead valuePointer
 	for _, writer := range sw.writers {
 		if err := writer.Done(); err != nil {
 			return err
+		}
+		if maxHead.Less(writer.head) {
+			maxHead = writer.head
 		}
 	}
 
 	// Encode and write the value log head into a new table.
 	data := make([]byte, vptrSize)
-	sw.head.Encode(data)
-	headWriter := sw.newWriter(math.MaxUint32)
+	maxHead.Encode(data)
+	headWriter := sw.newWriter(headStreamId)
 	if err := headWriter.Add(
 		y.KeyWithTs(head, sw.maxVersion),
 		y.ValueStruct{Value: data}); err != nil {
@@ -186,7 +175,10 @@ func (sw *StreamWriter) Flush() error {
 			return err
 		}
 	}
-	return syncDir(sw.db.opt.Dir)
+	if err := syncDir(sw.db.opt.Dir); err != nil {
+		return err
+	}
+	return sw.db.lc.validate()
 }
 
 type sortedWriter struct {
@@ -195,37 +187,91 @@ type sortedWriter struct {
 
 	builder  *table.Builder
 	lastKey  []byte
-	streamID uint32
+	streamId uint32
+	reqCh    chan *request
+	head     valuePointer
 }
 
-func (sw *StreamWriter) newWriter(streamID uint32) *sortedWriter {
-	return &sortedWriter{
+func (sw *StreamWriter) newWriter(streamId uint32) *sortedWriter {
+	w := &sortedWriter{
 		db:       sw.db,
-		streamID: streamID,
+		streamId: streamId,
 		throttle: sw.throttle,
 		builder:  table.NewTableBuilder(),
+		reqCh:    make(chan *request, 3),
 	}
+	sw.closer.AddRunning(1)
+	go w.handleRequests(sw.closer)
+	return w
 }
 
 // ErrUnsortedKey is returned when any out of order key arrives at sortedWriter during call to Add.
 var ErrUnsortedKey = errors.New("Keys not in sorted order")
 
+func (w *sortedWriter) handleRequests(closer *y.Closer) {
+	defer closer.Done()
+
+	process := func(req *request) {
+		for i, e := range req.Entries {
+			vptr := req.Ptrs[i]
+			if !vptr.IsZero() {
+				y.AssertTrue(w.head.Less(vptr))
+				w.head = vptr
+			}
+
+			var vs y.ValueStruct
+			if e.skipVlog {
+				vs = y.ValueStruct{
+					Value:     e.Value,
+					Meta:      e.meta,
+					UserMeta:  e.UserMeta,
+					ExpiresAt: e.ExpiresAt,
+				}
+			} else {
+				vbuf := make([]byte, vptrSize)
+				vs = y.ValueStruct{
+					Value:     vptr.Encode(vbuf),
+					Meta:      e.meta | bitValuePointer,
+					UserMeta:  e.UserMeta,
+					ExpiresAt: e.ExpiresAt,
+				}
+			}
+			if err := w.Add(e.Key, vs); err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	for {
+		select {
+		case req := <-w.reqCh:
+			process(req)
+		case <-closer.HasBeenClosed():
+			close(w.reqCh)
+			for req := range w.reqCh {
+				process(req)
+			}
+			return
+		}
+	}
+}
+
 // Add adds key and vs to sortedWriter.
 func (w *sortedWriter) Add(key []byte, vs y.ValueStruct) error {
-	if bytes.Compare(key, w.lastKey) <= 0 {
+	if len(w.lastKey) > 0 && y.CompareKeys(key, w.lastKey) <= 0 {
 		return ErrUnsortedKey
 	}
-	sameKey := y.SameKey(key, w.lastKey)
-	w.lastKey = y.SafeCopy(w.lastKey, key)
 
-	if err := w.builder.Add(key, vs); err != nil {
-		return err
-	}
+	sameKey := y.SameKey(key, w.lastKey)
 	// Same keys should go into the same SSTable.
 	if !sameKey && w.builder.ReachedCapacity(w.db.opt.MaxTableSize) {
-		return w.send()
+		if err := w.send(); err != nil {
+			return err
+		}
 	}
-	return nil
+
+	w.lastKey = y.SafeCopy(w.lastKey, key)
+	return w.builder.Add(key, vs)
 }
 
 func (w *sortedWriter) send() error {
@@ -269,6 +315,10 @@ func (w *sortedWriter) createTable(data []byte) error {
 	lc := w.db.lc
 
 	var lhandler *levelHandler
+	// We should start the levels from 1, because we need level 0 to set the !badger!head key. We
+	// cannot mix up this key with other keys from the DB, otherwise we would introduce a range
+	// overlap violation.
+	y.AssertTrue(len(lc.levels) > 1)
 	for _, l := range lc.levels[1:] {
 		ratio := float64(l.getTotalSize()) / float64(l.maxTotalSize)
 		if ratio < 1.0 {
@@ -277,7 +327,14 @@ func (w *sortedWriter) createTable(data []byte) error {
 		}
 	}
 	if lhandler == nil {
+		// If we're exceeding the size of the lowest level, shove it in the lowest level. Can't do
+		// better than that.
 		lhandler = lc.levels[len(lc.levels)-1]
+	}
+	if w.streamId == headStreamId {
+		// This is a special !badger!head key. We should store it at level 0, separate from all the
+		// other keys to avoid an overlap.
+		lhandler = lc.levels[0]
 	}
 	// Now that table can be opened successfully, let's add this to the MANIFEST.
 	change := &pb.ManifestChange{
@@ -293,6 +350,6 @@ func (w *sortedWriter) createTable(data []byte) error {
 		return err
 	}
 	w.db.opt.Infof("Table created: %d at level: %d for stream: %d. Size: %s\n",
-		fileID, lhandler.level, w.streamID, humanize.Bytes(uint64(tbl.Size())))
+		fileID, lhandler.level, w.streamId, humanize.Bytes(uint64(tbl.Size())))
 	return nil
 }

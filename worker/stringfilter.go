@@ -64,7 +64,7 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 		previous, ok := tokenMap[token]
 		if ok {
 			tokenMap[token] = true
-			if previous == false { // count only once
+			if !previous { // count only once
 				cnt++
 			}
 		}

@@ -88,7 +88,7 @@ func (lf *logFile) openReadOnly() error {
 
 	if err = lf.mmap(fi.Size()); err != nil {
 		_ = lf.fd.Close()
-		return y.Wrapf(err, "Unable to map file")
+		return y.Wrapf(err, "Unable to map file: %q", fi.Name())
 	}
 
 	return nil
@@ -181,6 +181,7 @@ func (lf *logFile) sync() error {
 
 var errStop = errors.New("Stop iteration")
 var errTruncate = errors.New("Do truncate")
+var errDeleteVlogFile = errors.New("Delete vlog file")
 
 type logEntry func(e Entry, vp valuePointer) error
 
@@ -707,11 +708,15 @@ func errFile(err error, path string, msg string) error {
 }
 
 func (vlog *valueLog) replayLog(lf *logFile, offset uint32, replayFn logEntry) error {
-	// We should open the file in RW mode, so it can be truncated.
 	var err error
-	lf.fd, err = os.OpenFile(lf.path, os.O_RDWR, 0)
+	mode := os.O_RDONLY
+	if vlog.opt.Truncate {
+		// We should open the file in RW mode, so it can be truncated.
+		mode = os.O_RDWR
+	}
+	lf.fd, err = os.OpenFile(lf.path, mode, 0)
 	if err != nil {
-		return errFile(err, lf.path, "Open file in RW mode")
+		return errFile(err, lf.path, "Open file")
 	}
 	defer lf.fd.Close()
 
@@ -736,6 +741,13 @@ func (vlog *valueLog) replayLog(lf *logFile, offset uint32, replayFn logEntry) e
 		return ErrTruncateNeeded
 	}
 
+	// The entire file should be truncated (i.e. it should be deleted).
+	// If fid == maxFid then it's okay to truncate the entire file since it will be
+	// used for future additions. Also, it's okay if the last file has size zero.
+	// We mmap 2*opt.ValueLogSize for the last file. See vlog.Open() function
+	if endOffset == 0 && lf.fid != vlog.maxFid {
+		return errDeleteVlogFile
+	}
 	if err := lf.fd.Truncate(int64(endOffset)); err != nil {
 		return errFile(err, lf.path, fmt.Sprintf(
 			"Truncation needed at offset %d. Can be done manually as well.", endOffset))
@@ -787,6 +799,15 @@ func (vlog *valueLog) open(db *DB, ptr valuePointer, replayFn logEntry) error {
 		// Replay and possible truncation done. Now we can open the file as per
 		// user specified options.
 		if err := vlog.replayLog(lf, offset, replayFn); err != nil {
+			// Log file is corrupted. Delete it.
+			if err == errDeleteVlogFile {
+				delete(vlog.filesMap, fid)
+				path := vlog.fpath(lf.fid)
+				if err := os.Remove(path); err != nil {
+					return y.Wrapf(err, "failed to delete empty value log file: %q", path)
+				}
+				continue
+			}
 			return err
 		}
 		vlog.db.opt.Infof("Replay took: %s\n", time.Since(now))
@@ -885,14 +906,35 @@ type request struct {
 	Ptrs []valuePointer
 	Wg   sync.WaitGroup
 	Err  error
+	ref  int32
+}
+
+func (req *request) IncrRef() {
+	atomic.AddInt32(&req.ref, 1)
+}
+
+func (req *request) DecrRef() {
+	nRef := atomic.AddInt32(&req.ref, -1)
+	if nRef > 0 {
+		return
+	}
+	req.Entries = nil
+	requestPool.Put(req)
 }
 
 func (req *request) Wait() error {
 	req.Wg.Wait()
-	req.Entries = nil
 	err := req.Err
-	requestPool.Put(req)
+	req.DecrRef() // DecrRef after writing to DB.
 	return err
+}
+
+type requests []*request
+
+func (reqs requests) DecrRef() {
+	for _, req := range reqs {
+		req.DecrRef()
+	}
 }
 
 // sync function syncs content of latest value log file to disk. Syncing of value log directory is

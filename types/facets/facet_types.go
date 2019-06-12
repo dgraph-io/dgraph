@@ -19,13 +19,19 @@ package facets
 import "github.com/dgraph-io/dgo/protos/api"
 
 const (
-	IntID      = TypeID(api.Facet_INT)
-	FloatID    = TypeID(api.Facet_FLOAT)
-	BoolID     = TypeID(api.Facet_BOOL)
+	// IntID represents the integer type.
+	IntID = TypeID(api.Facet_INT)
+	// FloatID represents the floating-point number type.
+	FloatID = TypeID(api.Facet_FLOAT)
+	// BoolID represents the boolean type.
+	BoolID = TypeID(api.Facet_BOOL)
+	// DateTimeID represents the datetime type.
 	DateTimeID = TypeID(api.Facet_DATETIME)
-	StringID   = TypeID(api.Facet_STRING)
+	// StringID represents the string type.
+	StringID = TypeID(api.Facet_STRING)
 )
 
+// TypeID represents the type of a facet.
 type TypeID api.Facet_ValType
 
 // ValTypeForTypeID gives api.Facet_ValType for given TypeID

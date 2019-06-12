@@ -18,8 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -45,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -95,27 +94,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		closer:   y.NewCloser(3), // Matches CLOSER:1
 	}
 	return n
-}
-
-type header struct {
-	proposalId uint32
-	msgId      uint16
-}
-
-func (h *header) Length() int {
-	return 6 // 4 bytes for proposalId, 2 bytes for msgId.
-}
-
-func (h *header) Encode() []byte {
-	result := make([]byte, h.Length())
-	binary.LittleEndian.PutUint32(result[0:4], h.proposalId)
-	binary.LittleEndian.PutUint16(result[4:6], h.msgId)
-	return result
-}
-
-func (h *header) Decode(in []byte) {
-	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
-	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
 func (n *node) Ctx(key string) context.Context {
@@ -541,7 +519,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		toDisk(status.StartTs, status.CommitTs)
 	}
 	if err := writer.Flush(); err != nil {
-		return x.Errorf("Error while flushing to disk: %v", err)
+		return errors.Wrapf(err, "while flushing to disk")
 	}
 
 	g := groups()
@@ -550,12 +528,6 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
-}
-
-func (n *node) applyAllMarks(ctx context.Context) {
-	// Get index of last committed.
-	lastIndex := n.Applied.LastIndex()
-	n.Applied.WaitForMark(ctx, lastIndex)
 }
 
 func (n *node) leaderBlocking() (*conn.Pool, error) {
@@ -637,7 +609,6 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 func (n *node) proposeSnapshot(discardN int) error {
 	snap, err := n.calculateSnapshot(0, discardN)
 	if err != nil {
-		glog.Warningf("Got error while calculating snapshot: %v", err)
 		return err
 	}
 	if snap == nil {
@@ -1323,7 +1294,7 @@ func (n *node) joinPeers() error {
 	c := pb.NewRaftClient(gconn)
 	glog.Infof("Calling JoinCluster via leader: %s", pl.Addr)
 	if _, err := c.JoinCluster(n.ctx, n.RaftContext); err != nil {
-		return x.Errorf("Error while joining cluster: %+v\n", err)
+		return errors.Wrapf(err, "error while joining cluster")
 	}
 	glog.Infof("Done with JoinCluster call\n")
 	return nil
@@ -1341,7 +1312,7 @@ func (n *node) isMember() (bool, error) {
 	glog.Infof("Calling IsPeer")
 	pr, err := c.IsPeer(n.ctx, n.RaftContext)
 	if err != nil {
-		return false, x.Errorf("Error while joining cluster: %+v\n", err)
+		return false, errors.Wrapf(err, "error while joining cluster")
 	}
 	glog.Infof("Done with IsPeer call\n")
 	return pr.Status, nil

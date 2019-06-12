@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -104,12 +104,14 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 	if id, present := newToUid[subject]; present {
 		return id, err
 	}
-	return 0, x.Errorf("UID not found/generated for xid %s\n", subject)
+	return 0, errors.Errorf("UID not found/generated for xid %s\n", subject)
 }
 
 var emptyEdge pb.DirectedEdge
 
-func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (*pb.DirectedEdge, error) {
+func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (
+	*pb.DirectedEdge, error) {
+
 	var err error
 	var objectUid uint64
 
@@ -168,7 +170,7 @@ func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 
 func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
-		return &emptyEdge, x.Errorf("Subject and object both should be *. Got: %+v", nq)
+		return &emptyEdge, errors.Errorf("Subject and object both should be *. Got: %+v", nq)
 	}
 
 	out := &pb.DirectedEdge{
@@ -214,7 +216,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error
 	case x.ValuePlain, x.ValueMulti:
 		edge, err = nq.CreateValueEdge(sUid)
 	default:
-		return &emptyEdge, x.Errorf("Unknown value type for nquad: %+v", nq)
+		return &emptyEdge, errors.Errorf("Unknown value type for nquad: %+v", nq)
 	}
 	if err != nil {
 		return nil, err

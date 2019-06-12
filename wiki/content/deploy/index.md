@@ -1208,7 +1208,7 @@ to learn more.
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 
-* `/health` returns HTTP status code 200 and an "OK" message if the worker is running, HTTP 503 otherwise.
+* `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
 * `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
 * `/admin/export` initiates a data [export]({{< relref "#export">}}).
 

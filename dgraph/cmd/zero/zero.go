@@ -17,7 +17,6 @@
 package zero
 
 import (
-	"errors"
 	"math"
 	"sync"
 	"time"
@@ -32,12 +31,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 var (
-	emptyMembershipState pb.MembershipState
 	emptyConnectionState pb.ConnectionState
-	errInternalError     = errors.New("Internal server error")
 	errServerShutDown    = errors.New("Server is being shut down")
 )
 
@@ -314,7 +312,7 @@ func (s *Server) servingTablet(tablet string) *pb.Tablet {
 func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	var res []*pb.ZeroProposal
 	if len(dst.Members) > 1 {
-		return res, x.Errorf("Create Proposal: Invalid group: %+v", dst)
+		return res, errors.Errorf("Create Proposal: Invalid group: %+v", dst)
 	}
 
 	s.RLock()
@@ -323,11 +321,11 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	for mid, dstMember := range dst.Members {
 		group, has := s.state.Groups[dstMember.GroupId]
 		if !has {
-			return res, x.Errorf("Unknown group for member: %+v", dstMember)
+			return res, errors.Errorf("Unknown group for member: %+v", dstMember)
 		}
 		srcMember, has := group.Members[mid]
 		if !has {
-			return res, x.Errorf("Unknown member: %+v", dstMember)
+			return res, errors.Errorf("Unknown member: %+v", dstMember)
 		}
 		if srcMember.Addr != dstMember.Addr ||
 			srcMember.Leader != dstMember.Leader {
@@ -350,7 +348,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	for key, dstTablet := range dst.Tablets {
 		group, has := s.state.Groups[dstTablet.GroupId]
 		if !has {
-			return res, x.Errorf("Unknown group for tablet: %+v", dstTablet)
+			return res, errors.Errorf("Unknown group for tablet: %+v", dstTablet)
 		}
 		srcTablet, has := group.Tablets[key]
 		if !has {
@@ -379,13 +377,13 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	zp := &pb.ZeroProposal{}
 	zp.Member = &pb.Member{Id: nodeId, GroupId: groupId, AmDead: true}
 	if _, ok := s.state.Groups[groupId]; !ok {
-		return x.Errorf("No group with groupId %d found", groupId)
+		return errors.Errorf("No group with groupId %d found", groupId)
 	}
 	if _, ok := s.state.Groups[groupId].Members[nodeId]; !ok {
-		return x.Errorf("No node with nodeId %d found in group %d", nodeId, groupId)
+		return errors.Errorf("No node with nodeId %d found in group %d", nodeId, groupId)
 	}
 	if len(s.state.Groups[groupId].Members) == 1 && len(s.state.Groups[groupId].Tablets) > 0 {
-		return x.Errorf("Move all tablets from group %d before removing the last node", groupId)
+		return errors.Errorf("Move all tablets from group %d before removing the last node", groupId)
 	}
 
 	return s.Node.proposeAndWait(ctx, zp)
@@ -401,8 +399,8 @@ func (s *Server) Connect(ctx context.Context,
 	defer glog.Infof("Connected: %+v\n", m)
 
 	if ctx.Err() != nil {
-		x.Errorf("Context has error: %v\n", ctx.Err())
-		return &emptyConnectionState, ctx.Err()
+		err := errors.Errorf("Context has error: %v\n", ctx.Err())
+		return &emptyConnectionState, err
 	}
 	ms, err := s.latestMembershipState(ctx)
 	if err != nil {
@@ -418,13 +416,13 @@ func (s *Server) Connect(ctx context.Context,
 		return cs, err
 	}
 	if len(m.Addr) == 0 {
-		return &emptyConnectionState, x.Errorf("NO_ADDR: No address provided: %+v", m)
+		return &emptyConnectionState, errors.Errorf("NO_ADDR: No address provided: %+v", m)
 	}
 
 	for _, member := range ms.Removed {
 		// It is not recommended to reuse RAFT ids.
 		if member.GroupId != 0 && m.Id == member.Id {
-			return &emptyConnectionState, x.Errorf(
+			return &emptyConnectionState, errors.Errorf(
 				"REUSE_RAFTID: Duplicate Raft ID %d to removed member: %+v", m.Id, member)
 		}
 	}
@@ -443,14 +441,14 @@ func (s *Server) Connect(ctx context.Context,
 			case member.Addr == m.Addr && member.Id != m.Id:
 				// Same address. Different Id. If Id is zero, then it might be trying to connect for
 				// the first time. We can just directly return the membership information.
-				return nil, x.Errorf("REUSE_ADDR: Duplicate address to existing member: %+v."+
+				return nil, errors.Errorf("REUSE_ADDR: Duplicate address to existing member: %+v."+
 					" Self: +%v", member, m)
 
 			case member.Addr != m.Addr && member.Id == m.Id:
 				// Same Id. Different address.
 				if pl, err := conn.GetPools().Get(member.Addr); err == nil && pl.IsHealthy() {
 					// Found a healthy connection.
-					return nil, x.Errorf("REUSE_RAFTID: Healthy connection to a member"+
+					return nil, errors.Errorf("REUSE_RAFTID: Healthy connection to a member"+
 						" with same ID: %+v", member)
 				}
 			}
@@ -533,10 +531,10 @@ func (s *Server) ShouldServe(
 	defer span.End()
 
 	if len(tablet.Predicate) == 0 {
-		return resp, x.Errorf("Tablet predicate is empty in %+v", tablet)
+		return resp, errors.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
 	if tablet.GroupId == 0 && !tablet.ReadOnly {
-		return resp, x.Errorf("Group ID is Zero in %+v", tablet)
+		return resp, errors.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
 	// Check who is serving this tablet.
@@ -548,9 +546,10 @@ func (s *Server) ShouldServe(
 		// serving.
 		return tab, nil
 	}
-	if tab == nil && tablet.ReadOnly {
-		// Read-only requests should return an empty tablet instead of asking zero to serve
-		// the predicate.
+
+	// Read-only requests should return an empty tablet instead of asking zero
+	// to serve the predicate.
+	if tablet.ReadOnly {
 		return &pb.Tablet{}, nil
 	}
 
@@ -636,7 +635,7 @@ func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
 		break
 	}
 	if gid == 0 {
-		return x.Errorf("Unable to find group")
+		return errors.Errorf("Unable to find group")
 	}
 	state, err := s.latestMembershipState(ctx)
 	if err != nil {
@@ -644,12 +643,12 @@ func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
 	}
 	sg, ok := state.Groups[gid]
 	if !ok {
-		return x.Errorf("Unable to find group: %d", gid)
+		return errors.Errorf("Unable to find group: %d", gid)
 	}
 
 	pl := s.Leader(gid)
 	if pl == nil {
-		return x.Errorf("Unable to reach leader of group: %d", gid)
+		return errors.Errorf("Unable to reach leader of group: %d", gid)
 	}
 	wc := pb.NewWorkerClient(pl.Get())
 

@@ -16,40 +16,31 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
-	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/ee/backup"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/z"
 )
 
 var (
-	backupDir  = "./data/backups"
-	restoreDir = "./data/restore"
-	dirs       = []string{backupDir, restoreDir}
+	backupDir      = "./data/backups"
+	localBackupDir = "./data/backups_local"
+	restoreDir     = "./data/restore"
+	dirs           = []string{restoreDir}
 
 	alphaBackupDir = "/data/backups"
 
@@ -62,7 +53,7 @@ var (
 
 func TestBackupFilesystem(t *testing.T) {
 	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-	x.Check(err)
+	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	// Add initial data.
@@ -130,7 +121,6 @@ func TestBackupFilesystem(t *testing.T) {
 	})
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform first incremental backup.
 	dirs = runBackup(t, 6, 2)
@@ -155,7 +145,6 @@ func TestBackupFilesystem(t *testing.T) {
 			`, original.Uids["x4"], original.Uids["x5"])),
 	})
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform second incremental backup.
 	dirs = runBackup(t, 9, 3)
@@ -181,7 +170,6 @@ func TestBackupFilesystem(t *testing.T) {
 			`, original.Uids["x4"], original.Uids["x5"])),
 	})
 	require.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
 	// Perform second full backup.
 	dirs = runBackupInternal(t, true, 12, 4)
@@ -213,103 +201,6 @@ func TestBackupFilesystem(t *testing.T) {
 	dirCleanup()
 }
 
-func getError(rc io.ReadCloser) error {
-	defer rc.Close()
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return fmt.Errorf("Read failed: %v", err)
-	}
-	if bytes.Contains(b, []byte("Error")) {
-		return fmt.Errorf("%s", string(b))
-	}
-	return nil
-}
-
-func getState() (*z.StateResponse, error) {
-	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/state")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if bytes.Contains(b, []byte("Error")) {
-		return nil, fmt.Errorf("Failed to get state: %s", string(b))
-	}
-
-	var st z.StateResponse
-	if err := json.Unmarshal(b, &st); err != nil {
-		return nil, err
-	}
-	return &st, nil
-}
-
-func getPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
-	opt := badger.DefaultOptions
-	opt.Dir = pdir
-	opt.ValueDir = pdir
-	opt.TableLoadingMode = options.MemoryMap
-	opt.ReadOnly = true
-	db, err := badger.OpenManaged(opt)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-
-	values := make(map[string]string)
-
-	stream := db.NewStreamAt(math.MaxUint64)
-	stream.ChooseKey = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
-		switch {
-		case pk.Attr != attr:
-			return false
-		case pk.IsSchema():
-			return false
-		}
-		return pk.IsData()
-	}
-	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
-		pk := x.Parse(key)
-		pl, err := posting.ReadPostingList(key, it)
-		if err != nil {
-			return nil, err
-		}
-		var list bpb.KVList
-		err = pl.Iterate(readTs, 0, func(p *pb.Posting) error {
-			vID := types.TypeID(p.ValType)
-			src := types.ValueForType(vID)
-			src.Value = p.Value
-			str, err := types.Convert(src, types.StringID)
-			if err != nil {
-				fmt.Println(err)
-				return err
-			}
-			value := strings.TrimRight(str.Value.(string), "\x00")
-			list.Kv = append(list.Kv, &bpb.KV{
-				Key:   []byte(fmt.Sprintf("%#x", pk.Uid)),
-				Value: []byte(value),
-			})
-			return nil
-		})
-		return &list, err
-	}
-	stream.Send = func(list *bpb.KVList) error {
-		for _, kv := range list.Kv {
-			values[string(kv.Key)] = string(kv.Value)
-		}
-		return nil
-	}
-	if err := stream.Orchestrate(context.Background()); err != nil {
-		return nil, err
-	}
-	return values, err
-}
-
 func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 	return runBackupInternal(t, false, numExpectedFiles, numExpectedDirs)
 }
@@ -327,17 +218,17 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.NoError(t, getError(resp.Body))
-	time.Sleep(5 * time.Second)
+	require.NoError(t, z.GetError(resp.Body))
+	time.Sleep(time.Second)
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs()
-	files := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+	files := x.WalkPathFunc(localBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.True(t, len(files) == numExpectedFiles)
-	dirs := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
+	dirs := x.WalkPathFunc(localBackupDir, func(path string, isdir bool) bool {
+		return isdir && strings.HasPrefix(path, "data/backups_local/dgraph.")
 	})
 	require.True(t, len(dirs) == numExpectedDirs)
 
@@ -349,7 +240,7 @@ func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]str
 	_, err := backup.RunRestore("./data/restore", restoreDir)
 	require.NoError(t, err)
 
-	restored, err := getPValues("./data/restore/p1", "movie", commitTs)
+	restored, err := z.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
@@ -371,33 +262,18 @@ func dirSetup() {
 }
 
 func dirCleanup() {
-	x.Check(os.RemoveAll("./data"))
+	x.Check(os.RemoveAll(restoreDir))
+	x.Check(os.RemoveAll(localBackupDir))
+
+	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
+	x.Check(z.DockerExec(alphaContainers[0], cmd...))
 }
 
 func copyToLocalFs() {
-	cwd, err := os.Getwd()
-	x.Check(err)
-
-	for _, alpha := range alphaContainers {
-		// Because docker cp does not support the * notation, the directory is copied
-		// first to a temporary location in the local FS. Then all backup files are
-		// combined under data/backups.
-		tmpDir := "./data/backups/" + alpha
-		srcPath := fmt.Sprintf("%s:/data/backups", alpha)
-		x.Check(z.DockerCp(srcPath, tmpDir))
-
-		paths, err := filepath.Glob(tmpDir + "/*")
-		x.Check(err)
-
-		opts := z.CmdOpts{
-			Dir: cwd,
-		}
-		cpCmd := []string{"cp", "-r"}
-		cpCmd = append(cpCmd, paths...)
-		cpCmd = append(cpCmd, "./data/backups")
-
-		x.Check(z.ExecWithOpts([]string{"ls", "./data/backups/"}, opts))
-		x.Check(z.ExecWithOpts(cpCmd, opts))
-		x.Check(z.ExecWithOpts([]string{"rm", "-r", tmpDir}, opts))
-	}
+	// The original backup files are not accessible because docker creates all files in
+	// the shared volume as the root user. This restriction is circumvented by using
+	// "docker cp" to create a copy that is not owned by the root user.
+	x.Check(os.RemoveAll(localBackupDir))
+	srcPath := "alpha1:/data/backups"
+	x.Check(z.DockerCp(srcPath, localBackupDir))
 }

@@ -25,11 +25,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-type stopper interface {
+// Stopper is an interface tasked with stopping the profiling process.
+type Stopper interface {
 	Stop()
 }
 
-func StartProfile(conf *viper.Viper) stopper {
+// StartProfile starts a new mode for profiling.
+func StartProfile(conf *viper.Viper) Stopper {
 	profileMode := conf.GetString("profile_mode")
 	switch profileMode {
 	case "cpu":

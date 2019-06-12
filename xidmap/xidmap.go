@@ -171,7 +171,7 @@ func (m *XidMap) AssignUid(xid string) uint64 {
 	if m.writer != nil {
 		var uidBuf [8]byte
 		binary.BigEndian.PutUint64(uidBuf[:], newUid)
-		if err := m.writer.Set([]byte(xid), uidBuf[:], 0); err != nil {
+		if err := m.writer.Set([]byte(xid), uidBuf[:]); err != nil {
 			panic(err)
 		}
 	}

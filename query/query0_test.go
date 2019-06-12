@@ -1809,7 +1809,7 @@ func TestNonFlattenedResponse(t *testing.T) {
 		me(func: eq(name@en, "Baz Luhrmann")) {
 			uid
 			director.film {
-				name@en	
+				name@en
 			}
 		}
 	}`

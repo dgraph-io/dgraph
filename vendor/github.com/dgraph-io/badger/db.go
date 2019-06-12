@@ -18,6 +18,7 @@ package badger
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"expvar"
@@ -32,6 +33,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/skl"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
@@ -54,7 +56,10 @@ type closers struct {
 	memtable   *y.Closer
 	writes     *y.Closer
 	valueGC    *y.Closer
+	pub        *y.Closer
 }
+
+type callback func(kv *pb.KVList)
 
 // DB provides the various functions required to interact with Badger.
 // DB is thread-safe.
@@ -76,6 +81,7 @@ type DB struct {
 	vhead     valuePointer // less than or equal to a pointer to the last vlog value put into mt
 	writeCh   chan *request
 	flushChan chan flushTask // For flushing memtables.
+	closeOnce sync.Once      // For closing DB only once.
 
 	// Number of log rotates since the last memtable flush. We will access this field via atomic
 	// functions. Since we are not going to use any 64bit atomic functions, there is no need for
@@ -85,6 +91,8 @@ type DB struct {
 	blockWrites int32
 
 	orc *oracle
+
+	pub *publisher
 }
 
 const (
@@ -202,7 +210,7 @@ func Open(opt Options) (db *DB, err error) {
 		}
 		if !dirExists {
 			if opt.ReadOnly {
-				return nil, y.Wrapf(err, "Cannot find Dir for read-only open: %q", path)
+				return nil, errors.Errorf("Cannot find directory %q for read-only open", path)
 			}
 			// Try to create the directory
 			err = os.Mkdir(path, 0700)
@@ -267,6 +275,7 @@ func Open(opt Options) (db *DB, err error) {
 		dirLockGuard:  dirLockGuard,
 		valueDirGuard: valueDirLockGuard,
 		orc:           newOracle(opt),
+		pub:           newPublisher(),
 	}
 
 	// Calculate initial size.
@@ -323,16 +332,26 @@ func Open(opt Options) (db *DB, err error) {
 	db.closers.valueGC = y.NewCloser(1)
 	go db.vlog.waitOnGC(db.closers.valueGC)
 
+	db.closers.pub = y.NewCloser(1)
+	go db.pub.listenForUpdates(db.closers.pub)
+
 	valueDirLockGuard = nil
 	dirLockGuard = nil
 	manifestFile = nil
 	return db, nil
 }
 
-// Close closes a DB. It's crucial to call it to ensure all the pending updates
-// make their way to disk. Calling DB.Close() multiple times is not safe and would
-// cause panic.
-func (db *DB) Close() (err error) {
+// Close closes a DB. It's crucial to call it to ensure all the pending updates make their way to
+// disk. Calling DB.Close() multiple times would still only close the DB once.
+func (db *DB) Close() error {
+	var err error
+	db.closeOnce.Do(func() {
+		err = db.close()
+	})
+	return err
+}
+
+func (db *DB) close() (err error) {
 	db.elog.Printf("Closing database")
 	atomic.StoreInt32(&db.blockWrites, 1)
 
@@ -341,6 +360,8 @@ func (db *DB) Close() (err error) {
 
 	// Stop writes next.
 	db.closers.writes.SignalAndWait()
+
+	db.closers.pub.SignalAndWait()
 
 	// Now close the value log.
 	if vlogErr := db.vlog.Close(); vlogErr != nil {
@@ -610,6 +631,8 @@ func (db *DB) writeRequests(reqs []*request) error {
 		return err
 	}
 
+	db.elog.Printf("Sending updates to subscribers")
+	db.pub.sendUpdates(reqs)
 	db.elog.Printf("Writing to memtable")
 	var count int
 	for _, b := range reqs {
@@ -662,6 +685,8 @@ func (db *DB) sendToWriteCh(entries []*Entry) (*request, error) {
 	req.Entries = entries
 	req.Wg = sync.WaitGroup{}
 	req.Wg.Add(1)
+	req.IncrRef()     // for db write
+	req.IncrRef()     // for publisher updates
 	db.writeCh <- req // Handled in doWrites.
 	y.NumPuts.Add(int64(len(entries)))
 
@@ -1087,7 +1112,7 @@ func (seq *Sequence) Release() error {
 	err := seq.db.Update(func(txn *Txn) error {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], seq.next)
-		return txn.Set(seq.key, buf[:])
+		return txn.SetEntry(NewEntry(seq.key, buf[:]))
 	})
 	if err != nil {
 		return err
@@ -1117,7 +1142,7 @@ func (seq *Sequence) updateLease() error {
 		lease := seq.next + seq.bandwidth
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], lease)
-		if err = txn.Set(seq.key, buf[:]); err != nil {
+		if err = txn.SetEntry(NewEntry(seq.key, buf[:])); err != nil {
 			return err
 		}
 		seq.leased = lease
@@ -1408,4 +1433,47 @@ func (db *DB) DropPrefix(prefix []byte) error {
 	}
 	db.opt.Infof("DropPrefix done")
 	return nil
+}
+
+// Subscribe can be used watch key changes for the given key prefix.
+func (db *DB) Subscribe(ctx context.Context, cb callback, prefix []byte, prefixes ...[]byte) error {
+	if cb == nil {
+		return ErrNilCallback
+	}
+	prefixes = append(prefixes, prefix)
+	c := y.NewCloser(1)
+	recvCh, id := db.pub.newSubscriber(c, prefixes...)
+	slurp := func(batch *pb.KVList) {
+		defer func() {
+			if len(batch.GetKv()) > 0 {
+				cb(batch)
+			}
+		}()
+		for {
+			select {
+			case kvs := <-recvCh:
+				batch.Kv = append(batch.Kv, kvs.Kv...)
+			default:
+				return
+			}
+		}
+	}
+	for {
+		select {
+		case <-c.HasBeenClosed():
+			slurp(new(pb.KVList))
+			// Drain if any pending updates.
+			c.Done()
+			// No need to delete here. Closer will be called only while
+			// closing DB. Subscriber will be deleted by cleanSubscribers.
+			return nil
+		case <-ctx.Done():
+			c.Done()
+			db.pub.deleteSubscriber(id)
+			// Delete the subscriber to avoid further updates.
+			return ctx.Err()
+		case batch := <-recvCh:
+			slurp(batch)
+		}
+	}
 }

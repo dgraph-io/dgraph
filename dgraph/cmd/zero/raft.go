@@ -17,7 +17,6 @@
 package zero
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -35,6 +34,7 @@ import (
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"golang.org/x/net/context"
@@ -42,11 +42,9 @@ import (
 
 type node struct {
 	*conn.Node
-	server      *Server
-	ctx         context.Context
-	reads       map[uint64]chan uint64
-	subscribers map[uint32]chan struct{}
-	closer      *y.Closer // to stop Run.
+	server *Server
+	ctx    context.Context
+	closer *y.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
@@ -80,12 +78,12 @@ var errInternalRetry = errors.New("Retry Raft proposal internally")
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) error {
 	switch {
 	case n.Raft() == nil:
-		return x.Errorf("Raft isn't initialized yet.")
+		return errors.Errorf("Raft isn't initialized yet.")
 	case ctx.Err() != nil:
 		return ctx.Err()
 	case !n.AmLeader():
 		// Do this check upfront. Don't do this inside propose for reasons explained below.
-		return x.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
+		return errors.Errorf("Not Zero leader. Aborting proposal: %+v", proposal)
 	}
 
 	// We could consider adding a wrapper around the user proposal, so we can access any key-values.
@@ -126,7 +124,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		// Propose the change.
 		if err := n.Raft().Propose(cctx, data); err != nil {
 			span.Annotatef(nil, "Error while proposing via Raft: %v", err)
-			return x.Wrapf(err, "While proposing")
+			return errors.Wrapf(err, "While proposing")
 		}
 
 		// Wait for proposal to be applied or timeout.
@@ -175,7 +173,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	m := n.server.member(member.Addr)
 	// Ensures that different nodes don't have same address.
 	if m != nil && (m.Id != member.Id || m.GroupId != member.GroupId) {
-		return x.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
+		return errors.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
 	}
 	if member.GroupId == 0 {
 		state.Zeros[member.Id] = member
@@ -210,7 +208,7 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	}
 	if !has && len(group.Members) >= n.server.NumReplicas {
 		// We shouldn't allow more members than the number of replicas.
-		return x.Errorf("Group reached replication level. Can't add another member: %+v", member)
+		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
 	}
 
 	// Create a connection to this server.
@@ -263,7 +261,7 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 	}()
 
 	if tablet.GroupId == 0 {
-		return x.Errorf("Tablet group id is zero: %+v", tablet)
+		return errors.Errorf("Tablet group id is zero: %+v", tablet)
 	}
 	group := state.Groups[tablet.GroupId]
 	if tablet.Remove {
@@ -396,7 +394,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		for _, member := range n.server.membershipState().Removed {
 			// It is not recommended to reuse RAFT ids.
 			if member.GroupId == 0 && m.Id == member.Id {
-				err := x.Errorf("REUSE_RAFTID: Reusing removed id: %d.\n", m.Id)
+				err := errors.Errorf("REUSE_RAFTID: Reusing removed id: %d.\n", m.Id)
 				n.DoneConfChange(cc.ID, err)
 				// Cancel configuration change.
 				cc.NodeID = raft.None
@@ -450,7 +448,7 @@ func (n *node) initAndStartNode() error {
 	} else if len(opts.peer) > 0 {
 		p := conn.GetPools().Connect(opts.peer)
 		if p == nil {
-			return x.Errorf("Unhealthy connection to %v", opts.peer)
+			return errors.Errorf("Unhealthy connection to %v", opts.peer)
 		}
 
 		gconn := p.Get()

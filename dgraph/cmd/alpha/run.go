@@ -19,6 +19,7 @@ package alpha
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -33,7 +34,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/y"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
@@ -63,6 +64,9 @@ const (
 
 var (
 	bindall bool
+
+	// used for computing uptime
+	beginTime = time.Now()
 )
 
 var Alpha x.SubCommand
@@ -150,8 +154,6 @@ they form a Raft group and provide synchronous replication.
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
-	flag.Bool("debugmode", false,
-		"Enable debug mode for more debug information.")
 	flag.String("mutations", "allow",
 		"Set mutation mode to allow, disallow, or strict.")
 
@@ -162,6 +164,9 @@ they form a Raft group and provide synchronous replication.
 	flag.Uint64("query_edge_limit", 1e6,
 		"Limit for the maximum number of edges that can be returned in a query."+
 			" This applies to shortest path and recursive queries.")
+	flag.Uint64("normalize_node_limit", 1e4,
+		"Limit for the maximum number of nodes that can be returned in a query that uses the "+
+			"normalize directive.")
 
 	// TLS configurations
 	flag.String("tls_dir", "", "Path to directory that has TLS certificates and keys.")
@@ -199,11 +204,11 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 	rangeStrings := strings.Split(str, ",")
 
 	for _, s := range rangeStrings {
-		isIPv6 := strings.Index(s, "::") >= 0
+		isIPv6 := strings.Contains(s, "::")
 		tuple := strings.Split(s, ":")
 		switch {
 		case isIPv6 || len(tuple) == 1:
-			if strings.Index(s, "/") < 0 {
+			if !strings.Contains(s, "/") {
 				// string is hostname like host.docker.internal,
 				// or IPv4 address like 144.124.126.254,
 				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
@@ -266,12 +271,25 @@ func grpcPort() int {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-	if err := x.HealthCheck(); err == nil {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	} else {
+	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
+
+	info := struct {
+		Version  string        `json:"version"`
+		Instance string        `json:"instance"`
+		Uptime   time.Duration `json:"uptime"`
+	}{
+		Version:  x.Version(),
+		Instance: "alpha",
+		Uptime:   time.Since(beginTime),
+	}
+	data, _ := json.Marshal(info)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // storeStatsHandler outputs some basic stats for data store.
@@ -474,9 +492,9 @@ func run() {
 
 	setupCustomTokenizers()
 	x.Init()
-	x.Config.DebugMode = Alpha.Conf.GetBool("debugmode")
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
+	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 
 	x.PrintVersion()
 
@@ -520,23 +538,17 @@ func run() {
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		var numShutDownSig int
-		for {
+		for range sdCh {
 			select {
-			case _, ok := <-sdCh:
-				if !ok {
-					return
-				}
-				select {
-				case <-shutdownCh:
-				default:
-					close(shutdownCh)
-				}
-				numShutDownSig++
-				glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
-				if numShutDownSig == 3 {
-					glog.Infoln("Signaled thrice. Aborting!")
-					os.Exit(1)
-				}
+			case <-shutdownCh:
+			default:
+				close(shutdownCh)
+			}
+			numShutDownSig++
+			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
+			if numShutDownSig == 3 {
+				glog.Infoln("Signaled thrice. Aborting!")
+				os.Exit(1)
 			}
 		}
 	}()

@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -181,7 +183,7 @@ func runRestoreCmd() error {
 			grpc.WithBlock(),
 			grpc.WithInsecure())
 		if err != nil {
-			return x.Wrapf(err, "Unable to connect to %s", opt.zero)
+			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}
 		zc = pb.NewZeroClient(zero)
 	}
@@ -192,7 +194,7 @@ func runRestoreCmd() error {
 		return err
 	}
 	if version == 0 {
-		return x.Errorf("Failed to obtain a restore version")
+		return errors.Errorf("Failed to obtain a restore version")
 	}
 	if glog.V(2) {
 		fmt.Printf("Restore version: %d\n", version)
@@ -204,7 +206,6 @@ func runRestoreCmd() error {
 
 		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
 		if err != nil {
-			// Let the user know so they can do this manually.
 			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
 		}
 	}
@@ -241,7 +242,11 @@ func RunRestore(pdir, location string) (uint64, error) {
 				fmt.Println("Creating new db:", bo.Dir)
 			}
 		}
-		return db.Load(r, 16)
+		gzReader, err := gzip.NewReader(r)
+		if err != nil {
+			return nil
+		}
+		return db.Load(gzReader, 16)
 	})
 }
 
@@ -249,16 +254,12 @@ func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
 	manifests, err := ListManifests(opt.location)
 	if err != nil {
-		return x.Errorf("Error while listing manifests: %v", err.Error())
+		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tVersion\tReadTs\tGroups\n")
-	for _, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\t%v\n",
-			manifest.FileName,
-			manifest.Version,
-			manifest.ReadTs,
-			manifest.Groups)
+	fmt.Printf("Name\tSince\tGroups\n")
+	for path, manifest := range manifests {
+		fmt.Printf("%v\t%v\t%v\n", path, manifest.Since, manifest.Groups)
 	}
 
 	return nil

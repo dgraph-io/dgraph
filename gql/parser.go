@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -219,7 +220,7 @@ func (fn *fragmentNode) expand(fmap fragmentMap) error {
 		return nil
 	}
 	if fn.Entered {
-		return x.Errorf("Cycle detected: %s", fn.Name)
+		return errors.Errorf("Cycle detected: %s", fn.Name)
 	}
 	fn.Entered = true
 	if err := fn.Gq.expandFragments(fmap); err != nil {
@@ -239,7 +240,7 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 			fname := child.fragment // Name of fragment being referenced.
 			fchild := fmap[fname]
 			if fchild == nil {
-				return x.Errorf("Missing fragment: %s", fname)
+				return errors.Errorf("Missing fragment: %s", fname)
 			}
 			if err := fchild.expand(fmap); err != nil {
 				return err
@@ -254,16 +255,6 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	}
 	gq.Children = newChildren
 	return nil
-}
-
-type query struct {
-	Variables map[string]string `json:"variables"`
-	Query     string            `json:"query"`
-}
-
-type queryAlt struct {
-	Variables string `json:"variables"`
-	Query     string `json:"query"`
 }
 
 func convertToVarMap(variables map[string]string) (vm varMap) {
@@ -286,13 +277,13 @@ func checkValueType(vm varMap) error {
 		typ := v.Type
 
 		if len(typ) == 0 {
-			return x.Errorf("Type of variable %v not specified", k)
+			return errors.Errorf("Type of variable %v not specified", k)
 		}
 
 		// Ensure value is not nil if the variable is required.
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
-				return x.Errorf("Variable %v should be initialised", k)
+				return errors.Errorf("Variable %v should be initialised", k)
 			}
 			typ = typ[:len(typ)-1]
 		}
@@ -303,24 +294,24 @@ func checkValueType(vm varMap) error {
 			case "int":
 				{
 					if _, err := strconv.ParseInt(v.Value, 0, 64); err != nil {
-						return x.Wrapf(err, "Expected an int but got %v", v.Value)
+						return errors.Wrapf(err, "Expected an int but got %v", v.Value)
 					}
 				}
 			case "float":
 				{
 					if _, err := strconv.ParseFloat(v.Value, 64); err != nil {
-						return x.Wrapf(err, "Expected a float but got %v", v.Value)
+						return errors.Wrapf(err, "Expected a float but got %v", v.Value)
 					}
 				}
 			case "bool":
 				{
 					if _, err := strconv.ParseBool(v.Value); err != nil {
-						return x.Wrapf(err, "Expected a bool but got %v", v.Value)
+						return errors.Wrapf(err, "Expected a bool but got %v", v.Value)
 					}
 				}
 			case "string": // Value is a valid string. No checks required.
 			default:
-				return x.Errorf("Type %v not supported", typ)
+				return errors.Errorf("Type %q not supported", typ)
 			}
 		}
 	}
@@ -332,7 +323,7 @@ func substituteVar(f string, res *string, vmap varMap) error {
 	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok || va.Type == "" {
-			return x.Errorf("Variable not defined %v", f)
+			return errors.Errorf("Variable not defined %v", f)
 		}
 		*res = va.Value
 	}
@@ -352,7 +343,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	idVal, ok := gq.Args["id"]
 	if ok && len(gq.UID) == 0 {
 		if idVal == "" {
-			return x.Errorf("Id can't be empty")
+			return errors.Errorf("Id can't be empty")
 		}
 		uids, err := parseID(idVal)
 		if err != nil {
@@ -415,10 +406,10 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 				// This is to support GraphQL variables in uid functions.
 				idVal, ok := vmap[v.Value]
 				if !ok {
-					return x.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
+					return errors.Errorf("Couldn't find value for GraphQL variable: [%s]", v.Value)
 				}
 				if idVal.Value == "" {
-					return x.Errorf("Id can't be empty")
+					return errors.Errorf("Id can't be empty")
 				}
 				uids, err := parseID(idVal.Value)
 				if err != nil {
@@ -558,7 +549,7 @@ func validateResult(res *Result) error {
 			continue
 		}
 		if _, found := seenQueryAliases[q.Alias]; found {
-			return x.Errorf("Duplicate aliases not allowed: %v", q.Alias)
+			return errors.Errorf("Duplicate aliases not allowed: %v", q.Alias)
 		}
 		seenQueryAliases[q.Alias] = true
 	}
@@ -582,22 +573,22 @@ func checkDependency(vl []*Vars) error {
 	defines = x.RemoveDuplicates(defines)
 
 	if len(defines) != lenBefore {
-		return x.Errorf("Some variables are declared multiple times.")
+		return errors.Errorf("Some variables are declared multiple times.")
 	}
 
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+		return errors.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
 	if len(defines) < len(needs) {
-		return x.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
+		return errors.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
 	for i := 0; i < len(defines); i++ {
 		if defines[i] != needs[i] {
-			return x.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
+			return errors.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
 				defines, needs)
 		}
 	}
@@ -1092,7 +1083,7 @@ func unquoteIfQuoted(str string) (string, error) {
 		return str, nil
 	}
 	uq, err := strconv.Unquote(str)
-	return uq, x.Wrapf(err, "could not unquote %q:", str)
+	return uq, errors.Wrapf(err, "could not unquote %q:", str)
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
@@ -1274,7 +1265,7 @@ func (s *filterTreeStack) popAssert() *FilterTree {
 
 func (s *filterTreeStack) pop() (*FilterTree, error) {
 	if s.empty() {
-		return nil, x.Errorf("Empty stack")
+		return nil, errors.Errorf("Empty stack")
 	}
 	last := s.a[len(s.a)-1]
 	s.a = s.a[:len(s.a)-1]
@@ -1289,19 +1280,19 @@ func (s *filterTreeStack) peek() *FilterTree {
 func evalStack(opStack, valueStack *filterTreeStack) error {
 	topOp, err := opStack.pop()
 	if err != nil {
-		return x.Errorf("Invalid filter statement")
+		return errors.Errorf("Invalid filter statement")
 	}
 	if topOp.Op == "not" {
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
-			return x.Errorf("Invalid filter statement")
+			return errors.Errorf("Invalid filter statement")
 		}
 		topOp.Child = []*FilterTree{topVal}
 	} else {
 		// "and" and "or" are binary operators, so pop two values.
 		if valueStack.size() < 2 {
-			return x.Errorf("Invalid filter statement")
+			return errors.Errorf("Invalid filter statement")
 		}
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()
@@ -1434,7 +1425,7 @@ type regexArgs struct {
 func parseRegexArgs(val string) (regexArgs, error) {
 	end := strings.LastIndex(val, "/")
 	if end < 0 {
-		return regexArgs{}, x.Errorf("Unexpected error while parsing regex arg: %s", val)
+		return regexArgs{}, errors.Errorf("Unexpected error while parsing regex arg: %s", val)
 	}
 	expr := strings.Replace(val[1:end], "\\/", "/", -1)
 	flags := ""
@@ -1623,7 +1614,7 @@ L:
 				attrItemsAgo = 0
 			} else if expectLang {
 				if val == "*" {
-					return nil, x.Errorf(
+					return nil, errors.Errorf(
 						"The * symbol cannot be used as a valid language inside functions")
 				}
 				function.Lang = val
@@ -2074,7 +2065,7 @@ func parseID(val string) ([]uint64, error) {
 	}
 
 	if val[len(val)-1] != ']' {
-		return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
+		return nil, errors.Errorf("Invalid id list at root. Got: %+v", val)
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -2091,7 +2082,7 @@ func parseID(val string) ([]uint64, error) {
 			continue
 		}
 		if c == '[' || c == ')' {
-			return nil, x.Errorf("Invalid id list at root. Got: %+v", val)
+			return nil, errors.Errorf("Invalid id list at root. Got: %+v", val)
 		}
 		buf.WriteRune(c)
 	}
@@ -2246,7 +2237,7 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 
 	for _, lang := range langs {
 		if lang == string(star) && len(langs) > 1 {
-			return nil, x.Errorf(
+			return nil, errors.Errorf(
 				"If * is used, no other languages are allowed in the language list. Found %v",
 				langs)
 		}
