@@ -208,9 +208,7 @@ func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	if len(src.Uid) > 0 {
 		// If there was no src.Uid, then don't run any mutation.
 		if src.Bal == 0 {
-			// TODO: WHAT a fucking hack.
-			d := map[string]string{"uid": src.Uid}
-			pb, err := json.Marshal(d)
+			pb, err := json.Marshal(src)
 			x.Check(err)
 			mu.DeleteJson = pb
 			fmt.Fprintf(w, "Deleting K_%02d: %s\n", src.Key, mu.DeleteJson)
