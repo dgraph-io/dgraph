@@ -128,7 +128,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 		fmt.Printf("Found backup manifest(s): %v\n", manifestPaths)
 	}
 
-	// Read and filter the manifests to get the list of manifests to considered
+	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
 	var manifests []*Manifest
 	for _, manifest := range manifestPaths {
