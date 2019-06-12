@@ -166,12 +166,11 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 	}
 
 	// what's the best way to append into the result []byte / json.RawMessage ??
-	r.resp.Data = append(r.resp.Data, []byte(`":`)...)
-	r.resp.Data = append(r.resp.Data, []byte(m.ResponseName())...)
-	r.resp.Data = append(r.resp.Data, []byte(`"`)...)
-	r.resp.Data = append(r.resp.Data, []byte(" {")...)
-	r.resp.Data = append(r.resp.Data, res...)
-	r.resp.Data = append(r.resp.Data, []byte("}")...)
+	r.resp.Data.WriteRune('"')
+	r.resp.Data.WriteString(m.ResponseName())
+	r.resp.Data.WriteString(`": {`) // FIXME: what we write (list/object) depends on schema result type
+	r.resp.Data.Write(res)
+	r.resp.Data.WriteString("}\n")
 }
 
 func buildMutationJSON(f schema.Mutation, v interface{}) map[string]interface{} {

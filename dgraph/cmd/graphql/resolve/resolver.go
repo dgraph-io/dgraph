@@ -110,7 +110,7 @@ func (r *RequestResolver) Resolve() *schema.Response {
 	}
 
 	if r.resp.Errors != nil {
-		r.resp.Data = nil
+		r.resp.Data.Reset()
 		return r.resp
 	}
 

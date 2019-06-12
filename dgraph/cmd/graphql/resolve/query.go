@@ -73,7 +73,7 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 	// More is needed here if we are to be totally GraphQL compliant.
 	// e.g. need to dig through that response and the expected types from the schema
 	// and propagate errors and missing ! fields according to spec.
-	r.resp.Data = append(r.resp.Data, res...)
+	r.resp.Data.Write(res)
 }
 
 func newQueryBuilder() *queryBuilder {
