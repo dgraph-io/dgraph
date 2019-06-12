@@ -267,17 +267,20 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 	// since is returned with the max manifest Since value found.
 	var since uint64
 
-	// Read and filter the manifests to get the list of manifests to consider
+	// Read and filter the files to get the list of files to consider
 	// for this restore operation.
-	var manifests []*Manifest
-	for _, manifest := range manifestPaths {
+	var files []*manifestFile
+	for _, path := range manifestPaths {
 		var m Manifest
-		if err := h.readManifest(mc, manifest, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", manifest)
+		if err := h.readManifest(mc, path, &m); err != nil {
+			return 0, errors.Wrapf(err, "While reading %q", path)
 		}
-		manifests = append(manifests, &m)
+		files = append(files, &manifestFile{
+			path:     path,
+			manifest: &m,
+		})
 	}
-	manifests, manifestPaths, err = filterManifests(manifests, manifestPaths, lastDir)
+	files, err = filterManifests(files, lastDir)
 	if err != nil {
 		return 0, err
 	}
@@ -285,17 +288,17 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for i, m := range manifests {
-		if m.Since == 0 || len(m.Groups) == 0 {
+	for i, f := range files {
+		if f.manifest.Since == 0 || len(f.manifest.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifestPaths[i], m)
+				fmt.Printf("Restore: skip backup: %s: %#v\n", f.path, f.manifest)
 			}
 			continue
 		}
 
 		path := filepath.Dir(manifestPaths[i])
-		for _, groupId := range m.Groups {
-			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.Since, groupId))
+		for _, groupId := range f.manifest.Groups {
+			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, f.manifest.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)
@@ -313,7 +316,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 				return 0, err
 			}
 		}
-		since = m.Since
+		since = f.manifest.Since
 	}
 	return since, nil
 }
