@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -135,12 +134,6 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
-	flag.String("hmac_secret_file", "", "The file storing the HMAC secret"+
-		" that is used for signing the JWT. Enterprise feature.")
-	flag.Duration("access_jwt_ttl", 6*time.Hour, "The TTL for the access jwt. "+
-		"Enterprise feature.")
-	flag.Duration("refresh_jwt_ttl", 30*24*time.Hour, "The TTL for the refresh jwt. "+
-		"Enterprise feature.")
 	flag.Float64P("lru_mb", "l", -1,
 		"Estimated memory the LRU cache can take. "+
 			"Actual usage by the process would be more than specified here.")
@@ -416,20 +409,6 @@ func run() {
 		MutationsMode:  edgraph.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-	}
-
-	secretFile := Alpha.Conf.GetString("hmac_secret_file")
-	if secretFile != "" {
-		hmacSecret, err := ioutil.ReadFile(secretFile)
-		if err != nil {
-			glog.Fatalf("Unable to read HMAC secret from file: %v", secretFile)
-		}
-
-		opts.HmacSecret = hmacSecret
-		opts.AccessJwtTtl = Alpha.Conf.GetDuration("access_jwt_ttl")
-		opts.RefreshJwtTtl = Alpha.Conf.GetDuration("refresh_jwt_ttl")
-
-		glog.Info("HMAC secret loaded successfully.")
 	}
 
 	switch strings.ToLower(Alpha.Conf.GetString("mutations")) {

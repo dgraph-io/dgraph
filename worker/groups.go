@@ -180,29 +180,6 @@ func (g *groupi) proposeInitialSchema() {
 		ValueType: pb.Posting_STRING,
 		List:      true,
 	})
-
-	// propose the schema update for acl predicates
-	g.upsertSchema(&pb.SchemaUpdate{
-		Predicate: "dgraph.xid",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-	})
-
-	g.upsertSchema(&pb.SchemaUpdate{
-		Predicate: "dgraph.password",
-		ValueType: pb.Posting_PASSWORD,
-	})
-
-	g.upsertSchema(&pb.SchemaUpdate{
-		Predicate: "dgraph.user.group",
-		Directive: pb.SchemaUpdate_REVERSE,
-		ValueType: pb.Posting_UID,
-	})
-	g.upsertSchema(&pb.SchemaUpdate{
-		Predicate: "dgraph.group.acl",
-		ValueType: pb.Posting_STRING,
-	})
 }
 
 func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
