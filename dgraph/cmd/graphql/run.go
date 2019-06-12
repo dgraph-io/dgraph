@@ -195,6 +195,7 @@ func initDgraph() error {
 		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
 	}
 
+	// TODO: extract out as todo's below are done
 	var schemaB strings.Builder
 	for _, def := range schema.Types {
 		switch def.Kind {
@@ -217,11 +218,11 @@ func initDgraph() error {
 
 				switch schema.Types[f.Type.Name()].Kind {
 				case ast.Object:
-					// still need to write [] ! and reverse in here
+					// TODO: still need to write [] ! and reverse in here
 					fmt.Fprintf(&ty, "  %s.%s: uid\n", def.Name, f.Name)
 					fmt.Fprintf(&preds, "%s.%s: uid .\n", def.Name, f.Name)
 				case ast.Scalar:
-					// indexes needed here
+					// TODO: indexes needed here
 					fmt.Fprintf(&ty, "  %s.%s: %s\n", def.Name, f.Name, strings.ToLower(f.Type.Name()))
 					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, strings.ToLower(f.Type.Name()))
 				case ast.Enum:
@@ -256,6 +257,7 @@ func initDgraph() error {
 	}
 	defer disconnect()
 
+	// TODO:
 	// check the current Dgraph schema, is it compatible with these additions.
 	// also need to check against any stored GraphQL schemas?
 	// - e.g. moving no ! to !, or redefining a type, or changing a relation's type
