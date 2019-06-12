@@ -23,7 +23,7 @@ import (
 	"github.com/vektah/gqlparser/validator"
 )
 
-// Request represents a GraphQL request.  It makes no guarantees that the request is valid.
+// A Request represents a GraphQL request.  It makes no guarantees that the request is valid.
 type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`

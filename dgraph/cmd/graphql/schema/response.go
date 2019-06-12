@@ -29,6 +29,9 @@ import (
 
 // Response represents a GraphQL response
 type Response struct {
+	// TODO: dgraph response type (x.go) is similar, should I be leaning on that?
+	// ATM, no ,cause I'm trying to follow the spec really closely with errors and
+	// when data should be missing or "null"
 	Errors gqlerror.List   `json:"errors,omitempty"`
 	Data   json.RawMessage `json:"data,omitempty"`
 }
@@ -55,12 +58,12 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 		// probably indicatesa bug that's written invalid bytes to r.Data
 		// should I even do it this way - why not just write the bytes directly to w?
 		msg := "Failed to write a valid GraphQL JSON response"
-		glog.Errorf(msg, err) // dump r in for debugging as well? only in V(2) ?
+		glog.Errorf(msg, err) // also dump in other debugging like r into V(2)?
 		errResp := ErrorResponsef(msg)
 		errResp.WithNullData()
 		b, err = json.Marshal(errResp)
 		if err != nil {
-			return 0, errors.Wrap(err, "filed to marshal json")
+			return 0, errors.Wrap(err, "failed to even marshal json error msg")
 		}
 	}
 
