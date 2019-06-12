@@ -190,19 +190,14 @@ func (d *Decoder) Uids() []uint64 {
 }
 
 func (d *Decoder) LinearSeek(seek uint64) []uint64 {
-	prev := d.blockIdx
 	for {
 		v := d.PeekNextBase()
-		if seek <= v {
+		if seek < v {
 			break
 		}
 		d.blockIdx++
 	}
-	if d.blockIdx == prev {
-		// The seek id is <= base of next block. But, we have already searched this
-		// block. So, let's move to the next block anyway.
-		return d.Next()
-	}
+
 	return d.unpackBlock()
 }
 
