@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package handler
+package resolve
 
 import (
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -65,34 +67,72 @@ import (
 // - The "data" works just like a Dgraph query
 //
 
-// RequestHandler can process GraphQL requests and write JSON responses.
-type RequestHandler struct {
+const (
+	idArgName    = "id"
+	inputArgName = "input"
+)
+
+// RequestResolver can process GraphQL requests and write GraphQL JSON responses.
+type RequestResolver struct {
 	GqlReq       *schema.Request
 	Schema       schema.Schema
-	Errors       gqlerror.List
-	DgraphClient *dgo.Dgraph
-	op           schema.Operation
+	dgraphClient *dgo.Dgraph
+	resp         *schema.Response
+}
+
+// New creates a new RequestResolver
+func New(s schema.Schema, dc *dgo.Dgraph) *RequestResolver {
+	return &RequestResolver{
+		Schema:       s,
+		dgraphClient: dc,
+		resp:         &schema.Response{},
+	}
+}
+
+// WithErrors records all errors errs in rh to be reported when a GraphQL response is generated
+func (r *RequestResolver) WithErrors(errs ...*gqlerror.Error) {
+	r.resp.Errors = append(r.resp.Errors, errs...)
 }
 
 // Resolve processes rh.GqlReq and returns a GraphQL response.
 // rh.GqlReq should be set with a request before Resolve is called
 // and a schema and backend should have been added.
 // Resolve records any errors in the response's error field.
-func (rh *RequestHandler) Resolve() *schema.Response {
-	if rh.Errors != nil {
-		errResp := &schema.Response{Errors: rh.Errors}
-		errResp.WithNullData()
-		return errResp
+func (r *RequestResolver) Resolve() *schema.Response {
+	if r == nil {
+		glog.Error("Call to Resolve with nil RequestResolver")
+		return schema.ErrorResponsef("Internal error")
 	}
 
-	op, resp := rh.Schema.Operation(rh.GqlReq)
+	if r.Schema == nil {
+		glog.Error("Call to Resolve with no schema")
+		return schema.ErrorResponsef("Internal error")
+	}
+
+	if r.resp.Errors != nil {
+		r.resp.Data = nil
+		return r.resp
+	}
+
+	op, resp := r.Schema.Operation(r.GqlReq)
 	if resp != nil {
 		return resp
 	}
 
-	_ = op.Mutations
-	// now do the operation processing
+	switch {
+	case op.IsQuery():
+		// TODO: this should handle queries in parallel
+		for _, q := range op.Queries() {
+			r.resolveQuery(q)
+		}
+	case op.IsMutation():
+		// unlike queries, mutations are always handled serially
+		for _, m := range op.Mutations() {
+			r.resolveMutation(m)
+		}
+	case op.IsSubscription():
+		schema.ErrorResponsef("Subscriptions not yet supported")
+	}
 
-	// TODO: fill in with previous http response code
-	return nil
+	return r.resp
 }
