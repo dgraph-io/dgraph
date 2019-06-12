@@ -74,7 +74,6 @@ func RunServer(bindall bool) {
 	if bindall {
 		laddr = "0.0.0.0"
 	}
-	var err error
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
@@ -83,7 +82,8 @@ func RunServer(bindall bool) {
 
 	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
 	pb.RegisterRaftServer(workerServer, &raftServer)
-	_ = workerServer.Serve(ln)
+	err = workerServer.Serve(ln)
+	glog.Errorf("Error while calling Serve: %+v", err)
 }
 
 // StoreStats returns stats for data store.

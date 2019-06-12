@@ -105,7 +105,8 @@ func (n *node) Ctx(key string) context.Context {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	_ = cc.Unmarshal(e.Data)
+	err := cc.Unmarshal(e.Data)
+	glog.Errorf("While unmarshalling confchange: %+v", err)
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)

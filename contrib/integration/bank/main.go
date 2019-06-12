@@ -320,8 +320,7 @@ func main() {
 	fmt.Println()
 	fmt.Println("Total aborts", s.aborts)
 	fmt.Println("Total success", s.runs)
-	err := s.runTotal(clients[0])
-	if err != nil {
+	if err := s.runTotal(clients[0]); err != nil {
 		log.Fatal(err)
 	}
 }
