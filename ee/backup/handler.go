@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
@@ -200,4 +201,8 @@ func filterManifests(manifests []*Manifest, paths []string) ([]*Manifest, []stri
 	}
 
 	return filteredManifests, filteredPaths, nil
+}
+
+func backupName(since uint64, groupId uint32) string {
+	return fmt.Sprintf(backupNameFmt, since, groupId)
 }

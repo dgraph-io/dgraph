@@ -206,7 +206,7 @@ func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error 
 		return err
 	}
 
-	objectName := fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId)
+	objectName := backupName(req.ReadTs, req.GroupId)
 	h.createObject(uri, req, mc, objectName)
 	return nil
 }
@@ -295,7 +295,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 		path := filepath.Dir(manifestPaths[i])
 		for _, groupId := range m.Groups {
-			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.Since, groupId))
+			object := filepath.Join(path, backupName(m.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)

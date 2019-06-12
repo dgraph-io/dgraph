@@ -96,7 +96,7 @@ func (h *fileHandler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) erro
 		return errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
-	fileName := fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId)
+	fileName := backupName(req.ReadTs, req.GroupId)
 	return h.createFiles(uri, req, fileName)
 }
 
@@ -157,7 +157,7 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 
 		path := filepath.Dir(manifestPaths[i])
 		for _, groupId := range manifest.Groups {
-			file := filepath.Join(path, fmt.Sprintf(backupNameFmt, manifest.Since, groupId))
+			file := filepath.Join(path, backupName(manifest.Since, groupId))
 			fp, err := os.Open(file)
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to open %q", file)
