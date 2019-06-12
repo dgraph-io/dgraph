@@ -18,13 +18,15 @@ package graphql
 
 import (
 	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/handler"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 )
@@ -34,14 +36,29 @@ type graphqlHTTPHandler struct {
 	schema       *ast.Schema
 }
 
-// ServeHTTP handles GraphQL queries and mutations that get translated
-// like GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL json response
+// ServeHTTP handles GraphQL queries and mutations that get resolved
+// via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
 func (gh *graphqlHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	rh := gh.handlerForRequest(r)
+	if gh == nil || gh.schema == nil || gh.dgraphClient == nil {
+		glog.Error(errors.New("Handler not initialised"))
+
+		b, err := json.Marshal(schema.ErrorResponsef("Server not correctly initialised"))
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+		_, err = w.Write(b)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+	}
+
+	rh := gh.resolverForRequest(r)
 	res := rh.Resolve()
 	_, err := res.WriteTo(w)
 	if err != nil {
@@ -49,38 +66,35 @@ func (gh *graphqlHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (gh *graphqlHTTPHandler) handlerForRequest(r *http.Request) (rh *handler.RequestHandler) {
-	rh = &handler.RequestHandler{
-		Schema: schema.AsSchema(gh.schema)
-		DgraphClient: gh.dgraphClient
-	}
+func (gh *graphqlHTTPHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
+	rr = resolve.New(schema.AsSchema(gh.schema), gh.dgraphClient)
 
 	switch r.Method {
 	case http.MethodGet:
-		// TODO: fill gqlReq in
+		// TODO: fill gqlReq in from parameters
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			rh.Errors = gqlerror.List{gqlerror.Errorf("Unable to parse media type: %s", err)}
+			rr.WithErrors(gqlerror.Errorf("Unable to parse media type: %s", err))
 			return
 		}
 
 		switch mediaType {
 		case "application/json":
-			if err = json.NewDecoder(r.Body).Decode(&rh.gqlReq); err != nil {
-				rh.Errors = gqlerror.List{gqlerror.Errorf("Not a valid GraphQL request body: %s", err)}
+			if err = json.NewDecoder(r.Body).Decode(&rr.GqlReq); err != nil {
+				rr.WithErrors(gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
 				return
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
 			// "A standard GraphQL POST request should use the application/json content type ..."
-			rh.Errors = gqlerror.List{gqlerror.Errorf(
-				"Unrecognised Content-Type.  Please use application/json for GraphQL requests")}
+			rr.WithErrors(gqlerror.Errorf(
+				"Unrecognised Content-Type.  Please use application/json for GraphQL requests"))
 			return
 		}
 	default:
-		rh.Errors = gqlerror.List{gqlerror.Errorf(
-			"Unrecognised request method.  Please use GET or POST for GraphQL requests")}
+		rr.WithErrors(gqlerror.Errorf(
+			"Unrecognised request method.  Please use GET or POST for GraphQL requests"))
 		return
 	}
 	return
