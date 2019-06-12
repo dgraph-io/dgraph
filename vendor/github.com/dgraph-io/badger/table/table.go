@@ -178,7 +178,7 @@ func OpenTable(fd *os.File, mode options.FileLoadingMode, cksum []byte) (*Table,
 		t.mmap, err = y.Mmap(fd, false, fileInfo.Size())
 		if err != nil {
 			_ = fd.Close()
-			return nil, y.Wrapf(err, "Unable to map file")
+			return nil, y.Wrapf(err, "Unable to map file: %q", fileInfo.Name())
 		}
 	case options.FileIO:
 		t.mmap = nil

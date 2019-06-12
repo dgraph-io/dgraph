@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -237,7 +238,11 @@ func RunRestore(pdir, location, lastDir string) (uint64, error) {
 		if !pathExist(bo.Dir) {
 			fmt.Println("Creating new db:", bo.Dir)
 		}
-		return db.Load(r, 16)
+		gzReader, err := gzip.NewReader(r)
+		if err != nil {
+			return nil
+		}
+		return db.Load(gzReader, 16)
 	})
 }
 

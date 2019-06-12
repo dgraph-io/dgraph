@@ -198,12 +198,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-	case "application/graphqlpm":
+	case "application/graphql+-":
 		params.Query = string(body)
 
 	default:
 		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
-			"Supported content types are application/json, application/graphqlpm")
+			"Supported content types are application/json, application/graphql+-")
 		return
 	}
 

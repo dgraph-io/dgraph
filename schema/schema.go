@@ -473,7 +473,7 @@ func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
 		return false
 	}
 
-	initialSchema := InitialSchema()
+	initialSchema := CompleteInitialSchema()
 	for _, original := range initialSchema {
 		if original.Predicate != pred {
 			continue

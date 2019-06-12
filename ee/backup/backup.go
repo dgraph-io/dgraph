@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -72,7 +73,8 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	newSince, err := stream.Backup(handler, pr.Request.SinceTs)
+	gzWriter := gzip.NewWriter(handler)
+	newSince, err := stream.Backup(gzWriter, pr.Request.SinceTs)
 
 	if err != nil {
 		glog.Errorf("While taking backup: %v", err)
@@ -85,6 +87,10 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error
 	}
 
 	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
+	if err = gzWriter.Close(); err != nil {
+		glog.Errorf("While closing gzipped writer: %v", err)
+		return &emptyRes, err
+	}
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return &emptyRes, err

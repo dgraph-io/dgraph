@@ -268,6 +268,22 @@ func TestCountIndex(t *testing.T) {
 	`))
 }
 
+func TestLoadTypes(t *testing.T) {
+	s := newSuite(t, `
+	type Person {
+		name: string
+	}
+	`, `
+		_:alice <name> "Alice" .
+	`)
+	defer s.cleanup()
+
+	// Ensures that the index keys are written to disk after commit.
+	time.Sleep(time.Second)
+	t.Run("All queries", s.testCase("schema(type: Person) {}",
+		`{"types":[{"name":"Person", "fields":[{"name":"name", "type":"string"}]}]}`))
+}
+
 // TODO: Fix this later.
 func DONOTRUNTestGoldenData(t *testing.T) {
 	if testing.Short() {

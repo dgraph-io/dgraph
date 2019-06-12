@@ -277,7 +277,7 @@ curl localhost:8080/alter -XPOST -d $'
 Run this query to get all the movies. The query works below all the movies have a starring edge
 
 ```sh
-curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
 {
  me(func: has(starring)) {
    name
@@ -291,7 +291,7 @@ Run this query to get "Star Wars" movies released after "1980".  Try it in the u
 
 
 ```sh
-curl -H "Content-Type: application/graphqlpm" localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
 {
   me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name

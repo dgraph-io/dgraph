@@ -19,6 +19,7 @@ package alpha
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -33,7 +34,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/y"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/golang/glog"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
@@ -63,6 +64,9 @@ const (
 
 var (
 	bindall bool
+
+	// used for computing uptime
+	beginTime = time.Now()
 )
 
 var Alpha x.SubCommand
@@ -267,12 +271,25 @@ func grpcPort() int {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-	if err := x.HealthCheck(); err == nil {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	} else {
+	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		return
 	}
+
+	info := struct {
+		Version  string        `json:"version"`
+		Instance string        `json:"instance"`
+		Uptime   time.Duration `json:"uptime"`
+	}{
+		Version:  x.Version(),
+		Instance: "alpha",
+		Uptime:   time.Since(beginTime),
+	}
+	data, _ := json.Marshal(info)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // storeStatsHandler outputs some basic stats for data store.
