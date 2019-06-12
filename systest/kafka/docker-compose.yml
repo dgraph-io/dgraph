@@ -74,7 +74,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=1 --kafka_target_brokers kafka1:9192
+      --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
   zero2:
     image: dgraph/dgraph:latest
     container_name: zero2
@@ -112,5 +112,12 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha -o 200 --my=alpha1:7280 --lru_mb=1024 --zero=zero2:5280
-      --logtostderr -v=1 --kafka_source_brokers kafka1:9192
+      --logtostderr -v=1 --kafka_source_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    working_dir: /working/jaeger
+    ports:
+    - 14268:14268
+    - 16686:16686
 volumes: {}

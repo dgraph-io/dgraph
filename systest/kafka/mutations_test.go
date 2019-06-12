@@ -35,21 +35,13 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgDst *dgo.Dgraph) {
 	ctx := context.Background()
 
 	require.NoError(t, dgSrc.Alter(ctx, &api.Operation{
-		Schema: `xid: string @index(exact) .`,
+		Schema: `name: string @index(exact) .`,
 	}))
 
 	txn := dgSrc.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`
-			_:breakfast <name> "" .
-			_:breakfast <nil_name> "_nil_" .
-			_:breakfast <xid> "breakfast" .
-			_:breakfast <fruit> _:banana .
-			_:breakfast <fruit> _:apple .
-			_:breakfast <cereal> _:weetbix .
-			_:banana <xid> "banana" .
-			_:apple <xid> "apple" .
-			_:weetbix <xid> "weetbix" .
+			_:michael <name> "Michael" .
 		`),
 	})
 	require.NoError(t, err)
@@ -60,16 +52,8 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgDst *dgo.Dgraph) {
 
 	const breakfastQuery = `
 	{
-		q(func: eq(xid, "breakfast")) {
+		q(func: eq(name, "Michael")) {
 			name
-			nil_name
-			extra
-			fruit {
-				xid
-			}
-			cereal {
-				xid
-			}
 		}
 	}`
 
@@ -77,28 +61,15 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgDst *dgo.Dgraph) {
 	resp, err := txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
 	z.CompareJSON(t, `{ "q": [ {
-		"fruit": [
-			{ "xid": "apple" },
-			{ "xid": "banana" }
-		],
-		"cereal": [
-			{ "xid": "weetbix" }
-		],
-		"name": "",
-		"nil_name": "_nil_"
+		"name": "Michael"
 	}]}`, string(resp.Json))
 
 	// delete data in the source cluster
 	txn = dgSrc.NewTxn()
 	_, err = txn.Mutate(ctx, &api.Mutation{
 		DelNquads: []byte(fmt.Sprintf(`
-			<%s> <fruit>  <%s> .
-			<%s> <cereal> <%s> .
-			<%s> <name> * .
-			<%s> <nil_name> * .`,
-			assigned.Uids["breakfast"], assigned.Uids["banana"],
-			assigned.Uids["breakfast"], assigned.Uids["weetbix"],
-			assigned.Uids["breakfast"], assigned.Uids["breakfast"])),
+			<%s> <fruit>  * .`,
+			assigned.Uids["michael"])),
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
@@ -109,9 +80,5 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgDst *dgo.Dgraph) {
 	txn = dgDst.NewReadOnlyTxn().BestEffort()
 	resp, err = txn.Query(ctx, breakfastQuery)
 	require.NoError(t, err)
-	z.CompareJSON(t, `{ "q": [ {
-		"fruit": [
-			{ "xid": "apple" }
-		]
-	}]}`, string(resp.Json))
+	z.CompareJSON(t, `{ "q": []}`, string(resp.Json))
 }
