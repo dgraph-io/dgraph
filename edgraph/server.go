@@ -393,7 +393,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	for _, update := range result.Schemas {
+	for _, update := range result.Preds {
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsReservedPredicateChanged(update.Predicate, update) {
@@ -407,9 +407,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 	}
 
-	glog.Infof("Got schema: %+v\n", result.Schemas)
+	glog.Infof("Got schema: %+v\n", result)
 	// TODO: Maybe add some checks about the schema.
-	m.Schema = result.Schemas
+	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
 	return empty, err
