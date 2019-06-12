@@ -267,7 +267,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 	// since is returned with the max manifest Since value found.
 	var since uint64
 
-	// Read and filter the manifests to get the list of manifests to considered
+	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
 	var manifests []*Manifest
 	for _, manifest := range manifestPaths {
