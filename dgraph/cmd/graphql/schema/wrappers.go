@@ -117,7 +117,7 @@ func (o *operation) Queries() (qs []Query) {
 }
 
 func (o *operation) Mutations() (ms []Mutation) {
-	if !o.IsQuery() {
+	if !o.IsMutation() {
 		return
 	}
 

@@ -160,7 +160,7 @@ func (qb *queryBuilder) withSelectionSetFrom(fld schema.Field) {
 		}
 		qbld.withAttr(fld.TypeName() + "." + f.Name())
 		// TODO: filters, pagination, etc in here
-		qbld.withSelectionSetFrom(fld)
+		qbld.withSelectionSetFrom(f)
 
 		q, err := qbld.query()
 		if err != nil {

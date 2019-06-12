@@ -50,13 +50,13 @@ func asString(query *gql.GraphQuery) string {
 	var b strings.Builder
 
 	b.WriteString("query {\n")
-	writeQuery(query, b, "  ")
+	writeQuery(query, &b, "  ")
 	b.WriteString("}")
 
 	return b.String()
 }
 
-func writeQuery(query *gql.GraphQuery, b strings.Builder, prefix string) {
+func writeQuery(query *gql.GraphQuery, b *strings.Builder, prefix string) {
 	b.WriteString(prefix)
 	if query.Alias != "" {
 		b.WriteString(query.Alias)
@@ -78,20 +78,20 @@ func writeQuery(query *gql.GraphQuery, b strings.Builder, prefix string) {
 	b.WriteString("\n")
 }
 
-func writeFunction(f *gql.Function, b strings.Builder) {
+func writeFunction(f *gql.Function, b *strings.Builder) {
 	if f != nil {
 		b.WriteString(fmt.Sprintf("(func: %s(0x%x)) ", f.Name, f.UID[0]))
 		// there's only uid(...) functions so far
 	}
 }
 
-func writeFilterFunction(f *gql.Function, b strings.Builder) {
+func writeFilterFunction(f *gql.Function, b *strings.Builder) {
 	if f != nil {
 		b.WriteString(fmt.Sprintf("%s(%s) ", f.Name, f.Args[0].Value))
 	}
 }
 
-func writeFilter(f *gql.FilterTree, b strings.Builder) {
+func writeFilter(f *gql.FilterTree, b *strings.Builder) {
 	if f == nil {
 		return
 	}

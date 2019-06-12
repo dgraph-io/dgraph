@@ -120,6 +120,7 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 	}
 
 	jsonMut, err := json.Marshal(buildMutationJSON(m, val))
+	glog.V(2).Infof("Generated Dgraph mutation for %s: \n%s\n", m.Name(), jsonMut)
 	if err != nil {
 		r.WithErrors(gqlerror.Errorf("couldn't marshal mutation for %s : %s", m.Name(), err))
 		return
@@ -128,8 +129,6 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 		CommitNow: true,
 		SetJson:   jsonMut,
 	}
-
-	glog.V(2).Infof("Generated Dgraph mutation for %s: \n%s\n", m.Name(), jsonMut)
 
 	ctx := context.Background()
 	assigned, err := r.dgraphClient.NewTxn().Mutate(ctx, mu)
@@ -167,7 +166,9 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 	}
 
 	// what's the best way to append into the result []byte / json.RawMessage ??
+	r.resp.Data = append(r.resp.Data, []byte(`":`)...)
 	r.resp.Data = append(r.resp.Data, []byte(m.ResponseName())...)
+	r.resp.Data = append(r.resp.Data, []byte(`"`)...)
 	r.resp.Data = append(r.resp.Data, []byte(" {")...)
 	r.resp.Data = append(r.resp.Data, res...)
 	r.resp.Data = append(r.resp.Data, []byte("}")...)
