@@ -10,7 +10,7 @@ import (
 )
 
 func newTrie() (*Trie, error) {
-	hasher, err := newHasher()
+	hasher, err := NewHasher()
 	if err != nil {
 		return nil, err
 	}
@@ -22,22 +22,22 @@ func newTrie() (*Trie, error) {
 
 	trie := &Trie{
 		db: &Database{
-			db:     db,
-			hasher: hasher,
+			Db:     db,
+			Hasher: hasher,
 		},
 		root: nil,
 	}
 
-	trie.db.batch = trie.db.db.NewBatch()
+	trie.db.Batch = trie.db.Db.NewBatch()
 
 	return trie, nil
 }
 
 func (t *Trie) closeDb() {
-    t.db.db.Close()
-    if err := os.RemoveAll("./gossamer_data"); err != nil {
-        fmt.Println("removal of temp directory gossamer_data failed")
-    }
+	t.db.Db.Close()
+	if err := os.RemoveAll("./gossamer_data"); err != nil {
+		fmt.Println("removal of temp directory gossamer_data failed")
+	}
 }
 
 func TestWriteToDB(t *testing.T) {

@@ -99,14 +99,14 @@ func TestFailingPk(t *testing.T) {
 		br     *branch
 		header []byte
 	}{
-		{&branch{byteArray(2<<16), [16]node{}, []byte{0x01}, true}, []byte{255, 254}},
+		{&branch{byteArray(2 << 16), [16]node{}, []byte{0x01}, true}, []byte{255, 254}},
 	}
 
 	for _, test := range tests {
 		_, err := test.br.header()
 		if err == nil {
 			t.Fatalf("should error when encoding node w pk length > 2^16")
-		} 
+		}
 	}
 }
 

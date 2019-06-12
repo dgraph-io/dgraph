@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -64,7 +65,7 @@ var (
 
 func newEmpty() *Trie {
 	db := &Database{
-		db: polkadb.NewMemDatabase(),
+		Db: polkadb.NewMemDatabase(),
 	}
 	t := NewEmptyTrie(db)
 	return t
@@ -79,7 +80,7 @@ func TestNewEmptyTrie(t *testing.T) {
 
 func TestNewTrie(t *testing.T) {
 	db := &Database{
-		db: polkadb.NewMemDatabase(),
+		Db: polkadb.NewMemDatabase(),
 	}
 	trie := NewTrie(db, &leaf{key: []byte{0}, value: []byte{17}})
 	if trie == nil {
@@ -112,10 +113,13 @@ func generateRandomTest(kv map[string][]byte) trieTest {
 	test := trieTest{}
 
 	for {
-		buf := make([]byte, r.Intn(379)+2)
+		size := r.Intn(379) + 2
+		buf := make([]byte, size)
 		r.Read(buf)
 
-		if kv[string(buf)] == nil {
+		key := binary.LittleEndian.Uint16(buf[:2])
+
+		if kv[string(buf)] == nil || key < 255 {
 			test.key = buf
 
 			buf = make([]byte, r.Intn(128))

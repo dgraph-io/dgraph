@@ -45,6 +45,14 @@ func NewTrie(db *Database, root node) *Trie {
 	}
 }
 
+func (t *Trie) Root() node {
+	return t.root
+}
+
+func (t *Trie) Db() *Database {
+	return t.db
+}
+
 func (t *Trie) Encode() ([]byte, error) {
 	return Encode(t.root)
 }

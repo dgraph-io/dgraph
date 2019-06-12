@@ -28,7 +28,7 @@ type Hasher struct {
 	hash hash.Hash
 }
 
-func newHasher() (*Hasher, error) {
+func NewHasher() (*Hasher, error) {
 	h, err := blake2b.New256(nil)
 	if err != nil {
 		return nil, err

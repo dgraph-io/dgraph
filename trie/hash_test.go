@@ -43,7 +43,7 @@ func generateRand(size int) [][]byte {
 }
 
 func TestNewHasher(t *testing.T) {
-	hasher, err := newHasher()
+	hasher, err := NewHasher()
 	if err != nil {
 		t.Fatalf("error creating new hasher: %s", err)
 	} else if hasher == nil {
@@ -64,7 +64,7 @@ func TestNewHasher(t *testing.T) {
 }
 
 func TestHashLeaf(t *testing.T) {
-	hasher, err := newHasher()
+	hasher, err := NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestHashLeaf(t *testing.T) {
 }
 
 func TestHashBranch(t *testing.T) {
-	hasher, err := newHasher()
+	hasher, err := NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestHashBranch(t *testing.T) {
 }
 
 func TestHashShort(t *testing.T) {
-	hasher, err := newHasher()
+	hasher, err := NewHasher()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,10 +24,10 @@ import (
 
 // Database is a wrapper around a polkadb
 type Database struct {
-	db     polkadb.Database
-	batch  polkadb.Batch
-	lock   sync.RWMutex
-	hasher *Hasher
+	Db     polkadb.Database
+	Batch  polkadb.Batch
+	Lock   sync.RWMutex
+	Hasher *Hasher
 }
 
 // WriteToDB writes the trie to the underlying database batch writer
@@ -35,7 +35,7 @@ type Database struct {
 // This does not actually write to the db, just to the batch writer
 // Commit must be called afterwards to finish writing to the db
 func (t *Trie) WriteToDB() error {
-	t.db.batch = t.db.db.NewBatch()
+	t.db.Batch = t.db.Db.NewBatch()
 	return t.writeToDB(t.root)
 }
 
@@ -74,14 +74,14 @@ func (t *Trie) writeNodeToDB(n node) (bool, error) {
 		return false, err
 	}
 
-	hash, err := t.db.hasher.Hash(n)
+	hash, err := t.db.Hasher.Hash(n)
 	if err != nil {
 		return false, err
 	}
 
-	t.db.lock.Lock()
-	err = t.db.batch.Put(hash, encRoot)
-	t.db.lock.Unlock()
+	t.db.Lock.Lock()
+	err = t.db.Batch.Put(hash, encRoot)
+	t.db.Lock.Unlock()
 
 	n.setDirty(false)
 	return true, err
@@ -89,5 +89,5 @@ func (t *Trie) writeNodeToDB(n node) (bool, error) {
 
 // Commit writes the contents of the db's batch writer to the db
 func (t *Trie) Commit() error {
-	return t.db.batch.Write()
+	return t.db.Batch.Write()
 }
