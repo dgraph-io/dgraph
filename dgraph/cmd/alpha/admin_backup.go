@@ -131,8 +131,13 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	m := backup.Manifest{Groups: groups}
-	m.Since = req.ReadTs
+	m := backup.Manifest{Groups: groups, Since: req.ReadTs}
+	if req.SinceTs == 0 {
+		m.Type = "full"
+	} else {
+		m.Type = "incremental"
+	}
+
 	bp := &backup.Processor{Request: &req}
 	return bp.CompleteBackup(ctx, &m)
 }

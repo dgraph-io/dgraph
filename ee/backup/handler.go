@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
@@ -172,4 +173,36 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 	}
 
 	return listedManifests, nil
+}
+
+// filterManifests takes a list of manifests, their paths, and returns the list of manifests
+// that should be considered during a restore.
+func filterManifests(manifests []*Manifest, paths []string) ([]*Manifest, []string, error) {
+	if len(manifests) != len(paths) {
+		return nil, nil, errors.Errorf("lengths of manifest and paths slice differ")
+	}
+
+	// Go through the manifests in reverse order and stop when the latest full backup is found.
+	var filteredManifests []*Manifest
+	var filteredPaths []string
+	for i := len(manifests) - 1; i >= 0; i-- {
+		filteredManifests = append(filteredManifests, manifests[i])
+		filteredPaths = append(filteredPaths, paths[i])
+		if manifests[i].Type == "full" {
+			break
+		}
+	}
+
+	// Reverse the filtered lists since the original iteration happened in reverse.
+	for i := len(filteredManifests)/2 - 1; i >= 0; i-- {
+		opp := len(filteredManifests) - 1 - i
+		filteredManifests[i], filteredManifests[opp] = filteredManifests[opp], filteredManifests[i]
+		filteredPaths[i], filteredPaths[opp] = filteredPaths[opp], filteredPaths[i]
+	}
+
+	return filteredManifests, filteredPaths, nil
+}
+
+func backupName(since uint64, groupId uint32) string {
+	return fmt.Sprintf(backupNameFmt, since, groupId)
 }
