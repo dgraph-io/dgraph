@@ -414,65 +414,55 @@ func skipDuplicate(in []uint64, idx int) int {
 	return i
 }
 
-func TestIntersectCompressedWithLinJump(t *testing.T) {
-	NUM1 := []int{0, 1, 3, 11, 100}
-	NUM2 := []int{0, 1, 3, 11, 100}
+func sortUint64(nums []uint64) {
+	sort.Slice(nums, func(i, j int) bool { return nums[i] < nums[j] })
+}
 
+func fillNums(N1, N2 int) ([]uint64, []uint64, []uint64) {
 	rand.Seed(time.Now().UnixNano())
 
-	for _, N1 := range NUM1 {
-		for _, N2 := range NUM2 {
-			// Elements of common array will be in encoded block as well as v
-			common := make([]uint64, N1)
-			r := make([]uint64, N2)
-			v := make([]uint64, N1+N2)
+	commonNums := make([]uint64, N1)
+	blockNums := make([]uint64, N1+N2)
+	otherNums := make([]uint64, N1+N2)
 
-			for i := 0; i < N1; i++ {
-				common[i] = rand.Uint64()
-			}
+	for i := 0; i < N1; i++ {
+		val := rand.Uint64()
+		commonNums[i] = val
+		blockNums[i] = val
+		otherNums[i] = val
+	}
 
-			for i := 0; i < N2; i++ {
-				r[i] = rand.Uint64()
-			}
+	for i := N1; i < N1+N2; i++ {
+		blockNums[i] = rand.Uint64()
+		otherNums[i] = rand.Uint64()
+	}
 
-			blkNums := make([]uint64, N1+N2)
-			for i, v := range common {
-				blkNums[i] = v
-			}
+	sortUint64(commonNums)
+	sortUint64(blockNums)
+	sortUint64(otherNums)
 
-			for i, v := range r {
-				blkNums[N1+i] = v
-			}
+	return commonNums, blockNums, otherNums
+}
 
-			sort.Slice(blkNums, func(i, j int) bool { return blkNums[i] < blkNums[j] })
+func TestIntersectCompressedWithLinJump(t *testing.T) {
+	lengths := []int{0, 1, 3, 11, 100}
+
+	for _, N1 := range lengths {
+		for _, N2 := range lengths {
+			// Intersection of blockNums and otherNums is commonNums.
+			commonNums, blockNums, otherNums := fillNums(N1, N2)
 
 			enc := codec.Encoder{BlockSize: 10}
-			for _, num := range blkNums {
+			for _, num := range blockNums {
 				enc.Add(num)
 			}
 
 			pack := enc.Done()
 			dec := codec.Decoder{Pack: pack}
 
-			for i := 0; i < N2; i++ {
-				r[i] = rand.Uint64()
-			}
-
-			for i, t := range common {
-				v[i] = t
-			}
-
-			for i, t := range r {
-				v[N1+i] = t
-			}
-
-			sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
-
-			o := make([]uint64, 0)
-			IntersectCompressedWithLinJump(&dec, v, &o)
-
-			sort.Slice(common, func(i, j int) bool { return common[i] < common[j] })
-			require.Equal(t, common, o)
+			actual := make([]uint64, 0)
+			IntersectCompressedWithLinJump(&dec, otherNums, &actual)
+			require.Equal(t, commonNums, actual)
 		}
 	}
 }
