@@ -414,6 +414,41 @@ func skipDuplicate(in []uint64, idx int) int {
 	return i
 }
 
+func fillNums(commonNums, blockNums, otherNums []uint64, N1, N2 int) {
+	extraNums := make([]uint64, N2)
+	for i := range commonNums {
+		commonNums[i] = rand.Uint64()
+	}
+
+	for i := range extraNums {
+		extraNums[i] = rand.Uint64()
+	}
+
+	for idx, val := range commonNums {
+		blockNums[idx] = val
+	}
+
+	for idx, val := range extraNums {
+		blockNums[N1+idx] = val
+	}
+
+	for i := range extraNums {
+		extraNums[i] = rand.Uint64()
+	}
+
+	for idx, val := range commonNums {
+		otherNums[idx] = val
+	}
+
+	for idx, val := range extraNums {
+		otherNums[N1+idx] = val
+	}
+
+	sort.Slice(blockNums, func(i, j int) bool { return blockNums[i] < blockNums[j] })
+	sort.Slice(otherNums, func(i, j int) bool { return otherNums[i] < otherNums[j] })
+	sort.Slice(commonNums, func(i, j int) bool { return commonNums[i] < commonNums[j] })
+}
+
 func TestIntersectCompressedWithLinJump(t *testing.T) {
 	NUM1 := []int{0, 1, 3, 11, 100}
 	NUM2 := []int{0, 1, 3, 11, 100}
@@ -422,57 +457,32 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 
 	for _, N1 := range NUM1 {
 		for _, N2 := range NUM2 {
-			// Elements of common array will be in encoded block as well as v
-			common := make([]uint64, N1)
-			r := make([]uint64, N2)
-			v := make([]uint64, N1+N2)
+			// blockNums contains numbers which will be encoded.
+			// arrNums contains numbers in array which will be intersected
+			// with numbers in encoded block. commonNums contains N1 random
+			// numbers common in both blockNums and arrNums. extraNums
+			// contains N2 random numbers which will be put in blockNums.
+			// extraNums will again be filled with N2 random numbers which will be put
+			// in arrNums. They both have commonNums, so their intesection should be
+			// equal to commonNums.
+			commonNums := make([]uint64, N1)
+			blockNums := make([]uint64, N1+N2)
+			otherNums := make([]uint64, N1+N2)
 
-			for i := 0; i < N1; i++ {
-				common[i] = rand.Uint64()
-			}
-
-			for i := 0; i < N2; i++ {
-				r[i] = rand.Uint64()
-			}
-
-			blkNums := make([]uint64, N1+N2)
-			for i, v := range common {
-				blkNums[i] = v
-			}
-
-			for i, v := range r {
-				blkNums[N1+i] = v
-			}
-
-			sort.Slice(blkNums, func(i, j int) bool { return blkNums[i] < blkNums[j] })
+			fillNums(commonNums[:], blockNums[:], otherNums[:], N1, N2)
 
 			enc := codec.Encoder{BlockSize: 10}
-			for _, num := range blkNums {
+			for _, num := range blockNums {
 				enc.Add(num)
 			}
 
 			pack := enc.Done()
 			dec := codec.Decoder{Pack: pack}
 
-			for i := 0; i < N2; i++ {
-				r[i] = rand.Uint64()
-			}
-
-			for i, t := range common {
-				v[i] = t
-			}
-
-			for i, t := range r {
-				v[N1+i] = t
-			}
-
-			sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
-
 			o := make([]uint64, 0)
-			IntersectCompressedWithLinJump(&dec, v, &o)
+			IntersectCompressedWithLinJump(&dec, otherNums, &o)
 
-			sort.Slice(common, func(i, j int) bool { return common[i] < common[j] })
-			require.Equal(t, common, o)
+			require.Equal(t, commonNums, o)
 		}
 	}
 }
