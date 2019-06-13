@@ -267,38 +267,36 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 	// since is returned with the max manifest Since value found.
 	var since uint64
 
-	// Read and filter the files to get the list of files to consider
+	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
-	var files []*manifestFile
+	var manifests []*Manifest
 	for _, path := range manifestPaths {
 		var m Manifest
 		if err := h.readManifest(mc, path, &m); err != nil {
 			return 0, errors.Wrapf(err, "While reading %q", path)
 		}
-		files = append(files, &manifestFile{
-			path:     path,
-			manifest: &m,
-		})
+		m.Path = path
+		manifests = append(manifests, &m)
 	}
-	files, err = filterManifests(files, lastDir)
+	manifests, err = filterManifests(manifests, lastDir)
 	if err != nil {
 		return 0, err
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
+	// backup manifests for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for i, f := range files {
-		if f.manifest.Since == 0 || len(f.manifest.Groups) == 0 {
+	for i, manifest := range manifests {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", f.path, f.manifest)
+				fmt.Printf("Restore: skip backup: %#v\n", manifest)
 			}
 			continue
 		}
 
 		path := filepath.Dir(manifestPaths[i])
-		for _, groupId := range f.manifest.Groups {
-			object := filepath.Join(path, backupName(f.manifest.Since, groupId))
+		for _, groupId := range manifest.Groups {
+			object := filepath.Join(path, backupName(manifest.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)
@@ -316,7 +314,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 				return 0, err
 			}
 		}
-		since = f.manifest.Since
+		since = manifest.Since
 	}
 	return since, nil
 }

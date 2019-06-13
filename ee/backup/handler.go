@@ -179,26 +179,21 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 	return listedManifests, nil
 }
 
-type manifestFile struct {
-	path     string
-	manifest *Manifest
-}
-
-// filterManifests takes a list of manifests, their paths, and returns the list of manifests
+// filterManifests takes a list of manifests and returns the list of manifests
 // that should be considered during a restore.
-func filterManifests(files []*manifestFile, lastDir string) ([]*manifestFile, error) {
+func filterManifests(manifests []*Manifest, lastDir string) ([]*Manifest, error) {
 	// Go through the files in reverse order and stop when the latest full backup is found.
-	var filteredManifests []*manifestFile
-	for i := len(files) - 1; i >= 0; i-- {
-		parts := strings.Split(files[i].path, "/")
+	var filteredManifests []*Manifest
+	for i := len(manifests) - 1; i >= 0; i-- {
+		parts := strings.Split(manifests[i].Path, "/")
 		dir := parts[len(parts)-2]
 		if len(lastDir) > 0 && dir > lastDir {
 			fmt.Printf("Restore: skip directory %s because it's newer than %s.\n", dir, lastDir)
 			continue
 		}
 
-		filteredManifests = append(filteredManifests, files[i])
-		if files[i].manifest.Type == "full" {
+		filteredManifests = append(filteredManifests, manifests[i])
+		if manifests[i].Type == "full" {
 			break
 		}
 	}
