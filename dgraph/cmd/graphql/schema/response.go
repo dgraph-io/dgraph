@@ -24,7 +24,8 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// GraphQL spec on errors is here https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+// GraphQL spec on errors is here:
+// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 
 // Response represents a GraphQL response
 type Response struct {
@@ -37,8 +38,8 @@ type Response struct {
 	Data   bytes.Buffer
 }
 
-// ErrorResponsef returns a Response containing a single GraphQL error with a message
-// obtained by Sprintf-ing the argugments
+// ErrorResponsef returns a Response containing a single GraphQL error with a
+// message obtained by Sprintf-ing the argugments
 func ErrorResponsef(format string, args ...interface{}) *Response {
 	return &Response{
 		Errors: gqlerror.List{gqlerror.Errorf(format, args...)},

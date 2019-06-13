@@ -82,12 +82,14 @@ func (gh *graphqlHTTPHandler) resolverForRequest(r *http.Request) (rr *resolve.R
 		switch mediaType {
 		case "application/json":
 			if err = json.NewDecoder(r.Body).Decode(&rr.GqlReq); err != nil {
-				rr.WithErrors(gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
+				rr.WithErrors(
+					gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
 				return
 			}
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
-			// "A standard GraphQL POST request should use the application/json content type ..."
+			// "A standard GraphQL POST request should use the application/json
+			// content type ..."
 			rr.WithErrors(gqlerror.Errorf(
 				"Unrecognised Content-Type.  Please use application/json for GraphQL requests"))
 			return

@@ -51,8 +51,8 @@ import (
 //
 // Either way we build up a Dgraph json mutation to add the object
 //
-// For now, all mutations are only 1 level deep (cause of how we build the input objects)
-// and only create a single node (again cause of what the inputs look like)
+// For now, all mutations are only 1 level deep (cause of how we build the
+// input objects) and only create a single node (again cause of inputs)
 
 const (
 	createdNode = "newnode"

@@ -36,7 +36,8 @@ func executeQuery(query *gql.GraphQuery, dgraphClient *dgo.Dgraph) ([]byte, erro
 	ctx := context.Background()
 	resp, err := dgraphClient.NewTxn().Query(ctx, q)
 	if err != nil {
-		// should I be inspecting this to work out if it's a bug, or a transient error?
+		// should I be inspecting this to work out if it's a bug,
+		// or a transient error?
 		return nil, errors.Wrap(err, "while querying Dgraph")
 	}
 
@@ -45,7 +46,8 @@ func executeQuery(query *gql.GraphQuery, dgraphClient *dgo.Dgraph) ([]byte, erro
 
 // TODO: extract the below into gql package??
 //
-// There's not much of GraphQuery supported so far, so just simple writes of what is supported.
+// There's not much of GraphQuery supported so far,
+// so just simple writes of what is supported.
 func asString(query *gql.GraphQuery) string {
 	var b strings.Builder
 

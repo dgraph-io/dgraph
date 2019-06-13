@@ -33,7 +33,8 @@ type queryBuilder struct {
 }
 
 func (r *RequestResolver) resolveQuery(q schema.Query) {
-	// all queries in an operation should run regardless of errors in other queries
+	// All queries in an operation should run (in parallel) regardless of
+	// errors in other queries
 
 	var gq *gql.GraphQuery
 

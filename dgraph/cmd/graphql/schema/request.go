@@ -23,17 +23,18 @@ import (
 	"github.com/vektah/gqlparser/validator"
 )
 
-// A Request represents a GraphQL request.  It makes no guarantees that the request is valid.
+// A Request represents a GraphQL request.  It makes no guarantees that the
+// request is valid.
 type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
 }
 
-// Operation finds the operation in req, if it is a valid request for GraphQL schema s.
-// If the request is GraphQL valid, it must contain a single valid Operation.
-// If either the request is malformed or doesn't contain a valid operation, a GraphQL
-// response containing all errors encountered is returned.
+// Operation finds the operation in req, if it is a valid request for GraphQL
+// schema s. If the request is GraphQL valid, it must contain a single valid
+// Operation.  If either the request is malformed or doesn't contain a valid
+// operation, a GraphQL response containing all errors encountered is returned.
 func (s schema) Operation(req *Request) (Operation, *Response) {
 	if req == nil || req.Query == "" {
 		return nil, ErrorResponsef("No query string supplied in request")

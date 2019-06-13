@@ -223,8 +223,10 @@ func initDgraph() error {
 					fmt.Fprintf(&preds, "%s.%s: uid .\n", def.Name, f.Name)
 				case ast.Scalar:
 					// TODO: indexes needed here
-					fmt.Fprintf(&ty, "  %s.%s: %s\n", def.Name, f.Name, strings.ToLower(f.Type.Name()))
-					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, strings.ToLower(f.Type.Name()))
+					fmt.Fprintf(&ty, "  %s.%s: %s\n",
+						def.Name, f.Name, strings.ToLower(f.Type.Name()))
+					fmt.Fprintf(&preds, "%s.%s: %s .\n",
+						def.Name, f.Name, strings.ToLower(f.Type.Name()))
 				case ast.Enum:
 					fmt.Fprintf(&ty, "  %s.%s: string\n", def.Name, f.Name)
 					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)

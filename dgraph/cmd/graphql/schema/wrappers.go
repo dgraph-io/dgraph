@@ -29,6 +29,9 @@ import (
 // This also auto hooks up some bookkeeping that's otherwise no fun.  E.g. getting values for
 // field arguments requires the variable map from the operation - so we'd need to carry vars
 // through all the resolver functions.  Much nicer if they are resolved by magic here.
+//
+// TODO: *Note* not vendoring github.com/vektah/gqlparser at this stage.  You need to go get it.
+// Will make decision on if it's exactly what we need as we move along.
 
 // QueryType is current queries supported
 type QueryType string
@@ -155,7 +158,7 @@ func (f *field) ResponseName() string {
 }
 
 func (f *field) ArgValue(name string) (interface{}, error) {
-	// FIXME: cache this
+	// FIXME: cache ArgumentMap ?
 	return f.field.ArgumentMap(f.op.vars)[name], nil
 }
 

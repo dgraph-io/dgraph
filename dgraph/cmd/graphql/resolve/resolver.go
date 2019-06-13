@@ -48,13 +48,16 @@ import (
 //   "errors": [ { "message" : ..., ...} ... ]
 // }
 //
-// Key points about the response (https://graphql.github.io/graphql-spec/June2018/#sec-Response)
+// Key points about the response
+// (https://graphql.github.io/graphql-spec/June2018/#sec-Response)
 //
 // - If an error was encountered before execution begins,
 //   the data entry should not be present in the result.
 //
 // - If an error was encountered during the execution that
 //   prevented a valid response, the data entry in the response should be null.
+//
+// - If there's errors and data, both are returned
 //
 // - If no errors were encountered during the requested operation,
 //   the errors entry should not be present in the result.
@@ -89,7 +92,8 @@ func New(s schema.Schema, dc *dgo.Dgraph) *RequestResolver {
 	}
 }
 
-// WithErrors records all errors errs in rh to be reported when a GraphQL response is generated
+// WithErrors records all errors errs in rh to be reported when a GraphQL
+// response is generated
 func (r *RequestResolver) WithErrors(errs ...*gqlerror.Error) {
 	r.resp.Errors = append(r.resp.Errors, errs...)
 }
