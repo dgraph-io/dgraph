@@ -245,7 +245,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 		return 0, err
 	}
 
-	var manifestPaths []string
+	var paths []string
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -253,15 +253,15 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
-			manifestPaths = append(manifestPaths, object.Key)
+			paths = append(paths, object.Key)
 		}
 	}
-	if len(manifestPaths) == 0 {
+	if len(paths) == 0 {
 		return 0, errors.Errorf("No manifests found at: %s", uri.String())
 	}
-	sort.Strings(manifestPaths)
+	sort.Strings(paths)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifestPaths)
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, paths)
 	}
 
 	// since is returned with the max manifest Since value found.
@@ -270,7 +270,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
 	var manifests []*Manifest
-	for _, path := range manifestPaths {
+	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(mc, path, &m); err != nil {
 			return 0, errors.Wrapf(err, "While reading %q", path)
@@ -294,7 +294,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 			continue
 		}
 
-		path := filepath.Dir(manifestPaths[i])
+		path := filepath.Dir(manifests[i].Path)
 		for _, groupId := range manifest.Groups {
 			object := filepath.Join(path, backupName(manifest.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})

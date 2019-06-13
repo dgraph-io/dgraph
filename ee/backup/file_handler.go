@@ -156,7 +156,7 @@ func (h *fileHandler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, err
 			continue
 		}
 
-		path := filepath.Dir(paths[i])
+		path := filepath.Dir(manifests[i].Path)
 		for _, groupId := range manifest.Groups {
 			file := filepath.Join(path, backupName(manifest.Since, groupId))
 			fp, err := os.Open(file)
