@@ -189,6 +189,9 @@ func (d *Decoder) Uids() []uint64 {
 	return d.uids
 }
 
+// LinearSeek returns uids of the last block whose base is less than seek.
+// If there are no such blocks i.e. seek < base of first block, it returns uids of first
+// block. LinearSeek is used to get closest uids which are >= seek.
 func (d *Decoder) LinearSeek(seek uint64) []uint64 {
 	for {
 		v := d.PeekNextBase()

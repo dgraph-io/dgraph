@@ -422,7 +422,7 @@ func TestIntersectCompressedWithLinJump(t *testing.T) {
 
 	for _, N1 := range NUM1 {
 		for _, N2 := range NUM2 {
-			// Elements of common array will be in encoded block as well as v
+			// Elements of common array will be in encoded block as well as v.
 			common := make([]uint64, N1)
 			r := make([]uint64, N2)
 			v := make([]uint64, N1+N2)
