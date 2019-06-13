@@ -54,7 +54,7 @@ type Manifest struct {
 	// a series. The full backup as BackupNum equal to one and each incremental
 	// backup gets assigned the next available number. Used to verify the integrity
 	// of the data during a restore.
-	BackupNum uint64 `json"backup_num"`
+	BackupNum uint64 `json:"backup_num"`
 	// Path is the path to the manifest file. This field is only used during
 	// processing and is not written to disk.
 	Path string `json:"-"`
