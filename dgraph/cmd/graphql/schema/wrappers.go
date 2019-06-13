@@ -39,6 +39,7 @@ type QueryType string
 const (
 	GetQuery    QueryType = "get"
 	FilterQuery QueryType = "query"
+	IDType      string    = "ID"
 )
 
 // Schema is a GraphQL schema

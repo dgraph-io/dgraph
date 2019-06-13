@@ -165,17 +165,19 @@ func (qb *queryBuilder) withSelectionSetFrom(fld schema.Field) {
 	}
 
 	for _, f := range fld.SelectionSet() {
-
-		// TODO: ID fields need special treatment and should be rewriten
-		// to "name : uid" in here
-
 		qbld := newQueryBuilder()
 		if f.Alias() != "" {
 			qbld.withAlias(f.Alias())
 		} else {
 			qbld.withAlias(f.Name())
 		}
-		qbld.withAttr(fld.TypeName() + "." + f.Name())
+
+		if f.TypeName() == schema.IDType {
+			qbld.withAttr("uid")
+		} else {
+			qbld.withAttr(fld.TypeName() + "." + f.Name())
+		}
+
 		// TODO: filters, pagination, etc in here
 		qbld.withSelectionSetFrom(f)
 
