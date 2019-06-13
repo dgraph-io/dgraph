@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 
@@ -133,10 +132,9 @@ func NewUriHandler(uri *url.URL) (UriHandler, error) {
 // A reader and the backup groupId are passed as arguments.
 type loadFn func(reader io.Reader, groupId int) error
 
-// Load will scan location l for backup files (not including any directories
-// created after lastDir), then load them sequentially through reader.
-// Returns the maximum Since value on success, otherwise an error.
-func Load(location, lastDir string, fn loadFn) (since uint64, err error) {
+// Load will scan location l for backup files in the given backup series and load them
+// sequentially. Returns the maximum Since value on success, otherwise an error.
+func Load(location, seriesUid string, fn loadFn) (since uint64, err error) {
 	uri, err := url.Parse(location)
 	if err != nil {
 		return 0, err
@@ -147,7 +145,7 @@ func Load(location, lastDir string, fn loadFn) (since uint64, err error) {
 		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, lastDir, fn)
+	return h.Load(uri, seriesUid, fn)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
@@ -181,14 +179,13 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 
 // filterManifests takes a list of manifests and returns the list of manifests
 // that should be considered during a restore.
-func filterManifests(manifests []*Manifest, lastDir string) ([]*Manifest, error) {
+func filterManifests(manifests []*Manifest, seriesUid string) ([]*Manifest, error) {
 	// Go through the files in reverse order and stop when the latest full backup is found.
 	var filteredManifests []*Manifest
 	for i := len(manifests) - 1; i >= 0; i-- {
-		parts := strings.Split(manifests[i].Path, "/")
-		dir := parts[len(parts)-2]
-		if len(lastDir) > 0 && dir > lastDir {
-			fmt.Printf("Restore: skip directory %s because it's newer than %s.\n", dir, lastDir)
+		if len(seriesUid) > 0 && manifests[i].SeriesUid != seriesUid {
+			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
+				manifests[i].Path, seriesUid)
 			continue
 		}
 
