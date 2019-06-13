@@ -21,15 +21,15 @@ import (
 )
 
 func TestAclCache(t *testing.T) {
-	aclCache = &AclCache{
+	aclCachePtr = &aclCache{
 		predPerms:      make(map[string]map[string]int32),
-		predRegexRules: make([]*PredRegexRule, 0),
+		predRegexRules: make([]*predRegexRule, 0),
 	}
 
 	var emptyGroups []string
 	group := "dev"
 	predicate := "friend"
-	require.NoError(t, aclCache.authorizePredicate(emptyGroups, predicate, acl.Read),
+	require.NoError(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
 		"the anonymous user should have access when the acl cache is empty")
 
 	acls := []acl.Acl{
@@ -45,17 +45,17 @@ func TestAclCache(t *testing.T) {
 			Acls:    string(aclBytes),
 		},
 	}
-	aclCache.update(groups)
+	aclCachePtr.update(groups)
 	// after a rule is defined, the anonymous user should no longer have access
-	require.Error(t, aclCache.authorizePredicate(emptyGroups, predicate, acl.Read),
+	require.Error(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
 		"the anonymous user should not have access when the predicate has acl defined")
-	require.NoError(t, aclCache.authorizePredicate([]string{group}, predicate, acl.Read),
+	require.NoError(t, aclCachePtr.authorizePredicate([]string{group}, predicate, acl.Read),
 		"the user with group authorized should have access")
 
 	// update the cache with empty acl list in order to clear the cache
-	aclCache.update([]acl.Group{})
+	aclCachePtr.update([]acl.Group{})
 	// the anonymous user should have access again
-	require.NoError(t, aclCache.authorizePredicate(emptyGroups, predicate, acl.Read),
+	require.NoError(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
 		"the anonymous user should have access when the acl cache is empty")
 
 	// define acls using regex
@@ -72,9 +72,9 @@ func TestAclCache(t *testing.T) {
 			Acls:    string(aclBytes1),
 		},
 	}
-	aclCache.update(groups1)
-	require.Error(t, aclCache.authorizePredicate(emptyGroups, predicate, acl.Read),
+	aclCachePtr.update(groups1)
+	require.Error(t, aclCachePtr.authorizePredicate(emptyGroups, predicate, acl.Read),
 		"the anonymous user should not have access when the predicate has acl defined")
-	require.NoError(t, aclCache.authorizePredicate([]string{group}, predicate, acl.Read),
+	require.NoError(t, aclCachePtr.authorizePredicate([]string{group}, predicate, acl.Read),
 		"the user with group authorized should have access")
 }
