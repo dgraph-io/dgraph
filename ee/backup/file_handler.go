@@ -111,34 +111,35 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
+func (h *fileHandler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error) {
 	if !pathExist(uri.Path) {
 		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
-	manifestPaths := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
+	paths := x.WalkPathFunc(uri.Path, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
-	if len(manifestPaths) == 0 {
+	if len(paths) == 0 {
 		return 0, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
-	sort.Strings(manifestPaths)
+	sort.Strings(paths)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s): %v\n", manifestPaths)
+		fmt.Printf("Found backup manifest(s): %v\n", paths)
 	}
 
-	// Read and filter the manifests to get the list of manifests to consider
+	// Read and filter the files to get the list of files to consider
 	// for this restore operation.
 	var manifests []*Manifest
-	for _, manifest := range manifestPaths {
+	for _, path := range paths {
 		var m Manifest
-		if err := h.readManifest(manifest, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", manifest)
+		if err := h.readManifest(path, &m); err != nil {
+			return 0, errors.Wrapf(err, "While reading %q", path)
 		}
+		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, manifestPaths, err := filterManifests(manifests, manifestPaths)
+	manifests, err := filterManifests(manifests, lastDir)
 	if err != nil {
 		return 0, err
 	}
@@ -150,12 +151,12 @@ func (h *fileHandler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifestPaths[i], manifest)
+				fmt.Printf("Restore: skip backup: %#v\n", manifest)
 			}
 			continue
 		}
 
-		path := filepath.Dir(manifestPaths[i])
+		path := filepath.Dir(manifests[i].Path)
 		for _, groupId := range manifest.Groups {
 			file := filepath.Join(path, backupName(manifest.Since, groupId))
 			fp, err := os.Open(file)

@@ -239,13 +239,13 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
+func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return 0, err
 	}
 
-	var manifestPaths []string
+	var paths []string
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -253,15 +253,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
-			manifestPaths = append(manifestPaths, object.Key)
+			paths = append(paths, object.Key)
 		}
 	}
-	if len(manifestPaths) == 0 {
+	if len(paths) == 0 {
 		return 0, errors.Errorf("No manifests found at: %s", uri.String())
 	}
-	sort.Strings(manifestPaths)
+	sort.Strings(paths)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifestPaths)
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, paths)
 	}
 
 	// since is returned with the max manifest Since value found.
@@ -270,32 +270,33 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
 	var manifests []*Manifest
-	for _, manifest := range manifestPaths {
+	for _, path := range paths {
 		var m Manifest
-		if err := h.readManifest(mc, manifest, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", manifest)
+		if err := h.readManifest(mc, path, &m); err != nil {
+			return 0, errors.Wrapf(err, "While reading %q", path)
 		}
+		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, manifestPaths, err = filterManifests(manifests, manifestPaths)
+	manifests, err = filterManifests(manifests, lastDir)
 	if err != nil {
 		return 0, err
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
+	// backup manifests for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
-	for i, m := range manifests {
-		if m.Since == 0 || len(m.Groups) == 0 {
+	for i, manifest := range manifests {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifestPaths[i], m)
+				fmt.Printf("Restore: skip backup: %#v\n", manifest)
 			}
 			continue
 		}
 
-		path := filepath.Dir(manifestPaths[i])
-		for _, groupId := range m.Groups {
-			object := filepath.Join(path, backupName(m.Since, groupId))
+		path := filepath.Dir(manifests[i].Path)
+		for _, groupId := range manifest.Groups {
+			object := filepath.Join(path, backupName(manifest.Since, groupId))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)
@@ -313,7 +314,7 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 				return 0, err
 			}
 		}
-		since = m.Since
+		since = manifest.Since
 	}
 	return since, nil
 }

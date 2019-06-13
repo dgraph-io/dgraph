@@ -37,10 +37,10 @@ import (
 )
 
 var (
-	backupDir      = "./data/backups"
-	localBackupDir = "./data/backups_local"
-	restoreDir     = "./data/restore"
-	dirs           = []string{restoreDir}
+	backupDir     = "./data/backups"
+	copyBackupDir = "./data/backups_copy"
+	restoreDir    = "./data/restore"
+	dirs          = []string{restoreDir}
 
 	alphaBackupDir = "/data/backups"
 
@@ -96,7 +96,7 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Send backup request.
 	dirs := runBackup(t, 3, 1)
-	restored := runRestore(t, dirs[0], math.MaxUint64)
+	restored := runRestore(t, copyBackupDir, "", math.MaxUint64)
 
 	checks := []struct {
 		blank, expected string
@@ -124,7 +124,7 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Perform first incremental backup.
 	dirs = runBackup(t, 6, 2)
-	restored = runRestore(t, dirs[1], incr1.Context.CommitTs)
+	restored = runRestore(t, copyBackupDir, "", incr1.Context.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -148,7 +148,7 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Perform second incremental backup.
 	dirs = runBackup(t, 9, 3)
-	restored = runRestore(t, dirs[2], incr2.Context.CommitTs)
+	restored = runRestore(t, copyBackupDir, "", incr2.Context.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -156,7 +156,6 @@ func TestBackupFilesystem(t *testing.T) {
 		{blank: "x4", expected: "The Shape of Water"},
 		{blank: "x5", expected: "The Black Panther"},
 	}
-
 	for _, check := range checks {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
@@ -173,11 +172,7 @@ func TestBackupFilesystem(t *testing.T) {
 
 	// Perform second full backup.
 	dirs = runBackupInternal(t, true, 12, 4)
-	// Recreate the restore directory to make sure there's no previous data when
-	// calling restore.
-	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
-	restored = runRestore(t, dirs[3], incr3.Context.CommitTs)
+	restored = runRestore(t, copyBackupDir, "", incr3.Context.CommitTs)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -189,7 +184,20 @@ func TestBackupFilesystem(t *testing.T) {
 		{blank: "x4", expected: "El laberinto del fauno"},
 		{blank: "x5", expected: "Black Panther 2"},
 	}
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
+	}
 
+	// Perform a partial restore. The restored data should be equivalent of performing
+	// as restore of the first full backup and the first incremental backup.
+	parts := strings.Split(dirs[1], "/")
+	restored = runRestore(t, copyBackupDir, parts[len(parts)-1], incr3.Context.CommitTs)
+	checks = []struct {
+		blank, expected string
+	}{
+		{blank: "x1", expected: "Birdman or (The Unexpected Virtue of Ignorance)"},
+		{blank: "x4", expected: "The Shape of Waterloo"},
+	}
 	for _, check := range checks {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
@@ -220,21 +228,26 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs()
-	files := x.WalkPathFunc(localBackupDir, func(path string, isdir bool) bool {
+	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.True(t, len(files) == numExpectedFiles)
-	dirs := x.WalkPathFunc(localBackupDir, func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups_local/dgraph.")
+	dirs := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
+		return isdir && strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.True(t, len(dirs) == numExpectedDirs)
 
 	return dirs
 }
 
-func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]string {
-	t.Logf("--- Restoring from: %q", restoreDir)
-	_, err := backup.RunRestore("./data/restore", restoreDir)
+func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) map[string]string {
+	// Recreate the restore directory to make sure there's no previous data when
+	// calling restore.
+	require.NoError(t, os.RemoveAll(restoreDir))
+	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
+
+	t.Logf("--- Restoring from: %q", backupLocation)
+	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
 	restored, err := z.GetPValues("./data/restore/p1", "movie", commitTs)
@@ -260,7 +273,7 @@ func dirSetup() {
 
 func dirCleanup() {
 	x.Check(os.RemoveAll(restoreDir))
-	x.Check(os.RemoveAll(localBackupDir))
+	x.Check(os.RemoveAll(copyBackupDir))
 
 	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
 	x.Check(z.DockerExec(alphaContainers[0], cmd...))
@@ -270,7 +283,7 @@ func copyToLocalFs() {
 	// The original backup files are not accessible because docker creates all files in
 	// the shared volume as the root user. This restriction is circumvented by using
 	// "docker cp" to create a copy that is not owned by the root user.
-	x.Check(os.RemoveAll(localBackupDir))
+	x.Check(os.RemoveAll(copyBackupDir))
 	srcPath := "alpha1:/data/backups"
-	x.Check(z.DockerCp(srcPath, localBackupDir))
+	x.Check(z.DockerCp(srcPath, copyBackupDir))
 }
