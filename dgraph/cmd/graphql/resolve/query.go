@@ -39,8 +39,7 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 	var gq *gql.GraphQuery
 
 	// currently only handles getT(id: "0x123") queries
-	// FIXME: "q.QueryType()"
-	switch schema.GetQuery {
+	switch q.QueryType() {
 	case schema.GetQuery:
 		qb := newQueryBuilder()
 		qb.withAttr(q.ResponseName())
@@ -53,6 +52,7 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 		gq, err = qb.query()
 		if err != nil {
 			// FIXME: could be a bug like error here or a gql error
+			// proably need to return gqlerrors and errors?
 
 			// TODO: errors that probably mean bugs, should return a simple GraphQL error
 			// AND log with a guid linking the GraphQL error and the server log

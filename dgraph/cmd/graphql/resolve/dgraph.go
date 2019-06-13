@@ -44,7 +44,7 @@ func executeQuery(query *gql.GraphQuery, dgraphClient *dgo.Dgraph) ([]byte, erro
 	return resp.Json, nil
 }
 
-// TODO: extract the below into gql package??
+// TODO: once there's more below, extract out into gql package??
 //
 // There's not much of GraphQuery supported so far,
 // so just simple writes of what is supported.
