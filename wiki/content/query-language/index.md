@@ -2068,10 +2068,10 @@ Types are defined using the GraphQL standard. Here's an example of a basic type.
 
 ```
 type Student {
-	name: string
-    dob: datetime
-    home_address: string
-    year: int
+  name: string
+  dob: datetime
+  home_address: string
+  year: int
 }
 ```
 
@@ -2092,11 +2092,11 @@ names for each type. Below there is a small example.
 
 ```
 type Student {
-	student_name: string
+  student_name: string
 }
 
 type Textbook {
-	textbook_name: string
+  textbook_name: string
 }
 
 student_name: string @index(exact) .
@@ -2121,11 +2121,11 @@ types. Here's an example of how to set the types of a node:
 
 ```
 {
-	set {
-    	_:a <name> "Garfield" .
-    	_:a <dgraph.type> "Pet" .
-    	_:a <dgraph.type> "Animal" .
-    }
+  set {
+    _:a <name> "Garfield" .
+    _:a <dgraph.type> "Pet" .
+    _:a <dgraph.type> "Animal" .
+  }
 }
 ```
 
@@ -2137,10 +2137,10 @@ The type system can be used as a top level function in the query language. Here'
 
 ```
 {
-	q(func: type(Animal)) {
-    	uid
-    	name
-    }
+  q(func: type(Animal)) {
+    uid
+    name
+  }
 }
 ```
 
@@ -2150,13 +2150,13 @@ The types can also be used to filter results inside the queries. For example:
 
 ```
 {
-	q(func: has(parent)) {
-    	uid
-    	parent @type(Person) {
-        	uid
-            name
-        }
+  q(func: has(parent)) {
+    uid
+    parent @type(Person) {
+      uid
+      name
     }
+  }
 }
 ```
 
@@ -2170,11 +2170,11 @@ to send an operation object with the field `DropOp` (or `drop_op` depending on
 the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
 to the type that is meant to be deleted.
 
-Below is an example deleting the type `Person` using the go client:
+Below is an example deleting the type `Person` using the Go client:
 ```go
-	err := c.Alter(context.Background(), &api.Operation{
-			DropOp: api.Operation_TYPE,
-			DropValue: "Person"})
+err := c.Alter(context.Background(), &api.Operation{
+                DropOp: api.Operation_TYPE,
+                DropValue: "Person"})
 ```
 
 #### Expand queries and types
