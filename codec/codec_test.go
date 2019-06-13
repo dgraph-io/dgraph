@@ -110,7 +110,7 @@ func TestSeek(t *testing.T) {
 	}
 }
 
-func TestLinearSeek1(t *testing.T) {
+func TestLinearSeek(t *testing.T) {
 	N := 10001
 	enc := Encoder{BlockSize: 10}
 	for i := 0; i < N; i += 10 {
@@ -120,7 +120,7 @@ func TestLinearSeek1(t *testing.T) {
 	dec := Decoder{Pack: pack}
 
 	var found bool
-	for i := 0; i < N; i += 10 {
+	for i := 0; i < 2*N; i += 10 {
 		found = false
 		uids := dec.LinearSeek(uint64(i))
 
@@ -131,7 +131,7 @@ func TestLinearSeek1(t *testing.T) {
 			}
 		}
 
-		require.Equal(t, found, true)
+		require.Equal(t, found, i < N)
 	}
 
 	for i := 0; i < 9990; i += 10 {
@@ -144,80 +144,9 @@ func TestLinearSeek1(t *testing.T) {
 				break
 			}
 		}
-		// blockIdx has increased, so LinearSeek shouldn't
-		// be able to find smaller numbers.
+		// blockIdx has increased, so LinearSeek shouldn't be able to find smaller numbers.
 		require.Equal(t, found, false)
 	}
-}
-
-func TestLinearSeek2(t *testing.T) {
-	N := 15
-	enc := Encoder{BlockSize: 10}
-	for i := 0; i < N; i++ {
-		enc.Add(uint64(i))
-	}
-	pack := enc.Done()
-	dec := Decoder{Pack: pack}
-
-	var found bool
-	uids := dec.LinearSeek(uint64(0))
-	for _, uid := range uids {
-		if uid == uint64(0) {
-			found = true
-			break
-		}
-	}
-	require.Equal(t, found, true)
-
-	found = false
-	uids = dec.LinearSeek(uint64(11))
-	for _, uid := range uids {
-		if uid == uint64(11) {
-			found = true
-			break
-		}
-	}
-	require.Equal(t, found, true)
-
-	found = false
-	uids = dec.LinearSeek(uint64(14))
-	for _, uid := range uids {
-		if uid == uint64(14) {
-			found = true
-			break
-		}
-	}
-	require.Equal(t, found, true)
-
-	found = false
-	uids = dec.LinearSeek(uint64(15))
-	for _, uid := range uids {
-		if uid == uint64(15) {
-			found = true
-			break
-		}
-	}
-	require.Equal(t, found, false)
-
-	found = false
-	uids = dec.LinearSeek(uint64(1))
-	for _, uid := range uids {
-		if uid == uint64(1) {
-			found = true
-			break
-		}
-	}
-	require.Equal(t, found, false)
-
-	found = false
-	uids = dec.LinearSeek(uint64(0))
-	for _, uid := range uids {
-		if uid == uint64(0) {
-			found = true
-			break
-		}
-	}
-	require.Equal(t, found, false)
 }
 
 func TestDecoder(t *testing.T) {

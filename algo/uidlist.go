@@ -82,7 +82,7 @@ func IntersectCompressedWithLinJump(dec *codec.Decoder, v []uint64, o *[]uint64)
 		}
 		_, off := IntersectWithLin(u, v[k:], o)
 		if off == 0 {
-			off = 1 // If v[k] isn't in u more forward
+			off = 1 // If v[k] isn't in u, move forward.
 		}
 
 		k += off
