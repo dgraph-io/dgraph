@@ -165,12 +165,12 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 		glog.Infof("Dgraph query failed : %s", err) // maybe log more info if it could be a bug?
 	}
 
-	// what's the best way to append into the result []byte / json.RawMessage ??
 	r.resp.Data.WriteRune('"')
 	r.resp.Data.WriteString(m.ResponseName())
-	r.resp.Data.WriteString(`": {`) // FIXME: what we write (list/object) depends on schema result type
+	r.resp.Data.WriteString(`":`)
 	r.resp.Data.Write(res)
-	r.resp.Data.WriteString("}\n")
+
+	// TODO: As with query case, we need to do error propagation etc on the above
 }
 
 func buildMutationJSON(f schema.Mutation, v interface{}) map[string]interface{} {

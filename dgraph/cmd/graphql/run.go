@@ -160,8 +160,9 @@ func run() error {
 
 	http.Handle("/graphql", handler)
 
+	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
-	return errors.Wrap(http.ListenAndServe(":8765", nil), "GraphQL server failed")
+	return errors.Wrap(http.ListenAndServe(":9000", nil), "GraphQL server failed")
 }
 
 func initDgraph() error {

@@ -72,9 +72,21 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 
 	// TODO:
 	// More is needed here if we are to be totally GraphQL compliant.
-	// e.g. need to dig through that response and the expected types from the schema
-	// and propagate errors and missing ! fields according to spec.
-	r.resp.Data.Write(res)
+	// e.g. need to dig through that response and the expected types from the
+	// schema and propagate missing ! fields and errors according to spec.
+	//
+	// TODO:
+	// Also below will return "qname : [ { ... } ]", even if the schema said the
+	// query returned a single item rather than a list.  In those cases it
+	// should be "qname : { ... }"
+
+	if r.resp.Data.Len() > 0 {
+		r.resp.Data.WriteRune(',')
+	}
+
+	// need to chop leading '{' and trailing '}' from response
+	// is this the safe way?
+	r.resp.Data.Write(res[1 : len(res)-1])
 }
 
 func newQueryBuilder() *queryBuilder {
@@ -153,6 +165,10 @@ func (qb *queryBuilder) withSelectionSetFrom(fld schema.Field) {
 	}
 
 	for _, f := range fld.SelectionSet() {
+
+		// TODO: ID fields need special treatment and should be rewriten
+		// to "name : uid" in here
+
 		qbld := newQueryBuilder()
 		if f.Alias() != "" {
 			qbld.withAlias(f.Alias())

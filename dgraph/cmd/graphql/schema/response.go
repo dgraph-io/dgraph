@@ -21,6 +21,9 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
@@ -29,11 +32,14 @@ import (
 
 // Response represents a GraphQL response
 type Response struct {
-	// TODO: dgraph response type (x.go) is similar, should I be leaning on that?
+	// Dgraph response type (x.go) is similar, should I be leaning on that?
 	// ATM, no, cause I'm trying to follow the spec really closely, e.g:
 	// - spec error format is different to x.errRes
 	// - I think we should mostly return 200 status code
 	// - for spec we need to return errors and data in same response
+	//
+	// see https://graphql.github.io/graphql-spec/June2018/#sec-Response
+	//
 	Errors gqlerror.List
 	Data   bytes.Buffer
 }
@@ -50,7 +56,7 @@ func ErrorResponsef(format string, args ...interface{}) *Response {
 // to r.WriteTo will write `"data": null`
 func (r *Response) WithNullData() {
 	r.Data.Reset()
-	r.Data.WriteString(`"data": null`)
+	r.Data.WriteString(`null`)
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w
@@ -58,38 +64,27 @@ func (r *Response) WithNullData() {
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	var out bytes.Buffer
 
+	out.WriteRune('{')
 	if len(r.Errors) > 0 {
-		js, _ := json.Marshal(r.Errors)
-		// FIXME: errors
+		js, err := json.Marshal(r.Errors)
+		if err != nil {
+			msg := "Server failed to marshal a valid JSON error response"
+			glog.Errorf(msg, errors.Wrap(err, msg))
+			out.WriteString("\"errors\": [ { \"message\": \"" + msg + "\" } ]")
+			out.WriteRune('}')
+			return out.WriteTo(w)
+		}
 
 		out.WriteString("\"errors\":")
 		out.Write(js)
-		out.WriteString("\n")
 	}
 
 	if r.Data.Len() > 0 {
-		out.Write(r.Data.Bytes()) // FIXME: best? or copy
+		out.WriteString("\"data\": {")
+		out.Write(r.Data.Bytes())
+		out.WriteRune('}')
 	}
 
-	n, err := w.Write(out.Bytes())
-	return int64(n), err
-
-	/*
-		b, err := json.Marshal(r)
-		if err != nil {
-			// probably indicatesa bug that's written invalid bytes to r.Data
-			// should I even do it this way - why not just write the bytes directly to w?
-			msg := "Failed to write a valid GraphQL JSON response"
-			glog.Errorf(msg, err) // also dump in other debugging like r into V(2)?
-			errResp := ErrorResponsef(msg)
-			errResp.WithNullData()
-			b, err = json.Marshal(errResp)
-			if err != nil {
-				return 0, errors.Wrap(err, "failed to even marshal json error msg")
-			}
-		}
-
-		n, err := w.Write(b)
-		return int64(n), err
-	*/
+	out.WriteRune('}')
+	return out.WriteTo(w)
 }
