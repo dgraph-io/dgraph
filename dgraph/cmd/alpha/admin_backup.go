@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 
+	"github.com/google/uuid"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -135,8 +136,12 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	m := backup.Manifest{Groups: groups, Since: req.ReadTs}
 	if req.SinceTs == 0 {
 		m.Type = "full"
+		m.SeriesUid = uuid.New().String()
+		m.BackupNum = 1
 	} else {
 		m.Type = "incremental"
+		m.SeriesUid = latestManifest.SeriesUid
+		m.BackupNum = latestManifest.BackupNum + 1
 	}
 
 	bp := &backup.Processor{Request: &req}

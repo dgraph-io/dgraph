@@ -180,11 +180,11 @@ func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 		}
 	}
 
+	var m Manifest
 	if lastManifest == "" {
-		return nil, nil
+		return &m, nil
 	}
 
-	var m Manifest
 	if err := h.readManifest(mc, lastManifest, &m); err != nil {
 		return nil, err
 	}

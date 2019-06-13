@@ -204,7 +204,39 @@ func filterManifests(manifests []*Manifest, lastDir string) ([]*Manifest, error)
 		filteredManifests[i], filteredManifests[opp] = filteredManifests[opp], filteredManifests[i]
 	}
 
+	if err := verifyManifests(filteredManifests); err != nil {
+		return nil, err
+	}
+
 	return filteredManifests, nil
+}
+
+func verifyManifests(manifests []*Manifest) error {
+	if len(manifests) == 0 {
+		return nil
+	}
+
+	if manifests[0].BackupNum != 1 {
+		return errors.Errorf("expected a BackupNum value of 1 for first manifest but got %d",
+			manifests[0].BackupNum)
+	}
+
+	seriesUid := manifests[0].SeriesUid
+	var backupNum uint64
+	for _, manifest := range manifests {
+		if manifest.SeriesUid != seriesUid {
+			return errors.Errorf("found a manifest with series UID %s but expected %s",
+				manifest.SeriesUid, seriesUid)
+		}
+
+		backupNum++
+		if manifest.BackupNum != backupNum {
+			return errors.Errorf("found a manifest with backup number %d but expected %d",
+				manifest.BackupNum, backupNum)
+		}
+	}
+
+	return nil
 }
 
 func backupName(since uint64, groupId uint32) string {

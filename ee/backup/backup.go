@@ -40,24 +40,24 @@ type Processor struct {
 type Manifest struct {
 	sync.Mutex
 	//Type is the type of backup, either full or incremental.
-	Type      string   `json:"type"`
+	Type string `json:"type"`
 	// Since is the timestamp at which this backup was taken. It's called Since
 	// because it will become the timestamp from which to backup in the next
 	// incremental backup.
-	Since     uint64   `json:"since"`
+	Since uint64 `json:"since"`
 	// Groups is the list of valid groups at the time the backup was created.
-	Groups    []uint32 `json:"groups"`
-	// SeriesId is a unique ID assigned to all the backups in the same series
-    // (from the first full backup to the last incremental backup).
-	SeriesId  uint64   `json:"series_id"`
+	Groups []uint32 `json:"groups"`
+	// SeriesUid is a unique ID assigned to all the backups in the same series
+	// (from the first full backup to the last incremental backup).
+	SeriesUid string `json:"series_id"`
 	// BackupNum is a monotonically increasing number assigned to each backup in
-	// a series. The full backup as BackupNum equal to zero and each incremental
+	// a series. The full backup as BackupNum equal to one and each incremental
 	// backup gets assigned the next available number. Used to verify the integrity
 	// of the data during a restore.
-	BackupNum uint64   `json"backup_num"`
+	BackupNum uint64 `json"backup_num"`
 	// Path is the path to the manifest file. This field is only used during
 	// processing and is not written to disk.
-	Path      string   `json:"-"`
+	Path string `json:"-"`
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data

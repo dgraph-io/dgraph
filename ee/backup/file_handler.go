@@ -79,11 +79,11 @@ func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 		return false
 	})
 
+	var m Manifest
 	if lastManifest == "" {
-		return nil, nil
+		return &m, nil
 	}
 
-	var m Manifest
 	if err := h.readManifest(lastManifest, &m); err != nil {
 		return nil, err
 	}
