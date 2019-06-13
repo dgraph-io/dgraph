@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/stretchr/testify/require"
 
@@ -284,7 +283,6 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
 		`{"predicate":"age","type":"default"},`+
-		x.AclPredsJson+","+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`+
 		`]}}`, output)
 
@@ -1291,7 +1289,6 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data":{"schema":[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"occupations","type":"string"}]}}`, res)
 
 }
@@ -1383,9 +1380,7 @@ func TestDropAll(t *testing.T) {
 	output, err = runQuery(q3)
 	require.NoError(t, err)
 	require.JSONEq(t,
-		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},`+
-			x.AclPredsJson+
-			`]}}`, output)
+		`{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true}]}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)

@@ -337,27 +337,6 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
         "list": true
       },
       {
-        "predicate": "dgraph.group.acl",
-        "type": "string"
-      },
-      {
-        "predicate": "dgraph.password",
-        "type": "password"
-      },
-      {
-        "predicate": "dgraph.user.group",
-        "type": "uid",
-        "reverse": true
-      },
-      {
-        "predicate": "dgraph.xid",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ]
-      },
-      {
         "predicate": "name",
         "type": "string",
         "index": true,
@@ -401,18 +380,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
     "schema": [
       {
         "predicate": "_predicate_"
-      },
-      {
-        "predicate": "dgraph.group.acl"
-      },
-      {
-        "predicate": "dgraph.password"
-      },
-      {
-        "predicate": "dgraph.user.group"
-      },
-      {
-        "predicate": "dgraph.xid"
       },
       {
         "predicate": "friends"
@@ -540,27 +507,6 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
         "predicate": "_predicate_",
         "type": "string",
         "list": true
-      },
-      {
-        "predicate": "dgraph.group.acl",
-        "type": "string"
-      },
-      {
-        "predicate": "dgraph.password",
-        "type": "password"
-      },
-      {
-        "predicate": "dgraph.user.group",
-        "type": "uid",
-        "reverse": true
-      },
-      {
-        "predicate": "dgraph.xid",
-        "type": "string",
-        "index": true,
-        "tokenizer": [
-          "exact"
-        ]
       },
       {
         "predicate": "name",

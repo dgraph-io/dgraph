@@ -79,18 +79,8 @@ var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	InitialPreds   = map[string]struct{}{
-		PredicateListAttr:   {},
-		"dgraph.xid":        {},
-		"dgraph.password":   {},
-		"dgraph.user.group": {},
-		"dgraph.group.acl":  {},
+		PredicateListAttr: {},
 	}
-	AclPredsJson = `
-{"predicate":"dgraph.group.acl", "type":"string"},
-{"predicate":"dgraph.password", "type":"password"},
-{"reverse":true, "predicate":"dgraph.user.group", "type":"uid"},
-{"index":true, "tokenizer":["exact"], "predicate":"dgraph.xid", "type":"string"}
-`
 	Nilbyte []byte
 )
 

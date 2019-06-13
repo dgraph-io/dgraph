@@ -628,7 +628,6 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"friend","type":"uid"},`+
 		`{"predicate":"married","type":"bool"},`+
 		`{"predicate":"name","type":"default"}]`, string(b))
@@ -651,7 +650,6 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[`+
 		`{"predicate":"_predicate_","type":"string","list":true},`+
-		x.AclPredsJson+","+
 		`{"predicate":"friend","type":"uid"},`+
 		`{"predicate":"name","type":"default"}]`, string(b))
 }
