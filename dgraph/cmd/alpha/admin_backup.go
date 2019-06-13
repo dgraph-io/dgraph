@@ -101,10 +101,11 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	req.SinceTs, err = handler.GetSinceTs(uri)
+	latestManifest, err := handler.GetLatestManifest(uri)
 	if err != nil {
 		return err
 	}
+	req.SinceTs = latestManifest.Since
 	if forceFull {
 		req.SinceTs = 0
 	}

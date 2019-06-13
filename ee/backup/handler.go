@@ -60,9 +60,9 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// GetSinceTs reads the manifests at the given URL and returns the appropriate
-	// timestamp from which the current backup should be started.
-	GetSinceTs(*url.URL) (uint64, error)
+	// GetLatestManifest reads the manifests at the given URL and returns the
+	// latest manifest.
+	GetLatestManifest(*url.URL) (*Manifest, error)
 
 	// CreateBackupFile prepares the object or file to save the backup file.
 	CreateBackupFile(*url.URL, *pb.BackupRequest) error

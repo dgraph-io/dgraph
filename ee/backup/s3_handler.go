@@ -161,12 +161,12 @@ func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.
 	}()
 }
 
-// GetSinceTs reads the manifests at the given URL and returns the appropriate
-// timestamp from which the current backup should be started.
-func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
+// GetLatestManifest reads the manifests at the given URL and returns the
+// latest manifest.
+func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Find the max Since value from the latest backup.
@@ -181,14 +181,14 @@ func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
 	}
 
 	if lastManifest == "" {
-		return 0, nil
+		return nil, nil
 	}
 
 	var m Manifest
 	if err := h.readManifest(mc, lastManifest, &m); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return m.Since, nil
+	return &m, nil
 }
 
 // CreateBackupFile creates a new session and prepares the data stream for the backup.

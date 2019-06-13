@@ -62,11 +62,11 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 	return nil
 }
 
-// GetSinceTs reads the manifests at the given URL and returns the appropriate
-// timestamp from which the current backup should be started.
-func (h *fileHandler) GetSinceTs(uri *url.URL) (uint64, error) {
+// GetLatestManifest reads the manifests at the given URL and returns the
+// latest manifest.
+func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	if !pathExist(uri.Path) {
-		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// Find the max Since value from the latest backup.
@@ -80,14 +80,14 @@ func (h *fileHandler) GetSinceTs(uri *url.URL) (uint64, error) {
 	})
 
 	if lastManifest == "" {
-		return 0, nil
+		return nil, nil
 	}
 
 	var m Manifest
 	if err := h.readManifest(lastManifest, &m); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return m.Since, nil
+	return &m, nil
 }
 
 // CreateBackupFile prepares the a path to save the backup file.
