@@ -37,6 +37,7 @@ type syncMark struct {
 	ts    uint64
 }
 
+// Oracle stores and manages the transaction state and conflict detection.
 type Oracle struct {
 	x.SafeMutex
 	commits map[uint64]uint64 // startTs -> commitTs
@@ -54,6 +55,7 @@ type Oracle struct {
 	syncMarks   []syncMark
 }
 
+// Init initializes the oracle.
 func (o *Oracle) Init() {
 	o.commits = make(map[uint64]uint64)
 	o.keyCommit = make(map[string]uint64)
@@ -274,6 +276,7 @@ func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	o.maxAssigned = x.Max(o.maxAssigned, max)
 }
 
+// MaxPending returns the maximum assigned timestamp.
 func (o *Oracle) MaxPending() uint64 {
 	o.RLock()
 	defer o.RUnlock()
@@ -397,6 +400,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	return s.proposeTxn(ctx, src)
 }
 
+// CommitOrAbort commits an abortion or aborts it if there's an error.
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -417,6 +421,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 var errClosed = errors.New("Streaming closed by oracle")
 var errNotLeader = errors.New("Node is no longer leader")
 
+// Oracle retrieves the oracle state.
 func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
 		return errNotLeader
@@ -448,6 +453,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 	}
 }
 
+// SyncedUntil returns the index up to which all the nodes have synced.
 func (s *Server) SyncedUntil() uint64 {
 	s.orc.Lock()
 	defer s.orc.Unlock()
@@ -467,6 +473,7 @@ func (s *Server) SyncedUntil() uint64 {
 	return syncUntil
 }
 
+// TryAbort attempts to abort the given transactions which are not already committed..
 func (s *Server) TryAbort(ctx context.Context,
 	txns *pb.TxnTimestamps) (*pb.OracleDelta, error) {
 	delta := &pb.OracleDelta{}

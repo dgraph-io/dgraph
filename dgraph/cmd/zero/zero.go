@@ -39,6 +39,7 @@ var (
 	errServerShutDown    = errors.New("Server is being shut down")
 )
 
+// Server implements the zero server.
 type Server struct {
 	x.SafeMutex
 	Node *node
@@ -62,6 +63,7 @@ type Server struct {
 	blockCommitsOn *sync.Map
 }
 
+// Init initializes the zero server.
 func (s *Server) Init() {
 	s.Lock()
 	defer s.Unlock()
@@ -143,6 +145,7 @@ func (s *Server) member(addr string) *pb.Member {
 	return nil
 }
 
+// Leader returns a connection pool to the zero leader.
 func (s *Server) Leader(gid uint32) *conn.Pool {
 	s.RLock()
 	defer s.RUnlock()
@@ -171,6 +174,7 @@ func (s *Server) Leader(gid uint32) *conn.Pool {
 	return healthyPool
 }
 
+// KnownGroups returns a list of the known groups.
 func (s *Server) KnownGroups() []uint32 {
 	var groups []uint32
 	s.RLock()
@@ -198,6 +202,7 @@ func (s *Server) hasLeader(gid uint32) bool {
 	return false
 }
 
+// SetMembershipState updates the membership state to the given one.
 func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	s.Lock()
 	defer s.Unlock()
@@ -220,6 +225,7 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	s.nextGroup = uint32(len(state.Groups) + 1)
 }
 
+// MarshalMembershipState returns the marshaled membership state.
 func (s *Server) MarshalMembershipState() ([]byte, error) {
 	s.Lock()
 	defer s.Unlock()
@@ -369,7 +375,9 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	return res, nil
 }
 
-// Its users responsibility to ensure that node doesn't come back again before calling the api.
+// removeNode removes the given node in the given group.
+// It's the user's responsibility to ensure that node doesn't come back again
+// before calling the api.
 func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
 	if groupId == 0 {
 		return s.Node.ProposePeerRemoval(ctx, nodeId)
@@ -525,6 +533,7 @@ func (s *Server) Connect(ctx context.Context,
 	return resp, nil
 }
 
+// ShouldServe returns the tablet serving the predicate passed in the request.
 func (s *Server) ShouldServe(
 	ctx context.Context, tablet *pb.Tablet) (resp *pb.Tablet, err error) {
 	ctx, span := otrace.StartSpan(ctx, "Zero.ShouldServe")
@@ -577,6 +586,7 @@ func (s *Server) ShouldServe(
 	return tab, nil
 }
 
+// UpdateMembership updates the membership of the given group.
 func (s *Server) UpdateMembership(ctx context.Context, group *pb.Group) (*api.Payload, error) {
 	proposals, err := s.createProposals(group)
 	if err != nil {
@@ -670,6 +680,7 @@ func (s *Server) deletePredicates(ctx context.Context, group *pb.Group) error {
 	return nil
 }
 
+// StreamMembership periodically streams the membership state to the given stream.
 func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershipServer) error {
 	// Send MembershipState right away. So, the connection is correctly established.
 	ctx := stream.Context()
