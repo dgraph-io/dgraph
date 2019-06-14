@@ -16,6 +16,34 @@
 
 package common
 
+import (
+	"encoding/hex"
+	"errors"
+	"strings"
+)
+
+// HexToBytes turns a 0x prefixed hex string into a byte slice
+func HexToBytes(in string) ([]byte, error) {
+	if strings.Compare(in[:2], "0x") != 0 {
+		return nil, errors.New("could not byteify non 0x prefixed string")
+	}
+	in = in[2:]
+	out, err := hex.DecodeString(in)
+	return out, err
+}
+
+// HexToBytes turns a 0x prefixed hex string into type Hash
+func HexToHash(in string) (Hash, error) {
+	if strings.Compare(in[:2], "0x") != 0 {
+		return [32]byte{}, errors.New("could not byteify non 0x prefixed string")
+	}
+	in = in[2:]
+	out, err := hex.DecodeString(in)
+	var buf = [32]byte{}
+	copy(buf[:], out)
+	return buf, err
+}
+
 // Concat concatenates two byte arrays
 // used instead of append to prevent modifying the original byte array
 func Concat(s1 []byte, s2 ...byte) []byte {
@@ -33,14 +61,13 @@ func Uint16ToBytes(in uint16) (out []byte) {
 	return out
 }
 
-// AppendZeroes appends zeroes to the input byte array up until it has length size
-func AppendZeroes(input []byte, size int) []byte {
+// AppendZeroes appends zeroes to the input byte array up until it has length l
+func AppendZeroes(in []byte, l int) []byte {
 	for {
-		if len(input) < 32 {
-			input = append(input, 0)
-		} else {
-			return input
+		if len(in) >= l {
+			return in
 		}
+		in = append(in, 0)
 	}
 }
 

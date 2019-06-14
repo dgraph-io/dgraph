@@ -21,6 +21,55 @@ import (
 	"testing"
 )
 
+func TestHexToBytes(t *testing.T) {
+	tests := []struct {
+		in  string
+		out []byte
+	}{
+		{"0x0fc1", []byte{0x0f, 0xc1}},
+		{"0x00", []byte{0x0}},
+	}
+
+	for _, test := range tests {
+		res, err := HexToBytes(test.in)
+		if err != nil {
+			t.Errorf("Fail: error %s", err)
+		} else if !bytes.Equal(res, test.out) {
+			t.Errorf("Fail: got %x expected %x", res, test.out)
+		}
+	}
+}
+
+func TestHexToBytesFailing(t *testing.T) {
+	_, err := HexToBytes("1234")
+	if err == nil {
+		t.Error("Fail: should error")
+	}
+}
+
+func TestHexToHash(t *testing.T) {
+	tests := []struct {
+		in  string
+		out []byte
+	}{
+		{"0x8550326cee1e1b768a254095b412e0db58523c2b5df9b7d2540b4513d475ce7f",
+			[]byte{0x85, 0x50, 0x32, 0x6c, 0xee, 0x1e, 0x1b, 0x76, 0x8a, 0x25, 0x40, 0x95, 0xb4, 0x12, 0xe0, 0xdb, 0x58, 0x52, 0x3c, 0x2b, 0x5d, 0xf9, 0xb7, 0xd2, 0x54, 0x0b, 0x45, 0x13, 0xd4, 0x75, 0xce, 0x7f}},
+		{"0x00", []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+		{"0x8550326cee1e1b768a254095b412e0db58523c2b5df9b7d2540b4513d475ce7f00",
+			[]byte{0x85, 0x50, 0x32, 0x6c, 0xee, 0x1e, 0x1b, 0x76, 0x8a, 0x25, 0x40, 0x95, 0xb4, 0x12, 0xe0, 0xdb, 0x58, 0x52, 0x3c, 0x2b, 0x5d, 0xf9, 0xb7, 0xd2, 0x54, 0x0b, 0x45, 0x13, 0xd4, 0x75, 0xce, 0x7f}},
+	}
+
+	for _, test := range tests {
+		res, err := HexToHash(test.in)
+		byteRes := [32]byte(res)
+		if err != nil {
+			t.Errorf("Fail: error %s", err)
+		} else if !bytes.Equal(byteRes[:], test.out) {
+			t.Errorf("Fail: got %x expected %x", res, test.out)
+		}
+	}
+}
+
 type concatTest struct {
 	a, b   []byte
 	output []byte
@@ -101,5 +150,4 @@ func TestSwapNibbles(t *testing.T) {
 			t.Fatalf("Re-encoding failed. got: %x expected: %x", res, test.key)
 		}
 	}
-
 }

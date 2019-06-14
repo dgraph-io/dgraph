@@ -1,12 +1,17 @@
 package runtime
 
 import (
+	"crypto/rand"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	scale "github.com/ChainSafe/gossamer/codec"
+	trie "github.com/ChainSafe/gossamer/trie"
+	"golang.org/x/crypto/ed25519"
 )
 
 const POLKADOT_RUNTIME_FP string = "polkadot_runtime.compact.wasm"
@@ -35,15 +40,21 @@ func getRuntimeBlob() (n int64, err error) {
 
 // Exists reports whether the named file or directory exists.
 func Exists(name string) bool {
-    if _, err := os.Stat(name); err != nil {
-        if os.IsNotExist(err) {
-            return false
-        }
-    }
-    return true
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
 }
 
-func TestNewVM(t *testing.T) {
+func newEmpty() *trie.Trie {
+	db := &trie.Database{}
+	t := trie.NewEmptyTrie(db)
+	return t
+}
+
+func newRuntime(t *testing.T) (*Runtime, error) {
 	_, err := getRuntimeBlob()
 	if err != nil {
 		t.Fatalf("Fail: could not get polkadot runtime")
@@ -54,20 +65,19 @@ func TestNewVM(t *testing.T) {
 		t.Fatal("could not create filepath")
 	}
 
-	r, err := NewRuntime(fp)
+	tt := newEmpty()
+
+	r, err := NewRuntime(fp, tt)
 	if err != nil {
 		t.Fatal(err)
 	} else if r == nil {
 		t.Fatal("did not create new VM")
 	}
+
+	return r, err
 }
 
 func TestExecVersion(t *testing.T) {
-	_, err := getRuntimeBlob()
-	if err != nil {
-		t.Fatalf("Fail: could not get polkadot runtime")
-	}
-
 	expected := &Version{
 		Spec_name:         []byte("polkadot"),
 		Impl_name:         []byte("parity-polkadot"),
@@ -76,12 +86,7 @@ func TestExecVersion(t *testing.T) {
 		Impl_version:      0,
 	}
 
-	fp, err := filepath.Abs("./polkadot_runtime.compact.wasm")
-	if err != nil {
-		t.Fatal("could not create filepath")
-	}
-
-	r, err := NewRuntime(fp)
+	r, err := newRuntime(t)
 	if err != nil {
 		t.Fatal(err)
 	} else if r == nil {
@@ -103,4 +108,37 @@ func TestExecVersion(t *testing.T) {
 	if !reflect.DeepEqual(version, expected) {
 		t.Errorf("Fail: got %v expected %v\n", version, expected)
 	}
+}
+
+func TestExecAuthorities(t *testing.T) {
+	r, err := newRuntime(t)
+	if err != nil {
+		t.Fatal(err)
+	} else if r == nil {
+		t.Fatal("did not create new VM")
+	}
+
+	for i := 0; i < 4; i++ {
+		var pubkey ed25519.PublicKey
+		pubkey, _, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		r.t.Put(append([]byte(":auth:"), []byte{byte(i), 0, 0, 0}...), []byte(pubkey))
+	}
+
+	authLen, err := scale.Encode(int64(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r.t.Put([]byte(":auth:len"), authLen)
+
+	res, err := r.Exec("Core_authorities", 0, 0)
+	if err != nil {
+		t.Fatalf("could not exec wasm runtime: %s", err)
+	}
+
+	t.Logf("%v\n", res)
 }

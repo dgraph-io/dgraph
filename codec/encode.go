@@ -44,6 +44,8 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 	switch v := b.(type) {
 	case []byte:
 		n, err = se.encodeByteArray(v)
+	case [32]byte:
+		n, err = se.encodeByteArray(v[:])
 	case *big.Int:
 		n, err = se.encodeBigInteger(v)
 	case int16:

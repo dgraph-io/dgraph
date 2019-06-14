@@ -24,4 +24,5 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/urfave/cli v1.20.0
 	golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
+	google.golang.org/appengine v1.6.0 // indirect
 )

@@ -1,12 +1,18 @@
 package runtime
 
 import (
+	"encoding/binary"
 	"fmt"
-	exec "github.com/perlin-network/life/exec"
+
+	common "github.com/ChainSafe/gossamer/common"
+	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/inconshreveable/log15"
+	exec "github.com/perlin-network/life/exec"
 )
 
-type Resolver struct{}
+type Resolver struct {
+	t *trie.Trie
+}
 
 // ResolveFunc resolves the imported functions in the runtime
 func (r *Resolver) ResolveFunc(module, field string) exec.FunctionImport {
@@ -16,7 +22,33 @@ func (r *Resolver) ResolveFunc(module, field string) exec.FunctionImport {
 		case "ext_get_storage_into":
 			return func(vm *exec.VirtualMachine) int64 {
 				log.Debug("executing: ext_get_storage_into")
-				return 0
+				keyData := int(uint32(vm.GetCurrentFrame().Locals[0]))
+				keyLen := int(uint32(vm.GetCurrentFrame().Locals[1]))
+				valueData := int(uint32(vm.GetCurrentFrame().Locals[2]))
+				valueLen := int(uint32(vm.GetCurrentFrame().Locals[3]))
+				valueOffset := int(uint32(vm.GetCurrentFrame().Locals[4]))
+				log.Debug("[ext_get_storage_into]", "keyData", keyData, "keyLen", keyLen, "valueData", valueData, "valueLen", valueLen, "valueOffset", valueOffset)
+
+				key := vm.Memory[keyData : keyData+keyLen]
+				log.Debug("[ext_get_storage_into]", "key", string(key), "byteskey", key)
+
+				value, err := r.t.Get(key)
+				if err != nil {
+					log.Error("[ext_get_storage_into]", "error", err)
+					return 0
+				}
+
+				if valueLen == 0 {
+					return 0
+				}
+
+				value = value[valueOffset:]
+				copy(vm.Memory[valueData:valueData+valueLen], value)
+
+				log.Debug("[ext_get_storage_into]", "value", vm.Memory[valueData:valueData+valueLen])
+				ret := int64(binary.LittleEndian.Uint64(common.AppendZeroes(vm.Memory[valueData:valueData+valueLen], 8)))
+				log.Debug("[ext_get_storage_into]", "returnvalue", ret)
+				return ret
 			}
 		case "ext_blake2_256":
 			return func(vm *exec.VirtualMachine) int64 {
@@ -30,7 +62,7 @@ func (r *Resolver) ResolveFunc(module, field string) exec.FunctionImport {
 			}
 		case "ext_print_utf8":
 			return func(vm *exec.VirtualMachine) int64 {
-				log.Debug("executing ext_print_utf8")
+				log.Debug("executing: ext_print_utf8")
 				log.Debug("[ext_print_utf8]", "local[0]", vm.GetCurrentFrame().Locals[0], "local[1]", vm.GetCurrentFrame().Locals[1])
 				ptr := int(uint32(vm.GetCurrentFrame().Locals[0]))
 				msgLen := int(uint32(vm.GetCurrentFrame().Locals[1]))
