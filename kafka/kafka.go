@@ -1,12 +1,16 @@
 package kafka
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/worker"
+
 	"github.com/Shopify/sarama"
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/pb"
+	bpb "github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
@@ -43,24 +47,20 @@ func (consumer *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 	claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		var list pb.KVList
-		if err := list.Unmarshal(message.Value); err != nil {
+		kafkaMsg := &pb.KafkaMsg{}
+		if err := kafkaMsg.Unmarshal(message.Value); err != nil {
 			glog.Errorf("error while unmarshaling from consumed message: %v", err)
 			return err
 		}
-
-		loader := pstore.NewLoader(16)
-		for _, kv := range list.Kv {
-			if err := loader.Set(kv); err != nil {
-				glog.Errorf("error while setting kv %v to loader: %v", kv, err)
-			}
+		if kafkaMsg.KvList != nil {
+			consumeList(kafkaMsg.KvList)
 		}
-		if err := loader.Finish(); err != nil {
-			glog.Errorf("error while finishing the loader: %v", err)
+		if kafkaMsg.State != nil {
+			consumeMembershipState(kafkaMsg.State)
 		}
 
-		glog.V(1).Infof("Message stored: value = %+v, timestamp = %v, topic = %s",
-			list, message.Timestamp, message.Topic)
+		glog.V(1).Infof("Message consumed: value = %+v, timestamp = %v, topic = %s",
+			kafkaMsg, message.Timestamp, message.Topic)
 
 		// marking of the message must be done after the message has been permanently stored
 		// in badger. Otherwise marking a message prematurely may result in message loss
@@ -69,6 +69,23 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 	}
 
 	return nil
+}
+
+func consumeMembershipState(state *pb.MembershipState) {
+	worker.ApplyState(state)
+}
+
+func consumeList(list *bpb.KVList) {
+	loader := pstore.NewLoader(16)
+	for _, kv := range list.Kv {
+		if err := loader.Set(kv); err != nil {
+			glog.Errorf("error while setting kv %v to loader: %v", kv, err)
+		}
+	}
+	if err := loader.Finish(); err != nil {
+		glog.Errorf("error while finishing the loader: %v", err)
+	}
+	glog.V(1).Infof("consumed kv list: %+v", list)
 }
 
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
@@ -121,31 +138,38 @@ func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
 	return client, err
 }
 
+var producer sarama.SyncProducer
+
+func PublishMembershipState(state *pb.MembershipState) {
+	msg := &pb.KafkaMsg{
+		State: state,
+	}
+	if err := produceMsg(msg); err != nil {
+		glog.Errorf("error while producing to kafka: %v", err)
+		return
+	}
+	glog.V(1).Infof("published membership state to kafka")
+}
+
 // setupKafkaTarget will create a kafka producer and use it to send updates to
 // the kafka cluster
 func SetupKafkaTarget() {
 	targetBrokers := Config.TargetBrokers
 	glog.Infof("target kafka brokers: %v", targetBrokers)
 	if len(targetBrokers) > 0 {
-		producer, err := getKafkaProducer(targetBrokers)
+		var err error
+		producer, err = getKafkaProducer(targetBrokers)
 		if err != nil {
 			glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
 			return
 		}
 
-		cb := func(list *pb.KVList) {
-			// TODO: produce to kafka
-			listBytes, err := list.Marshal()
-			if err != nil {
-				glog.Errorf("unable to marshal the kv list: %+v", err)
-				return
+		cb := func(list *bpb.KVList) {
+			kafkaMsg := &pb.KafkaMsg{
+				KvList: list,
 			}
-			_, _, err = producer.SendMessage(&sarama.ProducerMessage{
-				Topic: kafkaTopic,
-				Value: sarama.ByteEncoder(listBytes),
-			})
-			if err != nil {
-				glog.Errorf("error while producing list %v to kafka: %v", list, err)
+			if err := produceMsg(kafkaMsg); err != nil {
+				glog.Errorf("error while producing to Kafka: %v", err)
 				return
 			}
 
@@ -162,6 +186,18 @@ func SetupKafkaTarget() {
 
 		glog.V(1).Infof("subscribed to the pstore for updates")
 	}
+}
+
+func produceMsg(msg *pb.KafkaMsg) error {
+	msgBytes, err := msg.Marshal()
+	if err != nil {
+		return fmt.Errorf("unable to marshal the kv list: %v", err)
+	}
+	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
+		Topic: kafkaTopic,
+		Value: sarama.ByteEncoder(msgBytes),
+	})
+	return err
 }
 
 // getKafkaProducer tries to create a producer by connecting to Kafka at the specified brokers.

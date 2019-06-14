@@ -238,6 +238,11 @@ message KVS {
  bool done      = 2;
 }
 
+message KafkaMsg {
+	pb.KVList kv_list = 1;
+	MembershipState state = 2;
+}
+
 // Posting messages.
 message Posting {
 	fixed64 uid = 1;

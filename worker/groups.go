@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/dgraph/kafka"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -250,8 +252,16 @@ func UpdateMembershipState(ctx context.Context) error {
 	return nil
 }
 
+func ApplyState(state *pb.MembershipState) {
+	gr.applyState(state)
+}
+
 func (g *groupi) applyState(state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
+	if g.Node.AmLeader() {
+		kafka.PublishMembershipState(state)
+	}
+
 	g.Lock()
 	defer g.Unlock()
 	// We don't update state if we get any old state. Counter stores the raftindex of
