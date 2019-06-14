@@ -277,7 +277,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	out.WriteRune('}')
 
-	writeResponse(w, r, out.Bytes())
+	x.Check2(writeResponse(w, r, out.Bytes()))
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
