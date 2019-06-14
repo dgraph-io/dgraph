@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -96,6 +98,8 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
+var errLog = log.New(os.Stderr, "", 0)
+
 // handleError inspects errors and terminates if the errors are non-recoverable.
 // A gRPC code is Internal if there is an unforeseen issue that needs attention.
 // A gRPC code is Unavailable when we can't possibly reach the remote server, most likely the
@@ -111,14 +115,14 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
 		if !isRetry {
-			fmt.Printf("Transaction #%d aborted. Will retry in background.\n", reqNum)
+			errLog.Printf("Transaction #%d aborted. Will retry in background.\n", reqNum)
 		}
 	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
-		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
+		errLog.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
 	case err != y.ErrConflict:
-		fmt.Printf("Error while mutating: %v\n", s.Message())
+		errLog.Printf("Error while mutating: %v\n", s.Message())
 	}
 }
 
