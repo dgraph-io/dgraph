@@ -175,7 +175,7 @@ xid: string @index(exact) .
 <http://schema.org/type>: [uid] @reverse .
 ```
 
-Set the Type first of all.
+Set the type first of all.
 ```
 {
   set {
@@ -183,7 +183,7 @@ Set the Type first of all.
   }
 }
 ```
-Now you can create a new person and attach its type using upsert transaction.
+Now you can create a new person and attach its type using an upsert transaction.
 ```
    upsert {
       query {
@@ -204,7 +204,7 @@ Now you can create a new person and attach its type using upsert transaction.
     }
 ```
 
-You can also delete a person and detattach the relation between Type and Person Node. Is the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remains but "`Robin Wright`" will be deleted.
+You can also delete a person and deattach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
 
 ```
    upsert {
