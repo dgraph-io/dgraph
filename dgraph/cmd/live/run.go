@@ -46,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
@@ -297,7 +298,11 @@ func run() error {
 		return err
 	}
 
-	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
+	go func() {
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			glog.Errorf("Error while starting HTTP server in port 6060: %+v", err)
+		}
+	}()
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,

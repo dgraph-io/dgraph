@@ -262,7 +262,10 @@ func (o *Oracle) commitTs(startTs uint64) uint64 {
 func (o *Oracle) storePending(ids *pb.AssignedIds) {
 	// Wait to finish up processing everything before start id.
 	max := x.Max(ids.EndId, ids.ReadOnly)
-	_ = o.doneUntil.WaitForMark(context.Background(), max)
+	if err := o.doneUntil.WaitForMark(context.Background(), max); err != nil {
+		glog.Errorf("Error while waiting for mark: %+v", err)
+	}
+
 	// Now send it out to updates.
 	o.updates <- &pb.OracleDelta{MaxAssigned: max}
 

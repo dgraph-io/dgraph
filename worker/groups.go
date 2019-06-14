@@ -300,7 +300,12 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go func() { _ = g.Node.ProposePeerRemoval(context.Background(), member.Id) }()
+				go func() {
+					if err := g.Node.ProposePeerRemoval(
+						context.Background(), member.Id); err != nil {
+						glog.Errorf("Error while proposing node removal: %+v", err)
+					}
+				}()
 			}
 		}
 		conn.GetPools().RemoveInvalid(g.state)
@@ -748,10 +753,14 @@ OUTER:
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():
-			_ = stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case <-ctx.Done():
-			_ = stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
@@ -760,7 +769,9 @@ OUTER:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				_ = stream.CloseSend()
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
 				break OUTER
 			}
 		}

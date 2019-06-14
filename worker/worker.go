@@ -82,8 +82,9 @@ func RunServer(bindall bool) {
 
 	pb.RegisterWorkerServer(workerServer, &grpcWorker{})
 	pb.RegisterRaftServer(workerServer, &raftServer)
-	err = workerServer.Serve(ln)
-	glog.Errorf("Error while calling Serve: %+v", err)
+	if err := workerServer.Serve(ln); err != nil {
+		glog.Errorf("Error while calling Serve: %+v", err)
+	}
 }
 
 // StoreStats returns stats for data store.

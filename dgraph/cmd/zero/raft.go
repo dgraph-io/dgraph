@@ -376,8 +376,9 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	err := cc.Unmarshal(e.Data)
-	glog.Errorf("While unmarshalling confchange: %+v", err)
+	if err := cc.Unmarshal(e.Data); err != nil {
+		glog.Errorf("While unmarshalling confchange: %+v", err)
+	}
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		if cc.NodeID == n.Id {
