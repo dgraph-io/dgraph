@@ -987,7 +987,10 @@ func (n *node) Run() {
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
 	kafka.SetupKafkaTarget()
-	kafka.SetupKafkaSource()
+	kafka.SetupKafkaSource(func(state *pb.MembershipState) {
+		gr.applyState(state)
+		glog.V(1).Infof("applied state from kafka: %+v", state)
+	})
 }
 
 func onBecomeFollower() {

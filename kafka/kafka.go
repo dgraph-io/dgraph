@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/worker"
-
 	"github.com/Shopify/sarama"
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
@@ -56,7 +54,7 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			consumeList(kafkaMsg.KvList)
 		}
 		if kafkaMsg.State != nil {
-			consumeMembershipState(kafkaMsg.State)
+			stateCb(kafkaMsg.State)
 		}
 
 		glog.V(1).Infof("Message consumed: value = %+v, timestamp = %v, topic = %s",
@@ -69,10 +67,6 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 	}
 
 	return nil
-}
-
-func consumeMembershipState(state *pb.MembershipState) {
-	worker.ApplyState(state)
 }
 
 func consumeList(list *bpb.KVList) {
@@ -88,8 +82,14 @@ func consumeList(list *bpb.KVList) {
 	glog.V(1).Infof("consumed kv list: %+v", list)
 }
 
+type StateCallback func(state *pb.MembershipState)
+
+var stateCb StateCallback
+
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
-func SetupKafkaSource() {
+func SetupKafkaSource(cb StateCallback) {
+	stateCb = cb
+
 	sourceBrokers := Config.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
 	if len(sourceBrokers) > 0 {
@@ -140,12 +140,32 @@ func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
 
 var producer sarama.SyncProducer
 
+func PublishSchema(s *pb.SchemaUpdate) {
+	if producer == nil {
+		return
+	}
+
+	msg := &pb.KafkaMsg{
+		Schema: s,
+	}
+	if err := produceMsg(msg); err != nil {
+		glog.Errorf("error while publishing schema update to kafka: %v", err)
+		return
+	}
+
+	glog.V(1).Infof("published schema update to kafka")
+}
+
 func PublishMembershipState(state *pb.MembershipState) {
+	if producer == nil {
+		return
+	}
+
 	msg := &pb.KafkaMsg{
 		State: state,
 	}
 	if err := produceMsg(msg); err != nil {
-		glog.Errorf("error while producing to kafka: %v", err)
+		glog.Errorf("error while publishing membership state to kafka: %v", err)
 		return
 	}
 	glog.V(1).Infof("published membership state to kafka")

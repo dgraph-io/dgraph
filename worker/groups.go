@@ -252,16 +252,12 @@ func UpdateMembershipState(ctx context.Context) error {
 	return nil
 }
 
-func ApplyState(state *pb.MembershipState) {
-	gr.applyState(state)
-}
-
 func (g *groupi) applyState(state *pb.MembershipState) {
-	x.AssertTrue(state != nil)
-	if g.Node.AmLeader() {
+	if g.Node != nil && g.Node.AmLeader() {
 		kafka.PublishMembershipState(state)
 	}
 
+	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()
 	// We don't update state if we get any old state. Counter stores the raftindex of

@@ -21,6 +21,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/dgraph-io/dgraph/kafka"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
@@ -149,10 +151,17 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	return rebuild.Run(ctx)
 }
 
+func publishSchemaUpdate(s *pb.SchemaUpdate) {
+	if gr.Node != nil && gr.Node.AmLeader() {
+		kafka.PublishSchema(s)
+	}
+}
+
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateSchema(attr string, s pb.SchemaUpdate) error {
 	schema.State().Set(attr, s)
+	//publishSchemaUpdate(s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
