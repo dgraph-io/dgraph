@@ -161,7 +161,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
-				if err := updateSchema(s.Predicate, *s); err != nil {
+				if err := updateSchema(s); err != nil {
 					return err
 				}
 
