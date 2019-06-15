@@ -50,7 +50,7 @@ func init() {
 	flag.StringVar(&opt.geo, "geo", "", "Location of geo file to convert")
 	flag.StringVar(&opt.out, "out", "output.rdf.gz", "Location of output rdf.gz file")
 	flag.StringVar(&opt.geopred, "geopred", "loc", "Predicate to use to store geometries")
-	Conv.Cmd.MarkFlagRequired("geo")
+	x.Check(Conv.Cmd.MarkFlagRequired("geo"))
 }
 
 func run() error {

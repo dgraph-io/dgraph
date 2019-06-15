@@ -101,7 +101,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Send backup request.
 	dirs := runBackup(t, 3, 1)
-	restored := runRestore(t, dirs[0], math.MaxUint64)
+	restored := runRestore(t, backupDir, "", math.MaxUint64)
 
 	checks := []struct {
 		blank, expected string
@@ -129,7 +129,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform first incremental backup.
 	dirs = runBackup(t, 6, 2)
-	restored = runRestore(t, dirs[1], incr1.Context.CommitTs)
+	restored = runRestore(t, backupDir, "", incr1.Context.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -153,7 +153,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second incremental backup.
 	dirs = runBackup(t, 9, 3)
-	restored = runRestore(t, dirs[2], incr2.Context.CommitTs)
+	restored = runRestore(t, backupDir, "", incr2.Context.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -161,7 +161,6 @@ func TestBackupMinio(t *testing.T) {
 		{blank: "x4", expected: "The Shape of Water"},
 		{blank: "x5", expected: "The Black Panther"},
 	}
-
 	for _, check := range checks {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
@@ -178,14 +177,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second full backup.
 	dirs = runBackupInternal(t, true, 12, 4)
-	// To make sure this backup contains all the data remove all the previous backups.
-	require.NoError(t, os.RemoveAll(dirs[0]))
-	require.NoError(t, os.RemoveAll(dirs[1]))
-	require.NoError(t, os.RemoveAll(dirs[2]))
-	// Also recreate the restore directory.
-	require.NoError(t, os.RemoveAll(restoreDir))
-	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
-	restored = runRestore(t, dirs[3], incr3.Context.CommitTs)
+	restored = runRestore(t, backupDir, "", incr3.Context.CommitTs)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -197,7 +189,20 @@ func TestBackupMinio(t *testing.T) {
 		{blank: "x4", expected: "El laberinto del fauno"},
 		{blank: "x5", expected: "Black Panther 2"},
 	}
+	for _, check := range checks {
+		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
+	}
 
+	// Perform a partial restore. The restored data should be equivalent of performing
+	// as restore of the first full backup and the first incremental backup.
+	parts := strings.Split(dirs[1], "/")
+	restored = runRestore(t, backupDir, parts[len(parts)-1], incr3.Context.CommitTs)
+	checks = []struct {
+		blank, expected string
+	}{
+		{blank: "x1", expected: "Birdman or (The Unexpected Virtue of Ignorance)"},
+		{blank: "x4", expected: "The Shape of Waterloo"},
+	}
 	for _, check := range checks {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
@@ -241,9 +246,14 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	return dirs
 }
 
-func runRestore(t *testing.T, restoreDir string, commitTs uint64) map[string]string {
-	t.Logf("--- Restoring from: %q", restoreDir)
-	_, err := backup.RunRestore("./data/restore", restoreDir)
+func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) map[string]string {
+	// Recreate the restore directory to make sure there's no previous data when
+	// calling restore.
+	require.NoError(t, os.RemoveAll(restoreDir))
+	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
+
+	t.Logf("--- Restoring from: %q", backupLocation)
+	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
 	restored, err := z.GetPValues("./data/restore/p1", "movie", commitTs)

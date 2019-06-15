@@ -15,7 +15,7 @@ function run_index_test {
   while (( $attempt < $max_attempts ))
   do
     set +e
-    N=`curl -s localhost:8180/query -XPOST -d @${X}.in`
+    N=`curl -s -H 'Content-Type: application/graphql+-' localhost:8180/query -XPOST -d @${X}.in`
     exitCode=$?
 
     set -e

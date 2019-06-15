@@ -39,8 +39,10 @@ type Processor struct {
 // Groups are the IDs of the groups involved.
 type Manifest struct {
 	sync.Mutex
+	Type   string   `json:"type"` // Either full or incremental.
 	Since  uint64   `json:"since"`
 	Groups []uint32 `json:"groups"`
+	Path   string   `json:"-"`
 }
 
 // WriteBackup uses the request values to create a stream writer then hand off the data

@@ -182,7 +182,9 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	updateSchema(&s)
+	if err := updateSchema(&s); err != nil {
+		glog.Errorf("Error while updating schema: %+v", err)
+	}
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {

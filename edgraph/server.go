@@ -61,6 +61,7 @@ const (
 	methodQuery  = "Server.Query"
 )
 
+// ServerState holds the state of the Dgraph server.
 type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
@@ -74,8 +75,10 @@ type ServerState struct {
 	needTs chan tsReq
 }
 
+// State is the instance of ServerState used by the current server.
 var State ServerState
 
+// InitServerState initializes this server's state.
 func InitServerState() {
 	Config.validate()
 
@@ -188,6 +191,7 @@ func (s *ServerState) initStorage() {
 	go s.runVlogGC(s.WALstore)
 }
 
+// Dispose stops and closes all the resources inside the server state.
 func (s *ServerState) Dispose() {
 	if err := s.Pstore.Close(); err != nil {
 		glog.Errorf("Error while closing postings store: %v", err)
@@ -275,6 +279,7 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 	return <-tr.ch
 }
 
+// Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
@@ -419,6 +424,7 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
 }
 
+// Mutate handles requests to perform mutations.
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
 	return s.doMutate(ctx, mu, true)
 }
@@ -554,6 +560,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	return resp, nil
 }
 
+// Query handles queries and returns the data.
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
@@ -692,6 +699,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	return resp, err
 }
 
+// CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
 	defer span.End()
@@ -718,6 +726,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	return tctx, err
 }
 
+// CheckVersion returns the version of this Dgraph instance.
 func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
 		return v, err

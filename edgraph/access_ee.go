@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
 	ctx, span := otrace.StartSpan(ctx, "server.Login")
@@ -281,6 +282,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (*acl.Us
 	return user, nil
 }
 
+// RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
 func RefreshAcls(closer *y.Closer) {
 	defer closer.Done()
 	if len(Config.HmacSecret) == 0 {
@@ -292,7 +294,7 @@ func RefreshAcls(closer *y.Closer) {
 	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
-	// aclCache
+	// aclCachePtr
 	retrieveAcls := func() error {
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
@@ -311,7 +313,7 @@ func RefreshAcls(closer *y.Closer) {
 			return err
 		}
 
-		aclCache.update(groups)
+		aclCachePtr.update(groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
@@ -337,10 +339,10 @@ const queryAcls = `
 }
 `
 
-// clear the aclCache and upsert the Groot account.
+// ResetAcl clears the aclCachePtr and upserts the Groot account.
 func ResetAcl() {
 	if len(Config.HmacSecret) == 0 {
-		// the acl feature is not turned on
+		// The acl feature is not turned on.
 		return
 	}
 
@@ -413,7 +415,8 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
-//authorizeAlter parses the Schema in the operation and authorizes the operation using the aclCache
+// authorizeAlter parses the Schema in the operation and authorizes the operation
+// using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -467,9 +470,9 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		}
 
 		for _, pred := range preds {
-			err := aclCache.authorizePredicate(groupIds, pred, acl.Modify)
+			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Modify)
 			if err != nil {
-				logAccess(&AccessEntry{
+				logAccess(&accessEntry{
 					userId:    userId,
 					groups:    groupIds,
 					preds:     preds,
@@ -487,7 +490,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	err := doAuthorizeAlter()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&AccessEntry{
+		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			preds:     preds,
@@ -540,7 +543,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 	return false
 }
 
-// authorizeMutation authorizes the mutation using the aclCache
+// authorizeMutation authorizes the mutation using the aclCachePtr
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -574,9 +577,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 		}
 
 		for _, pred := range preds {
-			err := aclCache.authorizePredicate(groupIds, pred, acl.Write)
+			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Write)
 			if err != nil {
-				logAccess(&AccessEntry{
+				logAccess(&accessEntry{
 					userId:    userId,
 					groups:    groupIds,
 					preds:     preds,
@@ -594,7 +597,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	err := doAuthorizeMutation()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&AccessEntry{
+		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			preds:     preds,
@@ -630,7 +633,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	return preds
 }
 
-type AccessEntry struct {
+type accessEntry struct {
 	userId    string
 	groups    []string
 	preds     []string
@@ -638,17 +641,17 @@ type AccessEntry struct {
 	allowed   bool
 }
 
-func (log *AccessEntry) String() string {
+func (log *accessEntry) String() string {
 	return fmt.Sprintf("ACL-LOG Authorizing user %q with groups %q on predicates %q "+
 		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
 		strings.Join(log.preds, ","), log.operation.Name, log.allowed)
 }
 
-func logAccess(log *AccessEntry) {
+func logAccess(log *accessEntry) {
 	glog.V(1).Infof(log.String())
 }
 
-//authorizeQuery authorizes the query using the aclCache
+//authorizeQuery authorizes the query using the aclCachePtr
 func authorizeQuery(ctx context.Context, req *api.Request) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -684,9 +687,9 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		}
 
 		for _, pred := range preds {
-			err := aclCache.authorizePredicate(groupIds, pred, acl.Read)
+			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Read)
 			if err != nil {
-				logAccess(&AccessEntry{
+				logAccess(&accessEntry{
 					userId:    userId,
 					groups:    groupIds,
 					preds:     preds,
@@ -703,7 +706,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 
 	err = doAuthorizeQuery()
 	if span := otrace.FromContext(ctx); span != nil {
-		span.Annotatef(nil, (&AccessEntry{
+		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			preds:     preds,
