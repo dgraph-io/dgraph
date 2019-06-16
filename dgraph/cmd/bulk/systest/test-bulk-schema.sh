@@ -6,7 +6,7 @@ readonly ME=${0##*/}
 readonly SRCROOT=$(git rev-parse --show-toplevel)
 readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
 
-declare -ri ZERO_PORT=5080 HTTP_PORT=8180
+declare -ri ZERO_PORT=5180 HTTP_PORT=8180
 
 INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }

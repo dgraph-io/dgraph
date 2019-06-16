@@ -447,7 +447,7 @@ Query Example: All names that have `dog`, `dogs`, `bark`, `barks`, `barking`, et
 {{< runnable >}}
 {
   movie(func:alloftext(name@en, "the dog which barks")) {
-	 name@en
+    name@en
   }
 }
 {{< /runnable >}}
@@ -489,7 +489,7 @@ Query Example: Movies with exactly thirteen genres.
   me(func: eq(count(genre), 13)) {
     name@en
     genre {
-    	name@en
+      name@en
     }
   }
 }
@@ -1095,7 +1095,7 @@ Query Example: The actors of Ang Lee's "Eat Drink Man Woman" ordered by the numb
 
 {{< runnable >}}
 {
-	var(func: allofterms(name@en, "eat drink man woman")) {
+  var(func: allofterms(name@en, "eat drink man woman")) {
     starring {
       actors as performance.actor {
         totalRoles as count(actor.film)
@@ -1162,7 +1162,7 @@ Query Example: All genres sorted alphabetically and the five movies in each genr
     name@en
     ~genre (orderdesc: val(numGenres), first: 5) {
       name@en
-    	genres : val(numGenres)
+      genres : val(numGenres)
     }
   }
 }
@@ -1420,7 +1420,7 @@ This propagation is useful, for example, in normalizing a sum across users, find
 Query Example: For each Harry Potter movie, the number of roles played by actor Warwick Davis.
 {{< runnable >}}
 {
-	num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
+    num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
 
     paths as math(1)  # records number of paths to each character
 
@@ -1440,7 +1440,7 @@ Query Example: For each Harry Potter movie, the number of roles played by actor 
 Query Example: Each actor who has been in a Peter Jackson movie and the fraction of Peter Jackson movies they have appeared in.
 {{< runnable >}}
 {
-	movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
+    movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
 
     paths as math(1)
     total_films : num_films as count(director.film)
@@ -1633,10 +1633,10 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
   PJmovies(func: uid(PJ)) {
     name@en
-  	director.film (orderdesc: val(movie_total), first: 5) {
-    	name@en
-    	totalRoles : val(movie_total)
-  	}
+    director.film (orderdesc: val(movie_total), first: 5) {
+      name@en
+      totalRoles : val(movie_total)
+    }
     grandTotal : val(gt)
   }
 }
@@ -1816,13 +1816,13 @@ the following definitions:
 
 ```
 type Animal {
-	name: string
+    name: string
     species: uid
     dob: datetime
 }
 
 type Pet {
-	owner: uid
+    owner: uid
     veterinarian: uid
 }
 ```
@@ -2068,10 +2068,10 @@ Types are defined using the GraphQL standard. Here's an example of a basic type.
 
 ```
 type Student {
-	name: string
-    dob: datetime
-    home_address: string
-    year: int
+  name: string
+  dob: datetime
+  home_address: string
+  year: int
 }
 ```
 
@@ -2092,11 +2092,11 @@ names for each type. Below there is a small example.
 
 ```
 type Student {
-	student_name: string
+  student_name: string
 }
 
 type Textbook {
-	textbook_name: string
+  textbook_name: string
 }
 
 student_name: string @index(exact) .
@@ -2121,11 +2121,11 @@ types. Here's an example of how to set the types of a node:
 
 ```
 {
-	set {
-    	_:a <name> "Garfield" .
-    	_:a <dgraph.type> "Pet" .
-    	_:a <dgraph.type> "Animal" .
-    }
+  set {
+    _:a <name> "Garfield" .
+    _:a <dgraph.type> "Pet" .
+    _:a <dgraph.type> "Animal" .
+  }
 }
 ```
 
@@ -2137,10 +2137,10 @@ The type system can be used as a top level function in the query language. Here'
 
 ```
 {
-	q(func: type(Animal)) {
-    	uid
-    	name
-    }
+  q(func: type(Animal)) {
+    uid
+    name
+  }
 }
 ```
 
@@ -2150,13 +2150,13 @@ The types can also be used to filter results inside the queries. For example:
 
 ```
 {
-	q(func: has(parent)) {
-    	uid
-    	parent @type(Person) {
-        	uid
-            name
-        }
+  q(func: has(parent)) {
+    uid
+    parent @type(Person) {
+      uid
+      name
     }
+  }
 }
 ```
 
@@ -2170,11 +2170,11 @@ to send an operation object with the field `DropOp` (or `drop_op` depending on
 the client) to the enum value `TYPE` and the field 'DropValue' (or `drop_value`)
 to the type that is meant to be deleted.
 
-Below is an example deleting the type `Person` using the go client:
+Below is an example deleting the type `Person` using the Go client:
 ```go
-	err := c.Alter(context.Background(), &api.Operation{
-			DropOp: api.Operation_TYPE,
-			DropValue: "Person"})
+err := c.Alter(context.Background(), &api.Operation{
+                DropOp: api.Operation_TYPE,
+                DropValue: "Person"})
 ```
 
 #### Expand queries and types
@@ -2608,9 +2608,9 @@ Example:
 ```
 {
   set {
-		_:person1 <name> "Daniel" (वंश="स्पेनी", ancestry="Español") .
-		_:person2 <name> "Raj" (वंश="हिंदी", ancestry="हिंदी") .
-		_:person3 <name> "Zhang Wei" (वंश="चीनी", ancestry="中文") .
+    _:person1 <name> "Daniel" (वंश="स्पेनी", ancestry="Español") .
+    _:person2 <name> "Raj" (वंश="हिंदी", ancestry="हिंदी") .
+    _:person3 <name> "Zhang Wei" (वंश="चीनी", ancestry="中文") .
   }
 }
 ```

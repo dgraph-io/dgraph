@@ -200,7 +200,7 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 	defer cancel()
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
 		node1(func: uid(%s)) {

@@ -25,28 +25,45 @@ import (
 )
 
 const (
+	// AllowMutations is the mode allowing all mutations.
 	AllowMutations int = iota
+	// DisallowMutations is the mode that disallows all mutations.
 	DisallowMutations
+	// StrictMutations is the mode that allows mutations if and only if they contain known preds.
 	StrictMutations
 )
 
+// Options contains options for the Dgraph server.
 type Options struct {
-	PostingDir     string
-	BadgerTables   string
-	BadgerVlog     string
-	WALDir         string
-	MutationsMode  int
-	AuthToken      string
+	// PostingDir is the path to the directory storing the postings..
+	PostingDir string
+	// BadgerTables is the name of the mode used to load the badger tables.
+	BadgerTables string
+	// BadgerVlog is the name of the mode used to load the badger value log.
+	BadgerVlog string
+	// WALDir is the path to the directory storing the write-ahead log.
+	WALDir string
+	// MutationsMode is the mode used to handle mutation requests.
+	MutationsMode int
+	// AuthToken is the token to be passed for Alter HTTP requests.
+	AuthToken string
+	// AllottedMemory is the estimated size taken by the LRU cache.
 	AllottedMemory float64
 
-	HmacSecret         []byte
-	AccessJwtTtl       time.Duration
-	RefreshJwtTtl      time.Duration
+	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
+	HmacSecret []byte
+	// AccessJwtTtl is the TTL for the access JWT.
+	AccessJwtTtl time.Duration
+	// RefreshJwtTtl is the TTL of the refresh JWT.
+	RefreshJwtTtl time.Duration
+	// AclRefreshInterval is the interval used to refresh the ACL cache.
 	AclRefreshInterval time.Duration
 }
 
+// Config holds an instance of the server options..
 var Config Options
 
+// SetConfiguration sets the server configuration to the given config.
 func SetConfiguration(newConfig Options) {
 	newConfig.validate()
 	Config = newConfig
@@ -56,6 +73,7 @@ func SetConfiguration(newConfig Options) {
 	posting.Config.Mu.Unlock()
 }
 
+// MinAllottedMemory is the minimum amount of memory needed for the LRU cache.
 const MinAllottedMemory = 1024.0
 
 func (o *Options) validate() {
