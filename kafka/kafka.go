@@ -54,7 +54,10 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			consumeList(kafkaMsg.KvList)
 		}
 		if kafkaMsg.State != nil {
-			stateCb(kafkaMsg.State)
+			cb.MembershipCb(kafkaMsg.State)
+		}
+		if kafkaMsg.Schema != nil {
+			cb.SchemaCb(kafkaMsg.Schema)
 		}
 
 		glog.V(1).Infof("Message consumed: value = %+v, timestamp = %v, topic = %s",
@@ -82,13 +85,19 @@ func consumeList(list *bpb.KVList) {
 	glog.V(1).Infof("consumed kv list: %+v", list)
 }
 
-type StateCallback func(state *pb.MembershipState)
+type MembershipCb func(state *pb.MembershipState)
+type SchemaCb func(schema *pb.SchemaUpdate)
 
-var stateCb StateCallback
+type Callback struct {
+	MembershipCb MembershipCb
+	SchemaCb     SchemaCb
+}
+
+var cb *Callback
 
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
-func SetupKafkaSource(cb StateCallback) {
-	stateCb = cb
+func SetupKafkaSource(c *Callback) {
+	cb = c
 
 	sourceBrokers := Config.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)

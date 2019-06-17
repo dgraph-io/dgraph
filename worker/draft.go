@@ -987,9 +987,17 @@ func (n *node) Run() {
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
 	kafka.SetupKafkaTarget()
-	kafka.SetupKafkaSource(func(state *pb.MembershipState) {
+
+	membershipCb := func(state *pb.MembershipState) {
 		gr.applyState(state)
 		glog.V(1).Infof("applied state from kafka: %+v", state)
+	}
+	schemaCb := func(schema *pb.SchemaUpdate) {
+
+	}
+	kafka.SetupKafkaSource(&kafka.Callback{
+		MembershipCb: membershipCb,
+		SchemaCb:     schemaCb,
 	})
 }
 
