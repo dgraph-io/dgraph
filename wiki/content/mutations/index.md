@@ -116,7 +116,7 @@ _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
 ```
 
-As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+As Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
 
 ```
 <0x123> <xid> "http://schema.org/Person" .
@@ -163,7 +163,83 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
+## External IDs and Upsert Transaction
 
+The upsert transaction makes managing external IDs easy.
+
+Set the schema.
+
+```
+xid: string @index(exact) .
+<http://schema.org/name>: string @index(exact) .
+<http://schema.org/type>: [uid] @reverse .
+```
+
+Set the type first of all.
+```
+{
+  set {
+    _:blank <xid> "http://schema.org/Person" .
+  }
+}
+```
+Now you can create a new person and attach its type using an upsert transaction.
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          set {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+You can also delete a person and deattach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          delete {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+Query by user.
+```
+{
+  q(func: eq(<http://schema.org/name>, "Robin Wright")) {
+    uid
+    xid
+    <http://schema.org/name>
+    <http://schema.org/type> {
+      uid
+      xid
+    }
+  }
+}
+```
 
 ## Language and RDF Types
 
