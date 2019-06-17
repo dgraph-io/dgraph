@@ -109,7 +109,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		return err
 	}
 
-	return updateSchema(update.Predicate, *update)
+	return updateSchema(update)
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
@@ -151,14 +151,14 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(attr string, s pb.SchemaUpdate) error {
-	schema.State().Set(attr, s)
+func updateSchema(s *pb.SchemaUpdate) error {
+	schema.State().Set(s.Predicate, *s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
-		Key:      x.SchemaKey(attr),
+		Key:      x.SchemaKey(s.Predicate),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
 	})
@@ -182,7 +182,7 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	if err := updateSchema(attr, s); err != nil {
+	if err := updateSchema(&s); err != nil {
 		glog.Errorf("Error while updating schema: %+v", err)
 	}
 }
