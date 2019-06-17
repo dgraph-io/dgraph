@@ -195,18 +195,15 @@ func init() {
 		var v string
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				v = TagValueStatusOK
-				if err := HealthCheck(); err != nil {
-					v = TagValueStatusError
-				}
-				cctx, _ := tag.New(ctx, tag.Upsert(KeyStatus, v))
-				// TODO: Do we need to set health to zero, or would this tag be sufficient to
-				// indicate if Alpha is up but HealthCheck is failing.
-				stats.Record(cctx, AlphaHealth.M(1))
+		for range ticker.C {
+			v = TagValueStatusOK
+			if err := HealthCheck(); err != nil {
+				v = TagValueStatusError
 			}
+			cctx, _ := tag.New(ctx, tag.Upsert(KeyStatus, v))
+			// TODO: Do we need to set health to zero, or would this tag be sufficient to
+			// indicate if Alpha is up but HealthCheck is failing.
+			stats.Record(cctx, AlphaHealth.M(1))
 		}
 	}()
 

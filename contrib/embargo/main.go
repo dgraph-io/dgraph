@@ -35,10 +35,6 @@ func run(ctx context.Context, command string) error {
 	return nil
 }
 
-func partition(instance string) error {
-	return run(ctxb, fmt.Sprintf("embargo partition %s", instance))
-}
-
 func increment(atLeast int, args string) error {
 	errCh := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(ctxb, 1*time.Minute)

@@ -210,7 +210,7 @@ func Open(opt Options) (db *DB, err error) {
 		}
 		if !dirExists {
 			if opt.ReadOnly {
-				return nil, y.Wrapf(err, "Cannot find Dir for read-only open: %q", path)
+				return nil, errors.Errorf("Cannot find directory %q for read-only open", path)
 			}
 			// Try to create the directory
 			err = os.Mkdir(path, 0700)

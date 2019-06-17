@@ -1241,6 +1241,60 @@ func TestAggregateRootError(t *testing.T) {
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
 }
 
+func TestAggregateEmpty1(t *testing.T) {
+	query := `
+	{
+		var(func: has(number)) {
+			number as number
+		}
+		var() {
+			highest as max(val(number))
+		}
+
+		all(func: eq(number, val(highest))) {
+			uid
+			number
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"all":[]}}`, js)
+}
+
+func TestAggregateEmpty2(t *testing.T) {
+	query := `
+		{
+			var(func: has(number))
+			{
+				highest_number as number
+			}
+			all(func: eq(number, val(highest_number)))
+			{
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"all":[]}}`, js)
+}
+
+func TestAggregateEmpty3(t *testing.T) {
+	query := `
+		{
+			var(func: has(number))
+			{
+				highest_number as number
+			}
+			all(func: ge(number, val(highest_number)))
+			{
+				uid
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"all":[]}}`, js)
+}
+
 func TestFilterLang(t *testing.T) {
 	// This tests the fix for #1334. While getting uids for filter, we fetch data keys when number
 	// of uids is less than number of tokens. Lang tag was not passed correctly while fetching these

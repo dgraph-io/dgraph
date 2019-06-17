@@ -39,7 +39,7 @@ func ToInt(val *pb.TaskValue) int64 {
 }
 
 func FromBool(val bool) *pb.TaskValue {
-	if val == true {
+	if val {
 		return FromInt(1)
 	}
 	return FromInt(0)
@@ -50,8 +50,5 @@ func ToBool(val *pb.TaskValue) bool {
 		return false
 	}
 	result := ToInt(val)
-	if result != 0 {
-		return true
-	}
-	return false
+	return result != 0
 }

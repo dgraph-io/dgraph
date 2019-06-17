@@ -872,13 +872,17 @@ func (qs *queryState) helpProcessTask(
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		qs.filterGeoFunction(funcArgs{q, gid, srcFn, out})
+		if err := qs.filterGeoFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+			return nil, err
+		}
 	}
 
 	// For string matching functions, check the language.
 	if needsStringFiltering(srcFn, q.Langs, attr) {
 		span.Annotate(nil, "filterStringFunction")
-		qs.filterStringFunction(funcArgs{q, gid, srcFn, out})
+		if err := qs.filterStringFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+			return nil, err
+		}
 	}
 
 	out.IntersectDest = srcFn.intersectDest

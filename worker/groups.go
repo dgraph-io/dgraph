@@ -306,7 +306,12 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+				go func() {
+					if err := g.Node.ProposePeerRemoval(
+						context.Background(), member.Id); err != nil {
+						glog.Errorf("Error while proposing node removal: %+v", err)
+					}
+				}()
 			}
 		}
 		conn.GetPools().RemoveInvalid(g.state)
@@ -492,12 +497,10 @@ func (g *groupi) members(gid uint32) map[uint64]*pb.Member {
 
 func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 	members := g.members(gid)
-	if members != nil {
-		for _, m := range members {
-			pl, err := conn.GetPools().Get(m.Addr)
-			if err == nil {
-				return pl
-			}
+	for _, m := range members {
+		pl, err := conn.GetPools().Get(m.Addr)
+		if err == nil {
+			return pl
 		}
 	}
 	return nil
@@ -505,11 +508,9 @@ func (g *groupi) AnyServer(gid uint32) *conn.Pool {
 
 func (g *groupi) MyPeer() (uint64, bool) {
 	members := g.members(g.groupId())
-	if members != nil {
-		for _, m := range members {
-			if m.Id != g.Node.Id {
-				return m.Id, true
-			}
+	for _, m := range members {
+		if m.Id != g.Node.Id {
+			return m.Id, true
 		}
 	}
 	return 0, false
@@ -758,10 +759,14 @@ OUTER:
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case <-ctx.Done():
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
@@ -770,7 +775,9 @@ OUTER:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
 				break OUTER
 			}
 		}

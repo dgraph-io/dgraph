@@ -46,7 +46,8 @@ func init() {
 var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
 
 type suite struct {
-	t *testing.T
+	t           *testing.T
+	bulkCluster *DgraphCluster
 }
 
 func newSuite(t *testing.T, schema, rdfs string) *suite {
@@ -88,7 +89,14 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	s.checkFatal(
 		makeDirEmpty(bulkDir),
 		makeDirEmpty(liveDir),
+		makeDirEmpty(filepath.Join(bulkDir, "out", "0")),
 	)
+
+	s.bulkCluster = NewDgraphCluster(filepath.Join(bulkDir, "out", "0"))
+	if err := s.bulkCluster.StartZeroOnly(); err != nil {
+		s.cleanup()
+		s.t.Fatalf("Couldn't start zero in Dgraph cluster: %v\n", err)
+	}
 
 	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
 		"-f", rdfFile,
@@ -96,7 +104,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		"--http", "localhost:"+strconv.Itoa(freePort(0)),
 		"-j=1",
 		"-x=true",
-		"-z", z.SockAddrZero,
+		"-z", "localhost:"+s.bulkCluster.zeroPort,
 	)
 	bulkCmd.Dir = bulkDir
 	if out, err := bulkCmd.Output(); err != nil {
@@ -105,10 +113,10 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		s.t.Fatalf("Bulkloader didn't run: %v\n", err)
 	}
 
-	s.checkFatal(os.Rename(
-		filepath.Join(bulkDir, "out", "0", "p"),
-		filepath.Join(bulkDir, "p"),
-	))
+	if err := s.bulkCluster.StartAlphaOnly(); err != nil {
+		s.cleanup()
+		s.t.Fatalf("Couldn't start alpha in Dgraph cluster: %v\n", err)
+	}
 
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", rdfFile,
@@ -135,16 +143,30 @@ func (s *suite) cleanup() {
 	// NOTE: Shouldn't raise any errors here or fail a test, since this is
 	// called when we detect an error (don't want to mask the original problem).
 	_ = os.RemoveAll(rootDir)
+	s.bulkCluster.Close()
 }
 
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
+		// Check results of the live loader.
 		dg := z.DgraphClientWithGroot(z.SockAddr)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 
 		txn := dg.NewTxn()
 		resp, err := txn.Query(ctx, query)
+		if err != nil {
+			t.Fatalf("Could not query: %v", err)
+		}
+		z.CompareJSON(t, wantResult, string(resp.GetJson()))
+
+		// Check results of the bulk loader.
+		dg = z.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
+		ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel2()
+
+		txn = dg.NewTxn()
+		resp, err = txn.Query(ctx2, query)
 		if err != nil {
 			t.Fatalf("Could not query: %v", err)
 		}

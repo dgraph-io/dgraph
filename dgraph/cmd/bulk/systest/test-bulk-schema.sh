@@ -6,7 +6,7 @@ readonly ME=${0##*/}
 readonly SRCROOT=$(git rev-parse --show-toplevel)
 readonly DOCKER_CONF=$SRCROOT/dgraph/docker-compose.yml
 
-declare -ri ZERO_PORT=5080 HTTP_PORT=8180
+declare -ri ZERO_PORT=5180 HTTP_PORT=8180
 
 INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
@@ -112,7 +112,7 @@ function QuerySchema
 {
   INFO "running schema query"
   local out_file="schema.out"
-  curl -sS -H "Content-Type: application/graphqlpm" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
+  curl -sS -H "Content-Type: application/graphql+-" localhost:$HTTP_PORT/query -XPOST -d'schema(pred:[genre,language,name,revenue,predicate_with_default_type,predicate_with_index_no_uid_count,predicate_with_no_uid_count]) {}' | python -c "import json,sys; d=json.load(sys.stdin); json.dump(d['data'],sys.stdout,sort_keys=True,indent=2)"  > $out_file
   echo >> $out_file
 }
 

@@ -137,7 +137,7 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 	ctx := context.Background()
 
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 	q := fmt.Sprintf(`
 		{
 			get(func: eq(first, %q)) @filter(eq(last, %q) AND eq(age, %d)) {

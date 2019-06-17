@@ -257,16 +257,6 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	return nil
 }
 
-type query struct {
-	Variables map[string]string `json:"variables"`
-	Query     string            `json:"query"`
-}
-
-type queryAlt struct {
-	Variables string `json:"variables"`
-	Query     string `json:"query"`
-}
-
 func convertToVarMap(variables map[string]string) (vm varMap) {
 	vm = make(map[string]varInfo)
 	for k, v := range variables {
@@ -797,7 +787,9 @@ L:
 				gq.Cascade = true
 			case "groupby":
 				gq.IsGroupby = true
-				parseGroupby(it, gq)
+				if err := parseGroupby(it, gq); err != nil {
+					return nil, err
+				}
 			case "ignorereflex":
 				gq.IgnoreReflex = true
 			case "recurse":
@@ -2199,7 +2191,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 				return item.Errorf("Only one group by directive allowed.")
 			}
 			curp.IsGroupby = true
-			parseGroupby(it, curp)
+			if err := parseGroupby(it, curp); err != nil {
+				return err
+			}
 		case "type":
 			err := parseType(it, curp)
 			if err != nil {

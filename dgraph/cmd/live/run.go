@@ -46,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 )
 
@@ -106,26 +107,6 @@ func init() {
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
-}
-
-// Reads a single line from a buffered reader. The line is read into the
-// passed in buffer to minimize allocations. This is the preferred
-// method for loading long lines which could be longer than the buffer
-// size of bufio.Scanner.
-func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
-	isPrefix := true
-	var err error
-	for isPrefix && err == nil {
-		var line []byte
-		// The returned line is an pb.buffer in bufio and is only
-		// valid until the next call to ReadLine. It needs to be copied
-		// over to our own buffer.
-		line, isPrefix, err = r.ReadLine()
-		if err == nil {
-			buf.Write(line)
-		}
-	}
-	return err
 }
 
 // processSchemaFile process schema for a given gz file.
@@ -317,7 +298,11 @@ func run() error {
 		return err
 	}
 
-	go http.ListenAndServe("localhost:6060", nil)
+	go func() {
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			glog.Errorf("Error while starting HTTP server in port 6060: %+v", err)
+		}
+	}()
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,

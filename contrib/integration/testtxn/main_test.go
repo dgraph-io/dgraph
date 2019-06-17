@@ -42,7 +42,7 @@ var addr string = z.SockAddr
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
+	z.AssignUids(200)
 	dg := z.DgraphClientWithGroot(z.SockAddr)
 	s.dg = dg
 
@@ -693,4 +693,172 @@ func TestSPStar2(t *testing.T) {
 	require.NoError(t, err)
 	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan3", "uid":"%s"}]}]}`, uid1, uid2)
 	require.JSONEq(t, expectedResp, string(resp.Json))
+}
+
+var (
+	ctxb       = context.Background()
+	countQuery = `
+query countAnswers($num: int) {
+  me(func: eq(count(answer), $num)) {
+    uid
+    count(answer)
+  }
+}
+`
+)
+
+func TestCountIndexConcurrentTxns(t *testing.T) {
+	dg := z.DgraphClientWithGroot(z.SockAddr)
+	z.DropAll(t, dg)
+	alterSchema(dg, "answer: [uid] @count .")
+
+	// Expected edge count of 0x100: 1
+	txn0 := dg.NewTxn()
+	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
+	_, err := txn0.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn0.Commit(ctxb)
+	x.Check(err)
+
+	// The following two mutations are in separate interleaved txns.
+	txn1 := dg.NewTxn()
+	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
+	_, err = txn1.Mutate(ctxb, &mu)
+	x.Check(err)
+
+	txn2 := dg.NewTxn()
+	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
+	_, err = txn2.Mutate(ctxb, &mu)
+	x.Check(err)
+
+	err = txn1.Commit(ctxb)
+	x.Check(err)
+	err = txn2.Commit(ctxb)
+	require.Error(t, err,
+		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
+
+	// retry the mutatiton
+	txn3 := dg.NewTxn()
+	_, err = txn3.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn3.Commit(ctxb)
+	x.Check(err)
+
+	// Verify count queries
+	txn := dg.NewReadOnlyTxn()
+	vars := map[string]string{"$num": "1"}
+	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
+	x.Check(err)
+	js := string(resp.GetJson())
+	require.JSONEq(t,
+		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
+		js)
+	txn = dg.NewReadOnlyTxn()
+	vars = map[string]string{"$num": "2"}
+	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
+	x.Check(err)
+	js = string(resp.GetJson())
+	require.JSONEq(t,
+		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
+		js)
+}
+
+func TestCountIndexSerialTxns(t *testing.T) {
+	dg := z.DgraphClientWithGroot(z.SockAddr)
+	z.DropAll(t, dg)
+	alterSchema(dg, "answer: [uid] @count .")
+
+	// Expected Edge count of 0x100: 1
+	txn0 := dg.NewTxn()
+	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
+	_, err := txn0.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn0.Commit(ctxb)
+	x.Check(err)
+
+	// Expected edge count of 0x1: 2
+	// This should NOT appear in the query result
+	// The following two mutations are in serial txns.
+	txn1 := dg.NewTxn()
+	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
+	_, err = txn1.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn1.Commit(ctxb)
+	x.Check(err)
+
+	txn2 := dg.NewTxn()
+	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
+	_, err = txn2.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn2.Commit(ctxb)
+	x.Check(err)
+
+	// Verify query
+	txn := dg.NewReadOnlyTxn()
+	vars := map[string]string{"$num": "1"}
+	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
+	x.Check(err)
+	js := string(resp.GetJson())
+	require.JSONEq(t,
+		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
+		js)
+	txn = dg.NewReadOnlyTxn()
+	vars = map[string]string{"$num": "2"}
+	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
+	x.Check(err)
+	js = string(resp.GetJson())
+	require.JSONEq(t,
+		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
+		js)
+}
+
+func TestCountIndexSameTxn(t *testing.T) {
+	dg := z.DgraphClientWithGroot(z.SockAddr)
+	z.DropAll(t, dg)
+	alterSchema(dg, "answer: [uid] @count .")
+
+	// Expected Edge count of 0x100: 1
+	txn0 := dg.NewTxn()
+	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
+	_, err := txn0.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn0.Commit(ctxb)
+	x.Check(err)
+
+	// Expected edge count of 0x1: 2
+	// This should NOT appear in the query result
+	// The following two mutations are in the same txn.
+	txn1 := dg.NewTxn()
+	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
+	_, err = txn1.Mutate(ctxb, &mu)
+	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
+	_, err = txn1.Mutate(ctxb, &mu)
+	x.Check(err)
+	err = txn1.Commit(ctxb)
+	x.Check(err)
+
+	// Verify query
+	txn := dg.NewReadOnlyTxn()
+	vars := map[string]string{"$num": "1"}
+	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
+	x.Check(err)
+	js := string(resp.GetJson())
+	require.JSONEq(t,
+		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
+		js)
+	txn = dg.NewReadOnlyTxn()
+	vars = map[string]string{"$num": "2"}
+	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
+	x.Check(err)
+	js = string(resp.GetJson())
+	require.JSONEq(t,
+		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
+		js)
+}
+
+func alterSchema(dg *dgo.Dgraph, schema string) {
+	op := api.Operation{}
+	op.Schema = schema
+	err := dg.Alter(ctxb, &op)
+	x.Check(err)
 }

@@ -52,7 +52,7 @@ type options struct {
 	MapBufSize       int64
 	SkipMapPhase     bool
 	CleanupTmp       bool
-	NumShufflers     int
+	NumReducers      int
 	Version          bool
 	StoreXids        bool
 	ZeroAddr         string
@@ -130,7 +130,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string) []*pb.SchemaUpdate {
+func readSchema(filename string) *schema.ParsedSchema {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
@@ -145,7 +145,7 @@ func readSchema(filename string) []*pb.SchemaUpdate {
 
 	result, err := schema.Parse(string(buf))
 	x.Check(err)
-	return result.Schemas
+	return result
 }
 
 func (ld *loader) mapStage() {
@@ -220,25 +220,15 @@ func (ld *loader) mapStage() {
 }
 
 type shuffleOutput struct {
-	db         *badger.DB
+	writer     *badger.StreamWriter
 	mapEntries []*pb.MapEntry
 }
 
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	shuffleOutputCh := make(chan shuffleOutput, 100)
-	go func() {
-		shuf := shuffler{state: ld.state, output: shuffleOutputCh}
-		shuf.run()
-	}()
-
-	redu := reducer{
-		state:     ld.state,
-		input:     shuffleOutputCh,
-		writesThr: x.NewThrottle(100),
-	}
-	redu.run()
+	r := reducer{state: ld.state}
+	x.Check(r.run())
 }
 
 func (ld *loader) writeSchema() {
@@ -256,7 +246,7 @@ func (ld *loader) writeSchema() {
 
 	// Find any predicates that don't have data in any DB
 	// and distribute them among all the DBs.
-	for p := range ld.schema.m {
+	for p := range ld.schema.schemaMap {
 		if _, ok := m[p]; !ok {
 			i := adler32.Checksum([]byte(p)) % numDBs
 			preds[i] = append(preds[i], p)

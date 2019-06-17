@@ -84,7 +84,7 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	x.Check(err)
 
 	txn := dg.NewTxn()
-	defer txn.Discard(context.Background())
+	defer func() { _ = txn.Discard(context.Background()) }()
 	var mu api.Mutation
 	mu.SetJson = data
 	if *verbose {
@@ -106,7 +106,7 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 		}
 	`
 	txn := dg.NewReadOnlyTxn()
-	defer txn.Discard(context.Background())
+	defer func() { _ = txn.Discard(context.Background()) }()
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
 		return err
@@ -208,9 +208,7 @@ func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	if len(src.Uid) > 0 {
 		// If there was no src.Uid, then don't run any mutation.
 		if src.Bal == 0 {
-			// TODO: WHAT a fucking hack.
-			d := map[string]string{"uid": src.Uid}
-			pb, err := json.Marshal(d)
+			pb, err := json.Marshal(src)
 			x.Check(err)
 			mu.DeleteJson = pb
 			fmt.Fprintf(w, "Deleting K_%02d: %s\n", src.Key, mu.DeleteJson)
@@ -320,5 +318,7 @@ func main() {
 	fmt.Println()
 	fmt.Println("Total aborts", s.aborts)
 	fmt.Println("Total success", s.runs)
-	s.runTotal(clients[0])
+	if err := s.runTotal(clients[0]); err != nil {
+		log.Fatal(err)
+	}
 }

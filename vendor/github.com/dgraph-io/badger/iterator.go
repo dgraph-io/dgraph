@@ -648,9 +648,9 @@ func (it *Iterator) prefetch() {
 	}
 }
 
-// Seek would seek to the provided key if present. If absent, it would seek to the next smallest key
-// greater than the provided key if iterating in the forward direction. Behavior would be reversed if
-// iterating backwards.
+// Seek would seek to the provided key if present. If absent, it would seek to the next
+// smallest key greater than the provided key if iterating in the forward direction.
+// Behavior would be reversed if iterating backwards.
 func (it *Iterator) Seek(key []byte) {
 	for i := it.data.pop(); i != nil; i = it.data.pop() {
 		i.wg.Wait()

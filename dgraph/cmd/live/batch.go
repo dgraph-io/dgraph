@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 	"github.com/dustin/go-humanize/english"
@@ -82,30 +81,6 @@ type loader struct {
 	reqNum   uint64
 	reqs     chan api.Mutation
 	zeroconn *grpc.ClientConn
-}
-
-type uidProvider struct {
-	zero pb.ZeroClient
-	ctx  context.Context
-}
-
-func (p *uidProvider) ReserveUidRange() (uint64, uint64, error) {
-	factor := time.Second
-	for {
-		assignedIds, err := p.zero.AssignUids(context.Background(), &pb.Num{Val: 1000})
-		if err == nil {
-			return assignedIds.StartId, assignedIds.EndId, nil
-		}
-		fmt.Printf("Error while getting lease %v\n", err)
-		select {
-		case <-time.After(factor):
-		case <-p.ctx.Done():
-			return 0, 0, p.ctx.Err()
-		}
-		if factor < 256*time.Second {
-			factor *= 2
-		}
-	}
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -222,11 +197,5 @@ func (l *loader) Counter() Counter {
 		TxnsDone: atomic.LoadUint64(&l.txns),
 		Elapsed:  time.Since(l.start),
 		Aborts:   atomic.LoadUint64(&l.aborts),
-	}
-}
-
-func (l *loader) stopTickers() {
-	if l.ticker != nil {
-		l.ticker.Stop()
 	}
 }

@@ -21,7 +21,7 @@ import (
 func TestGetHandler(t *testing.T) {
 	tests := []struct {
 		in  string
-		out handler
+		out UriHandler
 	}{
 		{in: "file", out: &fileHandler{}},
 		{in: "minio", out: &s3Handler{}},
