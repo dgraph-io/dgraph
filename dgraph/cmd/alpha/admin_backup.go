@@ -135,7 +135,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	m := backup.Manifest{Groups: groups, Since: req.ReadTs}
 	if req.SinceTs == 0 {
 		m.Type = "full"
-		m.BackupId = x.GetRandomName(0)
+		m.BackupId = x.GetRandomName(1)
 		m.BackupNum = 1
 	} else {
 		m.Type = "incremental"
