@@ -221,12 +221,12 @@ func verifyManifests(manifests []*Manifest) error {
 			manifests[0].BackupNum)
 	}
 
-	seriesUid := manifests[0].BackupId
+	backupId := manifests[0].BackupId
 	var backupNum uint64
 	for _, manifest := range manifests {
-		if manifest.BackupId != seriesUid {
-			return errors.Errorf("found a manifest with series UID %s but expected %s",
-				manifest.BackupId, seriesUid)
+		if manifest.BackupId != backupId {
+			return errors.Errorf("found a manifest with backup ID %s but expected %s",
+				manifest.BackupId, backupId)
 		}
 
 		backupNum++
