@@ -524,8 +524,22 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 			return s
 		}
 
+		// Remove the mutations from gmu.Del when no UID was found
+		gmuDel := make([]*api.NQuad, 0, len(gmu.Del))
+		for _, nq := range gmu.Del {
+			nq.Subject = getNewVal(nq.Subject)
+			nq.ObjectId = getNewVal(nq.ObjectId)
+
+			if !strings.HasPrefix(nq.Subject, "_:uid(") &&
+				!strings.HasPrefix(nq.ObjectId, "_:uid(") {
+
+				gmuDel = append(gmuDel, nq)
+			}
+		}
+		gmu.Del = gmuDel
+
 		// update the values in mutation block from the query block.
-		for _, nq := range append(gmu.Set, gmu.Del...) {
+		for _, nq := range gmu.Set {
 			nq.Subject = getNewVal(nq.Subject)
 			nq.ObjectId = getNewVal(nq.ObjectId)
 		}

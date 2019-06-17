@@ -693,6 +693,12 @@ upsert {
       uid(u2) <name> "user2" .
       uid(u1) <friend> uid(u2) .
     }
+
+    delete {
+      uid(u3) <friend> uid(u1) .
+      uid(u1) <friend> uid(u3) .
+      uid(u3) <name> * .
+    }
   }
 
   query {
@@ -702,6 +708,10 @@ upsert {
 
     user2(func: eq(email, "user2@dgraph.io")) {
       u2 as uid
+    }
+
+    user3(func: eq(email, "user3@dgraph.io")) {
+      u3 as uid
     }
   }
 }`
@@ -754,4 +764,33 @@ upsert {
   }
 }`
 	z.CompareJSON(t, expected, res)
+}
+
+func TestUpsertDeleteNonExistent(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+email: string @index(exact) @upsert .
+name: string @index(exact) @lang .
+friend: uid @reverse .`))
+
+	m := `
+upsert {
+  mutation {
+    delete {
+      uid (u1) <friend> uid ( u2 ) .
+    }
+  }
+
+  query {
+    user1(func: eq(name@en, "user1")) {
+      u1 as uid
+    }
+
+    user2(func: eq(name@en, "user2")) {
+      u2 as uid
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
 }
