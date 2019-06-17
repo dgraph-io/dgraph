@@ -38,7 +38,7 @@ var Restore x.SubCommand
 var LsBackup x.SubCommand
 
 var opt struct {
-	seriesUid, location, pdir, zero string
+	backupId, location, pdir, zero string
 }
 
 func init() {
@@ -108,7 +108,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
-	flag.StringVarP(&opt.seriesUid, "series_uid", "", "", "The uid of the backup series to "+
+	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
@@ -190,7 +190,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := RunRestore(opt.pdir, opt.location, opt.seriesUid)
+	version, err := RunRestore(opt.pdir, opt.location, opt.backupId)
 	if err != nil {
 		return err
 	}
@@ -214,7 +214,7 @@ func runRestoreCmd() error {
 }
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, seriesUid string) (uint64, error) {
+func RunRestore(pdir, location, backupId string) (uint64, error) {
 	bo := badger.DefaultOptions
 	bo.SyncWrites = true
 	bo.TableLoadingMode = options.MemoryMap
@@ -223,7 +223,7 @@ func RunRestore(pdir, location, seriesUid string) (uint64, error) {
 
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(location, seriesUid, func(r io.Reader, groupId int) error {
+	return Load(location, backupId, func(r io.Reader, groupId int) error {
 		bo := bo
 		bo.Dir = filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 		bo.ValueDir = bo.Dir

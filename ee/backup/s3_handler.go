@@ -239,7 +239,7 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, seriesUid string, fn loadFn) (uint64, error) {
+func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return 0, err
@@ -278,7 +278,7 @@ func (h *s3Handler) Load(uri *url.URL, seriesUid string, fn loadFn) (uint64, err
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err = filterManifests(manifests, seriesUid)
+	manifests, err = filterManifests(manifests, backupId)
 	if err != nil {
 		return 0, err
 	}

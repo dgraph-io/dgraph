@@ -134,7 +134,7 @@ type loadFn func(reader io.Reader, groupId int) error
 
 // Load will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func Load(location, seriesUid string, fn loadFn) (since uint64, err error) {
+func Load(location, backupId string, fn loadFn) (since uint64, err error) {
 	uri, err := url.Parse(location)
 	if err != nil {
 		return 0, err
@@ -145,7 +145,7 @@ func Load(location, seriesUid string, fn loadFn) (since uint64, err error) {
 		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, seriesUid, fn)
+	return h.Load(uri, backupId, fn)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
@@ -179,13 +179,13 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 
 // filterManifests takes a list of manifests and returns the list of manifests
 // that should be considered during a restore.
-func filterManifests(manifests []*Manifest, seriesUid string) ([]*Manifest, error) {
+func filterManifests(manifests []*Manifest, backupId string) ([]*Manifest, error) {
 	// Go through the files in reverse order and stop when the latest full backup is found.
 	var filteredManifests []*Manifest
 	for i := len(manifests) - 1; i >= 0; i-- {
-		if len(seriesUid) > 0 && manifests[i].SeriesUid != seriesUid {
+		if len(backupId) > 0 && manifests[i].BackupId != backupId {
 			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
-				manifests[i].Path, seriesUid)
+				manifests[i].Path, backupId)
 			continue
 		}
 
@@ -218,12 +218,12 @@ func verifyManifests(manifests []*Manifest) error {
 			manifests[0].BackupNum)
 	}
 
-	seriesUid := manifests[0].SeriesUid
+	seriesUid := manifests[0].BackupId
 	var backupNum uint64
 	for _, manifest := range manifests {
-		if manifest.SeriesUid != seriesUid {
+		if manifest.BackupId != seriesUid {
 			return errors.Errorf("found a manifest with series UID %s but expected %s",
-				manifest.SeriesUid, seriesUid)
+				manifest.BackupId, seriesUid)
 		}
 
 		backupNum++

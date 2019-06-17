@@ -47,9 +47,9 @@ type Manifest struct {
 	Since uint64 `json:"since"`
 	// Groups is the list of valid groups at the time the backup was created.
 	Groups []uint32 `json:"groups"`
-	// SeriesUid is a unique ID assigned to all the backups in the same series
+	// BackupId is a unique ID assigned to all the backups in the same series
 	// (from the first full backup to the last incremental backup).
-	SeriesUid string `json:"series_id"`
+	BackupId string `json:"backup_id"`
 	// BackupNum is a monotonically increasing number assigned to each backup in
 	// a series. The full backup as BackupNum equal to one and each incremental
 	// backup gets assigned the next available number. Used to verify the integrity

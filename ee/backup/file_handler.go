@@ -111,7 +111,7 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, seriesUid string, fn loadFn) (uint64, error) {
+func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
 	if !pathExist(uri.Path) {
 		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
@@ -139,7 +139,7 @@ func (h *fileHandler) Load(uri *url.URL, seriesUid string, fn loadFn) (uint64, e
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err := filterManifests(manifests, seriesUid)
+	manifests, err := filterManifests(manifests, backupId)
 	if err != nil {
 		return 0, err
 	}
