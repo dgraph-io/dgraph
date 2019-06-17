@@ -610,7 +610,7 @@ func (s *levelsController) compactBuildTables(
 		// -- we're the only holders of a ref).
 		for j := 0; j < numBuilds; j++ {
 			if newTables[j] != nil {
-				newTables[j].DecrRef()
+				_ = newTables[j].DecrRef()
 			}
 		}
 		errorReturn := errors.Wrapf(firstErr, "While running compaction for: %+v", cd)

@@ -159,14 +159,9 @@ func publishSchemaUpdate(s *pb.SchemaUpdate) {
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-<<<<<<< variant A
-func updateSchema(attr string, s pb.SchemaUpdate) error {
-	schema.State().Set(attr, s)
-	//publishSchemaUpdate(s)
->>>>>>> variant B
 func updateSchema(s *pb.SchemaUpdate) error {
 	schema.State().Set(s.Predicate, *s)
-======= end
+	publishSchemaUpdate(s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()

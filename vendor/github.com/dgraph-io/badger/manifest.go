@@ -321,7 +321,8 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 }
 
 var (
-	errBadMagic = errors.New("manifest has bad magic")
+	errBadMagic    = errors.New("manifest has bad magic")
+	errBadChecksum = errors.New("manifest has checksum mismatch")
 )
 
 // ReplayManifestFile reads the manifest file and constructs two manifest objects.  (We need one
@@ -366,7 +367,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			return Manifest{}, 0, err
 		}
 		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
-			break
+			return Manifest{}, 0, errBadChecksum
 		}
 
 		var changeSet pb.ManifestChangeSet

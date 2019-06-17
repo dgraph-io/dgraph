@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/Shopify/sarama"
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
@@ -60,9 +62,6 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			cb.SchemaCb(kafkaMsg.Schema)
 		}
 
-		glog.V(1).Infof("Message consumed: value = %+v, timestamp = %v, topic = %s",
-			kafkaMsg, message.Timestamp, message.Topic)
-
 		// marking of the message must be done after the message has been permanently stored
 		// in badger. Otherwise marking a message prematurely may result in message loss
 		// if the server crashes right after the message is marked.
@@ -83,6 +82,9 @@ func consumeList(list *bpb.KVList) {
 		glog.Errorf("error while finishing the loader: %v", err)
 	}
 	glog.V(1).Infof("consumed kv list: %+v", list)
+	glog.Infof("BEGIN_SRC")
+	glog.Infof("consumed %s", spew.Sdump(list))
+	glog.Infof("END_SRC")
 }
 
 type MembershipCb func(state *pb.MembershipState)
@@ -203,6 +205,9 @@ func SetupKafkaTarget() {
 			}
 
 			glog.V(1).Infof("produced a list with %d messages to kafka", len(list.Kv))
+			glog.Infof("BEGIN_SRC")
+			glog.Infof("produced %s", spew.Sdump(list))
+			glog.Infof("END_SRC")
 		}
 
 		go func() {

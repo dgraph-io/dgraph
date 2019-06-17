@@ -967,7 +967,8 @@ func onBecomeLeader() {
 		glog.V(1).Infof("applied state from kafka: %+v", state)
 	}
 	schemaCb := func(schema *pb.SchemaUpdate) {
-
+		updateSchema(schema)
+		glog.V(1).Infof("applied schema from kafka: %+v", schema)
 	}
 	kafka.SetupKafkaSource(&kafka.Callback{
 		MembershipCb: membershipCb,

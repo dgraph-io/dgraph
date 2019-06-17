@@ -96,7 +96,7 @@ func (p *publisher) publishUpdates(reqs requests) {
 						kv := &pb.KV{
 							Key:       y.ParseKey(k),
 							Value:     y.SafeCopy(nil, e.Value),
-							Meta:      []byte{e.UserMeta},
+							UserMeta:  []byte{e.UserMeta},
 							ExpiresAt: e.ExpiresAt,
 							Version:   y.ParseTs(k),
 						}

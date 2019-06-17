@@ -463,7 +463,9 @@ func (vlog *valueLog) rewrite(f *logFile, tr trace.Trace) error {
 	}
 
 	if deleteFileNow {
-		vlog.deleteLogFile(f)
+		if err := vlog.deleteLogFile(f); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -476,7 +478,7 @@ func (vlog *valueLog) deleteMoveKeysFor(fid uint32, tr trace.Trace) error {
 	tr.LazyPrintf("Iterating over move keys to find invalids for fid: %d", fid)
 	err := db.View(func(txn *Txn) error {
 		opt := DefaultIteratorOptions
-		opt.internalAccess = true
+		opt.InternalAccess = true
 		opt.PrefetchValues = false
 		itr := txn.NewIterator(opt)
 		defer itr.Close()

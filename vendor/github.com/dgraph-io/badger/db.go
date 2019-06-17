@@ -294,7 +294,9 @@ func Open(opt Options) (db *DB, err error) {
 		db.lc.startCompact(db.closers.compactors)
 
 		db.closers.memtable = y.NewCloser(1)
-		go db.flushMemtable(db.closers.memtable) // Need levels controller to be up.
+		go func() {
+			_ = db.flushMemtable(db.closers.memtable) // Need levels controller to be up.
+		}()
 	}
 
 	headKey := y.KeyWithTs(head, math.MaxUint64)
@@ -913,7 +915,7 @@ func (db *DB) handleFlushTask(ft flushTask) error {
 	}
 	// We own a ref on tbl.
 	err = db.lc.addLevel0Table(tbl) // This will incrRef (if we don't error, sure)
-	tbl.DecrRef()                   // Releases our ref.
+	_ = tbl.DecrRef()               // Releases our ref.
 	return err
 }
 
@@ -1231,7 +1233,9 @@ func (db *DB) startCompactions() {
 	if db.closers.memtable != nil {
 		db.flushChan = make(chan flushTask, db.opt.NumMemtables)
 		db.closers.memtable = y.NewCloser(1)
-		go db.flushMemtable(db.closers.memtable)
+		go func() {
+			_ = db.flushMemtable(db.closers.memtable)
+		}()
 	}
 }
 
