@@ -328,6 +328,7 @@ password                       : password .
 symbol                         : string @index(exact) .
 room                           : string @index(term) .
 office.room                    : uid .
+number                         : int @index(int) .
 `
 
 	err := schema.ParseBytes([]byte(schemaStr), 1)
