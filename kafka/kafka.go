@@ -53,7 +53,8 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			return err
 		}
 		if kafkaMsg.KvList != nil {
-			consumeList(kafkaMsg.KvList)
+			//consumeList(kafkaMsg.KvList)
+			cb.KvListCb(kafkaMsg.KvList)
 		}
 		if kafkaMsg.State != nil {
 			cb.MembershipCb(kafkaMsg.State)
@@ -71,26 +72,12 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 	return nil
 }
 
-func consumeList(list *bpb.KVList) {
-	loader := pstore.NewLoader(16)
-	for _, kv := range list.Kv {
-		if err := loader.Set(kv); err != nil {
-			glog.Errorf("error while setting kv %v to loader: %v", kv, err)
-		}
-	}
-	if err := loader.Finish(); err != nil {
-		glog.Errorf("error while finishing the loader: %v", err)
-	}
-	glog.V(1).Infof("consumed kv list: %+v", list)
-	glog.Infof("BEGIN_SRC")
-	glog.Infof("consumed %s", spew.Sdump(list))
-	glog.Infof("END_SRC")
-}
-
 type MembershipCb func(state *pb.MembershipState)
 type SchemaCb func(schema *pb.SchemaUpdate)
+type KvListCb func(list *bpb.KVList)
 
 type Callback struct {
+	KvListCb     KvListCb
 	MembershipCb MembershipCb
 	SchemaCb     SchemaCb
 }

@@ -958,6 +958,19 @@ func (n *node) Run() {
 	}
 }
 
+func kvListCb(list *bpb.KVList) {
+	loader := pstore.NewLoader(16)
+	for _, kv := range list.Kv {
+		if err := loader.Set(kv); err != nil {
+			glog.Errorf("error while setting kv %v to loader: %v", kv, err)
+		}
+	}
+	if err := loader.Finish(); err != nil {
+		glog.Errorf("error while finishing the loader: %v", err)
+	}
+	glog.V(1).Infof("consumed kv list: %+v", list)
+}
+
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
 	kafka.SetupKafkaTarget()
@@ -971,6 +984,7 @@ func onBecomeLeader() {
 		glog.V(1).Infof("applied schema from kafka: %+v", schema)
 	}
 	kafka.SetupKafkaSource(&kafka.Callback{
+		KvListCb:     kvListCb,
 		MembershipCb: membershipCb,
 		SchemaCb:     schemaCb,
 	})
