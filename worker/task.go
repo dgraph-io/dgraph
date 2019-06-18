@@ -209,7 +209,7 @@ func convertToType(v types.Val, typ types.TypeID) (*pb.TaskValue, error) {
 	return result, nil
 }
 
-// FuncType indicate the type of a query function (aggregation, has, etc).
+// FuncType represents the type of a query function (aggregation, has, etc).
 type FuncType int
 
 const (
@@ -707,9 +707,9 @@ func (qs *queryState) handleUidPostings(
 }
 
 const (
-	// UseTxnCache is the constant used to indicate the transaction cache should be used.
+	// UseTxnCache indicates the transaction cache should be used.
 	UseTxnCache = iota
-	// NoTxnCache is the constant used to indicate no transaction caches should be used.
+	// NoTxnCache indicates no transaction caches should be used.
 	NoTxnCache
 )
 
