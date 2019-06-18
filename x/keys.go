@@ -22,6 +22,9 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 const (
@@ -350,6 +353,47 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	}
 	k[1] = 0
 	return buf
+}
+
+// ToBackupKey returns the key in the format used for writing backups.
+func (p ParsedKey) ToBackupKey() *pb.BackupKey {
+	key := pb.BackupKey{}
+	key.ByteType = []byte{p.byteType}
+	key.Attr = p.Attr
+	key.Uid = p.Uid
+	key.StartUid = p.StartUid
+	key.Term = p.Term
+	key.Count = p.Count
+	key.BytePrefix = []byte{p.bytePrefix}
+	return &key
+}
+
+// FromBackupKey takes a key in the format used for backups and converts it to a ParsedKey.
+func FromBackupKey(key *pb.BackupKey) (*ParsedKey, error) {
+	p := ParsedKey{}
+	if key == nil {
+		return &p, nil
+	}
+
+	if len(key.ByteType) != 1 {
+		return nil, errors.Errorf("ByteType must be of length 1 but is %d bytes long",
+			key.ByteType)
+	}
+	if len(key.BytePrefix) != 1 {
+		return nil, errors.Errorf("BytePrefix must be of length 1 but is %d bytes long",
+			key.BytePrefix)
+	}
+
+	p.byteType = key.ByteType[0]
+	p.Attr = key.Attr
+	p.Uid = key.Uid
+	p.StartUid = key.StartUid
+	p.HasStartUid = p.StartUid > 0
+	p.Term = key.Term
+	p.Count = key.Count
+	p.bytePrefix = key.BytePrefix[0]
+
+	return &p, nil
 }
 
 // SchemaPrefix returns the prefix for Schema keys.

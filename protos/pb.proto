@@ -499,4 +499,23 @@ message ExportRequest {
 	string  format   = 4;
 }
 
+// A key stored in the format used for writing backups.
+message BackupKey {
+  bytes byteType = 1;
+  string attr = 2;
+  uint64 uid = 3;
+  uint64 start_uid = 4;
+  string term = 5;
+  uint32 count = 6;
+  bytes byte_prefix = 7;
+}
+
+// A posting list stored in the format used for writing backups.
+message BackupPostingList {
+	repeated uint64 uids = 1;
+	repeated Posting postings = 2;
+	uint64 commit_ts = 3;
+  repeated uint64 splits = 4;
+}
+
 // vim: noexpandtab sw=2 ts=2
