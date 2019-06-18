@@ -449,7 +449,7 @@ service Worker {
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (BackupResponse) {}
 	rpc Export (ExportRequest)              returns (Status) {}
-	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
+	rpc ReceivePredicate(stream pb.KVList)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 }
 
