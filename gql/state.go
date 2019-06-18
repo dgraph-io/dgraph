@@ -138,12 +138,10 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemAt)
 			return lexDirectiveOrLangList
 		case isNameBegin(r) || isNumber(r):
-			empty = false
 			return lexArgName
 		case r == slash:
 			// if argument starts with '/' it's a regex, otherwise it's a division
 			if empty {
-				empty = false
 				return lexRegex(l)
 			}
 			fallthrough
