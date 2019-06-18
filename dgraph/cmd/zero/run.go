@@ -56,6 +56,7 @@ type options struct {
 
 var opts options
 
+// Zero is the sub-command used to start Zero servers.
 var Zero x.SubCommand
 
 func init() {
