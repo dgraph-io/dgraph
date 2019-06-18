@@ -58,15 +58,15 @@ func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	return schema.Load(pk.Attr)
 }
 
-func batchAndProposeKeyValues(ctx context.Context, listC chan *bpb.KVList) error {
+func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	glog.Infoln("Receiving predicate. Batching and proposing key values")
 	n := groups().Node
 	proposal := &pb.Proposal{}
 	size := 0
 	var pk *x.ParsedKey
 
-	for kvList := range listC {
-		for _, kv := range kvList.Kv {
+	for kvBatch := range kvs {
+		for _, kv := range kvBatch.Kv {
 			if pk == nil {
 				// This only happens once.
 				pk = x.Parse(kv.Key)
@@ -116,7 +116,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 	defer mu.Unlock()
 
 	// Values can be pretty big so having less buffer is safer.
-	listC := make(chan *bpb.KVList, 3)
+	kvs := make(chan *pb.KVS, 3)
 	che := make(chan error, 1)
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -128,7 +128,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 
 	go func() {
 		// Takes care of throttling and batching.
-		che <- batchAndProposeKeyValues(ctx, listC)
+		che <- batchAndProposeKeyValues(ctx, kvs)
 	}()
 	for {
 		kvBatch, err := stream.Recv()
@@ -144,9 +144,9 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 		count += len(kvBatch.Kv)
 
 		select {
-		case listC <- kvBatch:
+		case kvs <- kvBatch:
 		case <-ctx.Done():
-			close(listC)
+			close(kvs)
 			<-che
 			glog.Infof("Received %d keys. Context deadline\n", count)
 			return ctx.Err()
@@ -155,7 +155,7 @@ func (w *grpcWorker) ReceivePredicate(stream pb.Worker_ReceivePredicateServer) e
 			return err
 		}
 	}
-	close(listC)
+	close(kvs)
 	err := <-che
 	glog.Infof("Proposed %d keys. Error: %v\n", count, err)
 	return err
@@ -236,14 +236,14 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		if err != nil {
 			return err
 		}
-		list := &bpb.KVList{}
+		kvs := &pb.KVS{}
 		kv := &bpb.KV{}
 		kv.Key = schemaKey
 		kv.Value = val
 		kv.Version = 1
 		kv.UserMeta = []byte{item.UserMeta()}
-		list.Kv = append(list.Kv, kv)
-		if err := s.Send(list); err != nil {
+		kvs.Kv = append(kvs.Kv, kv)
+		if err := s.Send(kvs); err != nil {
 			return err
 		}
 	}
@@ -269,7 +269,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return s.Send(&bpb.KVList{Kv: list.Kv})
+		return s.Send(&pb.KVS{Kv: list.Kv})
 	}
 	span.Annotatef(nil, "Starting stream list orchestrate")
 	if err := stream.Orchestrate(ctx); err != nil {
