@@ -313,7 +313,7 @@ func TestTransactionBasic(t *testing.T) {
 	keys, preds, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
+	require.Equal(t, 4, len(keys))
 	require.Equal(t, 2, len(preds))
 	var parsedPreds []string
 	for _, pred := range preds {
@@ -367,7 +367,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
+	require.Equal(t, 4, len(keys))
 
 	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
 	require.NoError(t, err)
@@ -413,7 +413,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
+	require.Equal(t, 4, len(keys))
 
 	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
 	require.NoError(t, err)
