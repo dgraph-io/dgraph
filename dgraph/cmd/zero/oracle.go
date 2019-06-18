@@ -400,8 +400,10 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	return s.proposeTxn(ctx, src)
 }
 
-// CommitOrAbort commits a transaction or aborts it if there's an error
-// (e.g server is not the leader or there's a conflicting transaction).
+// CommitOrAbort either commits a transaction or aborts it.
+// The abortion can happen under the following conditions
+// 1) the api.TxnContext.Aborted flag is set in the src argument
+// 2) if there's an error (e.g server is not the leader or there's a conflicting transaction)
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
