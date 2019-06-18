@@ -62,11 +62,11 @@ func (h *fileHandler) createFiles(uri *url.URL, req *pb.BackupRequest, fileName 
 	return nil
 }
 
-// GetSinceTs reads the manifests at the given URL and returns the appropriate
-// timestamp from which the current backup should be started.
-func (h *fileHandler) GetSinceTs(uri *url.URL) (uint64, error) {
+// GetLatestManifest reads the manifests at the given URL and returns the
+// latest manifest.
+func (h *fileHandler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	if !pathExist(uri.Path) {
-		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return nil, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
 
 	// Find the max Since value from the latest backup.
@@ -79,15 +79,15 @@ func (h *fileHandler) GetSinceTs(uri *url.URL) (uint64, error) {
 		return false
 	})
 
+	var m Manifest
 	if lastManifest == "" {
-		return 0, nil
+		return &m, nil
 	}
 
-	var m Manifest
 	if err := h.readManifest(lastManifest, &m); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return m.Since, nil
+	return &m, nil
 }
 
 // CreateBackupFile prepares the a path to save the backup file.
@@ -111,7 +111,7 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error) {
+func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
 	if !pathExist(uri.Path) {
 		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
 	}
@@ -139,7 +139,7 @@ func (h *fileHandler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, err
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err := filterManifests(manifests, lastDir)
+	manifests, err := filterManifests(manifests, backupId)
 	if err != nil {
 		return 0, err
 	}
