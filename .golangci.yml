@@ -150,13 +150,6 @@ linters-settings:
     range-loops: true # Report preallocation suggestions on range loops, true by default
     for-loops: false # Report preallocation suggestions on for loops, false by default
   gocritic:
-    # Which checks should be enabled; can't be combined with 'disabled-checks';
-    # See https://go-critic.github.io/overview#checks-overview
-    # To check which checks are enabled run `GL_DEBUG=gocritic golangci-lint run`
-    # By default list of stable checks is used.
-    enabled-checks:
-      - rangeValCopy
-
     # Which checks should be disabled; can't be combined with 'enabled-checks'; default is empty
     disabled-checks:
       - regexpMust
@@ -176,6 +169,8 @@ linters:
   enable:
     - megacheck
     - govet
+    - gofmt
+    - goimports
   enable-all: false
   disable:
     - maligned
@@ -242,9 +237,3 @@ issues:
   # of integration: much better don't allow issues in new code.
   # Default is false.
   new: false
-
-  # Show only new issues created after git revision `REV`
-  new-from-rev: REV
-
-  # Show only new issues created in git patch with set file path.
-  #new-from-patch: path/to/patch/file

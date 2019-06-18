@@ -12,11 +12,12 @@ help: Makefile
 
 $(GOLANGCI):
 	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s latest
+	wget -O - -q https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s latest
 
 ## lint: Lints project files, go gets golangci-lint if missing. Runs `golangci-lint` on project files.
 .PHONY: lint
 lint: $(GOLANGCI)
-	golangci-lint run -v
+	golangci-lint run ./...
 
 ## test: Runs `go test` on project test files.
 test:

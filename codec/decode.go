@@ -240,10 +240,10 @@ func (sd *Decoder) DecodeInterface(t interface{}) (interface{}, error) {
 	switch reflect.ValueOf(t).Kind() {
 	case reflect.Ptr:
 		switch reflect.ValueOf(t).Elem().Kind() {
-			case reflect.Slice, reflect.Array:
-				return sd.DecodeArray(t)
-			default:
-				return sd.DecodeTuple(t)
+		case reflect.Slice, reflect.Array:
+			return sd.DecodeArray(t)
+		default:
+			return sd.DecodeTuple(t)
 		}
 	case reflect.Slice, reflect.Array:
 		return sd.DecodeArray(t)
@@ -251,7 +251,6 @@ func (sd *Decoder) DecodeInterface(t interface{}) (interface{}, error) {
 		return sd.DecodeTuple(t)
 	}
 }
-
 
 func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 	var v reflect.Value
@@ -302,7 +301,6 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 
 	return t, err
 }
-
 
 // DecodeTuple accepts a byte array representing the SCALE encoded tuple and an interface. This interface should be a pointer
 // to a struct which the encoded tuple should be marshalled into. If it is a valid encoding for the struct, it returns the

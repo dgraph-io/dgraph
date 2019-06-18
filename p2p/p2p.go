@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	mrand "math/rand"
 
+	log "github.com/inconshreveable/log15"
 	ds "github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
 	libp2p "github.com/libp2p/go-libp2p"
@@ -116,12 +116,11 @@ func (s *Service) start(e chan error) {
 	// Now we can build a full multiaddress to reach this host
 	// by encapsulating both addresses:
 	addrs := s.host.Addrs()
-	log.Println("I can be reached at:")
 	for _, addr := range addrs {
-		log.Println(addr.Encapsulate(s.hostAddr))
+		log.Info("address can be reached", "hostAddr", addr.Encapsulate(s.hostAddr))
 	}
 
-	log.Println("listening for connections...")
+	log.Info("listening for connections...")
 	e <- nil
 }
 
@@ -233,7 +232,11 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 
 // TODO: message handling
 func handleStream(stream net.Stream) {
-	defer stream.Close()
+	defer func() {
+		if err := stream.Close(); err != nil {
+			log.Error("error closing stream", "err", err)
+		}
+	}()
 	// Create a buffer stream for non blocking read and write.
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
 	str, err := rw.ReadString('\n')

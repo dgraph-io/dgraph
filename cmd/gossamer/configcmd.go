@@ -17,6 +17,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"unicode"
+
 	"github.com/ChainSafe/gossamer/cmd/utils"
 	cfg "github.com/ChainSafe/gossamer/config"
 	"github.com/ChainSafe/gossamer/dot"
@@ -25,11 +31,6 @@ import (
 	log "github.com/inconshreveable/log15"
 	"github.com/naoina/toml"
 	"github.com/urfave/cli"
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
-	"unicode"
 )
 
 var (
@@ -104,7 +105,7 @@ func loadConfig(file string) (*cfg.Config, error) {
 	filep := filepath.Join(filepath.Clean(fp))
 	info, err := os.Lstat(filep)
 	if err != nil {
-		log.Crit("config file err ","err", err)
+		log.Crit("config file err ", "err", err)
 		os.Exit(1)
 	}
 	if info.IsDir() {
@@ -114,7 +115,7 @@ func loadConfig(file string) (*cfg.Config, error) {
 	/* #nosec */
 	f, err := os.Open(filep)
 	if err != nil {
-		log.Crit("opening file err ", "err",err)
+		log.Crit("opening file err ", "err", err)
 		os.Exit(1)
 	}
 	defer func() {
@@ -149,6 +150,7 @@ func setP2PConfig(ctx *cli.Context, cfg *p2p.ServiceConfig) *p2p.Service {
 	srv := startP2PService(cfg)
 	return srv
 }
+
 // startP2PService starts a p2p network layer from provided config
 func startP2PService(cfg *p2p.ServiceConfig) *p2p.Service {
 	srv, err := p2p.NewService(cfg)

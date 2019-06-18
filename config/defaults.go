@@ -17,12 +17,13 @@
 package cfg
 
 import (
-	"github.com/inconshreveable/log15"
 	"os"
 	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime"
+
+	"github.com/inconshreveable/log15"
 )
 
 const (

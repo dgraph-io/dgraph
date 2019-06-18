@@ -127,8 +127,8 @@ func (b *branch) Encode() ([]byte, error) {
 
 	for _, child := range b.children {
 		if child != nil {
-			encChild, err := Encode(child)
-			if err != nil {
+			encChild, e := Encode(child)
+			if e != nil {
 				return encoding, err
 			}
 			encoding = append(encoding, encChild...)

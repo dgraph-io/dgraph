@@ -156,8 +156,8 @@ func TestBranchEncode(t *testing.T) {
 
 		for _, child := range b.children {
 			if child != nil {
-				encChild, err := Encode(child)
-				if err != nil {
+				encChild, e := Encode(child)
+				if e != nil {
 					t.Errorf("Fail when encoding branch child: %s", err)
 				}
 				expected = append(expected, encChild...)
