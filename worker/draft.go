@@ -959,16 +959,15 @@ func (n *node) Run() {
 }
 
 func kvListCb(list *bpb.KVList) {
-	loader := pstore.NewLoader(16)
-	for _, kv := range list.Kv {
-		if err := loader.Set(kv); err != nil {
-			glog.Errorf("error while setting kv %v to loader: %v", kv, err)
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	proposal := &pb.Proposal{Kv: list.Kv}
+	n := groups().Node
+	if err := n.proposeAndWait(ctx, proposal); err != nil {
+		glog.Errorf("error while proposing kv list from kafka: %v", err)
 	}
-	if err := loader.Finish(); err != nil {
-		glog.Errorf("error while finishing the loader: %v", err)
-	}
-	glog.V(1).Infof("consumed kv list: %+v", list)
+	glog.V(1).Infof("proposed kv list from kafka: %+v", list)
 }
 
 func onBecomeLeader() {

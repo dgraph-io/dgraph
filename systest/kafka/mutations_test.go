@@ -46,9 +46,10 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgDst *dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
+	delay := 2 * time.Second
 
 	// sleep for 2 seconds for the replication to finish
-	time.Sleep(2 * time.Second)
+	time.Sleep(delay)
 
 	const query = `
 	{
@@ -80,7 +81,7 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgDst *dgo.Dgraph) {
 	require.True(t, z.CompareJSON(t, `{ "q": []}`, string(resp.Json)))
 
 	// sleep for 2 seconds for the replication to finish
-	time.Sleep(2 * time.Second)
+	time.Sleep(delay)
 
 	// run the query again in the dst cluster
 	txn = dgDst.NewReadOnlyTxn().BestEffort()
