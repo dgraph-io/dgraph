@@ -400,7 +400,8 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	return s.proposeTxn(ctx, src)
 }
 
-// CommitOrAbort commits an abortion or aborts it if there's an error.
+// CommitOrAbort commits a transaction or aborts it if there's an error
+// (e.g server is not the leader or there's a conflicting transaction).
 func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.TxnContext, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -421,8 +422,11 @@ func (s *Server) CommitOrAbort(ctx context.Context, src *api.TxnContext) (*api.T
 var errClosed = errors.New("Streaming closed by oracle")
 var errNotLeader = errors.New("Node is no longer leader")
 
-// Oracle retrieves the oracle state.
-func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error {
+// Oracle streams the oracle state to the alphas.
+// The first entry sent by Zero contains the entire state of transactions. Zero periodically
+// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
+// safe way to get the status of all the transactions.
+func (s *Server) Oracle(_ *api.Payload, server pb.Zero_OracleServer) error {
 	if !s.Node.AmLeader() {
 		return errNotLeader
 	}
@@ -453,7 +457,7 @@ func (s *Server) Oracle(unused *api.Payload, server pb.Zero_OracleServer) error 
 	}
 }
 
-// SyncedUntil returns the index up to which all the nodes have synced.
+// SyncedUntil returns the timestamp up to which all the nodes have synced.
 func (s *Server) SyncedUntil() uint64 {
 	s.orc.Lock()
 	defer s.orc.Unlock()

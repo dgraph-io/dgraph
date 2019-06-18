@@ -375,7 +375,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 	return res, nil
 }
 
-// removeNode removes the given node in the given group.
+// removeNode removes the given node from the given group.
 // It's the user's responsibility to ensure that node doesn't come back again
 // before calling the api.
 func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) error {
