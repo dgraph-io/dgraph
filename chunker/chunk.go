@@ -37,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Chunker describes the interface to parse and process the input to the live and bulk loaders.
 type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
@@ -48,11 +49,15 @@ type rdfChunker struct{}
 type jsonChunker struct{}
 
 const (
+	// UnknownFormat is a constant to denote a format not supported by the bulk/live loaders.
 	UnknownFormat int = iota
+	// RdfFormat is a constant to denote the input to the live/bulk loader is in the RDF format.
 	RdfFormat
+	// JsonFormat is a constant to denote the input to the live/bulk loader is in the JSON format.
 	JsonFormat
 )
 
+// NewChunker returns a new chunker for the specified format.
 func NewChunker(inputFormat int) Chunker {
 	switch inputFormat {
 	case RdfFormat:
