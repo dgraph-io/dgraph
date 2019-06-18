@@ -48,9 +48,12 @@ type Chunker interface {
 type rdfChunker struct{}
 type jsonChunker struct{}
 
+// InputFormat represents the multiple formats supported by Chunker.
+type InputFormat byte
+
 const (
 	// UnknownFormat is a constant to denote a format not supported by the bulk/live loaders.
-	UnknownFormat int = iota
+	UnknownFormat InputFormat = iota
 	// RdfFormat is a constant to denote the input to the live/bulk loader is in the RDF format.
 	RdfFormat
 	// JsonFormat is a constant to denote the input to the live/bulk loader is in the JSON format.
@@ -58,7 +61,7 @@ const (
 )
 
 // NewChunker returns a new chunker for the specified format.
-func NewChunker(inputFormat int) Chunker {
+func NewChunker(inputFormat InputFormat) Chunker {
 	switch inputFormat {
 	case RdfFormat:
 		return &rdfChunker{}
@@ -334,7 +337,7 @@ func IsJSONData(r *bufio.Reader) (bool, error) {
 
 // DataFormat returns a file's data format (RDF, JSON, or unknown) based on the filename
 // or the user-provided format option. The file extension has precedence.
-func DataFormat(filename string, format string) int {
+func DataFormat(filename string, format string) InputFormat {
 	format = strings.ToLower(format)
 	filename = strings.TrimSuffix(strings.ToLower(filename), ".gz")
 	switch {
