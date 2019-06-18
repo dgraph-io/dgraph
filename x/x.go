@@ -388,7 +388,7 @@ func (b *BytesBuffer) Length() int {
 }
 
 // CopyTo copies the contents of the buffer to the given byte slice.
-// Caller should ensure that o is of appropriate length
+// Caller should ensure that o is of appropriate length.
 func (b *BytesBuffer) CopyTo(o []byte) int {
 	offset := 0
 	for i, d := range b.data {
@@ -404,7 +404,7 @@ func (b *BytesBuffer) CopyTo(o []byte) int {
 }
 
 // TruncateBy reduces the size of the bugger by the given amount.
-// Always give back <= touched bytes
+// Always give back <= touched bytes.
 func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 	b.sz -= n
