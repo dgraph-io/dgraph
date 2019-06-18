@@ -110,12 +110,20 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		req.SinceTs = 0
 	}
 
-	groups := worker.KnownGroups()
+	predState, err := worker.PredicateState()
+	if err != nil {
+		return errors.Wrapf(err, "cannot retrieve predicate state from zero")
+	}
+	var groups []uint32
+	for gid := range predState.Groups {
+		groups = append(groups, gid)
+	}
+
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error, len(groups))
+	errCh := make(chan error, len(predState.Groups))
 	for _, gid := range groups {
 		req := req
 		req.GroupId = gid
@@ -132,7 +140,17 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	m := backup.Manifest{Groups: groups, Since: req.ReadTs}
+	// Convert predState into a map for writing into the manifest.
+	manifestGroups := make(map[uint32][]string)
+	for gid, group := range predState.Groups {
+		var preds []string
+		for key := range group.Tablets {
+			preds = append(preds, key)
+		}
+		manifestGroups[gid] = preds
+	}
+
+	m := backup.Manifest{Since: req.ReadTs, Groups: manifestGroups}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)

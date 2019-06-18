@@ -712,3 +712,22 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 	}
 	return ms, nil
 }
+
+// PredicateState returns the group to predicate mapping.
+func (s *Server) PredicateState(ctx context.Context, req *pb.Empty) (*pb.MembershipState, error) {
+	s.RLock()
+	defer s.RUnlock()
+	memState := &pb.MembershipState{
+		Groups: make(map[uint32]*pb.Group),
+	}
+
+	for gid, group := range s.state.Groups {
+		memState.Groups[gid] = &pb.Group{}
+		for key, tab := range group.Tablets {
+			newTab := &pb.Tablet{}
+			newTab.Predicate = tab.Predicate
+			memState.Groups[gid].Tablets[key] = newTab
+		}
+	}
+	return memState, nil
+}
