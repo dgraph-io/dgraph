@@ -61,12 +61,11 @@ func main() {
 
 //gossamer is the main entrypoint into the gossamer system
 func gossamer(ctx *cli.Context) error {
-	srvlog := log.New(log.Ctx{"blockchain": "gossamer"})
 	g, err := makeNode(ctx)
 	if err != nil {
 		log.Error("error making node", "err", err)
 	}
-	srvlog.Info("🕸️ starting p2p service")
+	log.Info("🕸️ starting p2p service", "blockchain", "gossamer")
 	g.Server.Start()
 
 	return nil
