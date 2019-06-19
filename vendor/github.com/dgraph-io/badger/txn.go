@@ -318,8 +318,6 @@ func (txn *Txn) modify(e *Entry) error {
 		return ErrDiscardedTxn
 	case len(e.Key) == 0:
 		return ErrEmptyKey
-	case bytes.HasPrefix(e.Key, badgerPrefix):
-		return ErrInvalidKey
 	case len(e.Key) > maxKeySize:
 		// Key length can't be more than uint16, as determined by table::header.  To
 		// keep things safe and allow badger move prefix and a timestamp suffix, let's

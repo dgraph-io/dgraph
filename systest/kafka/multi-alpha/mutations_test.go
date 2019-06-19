@@ -9,6 +9,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/z"
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +49,7 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgsDst []*dgo.Dgraph) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, txn.Commit(ctx))
-	delay := 2 * time.Second
+	delay := 5 * time.Second
 
 	// sleep for 2 seconds for the replication to finish
 	time.Sleep(delay)
@@ -60,13 +61,14 @@ func NQuadMutationTest(t *testing.T, dgSrc *dgo.Dgraph, dgsDst []*dgo.Dgraph) {
 		}
 	}`
 
-	for _, dgDst := range dgsDst {
+	for idx, dgDst := range dgsDst {
+		glog.Infof("querying the %s host", dstAlphas[idx])
 		txn = dgDst.NewReadOnlyTxn().BestEffort()
 		resp, err := txn.Query(ctx, query)
 		require.NoError(t, err)
-		z.CompareJSON(t, `{ "q": [ {
+		require.True(t, z.CompareJSON(t, `{ "q": [ {
 		"name": "Michael"
-	}]}`, string(resp.Json))
+	}]}`, string(resp.Json)))
 	}
 
 	//delete data in the source cluster
