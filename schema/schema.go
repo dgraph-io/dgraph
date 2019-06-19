@@ -52,7 +52,7 @@ type state struct {
 	elog      trace.EventLog
 }
 
-// SateFor returns the schema for given group
+// State returns the struct holding the current schema.
 func State() *state {
 	return pstate
 }
@@ -300,11 +300,13 @@ func (s *state) HasLang(pred string) bool {
 	return false
 }
 
+// Init resets the schema state, setting the underlying DB to the given pointer.
 func Init(ps *badger.DB) {
 	pstore = ps
 	reset()
 }
 
+// Load reads the schema for the given predicate from the DB.
 func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
@@ -341,6 +343,7 @@ func LoadFromDb() error {
 	return LoadTypesFromDb()
 }
 
+// LoadSchemaFromDb iterates through the DB and loads all the stored schema updates.
 func LoadSchemaFromDb() error {
 	prefix := x.SchemaPrefix()
 	txn := pstore.NewTransactionAt(1, false)
@@ -375,6 +378,7 @@ func LoadSchemaFromDb() error {
 	return nil
 }
 
+// LoadTypesFromDb iterates through the DB and loads all the stored type updates.
 func LoadTypesFromDb() error {
 	prefix := x.TypePrefix()
 	txn := pstore.NewTransactionAt(1, false)
