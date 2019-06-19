@@ -112,10 +112,6 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-	glog.Infof("BEGIN_SRC")
-	glog.Infof("index key %s %s: %v", edge.Attr, token, key)
-	glog.Infof("END_SRC")
-
 	plist, err := txn.Get(key)
 	if err != nil {
 		return err

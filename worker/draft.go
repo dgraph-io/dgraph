@@ -767,6 +767,9 @@ func (n *node) Run() {
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
+				glog.Infof("BEGIN_SRC")
+				glog.Infof("got raft ready state: %v", rd.RaftState)
+				glog.Infof("END_SRC")
 				leaderNow := rd.RaftState == raft.StateLeader
 				if !leader && leaderNow {
 					onBecomeLeader()
@@ -976,7 +979,7 @@ func onBecomeLeader() {
 
 	membershipCb := func(state *pb.MembershipState) {
 		gr.applyState(state)
-		glog.V(1).Infof("applied state from kafka: %+v", state)
+		glog.V(2).Infof("applied state from kafka: %+v", state)
 	}
 	schemaCb := func(schema *pb.SchemaUpdate) {
 		updateSchema(schema)

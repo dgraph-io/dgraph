@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/Shopify/sarama"
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
@@ -166,7 +164,7 @@ func PublishMembershipState(state *pb.MembershipState) {
 		glog.Errorf("error while publishing membership state to kafka: %v", err)
 		return
 	}
-	glog.V(1).Infof("published membership state to kafka")
+	glog.V(2).Infof("published membership state to kafka: %+v", state)
 }
 
 // setupKafkaTarget will create a kafka producer and use it to send updates to
@@ -192,9 +190,6 @@ func SetupKafkaTarget() {
 			}
 
 			glog.V(1).Infof("produced a list with %d messages to kafka", len(list.Kv))
-			glog.Infof("BEGIN_SRC")
-			glog.Infof("produced %s", spew.Sdump(list))
-			glog.Infof("END_SRC")
 		}
 
 		go func() {

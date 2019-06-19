@@ -20,11 +20,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math"
-	"runtime/debug"
 	"strconv"
 	"sync/atomic"
-
-	"github.com/golang/glog"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -193,10 +190,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			return nil, errors.Errorf(
 				"Trying to read schema in ReadPostingList for key: %s", hex.Dump(key))
 		default:
-			glog.Infof("BEGIN_SRC")
-			glog.Infof("reading postling list with key: %+v", key)
-			debug.PrintStack()
-			glog.Infof("END_SRC")
 			return nil, errors.Errorf(
 				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
