@@ -501,13 +501,23 @@ message ExportRequest {
 
 // A key stored in the format used for writing backups.
 message BackupKey {
-  bytes byteType = 1;
+  enum KeyType {
+    UNKNOWN = 0;
+    DATA = 1;
+    INDEX = 2;
+    REVERSE = 3;
+    COUNT = 4;
+    COUNT_REV = 5;
+    SCHEMA = 6;
+    TYPE = 7;
+  }
+
+  KeyType type = 1;
   string attr = 2;
   uint64 uid = 3;
   uint64 start_uid = 4;
   string term = 5;
   uint32 count = 6;
-  bytes byte_prefix = 7;
 }
 
 // A posting list stored in the format used for writing backups.

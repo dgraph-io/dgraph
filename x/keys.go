@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
@@ -94,9 +93,9 @@ func SchemaKey(attr string) []byte {
 //
 // byte 0: key type prefix (set to byteType)
 // byte 1-2: length of typeName
-// next len(attr) bytes: value of typeName
-func TypeKey(typeName string) []byte {
-	return generateKey(byteType, typeName, 1+2+len(typeName))
+// next len(attr) bytes: value of attr (the type name)
+func TypeKey(attr string) []byte {
+	return generateKey(byteType, attr, 1+2+len(attr))
 }
 
 // DataKey generates a data key with the given attribute and UID.
@@ -240,10 +239,20 @@ func (p ParsedKey) IsReverse() bool {
 	return p.bytePrefix == DefaultPrefix && p.byteType == ByteReverse
 }
 
-// IsCount returns whether the key is a count key.
-func (p ParsedKey) IsCount() bool {
+// IsCountOrCountRev returns whether the key is a count or a count rev key.
+func (p ParsedKey) IsCountOrCountRev() bool {
 	return p.bytePrefix == DefaultPrefix && (p.byteType == ByteCount ||
 		p.byteType == ByteCountRev)
+}
+
+// IsCount returns whether the key is a count key.
+func (p ParsedKey) IsCount() bool {
+	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCount
+}
+
+// IsCountRev returns whether the key is a count rev key.
+func (p ParsedKey) IsCountRev() bool {
+	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCountRev
 }
 
 // IsIndex returns whether the key is an index key.
@@ -265,7 +274,7 @@ func (p ParsedKey) IsType() bool {
 func (p ParsedKey) IsOfType(typ byte) bool {
 	switch typ {
 	case ByteCount, ByteCountRev:
-		return p.IsCount()
+		return p.IsCountOrCountRev()
 	case ByteReverse:
 		return p.IsReverse()
 	case ByteIndex:
@@ -358,42 +367,59 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 // ToBackupKey returns the key in the format used for writing backups.
 func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 	key := pb.BackupKey{}
-	key.ByteType = []byte{p.byteType}
 	key.Attr = p.Attr
 	key.Uid = p.Uid
 	key.StartUid = p.StartUid
 	key.Term = p.Term
 	key.Count = p.Count
-	key.BytePrefix = []byte{p.bytePrefix}
+
+	switch {
+	case p.IsData():
+		key.Type = pb.BackupKey_DATA
+	case p.IsIndex():
+		key.Type = pb.BackupKey_INDEX
+	case p.IsReverse():
+		key.Type = pb.BackupKey_REVERSE
+	case p.IsCount():
+		key.Type = pb.BackupKey_COUNT
+	case p.IsCountRev():
+		key.Type = pb.BackupKey_COUNT_REV
+	case p.IsSchema():
+		key.Type = pb.BackupKey_SCHEMA
+	case p.IsType():
+		key.Type = pb.BackupKey_TYPE
+	}
 	return &key
 }
 
-// FromBackupKey takes a key in the format used for backups and converts it to a ParsedKey.
-func FromBackupKey(key *pb.BackupKey) (*ParsedKey, error) {
-	p := ParsedKey{}
-	if key == nil {
-		return &p, nil
+// FromBackupKey takes a key in the format used for backups and converts it to a key.
+func FromBackupKey(backupKey *pb.BackupKey) []byte {
+	if backupKey == nil {
+		return nil
 	}
 
-	if len(key.ByteType) != 1 {
-		return nil, errors.Errorf("ByteType must be of length 1 but is %d bytes long",
-			key.ByteType)
-	}
-	if len(key.BytePrefix) != 1 {
-		return nil, errors.Errorf("BytePrefix must be of length 1 but is %d bytes long",
-			key.BytePrefix)
+	var key []byte
+	switch backupKey.Type {
+	case pb.BackupKey_DATA:
+		key = DataKey(backupKey.Attr, backupKey.Uid)
+	case pb.BackupKey_INDEX:
+		key = IndexKey(backupKey.Attr, backupKey.Term)
+	case pb.BackupKey_REVERSE:
+		key = ReverseKey(backupKey.Attr, backupKey.Uid)
+	case pb.BackupKey_COUNT:
+		key = CountKey(backupKey.Attr, backupKey.Count, false)
+	case pb.BackupKey_COUNT_REV:
+		key = CountKey(backupKey.Attr, backupKey.Count, true)
+	case pb.BackupKey_SCHEMA:
+		key = SchemaKey(backupKey.Attr)
+	case pb.BackupKey_TYPE:
+		key = TypeKey(backupKey.Attr)
 	}
 
-	p.byteType = key.ByteType[0]
-	p.Attr = key.Attr
-	p.Uid = key.Uid
-	p.StartUid = key.StartUid
-	p.HasStartUid = p.StartUid > 0
-	p.Term = key.Term
-	p.Count = key.Count
-	p.bytePrefix = key.BytePrefix[0]
-
-	return &p, nil
+	if backupKey.StartUid > 0 {
+		key = GetSplitKey(key, backupKey.StartUid)
+	}
+	return key
 }
 
 // SchemaPrefix returns the prefix for Schema keys.
