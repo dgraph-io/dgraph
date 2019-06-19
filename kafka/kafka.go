@@ -50,17 +50,22 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 			glog.Errorf("error while unmarshaling from consumed message: %v", err)
 			return err
 		}
+		proposal := &pb.Proposal{}
 		if kafkaMsg.KvList != nil {
 			//consumeList(kafkaMsg.KvList)
-			cb.KvListCb(kafkaMsg.KvList)
+			proposal.Kv = kafkaMsg.KvList.Kv
 		}
 		if kafkaMsg.State != nil {
-			cb.MembershipCb(kafkaMsg.State)
+			proposal.State = kafkaMsg.State
 		}
 		if kafkaMsg.Schema != nil {
-			cb.SchemaCb(kafkaMsg.Schema)
+			proposal.Mutations = &pb.Mutations{
+				Schema: []*pb.SchemaUpdate{kafkaMsg.Schema},
+			}
 		}
-
+		if err := cb(proposal); err != nil {
+			glog.Errorf("error while calling callback for proposal: %+v", proposal)
+		}
 		// marking of the message must be done after the message has been permanently stored
 		// in badger. Otherwise marking a message prematurely may result in message loss
 		// if the server crashes right after the message is marked.
@@ -70,20 +75,12 @@ func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
 	return nil
 }
 
-type MembershipCb func(state *pb.MembershipState)
-type SchemaCb func(schema *pb.SchemaUpdate)
-type KvListCb func(list *bpb.KVList)
+type Callback func(proposal *pb.Proposal) error
 
-type Callback struct {
-	KvListCb     KvListCb
-	MembershipCb MembershipCb
-	SchemaCb     SchemaCb
-}
-
-var cb *Callback
+var cb Callback
 
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
-func SetupKafkaSource(c *Callback) {
+func SetupKafkaSource(c Callback) {
 	cb = c
 
 	sourceBrokers := Config.SourceBrokers

@@ -961,35 +961,24 @@ func (n *node) Run() {
 	}
 }
 
-func kvListCb(list *bpb.KVList) {
+func kafkaMsgCb(proposal *pb.Proposal) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	proposal := &pb.Proposal{Kv: list.Kv}
 	n := groups().Node
 	if err := n.proposeAndWait(ctx, proposal); err != nil {
 		glog.Errorf("error while proposing kv list from kafka: %v", err)
+		return err
 	}
-	glog.V(1).Infof("proposed kv list from kafka: %+v", list)
+	glog.V(1).Infof("proposed info from kafka: %+v", proposal)
+	return nil
 }
 
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
 	kafka.SetupKafkaTarget()
 
-	membershipCb := func(state *pb.MembershipState) {
-		gr.applyState(state)
-		glog.V(2).Infof("applied state from kafka: %+v", state)
-	}
-	schemaCb := func(schema *pb.SchemaUpdate) {
-		updateSchema(schema)
-		glog.V(1).Infof("applied schema from kafka: %+v", schema)
-	}
-	kafka.SetupKafkaSource(&kafka.Callback{
-		KvListCb:     kvListCb,
-		MembershipCb: membershipCb,
-		SchemaCb:     schemaCb,
-	})
+	kafka.SetupKafkaSource(kafkaMsgCb)
 }
 
 func onBecomeFollower() {
