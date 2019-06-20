@@ -634,6 +634,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	return err
 }
 
+// ExportOverNetwork sends export requests to all the known groups.
 func ExportOverNetwork(ctx context.Context, format string) error {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
