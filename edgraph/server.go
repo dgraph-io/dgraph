@@ -485,7 +485,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	if err != nil {
 		return resp, err
 	}
-	parsingTime += time.Now().Sub(startParsingTime)
+	parsingTime += time.Since(startParsingTime)
 
 	if authorize {
 		if err := authorizeMutation(ctx, gmu); err != nil {
@@ -572,7 +572,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	return resp, nil
 }
 
-// doQueryInUpsert processes the query in upsert block
+// doQueryInUpsert processes the query in upsert block.
 func doQueryInUpsert(ctx context.Context, startTs uint64, gmu *gql.Mutation,
 	queryText string) (time.Duration, error) {
 
@@ -670,7 +670,7 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string]string) {
 		return s
 	}
 
-	// Remove the mutations from gmu.Del when no UID was found
+	// Remove the mutations from gmu.Del when no UID was found.
 	gmuDel := make([]*api.NQuad, 0, len(gmu.Del))
 	for _, nq := range gmu.Del {
 		nq.Subject = getNewVal(nq.Subject)
@@ -684,7 +684,7 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string]string) {
 	}
 	gmu.Del = gmuDel
 
-	// update the values in mutation block from the query block.
+	// Update the values in mutation block from the query block.
 	for _, nq := range gmu.Set {
 		nq.Subject = getNewVal(nq.Subject)
 		nq.ObjectId = getNewVal(nq.ObjectId)
