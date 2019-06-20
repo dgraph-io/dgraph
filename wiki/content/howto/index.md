@@ -660,6 +660,12 @@ in the `Assigned` object returned from the mutation.
    modify the account (using additional mutations) or perform queries on it in
 whichever way you wish.
 
+### Upsert Block
+
+We can use the `Upsert Block` to achieve the upsert procedure in single mutation.
+The request will contain both the query and the mutation as explained
+[here]({{< relref "mutations/index.md#upsert-block" >}}).
+
 ### Conflicts
 
 Upsert operations are intended to be run concurrently, as per the needs of the

@@ -798,8 +798,10 @@ upsert {
 The Mutation block currently only allows the `uid` function, which allows extracting UIDs
 from variables defined in the query block. There are 3 possible outcomes based on the
 results of executing the query block:
-  * If the variable is empty i.e. has no value, the `uid` function returns a new UID and
-  is treated similar to a blank node.
+
+  * If the variable is empty i.e. has no value, the `uid` function returns a new UID in
+  case of `set` and is treated similar to a blank node. In case of `delete/del`, it
+  returns no UID. Hence, the operation becomes a no-op and is silently ignored.
   * If the variable stores exactly one UID, the `uid` function returns the uid stored in
   the variable.
   * If the variable stores more than one UID, the mutation fails. We plan to support
@@ -822,6 +824,7 @@ curl localhost:8080/alter -X POST -d $'
 
 Now, let's say we want to create a new user with `email`, and `name` information.
 We also want to make sure that two users cannot have same email id in the database.
+
 We can do this using the Upsert block as follows:
 
 ```sh
