@@ -98,7 +98,7 @@ func TestFilterManifestMissingBackup(t *testing.T) {
 			BackupNum: 3,
 		},
 	}
-	manifests, err := filterManifests(manifests, "aa")
+	_, err := filterManifests(manifests, "aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "found a manifest with backup number")
 }
@@ -116,7 +116,7 @@ func TestFilterManifestMissingFirstBackup(t *testing.T) {
 			BackupNum: 3,
 		},
 	}
-	manifests, err := filterManifests(manifests, "aa")
+	_, err := filterManifests(manifests, "aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expected a BackupNum value of 1 for first manifest")
 }
@@ -134,7 +134,7 @@ func TestFilterManifestDifferentSeries(t *testing.T) {
 			BackupNum: 2,
 		},
 	}
-	manifests, err := filterManifests(manifests, "")
+	_, err := filterManifests(manifests, "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "found a manifest with backup ID")
 }

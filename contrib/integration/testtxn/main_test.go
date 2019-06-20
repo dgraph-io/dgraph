@@ -831,6 +831,7 @@ func TestCountIndexSameTxn(t *testing.T) {
 	txn1 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
+	x.Check(err)
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
 	x.Check(err)
