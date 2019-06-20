@@ -976,9 +976,10 @@ func kafkaMsgCb(proposal *pb.Proposal) error {
 
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
-	kafka.SetupKafkaTarget()
+	groupId := int32(groups().groupId())
+	kafka.SetupKafkaTarget(groupId)
 
-	kafka.SetupKafkaSource(kafkaMsgCb)
+	kafka.SetupKafkaSource(kafkaMsgCb, groupId)
 }
 
 func onBecomeFollower() {

@@ -13,98 +13,94 @@ import (
 	"golang.org/x/net/context"
 )
 
+type Callback func(proposal *pb.Proposal) error
+type state struct {
+	partition int32 // the same partition number that is used for producing and consuming messages
+}
+type Cancel func()
+
 var pstore *badger.DB
+var cb Callback
+var s state
+var producer sarama.SyncProducer
 
 const (
-	kafkaTopic = "dgraph"
-	kafkaGroup = "dgraph"
+	dgraphTopic = "dgraph"
+	dgraphGroup = "dgraph-consumer-group"
 )
 
 func Init(db *badger.DB) {
 	pstore = db
 }
 
-// Consumer represents a Sarama consumer group consumer
-type Consumer struct {
-	ready chan bool
-}
-
-// Setup is run at the beginning of a new session, before ConsumeClaim
-func (consumer *Consumer) Setup(sarama.ConsumerGroupSession) error {
-	// Mark the consumer as ready
-	close(consumer.ready)
-	return nil
-}
-
-// Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
-func (consumer *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
-func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession,
-	claim sarama.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		kafkaMsg := &pb.KafkaMsg{}
-		if err := kafkaMsg.Unmarshal(message.Value); err != nil {
-			glog.Errorf("error while unmarshaling from consumed message: %v", err)
-			return err
-		}
-		proposal := &pb.Proposal{}
-		if kafkaMsg.KvList != nil {
-			//consumeList(kafkaMsg.KvList)
-			proposal.Kv = kafkaMsg.KvList.Kv
-		}
-		if kafkaMsg.State != nil {
-			proposal.State = kafkaMsg.State
-		}
-		if kafkaMsg.Schema != nil {
-			proposal.Mutations = &pb.Mutations{
-				Schema: []*pb.SchemaUpdate{kafkaMsg.Schema},
-			}
-		}
-		if err := cb(proposal); err != nil {
-			glog.Errorf("error while calling callback for proposal: %+v", proposal)
-		}
-		// marking of the message must be done after the message has been permanently stored
-		// in badger. Otherwise marking a message prematurely may result in message loss
-		// if the server crashes right after the message is marked.
-		session.MarkMessage(message, "")
+func consumeMsg(pom sarama.PartitionOffsetManager, message *sarama.ConsumerMessage) error {
+	kafkaMsg := &pb.KafkaMsg{}
+	if err := kafkaMsg.Unmarshal(message.Value); err != nil {
+		return fmt.Errorf("error while unmarshaling from consumed message: %v", err)
 	}
-
+	proposal := &pb.Proposal{}
+	if kafkaMsg.KvList != nil {
+		//consumeList(kafkaMsg.KvList)
+		proposal.Kv = kafkaMsg.KvList.Kv
+	}
+	if kafkaMsg.State != nil {
+		proposal.State = kafkaMsg.State
+	}
+	if kafkaMsg.Schema != nil {
+		proposal.Mutations = &pb.Mutations{
+			Schema: []*pb.SchemaUpdate{kafkaMsg.Schema},
+		}
+	}
+	if err := cb(proposal); err != nil {
+		return fmt.Errorf("error while calling callback for proposal: %+v", proposal)
+	}
+	// Marking of the message must be done after the message has been securely processed.
+	// Otherwise marking a message prematurely may result in message loss
+	// if the server crashes right after the message is marked.
+	pom.MarkOffset(message.Offset+1, "")
 	return nil
 }
-
-type Callback func(proposal *pb.Proposal) error
-
-var cb Callback
 
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
-func SetupKafkaSource(c Callback) {
+func SetupKafkaSource(c Callback, partition int32) {
 	cb = c
+	s.partition = partition
 
 	sourceBrokers := Config.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
 	if len(sourceBrokers) > 0 {
+		pom, cancelPom, err := getPOM(sourceBrokers)
+		if err != nil {
+			glog.Errorf("error while getting the partition offset manager: %v", err)
+			return
+		}
+
 		client, err := getKafkaConsumer(sourceBrokers)
 		if err != nil {
 			glog.Errorf("unable to get kafka consumer and will not receive updates: %v", err)
 			return
 		}
 
-		consumer := Consumer{
-			ready: make(chan bool),
+		var partConsumer sarama.PartitionConsumer
+
+		nextOffset, _ := pom.NextOffset()
+		partConsumer, err = client.ConsumePartition(dgraphTopic, s.partition, nextOffset)
+		if err != nil {
+			glog.Errorf("error while consuming from kafka: %v", err)
+			return
 		}
+
 		go func() {
-			for {
-				err := client.Consume(context.Background(), []string{kafkaTopic}, &consumer)
-				if err != nil {
-					glog.Errorf("error while consuming from kafka: %v", err)
+			for msg := range partConsumer.Messages() {
+				if err := consumeMsg(pom, msg); err != nil {
+					glog.Errorf("error while handling kafka msg: %v", err)
 				}
 			}
+
+			glog.V(1).Infof("closing the kafka offset manager")
+			cancelPom()
 		}()
 
-		<-consumer.ready // Await till the consumer has been set up
 		glog.Info("kafka consumer up and running")
 	}
 }
@@ -112,14 +108,15 @@ func SetupKafkaSource(c Callback) {
 // getKafkaConsumer tries to create a consumer by connecting to Kafka at the specified brokers.
 // If an error errors while creating the consumer, this function will wait and retry up to 10 times
 // before giving up and returning an error
-func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
+func getKafkaConsumer(sourceBrokers string) (sarama.Consumer, error) {
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_2_0_0
 
-	var client sarama.ConsumerGroup
+	addrs := strings.Split(sourceBrokers, ",")
+	var consumer sarama.Consumer
 	var err error
 	for i := 0; i < 10; i++ {
-		client, err = sarama.NewConsumerGroup(strings.Split(sourceBrokers, ","), kafkaGroup, config)
+		consumer, err = sarama.NewConsumer(addrs, config)
 		if err == nil {
 			break
 		} else {
@@ -128,10 +125,27 @@ func getKafkaConsumer(sourceBrokers string) (sarama.ConsumerGroup, error) {
 			time.Sleep(5 * time.Second)
 		}
 	}
-	return client, err
+
+	return consumer, err
 }
 
-var producer sarama.SyncProducer
+func getPOM(sourceBrokers string) (sarama.PartitionOffsetManager, Cancel, error) {
+	addrs := strings.Split(sourceBrokers, ",")
+	client, err := sarama.NewClient(addrs, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	om, err := sarama.NewOffsetManagerFromClient(dgraphGroup, client)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pom, err := om.ManagePartition(dgraphTopic, s.partition)
+	return pom, func() {
+		client.Close()
+	}, nil
+}
 
 func PublishSchema(s *pb.SchemaUpdate) {
 	if producer == nil {
@@ -165,11 +179,14 @@ func PublishMembershipState(state *pb.MembershipState) {
 }
 
 // setupKafkaTarget will create a kafka producer and use it to send updates to
-// the kafka cluster
-func SetupKafkaTarget() {
+// the kafka cluster. The partition argument specifies which kafka partition will
+// be used for the current raft group.
+func SetupKafkaTarget(partition int32) {
 	targetBrokers := Config.TargetBrokers
 	glog.Infof("target kafka brokers: %v", targetBrokers)
 	if len(targetBrokers) > 0 {
+		s.partition = partition
+
 		var err error
 		producer, err = getKafkaProducer(targetBrokers)
 		if err != nil {
@@ -207,8 +224,9 @@ func produceMsg(msg *pb.KafkaMsg) error {
 		return fmt.Errorf("unable to marshal the kv list: %v", err)
 	}
 	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
-		Topic: kafkaTopic,
-		Value: sarama.ByteEncoder(msgBytes),
+		Topic:     dgraphTopic,
+		Partition: s.partition,
+		Value:     sarama.ByteEncoder(msgBytes),
 	})
 	return err
 }
