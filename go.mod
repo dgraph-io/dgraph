@@ -13,6 +13,11 @@ require (
 	github.com/ipfs/go-datastore v0.0.2
 	github.com/ipfs/go-ipfs v0.4.19-rc2.0.20190328185617-7aab3c29f9d4
 	github.com/ipfs/go-ipfs-config v0.0.1
+	github.com/kisielk/errcheck v1.2.0 // indirect
+	github.com/klauspost/compress v1.7.1 // indirect
+	github.com/klauspost/cpuid v1.2.1 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
+	github.com/kr/pty v1.1.5 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/libp2p/go-libp2p v0.0.3
 	github.com/libp2p/go-libp2p-crypto v0.0.1
