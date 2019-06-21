@@ -24,7 +24,7 @@ import (
 
 var (
 	// TrueVal is the pb.TaskValue value equivalent to the "true" boolean.
-	TrueVal  = FromBool(true)
+	TrueVal = FromBool(true)
 	// FalseVal is the pb.TaskValue value equivalent to the "false" boolean.
 	FalseVal = FromBool(false)
 )
