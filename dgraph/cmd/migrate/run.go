@@ -29,7 +29,8 @@ import (
 )
 
 var (
-	logger  = log.New(os.Stderr, "", 0)
+	logger = log.New(os.Stderr, "", 0)
+	// Migrate is the sub-command invoked when running "dgraph migrate".
 	Migrate x.SubCommand
 	quiet   bool // enabling quiet mode would suppress the warning logs
 )
