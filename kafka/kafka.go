@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/badger/y"
+
 	"github.com/Shopify/sarama"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
@@ -17,6 +19,7 @@ type state struct {
 type Cancel func()
 
 var cb Callback
+var consumerCloser *y.Closer
 var s state
 var producer sarama.SyncProducer
 
@@ -80,7 +83,7 @@ func waitForPartitionCount(brokers []string, partition int32) error {
 		expectedPartitionCount)
 }
 
-// setupKafkaSource will create a kafka consumer and and use it to receive updates
+// SetupKafkaSource will create a kafka consumer and and use it to receive updates
 func SetupKafkaSource(c Callback, partition int32) {
 	cb = c
 	s.partition = partition
@@ -121,19 +124,34 @@ func SetupKafkaSource(c Callback, partition int32) {
 			}
 			glog.Info("kafka consumer up and running")
 
-			for msg := range partConsumer.Messages() {
-				if err := consumeMsg(pom, msg); err != nil {
-					glog.Errorf("error while handling kafka msg: %v", err)
+			consumerCloser = y.NewCloser(1)
+			for {
+				select {
+				case <-consumerCloser.HasBeenClosed():
+					consumerCloser.Done()
+					consumerCloser = nil
+					return
+				case msg := <-partConsumer.Messages():
+					if err := consumeMsg(pom, msg); err != nil {
+						glog.Errorf("error while handling kafka msg: %v", err)
+					}
 				}
 			}
-
-			glog.V(1).Infof("closing the kafka offset manager")
 		}
 
 		// since setting up the kafka producer may involve blocking and waiting
 		// we run the logic inside a separate go routine to avoid blocking the raft main loop
 		// for too long
 		go internalSetup()
+	}
+}
+
+// CancelKafkaSource will send a signal to the consumer loop and terminate message consuming from
+// Kafka
+func CancleKafkaSource() {
+	if consumerCloser != nil {
+		consumerCloser.SignalAndWait()
+		glog.Infof("cancelled message consuming from kafka")
 	}
 }
 
@@ -181,7 +199,7 @@ func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
 	}, nil
 }
 
-// setupKafkaTarget will create a kafka producer and use it to send updates to
+// SetupKafkaTarget will create a kafka producer and use it to send updates to
 // the kafka cluster. The partition argument specifies which kafka partition will
 // be used for the current raft group.
 func SetupKafkaTarget(partition int32) {
@@ -212,6 +230,12 @@ func SetupKafkaTarget(partition int32) {
 		// for too long
 		go internalSetup()
 	}
+}
+
+// CancelKafkaTarget will invalidate the producer, and hence disable sending more messages to Kafka
+func CancelKafkaTarget() {
+	producer = nil
+	glog.Infof("cancelled message producing to kafka")
 }
 
 func PublishMsg(proposal *pb.Proposal) {

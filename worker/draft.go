@@ -979,6 +979,8 @@ func onBecomeLeader() {
 
 func onBecomeFollower() {
 	glog.Infof("onBecomeFollower")
+	kafka.CancleKafkaSource()
+	kafka.CancelKafkaTarget()
 }
 
 func listWrap(kv *bpb.KV) *bpb.KVList {
