@@ -68,7 +68,8 @@ type options struct {
 var (
 	opt    options
 	tlsCfg *tls.Config
-	Live   x.SubCommand
+	// Live is the sub-command invoked when running "dgraph live".
+	Live x.SubCommand
 )
 
 func init() {

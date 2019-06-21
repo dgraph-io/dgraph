@@ -67,9 +67,10 @@ var (
 
 	// used for computing uptime
 	beginTime = time.Now()
-)
 
-var Alpha x.SubCommand
+	// Alpha is the sub-command invoked when running "dgraph alpha".
+	Alpha x.SubCommand
+)
 
 func init() {
 	Alpha.Cmd = &cobra.Command{

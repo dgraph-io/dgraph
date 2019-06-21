@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Conv is the sub-command invoked when running "dgraph conv".
 var Conv x.SubCommand
 
 var opt struct {
