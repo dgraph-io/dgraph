@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
 )
@@ -17,7 +16,6 @@ type state struct {
 }
 type Cancel func()
 
-var pstore *badger.DB
 var cb Callback
 var s state
 var producer sarama.SyncProducer
@@ -26,10 +24,6 @@ const (
 	dgraphTopic = "dgraph"
 	dgraphGroup = "dgraph-consumer-group"
 )
-
-func Init(db *badger.DB) {
-	pstore = db
-}
 
 func consumeMsg(pom sarama.PartitionOffsetManager, message *sarama.ConsumerMessage) error {
 	proposal := &pb.Proposal{}
@@ -63,7 +57,7 @@ func waitForPartitionCount(brokers []string, partition int32) error {
 		return fmt.Errorf("error while creating cluster admin: %v", err)
 	}
 
-	expectedPartititionCount := int(partition + 1)
+	expectedPartitionCount := int(partition + 1)
 
 	for i := 0; i < 20; i++ {
 		topics, err := admin.DescribeTopics([]string{dgraphTopic})
@@ -74,16 +68,16 @@ func waitForPartitionCount(brokers []string, partition int32) error {
 			return fmt.Errorf("topic metadata not found")
 		}
 
-		if len(topics[0].Partitions) >= expectedPartititionCount {
+		if len(topics[0].Partitions) >= expectedPartitionCount {
 			return nil
 		}
 
 		glog.Warningf("current partition count %d, waiting for it to reach %d",
-			len(topics[0].Partitions), expectedPartititionCount)
+			len(topics[0].Partitions), expectedPartitionCount)
 		time.Sleep(1 * time.Second)
 	}
 	return fmt.Errorf("unable to meet the expected partition count %d",
-		expectedPartititionCount)
+		expectedPartitionCount)
 }
 
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
@@ -107,6 +101,7 @@ func SetupKafkaSource(c Callback, partition int32) {
 				glog.Errorf("error while getting the partition offset manager: %v", err)
 				return
 			}
+			defer cancelPom()
 
 			client, err := getKafkaConsumer(brokers)
 			if err != nil {
@@ -114,11 +109,10 @@ func SetupKafkaSource(c Callback, partition int32) {
 				return
 			}
 
-			var partConsumer sarama.PartitionConsumer
-
 			nextOffset, _ := pom.NextOffset()
 			glog.V(1).Infof("setting next offset to %d", nextOffset)
 
+			var partConsumer sarama.PartitionConsumer
 			partConsumer, err = client.ConsumePartition(dgraphTopic, s.partition, nextOffset)
 			if err != nil {
 				glog.Errorf("error while consuming from partition %s-%d: %v",
@@ -134,7 +128,6 @@ func SetupKafkaSource(c Callback, partition int32) {
 			}
 
 			glog.V(1).Infof("closing the kafka offset manager")
-			cancelPom()
 		}
 
 		// since setting up the kafka producer may involve blocking and waiting
@@ -156,7 +149,7 @@ func getKafkaConsumer(brokers []string) (sarama.Consumer, error) {
 	for i := 0; i < 10; i++ {
 		consumer, err = sarama.NewConsumer(brokers, config)
 		if err == nil {
-			break
+			return consumer, nil
 		} else {
 			glog.Errorf("unable to create the kafka consumer, "+
 				"will retry in 5 seconds: %v", err)
@@ -164,7 +157,7 @@ func getKafkaConsumer(brokers []string) (sarama.Consumer, error) {
 		}
 	}
 
-	return consumer, err
+	return nil, fmt.Errorf("unable to get consumer after retries")
 }
 
 func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
@@ -211,7 +204,6 @@ func SetupKafkaTarget(partition int32) {
 				return
 			}
 
-			//glog.V(1).Infof("subscribed to the pstore for updates")
 			glog.V(1).Infof("created kafka producer")
 		}
 
@@ -258,12 +250,12 @@ func getKafkaProducer(brokers []string) (sarama.SyncProducer, error) {
 	for i := 0; i < 10; i++ {
 		producer, err = sarama.NewSyncProducer(brokers, conf)
 		if err == nil {
-			break
+			return producer, nil
 		} else {
 			glog.Errorf("unable to create the kafka sync producer, "+
 				"will retry in 5 seconds: %v", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
-	return producer, err
+	return nil, fmt.Errorf("unable to get producer after retries")
 }

@@ -763,9 +763,6 @@ func (n *node) Run() {
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
-				glog.Infof("BEGIN_SRC")
-				glog.Infof("got raft ready state: %v", rd.RaftState)
-				glog.Infof("END_SRC")
 				leaderNow := rd.RaftState == raft.StateLeader
 				if !leader && leaderNow {
 					onBecomeLeader()
@@ -966,8 +963,7 @@ func kafkaMsgCb(proposal *pb.Proposal) error {
 		glog.V(1).Infof("got proposal from kafka: %+v", proposal)
 	}
 
-	n := groups().Node
-	if err := n.proposeAndWait(ctx, proposal); err != nil {
+	if err := groups().Node.proposeAndWait(ctx, proposal); err != nil {
 		return fmt.Errorf("error while waiting for proposal from kafka %+v: %v", proposal, err)
 	}
 	return nil

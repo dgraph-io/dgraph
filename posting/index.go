@@ -112,6 +112,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
+
 	plist, err := txn.Get(key)
 	if err != nil {
 		return err
