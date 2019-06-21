@@ -55,7 +55,8 @@ func (txn *Txn) addConflictKey(conflictKey string) {
 	}
 }
 
-func (txn *Txn) Fill(ctx *api.TxnContext, gid uint32) {
+// FillContext updates the given transaction context with data from this transaction.
+func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 	txn.Lock()
 	ctx.StartTs = txn.StartTs
 	for key := range txn.conflicts {

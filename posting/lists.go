@@ -162,16 +162,8 @@ func Cleanup() {
 	closer.SignalAndWait()
 }
 
-// Get stores the List corresponding to key, if it's not there already.
-// to lru cache and returns it.
-//
-// plist := Get(key, group)
-// ... Use plist
-// TODO: This should take a node id and index. And just append all indices to a list.
-// When doing a commit, it should update all the sync index watermarks.
-// worker pkg would push the indices to the watermarks held by lists.
-// And watermark stuff would have to be located outside worker pkg, maybe in x.
-// That way, we don't have a dependency conflict.
+// GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
+// It does not store the list in any cache.
 func GetNoStore(key []byte) (rlist *List, err error) {
 	return getNew(key, pstore)
 }
