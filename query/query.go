@@ -212,10 +212,12 @@ func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
 	}
 }
 
+// IsGroupBy returns whether this subgraph is part of a groupBy query.
 func (sg *SubGraph) IsGroupBy() bool {
 	return sg.Params.isGroupBy
 }
 
+// IsInternal returns whether this subgraph is marked as internal.
 func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.isInternal
 }
@@ -2543,6 +2545,7 @@ func getReversePredicates(ctx context.Context, preds []string) ([]string, error)
 	return rpreds, nil
 }
 
+// GetAllPredicates returns the list of all the unique predicates present in the list of subgraphs.
 func GetAllPredicates(subGraphs []*SubGraph) []string {
 	predicatesMap := make(map[string]struct{})
 	for _, sg := range subGraphs {
