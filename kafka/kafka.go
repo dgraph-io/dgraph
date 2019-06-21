@@ -7,10 +7,8 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/dgraph-io/badger"
-	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 )
 
 type Callback func(proposal *pb.Proposal) error
@@ -34,25 +32,12 @@ func Init(db *badger.DB) {
 }
 
 func consumeMsg(pom sarama.PartitionOffsetManager, message *sarama.ConsumerMessage) error {
-	kafkaMsg := &pb.KafkaMsg{}
-	if err := kafkaMsg.Unmarshal(message.Value); err != nil {
+	proposal := &pb.Proposal{}
+	if err := proposal.Unmarshal(message.Value); err != nil {
 		return fmt.Errorf("error while unmarshaling from consumed message: %v", err)
 	}
-	proposal := &pb.Proposal{}
-	if kafkaMsg.KvList != nil {
-		//consumeList(kafkaMsg.KvList)
-		proposal.Kv = kafkaMsg.KvList.Kv
-	}
-	if kafkaMsg.State != nil {
-		proposal.State = kafkaMsg.State
-	}
-	if kafkaMsg.Schema != nil {
-		proposal.Mutations = &pb.Mutations{
-			Schema: []*pb.SchemaUpdate{kafkaMsg.Schema},
-		}
-	}
 	if err := cb(proposal); err != nil {
-		return fmt.Errorf("error while calling callback for proposal: %+v", proposal)
+		return err
 	}
 	// Marking of the message must be done after the message has been securely processed.
 	// Otherwise marking a message prematurely may result in message loss
@@ -66,7 +51,7 @@ func waitForPartitionCount(brokers []string, partition int32) error {
 	config.Version = sarama.V2_2_0_0
 	var admin sarama.ClusterAdmin
 	var err error
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		admin, err = sarama.NewClusterAdmin(brokers, config)
 		if err == nil {
 			break
@@ -80,7 +65,7 @@ func waitForPartitionCount(brokers []string, partition int32) error {
 
 	expectedPartititionCount := int(partition + 1)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		topics, err := admin.DescribeTopics([]string{dgraphTopic})
 		if err != nil {
 			return fmt.Errorf("error while describing topic: %v", err)
@@ -110,34 +95,38 @@ func SetupKafkaSource(c Callback, partition int32) {
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
 	if len(sourceBrokers) > 0 {
 		brokers := strings.Split(sourceBrokers, ",")
-		if err := waitForPartitionCount(brokers, partition); err != nil {
-			glog.Errorf("error while waiting for partition count: %v", err)
-			return
-		}
 
-		pom, cancelPom, err := getPOM(brokers)
-		if err != nil {
-			glog.Errorf("error while getting the partition offset manager: %v", err)
-			return
-		}
+		internalSetup := func() {
+			if err := waitForPartitionCount(brokers, partition); err != nil {
+				glog.Errorf("error while waiting for partition count: %v", err)
+				return
+			}
 
-		client, err := getKafkaConsumer(brokers)
-		if err != nil {
-			glog.Errorf("unable to get kafka consumer and will not receive updates: %v", err)
-			return
-		}
+			pom, cancelPom, err := getPOM(brokers)
+			if err != nil {
+				glog.Errorf("error while getting the partition offset manager: %v", err)
+				return
+			}
 
-		var partConsumer sarama.PartitionConsumer
+			client, err := getKafkaConsumer(brokers)
+			if err != nil {
+				glog.Errorf("unable to get kafka consumer and will not receive updates: %v", err)
+				return
+			}
 
-		nextOffset, _ := pom.NextOffset()
-		partConsumer, err = client.ConsumePartition(dgraphTopic, s.partition, nextOffset)
-		if err != nil {
-			glog.Errorf("error while consuming from partition %s-%d: %v",
-				dgraphTopic, s.partition, err)
-			return
-		}
+			var partConsumer sarama.PartitionConsumer
 
-		go func() {
+			nextOffset, _ := pom.NextOffset()
+			glog.V(1).Infof("setting next offset to %d", nextOffset)
+
+			partConsumer, err = client.ConsumePartition(dgraphTopic, s.partition, nextOffset)
+			if err != nil {
+				glog.Errorf("error while consuming from partition %s-%d: %v",
+					dgraphTopic, s.partition, err)
+				return
+			}
+			glog.Info("kafka consumer up and running")
+
 			for msg := range partConsumer.Messages() {
 				if err := consumeMsg(pom, msg); err != nil {
 					glog.Errorf("error while handling kafka msg: %v", err)
@@ -146,9 +135,12 @@ func SetupKafkaSource(c Callback, partition int32) {
 
 			glog.V(1).Infof("closing the kafka offset manager")
 			cancelPom()
-		}()
+		}
 
-		glog.Info("kafka consumer up and running")
+		// since setting up the kafka producer may involve blocking and waiting
+		// we run the logic inside a separate go routine to avoid blocking the raft main loop
+		// for too long
+		go internalSetup()
 	}
 }
 
@@ -176,7 +168,10 @@ func getKafkaConsumer(brokers []string) (sarama.Consumer, error) {
 }
 
 func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
-	client, err := sarama.NewClient(brokers, nil)
+	config := sarama.NewConfig()
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+
+	client, err := sarama.NewClient(brokers, config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error while creating client: %v", err)
 	}
@@ -193,37 +188,6 @@ func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
 	}, nil
 }
 
-func PublishSchema(s *pb.SchemaUpdate) {
-	if producer == nil {
-		return
-	}
-
-	msg := &pb.KafkaMsg{
-		Schema: s,
-	}
-	if err := produceMsg(msg); err != nil {
-		glog.Errorf("error while publishing schema update to kafka: %v", err)
-		return
-	}
-
-	glog.V(1).Infof("published schema update to kafka")
-}
-
-func PublishMembershipState(state *pb.MembershipState) {
-	if producer == nil {
-		return
-	}
-
-	msg := &pb.KafkaMsg{
-		State: state,
-	}
-	if err := produceMsg(msg); err != nil {
-		glog.Errorf("error while publishing membership state to kafka: %v", err)
-		return
-	}
-	glog.V(2).Infof("published membership state to kafka: %+v", state)
-}
-
 // setupKafkaTarget will create a kafka producer and use it to send updates to
 // the kafka cluster. The partition argument specifies which kafka partition will
 // be used for the current raft group.
@@ -233,53 +197,52 @@ func SetupKafkaTarget(partition int32) {
 	glog.Infof("target kafka brokers: %v", targetBrokers)
 	if len(targetBrokers) > 0 {
 		brokers := strings.Split(targetBrokers, ",")
-		if err := waitForPartitionCount(brokers, partition); err != nil {
-			glog.Errorf("error while waiting for partition count: %v", err)
-			return
-		}
 
-		var err error
-		producer, err = getKafkaProducer(brokers)
-		if err != nil {
-			glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
-			return
-		}
-
-		cb := func(list *bpb.KVList) {
-			kafkaMsg := &pb.KafkaMsg{
-				KvList: list,
-			}
-			if err := produceMsg(kafkaMsg); err != nil {
-				glog.Errorf("error while producing to Kafka: %v", err)
+		internalSetup := func() {
+			if err := waitForPartitionCount(brokers, partition); err != nil {
+				glog.Errorf("error while waiting for partition count: %v", err)
 				return
 			}
 
-			glog.V(1).Infof("produced a list with %d messages to kafka", len(list.Kv))
+			var err error
+			producer, err = getKafkaProducer(brokers)
+			if err != nil {
+				glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
+				return
+			}
+
+			//glog.V(1).Infof("subscribed to the pstore for updates")
+			glog.V(1).Infof("created kafka producer")
 		}
 
-		go func() {
-			// The Subscribe will go into an infinite loop,
-			// hence we need to run it inside a separate go routine
-			if err := pstore.Subscribe(context.Background(), cb, nil); err != nil {
-				glog.Errorf("error while subscribing to the pstore: %v", err)
-			}
-		}()
-
-		glog.V(1).Infof("subscribed to the pstore for updates")
+		// since setting up the kafka producer may involve blocking and waiting
+		// we run the logic inside a separate go routine to avoid blocking the raft main loop
+		// for too long
+		go internalSetup()
 	}
 }
 
-func produceMsg(msg *pb.KafkaMsg) error {
-	msgBytes, err := msg.Marshal()
+func PublishMsg(proposal *pb.Proposal) {
+	if producer == nil {
+		return
+	}
+
+	msgBytes, err := proposal.Marshal()
 	if err != nil {
-		return fmt.Errorf("unable to marshal the kv list: %v", err)
+		glog.Errorf("unable to marshal the kv list: %v", err)
+		return
 	}
 	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     dgraphTopic,
 		Partition: s.partition,
 		Value:     sarama.ByteEncoder(msgBytes),
 	})
-	return err
+	if err != nil {
+		glog.Errorf("error while publishing msg to kafka: %v", err)
+		return
+	}
+
+	glog.V(1).Infof("published proposal to kafka partition %d: %+v", s.partition, proposal)
 }
 
 // getKafkaProducer tries to create a producer by connecting to Kafka at the specified brokers.
@@ -288,6 +251,8 @@ func produceMsg(msg *pb.KafkaMsg) error {
 func getKafkaProducer(brokers []string) (sarama.SyncProducer, error) {
 	conf := sarama.NewConfig()
 	conf.Producer.Return.Successes = true
+	conf.Producer.Partitioner = sarama.NewManualPartitioner
+
 	var producer sarama.SyncProducer
 	var err error
 	for i := 0; i < 10; i++ {

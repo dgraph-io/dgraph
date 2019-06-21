@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/kafka"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger"
@@ -253,10 +251,6 @@ func UpdateMembershipState(ctx context.Context) error {
 }
 
 func (g *groupi) applyState(state *pb.MembershipState) {
-	if g.Node != nil && g.Node.AmLeader() {
-		kafka.PublishMembershipState(state)
-	}
-
 	x.AssertTrue(state != nil)
 	g.Lock()
 	defer g.Unlock()

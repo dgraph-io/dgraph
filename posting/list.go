@@ -24,7 +24,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/dgryski/go-farm"
+	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 
 	bpb "github.com/dgraph-io/badger/pb"
@@ -328,9 +328,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 
 // TypeID returns the typeid of destination vertex
 func TypeID(edge *pb.DirectedEdge) types.TypeID {
-	if edge.ValueId != 0 {
-		return types.UidID
-	}
 	return types.TypeID(edge.ValueType)
 }
 

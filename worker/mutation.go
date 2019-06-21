@@ -151,9 +151,9 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 	return rebuild.Run(ctx)
 }
 
-func publishSchemaUpdate(s *pb.SchemaUpdate) {
+func publishCommittedProposal(proposal *pb.Proposal) {
 	if gr.Node != nil && gr.Node.AmLeader() {
-		kafka.PublishSchema(s)
+		kafka.PublishMsg(proposal)
 	}
 }
 
@@ -161,7 +161,6 @@ func publishSchemaUpdate(s *pb.SchemaUpdate) {
 // only during schema mutations or we see a new predicate.
 func updateSchema(s *pb.SchemaUpdate) error {
 	schema.State().Set(s.Predicate, *s)
-	publishSchemaUpdate(s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
@@ -360,10 +359,11 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		return errors.Errorf("Input for predicate %s is scalar while schema type is %v", edge.Attr, schemaType)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %s is not scalar while the schema type is %v. "+
+			"Edge: %v", edge.Attr, schemaType, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:
