@@ -47,9 +47,6 @@ services:
     working_dir: /data/zero1
     labels:
       cluster: test
-    depends_on:
-      - kafka1
-      - kafka2
     ports:
     - 5180:5180
     - 6180:6180
@@ -123,9 +120,6 @@ services:
     working_dir: /data/zero2
     labels:
       cluster: test
-    depends_on:
-      - kafka1
-      - kafka2
     ports:
     - 5280:5280
     - 6280:6280

@@ -970,7 +970,10 @@ func kafkaMsgCb(proposal *pb.Proposal) error {
 		glog.Errorf("error while proposing kv list from kafka: %v", err)
 		return err
 	}
-	glog.V(1).Infof("proposed info from kafka: %+v", proposal)
+	if proposal.State == nil {
+		// we do not log membership state
+		glog.V(1).Infof("proposed info from kafka: %+v", proposal)
+	}
 	return nil
 }
 

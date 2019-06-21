@@ -71,7 +71,7 @@ func waitForPartitionCount(brokers []string, partition int32) error {
 		if err == nil {
 			break
 		}
-		glog.Warningf("error while creating cluster admin, will retry in 1s")
+		glog.Warningf("error while creating cluster admin, will retry in 1s: %v", err)
 		time.Sleep(1 * time.Second)
 	}
 	if err != nil {
@@ -108,8 +108,8 @@ func SetupKafkaSource(c Callback, partition int32) {
 
 	sourceBrokers := Config.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
-	brokers := strings.Split(sourceBrokers, ",")
-	if len(brokers) > 0 {
+	if len(sourceBrokers) > 0 {
+		brokers := strings.Split(sourceBrokers, ",")
 		if err := waitForPartitionCount(brokers, partition); err != nil {
 			glog.Errorf("error while waiting for partition count: %v", err)
 			return
