@@ -36,7 +36,7 @@ func CompareJSON(t *testing.T, want, got string) bool {
 	return CompareJSONMaps(t, wantMap, gotMap)
 }
 
-// CompareJSON compares two JSON objects (passed as maps).
+// CompareJSONMaps compares two JSON objects (passed as maps).
 func CompareJSONMaps(t *testing.T, wantMap, gotMap map[string]interface{}) bool {
 	return DiffJSONMaps(t, wantMap, gotMap, "", false)
 }

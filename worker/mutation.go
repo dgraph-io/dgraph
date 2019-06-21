@@ -41,6 +41,7 @@ import (
 )
 
 var (
+	// ErrNonExistentTabletMessage is the error message sent when no tablet is serving a predicate.
 	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
 	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
 	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
@@ -395,6 +396,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	return nil
 }
 
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
@@ -406,6 +408,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	return c.AssignUids(ctx, num)
 }
 
+// Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().connToZeroLeader()
 	if pl == nil {

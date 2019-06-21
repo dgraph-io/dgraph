@@ -101,10 +101,11 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	req.SinceTs, err = handler.GetSinceTs(uri)
+	latestManifest, err := handler.GetLatestManifest(uri)
 	if err != nil {
 		return err
 	}
+	req.SinceTs = latestManifest.Since
 	if forceFull {
 		req.SinceTs = 0
 	}
@@ -134,8 +135,12 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	m := backup.Manifest{Groups: groups, Since: req.ReadTs}
 	if req.SinceTs == 0 {
 		m.Type = "full"
+		m.BackupId = x.GetRandomName(1)
+		m.BackupNum = 1
 	} else {
 		m.Type = "incremental"
+		m.BackupId = latestManifest.BackupId
+		m.BackupNum = latestManifest.BackupNum + 1
 	}
 
 	bp := &backup.Processor{Request: &req}

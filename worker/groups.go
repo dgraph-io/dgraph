@@ -808,9 +808,6 @@ func (g *groupi) processOracleDeltaStream() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		c := pb.NewZeroClient(pl.Get())
-		// The first entry send by Zero contains the entire state of transactions. Zero periodically
-		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
-		// safe way to get the status of all the transactions.
 		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
 			glog.Errorf("Error while calling Oracle %v\n", err)

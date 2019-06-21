@@ -161,12 +161,12 @@ func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.
 	}()
 }
 
-// GetSinceTs reads the manifests at the given URL and returns the appropriate
-// timestamp from which the current backup should be started.
-func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
+// GetLatestManifest reads the manifests at the given URL and returns the
+// latest manifest.
+func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Find the max Since value from the latest backup.
@@ -180,15 +180,15 @@ func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
 		}
 	}
 
+	var m Manifest
 	if lastManifest == "" {
-		return 0, nil
+		return &m, nil
 	}
 
-	var m Manifest
 	if err := h.readManifest(mc, lastManifest, &m); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return m.Since, nil
+	return &m, nil
 }
 
 // CreateBackupFile creates a new session and prepares the data stream for the backup.
@@ -239,7 +239,7 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error) {
+func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return 0, err
@@ -278,7 +278,7 @@ func (h *s3Handler) Load(uri *url.URL, lastDir string, fn loadFn) (uint64, error
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
-	manifests, err = filterManifests(manifests, lastDir)
+	manifests, err = filterManifests(manifests, backupId)
 	if err != nil {
 		return 0, err
 	}
