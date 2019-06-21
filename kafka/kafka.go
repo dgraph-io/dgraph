@@ -61,6 +61,46 @@ func consumeMsg(pom sarama.PartitionOffsetManager, message *sarama.ConsumerMessa
 	return nil
 }
 
+func waitForPartitionCount(brokers []string, partition int32) error {
+	config := sarama.NewConfig()
+	config.Version = sarama.V2_2_0_0
+	var admin sarama.ClusterAdmin
+	var err error
+	for i := 0; i < 10; i++ {
+		admin, err = sarama.NewClusterAdmin(brokers, config)
+		if err == nil {
+			break
+		}
+		glog.Warningf("error while creating cluster admin, will retry in 1s")
+		time.Sleep(1 * time.Second)
+	}
+	if err != nil {
+		return fmt.Errorf("error while creating cluster admin: %v", err)
+	}
+
+	expectedPartititionCount := int(partition + 1)
+
+	for i := 0; i < 10; i++ {
+		topics, err := admin.DescribeTopics([]string{dgraphTopic})
+		if err != nil {
+			return fmt.Errorf("error while describing topic: %v", err)
+		}
+		if len(topics) < 1 {
+			return fmt.Errorf("topic metadata not found")
+		}
+
+		if len(topics[0].Partitions) >= expectedPartititionCount {
+			return nil
+		}
+
+		glog.Warningf("current partition count %d, waiting for it to reach %d",
+			len(topics[0].Partitions), expectedPartititionCount)
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("unable to meet the expected partition count %d",
+		expectedPartititionCount)
+}
+
 // setupKafkaSource will create a kafka consumer and and use it to receive updates
 func SetupKafkaSource(c Callback, partition int32) {
 	cb = c
@@ -68,14 +108,20 @@ func SetupKafkaSource(c Callback, partition int32) {
 
 	sourceBrokers := Config.SourceBrokers
 	glog.Infof("source kafka brokers: %v", sourceBrokers)
-	if len(sourceBrokers) > 0 {
-		pom, cancelPom, err := getPOM(sourceBrokers)
+	brokers := strings.Split(sourceBrokers, ",")
+	if len(brokers) > 0 {
+		if err := waitForPartitionCount(brokers, partition); err != nil {
+			glog.Errorf("error while waiting for partition count: %v", err)
+			return
+		}
+
+		pom, cancelPom, err := getPOM(brokers)
 		if err != nil {
 			glog.Errorf("error while getting the partition offset manager: %v", err)
 			return
 		}
 
-		client, err := getKafkaConsumer(sourceBrokers)
+		client, err := getKafkaConsumer(brokers)
 		if err != nil {
 			glog.Errorf("unable to get kafka consumer and will not receive updates: %v", err)
 			return
@@ -86,7 +132,8 @@ func SetupKafkaSource(c Callback, partition int32) {
 		nextOffset, _ := pom.NextOffset()
 		partConsumer, err = client.ConsumePartition(dgraphTopic, s.partition, nextOffset)
 		if err != nil {
-			glog.Errorf("error while consuming from kafka: %v", err)
+			glog.Errorf("error while consuming from partition %s-%d: %v",
+				dgraphTopic, s.partition, err)
 			return
 		}
 
@@ -108,15 +155,14 @@ func SetupKafkaSource(c Callback, partition int32) {
 // getKafkaConsumer tries to create a consumer by connecting to Kafka at the specified brokers.
 // If an error errors while creating the consumer, this function will wait and retry up to 10 times
 // before giving up and returning an error
-func getKafkaConsumer(sourceBrokers string) (sarama.Consumer, error) {
+func getKafkaConsumer(brokers []string) (sarama.Consumer, error) {
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_2_0_0
 
-	addrs := strings.Split(sourceBrokers, ",")
 	var consumer sarama.Consumer
 	var err error
 	for i := 0; i < 10; i++ {
-		consumer, err = sarama.NewConsumer(addrs, config)
+		consumer, err = sarama.NewConsumer(brokers, config)
 		if err == nil {
 			break
 		} else {
@@ -129,16 +175,16 @@ func getKafkaConsumer(sourceBrokers string) (sarama.Consumer, error) {
 	return consumer, err
 }
 
-func getPOM(sourceBrokers string) (sarama.PartitionOffsetManager, Cancel, error) {
-	addrs := strings.Split(sourceBrokers, ",")
-	client, err := sarama.NewClient(addrs, nil)
+func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
+	client, err := sarama.NewClient(brokers, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error while creating client: %v", err)
 	}
 
 	om, err := sarama.NewOffsetManagerFromClient(dgraphGroup, client)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil,
+			fmt.Errorf("error while creating offset manager from client: %v", err)
 	}
 
 	pom, err := om.ManagePartition(dgraphTopic, s.partition)
@@ -183,12 +229,17 @@ func PublishMembershipState(state *pb.MembershipState) {
 // be used for the current raft group.
 func SetupKafkaTarget(partition int32) {
 	targetBrokers := Config.TargetBrokers
+	s.partition = partition
 	glog.Infof("target kafka brokers: %v", targetBrokers)
 	if len(targetBrokers) > 0 {
-		s.partition = partition
+		brokers := strings.Split(targetBrokers, ",")
+		if err := waitForPartitionCount(brokers, partition); err != nil {
+			glog.Errorf("error while waiting for partition count: %v", err)
+			return
+		}
 
 		var err error
-		producer, err = getKafkaProducer(targetBrokers)
+		producer, err = getKafkaProducer(brokers)
 		if err != nil {
 			glog.Errorf("unable to create the kafka sync producer, and will not publish updates")
 			return
@@ -234,13 +285,13 @@ func produceMsg(msg *pb.KafkaMsg) error {
 // getKafkaProducer tries to create a producer by connecting to Kafka at the specified brokers.
 // If an error errors while creating the producer, this function will wait and retry up to 10 times
 // before giving up and returning an error
-func getKafkaProducer(targetBrokers string) (sarama.SyncProducer, error) {
+func getKafkaProducer(brokers []string) (sarama.SyncProducer, error) {
 	conf := sarama.NewConfig()
 	conf.Producer.Return.Successes = true
 	var producer sarama.SyncProducer
 	var err error
 	for i := 0; i < 10; i++ {
-		producer, err = sarama.NewSyncProducer(strings.Split(targetBrokers, ","), conf)
+		producer, err = sarama.NewSyncProducer(brokers, conf)
 		if err == nil {
 			break
 		} else {

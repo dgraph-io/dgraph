@@ -15,6 +15,8 @@ services:
     depends_on:
       - zookeeper
     environment:
+        KAFKA_PORT: 9192 # used for detecting kafka ready and creating topic
+        KAFKA_CREATE_TOPICS: "dgraph:2:2"
         KAFKA_ADVERTISED_LISTENERS: ALL://kafka1:9192
         KAFKA_LISTENERS: ALL://:9192
         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ALL:PLAINTEXT
@@ -30,6 +32,8 @@ services:
     depends_on:
       - zookeeper
     environment:
+        KAFKA_PORT: 9292 # used for detecting kafka ready and creating topic
+        KAFKA_CREATE_TOPICS: "dgraph:2:2"
         KAFKA_ADVERTISED_LISTENERS: ALL://kafka2:9292
         KAFKA_LISTENERS: ALL://:9292
         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ALL:PLAINTEXT
@@ -74,7 +78,7 @@ services:
       target: /gobin
       read_only: true
     command: /gobin/dgraph alpha -o 100 --my=alpha100:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+        --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
   alpha101:
     image: dgraph/dgraph:latest
     container_name: alpha101
@@ -92,8 +96,8 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph alpha -o 101 --my=alpha101:7181 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+    command:  /gobin/dgraph alpha -o 101 --my=alpha101:7181 --lru_mb=1024 --zero=zero1:5180
+          --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
   alpha102:
     image: dgraph/dgraph:latest
     container_name: alpha102
@@ -111,7 +115,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph alpha -o 102 --my=alpha102:7182 --lru_mb=1024 --zero=zero1:5180
+    command:  /gobin/dgraph alpha -o 102 --my=alpha102:7182 --lru_mb=1024 --zero=zero1:5180 
       --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
   zero2:
     image: dgraph/dgraph:latest
