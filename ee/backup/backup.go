@@ -64,8 +64,8 @@ type Manifest struct {
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Empty, error) {
-	var emptyRes pb.Empty
+func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
+	var emptyRes pb.Status
 
 	if err := ctx.Err(); err != nil {
 		return nil, err

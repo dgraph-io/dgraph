@@ -24,12 +24,12 @@ import (
 )
 
 // Backup handles a request coming from another node.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Empty, error) {
+func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
 	glog.V(2).Infof("Received backup request via Grpc: %+v", req)
 	return backupCurrentGroup(ctx, req)
 }
 
-func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Empty, error) {
+func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
 	glog.Infof("Backup request: group %d at %d", req.GroupId, req.ReadTs)
 	if err := ctx.Err(); err != nil {
 		glog.Errorf("Context error during backup: %v\n", err)
@@ -51,7 +51,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Empty, 
 }
 
 // BackupGroup backs up the group specified in the backup request.
-func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Empty, error) {
+func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) {
 	glog.V(2).Infof("Sending backup request: %+v\n", in)
 	if groups().groupId() == in.GroupId {
 		return backupCurrentGroup(ctx, in)
@@ -69,9 +69,4 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Empty, error) {
 	}
 
 	return res, nil
-}
-
-// PredicateState returns the group to predicate mapping for all known groups..
-func PredicateState() (*pb.MembershipState, error) {
-	return groups().PredicateState()
 }

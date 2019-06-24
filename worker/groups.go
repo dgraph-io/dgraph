@@ -233,6 +233,14 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+// GetMembershipState returns the current membership state.
+func GetMembershipState() *pb.MembershipState {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return g.state
+}
+
 // UpdateMembershipState contacts zero for an update on membership state.
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
@@ -935,19 +943,4 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 		}
 	}
-}
-
-// PredicateState returns the group to predicate mapping for all known groups..
-func (g *groupi) PredicateState() (*pb.MembershipState, error) {
-	var emptyMem pb.MembershipState
-
-	pl := g.connToZeroLeader()
-	zc := pb.NewZeroClient(pl.Get())
-
-	out, err := zc.PredicateState(context.Background(), &pb.Empty{})
-	if err != nil {
-		glog.Errorf("Error while PredicateState grpc call %v", err)
-		return &emptyMem, err
-	}
-	return out, nil
 }

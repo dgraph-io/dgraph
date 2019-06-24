@@ -110,12 +110,17 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		req.SinceTs = 0
 	}
 
-	predState, err := worker.PredicateState()
+
+	// Update the membership state to get the latest mapping of groups to predicates.
+	if err := worker.UpdateMembershipState(ctx); err != nil {
+		return err
+	}
+	state := worker.GetMembershipState()
 	if err != nil {
-		return errors.Wrapf(err, "cannot retrieve predicate state from zero")
+		return errors.Wrapf(err, "cannot retrieve membership state from zero")
 	}
 	var groups []uint32
-	for gid := range predState.Groups {
+	for gid := range state.Groups {
 		groups = append(groups, gid)
 	}
 
@@ -123,7 +128,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error, len(predState.Groups))
+	errCh := make(chan error, len(state.Groups))
 	for _, gid := range groups {
 		req := req
 		req.GroupId = gid
@@ -140,9 +145,9 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	// Convert predState into a map for writing into the manifest.
+	// Convert state into a map for writing into the manifest.
 	manifestGroups := make(map[uint32][]string)
-	for gid, group := range predState.Groups {
+	for gid, group := range state.Groups {
 		var preds []string
 		for key := range group.Tablets {
 			preds = append(preds, key)
