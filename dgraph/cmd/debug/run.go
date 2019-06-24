@@ -504,7 +504,7 @@ func printKeys(db *badger.DB) {
 		if pk.IsIndex() {
 			buf.WriteString("{i}")
 		}
-		if pk.IsCount() {
+		if pk.IsCountOrCountRev() {
 			buf.WriteString("{c}")
 		}
 		if pk.IsSchema() {
