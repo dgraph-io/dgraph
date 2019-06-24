@@ -241,8 +241,7 @@ func (p ParsedKey) IsReverse() bool {
 
 // IsCountOrCountRev returns whether the key is a count or a count rev key.
 func (p ParsedKey) IsCountOrCountRev() bool {
-	return p.bytePrefix == DefaultPrefix && (p.byteType == ByteCount ||
-		p.byteType == ByteCountRev)
+	return p.IsCount() || p.IsCountRev()
 }
 
 // IsCount returns whether the key is a count key.
