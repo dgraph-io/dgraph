@@ -110,15 +110,11 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		req.SinceTs = 0
 	}
 
-
 	// Update the membership state to get the latest mapping of groups to predicates.
 	if err := worker.UpdateMembershipState(ctx); err != nil {
 		return err
 	}
 	state := worker.GetMembershipState()
-	if err != nil {
-		return errors.Wrapf(err, "cannot retrieve membership state from zero")
-	}
 	var groups []uint32
 	for gid := range state.Groups {
 		groups = append(groups, gid)
