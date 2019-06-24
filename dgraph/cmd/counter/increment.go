@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// This binary would retrieve a value for UID=0x01, and increment it by 1. If
-// successful, it would print out the incremented value. It assumes that it has
+// Package counter builds a tool that retrieves a value for UID=0x01, and increments
+// it by 1. If successful, it prints out the incremented value. It assumes that it has
 // access to UID=0x01, and that `val` predicate is of type int.
 package counter
 
@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/dgraph-io/dgo"
@@ -30,8 +31,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
+// Increment is the sub-command invoked when calling "dgraph increment".
 var Increment x.SubCommand
 
 func init() {
@@ -47,6 +50,7 @@ func init() {
 	flag := Increment.Cmd.Flags()
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
+	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("user", "", "Username if login is required.")
 	flag.String("password", "", "Password of the user.")
@@ -60,6 +64,7 @@ func init() {
 	x.RegisterClientTLSFlags(flag)
 }
 
+// Counter stores information about the value being incremented by this tool.
 type Counter struct {
 	Uid string `json:"uid"`
 	Val int    `json:"val"`
@@ -158,13 +163,25 @@ func run(conf *viper.Viper) {
 	format := "0102 03:04:05.999"
 
 retryConn:
-	conn, err := x.SetupConnection(alpha, tlsCfg, false)
-	if err != nil {
-		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...",
+	var conn *grpc.ClientConn
+	retries := conf.GetInt("retries")
+	if retries < 1 {
+		retries = 1
+	}
+	for i := 0; i < retries; retries++ {
+		conn, err = x.SetupConnection(alpha, tlsCfg, false)
+		if err == nil {
+			break
+		}
+		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...\n",
 			time.Now().UTC().Format(format), err)
 		time.Sleep(time.Second)
-		goto retryConn
 	}
+	if conn == nil {
+		fmt.Printf("Could not setup connection after %d retries", retries)
+		os.Exit(1)
+	}
+
 	dc := api.NewDgraphClient(conn)
 	dg := dgo.NewDgraphClient(dc)
 	if user := conf.GetString("user"); len(user) > 0 {
