@@ -17,13 +17,54 @@
 package dot
 
 import (
-	"github.com/ChainSafe/gossamer/p2p"
-	"github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/internal/services"
+	"github.com/ChainSafe/gossamer/rpc"
+	log "github.com/ChainSafe/log15"
 )
 
-// Dot is a container on which services can be registered.
+// Dot is a container for all the components of a node.
 type Dot struct {
-	ServerConfig *p2p.ServiceConfig
-	Server       *p2p.Service      // Currently running P2P networking layer
-	Polkadb      *polkadb.BadgerDB //BadgerDB database
+	Services  *services.ServiceRegistry // Registry of all core services
+	Rpc       *rpc.HttpServer           // HTTP instance for RPC server
+	IsStarted chan struct{}             // Signals node startup complete
+	stop      chan struct{}             // Used to signal node shutdown
+}
+
+// NewDot initializes a Dot with provided components.
+func NewDot(srvcs []services.Service, rpc *rpc.HttpServer) *Dot {
+	d := &Dot{
+		Services:  services.NewServiceRegistry(),
+		Rpc:       rpc,
+		IsStarted: make(chan struct{}),
+		stop:      nil,
+	}
+
+	for _, srvc := range srvcs {
+		d.Services.RegisterService(srvc)
+	}
+
+	return d
+}
+
+// Start starts all services. API service is started last.
+func (d *Dot) Start() {
+	log.Debug("Starting core services.")
+	d.Services.StartAll()
+	if d.Rpc != nil {
+		d.Rpc.Start()
+	}
+
+	d.stop = make(chan struct{})
+	d.IsStarted <- struct{}{}
+	d.Wait()
+}
+
+// Wait is used to force the node to stay alive until a signal is passed into `Dot.stop`
+func (d *Dot) Wait() {
+	<-d.stop
+}
+
+func (d *Dot) Stop() {
+	// TODO: Shutdown services and exit
+	d.stop <- struct{}{}
 }

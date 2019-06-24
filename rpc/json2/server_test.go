@@ -113,7 +113,7 @@ func execInvalidJSON(s *rpc.Server, res interface{}) error {
 
 func TestService(t *testing.T) {
 	s := rpc.NewServer()
-	s.RegisterCodec(NewCodec())
+	s.RegisterCodec(&Codec{})
 	err := s.RegisterService(new(Service), "Service")
 	if err != nil {
 		t.Fatalf("could not register service: %s", err)

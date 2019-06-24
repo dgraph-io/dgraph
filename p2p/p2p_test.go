@@ -25,7 +25,7 @@ import (
 )
 
 func TestBuildOpts(t *testing.T) {
-	testServiceConfig := &ServiceConfig{
+	testServiceConfig := &Config{
 		BootstrapNodes: []string{},
 		Port:           7001,
 	}
@@ -64,7 +64,7 @@ func TestStart(t *testing.T) {
 
 	t.Log("ipfsAddr:", ipfsAddr)
 
-	testServiceConfig := &ServiceConfig{
+	testServiceConfig := &Config{
 		BootstrapNodes: []string{
 			ipfsAddr,
 		},
@@ -93,7 +93,7 @@ func TestService_PeerCount(t *testing.T) {
 
 	ipfsAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/ipfs/%s", ipfsNode.Identity.String())
 
-	testServiceConfig := &ServiceConfig{
+	testServiceConfig := &Config{
 		BootstrapNodes: []string{
 			ipfsAddr,
 		},

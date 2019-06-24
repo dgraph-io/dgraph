@@ -18,10 +18,13 @@ package rpc
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"reflect"
 	"strings"
+
+	"github.com/ChainSafe/gossamer/internal/api"
+	"github.com/ChainSafe/gossamer/rpc/modules"
+	log "github.com/inconshreveable/log15"
 )
 
 // Codec defines the interface for creating a CodecRequest.
@@ -39,15 +42,48 @@ type CodecRequest interface {
 
 // Server is an RPC server.
 type Server struct {
-	codec Codec
-	// TODO: need to store content type as well (eg. application/json)
-	services *serviceMap
+	codec    Codec       // Codec for requests/responses (default JSON)
+	services *serviceMap // Maps requests to actual procedure calls
+	api      *api.Api    // API interface for system internals
 }
 
 // NewServer creates a new Server.
 func NewServer() *Server {
 	return &Server{
 		services: new(serviceMap),
+	}
+}
+
+// NewApiServer creates a new Server.
+func NewApiServer(mods []api.Module, api *api.Api) *Server {
+	s := &Server{
+		services: new(serviceMap),
+		api:      api,
+	}
+
+	s.RegisterModules(mods)
+
+	return s
+}
+
+// RegisterModules registers the RPC services associated with the given API modules
+func (s *Server) RegisterModules(mods []api.Module) {
+	for _, mod := range mods {
+		log.Debug("[rpc] Enabling rpc module", "module", mod)
+		var srvc interface{}
+		switch mod {
+		case "system":
+			srvc = modules.NewSystemModule(s.api)
+		default:
+			log.Warn("[rpc] Unrecognized module", "module", mod)
+			continue
+		}
+
+		err := s.RegisterService(srvc, mod)
+
+		if err != nil {
+			log.Warn("[rpc] Failed to register module", "mod", mod, "err", err)
+		}
 	}
 }
 
@@ -58,13 +94,13 @@ func (s *Server) RegisterCodec(codec Codec) {
 }
 
 // RegisterService adds a service to the servers service map.
-func (s *Server) RegisterService(receiver interface{}, name string) error {
-	return s.services.register(receiver, name)
+func (s *Server) RegisterService(receiver interface{}, name api.Module) error {
+	return s.services.register(receiver, string(name))
 }
 
 // ServeHTTP handles http requests to the RPC server.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println("Serving HTTP request...")
+	log.Debug("[rpc] Serving HTTP request...")
 	if r.Method != "POST" {
 		WriteError(w, http.StatusMethodNotAllowed, "rpc: Only accepts POST requests, got: "+r.Method)
 	}
@@ -76,7 +112,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if contentType != "application/json" {
 		WriteError(w, http.StatusUnsupportedMediaType, "rpc: Only application/json content allowed, got: "+r.Header.Get("Content-Type"))
 	}
-	log.Println("Got application/json request, proceeding...")
+	log.Debug("[rpc] Got application/json request, proceeding...")
 	codecReq := s.codec.NewRequest(r)
 	method, errMethod := codecReq.Method()
 	if errMethod != nil {

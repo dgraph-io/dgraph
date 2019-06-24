@@ -68,7 +68,7 @@ func NewSimulator(num int) (sim *Simulator, err error) {
 	// create all nodes, increment port by 1 each time
 	for i := 0; i < num; i++ {
 		// configure p2p service
-		conf := &ServiceConfig{
+		conf := &Config{
 			BootstrapNodes: []string{
 				ipfsAddr,
 			},

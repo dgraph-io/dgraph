@@ -49,7 +49,7 @@ type Iterator interface {
 	Release()
 }
 
-// Iteratee wraps the NewIterator methods of BadgerDB
+// Iteratee wraps the NewIterator methods of BadgerService
 type Iteratee interface {
 	NewIterator() Iterable
 }

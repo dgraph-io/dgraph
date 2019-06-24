@@ -48,11 +48,6 @@ type serverResponse struct {
 	Id *json.RawMessage `json:"id"`
 }
 
-// NewCodec creates a Codec instance
-func NewCodec() *Codec {
-	return &Codec{}
-}
-
 // Codec is used to define the JSON codec methods to adhere to the Codec interface inside the rpc package.
 type Codec struct{}
 

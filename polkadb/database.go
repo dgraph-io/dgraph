@@ -24,15 +24,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// BadgerDB struct contains directory path to data and db instance
-type BadgerDB struct {
-	config DbConfig
+// BadgerService contains directory path to data and db instance
+type BadgerService struct {
+	config Config
 	db     *badger.DB
+	err    <-chan error
 }
 
-//DbConfig struct defines configurations for BadgerDB instance
-type DbConfig struct {
-	Datadir string
+//Config defines configurations for BadgerService instance
+type Config struct {
+	DataDir string
 }
 
 // Iterable struct contains a transaction, iterator and context fields released, initialized
@@ -45,7 +46,7 @@ type Iterable struct {
 
 // Batch struct contains a database instance, key-value mapping for batch writes and length of item value for batch write
 type batchWriter struct {
-	db   *BadgerDB
+	db   *BadgerService
 	b    map[string][]byte
 	size int
 }
@@ -60,8 +61,17 @@ type tableBatch struct {
 	prefix string
 }
 
-// NewBadgerDB opens and returns a new DB object
-func NewBadgerDB(file string) (*BadgerDB, error) {
+func (b *BadgerService) Start() <-chan error {
+	b.err = make(<-chan error)
+	return b.err
+}
+
+func (b *BadgerService) Stop() {
+	// TODO: Implement
+}
+
+// NewBadgerService opens and returns a new DB object
+func NewBadgerService(file string) (*BadgerService, error) {
 	opts := badger.DefaultOptions
 	opts.Dir = file
 	opts.ValueDir = file
@@ -71,21 +81,21 @@ func NewBadgerDB(file string) (*BadgerDB, error) {
 		return nil, err
 	}
 
-	return &BadgerDB{
-		config: DbConfig{
-			Datadir: file,
+	return &BadgerService{
+		config: Config{
+			DataDir: file,
 		},
 		db: db,
 	}, nil
 }
 
 // Path returns the path to the database directory.
-func (db *BadgerDB) Path() string {
-	return db.config.Datadir
+func (db *BadgerService) Path() string {
+	return db.config.DataDir
 }
 
 // NewBatch returns batchWriter with a badgerDB instance and an initialized mapping
-func (db *BadgerDB) NewBatch() Batch {
+func (db *BadgerService) NewBatch() Batch {
 	return &batchWriter{
 		db: db,
 		b:  make(map[string][]byte),
@@ -93,7 +103,7 @@ func (db *BadgerDB) NewBatch() Batch {
 }
 
 // Put puts the given key / value to the queue
-func (db *BadgerDB) Put(key []byte, value []byte) error {
+func (db *BadgerService) Put(key []byte, value []byte) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		err := txn.Set(snappy.Encode(nil, key), snappy.Encode(nil, value))
 		return err
@@ -101,7 +111,7 @@ func (db *BadgerDB) Put(key []byte, value []byte) error {
 }
 
 // Has checks the given key exists already; returning true or false
-func (db *BadgerDB) Has(key []byte) (exists bool, err error) {
+func (db *BadgerService) Has(key []byte) (exists bool, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		item, errr := txn.Get(snappy.Encode(nil, key))
 		if item != nil {
@@ -117,7 +127,7 @@ func (db *BadgerDB) Has(key []byte) (exists bool, err error) {
 }
 
 // Get returns the given key
-func (db *BadgerDB) Get(key []byte) (data []byte, err error) {
+func (db *BadgerService) Get(key []byte) (data []byte, err error) {
 	_ = db.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(snappy.Encode(nil, key))
 		if err != nil {
@@ -134,7 +144,7 @@ func (db *BadgerDB) Get(key []byte) (data []byte, err error) {
 }
 
 // Del removes the key from the queue and database
-func (db *BadgerDB) Del(key []byte) error {
+func (db *BadgerService) Del(key []byte) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		err := txn.Delete(snappy.Encode(nil, key))
 		if err == badger.ErrKeyNotFound {
@@ -145,7 +155,7 @@ func (db *BadgerDB) Del(key []byte) error {
 }
 
 // Close closes a DB
-func (db *BadgerDB) Close() {
+func (db *BadgerService) Close() {
 	err := db.db.Close()
 	if err == nil {
 		log.Println("Database closed")
@@ -155,7 +165,7 @@ func (db *BadgerDB) Close() {
 }
 
 // NewIterator returns a new iterator within the Iterator struct along with a new transaction
-func (db *BadgerDB) NewIterator() Iterable {
+func (db *BadgerService) NewIterator() Iterable {
 	txn := db.db.NewTransaction(false)
 	opts := badger.DefaultIteratorOptions
 	iter := txn.NewIterator(opts)

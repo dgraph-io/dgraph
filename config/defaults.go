@@ -20,16 +20,57 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"runtime"
 
-	"github.com/inconshreveable/log15"
+	"github.com/ChainSafe/gossamer/internal/api"
+	"github.com/ChainSafe/gossamer/p2p"
+	"github.com/ChainSafe/gossamer/polkadb"
+	"github.com/ChainSafe/gossamer/rpc"
 )
 
 const (
-	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort = 8545
+	DefaultRpcHttpHost = "localhost" // Default host interface for the HTTP RPC server
+	DefaultRpcHttpPort = 8545        // Default port for
+
+	// P2P
+	DefaultP2PPort     = 7001
+	DefaultP2PRandSeed = int64(33)
 )
+
+var DefaultP2PBootstrap = []string{
+	"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+	"/ip4/104.236.179.241/tcp/4001/ipfs/QmSoLPppuBtQSGwKDZT2M73ULpjvfd3aZ6ha4oFGL1KrGM",
+}
+
+var DefaultRpcModules = []api.Module{"system"}
+
+var (
+	// P2P
+	DefaultP2PConfig = &p2p.Config{
+		Port:           DefaultP2PPort,
+		RandSeed:       DefaultP2PRandSeed,
+		BootstrapNodes: DefaultP2PBootstrap,
+	}
+
+	// DB
+	DefaultDBConfig = &polkadb.Config{
+		DataDir: DefaultDataDir(),
+	}
+
+	// RPC
+	DefaultRpcConfig = &rpc.Config{
+		Host:    DefaultRpcHttpHost,
+		Port:    DefaultRpcHttpPort,
+		Modules: DefaultRpcModules,
+	}
+)
+
+// DefaultConfig is the default settings used when a config.toml file is not passed in during instantiation
+var DefaultConfig = &Config{
+	P2pCfg: DefaultP2PConfig,
+	DbCfg:  DefaultDBConfig,
+	RpcCfg: DefaultRpcConfig,
+}
 
 // DefaultDataDir is the default data directory to use for the databases and other
 // persistence requirements.
@@ -57,32 +98,4 @@ func homeDir() string {
 		return usr.HomeDir
 	}
 	return ""
-}
-
-// CheckConfig finds file based on ext input
-func CheckConfig(ext string) string {
-	pathS, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	var file string
-	if err = filepath.Walk(pathS, func(path string, f os.FileInfo, _ error) error {
-		if !f.IsDir() && f.Name() == "config.toml" {
-			r, e := regexp.MatchString(ext, f.Name())
-			if e == nil && r {
-				file = f.Name()
-				return nil
-			}
-		} else if !f.IsDir() && f.Name() != "Gopkg.toml" {
-			r, e := regexp.MatchString(ext, f.Name())
-			if e == nil && r {
-				file = f.Name()
-				return nil
-			}
-		}
-		return nil
-	}); err != nil {
-		log15.Error("please specify a config file", "err", err)
-	}
-	return file
 }

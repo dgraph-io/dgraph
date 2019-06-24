@@ -4,7 +4,7 @@ go:
 - 1.12
 
 env:
-- GO111MODULE=on IPFS_LOGGING=info
+- GO111MODULE=on
 
 cache:
   directories:

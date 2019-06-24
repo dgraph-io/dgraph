@@ -31,19 +31,21 @@ var (
 		configFileFlag,
 	}
 	rpcFlags = []cli.Flag{
-		utils.RPCEnabledFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCPortFlag,
+		utils.RpcEnabledFlag,
+		utils.RpcListenAddrFlag,
+		utils.RpcPortFlag,
+		utils.RpcHostFlag,
+		utils.RpcModuleFlag,
 	}
 )
 
-//init initializes CLI
+// init initializes CLI
 func init() {
 	app.Action = gossamer
-	app.Copyright = "Copyright 2019 Chainsafe Systems Authors"
+	app.Copyright = "Copyright 2019 ChainSafe Systems Authors"
 	app.Name = "gossamer"
 	app.Usage = "Official gossamer command-line interface"
-	app.Author = "Chainsafe Systems 2019"
+	app.Author = "ChainSafe Systems 2019"
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		dumpConfigCommand,
@@ -59,14 +61,16 @@ func main() {
 	}
 }
 
-//gossamer is the main entrypoint into the gossamer system
+// gossamer is the main entrypoint into the gossamer system
 func gossamer(ctx *cli.Context) error {
-	g, err := makeNode(ctx)
+	srvlog := log.New(log.Ctx{"blockchain": "gossamer"})
+	node, err := makeNode(ctx)
 	if err != nil {
+		// TODO: Need to manage error propagation and exit smoothly
 		log.Error("error making node", "err", err)
 	}
-	log.Info("🕸️ starting p2p service", "blockchain", "gossamer")
-	g.Server.Start()
+	srvlog.Info("🕸️Starting node...")
+	node.Start()
 
 	return nil
 }

@@ -32,12 +32,12 @@ type data struct {
 	expected string
 }
 
-func newTestBadgerDB() (*BadgerDB, func()) {
+func newTestBadgerDB() (*BadgerService, func()) {
 	dir, err := ioutil.TempDir(os.TempDir(), "badger-test")
 	if err != nil {
 		panic("failed to create test file: " + err.Error())
 	}
-	db, err := NewBadgerDB(dir)
+	db, err := NewBadgerService(dir)
 	if err != nil {
 		panic("failed to create test database: " + err.Error())
 	}
@@ -147,7 +147,7 @@ func testDelGetter(db Database, t *testing.T) {
 	}
 }
 
-func testGetPath(db *BadgerDB, t *testing.T) {
+func testGetPath(db *BadgerService, t *testing.T) {
 	dir := db.Path()
 	if len(dir) <= 0 {
 		t.Fatalf("failed to set database path")
@@ -160,7 +160,7 @@ func TestBadgerDB_Batch(t *testing.T) {
 	testBatchPut(db, t)
 }
 
-func batchTestSetup(db *BadgerDB) (func(i int) []byte, func(i int) []byte, Batch) {
+func batchTestSetup(db *BadgerService) (func(i int) []byte, func(i int) []byte, Batch) {
 	testKey := func(i int) []byte {
 		return []byte(fmt.Sprintf("%04d", i))
 	}
@@ -171,7 +171,7 @@ func batchTestSetup(db *BadgerDB) (func(i int) []byte, func(i int) []byte, Batch
 	return testKey, testValue, b
 }
 
-func testBatchPut(db *BadgerDB, t *testing.T) {
+func testBatchPut(db *BadgerService, t *testing.T) {
 	k, v, b := batchTestSetup(db)
 
 	for i := 0; i < 10000; i++ {
@@ -207,7 +207,7 @@ func TestBadgerDB_Iterator(t *testing.T) {
 	testSeekKeyValueIterator(db, t)
 }
 
-func testIteratorSetup(db *BadgerDB, t *testing.T) {
+func testIteratorSetup(db *BadgerService, t *testing.T) {
 	k, v, b := batchTestSetup(db)
 
 	for i := 0; i < 5; i++ {
@@ -222,7 +222,7 @@ func testIteratorSetup(db *BadgerDB, t *testing.T) {
 	}
 }
 
-func testNewIterator(db *BadgerDB, t *testing.T) {
+func testNewIterator(db *BadgerService, t *testing.T) {
 	testIteratorSetup(db, t)
 
 	it := db.NewIterator()
@@ -247,7 +247,7 @@ func testNewIterator(db *BadgerDB, t *testing.T) {
 	}
 }
 
-func testNextKeyIterator(db *BadgerDB, t *testing.T) {
+func testNextKeyIterator(db *BadgerService, t *testing.T) {
 	testIteratorSetup(db, t)
 
 	it := db.NewIterator()
@@ -279,7 +279,7 @@ func testKVData() []data {
 	return testKeyValue
 }
 
-func testSeekKeyValueIterator(db *BadgerDB, t *testing.T) {
+func testSeekKeyValueIterator(db *BadgerService, t *testing.T) {
 	testIteratorSetup(db, t)
 	kv := testKVData()
 
@@ -379,7 +379,7 @@ func TestBadgerDB_TableBatchWithPrefix(t *testing.T) {
 	testBatchTablePutWithPrefix(db, t)
 }
 
-func batchTableWithPrefixTestSetup(db *BadgerDB) (func(i int) []byte, func(i int) []byte, Batch) {
+func batchTableWithPrefixTestSetup(db *BadgerService) (func(i int) []byte, func(i int) []byte, Batch) {
 	testKey := func(i int) []byte {
 		return []byte(fmt.Sprintf("%04d", i))
 	}
@@ -390,7 +390,7 @@ func batchTableWithPrefixTestSetup(db *BadgerDB) (func(i int) []byte, func(i int
 	return testKey, testValue, b
 }
 
-func testBatchTablePutWithPrefix(db *BadgerDB, t *testing.T) {
+func testBatchTablePutWithPrefix(db *BadgerService, t *testing.T) {
 	k, v, b := batchTableWithPrefixTestSetup(db)
 
 	for i := 0; i < 10000; i++ {
