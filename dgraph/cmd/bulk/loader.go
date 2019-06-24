@@ -219,11 +219,6 @@ func (ld *loader) mapStage() {
 	runtime.GC()
 }
 
-type shuffleOutput struct {
-	writer     *badger.StreamWriter
-	mapEntries []*pb.MapEntry
-}
-
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 

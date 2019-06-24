@@ -38,6 +38,7 @@ var (
 	bitMask uint64 = 0xffffffff00000000
 )
 
+// Encoder is used to convert a list of UIDs into a pb.UidPack object.
 type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
@@ -81,6 +82,7 @@ func (e *Encoder) packBlock() {
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
+// Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
@@ -99,11 +101,13 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
+// Done returns the final output of the encoder.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
 	return e.pack
 }
 
+// Decoder is used to read a pb.UidPack object back into a list of UIDs.
 type Decoder struct {
 	Pack     *pb.UidPack
 	blockIdx int
@@ -150,6 +154,7 @@ func (d *Decoder) unpackBlock() []uint64 {
 	return d.uids
 }
 
+// ApproxLen returns the approximate number of UIDs in the pb.UidPack object.
 func (d *Decoder) ApproxLen() int {
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
@@ -222,7 +227,8 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	return d.Next()
 }
 
-// Uids are owned by the Decoder, and the slice contents would be changed on the next call. They
+// Uids returns all the uids in the pb.UidPack object as an array of integers.
+// uids are owned by the Decoder, and the slice contents would be changed on the next call. They
 // should be copied if passed around.
 func (d *Decoder) Uids() []uint64 {
 	return d.uids
@@ -243,6 +249,7 @@ func (d *Decoder) LinearSeek(seek uint64) []uint64 {
 	return d.unpackBlock()
 }
 
+// PeekNextBase returns the base of the next block without advancing the decoder.
 func (d *Decoder) PeekNextBase() uint64 {
 	bidx := d.blockIdx + 1
 	if bidx < len(d.Pack.Blocks) {
@@ -251,10 +258,12 @@ func (d *Decoder) PeekNextBase() uint64 {
 	return math.MaxUint64
 }
 
+// Valid returns true if the decoder has not reached the end of the packed data.
 func (d *Decoder) Valid() bool {
 	return d.blockIdx < len(d.Pack.Blocks)
 }
 
+// Next moves the decoder on to the next block.
 func (d *Decoder) Next() []uint64 {
 	d.blockIdx++
 	return d.unpackBlock()

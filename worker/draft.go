@@ -537,8 +537,7 @@ func (n *node) leaderBlocking() (*conn.Pool, error) {
 	if pool == nil {
 		// Functions like retrieveSnapshot and joinPeers are blocking at initial start and
 		// leader election for a group might not have happened when it is called. If we can't
-		// find a leader, get latest state from
-		// Zero.
+		// find a leader, get latest state from Zero.
 		if err := UpdateMembershipState(context.Background()); err != nil {
 			return nil, fmt.Errorf("Error while trying to update membership state: %+v", err)
 		}
@@ -687,7 +686,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = chk-first >= uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take

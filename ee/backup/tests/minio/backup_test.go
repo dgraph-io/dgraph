@@ -100,7 +100,7 @@ func TestBackupMinio(t *testing.T) {
 	dirSetup()
 
 	// Send backup request.
-	dirs := runBackup(t, 3, 1)
+	_ = runBackup(t, 3, 1)
 	restored := runRestore(t, backupDir, "", math.MaxUint64)
 
 	checks := []struct {
@@ -128,7 +128,7 @@ func TestBackupMinio(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform first incremental backup.
-	dirs = runBackup(t, 6, 2)
+	_ = runBackup(t, 6, 2)
 	restored = runRestore(t, backupDir, "", incr1.Context.CommitTs)
 
 	checks = []struct {
@@ -152,7 +152,7 @@ func TestBackupMinio(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform second incremental backup.
-	dirs = runBackup(t, 9, 3)
+	_ = runBackup(t, 9, 3)
 	restored = runRestore(t, backupDir, "", incr2.Context.CommitTs)
 
 	checks = []struct {
@@ -176,7 +176,7 @@ func TestBackupMinio(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform second full backup.
-	dirs = runBackupInternal(t, true, 12, 4)
+	dirs := runBackupInternal(t, true, 12, 4)
 	restored = runRestore(t, backupDir, "", incr3.Context.CommitTs)
 
 	// Check all the values were restored to their most recent value.

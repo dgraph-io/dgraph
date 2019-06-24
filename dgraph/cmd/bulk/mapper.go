@@ -118,7 +118,7 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
 }
 
-func (m *mapper) run(inputFormat int) {
+func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunker := chunker.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
 		done := false
