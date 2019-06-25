@@ -156,7 +156,7 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) 
 	dg, closeClient := x.GetDgraphClient(conf, false)
 	cancel, err := x.GetPassAndLogin(dg, &x.CredOpt{
 		Conf:        conf,
-		Userid:      x.GrootId,
+		UserId:      x.GrootId,
 		PasswordOpt: gPassword,
 	})
 	if err != nil {

@@ -565,6 +565,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	Checkf(err, "While loading TLS configuration")
 
 	ds := strings.Split(alphas, ",")
+	var conns []*grpc.ClientConn
 	var clients []api.DgraphClient
 
 	retries := 1
@@ -589,27 +590,33 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 			Fatalf("Could not setup connection after %d retries", retries)
 		}
 
+		conns = append(conns, conn)
 		dc := api.NewDgraphClient(conn)
 		clients = append(clients, dc)
 	}
 
 	dg := dgo.NewDgraphClient(clients...)
-	cancel := func() {}
 	user := conf.GetString("user")
 	if login && len(user) > 0 {
-		cancel, err = GetPassAndLogin(dg, &CredOpt{
+		err = GetPassAndLogin(dg, &CredOpt{
 			Conf:        conf,
-			Userid:      user,
+			UserId:      user,
 			PasswordOpt: "password",
 		})
 		Checkf(err, "While retrieving password and logging in")
 	}
-	return dg, cancel
+
+	closeFunc := func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	}
+	return dg, closeFunc
 }
 
 type CredOpt struct {
 	Conf        *viper.Viper
-	Userid      string
+	UserId      string
 	PasswordOpt string
 }
 
@@ -641,20 +648,21 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	return password, nil
 }
 
-func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) (CloseFunc, error) {
+func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	password := opt.Conf.GetString(opt.PasswordOpt)
 	if len(password) == 0 {
 		var err error
-		password, err = AskUserPassword(opt.Userid, "Current", 1)
+		password, err = AskUserPassword(opt.UserId, "Current", 1)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	if err := dg.Login(ctx, opt.Userid, password); err != nil {
-		return nil, fmt.Errorf("unable to login to the %v account:%v", opt.Userid, err)
+	defer cancel()
+	if err := dg.Login(ctx, opt.UserId, password); err != nil {
+		return fmt.Errorf("unable to login to the %v account:%v", opt.UserId, err)
 	}
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
-	return func() { cancel() }, nil
+	return nil
 }
