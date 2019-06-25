@@ -163,12 +163,11 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
-## External IDs and Upsert Transaction
+## External IDs and Upsert Block
 
-The upsert transaction makes managing external IDs easy.
+The Upsert Block makes managing external IDs easy.
 
 Set the schema.
-
 ```
 xid: string @index(exact) .
 <http://schema.org/name>: string @index(exact) .
@@ -183,7 +182,8 @@ Set the type first of all.
   }
 }
 ```
-Now you can create a new person and attach its type using an upsert transaction.
+
+Now you can create a new person and attach its type using the Upsert Block.
 ```
    upsert {
       query {
@@ -204,7 +204,7 @@ Now you can create a new person and attach its type using an upsert transaction.
     }
 ```
 
-You can also delete a person and deattach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+You can also delete a person and deatach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
 
 ```
    upsert {
