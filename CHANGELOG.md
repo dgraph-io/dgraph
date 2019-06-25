@@ -4,6 +4,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
+## [1.1.0] - Unreleased
+
+### Fixed
+
+### Changed
+
+- Tablet move and group removal. (#2880)
+- Improve hash index. (#2887)
+
+- Use a stream connection for internal connection health checking. (#2956)
+
+- Use defer statements to release locks. (#2962)
+
+- Suppress logging before `flag.Parse` from glog. (#970)
+
+- VerifyUid should wait for membership information. (#2974)
+
+
+- Switching to perfect use case of sync.Map and remove the locks. (#2976)
+
+
+### Added
+
+#### Query
+
+- Output non-list uid predicates as a map. (#2921)
+- Allow querying all lang values of a predicate. (#2910)
+- Support anyofterms query on facet if the input format is json. (#2885)
+- `regexp()` is valid in `@filter` even for predicates without the trigram index. (#2913)
+- Add `minweight` and `maxweight` arguments to k-shortest path algorithm. (#2915)
+- Allow variable assignment of `count(uid)`. (#2947)
+
+- Type system.
+  - Add `type` function to query types. (#2933)
+  - Parser for type declaration. (#2950)
+
+#### Mutation
+
+- Add ability to delete triples of scalar non-list predicates. (#2899)
+
+#### Schema
+- Add ability to set schema to a single UID schema. (#2895)
+
+#### Flags
+
+- Whitelist by hostname. (#2953)
+
+
+#### Enterprise features
+
+- Enforcing ACLs for query, mutation and alter requests. (#2862)
+- Don't create ACL predicates when the ACL feature is not turned on. (#2924)
+
+#### Enterprise backups
+
+- Fixed bug with backup fan-out code. (#2973)
+
+#### Dgraph Zero
+
+- Zero server shutdown endpoint `/shutdown` at Zero's HTTP port. (#2928)
+
+#### Dgraph Live Loader
+
+- Support live loading JSON files or stdin streams. (#2961)
+
+#### Tracing
+
+### Removed
+
+### Fixed
+
+- Fixes error found by gofuzz and reports line-column numbers for lexer/parser errors. (#2914)
+- Fix int/float conversion to bool. (#2893)
+- Handling of empty string to datetime conversion. (#2891)
+- Export schema with special chars. Fixes #2925. (#2929)
+
+- Fix a `/moveTablet` test to take into account that predicates could be in long URI form. Tablet names must be URI-escaped. (#2957)
+
 ## [1.0.15] - 2019-05-30
 [1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
 
