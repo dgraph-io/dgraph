@@ -32,8 +32,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -327,7 +334,7 @@ func ValidateAddress(addr string) bool {
 }
 
 // RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
-// This function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+// This function should be called like: someSlice = RemoveDuplicates(someSlice)
 func RemoveDuplicates(s []string) (out []string) {
 	sort.Strings(s)
 	out = s[:0]
@@ -538,4 +545,116 @@ func SpanTimer(span *trace.Span, name string) func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
 		// TODO: We can look into doing a latency record here.
 	}
+}
+
+type CloseFunc func()
+
+// GetDgraphClient creates a Dgraph client based on the following options in the configuration:
+// --alpha specifies a comma separated list of endpoints to connect to
+// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
+// --retries specifies how many times we should retry the connection to each endpoint upon failures
+// --user and --password specify the credentials we should use to login with the server
+func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
+	alphas := conf.GetString("alpha")
+	if len(alphas) == 0 {
+		glog.Fatalf("The --alpha option must be set in order to connect to Dgraph")
+	}
+
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", alphas)
+	tlsCfg, err := LoadClientTLSConfig(conf)
+	Checkf(err, "While loading TLS configuration")
+
+	ds := strings.Split(alphas, ",")
+	var clients []api.DgraphClient
+
+	retries := 1
+	if conf.IsSet("retries") {
+		retries = conf.GetInt("retries")
+		if retries < 1 {
+			retries = 1
+		}
+	}
+
+	for _, d := range ds {
+		var conn *grpc.ClientConn
+		for i := 0; i < retries; retries++ {
+			conn, err = SetupConnection(d, tlsCfg, false)
+			if err == nil {
+				break
+			}
+			fmt.Printf("While trying to setup connection: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+		}
+		if conn == nil {
+			Fatalf("Could not setup connection after %d retries", retries)
+		}
+
+		dc := api.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+
+	dg := dgo.NewDgraphClient(clients...)
+	cancel := func() {}
+	user := conf.GetString("user")
+	if login && len(user) > 0 {
+		cancel, err = GetPassAndLogin(dg, &CredOpt{
+			Conf:        conf,
+			Userid:      user,
+			PasswordOpt: "password",
+		})
+		Checkf(err, "While retrieving password and logging in")
+	}
+	return dg, cancel
+}
+
+type CredOpt struct {
+	Conf        *viper.Viper
+	Userid      string
+	PasswordOpt string
+}
+
+func AskUserPassword(userid string, pwdType string, times int) (string, error) {
+	AssertTrue(times == 1 || times == 2)
+	AssertTrue(pwdType == "Current" || pwdType == "New")
+	// ask for the user's password
+	fmt.Printf("%s password for %v:", pwdType, userid)
+	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", fmt.Errorf("error while reading password:%v", err)
+	}
+	fmt.Println()
+	password := string(pd)
+
+	if times == 2 {
+		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
+		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", fmt.Errorf("error while reading password:%v", err)
+		}
+		fmt.Println()
+
+		password2 := string(pd2)
+		if password2 != password {
+			return "", fmt.Errorf("the two typed passwords do not match")
+		}
+	}
+	return password, nil
+}
+
+func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) (CloseFunc, error) {
+	password := opt.Conf.GetString(opt.PasswordOpt)
+	if len(password) == 0 {
+		var err error
+		password, err = AskUserPassword(opt.Userid, "Current", 1)
+		if err != nil {
+			return nil, err
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := dg.Login(ctx, opt.Userid, password); err != nil {
+		return nil, fmt.Errorf("unable to login to the %v account:%v", opt.Userid, err)
+	}
+	fmt.Println("Login successful.")
+	// update the context so that it has the admin jwt token
+	return func() { cancel() }, nil
 }

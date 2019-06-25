@@ -13,12 +13,8 @@
 package acl
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"syscall"
-	"time"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -26,7 +22,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 func GetGroupIDs(groups []Group) []string {
@@ -155,89 +150,22 @@ type JwtGroup struct {
 	Group string
 }
 
-func askUserPassword(userid string, pwdType string, times int) (string, error) {
-	x.AssertTrue(times == 1 || times == 2)
-	x.AssertTrue(pwdType == "Current" || pwdType == "New")
-	// ask for the user's password
-	fmt.Printf("%s password for %v:", pwdType, userid)
-	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+// getClientWithAdminCtx creates a client by checking the --alpha, various --tls*, and --retries
+// options, and then login using groot id and password
+func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) {
+	dg, closeClient := x.GetDgraphClient(conf, false)
+	cancel, err := x.GetPassAndLogin(dg, &x.CredOpt{
+		Conf:        conf,
+		Userid:      x.GrootId,
+		PasswordOpt: gPassword,
+	})
 	if err != nil {
-		return "", fmt.Errorf("error while reading password:%v", err)
+		return nil, nil, err
 	}
-	fmt.Println()
-	password := string(pd)
-
-	if times == 2 {
-		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
-		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return "", fmt.Errorf("error while reading password:%v", err)
-		}
-		fmt.Println()
-
-		password2 := string(pd2)
-		if password2 != password {
-			return "", fmt.Errorf("the two typed passwords do not match")
-		}
-	}
-	return password, nil
-}
-
-type CloseFunc func()
-
-func getDgraphClient(conf *viper.Viper) (*dgo.Dgraph, CloseFunc) {
-	opt = options{
-		alpha: conf.GetString("alpha"),
-	}
-	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", opt.alpha)
-
-	if len(opt.alpha) == 0 {
-		glog.Fatalf("The --alpha option must be set in order to connect to dgraph")
-	}
-
-	tlsCfg, err := x.LoadClientTLSConfig(conf)
-	x.Checkf(err, "While loading TLS configuration")
-
-	conn, err := x.SetupConnection(opt.alpha, tlsCfg, false)
-	x.Checkf(err, "While trying to setup connection to Dgraph alpha.")
-
-	dc := api.NewDgraphClient(conn)
-	return dgo.NewDgraphClient(dc), func() {
-		if err := conn.Close(); err != nil {
-			fmt.Printf("Error while closing connection: %v\n", err)
-		}
-	}
-}
-
-func getClientWithUserCtx(userid string, passwordOpt string, conf *viper.Viper) (*dgo.Dgraph,
-	CloseFunc, error) {
-	password := conf.GetString(passwordOpt)
-	if len(password) == 0 {
-		var err error
-		password, err = askUserPassword(userid, "Current", 1)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	dc, closeClient := getDgraphClient(conf)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-	cleanFunc := func() {
+	return dg, func() {
 		cancel()
 		closeClient()
-	}
-
-	if err := dc.Login(ctx, userid, password); err != nil {
-		return dc, cleanFunc, fmt.Errorf("unable to login to the %v account:%v", userid, err)
-	}
-	fmt.Println("Login successful.")
-	// update the context so that it has the admin jwt token
-	return dc, cleanFunc, nil
-}
-
-func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, CloseFunc, error) {
-	return getClientWithUserCtx(x.GrootId, gPassword, conf)
+	}, nil
 }
 
 func CreateUserNQuads(userId string, password string) []*api.NQuad {

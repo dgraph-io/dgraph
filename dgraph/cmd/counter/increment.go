@@ -23,7 +23,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/dgraph-io/dgo"
@@ -31,7 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 )
 
 // Increment is the sub-command invoked when calling "dgraph increment".
@@ -153,40 +151,12 @@ func run(conf *viper.Viper) {
 	startTime := time.Now()
 	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()
 
-	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
-
-	tlsCfg, err := x.LoadClientTLSConfig(conf)
-	x.CheckfNoTrace(err)
-
 	format := "0102 03:04:05.999"
 
-retryConn:
-	var conn *grpc.ClientConn
-	retries := conf.GetInt("retries")
-	if retries < 1 {
-		retries = 1
-	}
-	for i := 0; i < retries; retries++ {
-		conn, err = x.SetupConnection(alpha, tlsCfg, false)
-		if err == nil {
-			break
-		}
-		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...\n",
-			time.Now().UTC().Format(format), err)
-		time.Sleep(time.Second)
-	}
-	if conn == nil {
-		fmt.Printf("Could not setup connection after %d retries", retries)
-		os.Exit(1)
-	}
-
-	dc := api.NewDgraphClient(conn)
-	dg := dgo.NewDgraphClient(dc)
-	if user := conf.GetString("user"); len(user) > 0 {
-		x.CheckfNoTrace(dg.Login(context.Background(), user, conf.GetString("password")))
-	}
+	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
+	defer closeFunc()
 
 	for num > 0 {
 		txnStart := time.Now() // Start time of transaction
@@ -195,7 +165,7 @@ retryConn:
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 			time.Sleep(time.Second)
-			goto retryConn
+			continue
 		}
 		serverLat := cnt.qLatency + cnt.mLatency
 		clientLat := time.Since(txnStart).Round(time.Millisecond)
