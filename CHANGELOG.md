@@ -109,7 +109,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Allow partial snapshot streams to reduce the amount of data needed to be transferred between Alphas. ([#3454][])
 - Use Badger's StreamWriter to improve write speeds during snapshot streaming. ([#3457][]) ([#3442][])
 - Call file sync explicitly at the end of TxnWriter to improve performance. ([#3418][])
-- Optimize mutation and delta application. ([#2987][])
+- Optimize mutation and delta application. **Breaking: With these changes, the mutations within a single call are rearranged. So, no assumptions must be made about the order in which they get executed.**
+ ([#2987][])
 - Add logs to show Dgraph config options. ([#3337][])
 - Add `-v=3` logs for reporting Raft communication for debugging. These logs start with `RaftComm:`. ([9cd628f6f][])
 
