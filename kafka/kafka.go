@@ -170,11 +170,10 @@ func getKafkaConsumer(brokers []string) (sarama.Consumer, error) {
 		consumer, err = sarama.NewConsumer(brokers, config)
 		if err == nil {
 			return consumer, nil
-		} else {
-			glog.Errorf("unable to create the kafka consumer, "+
-				"will retry in 5 seconds: %v", err)
-			time.Sleep(5 * time.Second)
 		}
+		glog.Errorf("unable to create the kafka consumer, "+
+			"will retry in 5 seconds: %v", err)
+		time.Sleep(5 * time.Second)
 	}
 
 	return nil, fmt.Errorf("unable to get consumer after retries")
@@ -196,6 +195,10 @@ func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
 	}
 
 	pom, err := om.ManagePartition(dgraphTopic, s.partition)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return pom, func() {
 		client.Close()
 	}, nil
@@ -278,11 +281,10 @@ func getKafkaProducer(brokers []string) (sarama.SyncProducer, error) {
 		producer, err = sarama.NewSyncProducer(brokers, conf)
 		if err == nil {
 			return producer, nil
-		} else {
-			glog.Errorf("unable to create the kafka sync producer, "+
-				"will retry in 5 seconds: %v", err)
-			time.Sleep(5 * time.Second)
 		}
+		glog.Errorf("unable to create the kafka sync producer, "+
+			"will retry in 5 seconds: %v", err)
+		time.Sleep(5 * time.Second)
 	}
 	return nil, fmt.Errorf("unable to get producer after retries")
 }

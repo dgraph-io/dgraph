@@ -1,8 +1,8 @@
 package kafka
 
-type KafkaOptions struct {
+type Options struct {
 	TargetBrokers string
 	SourceBrokers string
 }
 
-var Config KafkaOptions
+var Config Options

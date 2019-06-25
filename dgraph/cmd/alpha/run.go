@@ -436,7 +436,7 @@ func run() {
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
-	kafka.Config = kafka.KafkaOptions{
+	kafka.Config = kafka.Options{
 		TargetBrokers: Alpha.Conf.GetString("kafka_target_brokers"),
 		SourceBrokers: Alpha.Conf.GetString("kafka_source_brokers"),
 	}

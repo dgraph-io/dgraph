@@ -334,8 +334,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		span.Annotate(nil, "Done")
 	case len(proposal.Kv) > 0:
-		populateKeyValues(ctx, proposal.Kv)
-
+		if err := populateKeyValues(ctx, proposal.Kv); err != nil {
+			return err
+		}
 	case proposal.State != nil:
 		n.elog.Printf("Applying state for key: %s", proposal.Key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
@@ -343,12 +344,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		groups().applyState(proposal.State)
 	case len(proposal.CleanPredicate) > 0:
 		n.elog.Printf("Cleaning predicate: %s", proposal.CleanPredicate)
-		posting.DeletePredicate(ctx, proposal.CleanPredicate)
-
+		if err := posting.DeletePredicate(ctx, proposal.CleanPredicate); err != nil {
+			return err
+		}
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
-		n.commitOrAbort(proposal.Key, proposal.Delta)
-
+		if err := n.commitOrAbort(proposal.Key, proposal.Delta); err != nil {
+			return err
+		}
 	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
 		if err != nil {
@@ -971,10 +974,10 @@ func kafkaMsgCb(proposal *pb.Proposal) error {
 
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
-	groupId := int32(groups().groupId())
-	kafka.SetupKafkaTarget(groupId)
+	groupID := int32(groups().groupId())
+	kafka.SetupKafkaTarget(groupID)
 
-	kafka.SetupKafkaSource(kafkaMsgCb, groupId)
+	kafka.SetupKafkaSource(kafkaMsgCb, groupID)
 }
 
 func onBecomeFollower() {
