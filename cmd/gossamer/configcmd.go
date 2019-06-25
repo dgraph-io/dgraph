@@ -55,11 +55,11 @@ var (
 )
 
 // makeNode sets up node; opening badgerDB instance and returning the Dot container
-func makeNode(ctx *cli.Context) (*dot.Dot, error) {
+func makeNode(ctx *cli.Context) (*dot.Dot, *cfg.Config, error) {
 	fig, err := getConfig(ctx)
 	if err != nil {
 		log.Crit("unable to extract required config", "err", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	var srvcs []services.Service
@@ -73,7 +73,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, error) {
 	dataDir := getDatabaseDir(ctx, fig)
 	dbSrvc, err := polkadb.NewBadgerService(dataDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	srvcs = append(srvcs, dbSrvc)
 
@@ -86,7 +86,7 @@ func makeNode(ctx *cli.Context) (*dot.Dot, error) {
 	setRpcHost(ctx, fig.RpcCfg)
 	rpcSrvr := rpc.NewHttpServer(apiSrvc.Api, &json2.Codec{}, fig.RpcCfg)
 
-	return dot.NewDot(srvcs, rpcSrvr), nil
+	return dot.NewDot(srvcs, rpcSrvr), fig, nil
 }
 
 // getConfig checks for config.toml if --config flag is specified
@@ -143,6 +143,7 @@ func loadConfig(file string) (*cfg.Config, error) {
 // getDatabaseDir initializes directory for BadgerService logs
 func getDatabaseDir(ctx *cli.Context, fig *cfg.Config) string {
 	if file := ctx.GlobalString(utils.DataDirFlag.Name); file != "" {
+		fig.DbCfg.DataDir = file
 		return file
 	} else if fig.DbCfg.DataDir != "" {
 		return fig.DbCfg.DataDir
@@ -211,7 +212,7 @@ func strToMods(strs []string) []api.Module {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	fig, err := getConfig(ctx)
+	_, fig, err := makeNode(ctx)
 	if err != nil {
 		return err
 	}

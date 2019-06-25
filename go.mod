@@ -28,7 +28,6 @@ require (
 	github.com/onsi/gomega v1.5.0 // indirect
 	github.com/perlin-network/life v0.0.0-20190402092845-c30697b41680
 	github.com/pkg/errors v0.8.1
-	github.com/rendon/testcli v0.0.0-20161027181003-6283090d169f
 	github.com/urfave/cli v1.20.0
 	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
 	golang.org/x/net v0.0.0-20190613194153-d28f0bde5980 // indirect
