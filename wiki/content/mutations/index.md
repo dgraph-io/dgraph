@@ -799,9 +799,10 @@ The Mutation block currently only allows the `uid` function, which allows extrac
 from variables defined in the query block. There are 3 possible outcomes based on the
 results of executing the query block:
 
-  * If the variable is empty i.e. has no value, the `uid` function returns a new UID in
-  case of `set` and is treated similar to a blank node. In case of `delete/del`, it
-  returns no UID. Hence, the operation becomes a no-op and is silently ignored.
+  * If the variable is empty i.e. no node matched the query, the `uid` function returns
+  a new UID in case of a `set` operation and is thus treated similar to a blank node.
+  On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes
+  a no-op and is silently ignored.
   * If the variable stores exactly one UID, the `uid` function returns the uid stored in
   the variable.
   * If the variable stores more than one UID, the mutation fails. We plan to support
