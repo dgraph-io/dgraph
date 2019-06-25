@@ -600,7 +600,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	if login && len(user) > 0 {
 		err = GetPassAndLogin(dg, &CredOpt{
 			Conf:        conf,
-			UserId:      user,
+			UserID:      user,
 			PasswordOpt: "password",
 		})
 		Checkf(err, "While retrieving password and logging in")
@@ -616,7 +616,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 
 type CredOpt struct {
 	Conf        *viper.Viper
-	UserId      string
+	UserID      string
 	PasswordOpt string
 }
 
@@ -652,15 +652,15 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	password := opt.Conf.GetString(opt.PasswordOpt)
 	if len(password) == 0 {
 		var err error
-		password, err = AskUserPassword(opt.UserId, "Current", 1)
+		password, err = AskUserPassword(opt.UserID, "Current", 1)
 		if err != nil {
 			return err
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := dg.Login(ctx, opt.UserId, password); err != nil {
-		return fmt.Errorf("unable to login to the %v account:%v", opt.UserId, err)
+	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+		return fmt.Errorf("unable to login to the %v account:%v", opt.UserID, err)
 	}
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token
