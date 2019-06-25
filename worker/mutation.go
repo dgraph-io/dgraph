@@ -21,6 +21,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/dgraph-io/dgraph/kafka"
+
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
@@ -148,6 +150,12 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 		CurrentSchema: &current,
 	}
 	return rebuild.Run(ctx)
+}
+
+func publishCommittedProposal(proposal *pb.Proposal) {
+	if gr.Node != nil && gr.Node.AmLeader() {
+		kafka.PublishMsg(proposal)
+	}
 }
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
@@ -352,10 +360,12 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 		return nil
 
 	case !schemaType.IsScalar() && storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		return errors.Errorf("Input for predicate %s is scalar while the schema type is %v",
+			edge.Attr, schemaType)
 
 	case schemaType.IsScalar() && !storageType.IsScalar():
-		return errors.Errorf("Input for predicate %s of type scalar is uid. Edge: %v", edge.Attr, edge)
+		return errors.Errorf("Input for predicate %s is not scalar while the schema type "+
+			"is %v. Edge: %v", edge.Attr, schemaType, edge)
 
 	// The suggested storage type matches the schema, OK!
 	case storageType == schemaType && schemaType != types.DefaultID:

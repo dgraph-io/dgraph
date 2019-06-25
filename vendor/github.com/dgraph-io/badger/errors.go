@@ -48,10 +48,6 @@ var (
 	// ErrEmptyKey is returned if an empty key is passed on an update function.
 	ErrEmptyKey = errors.New("Key cannot be empty")
 
-	// ErrInvalidKey is returned if the key has a special !badger! prefix,
-	// reserved for internal usage.
-	ErrInvalidKey = errors.New("Key is using a reserved !badger! prefix")
-
 	// ErrRetry is returned when a log file containing the value is not found.
 	// This usually indicates that it may have been garbage collected, and the
 	// operation needs to be retried.

@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/badger/y"
 	dy "github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/kafka"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -323,7 +324,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 	span.Annotatef(nil, "node.applyCommitted Node id: %d. Group id: %d. Got proposal key: %s",
 		n.Id, n.gid, proposal.Key)
 
-	if proposal.Mutations != nil {
+	switch {
+	case proposal.Mutations != nil:
 		// syncmarks for this shouldn't be marked done until it's committed.
 		span.Annotate(nil, "Applying mutations")
 		if err := n.applyMutations(ctx, proposal); err != nil {
@@ -331,27 +333,21 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return err
 		}
 		span.Annotate(nil, "Done")
-		return nil
-	}
-
-	switch {
 	case len(proposal.Kv) > 0:
-		return populateKeyValues(ctx, proposal.Kv)
+		populateKeyValues(ctx, proposal.Kv)
 
 	case proposal.State != nil:
 		n.elog.Printf("Applying state for key: %s", proposal.Key)
 		// This state needn't be snapshotted in this group, on restart we would fetch
 		// a state which is latest or equal to this.
 		groups().applyState(proposal.State)
-		return nil
-
 	case len(proposal.CleanPredicate) > 0:
 		n.elog.Printf("Cleaning predicate: %s", proposal.CleanPredicate)
-		return posting.DeletePredicate(ctx, proposal.CleanPredicate)
+		posting.DeletePredicate(ctx, proposal.CleanPredicate)
 
 	case proposal.Delta != nil:
 		n.elog.Printf("Applying Oracle Delta for key: %s", proposal.Key)
-		return n.commitOrAbort(proposal.Key, proposal.Delta)
+		n.commitOrAbort(proposal.Key, proposal.Delta)
 
 	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
@@ -381,9 +377,11 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		// Roll up all posting lists as a best-effort operation.
 		n.rollupCh <- snap.ReadTs
-		return nil
+	default:
+		x.Fatalf("Unknown proposal: %+v", proposal)
 	}
-	x.Fatalf("Unknown proposal: %+v", proposal)
+
+	publishCommittedProposal(proposal)
 	return nil
 }
 
@@ -765,8 +763,15 @@ func (n *node) Run() {
 				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
 
 			if rd.SoftState != nil {
+				leaderNow := rd.RaftState == raft.StateLeader
+				if !leader && leaderNow {
+					onBecomeLeader()
+				} else if leader && !leaderNow {
+					onBecomeFollower()
+				}
+
 				groups().triggerMembershipSync()
-				leader = rd.RaftState == raft.StateLeader
+				leader = leaderNow
 			}
 			if leader {
 				// Leader can send messages in parallel with writing to disk.
@@ -931,6 +936,7 @@ func (n *node) Run() {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
+
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
@@ -946,6 +952,35 @@ func (n *node) Run() {
 			}
 		}
 	}
+}
+
+func kafkaMsgCb(proposal *pb.Proposal) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if proposal.State == nil {
+		// we do not log membership state
+		glog.V(1).Infof("got proposal from kafka: %+v", proposal)
+	}
+
+	if err := groups().Node.proposeAndWait(ctx, proposal); err != nil {
+		return fmt.Errorf("error while waiting for proposal from kafka %+v: %v", proposal, err)
+	}
+	return nil
+}
+
+func onBecomeLeader() {
+	glog.Infof("onBecomeLeader setting up kafka")
+	groupId := int32(groups().groupId())
+	kafka.SetupKafkaTarget(groupId)
+
+	kafka.SetupKafkaSource(kafkaMsgCb, groupId)
+}
+
+func onBecomeFollower() {
+	glog.Infof("onBecomeFollower")
+	kafka.CancleKafkaSource()
+	kafka.CancelKafkaTarget()
 }
 
 func listWrap(kv *bpb.KV) *bpb.KVList {

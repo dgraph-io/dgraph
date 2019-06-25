@@ -27,7 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	ostats "go.opencensus.io/stats"
-	tag "go.opencensus.io/tag"
+	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
 	"github.com/pkg/errors"
@@ -181,7 +181,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	key := uniqueKey()
 	proposal.Key = key
 	span := otrace.FromContext(ctx)
-
 	stop := x.SpanTimer(span, "n.proposeAndWait")
 	defer stop()
 

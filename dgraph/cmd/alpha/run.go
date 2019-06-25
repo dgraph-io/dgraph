@@ -33,6 +33,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/kafka"
+
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -178,6 +180,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 
+	flag.String("kafka_target_brokers", "", "The Kafka brokers to publish updates to")
+	flag.String("kafka_source_brokers", "", "The Kafka brokers to receive updates from")
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 }
@@ -431,6 +435,10 @@ func run() {
 		MutationsMode:  edgraph.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+	}
+	kafka.Config = kafka.KafkaOptions{
+		TargetBrokers: Alpha.Conf.GetString("kafka_target_brokers"),
+		SourceBrokers: Alpha.Conf.GetString("kafka_source_brokers"),
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

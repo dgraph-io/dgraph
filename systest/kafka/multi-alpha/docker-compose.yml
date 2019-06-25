@@ -1,0 +1,197 @@
+# Auto-generated with: [/home/lucas/go/src/github.com/dgraph-io/dgraph/compose/compose -a 1 -z 1]
+#
+version: "3.5"
+services:
+  zookeeper:
+    container_name: zookeeper
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+  kafka1:
+    image: wurstmeister/kafka
+    container_name: kafka1
+    ports:
+      - "9192:9192"
+    depends_on:
+      - zookeeper
+    environment:
+        KAFKA_PORT: 9192 # used for detecting kafka ready and creating topic
+        KAFKA_CREATE_TOPICS: "dgraph:2:2"
+        KAFKA_ADVERTISED_LISTENERS: ALL://kafka1:9192
+        KAFKA_LISTENERS: ALL://:9192
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ALL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: ALL
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker1.sock:/var/run/docker.sock
+  kafka2:
+    image: wurstmeister/kafka
+    container_name: kafka2
+    ports:
+      - "9292:9292"
+    depends_on:
+      - zookeeper
+    environment:
+        KAFKA_PORT: 9292 # used for detecting kafka ready and creating topic
+        KAFKA_CREATE_TOPICS: "dgraph:2:2"
+        KAFKA_ADVERTISED_LISTENERS: ALL://kafka2:9292
+        KAFKA_LISTENERS: ALL://:9292
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ALL:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: ALL
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker2.sock:/var/run/docker.sock
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5180:5180
+    - 6180:6180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 100 --replicas 3 --idx=1 --my=zero1:5180 --logtostderr -v=2
+      --bindall
+  alpha100:
+    image: dgraph/dgraph:latest
+    container_name: alpha100
+    working_dir: /data/alpha100
+    depends_on:
+      - kafka1
+      - kafka2
+    labels:
+      cluster: test
+    ports:
+    - 8180:8180
+    - 9180:9180
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 100 --my=alpha100:7180 --lru_mb=1024 --zero=zero1:5180
+        --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  alpha101:
+    image: dgraph/dgraph:latest
+    container_name: alpha101
+    working_dir: /data/alpha101
+    depends_on:
+      - kafka1
+      - kafka2
+    labels:
+      cluster: test
+    ports:
+    - 8181:8181
+    - 9181:9181
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command:  /gobin/dgraph alpha -o 101 --my=alpha101:7181 --lru_mb=1024 --zero=zero1:5180
+          --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  alpha102:
+    image: dgraph/dgraph:latest
+    container_name: alpha102
+    working_dir: /data/alpha102
+    depends_on:
+      - kafka1
+      - kafka2
+    labels:
+      cluster: test
+    ports:
+    - 8182:8182
+    - 9182:9182
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command:  /gobin/dgraph alpha -o 102 --my=alpha102:7182 --lru_mb=1024 --zero=zero1:5180 
+      --logtostderr -v=1 --kafka_target_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  zero2:
+    image: dgraph/dgraph:latest
+    container_name: zero2
+    working_dir: /data/zero2
+    labels:
+      cluster: test
+    ports:
+    - 5280:5280
+    - 6280:6280
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 200 --replicas 3 --idx=1 --my=zero2:5280 --logtostderr -v=2
+      --bindall
+  alpha200:
+    image: dgraph/dgraph:latest
+    container_name: alpha200
+    working_dir: /data/alpha200
+    depends_on:
+      - kafka1
+      - kafka2
+    labels:
+      cluster: test
+    ports:
+    - 8280:8280
+    - 9280:9280
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 200 --my=alpha200:7280 --lru_mb=1024 --zero=zero2:5280
+      --logtostderr -v=1 --kafka_source_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  alpha201:
+    image: dgraph/dgraph:latest
+    container_name: alpha201
+    working_dir: /data/alpha201
+    depends_on:
+      - kafka1
+      - kafka2
+    labels:
+      cluster: test
+    ports:
+    - 8281:8281
+    - 9281:9281
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 201 --my=alpha201:7281 --lru_mb=1024 --zero=zero2:5280
+      --logtostderr -v=1 --kafka_source_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  alpha202:
+    image: dgraph/dgraph:latest
+    container_name: alpha202
+    working_dir: /data/alpha202
+    depends_on:
+      - kafka1
+      - kafka2
+    labels:
+      cluster: test
+    ports:
+    - 8282:8282
+    - 9282:9282
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 202 --my=alpha202:7282 --lru_mb=1024 --zero=zero2:5280
+      --logtostderr -v=1 --kafka_source_brokers kafka1:9192 --jaeger.collector=http://jaeger:14268
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    working_dir: /working/jaeger
+    ports:
+    - 14268:14268
+    - 16686:16686
+volumes: {}

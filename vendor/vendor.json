@@ -459,10 +459,10 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "LmxXlda5frwORaWcfAZW0OWyERI=",
+			"checksumSHA1": "xj4qf89qOSSgCWu3cT3IHYT8xyo=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "02a1ef381f997575f6647e2d8cb93dca83ce325a",
+			"revisionTime": "2019-06-19T19:39:36Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
@@ -495,10 +495,10 @@
 			"revisionTime": "2019-06-07T23:13:53Z"
 		},
 		{
-			"checksumSHA1": "ozi+AzOCsxkBoTXDQiwS4a7M0mU=",
+			"checksumSHA1": "6Ya7Kr114SVcXRqa3UaglreBrY8=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "02a1ef381f997575f6647e2d8cb93dca83ce325a",
+			"revisionTime": "2019-06-19T19:39:36Z"
 		},
 		{
 			"checksumSHA1": "g06KOc9faGeu0J6262AQfpL1x/o=",

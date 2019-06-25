@@ -30,10 +30,10 @@ import (
 )
 
 // CompareJSON compares two JSON objects (passed as strings).
-func CompareJSON(t *testing.T, want, got string) {
+func CompareJSON(t *testing.T, want, got string) bool {
 	wantMap := UnmarshalJSON(t, want)
 	gotMap := UnmarshalJSON(t, got)
-	CompareJSONMaps(t, wantMap, gotMap)
+	return CompareJSONMaps(t, wantMap, gotMap)
 }
 
 // CompareJSONMaps compares two JSON objects (passed as maps).
