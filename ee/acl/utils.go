@@ -154,7 +154,7 @@ type JwtGroup struct {
 // options, and then login using groot id and password
 func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) {
 	dg, closeClient := x.GetDgraphClient(conf, false)
-	cancel, err := x.GetPassAndLogin(dg, &x.CredOpt{
+	err := x.GetPassAndLogin(dg, &x.CredOpt{
 		Conf:        conf,
 		UserId:      x.GrootId,
 		PasswordOpt: gPassword,
@@ -162,10 +162,7 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	return dg, func() {
-		cancel()
-		closeClient()
-	}, nil
+	return dg, closeClient, nil
 }
 
 func CreateUserNQuads(userId string, password string) []*api.NQuad {
