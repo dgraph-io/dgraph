@@ -78,6 +78,7 @@ Error messages:
 #### Dgraph Debug Tool
 
 - When looking up a key, print if it's a multi-part list and its splits. (#3311)
+- Diagnose Raft WAL via debug tool (#3319)
 
 ####  HTTP API
 - Change `/commit` endpoint to accept a list of preds for conflict detection. (#3020)
@@ -181,6 +182,8 @@ Error messages:
 - Add bash and zsh shell completion. See `dgraph completion bash --help` or `dgraph completion zsh --help` for installation instructions. (#3084)
 - Add TLS support to increment command. (#3257)
 - Add support for ECDSA in dgraph cert. (#3269)
+- Add support for JSON export. (#3309)
+
 
 ### Removed
 
@@ -215,7 +218,6 @@ Error messages:
 
 - Fix bug with pagination using `after`. (#3149)
 - Fix tablet error handling. (#3323)
-
 
 Code cleanup:
 - Remove unused function deleteEntries. (#3126)
