@@ -25,6 +25,69 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Switching to perfect use case of sync.Map and remove the locks. (#2976)
 
 
+- Update govendor dependencies.
+  - Add OpenCensus deps to vendor using govendor. (#2989)
+
+- Optimize XidtoUID map used by live and bulk loader. With these changes, the live loader throughput jumps to 100K-120K NQuads/sec on my desktop. In particular, pre-assigning UIDs to the RDF/JSON file yields maximum throughput. I can load 140M friend graph RDFs in 25 mins. (#2998)
+
+- Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. (#3004, #3045) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. (18277872f)
+
+- Remove xidmap storage on disk from bulk loader. Peaks to 4M edges/sec on my machine now, up from max 1M/s.
+
+- Add `--format` flag to Dgraph Live Loader and Dgraph Bulk Loader to specify input data format type. (#2991)
+
+Error messages:
+
+- Output the line and column number in schema parsing error messages. (#2986)
+- Improve error of empty block queries. (#3015)
+- Update flag description and error messaging related to `--query_edge_limit` flag. (#2979)
+
+- Delete tablets which don't belong after tablet move. (#3051)
+
+- Alphas inform Zero about tablets in its postings directory when Alpha starts. (3271f64e0)
+
+- Govendor in latest dgo. (#3078)
+
+- Move glog of missing value warning to verbosity level 3. (#3092)
+
+- Prevent alphas from asking zero to serve tablets during queries. (#3091)
+
+- Put data before extensions in JSON response. (#3194)
+
+- Always parse language tag. (#3243)
+
+- Populate the StartTs for the commit gRPC call so that clients can double check the startTs still matches (#3228)
+
+- Replace MD5 with SHA-256 in `dgraph cert ls`. (#3254)
+
+- Reduce required memory. (#3274)
+
+- Update live loader flag help text. (#3278)
+
+- Fix use of deprecated function `grpc.WithTimeout()`. (#3253)
+
+- Use UTC Hour, Day, Month, Year for datetime comparison. **Backwards incompatible with v1.0.x** (#3251)
+
+- Add timestamps during bulk/live load. (#3287)
+- Introduce multi-part posting lists. (#3105)
+
+- Improve reporting of aborts and retries during live load. (#3313)
+
+- Vendor in the Jaeger and prometheus exporters from their own repos (#3322)
+
+#### Dgraph Debug Tool
+
+- When looking up a key, print if it's a multi-part list and its splits. (#3311)
+
+####  HTTP API
+- Change `/commit` endpoint to accept a list of preds for conflict detection. (#3020)
+
+#### Flags
+
+- Whitelist by hostname. (#2953)
+- User more readable CIDR format for whitelists.
+
+
 ### Added
 
 #### Query
@@ -39,27 +102,58 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Type system.
   - Add `type` function to query types. (#2933)
   - Parser for type declaration. (#2950)
+  - Add `@type` directive to enforce type constraints. (#3003)
+  - Store and query types. (#3018)
+  - Rename type predicate to dgraph.type (#3204)
+  - Change definition of dgraph.type pred to [string]. (#3235)
+  - Use type when available to resolve expand predicates. (#3214)
+  
+- Fuzzy match support (#2916)
+
+- Support for GraphQL variables in arrays. (#2981)
+
+- Show total weight of path in shortest path algorithm. (#2954)
+
+- Rename dgraph `--dgraph` option to `--alpha`. (#3273)
 
 #### Mutation
 
 - Add ability to delete triples of scalar non-list predicates. (#2899)
+- Allow deletion of specific language. (#3242)
+
+#### Alter
+
+- Implement DropData operation to delete data without deleting schema. (#3271)
 
 #### Schema
+
 - Add ability to set schema to a single UID schema. (#2895)
-
-#### Flags
-
-- Whitelist by hostname. (#2953)
-
+  - REVIEWTODO: Fix bulk loader bug regarding unknown UID predicates. (#3173)
+- Prevent dropping or altering of reserved predicates. (#2967)
+- Reserved predicates should act as case-insensitive. (#2997)
+- Support comments in schema. (#3133)
 
 #### Enterprise features
 
 - Enforcing ACLs for query, mutation and alter requests. (#2862)
 - Don't create ACL predicates when the ACL feature is not turned on. (#2924)
+- Add HTTP API for ACL commands, pinning ACL predicates to group 1. (#2951)
+- ACL: Using type to distinguish user and group. (#3124)
+- REVIEWTODO: Fix the aclCache race condition by initializing it on definition (#3141)
+-  Reduce the value of ACL TTLs to reduce the test running time. (#3164)
+  - Adds `--acl_cache_ttl` flag.
+- Fix panic when deleting a user or group that does not exist. (#3218)
+- ACL over TLS. (#3207)
+- Using read-only queries for ACL refreshes. (#3256)
+- When HttpLogin response context error, unmarshal and return the response context. (#3275)
 
 #### Enterprise backups
 
 - Fixed bug with backup fan-out code. (#2973)
+- Incremental backups / partial restore. (#2963)
+- REVIEWTODO: Turn obsolete error into warning. (#3172)
+- Add `dgraph lsbackup` command to list backups. (#3219)
+- Add option to override credentials and use public buckets. (#3227)
 
 #### Dgraph Zero
 
@@ -68,8 +162,25 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 #### Dgraph Live Loader
 
 - Support live loading JSON files or stdin streams. (#2961)
+- Support live loading N-Quads from stdin streams. (#3266)
+
+  - Later changes: Fix error to print string instead of character in live loader. (#3106)
+
+#### Dgraph Bulk Loader
+
+- Add `--replace_out` option to bulk command. (#3089)
 
 #### Tracing
+
+- Measure latency of Alpha's Raft loop. (63f545568)
+
+- Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. (#3060)
+
+#### Misc
+
+- Add bash and zsh shell completion. See `dgraph completion bash --help` or `dgraph completion zsh --help` for installation instructions. (#3084)
+- Add TLS support to increment command. (#3257)
+- Add support for ECDSA in dgraph cert. (#3269)
 
 ### Removed
 
@@ -81,6 +192,47 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Export schema with special chars. Fixes #2925. (#2929)
 
 - Fix a `/moveTablet` test to take into account that predicates could be in long URI form. Tablet names must be URI-escaped. (#2957)
+
+<!-- TODO: This sanity check was fixed? -->
+- Default value should not be nil. (#2995)
+- Sanity check for empty variables. (#3021)
+- Panic due to nil maps. (#3042)
+- ValidateAddress should return true if IPv6 is valid. (#3027)
+- Throw error when @recurse queries contain nested fields. (#3182)
+
+- Reject requests with predicates larger than the max size allowed (longer than 65,535 characters). (#3052)
+
+- Allow glog flags to be set via config file. (#3062, #3077)
+- Upgrade raft lib and fix group checksum. (#3085)
+
+- Check that uid is not used as function attribute. (#3112)
+- Do not retrieve facets when max recurse depth has been reached. (#3190)
+
+- Remove obsolete error message. (#3172)
+- Remove an unnecessary warning log. (#3216)
+- Fix bug triggered by nested expand predicates. (#3205)
+- Empty datetime will fail when returning results. (#3169)
+
+- Fix bug with pagination using `after`. (#3149)
+- Fix tablet error handling. (#3323)
+
+
+Code cleanup:
+- Remove unused function deleteEntries. (#3126)
+- Rename updateSchemaType to createSchema and remove unneeded parameter. (#3250)
+<!-- REVIEWTODO: Double check that this is just a code cleanup -->
+- Merge cases in handleUidPostings since their bodies are the same. (#3312)
+
+Reserved predicates:
+- Ensure reserved predicates cannot be moved. (#3137)
+- Allow schema updates to reserved preds if the update is the same. (#3143
+
+Internal tooling:
+- Update protos, proto regeneration Makefile, and release script. (#3189)
+- Tool to benchmark posting list performance. (#3294)
+
+
+
 
 ## [1.0.15] - 2019-05-30
 [1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
