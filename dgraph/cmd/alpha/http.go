@@ -165,10 +165,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isDebugMode, err := parseBool(r, "debug")
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
+	debugMode := r.URL.Query().Get("debug")
+	if debugMode != "true" {
+		debugMode = "false"
 	}
 	queryTimeout, err := parseDuration(r, "timeout")
 	if err != nil {
@@ -207,7 +206,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
+	ctx := context.WithValue(context.Background(), query.DebugKey, debugMode)
 	ctx = attachAccessJwt(ctx, r)
 
 	if queryTimeout != 0 {
