@@ -20,93 +20,54 @@ import (
 	"github.com/dgraph-io/badger/options"
 )
 
-// NOTE: Keep the comments in the following to 75 chars width, so they
-// format nicely in godoc.
+// Note: If you add a new option X make sure you also add a WithX method on Options.
 
 // Options are params for creating DB object.
 //
 // This package provides DefaultOptions which contains options that should
 // work for most applications. Consider using that as a starting point before
 // customizing it for your own needs.
+//
+// Each option X is documented on the WithX method.
 type Options struct {
-	// 1. Mandatory flags
-	// -------------------
-	// Directory to store the data in. If it doesn't exist, Badger will
-	// try to create it for you.
-	Dir string
-	// Directory to store the value log in. Can be the same as Dir. If it
-	// doesn't exist, Badger will try to create it for you.
+	// Required options.
+
+	Dir      string
 	ValueDir string
 
-	// 2. Frequently modified flags
-	// -----------------------------
-	// Sync all writes to disk. Setting this to false would achieve better
-	// performance, but may cause data to be lost.
-	SyncWrites bool
+	// Usually modified options.
 
-	// How should LSM tree be accessed.
-	TableLoadingMode options.FileLoadingMode
-
-	// How should value log be accessed.
+	SyncWrites          bool
+	TableLoadingMode    options.FileLoadingMode
 	ValueLogLoadingMode options.FileLoadingMode
+	NumVersionsToKeep   int
+	ReadOnly            bool
+	Truncate            bool
+	Logger              Logger
 
-	// How many versions to keep per key.
-	NumVersionsToKeep int
+	// Fine tuning options.
 
-	// Open the DB as read-only. With this set, multiple processes can
-	// open the same Badger DB. Note: if the DB being opened had crashed
-	// before and has vlog data to be replayed, ReadOnly will cause Open
-	// to fail with an appropriate message.
-	ReadOnly bool
+	MaxTableSize        int64
+	LevelSizeMultiplier int
+	MaxLevels           int
+	ValueThreshold      int
+	NumMemtables        int
 
-	// Truncate value log to delete corrupt data, if any. Would not truncate if ReadOnly is set.
-	Truncate bool
-
-	// DB-specific logger which will override the global logger.
-	Logger Logger
-
-	// 3. Flags that user might want to review
-	// ----------------------------------------
-	// The following affect all levels of LSM tree.
-	MaxTableSize        int64 // Each table (or file) is at most this size.
-	LevelSizeMultiplier int   // Equals SizeOf(Li+1)/SizeOf(Li).
-	MaxLevels           int   // Maximum number of levels of compaction.
-	// If value size >= this threshold, only store value offsets in tree.
-	ValueThreshold int
-	// Maximum number of tables to keep in memory, before stalling.
-	NumMemtables int
-	// The following affect how we handle LSM tree L0.
-	// Maximum number of Level 0 tables before we start compacting.
-	NumLevelZeroTables int
-
-	// If we hit this number of Level 0 tables, we will stall until L0 is
-	// compacted away.
+	NumLevelZeroTables      int
 	NumLevelZeroTablesStall int
 
-	// Maximum total size for L1.
-	LevelOneSize int64
-
-	// Size of single value log file.
-	ValueLogFileSize int64
-
-	// Max number of entries a value log file can hold (approximately). A value log file would be
-	// determined by the smaller of its file size and max entries.
+	LevelOneSize       int64
+	ValueLogFileSize   int64
 	ValueLogMaxEntries uint32
 
-	// Number of compaction workers to run concurrently. Setting this to zero would stop compactions
-	// to happen within LSM tree. If set to zero, writes could block forever.
-	NumCompactors int
-
-	// When closing the DB, force compact Level 0. This ensures that both reads and writes are
-	// efficient when the DB is opened later.
-	CompactL0OnClose bool
-
-	// After this many number of value log file rotates, there would be a force flushing of memtable
-	// to disk. This is useful in write loads with fewer keys and larger values. This work load
-	// would fill up the value logs quickly, while not filling up the Memtables. Thus, on a crash
-	// and restart, the value log head could cause the replay of a good number of value log files
-	// which can slow things on start.
+	NumCompactors     int
+	CompactL0OnClose  bool
 	LogRotatesToFlush int32
+
+	BackupKeyFn    func([]byte) ([]byte, error)
+	BackupValueFn  func([]byte) ([]byte, error)
+	RestoreKeyFn   func([]byte) ([]byte, error)
+	RestoreValueFn func([]byte) ([]byte, error)
 
 	// Transaction start and commit timestamps are managed by end-user.
 	// This is only useful for databases built on top of Badger (like Dgraph).
@@ -121,46 +82,46 @@ type Options struct {
 }
 
 // DefaultOptions sets a list of recommended options for good performance.
-// Feel free to modify these to suit your needs.
-var DefaultOptions = Options{
-	LevelOneSize:        256 << 20,
-	LevelSizeMultiplier: 10,
-	TableLoadingMode:    options.MemoryMap,
-	ValueLogLoadingMode: options.MemoryMap,
-	// table.MemoryMap to mmap() the tables.
-	// table.Nothing to not preload the tables.
-	MaxLevels:               7,
-	MaxTableSize:            64 << 20,
-	NumCompactors:           2, // Compactions can be expensive. Only run 2.
-	NumLevelZeroTables:      5,
-	NumLevelZeroTablesStall: 10,
-	NumMemtables:            5,
-	SyncWrites:              true,
-	NumVersionsToKeep:       1,
-	CompactL0OnClose:        true,
-	// Nothing to read/write value log using standard File I/O
-	// MemoryMap to mmap() the value log files
-	// (2^30 - 1)*2 when mmapping < 2^31 - 1, max int32.
-	// -1 so 2*ValueLogFileSize won't overflow on 32-bit systems.
-	ValueLogFileSize: 1<<30 - 1,
+// Feel free to modify these to suit your needs with the WithX methods.
+func DefaultOptions(path string) Options {
+	return Options{
+		Dir:                 path,
+		ValueDir:            path,
+		LevelOneSize:        256 << 20,
+		LevelSizeMultiplier: 10,
+		TableLoadingMode:    options.MemoryMap,
+		ValueLogLoadingMode: options.MemoryMap,
+		// table.MemoryMap to mmap() the tables.
+		// table.Nothing to not preload the tables.
+		MaxLevels:               7,
+		MaxTableSize:            64 << 20,
+		NumCompactors:           2, // Compactions can be expensive. Only run 2.
+		NumLevelZeroTables:      5,
+		NumLevelZeroTablesStall: 10,
+		NumMemtables:            5,
+		SyncWrites:              true,
+		NumVersionsToKeep:       1,
+		CompactL0OnClose:        true,
+		// Nothing to read/write value log using standard File I/O
+		// MemoryMap to mmap() the value log files
+		// (2^30 - 1)*2 when mmapping < 2^31 - 1, max int32.
+		// -1 so 2*ValueLogFileSize won't overflow on 32-bit systems.
+		ValueLogFileSize: 1<<30 - 1,
 
-	ValueLogMaxEntries: 1000000,
-	ValueThreshold:     32,
-	Truncate:           false,
-	Logger:             defaultLogger,
-	LogRotatesToFlush:  2,
+		ValueLogMaxEntries: 1000000,
+		ValueThreshold:     32,
+		Truncate:           false,
+		Logger:             defaultLogger,
+		LogRotatesToFlush:  2,
+	}
 }
 
 // LSMOnlyOptions follows from DefaultOptions, but sets a higher ValueThreshold
 // so values would be colocated with the LSM tree, with value log largely acting
 // as a write-ahead log only. These options would reduce the disk usage of value
 // log, and make Badger act more like a typical LSM tree.
-var LSMOnlyOptions = Options{}
-
-func init() {
-	LSMOnlyOptions = DefaultOptions
-
-	LSMOnlyOptions.ValueThreshold = 65500 // Max value length which fits in uint16.
+func LSMOnlyOptions(path string) Options {
+	// Max value length which fits in uint16.
 	// Let's not set any other options, because they can cause issues with the
 	// size of key-value a user can pass to Badger. For e.g., if we set
 	// ValueLogFileSize to 64MB, a user can't pass a value more than that.
@@ -171,4 +132,284 @@ func init() {
 	// NOTE: If a user does not want to set 64KB as the ValueThreshold because
 	// of performance reasons, 1KB would be a good option too, allowing
 	// values smaller than 1KB to be colocated with the keys in the LSM tree.
+	return DefaultOptions(path).WithValueThreshold(65500)
+}
+
+// WithDir returns a new Options value with Dir set to the given value.
+//
+// Dir is the path of the directory where key data will be stored in.
+// If it doesn't exist, Badger will try to create it for you.
+// This is set automatically to be the path given to `DefaultOptions`.
+func (opt Options) WithDir(val string) Options {
+	opt.Dir = val
+	return opt
+}
+
+// WithValueDir returns a new Options value with ValueDir set to the given value.
+//
+// ValueDir is the path of the directory where value data will be stored in.
+// If it doesn't exist, Badger will try to create it for you.
+// This is set automatically to be the path given to `DefaultOptions`.
+func (opt Options) WithValueDir(val string) Options {
+	opt.ValueDir = val
+	return opt
+}
+
+// WithSyncWrites returns a new Options value with SyncWrites set to the given value.
+//
+// When SyncWrites is true all writes are synced to disk. Setting this to false would achieve better
+// performance, but may cause data loss in case of crash.
+//
+// The default value of SyncWrites is true.
+func (opt Options) WithSyncWrites(val bool) Options {
+	opt.SyncWrites = val
+	return opt
+}
+
+// WithTableLoadingMode returns a new Options value with TableLoadingMode set to the given value.
+//
+// TableLoadingMode indicates which file loading mode should be used for the LSM tree data files.
+//
+// The default value of TableLoadingMode is options.MemoryMap.
+func (opt Options) WithTableLoadingMode(val options.FileLoadingMode) Options {
+	opt.TableLoadingMode = val
+	return opt
+}
+
+// WithValueLogLoadingMode returns a new Options value with ValueLogLoadingMode set to the given
+// value.
+//
+// ValueLogLoadingMode indicates which file loading mode should be used for the value log data
+// files.
+//
+// The default value of ValueLogLoadingMode is options.MemoryMap.
+func (opt Options) WithValueLogLoadingMode(val options.FileLoadingMode) Options {
+	opt.ValueLogLoadingMode = val
+	return opt
+}
+
+// WithNumVersionsToKeep returns a new Options value with NumVersionsToKeep set to the given value.
+//
+// NumVersionsToKeep sets how many versions to keep per key at most.
+//
+// The default value of NumVersionsToKeep is 1.
+func (opt Options) WithNumVersionsToKeep(val int) Options {
+	opt.NumVersionsToKeep = val
+	return opt
+}
+
+// WithReadOnly returns a new Options value with ReadOnly set to the given value.
+//
+// When ReadOnly is true the DB will be opened on read-only mode.
+// Multiple processes can open the same Badger DB.
+// Note: if the DB being opened had crashed before and has vlog data to be replayed,
+// ReadOnly will cause Open to fail with an appropriate message.
+//
+// The default value of ReadOnly is false.
+func (opt Options) WithReadOnly(val bool) Options {
+	opt.ReadOnly = val
+	return opt
+}
+
+// WithTruncate returns a new Options value with Truncate set to the given value.
+//
+// Truncate indicates whether value log files should be truncated to delete corrupt data, if any.
+// This option is ignored when ReadOnly is true.
+//
+// The default value of Truncate is false.
+func (opt Options) WithTruncate(val bool) Options {
+	opt.Truncate = val
+	return opt
+}
+
+// WithLogger returns a new Options value with Logger set to the given value.
+//
+// Logger provides a way to configure what logger each value of badger.DB uses.
+//
+// The default value of Logger writes to stderr using the log package from the Go standard library.
+func (opt Options) WithLogger(val Logger) Options {
+	opt.Logger = val
+	return opt
+}
+
+// WithMaxTableSize returns a new Options value with MaxTableSize set to the given value.
+//
+// MaxTableSize sets the maximum size in bytes for each LSM table or file.
+//
+// The default value of MaxTableSize is 64MB.
+func (opt Options) WithMaxTableSize(val int64) Options {
+	opt.MaxTableSize = val
+	return opt
+}
+
+// WithLevelSizeMultiplier returns a new Options value with LevelSizeMultiplier set to the given
+// value.
+//
+// LevelSizeMultiplier sets the ratio between the maximum sizes of contiguous levels in the LSM.
+// Once a level grows to be larger than this ratio allowed, the compaction process will be
+//  triggered.
+//
+// The default value of LevelSizeMultiplier is 10.
+func (opt Options) WithLevelSizeMultiplier(val int) Options {
+	opt.LevelSizeMultiplier = val
+	return opt
+}
+
+// WithMaxLevels returns a new Options value with MaxLevels set to the given value.
+//
+// Maximum number of levels of compaction allowed in the LSM.
+//
+// The default value of MaxLevels is 7.
+func (opt Options) WithMaxLevels(val int) Options {
+	opt.MaxLevels = val
+	return opt
+}
+
+// WithValueThreshold returns a new Options value with ValueThreshold set to the given value.
+//
+// ValueThreshold sets the threshold used to decide whether a value is stored directly in the LSM
+// tree or separatedly in the log value files.
+//
+// The default value of ValueThreshold is 32, but LSMOnlyOptions sets it to 65500.
+func (opt Options) WithValueThreshold(val int) Options {
+	opt.ValueThreshold = val
+	return opt
+}
+
+// WithNumMemtables returns a new Options value with NumMemtables set to the given value.
+//
+// NumMemtables sets the maximum number of tables to keep in memory before stalling.
+//
+// The default value of NumMemtables is 5.
+func (opt Options) WithNumMemtables(val int) Options {
+	opt.NumMemtables = val
+	return opt
+}
+
+// WithNumLevelZeroTables returns a new Options value with NumLevelZeroTables set to the given
+// value.
+//
+// NumLevelZeroTables sets the maximum number of Level 0 tables before compaction starts.
+//
+// The default value of NumLevelZeroTables is 5.
+func (opt Options) WithNumLevelZeroTables(val int) Options {
+	opt.NumLevelZeroTables = val
+	return opt
+}
+
+// WithNumLevelZeroTablesStall returns a new Options value with NumLevelZeroTablesStall set to the
+// given value.
+//
+// NumLevelZeroTablesStall sets the number of Level 0 tables that once reached causes the DB to
+// stall until compaction succeeds.
+//
+// The default value of NumLevelZeroTablesStall is 10.
+func (opt Options) WithNumLevelZeroTablesStall(val int) Options {
+	opt.NumLevelZeroTablesStall = val
+	return opt
+}
+
+// WithLevelOneSize returns a new Options value with LevelOneSize set to the given value.
+//
+// LevelOneSize sets the maximum total size for Level 1.
+//
+// The default value of LevelOneSize is 20MB.
+func (opt Options) WithLevelOneSize(val int64) Options {
+	opt.LevelOneSize = val
+	return opt
+}
+
+// WithValueLogFileSize returns a new Options value with ValueLogFileSize set to the given value.
+//
+// ValueLogFileSize sets the maximum size of a single value log file.
+//
+// The default value of ValueLogFileSize is 1GB.
+func (opt Options) WithValueLogFileSize(val int64) Options {
+	opt.ValueLogFileSize = val
+	return opt
+}
+
+// WithValueLogMaxEntries returns a new Options value with ValueLogMaxEntries set to the given
+// value.
+//
+// ValueLogMaxEntries sets the maximum number of entries a value log file can hold approximately.
+// A actual size limit of a value log file is the minimum of ValueLogFileSize and
+// ValueLogMaxEntries.
+//
+// The default value of ValueLogMaxEntries is one million (1000000).
+func (opt Options) WithValueLogMaxEntries(val uint32) Options {
+	opt.ValueLogMaxEntries = val
+	return opt
+}
+
+// WithNumCompactors returns a new Options value with NumCompactors set to the given value.
+//
+// NumCompactors sets the number of compaction workers to run concurrently.
+// Setting this to zero stops compactions, which could eventually cause writes to block forever.
+//
+// The default value of NumCompactors is 2.
+func (opt Options) WithNumCompactors(val int) Options {
+	opt.NumCompactors = val
+	return opt
+}
+
+// WithCompactL0OnClose returns a new Options value with CompactL0OnClose set to the given value.
+//
+// CompactL0OnClose determines whether Level 0 should be compacted before closing the DB.
+// This ensures that both reads and writes are efficient when the DB is opened later.
+//
+// The default value of CompactL0OnClose is true.
+func (opt Options) WithCompactL0OnClose(val bool) Options {
+	opt.CompactL0OnClose = val
+	return opt
+}
+
+// WithLogRotatesToFlush returns a new Options value with LogRotatesToFlush set to the given value.
+//
+// LogRotatesToFlush sets the number of value log file rotates after which the Memtables are
+// flushed to disk. This is useful in write loads with fewer keys and larger values. This work load
+// would fill up the value logs quickly, while not filling up the Memtables. Thus, on a crash
+// and restart, the value log head could cause the replay of a good number of value log files
+// which can slow things on start.
+//
+// The default value of LogRotatesToFlush is 2.
+func (opt Options) WithLogRotatesToFlush(val int32) Options {
+	opt.LogRotatesToFlush = val
+	return opt
+}
+
+// WithBackupKeyFn returns a new Options value with BackupKeyFn set to the given value.
+//
+// BackupKeyFn is used during backup when the user wishes to store the keys in some other format.
+func (opt Options) WithBackupKeyFn(fn func([]byte) ([]byte, error)) Options {
+	opt.BackupKeyFn = fn
+	return opt
+}
+
+// WithBackupValueFn returns a new Options value with BackupValueFn set to the given value.
+//
+// BackupValueFn is used during backup when the user wishes to store the values in some other
+// format.
+func (opt Options) WithBackupValueFn(fn func([]byte) ([]byte, error)) Options {
+	opt.BackupValueFn = fn
+	return opt
+}
+
+// WithRestoreKeyFn returns a new Options value with RestoreKeyFn set to the given value.
+//
+// RestoreKeyFn is used while loading a backup when the user wishes to restore keys that were
+// backed up in a different format. It essentially should revert the changes made by BackupKeyFn.
+func (opt Options) WithRestoreKeyFn(fn func([]byte) ([]byte, error)) Options {
+	opt.RestoreKeyFn = fn
+	return opt
+}
+
+// WithRestoreValueFn returns a new Options value with RestoreValueFn set to the given value.
+//
+// RestoreValueFn is used while loading a backup when the user wishes to restore values that were
+// backed up in a different format. It essentially should revert the changes made by
+// BackupValueFn.
+func (opt Options) WithRestoreValueFn(fn func([]byte) ([]byte, error)) Options {
+	opt.RestoreValueFn = fn
+	return opt
 }

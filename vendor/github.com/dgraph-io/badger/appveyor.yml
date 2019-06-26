@@ -13,6 +13,7 @@ clone_folder: c:\gopath\src\github.com\dgraph-io\badger
 environment:
   GOVERSION: 1.8.3
   GOPATH: c:\gopath
+  GO111MODULE: on
 
 # scripts that run after cloning repository
 install:
