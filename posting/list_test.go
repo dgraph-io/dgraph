@@ -1247,8 +1247,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	opt := badger.DefaultOptions(dir)
-	ps, err = badger.OpenManaged(opt)
+	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
 	x.Check(err)
 	Init(ps)
 	schema.Init(ps)

@@ -34,11 +34,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions(dir)
-	return badger.Open(opt)
-}
-
 func (n *Node) run(wg *sync.WaitGroup) {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
@@ -70,7 +65,7 @@ func TestProposal(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	store := raftwal.Init(db, 0, 0)
 

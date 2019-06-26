@@ -219,16 +219,18 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 	// and we create a new p dir for each.
 	return Load(location, backupId, func(r io.Reader, groupId int) error {
 		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-		bo := badger.DefaultOptions(dir).WithSyncWrites(true).WithTableLoadingMode(
-			options.MemoryMap).WithValueThreshold(1 << 10).WithNumVersionsToKeep(math.MaxInt32)
-		db, err := badger.OpenManaged(bo)
+		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+			WithSyncWrites(true).
+			WithTableLoadingMode(options.MemoryMap).
+			WithValueThreshold(1 << 10).
+			WithNumVersionsToKeep(math.MaxInt32))
 		if err != nil {
 			return err
 		}
 		defer db.Close()
 		fmt.Printf("Restoring groupId: %d\n", groupId)
-		if !pathExist(bo.Dir) {
-			fmt.Println("Creating new db:", bo.Dir)
+		if !pathExist(dir) {
+			fmt.Println("Creating new db:", dir)
 		}
 		gzReader, err := gzip.NewReader(r)
 		if err != nil {

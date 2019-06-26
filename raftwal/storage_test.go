@@ -45,17 +45,12 @@ import (
 	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
-func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions(dir)
-	return badger.Open(opt)
-}
-
 func TestStorageTerm(t *testing.T) {
 	dir, err := ioutil.TempDir("", "badger")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 
@@ -105,7 +100,7 @@ func TestStorageEntries(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 
@@ -150,7 +145,7 @@ func TestStorageLastIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 
@@ -180,7 +175,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 
@@ -213,7 +208,7 @@ func TestStorageCompact(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 
@@ -262,7 +257,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 
@@ -299,7 +294,7 @@ func TestStorageAppend(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	db, err := openBadger(dir)
+	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
 

@@ -743,8 +743,9 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	bopts := badger.DefaultOptions(dir).WithTableLoadingMode(options.MemoryMap).WithReadOnly(
-		opt.readOnly)
+	bopts := badger.DefaultOptions(dir).
+		WithTableLoadingMode(options.MemoryMap).
+		WithReadOnly(opt.readOnly)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)

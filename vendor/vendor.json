@@ -459,22 +459,22 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "tFDsXzn1Ipsnp8uddlDzz0ZClQA=",
+			"checksumSHA1": "xNw25IDral2xen+ekQicZluFJfw=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "e0016993b79079008f2c303d78e2f3ef1d8b8b3e",
-			"revisionTime": "2019-06-25T22:44:16Z"
+			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
+			"revisionTime": "2019-06-26T23:27:49Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "e0016993b79079008f2c303d78e2f3ef1d8b8b3e",
-			"revisionTime": "2019-06-25T22:44:16Z"
+			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
+			"revisionTime": "2019-06-26T23:27:49Z"
 		},
 		{
 			"checksumSHA1": "SV7o4+eEK7/XNWC7H7Z5vWCoHP0=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "e0016993b79079008f2c303d78e2f3ef1d8b8b3e",
-			"revisionTime": "2019-06-25T22:44:16Z"
+			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
+			"revisionTime": "2019-06-26T23:27:49Z"
 		},
 		{
 			"checksumSHA1": "d8wE18ae6lOhmJqh0jwwhmQCkII=",
@@ -485,20 +485,20 @@
 		{
 			"checksumSHA1": "7dxXjygrynDxvPE1UBHFDxVn7kE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "e0016993b79079008f2c303d78e2f3ef1d8b8b3e",
-			"revisionTime": "2019-06-25T22:44:16Z"
+			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
+			"revisionTime": "2019-06-26T23:27:49Z"
 		},
 		{
 			"checksumSHA1": "0nZcXky/WdTWm3io4j6z2XbH4oM=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "e0016993b79079008f2c303d78e2f3ef1d8b8b3e",
-			"revisionTime": "2019-06-25T22:44:16Z"
+			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
+			"revisionTime": "2019-06-26T23:27:49Z"
 		},
 		{
 			"checksumSHA1": "6Ya7Kr114SVcXRqa3UaglreBrY8=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "e0016993b79079008f2c303d78e2f3ef1d8b8b3e",
-			"revisionTime": "2019-06-25T22:44:16Z"
+			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
+			"revisionTime": "2019-06-26T23:27:49Z"
 		},
 		{
 			"checksumSHA1": "g06KOc9faGeu0J6262AQfpL1x/o=",

@@ -64,11 +64,6 @@ type Options struct {
 	CompactL0OnClose  bool
 	LogRotatesToFlush int32
 
-	BackupKeyFn    func([]byte) ([]byte, error)
-	BackupValueFn  func([]byte) ([]byte, error)
-	RestoreKeyFn   func([]byte) ([]byte, error)
-	RestoreValueFn func([]byte) ([]byte, error)
-
 	// Transaction start and commit timestamps are managed by end-user.
 	// This is only useful for databases built on top of Badger (like Dgraph).
 	// Not recommended for most users.
@@ -375,41 +370,5 @@ func (opt Options) WithCompactL0OnClose(val bool) Options {
 // The default value of LogRotatesToFlush is 2.
 func (opt Options) WithLogRotatesToFlush(val int32) Options {
 	opt.LogRotatesToFlush = val
-	return opt
-}
-
-// WithBackupKeyFn returns a new Options value with BackupKeyFn set to the given value.
-//
-// BackupKeyFn is used during backup when the user wishes to store the keys in some other format.
-func (opt Options) WithBackupKeyFn(fn func([]byte) ([]byte, error)) Options {
-	opt.BackupKeyFn = fn
-	return opt
-}
-
-// WithBackupValueFn returns a new Options value with BackupValueFn set to the given value.
-//
-// BackupValueFn is used during backup when the user wishes to store the values in some other
-// format.
-func (opt Options) WithBackupValueFn(fn func([]byte) ([]byte, error)) Options {
-	opt.BackupValueFn = fn
-	return opt
-}
-
-// WithRestoreKeyFn returns a new Options value with RestoreKeyFn set to the given value.
-//
-// RestoreKeyFn is used while loading a backup when the user wishes to restore keys that were
-// backed up in a different format. It essentially should revert the changes made by BackupKeyFn.
-func (opt Options) WithRestoreKeyFn(fn func([]byte) ([]byte, error)) Options {
-	opt.RestoreKeyFn = fn
-	return opt
-}
-
-// WithRestoreValueFn returns a new Options value with RestoreValueFn set to the given value.
-//
-// RestoreValueFn is used while loading a backup when the user wishes to restore values that were
-// backed up in a different format. It essentially should revert the changes made by
-// BackupValueFn.
-func (opt Options) WithRestoreValueFn(fn func([]byte) ([]byte, error)) Options {
-	opt.RestoreValueFn = fn
 	return opt
 }
