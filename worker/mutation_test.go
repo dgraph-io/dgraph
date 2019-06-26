@@ -37,54 +37,22 @@ func TestConvertEdgeType(t *testing.T) {
 	}{
 		{
 			input: &pb.DirectedEdge{
-				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
-			},
-			to:        types.StringID,
-			expectErr: false,
-			output: &pb.DirectedEdge{
-				Value:     []byte("set edge"),
-				Label:     "test-mutation",
-				Attr:      "name",
-				ValueType: 9,
-			},
-		},
-		{
-			input: &pb.DirectedEdge{
-				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
-				Op:    pb.DirectedEdge_DEL,
-			},
-			to:        types.StringID,
-			expectErr: false,
-			output: &pb.DirectedEdge{
-				Value:     []byte("set edge"),
-				Label:     "test-mutation",
-				Attr:      "name",
-				Op:        pb.DirectedEdge_DEL,
-				ValueType: 9,
-			},
-		},
-		{
-			input: &pb.DirectedEdge{
 				ValueId: 123,
 				Label:   "test-mutation",
 				Attr:    "name",
 			},
 			to:        types.StringID,
 			expectErr: true,
-		},
-		{
-			input: &pb.DirectedEdge{
-				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
-			},
-			to:        types.UidID,
-			expectErr: true,
-		},
+		}, /*
+			{
+				input: &pb.DirectedEdge{
+					Value: []byte("set edge"),
+					Label: "test-mutation",
+					Attr:  "name",
+				},
+				to:        types.UidID,
+				expectErr: true,
+			},*/
 	}
 
 	for _, testEdge := range testEdges {
