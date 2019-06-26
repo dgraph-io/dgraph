@@ -86,13 +86,9 @@ func (r *reducer) run() error {
 }
 
 func (r *reducer) createBadger(i int) *badger.DB {
-	opt := badger.DefaultOptions
-	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.MemoryMap
-	opt.ValueThreshold = 1 << 10 // 1 KB.
-	opt.Dir = r.opt.shardOutputDirs[i]
-	opt.ValueDir = opt.Dir
-	opt.Logger = nil
+	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
+		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
+		WithLogger(nil)
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 	r.dbs = append(r.dbs, db)

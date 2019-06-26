@@ -215,18 +215,12 @@ func runRestoreCmd() error {
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
 func RunRestore(pdir, location, backupId string) (uint64, error) {
-	bo := badger.DefaultOptions
-	bo.SyncWrites = true
-	bo.TableLoadingMode = options.MemoryMap
-	bo.ValueThreshold = 1 << 10
-	bo.NumVersionsToKeep = math.MaxInt32
-
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
 	return Load(location, backupId, func(r io.Reader, groupId int) error {
-		bo := bo
-		bo.Dir = filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-		bo.ValueDir = bo.Dir
+		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
+		bo := badger.DefaultOptions(dir).WithSyncWrites(true).WithTableLoadingMode(
+			options.MemoryMap).WithValueThreshold(1 << 10).WithNumVersionsToKeep(math.MaxInt32)
 		db, err := badger.OpenManaged(bo)
 		if err != nil {
 			return err
