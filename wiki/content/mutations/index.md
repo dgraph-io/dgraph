@@ -204,7 +204,7 @@ Now you can create a new person and attach its type using the Upsert Block.
     }
 ```
 
-You can also delete a person and deatach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+You can also delete a person and detach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
 
 ```
    upsert {
