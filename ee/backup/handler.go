@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 
@@ -60,9 +59,9 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// GetSinceTs reads the manifests at the given URL and returns the appropriate
-	// timestamp from which the current backup should be started.
-	GetSinceTs(*url.URL) (uint64, error)
+	// GetLatestManifest reads the manifests at the given URL and returns the
+	// latest manifest.
+	GetLatestManifest(*url.URL) (*Manifest, error)
 
 	// CreateBackupFile prepares the object or file to save the backup file.
 	CreateBackupFile(*url.URL, *pb.BackupRequest) error
@@ -133,10 +132,9 @@ func NewUriHandler(uri *url.URL) (UriHandler, error) {
 // A reader and the backup groupId are passed as arguments.
 type loadFn func(reader io.Reader, groupId int) error
 
-// Load will scan location l for backup files (not including any directories
-// created after lastDir), then load them sequentially through reader.
-// Returns the maximum Since value on success, otherwise an error.
-func Load(location, lastDir string, fn loadFn) (since uint64, err error) {
+// Load will scan location l for backup files in the given backup series and load them
+// sequentially. Returns the maximum Since value on success, otherwise an error.
+func Load(location, backupId string, fn loadFn) (since uint64, err error) {
 	uri, err := url.Parse(location)
 	if err != nil {
 		return 0, err
@@ -147,7 +145,7 @@ func Load(location, lastDir string, fn loadFn) (since uint64, err error) {
 		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, lastDir, fn)
+	return h.Load(uri, backupId, fn)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
@@ -181,14 +179,16 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 
 // filterManifests takes a list of manifests and returns the list of manifests
 // that should be considered during a restore.
-func filterManifests(manifests []*Manifest, lastDir string) ([]*Manifest, error) {
+func filterManifests(manifests []*Manifest, backupId string) ([]*Manifest, error) {
 	// Go through the files in reverse order and stop when the latest full backup is found.
 	var filteredManifests []*Manifest
 	for i := len(manifests) - 1; i >= 0; i-- {
-		parts := strings.Split(manifests[i].Path, "/")
-		dir := parts[len(parts)-2]
-		if len(lastDir) > 0 && dir > lastDir {
-			fmt.Printf("Restore: skip directory %s because it's newer than %s.\n", dir, lastDir)
+		// If backupId is not empty, skip all the manifests that do not match the given
+		// backupId. If it's empty, do not skip any manifests as the default behavior is
+		// to restore the latest series of backups.
+		if len(backupId) > 0 && manifests[i].BackupId != backupId {
+			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
+				manifests[i].Path, backupId)
 			continue
 		}
 
@@ -204,7 +204,39 @@ func filterManifests(manifests []*Manifest, lastDir string) ([]*Manifest, error)
 		filteredManifests[i], filteredManifests[opp] = filteredManifests[opp], filteredManifests[i]
 	}
 
+	if err := verifyManifests(filteredManifests); err != nil {
+		return nil, err
+	}
+
 	return filteredManifests, nil
+}
+
+func verifyManifests(manifests []*Manifest) error {
+	if len(manifests) == 0 {
+		return nil
+	}
+
+	if manifests[0].BackupNum != 1 {
+		return errors.Errorf("expected a BackupNum value of 1 for first manifest but got %d",
+			manifests[0].BackupNum)
+	}
+
+	backupId := manifests[0].BackupId
+	var backupNum uint64
+	for _, manifest := range manifests {
+		if manifest.BackupId != backupId {
+			return errors.Errorf("found a manifest with backup ID %s but expected %s",
+				manifest.BackupId, backupId)
+		}
+
+		backupNum++
+		if manifest.BackupNum != backupNum {
+			return errors.Errorf("found a manifest with backup number %d but expected %d",
+				manifest.BackupNum, backupNum)
+		}
+	}
+
+	return nil
 }
 
 func backupName(since uint64, groupId uint32) string {

@@ -209,6 +209,7 @@ func convertToType(v types.Val, typ types.TypeID) (*pb.TaskValue, error) {
 	return result, nil
 }
 
+// FuncType represents the type of a query function (aggregation, has, etc).
 type FuncType int
 
 const (
@@ -706,7 +707,9 @@ func (qs *queryState) handleUidPostings(
 }
 
 const (
+	// UseTxnCache indicates the transaction cache should be used.
 	UseTxnCache = iota
+	// NoTxnCache indicates no transaction caches should be used.
 	NoTxnCache
 )
 
@@ -872,13 +875,17 @@ func (qs *queryState) helpProcessTask(
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		qs.filterGeoFunction(funcArgs{q, gid, srcFn, out})
+		if err := qs.filterGeoFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+			return nil, err
+		}
 	}
 
 	// For string matching functions, check the language.
 	if needsStringFiltering(srcFn, q.Langs, attr) {
 		span.Annotate(nil, "filterStringFunction")
-		qs.filterStringFunction(funcArgs{q, gid, srcFn, out})
+		if err := qs.filterStringFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+			return nil, err
+		}
 	}
 
 	out.IntersectDest = srcFn.intersectDest

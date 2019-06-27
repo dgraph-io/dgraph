@@ -39,6 +39,7 @@ import (
 )
 
 var (
+	// ErrNonExistentTabletMessage is the error message sent when no tablet is serving a predicate.
 	ErrNonExistentTabletMessage = "Requested predicate is not being served by any tablet"
 	errNonExistentTablet        = errors.Errorf(ErrNonExistentTabletMessage)
 	errUnservedTablet           = errors.Errorf("Tablet isn't being served by this instance")
@@ -109,7 +110,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		return err
 	}
 
-	return updateSchema(update.Predicate, *update)
+	return updateSchema(update)
 }
 
 func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
@@ -151,14 +152,14 @@ func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, start
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
-func updateSchema(attr string, s pb.SchemaUpdate) error {
-	schema.State().Set(attr, s)
+func updateSchema(s *pb.SchemaUpdate) error {
+	schema.State().Set(s.Predicate, *s)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
 	err = txn.SetEntry(&badger.Entry{
-		Key:      x.SchemaKey(attr),
+		Key:      x.SchemaKey(s.Predicate),
 		Value:    data,
 		UserMeta: posting.BitSchemaPosting,
 	})
@@ -182,7 +183,9 @@ func createSchema(attr string, typ types.TypeID) {
 			s.List = true
 		}
 	}
-	updateSchema(attr, s)
+	if err := updateSchema(&s); err != nil {
+		glog.Errorf("Error while updating schema: %+v", err)
+	}
 }
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
@@ -384,6 +387,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	return nil
 }
 
+// AssignUidsOverNetwork sends a request to assign UIDs to blank nodes to the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().Leader(0)
 	if pl == nil {
@@ -395,6 +399,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 	return c.AssignUids(ctx, num)
 }
 
+// Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	pl := groups().connToZeroLeader()
 	if pl == nil {
@@ -408,7 +413,7 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.Fill(tctx, groups().groupId())
+		txn.FillContext(tctx, groups().groupId())
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.

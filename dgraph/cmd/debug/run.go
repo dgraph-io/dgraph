@@ -38,6 +38,7 @@ import (
 )
 
 var (
+	// Debug is the sub-command invoked when calling "dgraph debug"
 	Debug x.SubCommand
 	opt   flagOptions
 )
@@ -503,7 +504,7 @@ func printKeys(db *badger.DB) {
 		if pk.IsIndex() {
 			buf.WriteString("{i}")
 		}
-		if pk.IsCount() {
+		if pk.IsCountOrCountRev() {
 			buf.WriteString("{c}")
 		}
 		if pk.IsSchema() {
@@ -551,6 +552,8 @@ func getHistogramBounds(minExponent, maxExponent uint32) []float64 {
 	return bounds
 }
 
+// HistogramData stores the information needed to represent the sizes of the keys and values
+// as a histogram.
 type HistogramData struct {
 	Bounds         []float64
 	Count          int64
@@ -560,7 +563,7 @@ type HistogramData struct {
 	Sum            int64
 }
 
-// Return a new instance of HistogramData with properly initialized fields.
+// NewHistogramData returns a new instance of HistogramData with properly initialized fields.
 func NewHistogramData(bounds []float64) *HistogramData {
 	return &HistogramData{
 		Bounds:         bounds,
@@ -570,8 +573,7 @@ func NewHistogramData(bounds []float64) *HistogramData {
 	}
 }
 
-// Update the Min and Max fields if value is less than or greater than the
-// current values.
+// Update changes the Min and Max fields if value is less than or greater than the current values.
 func (histogram *HistogramData) Update(value int64) {
 	if value > histogram.Max {
 		histogram.Max = value
@@ -597,7 +599,7 @@ func (histogram *HistogramData) Update(value int64) {
 	}
 }
 
-// Print the histogram data in a human-readable format.
+// PrintHistogram prints the histogram data in a human-readable format.
 func (histogram HistogramData) PrintHistogram() {
 	fmt.Printf("Min value: %d\n", histogram.Min)
 	fmt.Printf("Max value: %d\n", histogram.Max)

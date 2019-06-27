@@ -628,6 +628,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	return err
 }
 
+// IsEmpty returns true if there are no uids at the given timestamp after the given UID.
 func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	l.RLock()
 	defer l.RUnlock()
@@ -1257,4 +1258,33 @@ func (l *List) PartSplits() []uint64 {
 	splits := make([]uint64, len(l.plist.Splits))
 	copy(splits, l.plist.Splits)
 	return splits
+}
+
+// ToBackupPostingList converts a posting list into its representation used for storing backups.
+func ToBackupPostingList(l *pb.PostingList) *pb.BackupPostingList {
+	bl := pb.BackupPostingList{}
+	if l == nil {
+		return &bl
+	}
+
+	bl.Uids = codec.Decode(l.Pack, 0)
+	bl.Postings = l.Postings
+	bl.CommitTs = l.CommitTs
+	bl.Splits = l.Splits
+	return &bl
+}
+
+// FromBackupPostingList converts a posting list in the format used for backups to a
+// normal posting list.
+func FromBackupPostingList(bl *pb.BackupPostingList) *pb.PostingList {
+	l := pb.PostingList{}
+	if bl == nil {
+		return &l
+	}
+
+	l.Pack = codec.Encode(bl.Uids, blockSize)
+	l.Postings = bl.Postings
+	l.CommitTs = bl.CommitTs
+	l.Splits = bl.Splits
+	return &l
 }

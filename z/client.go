@@ -266,24 +266,25 @@ func GrootHttpLogin(endpoint string) (string, string) {
 	return accessJwt, refreshJwt
 }
 
-type FailureConfig struct {
+// CurlFailureConfig stores information about the expected failure of a curl test.
+type CurlFailureConfig struct {
 	ShouldFail   bool
 	CurlErrMsg   string
 	DgraphErrMsg string
 }
 
-type ErrorEntry struct {
+type curlErrorEntry struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-type Output struct {
+type curlOutput struct {
 	Data   map[string]interface{} `json:"data"`
-	Errors []ErrorEntry           `json:"errors"`
+	Errors []curlErrorEntry       `json:"errors"`
 }
 
-func verifyOutput(t *testing.T, bytes []byte, failureConfig *FailureConfig) {
-	output := Output{}
+func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) {
+	output := curlOutput{}
 	require.NoError(t, json.Unmarshal(bytes, &output),
 		"unable to unmarshal the curl output")
 
@@ -304,7 +305,7 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *FailureConfig) {
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
 func VerifyCurlCmd(t *testing.T, args []string,
-	failureConfig *FailureConfig) {
+	failureConfig *CurlFailureConfig) {
 	queryCmd := exec.Command("curl", args...)
 
 	output, err := queryCmd.Output()
@@ -321,6 +322,7 @@ func VerifyCurlCmd(t *testing.T, args []string,
 	}
 }
 
+// AssignUids talks to zero to assign the given number of uids.
 func AssignUids(num uint64) {
 	_, err := http.Get(fmt.Sprintf("http://"+SockAddrZeroHttp+"/assign?what=uids&num=%d", num))
 	if err != nil {

@@ -35,6 +35,7 @@ const (
 	SeekCurrent
 )
 
+// Encoder is used to convert a list of UIDs into a pb.UidPack object.
 type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
@@ -61,6 +62,7 @@ func (e *Encoder) packBlock() {
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
+// Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
@@ -72,11 +74,13 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
+// Done returns the final output of the encoder.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
 	return e.pack
 }
 
+// Decoder is used to read a pb.UidPack object back into a list of UIDs.
 type Decoder struct {
 	Pack     *pb.UidPack
 	blockIdx int
@@ -111,6 +115,7 @@ func (d *Decoder) unpackBlock() []uint64 {
 	return d.uids
 }
 
+// ApproxLen returns the approximate number of UIDs in the pb.UidPack object.
 func (d *Decoder) ApproxLen() int {
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
@@ -183,29 +188,29 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	return d.Next()
 }
 
-// Uids are owned by the Decoder, and the slice contents would be changed on the next call. They
+// Uids returns all the uids in the pb.UidPack object as an array of integers.
+// uids are owned by the Decoder, and the slice contents would be changed on the next call. They
 // should be copied if passed around.
 func (d *Decoder) Uids() []uint64 {
 	return d.uids
 }
 
+// LinearSeek returns uids of the last block whose base is less than seek.
+// If there are no such blocks i.e. seek < base of first block, it returns uids of first
+// block. LinearSeek is used to get closest uids which are >= seek.
 func (d *Decoder) LinearSeek(seek uint64) []uint64 {
-	prev := d.blockIdx
 	for {
 		v := d.PeekNextBase()
-		if seek <= v {
+		if seek < v {
 			break
 		}
 		d.blockIdx++
 	}
-	if d.blockIdx == prev {
-		// The seek id is <= base of next block. But, we have already searched this
-		// block. So, let's move to the next block anyway.
-		return d.Next()
-	}
+
 	return d.unpackBlock()
 }
 
+// PeekNextBase returns the base of the next block without advancing the decoder.
 func (d *Decoder) PeekNextBase() uint64 {
 	bidx := d.blockIdx + 1
 	if bidx < len(d.Pack.Blocks) {
@@ -214,10 +219,12 @@ func (d *Decoder) PeekNextBase() uint64 {
 	return math.MaxUint64
 }
 
+// Valid returns true if the decoder has not reached the end of the packed data.
 func (d *Decoder) Valid() bool {
 	return d.blockIdx < len(d.Pack.Blocks)
 }
 
+// Next moves the decoder on to the next block.
 func (d *Decoder) Next() []uint64 {
 	d.blockIdx++
 	return d.unpackBlock()
@@ -238,7 +245,7 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	return enc.Done()
 }
 
-// ApproxNum would indicate the total number of UIDs in the pack. Can be used for int slice
+// ApproxLen returns an approximation of the number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
 	if pack == nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/golang/glog"
 )
 
+// Telemetry holds information about the state of the zero server.
 type Telemetry struct {
 	Arch        string
 	Cid         string

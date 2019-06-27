@@ -32,8 +32,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/golang/glog"
+	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -42,36 +49,54 @@ import (
 
 // Error constants representing different types of errors.
 var (
+	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
-	Success             = "Success"
-	ErrorUnauthorized   = "ErrorUnauthorized"
-	ErrorInvalidMethod  = "ErrorInvalidMethod"
+	// Success is equivalent to the HTTP 200 error code.
+	Success = "Success"
+	// ErrorUnauthorized is equivalent to the HTTP 401 error code.
+	ErrorUnauthorized = "ErrorUnauthorized"
+	// ErrorInvalidMethod is equivalent to the HTTP 405 error code.
+	ErrorInvalidMethod = "ErrorInvalidMethod"
+	// ErrorInvalidRequest is equivalent to the HTTP 400 error code.
 	ErrorInvalidRequest = "ErrorInvalidRequest"
-	Error               = "Error"
-	ErrorNoData         = "ErrorNoData"
-	ValidHostnameRegex  = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
+	// Error is a general error code.
+	Error = "Error"
+	// ErrorNoData is an error returned when the requested data cannot be returned.
+	ErrorNoData = "ErrorNoData"
+	// ValidHostnameRegex is a regex that accepts our expected hostname format.
+	ValidHostnameRegex = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]" +
 		"|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	// Star is equivalent to using * in a mutation.
 	// When changing this value also remember to change in in client/client.go:DeleteEdges.
 	Star = "_STAR_ALL"
 
-	// Use the max possible grpc msg size for the most flexibility (4GB - equal
+	// GrpcMaxSize is the maximum possible size for a gRPC message.
+	// Dgraph uses the maximum size for the most flexibility (4GB - equal
 	// to the max grpc frame size). Users will still need to set the max
 	// message sizes allowable on the client size when dialing.
 	GrpcMaxSize = 4 << 30
 
+	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080
+	// PortZeroHTTP is the default HTTP port for zero.
 	PortZeroHTTP = 6080
+	// PortInternal is the default port for internal use.
 	PortInternal = 7080
-	PortHTTP     = 8080
-	PortGrpc     = 9080
-	// If the difference between AppliedUntil - TxnMarks.DoneUntil() is greater than this, we
-	// start aborting old transactions.
+	// PortHTTP is the default HTTP port for alpha.
+	PortHTTP = 8080
+	// PortGrpc is the default gRPC port for alpha.
+	PortGrpc = 9080
+	// ForceAbortDifference is the maximum allowed difference between
+	// AppliedUntil - TxnMarks.DoneUntil() before old transactions start getting aborted.
 	ForceAbortDifference = 5000
 
-	GrootId       = "groot"
+	// GrootId is the ID of the admin user for ACLs.
+	GrootId = "groot"
+	// AclPredicates is the JSON representation of the predicates reserved for use
+	// by the ACL system.
 	AclPredicates = `
 {"predicate":"dgraph.xid","type":"string", "index": true, "tokenizer":["exact"], "upsert": true},
 {"predicate":"dgraph.password","type":"password"},
@@ -83,7 +108,8 @@ const (
 var (
 	// Useful for running multiple servers on the same machine.
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
-	Nilbyte        []byte
+	// Nilbyte is a nil byte slice. Used
+	Nilbyte []byte
 )
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -308,7 +334,7 @@ func ValidateAddress(addr string) bool {
 }
 
 // RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
-// This function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+// This function should be called like: someSlice = RemoveDuplicates(someSlice)
 func RemoveDuplicates(s []string) (out []string) {
 	sort.Strings(s)
 	out = s[:0]
@@ -321,6 +347,7 @@ func RemoveDuplicates(s []string) (out []string) {
 	return
 }
 
+// BytesBuffer provides a buffer backed by byte slices.
 type BytesBuffer struct {
 	data [][]byte
 	off  int
@@ -353,7 +380,7 @@ func (b *BytesBuffer) grow(n int) {
 	b.off = 0
 }
 
-// returns a slice of length n to be used to writing
+// Slice returns a slice of length n to be used for writing.
 func (b *BytesBuffer) Slice(n int) []byte {
 	b.grow(n)
 	last := len(b.data) - 1
@@ -362,11 +389,13 @@ func (b *BytesBuffer) Slice(n int) []byte {
 	return b.data[last][b.off-n : b.off]
 }
 
+// Length returns the size of the buffer.
 func (b *BytesBuffer) Length() int {
 	return b.sz
 }
 
-// Caller should ensure that o is of appropriate length
+// CopyTo copies the contents of the buffer to the given byte slice.
+// Caller should ensure that o is of appropriate length.
 func (b *BytesBuffer) CopyTo(o []byte) int {
 	offset := 0
 	for i, d := range b.data {
@@ -381,7 +410,8 @@ func (b *BytesBuffer) CopyTo(o []byte) int {
 	return offset
 }
 
-// Always give back <= touched bytes
+// TruncateBy reduces the size of the bugger by the given amount.
+// Always give back <= touched bytes.
 func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 	b.sz -= n
@@ -392,18 +422,22 @@ type record struct {
 	Name string
 	Dur  time.Duration
 }
+
+// Timer implements a timer that supports recording the duration of events.
 type Timer struct {
 	start   time.Time
 	last    time.Time
 	records []record
 }
 
+// Start starts the timer and clears the list of records.
 func (t *Timer) Start() {
 	t.start = time.Now()
 	t.last = t.start
 	t.records = t.records[:0]
 }
 
+// Record records an event and assigns it the given name.
 func (t *Timer) Record(name string) {
 	now := time.Now()
 	t.records = append(t.records, record{
@@ -413,6 +447,7 @@ func (t *Timer) Record(name string) {
 	t.last = now
 }
 
+// Total returns the duration since the timer was started.
 func (t *Timer) Total() time.Duration {
 	return time.Since(t.start).Round(time.Millisecond)
 }
@@ -434,6 +469,7 @@ func PredicateLang(s string) (string, string) {
 	return s[0:i], s[i+1:]
 }
 
+// DivideAndRule is used to divide a number of tasks among multiple go routines.
 func DivideAndRule(num int) (numGo, width int) {
 	numGo, width = 64, 0
 	for ; numGo >= 1; numGo /= 2 {
@@ -446,6 +482,7 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
+// SetupConnection starts a secure gRPC connection to the given host.
 func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
@@ -472,6 +509,7 @@ func SetupConnection(host string, tlsCfg *tls.Config, useGz bool) (*grpc.ClientC
 	return grpc.DialContext(ctx, host, dialOpts...)
 }
 
+// Diff computes the difference between the keys of the two given maps.
 func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string) {
 	var add []string
 	var del []string
@@ -490,6 +528,7 @@ func Diff(dst map[string]struct{}, src map[string]struct{}) ([]string, []string)
 	return add, del
 }
 
+// SpanTimer returns a function used to record the duration of the given span.
 func SpanTimer(span *trace.Span, name string) func() {
 	if span == nil {
 		return func() {}
@@ -506,4 +545,124 @@ func SpanTimer(span *trace.Span, name string) func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
 		// TODO: We can look into doing a latency record here.
 	}
+}
+
+type CloseFunc func()
+
+// GetDgraphClient creates a Dgraph client based on the following options in the configuration:
+// --alpha specifies a comma separated list of endpoints to connect to
+// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
+// --retries specifies how many times we should retry the connection to each endpoint upon failures
+// --user and --password specify the credentials we should use to login with the server
+func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
+	alphas := conf.GetString("alpha")
+	if len(alphas) == 0 {
+		glog.Fatalf("The --alpha option must be set in order to connect to Dgraph")
+	}
+
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", alphas)
+	tlsCfg, err := LoadClientTLSConfig(conf)
+	Checkf(err, "While loading TLS configuration")
+
+	ds := strings.Split(alphas, ",")
+	var conns []*grpc.ClientConn
+	var clients []api.DgraphClient
+
+	retries := 1
+	if conf.IsSet("retries") {
+		retries = conf.GetInt("retries")
+		if retries < 1 {
+			retries = 1
+		}
+	}
+
+	for _, d := range ds {
+		var conn *grpc.ClientConn
+		for i := 0; i < retries; retries++ {
+			conn, err = SetupConnection(d, tlsCfg, false)
+			if err == nil {
+				break
+			}
+			fmt.Printf("While trying to setup connection: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+		}
+		if conn == nil {
+			Fatalf("Could not setup connection after %d retries", retries)
+		}
+
+		conns = append(conns, conn)
+		dc := api.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+
+	dg := dgo.NewDgraphClient(clients...)
+	user := conf.GetString("user")
+	if login && len(user) > 0 {
+		err = GetPassAndLogin(dg, &CredOpt{
+			Conf:        conf,
+			UserID:      user,
+			PasswordOpt: "password",
+		})
+		Checkf(err, "While retrieving password and logging in")
+	}
+
+	closeFunc := func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	}
+	return dg, closeFunc
+}
+
+type CredOpt struct {
+	Conf        *viper.Viper
+	UserID      string
+	PasswordOpt string
+}
+
+func AskUserPassword(userid string, pwdType string, times int) (string, error) {
+	AssertTrue(times == 1 || times == 2)
+	AssertTrue(pwdType == "Current" || pwdType == "New")
+	// ask for the user's password
+	fmt.Printf("%s password for %v:", pwdType, userid)
+	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", fmt.Errorf("error while reading password:%v", err)
+	}
+	fmt.Println()
+	password := string(pd)
+
+	if times == 2 {
+		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
+		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", fmt.Errorf("error while reading password:%v", err)
+		}
+		fmt.Println()
+
+		password2 := string(pd2)
+		if password2 != password {
+			return "", fmt.Errorf("the two typed passwords do not match")
+		}
+	}
+	return password, nil
+}
+
+func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
+	password := opt.Conf.GetString(opt.PasswordOpt)
+	if len(password) == 0 {
+		var err error
+		password, err = AskUserPassword(opt.UserID, "Current", 1)
+		if err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+		return fmt.Errorf("unable to login to the %v account:%v", opt.UserID, err)
+	}
+	fmt.Println("Login successful.")
+	// update the context so that it has the admin jwt token
+	return nil
 }

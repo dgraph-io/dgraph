@@ -23,21 +23,26 @@ import (
 )
 
 var (
-	TrueVal  = FromBool(true)
+	// TrueVal is the pb.TaskValue value equivalent to the "true" boolean.
+	TrueVal = FromBool(true)
+	// FalseVal is the pb.TaskValue value equivalent to the "false" boolean.
 	FalseVal = FromBool(false)
 )
 
+// FromInt converts the given int value into a pb.TaskValue object.
 func FromInt(val int) *pb.TaskValue {
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, uint64(val))
 	return &pb.TaskValue{Val: []byte(bs), ValType: pb.Posting_INT}
 }
 
+// ToInt converts the given pb.TaskValue object into an integer.
 func ToInt(val *pb.TaskValue) int64 {
 	result := binary.LittleEndian.Uint64(val.Val)
 	return int64(result)
 }
 
+// FromBool converts the given boolean in to a pb.TaskValue object.
 func FromBool(val bool) *pb.TaskValue {
 	if val {
 		return FromInt(1)
@@ -45,6 +50,7 @@ func FromBool(val bool) *pb.TaskValue {
 	return FromInt(0)
 }
 
+// ToBool converts the given pb.TaskValue object into a boolean.
 func ToBool(val *pb.TaskValue) bool {
 	if len(val.Val) == 0 {
 		return false

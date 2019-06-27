@@ -110,6 +110,33 @@ func TestSeek(t *testing.T) {
 	}
 }
 
+func TestLinearSeek(t *testing.T) {
+	N := 10001
+	enc := Encoder{BlockSize: 10}
+	for i := 0; i < N; i += 10 {
+		enc.Add(uint64(i))
+	}
+	pack := enc.Done()
+	dec := Decoder{Pack: pack}
+
+	for i := 0; i < 2*N; i += 10 {
+		uids := dec.LinearSeek(uint64(i))
+
+		if i < N {
+			require.Contains(t, uids, uint64(i))
+		} else {
+			require.NotContains(t, uids, uint64(i))
+		}
+	}
+
+	//blockIdx points to last block.
+	for i := 0; i < 9990; i += 10 {
+		uids := dec.LinearSeek(uint64(i))
+
+		require.NotContains(t, uids, uint64(i))
+	}
+}
+
 func TestDecoder(t *testing.T) {
 	N := 10001
 	var expected []uint64
