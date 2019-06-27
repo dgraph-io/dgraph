@@ -772,9 +772,9 @@ func TestCountIndexSerialTxns(t *testing.T) {
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
 	_, err := txn0.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	err = txn0.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
 
 	// Expected edge count of 0x1: 2
 	// This should NOT appear in the query result
@@ -782,22 +782,22 @@ func TestCountIndexSerialTxns(t *testing.T) {
 	txn1 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	err = txn1.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
 
 	txn2 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
 	_, err = txn2.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	err = txn2.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
 
 	// Verify query
 	txn := dg.NewReadOnlyTxn()
 	vars := map[string]string{"$num": "1"}
 	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js := string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
@@ -805,7 +805,7 @@ func TestCountIndexSerialTxns(t *testing.T) {
 	txn = dg.NewReadOnlyTxn()
 	vars = map[string]string{"$num": "2"}
 	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js = string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,

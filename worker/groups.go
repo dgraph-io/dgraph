@@ -201,7 +201,15 @@ func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
-	m.StartTs = 1
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
+	cancel()
+	if err != nil {
+		glog.Errorf("error while requesting timestamp for schema %v: %v", schema, err)
+		return
+	}
+
+	m.StartTs = ts.StartId
 	m.Schema = append(m.Schema, schema)
 
 	// This would propose the schema mutation and make sure some node serves this predicate
