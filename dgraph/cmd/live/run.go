@@ -54,7 +54,6 @@ type options struct {
 	dataFiles           string
 	dataFormat          string
 	schemaFile          string
-	alpha               string
 	zero                string
 	concurrent          int
 	batchSize           int
@@ -105,6 +104,8 @@ func init() {
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.StringP("user", "u", "", "Username if login is required.")
+	flag.StringP("password", "p", "", "Password of the user.")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
@@ -284,7 +285,6 @@ func run() error {
 		dataFiles:           Live.Conf.GetString("files"),
 		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
-		alpha:               Live.Conf.GetString("alpha"),
 		zero:                Live.Conf.GetString("zero"),
 		concurrent:          Live.Conf.GetInt("conc"),
 		batchSize:           Live.Conf.GetInt("batch"),
@@ -294,11 +294,6 @@ func run() error {
 		useCompression:      Live.Conf.GetBool("use_compression"),
 		newUids:             Live.Conf.GetBool("new_uids"),
 	}
-	tlsCfg, err := x.LoadClientTLSConfig(Live.Conf)
-	if err != nil {
-		return err
-	}
-
 	go func() {
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
 			glog.Errorf("Error while starting HTTP server in port 6060: %+v", err)
@@ -313,23 +308,14 @@ func run() error {
 		MaxRetries:    math.MaxUint32,
 	}
 
-	ds := strings.Split(opt.alpha, ",")
-	var clients []api.DgraphClient
-	for _, d := range ds {
-		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
-		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
-		defer conn.Close()
+	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
+	defer closeFunc()
 
-		dc := api.NewDgraphClient(conn)
-		clients = append(clients, dc)
-	}
-	dgraphClient := dgo.NewDgraphClient(clients...)
-
-	l := setup(bmOpts, dgraphClient)
+	l := setup(bmOpts, dg)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
+		if err := processSchemaFile(ctx, opt.schemaFile, dg); err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
 				return nil

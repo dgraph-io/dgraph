@@ -163,12 +163,11 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
-## External IDs and Upsert Transaction
+## External IDs and Upsert Block
 
-The upsert transaction makes managing external IDs easy.
+The Upsert Block makes managing external IDs easy.
 
 Set the schema.
-
 ```
 xid: string @index(exact) .
 <http://schema.org/name>: string @index(exact) .
@@ -183,7 +182,8 @@ Set the type first of all.
   }
 }
 ```
-Now you can create a new person and attach its type using an upsert transaction.
+
+Now you can create a new person and attach its type using the Upsert Block.
 ```
    upsert {
       query {
@@ -204,7 +204,7 @@ Now you can create a new person and attach its type using an upsert transaction.
     }
 ```
 
-You can also delete a person and deattach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+You can also delete a person and detach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
 
 ```
    upsert {
@@ -799,14 +799,9 @@ The Mutation block currently only allows the `uid` function, which allows extrac
 from variables defined in the query block. There are 3 possible outcomes based on the
 results of executing the query block:
 
-  * If the variable is empty i.e. no node matched the query, the `uid` function returns
-  a new UID in case of a `set` operation and is thus treated similar to a blank node.
-  On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes
-  a no-op and is silently ignored.
-  * If the variable stores exactly one UID, the `uid` function returns the uid stored in
-  the variable.
-  * If the variable stores more than one UID, the mutation fails. We plan to support
-  this use case in the future.
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+* If the variable stores exactly one UID, the `uid` function returns the uid stored in the variable.
+* If the variable stores more than one UID, the mutation fails. We plan to support this use case in the future.
 
 ### Example
 
