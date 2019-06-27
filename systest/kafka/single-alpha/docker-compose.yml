@@ -1,15 +1,17 @@
-# Auto-generated with: [/home/lucas/go/src/github.com/dgraph-io/dgraph/compose/compose -a 1 -z 1]
-#
 version: "3.5"
 services:
   zookeeper:
     container_name: zookeeper
+    labels:
+        cluster: test
     image: wurstmeister/zookeeper
     ports:
       - "2181:2181"
   kafka1:
     image: wurstmeister/kafka
     container_name: kafka1
+    labels:
+        cluster: test
     ports:
       - "9192:9192"
     depends_on:
@@ -27,6 +29,8 @@ services:
   kafka2:
     image: wurstmeister/kafka
     container_name: kafka2
+    labels:
+        cluster: test
     ports:
       - "9292:9292"
     depends_on:
@@ -44,9 +48,9 @@ services:
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
-    working_dir: /data/zero1
     labels:
-      cluster: test
+        cluster: test
+    working_dir: /data/zero1
     depends_on:
       - kafka1
       - kafka2
@@ -63,12 +67,12 @@ services:
   alpha1:
     image: dgraph/dgraph:latest
     container_name: alpha1
+    labels:
+        cluster: test
     working_dir: /data/alpha1
     depends_on:
       - kafka1
       - kafka2
-    labels:
-      cluster: test
     ports:
     - 8180:8180
     - 9180:9180
@@ -82,9 +86,9 @@ services:
   zero2:
     image: dgraph/dgraph:latest
     container_name: zero2
-    working_dir: /data/zero2
     labels:
-      cluster: test
+        cluster: test
+    working_dir: /data/zero2
     depends_on:
       - kafka1
       - kafka2
@@ -101,12 +105,12 @@ services:
   alpha2:
     image: dgraph/dgraph:latest
     container_name: alpha2
+    labels:
+        cluster: test
     working_dir: /data/alpha2
     depends_on:
       - kafka1
       - kafka2
-    labels:
-      cluster: test
     ports:
     - 8280:8280
     - 9280:9280
@@ -120,6 +124,8 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
+    labels:
+        cluster: test
     working_dir: /working/jaeger
     ports:
     - 14268:14268

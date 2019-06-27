@@ -4,12 +4,16 @@ version: "3.5"
 services:
   zookeeper:
     container_name: zookeeper
+    labels:
+        cluster: test
     image: wurstmeister/zookeeper
     ports:
       - "2181:2181"
   kafka1:
     image: wurstmeister/kafka
     container_name: kafka1
+    labels:
+        cluster: test
     ports:
       - "9192:9192"
     depends_on:
@@ -27,6 +31,8 @@ services:
   kafka2:
     image: wurstmeister/kafka
     container_name: kafka2
+    labels:
+        cluster: test
     ports:
       - "9292:9292"
     depends_on:
@@ -44,6 +50,8 @@ services:
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
+    labels:
+        cluster: test
     working_dir: /data/zero1
     labels:
       cluster: test
@@ -60,6 +68,8 @@ services:
   alpha100:
     image: dgraph/dgraph:latest
     container_name: alpha100
+    labels:
+        cluster: test
     working_dir: /data/alpha100
     depends_on:
       - kafka1
@@ -79,6 +89,8 @@ services:
   alpha101:
     image: dgraph/dgraph:latest
     container_name: alpha101
+    labels:
+        cluster: test
     working_dir: /data/alpha101
     depends_on:
       - kafka1
@@ -98,6 +110,8 @@ services:
   alpha102:
     image: dgraph/dgraph:latest
     container_name: alpha102
+    labels:
+        cluster: test
     working_dir: /data/alpha102
     depends_on:
       - kafka1
@@ -117,6 +131,8 @@ services:
   zero2:
     image: dgraph/dgraph:latest
     container_name: zero2
+    labels:
+        cluster: test
     working_dir: /data/zero2
     labels:
       cluster: test
@@ -133,6 +149,8 @@ services:
   alpha200:
     image: dgraph/dgraph:latest
     container_name: alpha200
+    labels:
+        cluster: test
     working_dir: /data/alpha200
     depends_on:
       - kafka1
@@ -152,6 +170,8 @@ services:
   alpha201:
     image: dgraph/dgraph:latest
     container_name: alpha201
+    labels:
+        cluster: test
     working_dir: /data/alpha201
     depends_on:
       - kafka1
@@ -171,6 +191,8 @@ services:
   alpha202:
     image: dgraph/dgraph:latest
     container_name: alpha202
+    labels:
+        cluster: test
     working_dir: /data/alpha202
     depends_on:
       - kafka1
@@ -190,6 +212,8 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
+    labels:
+        cluster: test
     working_dir: /working/jaeger
     ports:
     - 14268:14268

@@ -90,7 +90,7 @@ function FindCustomClusterTests {
     touch $CUSTOM_CLUSTER_TESTS
     for FILE in $(find -type f -name docker-compose.yml); do
         DIR=$(dirname $FILE)
-        if grep -q $DIR $MATCHING_TESTS && ls $DIR | grep -q "_test.go$"; then
+        if grep -q $DIR $MATCHING_TESTS; then
             echo "${DIR:1}\$" >> $CUSTOM_CLUSTER_TESTS
         fi
     done
@@ -198,7 +198,11 @@ if [[ $# -eq 0 ]]; then
     fi
 elif [[ $# -eq 1 ]]; then
     REGEX=${1%/}
-    go list ./... | grep $REGEX > $MATCHING_TESTS
+    for DIR in $(go list ./... | grep $REGEX); do
+        if ls $GOPATH/src/$DIR | grep -q "_test.go$"; then
+            echo "$DIR" >> $MATCHING_TESTS
+        fi
+    done
     Info "Running only tests matching '$REGEX'"
     RUN_ALL=
 else
