@@ -430,18 +430,22 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, e
 }
 
 func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool) (
-	resp *api.Assigned, retErr error) {
+	resp *api.Assigned, rerr error) {
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
+	if !isMutationAllowed(ctx) {
+		return resp, errors.Errorf("No mutations allowed.")
+	}
+
 	var parsingTime time.Duration
 	resp = &api.Assigned{}
 
-	startDoMutate := time.Now()
+	start := time.Now()
 	defer func() {
-		totalTime := time.Since(startDoMutate)
+		totalTime := time.Since(start)
 		processingTime := totalTime - parsingTime
 		resp.Latency = &api.Latency{
 			ParsingNs:    uint64(parsingTime.Nanoseconds()),
@@ -454,19 +458,15 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	defer func() {
 		span.End()
 		v := x.TagValueStatusOK
-		if retErr != nil {
+		if rerr != nil {
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceMs(startDoMutate)
+		timeSpentMs := x.SinceMs(start)
 		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
 	}()
 
-	if !isMutationAllowed(ctx) {
-		return resp, errors.Errorf("No mutations allowed.")
-	}
-
-	if retErr = x.HealthCheck(); retErr != nil {
+	if rerr = x.HealthCheck(); rerr != nil {
 		return
 	}
 
@@ -503,11 +503,11 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	}
 	annotateStartTs(span, mu.StartTs)
 
-	pt, err := doQueryInUpsert(ctx, mu.StartTs, gmu, mu.Query)
+	l, err := doQueryInUpsert(ctx, mu, gmu)
 	if err != nil {
 		return resp, err
 	}
-	parsingTime += pt
+	parsingTime += l.Parsing
 
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
@@ -573,37 +573,35 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 }
 
 // doQueryInUpsert processes the query in upsert block.
-func doQueryInUpsert(ctx context.Context, startTs uint64, gmu *gql.Mutation,
-	queryText string) (time.Duration, error) {
+func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
+	*query.Latency, error) {
 
-	var parsingTime time.Duration
-	if queryText == "" {
-		return parsingTime, nil
+	l := &query.Latency{}
+	if mu.Query == "" {
+		return l, nil
 	}
 
 	needVars := findVars(gmu)
 	startParsingTime := time.Now()
 	parsedReq, err := gql.ParseWithNeedVars(gql.Request{
-		Str:       queryText,
+		Str:       mu.Query,
 		Variables: make(map[string]string),
 	}, needVars)
-	parsingTime += time.Since(startParsingTime)
+	l.Parsing += time.Since(startParsingTime)
 	if err != nil {
-		return parsingTime, errors.Wrapf(err, "while parsing query: %q", queryText)
+		return nil, errors.Wrapf(err, "while parsing query: %q", mu.Query)
 	}
 	if err := validateQuery(parsedReq.Query); err != nil {
-		return parsingTime, errors.Wrapf(err, "while validating query: %q", queryText)
+		return nil, errors.Wrapf(err, "while validating query: %q", mu.Query)
 	}
 
-	var l query.Latency
-	qr := query.Request{Latency: &l, GqlQuery: &parsedReq, ReadTs: startTs}
+	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: mu.StartTs}
 	if err := qr.ProcessQuery(ctx); err != nil {
-		return parsingTime, errors.Wrapf(err, "while processing query: %q", queryText)
+		return nil, errors.Wrapf(err, "while processing query: %q", mu.Query)
 	}
-	parsingTime += qr.Latency.Parsing
 
 	if len(qr.Vars) <= 0 {
-		return parsingTime, fmt.Errorf("upsert query block has no variables")
+		return nil, fmt.Errorf("upsert query block has no variables")
 	}
 
 	// TODO(Aman): allow multiple values for each variable.
@@ -614,14 +612,14 @@ func doQueryInUpsert(ctx context.Context, startTs uint64, gmu *gql.Mutation,
 			continue
 		}
 		if len(v.Uids.Uids) > 1 {
-			return parsingTime, fmt.Errorf("more than one values found for var (%s)", name)
+			return nil, fmt.Errorf("more than one values found for var (%s)", name)
 		} else if len(v.Uids.Uids) == 1 {
 			varToUID[name] = fmt.Sprintf("%d", v.Uids.Uids[0])
 		}
 	}
 
 	updateMutations(gmu, varToUID)
-	return parsingTime, nil
+	return l, nil
 }
 
 // findVars finds all the variables used in mutation block
@@ -671,7 +669,7 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string]string) {
 	}
 
 	// Remove the mutations from gmu.Del when no UID was found.
-	gmuDel := make([]*api.NQuad, 0, len(gmu.Del))
+	gmuDel := gmu.Del[:0]
 	for _, nq := range gmu.Del {
 		nq.Subject = getNewVal(nq.Subject)
 		nq.ObjectId = getNewVal(nq.ObjectId)
