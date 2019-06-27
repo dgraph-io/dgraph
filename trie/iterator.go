@@ -17,25 +17,72 @@
 package trie
 
 import (
-	log "github.com/inconshreveable/log15"
+	"fmt"
+	//log "github.com/inconshreveable/log15"
 )
 
 // Print prints the trie through pre-order traversal
 func (t *Trie) Print() {
-	log.Info("printing trie...")
-	t.print(t.root, nil)
+	fmt.Println("printing trie...")
+	t.print(t.root, nil, false)
 }
 
-func (t *Trie) print(current node, prefix []byte) {
+func (t *Trie) PrintEncoding() {
+	t.print(t.root, nil, true)
+}
+
+func (t *Trie) print(current node, prefix []byte, withEncoding bool) {
+	h, err := NewHasher()
+	if err != nil {
+		fmt.Printf("new hasher err %s\n", err)
+	}
+	var encoding []byte
+	var hash []byte
+	if withEncoding && current != nil {
+		encoding, err = current.Encode()
+		if err != nil {
+			fmt.Printf("encoding err %s\n", err)
+		}
+		hash, err = h.Hash(current)
+		if err != nil {
+			fmt.Printf("hashing err %s\n", err)
+		}
+	}
+
 	switch c := current.(type) {
 	case *branch:
-		log.Info("branch key %x children %b value %s\n", nibblesToKeyLE(append(prefix, c.key...)), c.childrenBitmap(), c.value)
+		fmt.Printf("branch key %x children %b value %x\n", nibblesToKeyLE(append(prefix, c.key...)), c.childrenBitmap(), c.value)
+		if withEncoding {
+			fmt.Printf("branch encoding ")
+			printHexBytes(encoding)
+			fmt.Printf("branch hash ")
+			printHexBytes(hash)
+		}
 		for i, child := range c.children {
-			t.print(child, append(append(prefix, byte(i)), c.key...))
+			t.print(child, append(append(prefix, byte(i)), c.key...), withEncoding)
 		}
 	case *leaf:
-		log.Info("leaf key %x val %x\n", nibblesToKeyLE(append(prefix, c.key...)), c.value)
+		fmt.Printf("leaf key %x value %x\n", nibblesToKeyLE(append(prefix, c.key...)), c.value)
+		if withEncoding {
+			fmt.Printf("leaf encoding ")
+			printHexBytes(encoding)
+			fmt.Printf("leaf hash ")
+			printHexBytes(hash)
+		}
 	default:
 		// do nothing
 	}
+}
+
+func printHexBytes(in []byte) {
+	fmt.Print("[")
+	for i, b := range in {
+		if i < len(in)-1 {
+			fmt.Printf("%x, ", b)
+		} else {
+			fmt.Printf("%x", b)
+		}
+	}
+	fmt.Println("]")
+
 }

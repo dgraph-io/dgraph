@@ -19,7 +19,6 @@ package trie
 import (
 	"hash"
 
-	"github.com/ChainSafe/gossamer/common"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -48,7 +47,7 @@ func (h *Hasher) Hash(n node) (res []byte, err error) {
 
 	// if length of encoded leaf is less than 32 bytes, do not hash
 	if len(encNode) < 32 {
-		return common.AppendZeroes(encNode, 32), nil
+		return encNode, nil
 	}
 
 	// otherwise, hash encoded node

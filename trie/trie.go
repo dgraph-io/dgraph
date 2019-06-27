@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"errors"
+	"github.com/ChainSafe/gossamer/common"
 )
 
 // Trie is a Merkle Patricia Trie.
@@ -45,16 +46,29 @@ func NewTrie(db *Database, root node) *Trie {
 	}
 }
 
+// Root returns the root of the trie
 func (t *Trie) Root() node {
 	return t.root
 }
 
+// Db returns the trie's underlying database
 func (t *Trie) Db() *Database {
 	return t.db
 }
 
+// Encode returns the encoded root of the trie
 func (t *Trie) Encode() ([]byte, error) {
 	return Encode(t.root)
+}
+
+// Hash returns the hashed root of the trie
+func (t *Trie) Hash() (common.Hash, error) {
+	encRoot, err := t.Encode()
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	return common.Blake2bHash(encRoot)
 }
 
 // Put inserts a key with value into the trie

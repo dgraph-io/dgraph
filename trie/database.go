@@ -80,7 +80,7 @@ func (t *Trie) writeNodeToDB(n node) (bool, error) {
 	}
 
 	t.db.Lock.Lock()
-	err = t.db.Batch.Put(hash, encRoot)
+	err = t.db.Batch.Put(hash[:], encRoot)
 	t.db.Lock.Unlock()
 
 	n.setDirty(false)
