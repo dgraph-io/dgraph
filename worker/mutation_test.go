@@ -74,7 +74,14 @@ func TestConvertEdgeType(t *testing.T) {
 				Attr:    "name",
 			},
 			to:        types.StringID,
-			expectErr: true,
+			expectErr: false,
+			output: &pb.DirectedEdge{
+				Value:     []byte(""),
+				ValueId:   123,
+				ValueType: pb.Posting_STRING,
+				Label:     "test-mutation",
+				Attr:      "name",
+			},
 		},
 		{
 			input: &pb.DirectedEdge{
