@@ -49,7 +49,7 @@ if [[ $DGRAPH_LOADER == bulk ]]; then
     DockerCompose run --rm dg1 \
         bash -s <<EOF
             /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                               --format=rdf --zero=zero1:5080 --out=/data/dg1/bulk
+                               --format=rdf --zero=zero1:5180 --out=/data/dg1/bulk
             mv /data/dg1/bulk/0/p /data/dg1
 EOF
 fi
@@ -63,5 +63,5 @@ DockerCompose logs -f dg1 | grep -q -m1 "Server is ready"
 if [[ $DGRAPH_LOADER == live ]]; then
     Info "live loading 21million data set"
     dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                --format=rdf --zero=:5080 --alpha=:9180 --logtostderr
+                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr
 fi
