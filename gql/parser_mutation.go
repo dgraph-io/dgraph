@@ -39,11 +39,11 @@ func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 	item := it.Item()
 	switch item.Typ {
 	case itemUpsertBlock:
-		if mu, err = ParseUpsertBlock(it); err != nil {
+		if mu, err = parseUpsertBlock(it); err != nil {
 			return nil, err
 		}
 	case itemLeftCurl:
-		if mu, err = ParseMutationBlock(it); err != nil {
+		if mu, err = parseMutationBlock(it); err != nil {
 			return nil, err
 		}
 	default:
@@ -58,8 +58,8 @@ func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 	return mu, nil
 }
 
-// ParseUpsertBlock parses the upsert block
-func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
+// parseUpsertBlock parses the upsert block
+func parseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	var mu *api.Mutation
 	var queryText string
 	var queryFound bool
@@ -109,8 +109,22 @@ func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 			if !it.Next() {
 				return nil, errors.Errorf("Unexpected end of upsert block")
 			}
+
+			// upsert ===>@<===if(...) {....}
+			if it.Item().Typ == itemAt {
+				if err := parseIfDirective(it); err != nil {
+					return nil, err
+				}
+
+				// upsert @if(...===>)<=== {....}
+				if !it.Next() {
+					return nil, errors.Errorf("Unexpected end of upsert block")
+				}
+			}
+
+			// upsert @if(...) ===>{<=== ....}
 			var err error
-			if mu, err = ParseMutationBlock(it); err != nil {
+			if mu, err = parseMutationBlock(it); err != nil {
 				return nil, err
 			}
 
@@ -133,8 +147,44 @@ func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	return nil, errors.Errorf("Invalid upsert block")
 }
 
-// ParseMutationBlock parses the mutation block
-func ParseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
+// parseIfDirective parses the @if directive in mutation
+func parseIfDirective(it *lex.ItemIterator) error {
+	if !it.Next() {
+		return errors.Errorf("Unexpected end of @if directive in upsert block")
+	}
+
+	// upsert @===>if<===(...) {....}
+	item := it.Item()
+	if item.Typ != itemName || item.Val != "if" {
+		return errors.Errorf("Expected [if], Got: [%s]", item.Val)
+	}
+
+	// TODO(Aman): Construct Tree/Graph to evaluate if condition.
+	depth := 0
+	for it.Next() {
+		item = it.Item()
+		switch item.Typ {
+		case itemLeftRound:
+			depth++
+		case itemRightRound:
+			depth--
+			if depth == 0 {
+				return nil
+			}
+		case itemName:
+			continue
+		case itemComma:
+			continue
+		default:
+			return errors.Errorf("Unexpected token in @if directive [%s]", item.Val)
+		}
+	}
+
+	return errors.Errorf("Invalid @if directive in upsert block")
+}
+
+// parseMutationBlock parses the mutation block
+func parseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	var mu api.Mutation
 
 	item := it.Item()

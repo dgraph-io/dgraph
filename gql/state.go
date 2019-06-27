@@ -93,11 +93,7 @@ func lexIdentifyBlock(l *lex.Lexer) lex.StateFn {
 func lexNameBlock(l *lex.Lexer) lex.StateFn {
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
+		l.AcceptRun(isNameSuffix)
 		switch word := l.Input[l.Start:l.Pos]; word {
 		case "upsert":
 			l.Emit(itemUpsertBlock)
@@ -140,11 +136,7 @@ func lexUpsertBlock(l *lex.Lexer) lex.StateFn {
 func lexNameUpsertOp(l *lex.Lexer) lex.StateFn {
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
+		l.AcceptRun(isNameSuffix)
 		word := l.Input[l.Start:l.Pos]
 		switch word {
 		case "query":
@@ -187,10 +179,39 @@ func lexBlockContent(l *lex.Lexer) lex.StateFn {
 	}
 }
 
+// lexIfDirective lexes the @if directive in a mutation block
+func lexIfDirective(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexIfDirective
+	for {
+		switch r := l.Next(); {
+		case r == lex.EOF:
+			return l.Errorf("invalid if condition")
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case r == '#':
+			return lexComment
+		case r == leftRound:
+			l.Emit(itemLeftRound)
+			l.AcceptRun(isSpace)
+			l.Ignore()
+			l.ArgDepth++
+			return lexFuncOrArg
+		case r == at:
+			l.Emit(itemAt)
+			return lexDirectiveOrLangList
+		default:
+			return l.Errorf("Unrecognized character in lexText: %#U", r)
+		}
+	}
+}
+
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
 	for {
 		switch r := l.Next(); {
+		case r == at:
+			l.Backup()
+			return lexIfDirective
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
@@ -394,6 +415,10 @@ Loop:
 
 // lexQuery lexes the input string and calls other lex functions.
 func lexQuery(l *lex.Lexer) lex.StateFn {
+	if l.BlockDepth != 0 {
+		return lexInsideMutation
+	}
+
 	l.Mode = lexQuery
 	for {
 		switch r := l.Next(); {
