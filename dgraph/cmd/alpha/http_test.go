@@ -54,15 +54,15 @@ type params struct {
 	Variables map[string]string `json:"variables"`
 }
 
-func queryWithGz(q, ct, d, u string, gzReq, gzResp bool) (
+func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bool) (
 	string, *http.Response, error) {
 
 	params := make([]string, 0, 2)
-	if d != "" {
-		params = append(params, "debug="+d)
+	if debug != "" {
+		params = append(params, "debug="+debug)
 	}
-	if u != "" {
-		params = append(params, fmt.Sprintf("timeout=%v", u))
+	if timeout != "" {
+		params = append(params, fmt.Sprintf("timeout=%v", timeout))
 	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
@@ -70,18 +70,18 @@ func queryWithGz(q, ct, d, u string, gzReq, gzResp bool) (
 	if gzReq {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		gz.Write([]byte(q))
+		gz.Write([]byte(queryText))
 		gz.Close()
 		buf = &b
 	} else {
-		buf = bytes.NewBufferString(q)
+		buf = bytes.NewBufferString(queryText)
 	}
 
 	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
 		return "", nil, err
 	}
-	req.Header.Add("Content-Type", ct)
+	req.Header.Add("Content-Type", contentType)
 
 	if gzReq {
 		req.Header.Set("Content-Encoding", "gzip")
