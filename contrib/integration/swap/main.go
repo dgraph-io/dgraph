@@ -181,7 +181,7 @@ func setup(c *dgo.Dgraph, sentences []string) []string {
 		rdfs += fmt.Sprintf("_:s%d <sentence> %q .\n", i, s)
 	}
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(ctx) }()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(rdfs),
 	})
@@ -221,7 +221,8 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 			Sentence *string
 		}
 	}{}
-	json.Unmarshal(resp.GetJson(), &decode)
+	err = json.Unmarshal(resp.GetJson(), &decode)
+	x.Check(err)
 	x.AssertTrue(len(decode.Node1) == 1)
 	x.AssertTrue(len(decode.Node2) == 1)
 	x.AssertTrue(decode.Node1[0].Sentence != nil)

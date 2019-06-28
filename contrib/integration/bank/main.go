@@ -170,7 +170,7 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() { _ = txn.Discard(context.Background()) }()
 
 	var sk, sd int
 	for {

@@ -117,7 +117,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	default:
 		txn = dg.NewTxn()
 	}
-	defer txn.Discard(nil)
+	defer func() { _ = txn.Discard(nil) }()
 
 	counter, err := queryCounter(txn, pred)
 	if err != nil {

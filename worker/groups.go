@@ -827,7 +827,11 @@ func (g *groupi) processOracleDeltaStream() {
 		go func() {
 			// This would exit when either a Recv() returns error. Or, cancel() is called by
 			// something outside of this goroutine.
-			defer stream.CloseSend()
+			defer func() {
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
+			}()
 			defer close(deltaCh)
 
 			for {
