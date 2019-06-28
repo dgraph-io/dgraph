@@ -62,6 +62,7 @@ type options struct {
 	authToken           string
 	useCompression      bool
 	newUids             bool
+	verbose             bool
 }
 
 var (
@@ -104,6 +105,7 @@ func init() {
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.Bool("verbose", false, "Run the live loader in verbose mode")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 
@@ -290,6 +292,7 @@ func run() error {
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
 		newUids:             Live.Conf.GetBool("new_uids"),
+		verbose:             Live.Conf.GetBool("verbose"),
 	}
 	go func() {
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {

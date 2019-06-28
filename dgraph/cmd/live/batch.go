@@ -110,15 +110,15 @@ func handleError(err error, reqNum uint64, isRetry bool) {
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
-		if !isRetry {
+		if !isRetry && opt.verbose {
 			fmt.Printf("Transaction #%d aborted. Will retry in background.\n", reqNum)
 		}
 	case strings.Contains(s.Message(), "Server overloaded."):
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
-	case err != y.ErrConflict:
-		fmt.Printf("Error while mutating: %v\n", s.Message())
+	case err != y.ErrConflict && err != y.ErrAborted:
+		fmt.Printf("Error while mutating: %v s.Code %v\n", s.Message(), s.Code())
 	}
 }
 
@@ -130,8 +130,10 @@ func (l *loader) infinitelyRetry(req api.Mutation, reqNum uint64) {
 		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, &req)
 		if err == nil {
-			fmt.Printf("Transaction #%d succeeded after %s.\n",
-				reqNum, english.Plural(nretries, "retry", "retries"))
+			if opt.verbose {
+				fmt.Printf("Transaction #%d succeeded after %s.\n",
+					reqNum, english.Plural(nretries, "retry", "retries"))
+			}
 			atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 			atomic.AddUint64(&l.txns, 1)
 			return
