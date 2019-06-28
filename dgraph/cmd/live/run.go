@@ -244,14 +244,11 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
-		o := badger.DefaultOptions
-		o.Dir = opt.clientDir
-		o.ValueDir = opt.clientDir
-		o.TableLoadingMode = bopt.MemoryMap
-		o.SyncWrites = false
 
 		var err error
-		db, err = badger.Open(o)
+		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
+			WithTableLoadingMode(bopt.MemoryMap).
+			WithSyncWrites(false))
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
 

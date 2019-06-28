@@ -114,13 +114,19 @@ func encodeEntry(e *Entry, buf *bytes.Buffer) (int, error) {
 	hash := crc32.New(y.CastagnoliCrcTable)
 
 	buf.Write(headerEnc[:])
-	hash.Write(headerEnc[:])
+	if _, err := hash.Write(headerEnc[:]); err != nil {
+		return 0, err
+	}
 
 	buf.Write(e.Key)
-	hash.Write(e.Key)
+	if _, err := hash.Write(e.Key); err != nil {
+		return 0, err
+	}
 
 	buf.Write(e.Value)
-	hash.Write(e.Value)
+	if _, err := hash.Write(e.Value); err != nil {
+		return 0, err
+	}
 
 	var crcBuf [crc32.Size]byte
 	binary.BigEndian.PutUint32(crcBuf[:], hash.Sum32())
