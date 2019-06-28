@@ -6,8 +6,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ## [1.1.0] - Unreleased
 
-### Fixed
-
 ### Changed
 
 - Tablet move and group removal. (#2880)
@@ -21,9 +19,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 - VerifyUid should wait for membership information. (#2974)
 
-
 - Switching to perfect use case of sync.Map and remove the locks. (#2976)
-
 
 - Update govendor dependencies.
   - Add OpenCensus deps to vendor using govendor. (#2989)
@@ -70,15 +66,52 @@ Error messages:
 
 - Add timestamps during bulk/live load. (#3287)
 - Introduce multi-part posting lists. (#3105)
+  - Fix format of the keys to support startUid. (#3310)
 
 - Improve reporting of aborts and retries during live load. (#3313)
 
 - Vendor in the Jaeger and prometheus exporters from their own repos (#3322)
 
+- Use initial schema during bulk load. (#3333)
+
+- Access groupi.gid atomically. (#3402)
+
+- Adding datadog trace collector. (#3428)
+
+- Use Stream Writer for full snapshot transfer. (#3442)
+
+- Add field to backup requests to force a full backup. (#3387)
+- Move Raft checkpoint key to w directory. (#3444)
+
+- Update vendored dependencies. (#3357)
+
+- Remove custom HTTP Headers, cleanup API. (#3365)
+  - Improve the content type error message by showing available content types (#3532)
+- Update HTTP API Content-Type to application/graphql+. (#3550)
+
+- Remove list.SetForDeletion method, remnant of the global LRU cache. (#3481)
+
+- Bring in latest changes from badger and fix broken API calls. (#3502)
+
+- Vendor in Shopify/sarama to use its Kafka clients. (#3523)
+
+- Update dgo dependency in vendor. (#3412)
+
+- Use StreamWriter in bulk loader. (#3542)
+
+- Update /health endpoint to return alpha version. (#3526)
+
+
 #### Dgraph Debug Tool
 
 - When looking up a key, print if it's a multi-part list and its splits. (#3311)
 - Diagnose Raft WAL via debug tool (#3319)
+- Allow truncating raft logs via debug tool. (#3345)
+- Debug tool to modify Raft snapshot and hardstate (#3364)
+
+#### Dgraph Increment Tool
+
+- Add latency numbers to increment tool. (#3422)
 
 ####  HTTP API
 - Change `/commit` endpoint to accept a list of preds for conflict detection. (#3020)
@@ -108,6 +141,12 @@ Error messages:
   - Rename type predicate to dgraph.type (#3204)
   - Change definition of dgraph.type pred to [string]. (#3235)
   - Use type when available to resolve expand predicates. (#3214)
+  - Include types in results of export operation. (#3493)
+  - Support types in the bulk loader. (#3506)
+  
+- Reserved predicates
+  - During startup, don't upsert initial schema if it already exists. (#3374)
+  - Use all reserved predicates in IsReservedPredicateChanged. (#3531)
   
 - Fuzzy match support (#2916)
 
@@ -116,6 +155,8 @@ Error messages:
 - Show total weight of path in shortest path algorithm. (#2954)
 
 - Rename dgraph `--dgraph` option to `--alpha`. (#3273)
+
+- Allow the normalize limit to be set via a flag. (#3467)
 
 #### Mutation
 
@@ -134,7 +175,7 @@ Error messages:
 - Reserved predicates should act as case-insensitive. (#2997)
 - Support comments in schema. (#3133)
 
-#### Enterprise features
+#### Enterprise Access Control Lists
 
 - Enforcing ACLs for query, mutation and alter requests. (#2862)
 - Don't create ACL predicates when the ACL feature is not turned on. (#2924)
@@ -147,14 +188,19 @@ Error messages:
 - ACL over TLS. (#3207)
 - Using read-only queries for ACL refreshes. (#3256)
 - When HttpLogin response context error, unmarshal and return the response context. (#3275)
+- Refactor: avoid double parsing of mutation string in ACL. (#3494)
 
-#### Enterprise backups
+#### Enterprise Backups
 
 - Fixed bug with backup fan-out code. (#2973)
 - Incremental backups / partial restore. (#2963)
 - REVIEWTODO: Turn obsolete error into warning. (#3172)
 - Add `dgraph lsbackup` command to list backups. (#3219)
 - Add option to override credentials and use public buckets. (#3227)
+- Add field to backup requests to force a full backup. (#3387)
+- More refactoring of backup code. (#3515)
+- Use gzip compression in backups. (#3536)
+- Allow partial restores and restoring different backup series. (#3547)
 
 #### Dgraph Zero
 
@@ -184,8 +230,15 @@ Error messages:
 - Add support for ECDSA in dgraph cert. (#3269)
 - Add support for JSON export. (#3309)
 
+- Adding the migration tool. (#3295)
+
+- Support exporting tracing data to oc_agent, then to datadog agent. (#3398)
 
 ### Removed
+
+- Remove `_predicate_` from Dgraph. (#3262)
+
+- Remove DebugMode option. (#3441)
 
 ### Fixed
 
@@ -233,8 +286,10 @@ Internal tooling:
 - Update protos, proto regeneration Makefile, and release script. (#3189)
 - Tool to benchmark posting list performance. (#3294)
 
-
-
+- Fix race condition in numShutDownSig in Alpha. (#3402)
+- Fix race condition in oracle.go. (#3417)
+- Fix tautological condition in zero.go (#3516)
+- Fix panic in fillVars. (#3505)
 
 ## [1.0.15] - 2019-05-30
 [1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
@@ -835,6 +890,7 @@ instead use the address given by user.
 * Live loader treats subjects/predicates that look like UIDs as existing nodes
   rather than new nodes.
 * Fix bug in `@groupby` queries where predicate was converted to lower case in queries.
+- Fix race condition in IsPeer. (#3432)
 
 ### Changed
 
