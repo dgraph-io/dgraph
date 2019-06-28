@@ -181,7 +181,12 @@ func setup(c *dgo.Dgraph, sentences []string) []string {
 		rdfs += fmt.Sprintf("_:s%d <sentence> %q .\n", i, s)
 	}
 	txn := c.NewTxn()
-	defer func() { _ = txn.Discard(ctx) }()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(rdfs),
 	})
@@ -200,7 +205,12 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 	defer cancel()
 
 	txn := c.NewTxn()
-	defer func() { _ = txn.Discard(ctx) }()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
 		node1(func: uid(%s)) {
