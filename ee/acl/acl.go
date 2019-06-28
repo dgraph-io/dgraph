@@ -195,9 +195,12 @@ func del(conf *viper.Viper) error {
 		})
 }
 
+// AclEntity is an interface that must be met by all the types of entities (i.e users, groups)
+// in the ACL system.
 type AclEntity interface {
-	// the implementation of GetUid must check the case that the entity is nil
-	// and return an empty string accordingly
+	// GetUid returns the UID of the entity.
+	// The implementation of GetUid must check the case that the entity is nil
+	// and return an empty string accordingly.
 	GetUid() string
 }
 

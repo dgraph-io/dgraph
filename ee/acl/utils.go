@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// GetGroupIDs returns a slice containing the group ids of all the given groups.
 func GetGroupIDs(groups []Group) []string {
 	if len(groups) == 0 {
 		// the user does not have any groups
@@ -37,26 +38,31 @@ func GetGroupIDs(groups []Group) []string {
 	return jwtGroups
 }
 
+// Operation represents a Dgraph data operation (e.g write or read).
 type Operation struct {
 	Code int32
 	Name string
 }
 
 var (
+	// Read is used when doing a query.
 	Read = &Operation{
 		Code: 4,
 		Name: "Read",
 	}
+	// Write is used when mutating data.
 	Write = &Operation{
 		Code: 2,
 		Name: "Write",
 	}
+	// Modify is used when altering the schema or dropping data.
 	Modify = &Operation{
 		Code: 1,
 		Name: "Modify",
 	}
 )
 
+// User represents a user in the ACL system.
 type User struct {
 	Uid           string  `json:"uid"`
 	UserID        string  `json:"dgraph.xid"`
@@ -65,6 +71,7 @@ type User struct {
 	Groups        []Group `json:"dgraph.user.group"`
 }
 
+// GetUid returns the UID of the user.
 func (u *User) GetUid() string {
 	if u == nil {
 		return ""
@@ -72,7 +79,7 @@ func (u *User) GetUid() string {
 	return u.Uid
 }
 
-// Extract the first User pointed by the userKey in the query response
+// UnmarshalUser extracts the first User pointed by the userKey in the query response.
 func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 	m := make(map[string][]User)
 
@@ -91,15 +98,16 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 	return &users[0], nil
 }
 
-// an Acl can have either a single predicate or a regex that can be used to
-// match multiple predicates
+// Acl represents the permissions in the ACL system.
+// An Acl can have either a single predicate or a regex that can be used to
+// match multiple predicates.
 type Acl struct {
 	Predicate string `json:"predicate"`
 	Regex     string `json:"regex"`
 	Perm      int32  `json:"perm"`
 }
 
-// parse the response and check existing of the uid
+// Group represents a group in the ACL system.
 type Group struct {
 	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
@@ -107,6 +115,7 @@ type Group struct {
 	Acls    string `json:"dgraph.group.acl"`
 }
 
+// GetUid returns the UID of the group.
 func (g *Group) GetUid() string {
 	if g == nil {
 		return ""
@@ -114,7 +123,7 @@ func (g *Group) GetUid() string {
 	return g.Uid
 }
 
-// Extract the first User pointed by the userKey in the query response
+// UnmarshalGroup extracts the first Group pointed by the groupKey in the query response.
 func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	m := make(map[string][]Group)
 
@@ -124,7 +133,7 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	}
 	groups := m[groupKey]
 	if len(groups) == 0 {
-		// the group does not exist
+		// The group does not exist.
 		return nil, nil
 	}
 	if len(groups) > 1 {
@@ -134,7 +143,7 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 	return &groups[0], nil
 }
 
-// Extract a sequence of groups from the input
+// UnmarshalGroups extracts a sequence of groups from the input.
 func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 	m := make(map[string][]Group)
 
@@ -144,10 +153,6 @@ func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 	}
 	groups := m[groupKey]
 	return groups, nil
-}
-
-type JwtGroup struct {
-	Group string
 }
 
 // getClientWithAdminCtx creates a client by checking the --alpha, various --tls*, and --retries
@@ -165,6 +170,8 @@ func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) 
 	return dg, closeClient, nil
 }
 
+// CreateUserNQuads creates the NQuads needed to store a user with the given ID and
+// password in the ACL system.
 func CreateUserNQuads(userId string, password string) []*api.NQuad {
 	return []*api.NQuad{
 		{
