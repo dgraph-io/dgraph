@@ -44,7 +44,7 @@ type columnInfo struct {
 type fkConstraint struct {
 	parts []*constraintPart
 	// the referenced column names and their indices in the foreign table
-	foreignIndices []*ColumnIdx
+	foreignIndices []*columnIdx
 }
 
 type constraintPart struct {
@@ -86,7 +86,7 @@ func getDataType(dbType string) dataType {
 			return goType
 		}
 	}
-	return UNKNOWN
+	return unknownType
 }
 
 func getColumnInfo(fieldName string, dbType string) *columnInfo {
