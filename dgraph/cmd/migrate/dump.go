@@ -215,7 +215,7 @@ func (m *dumpMeta) outputConstraints(row *sqlRow, tableInfo *sqlTable) {
 		}
 		foreignBlankNode := m.tableGuides[foreignTableName].valuesRecorder.getBlankNode(refLabel)
 		m.outputPlainCell(row.blankNodeLabel,
-			getPredFromConstraint(tableInfo.tableName, separator, constraint), UID, foreignBlankNode)
+			getPredFromConstraint(tableInfo.tableName, separator, constraint), uidType, foreignBlankNode)
 	}
 }
 
@@ -228,9 +228,9 @@ func (m *dumpMeta) outputPlainCell(blankNode string, predName string, dataType d
 	fmt.Fprintf(&m.buf, "%s <%s> ", blankNode, predName)
 
 	switch dataType {
-	case STRING:
+	case stringType:
 		fmt.Fprintf(&m.buf, "%q .\n", colValue)
-	case UID:
+	case uidType:
 		fmt.Fprintf(&m.buf, "%s .\n", colValue)
 	default:
 		objectVal, err := getValue(dataType, colValue)
@@ -272,8 +272,8 @@ func (row *sqlRow) getRefLabelFromConstraint(foreignTableInfo *sqlTable,
 			})
 
 		// replace the column names to be the foreign column names
-		for _, columnIdx := range constraint.foreignIndices {
-			columnIdx.name = foreignKeyColumnNames[columnIdx.name]
+		for _, colIdx := range constraint.foreignIndices {
+			colIdx.name = foreignKeyColumnNames[colIdx.name]
 		}
 	}
 
