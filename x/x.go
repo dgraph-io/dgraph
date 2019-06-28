@@ -547,7 +547,15 @@ func SpanTimer(span *trace.Span, name string) func() {
 	}
 }
 
+// CloseFunc needs to be called to close all the client connections.
 type CloseFunc func()
+
+// CredOpt stores the options for logging in, including the password and user.
+type CredOpt struct {
+	Conf        *viper.Viper
+	UserID      string
+	PasswordOpt string
+}
 
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
 // --alpha specifies a comma separated list of endpoints to connect to
@@ -614,12 +622,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	return dg, closeFunc
 }
 
-type CredOpt struct {
-	Conf        *viper.Viper
-	UserID      string
-	PasswordOpt string
-}
-
+// AskUserPassword prompts the user to enter the password for the given user ID.
 func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(times == 1 || times == 2)
 	AssertTrue(pwdType == "Current" || pwdType == "New")
@@ -648,6 +651,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	return password, nil
 }
 
+// GetPassAndLogin uses the given credentials and client to perform the login operation.
 func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	password := opt.Conf.GetString(opt.PasswordOpt)
 	if len(password) == 0 {
