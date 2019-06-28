@@ -17,9 +17,14 @@
 package cfg
 
 import (
+	"bytes"
+	"os"
+
+	tml "github.com/BurntSushi/toml"
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/rpc"
+	log "github.com/inconshreveable/log15"
 )
 
 // Config is a collection of configurations throughout the system
@@ -27,4 +32,32 @@ type Config struct {
 	P2pCfg *p2p.Config     `toml:"p2p"`
 	DbCfg  *polkadb.Config `toml:"db"`
 	RpcCfg *rpc.Config     `toml:"rpc"`
+}
+
+// ToTOML encodes a state type into a TOML file.
+func ToTOML(file string, s *Config) *os.File {
+	var buff bytes.Buffer
+	var (
+		newFile *os.File
+		err     error
+	)
+
+	if err = tml.NewEncoder(&buff).Encode(s); err != nil {
+		log.Warn("error closing file", "err", err)
+		os.Exit(1)
+	}
+
+	newFile, err = os.Create(file)
+	if err != nil {
+		log.Warn("error closing file", "err", err)
+	}
+	_, err = newFile.Write([]byte(buff.Bytes()))
+	if err != nil {
+		log.Warn("error closing file", "err", err)
+	}
+
+	if err := newFile.Close(); err != nil {
+		log.Warn("error closing file", "err", err)
+	}
+	return newFile
 }

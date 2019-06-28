@@ -166,9 +166,10 @@ func createP2PService(fig *p2p.Config) *p2p.Service {
 func setBootstrapNodes(ctx *cli.Context, fig *p2p.Config) {
 	var urls []string
 
-	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
+	if bnodes := ctx.GlobalString(utils.BootnodesFlag.Name); bnodes != "" {
 		urls = strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
 		fig.BootstrapNodes = append(fig.BootstrapNodes, urls...)
+		return
 	} else if fig.BootstrapNodes != nil {
 		return // set in config, dont use defaults
 	} else {
@@ -180,9 +181,10 @@ func setBootstrapNodes(ctx *cli.Context, fig *p2p.Config) {
 func setRpcModules(ctx *cli.Context, fig *rpc.Config) {
 	var strs []string
 
-	if ctx.GlobalIsSet(utils.RpcModuleFlag.Name) {
+	if mods := ctx.GlobalString(utils.RpcModuleFlag.Name); mods != "" {
 		strs = strings.Split(ctx.GlobalString(utils.RpcModuleFlag.Name), ",")
 		fig.Modules = append(fig.Modules, strToMods(strs)...)
+		return
 	} else if fig.Modules != nil {
 		return // set in config, dont use defaults
 	} else {
@@ -192,8 +194,9 @@ func setRpcModules(ctx *cli.Context, fig *rpc.Config) {
 
 // setRpcHost checks the context for a hostname and applies it to `cfg`, unless one is already set
 func setRpcHost(ctx *cli.Context, fig *rpc.Config) {
-	if ctx.GlobalIsSet(utils.RpcHostFlag.Name) {
-		fig.Host = ctx.GlobalString(utils.RpcHostFlag.Name)
+	if host := ctx.GlobalString(utils.RpcHostFlag.Name); host != "" {
+		fig.Host = host
+		return
 	} else if fig.Host != "" {
 		return
 	} else {
