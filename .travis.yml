@@ -4,7 +4,9 @@ go:
   - 1.12.x
 
 env:
-  - GO111MODULE=on
+  global:
+    - GO111MODULE=on
+    - CC_TEST_REPORTER_ID=abdad8b2e2ec0bfdd7af57d955c44e9470f4d174e744b824047f3037800f5b40
 
 cache:
   directories:
