@@ -190,7 +190,7 @@ upsert {
   }
 }`
 	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
-	require.Contains(t, err.Error(), "upsert query op has no variables")
+	require.Contains(t, err.Error(), "upsert query block has no variables")
 }
 
 func TestUpsertWithFragment(t *testing.T) {
