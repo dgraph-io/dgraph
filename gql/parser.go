@@ -158,6 +158,7 @@ type Function struct {
 	NeedsVar   []VarContext // If the function requires some variable
 	IsCount    bool         // gt(count(friends),0)
 	IsValueVar bool         // eq(val(s), 5)
+	IsLen      bool         // eq(len(s), 5)
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -1530,6 +1531,9 @@ L:
 					}
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 					function.NeedsVar[0].Typ = ValueVar
+				} else if nestedFunc.Name == "len" {
+					function.Attr = nestedFunc.Attr
+					function.IsLen = true
 				} else {
 					if nestedFunc.Name != "count" {
 						return nil, itemInFunc.Errorf("Only val/count allowed as function "+

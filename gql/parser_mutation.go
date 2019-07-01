@@ -17,6 +17,8 @@
 package gql
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/pkg/errors"
@@ -159,28 +161,14 @@ func parseIfDirective(it *lex.ItemIterator) error {
 		return errors.Errorf("Expected [if], Got: [%s]", item.Val)
 	}
 
-	// TODO(Aman): Construct Tree/Graph to evaluate if condition.
-	depth := 0
-	for it.Next() {
-		item = it.Item()
-		switch item.Typ {
-		case itemLeftRound:
-			depth++
-		case itemRightRound:
-			depth--
-			if depth == 0 {
-				return nil
-			}
-		case itemName:
-			continue
-		case itemComma:
-			continue
-		default:
-			return errors.Errorf("Unexpected token in @if directive [%s]", item.Val)
-		}
+	ft, err := parseFilter(it)
+	if err != nil {
+		return err
 	}
+	// TODO
+	fmt.Println(ft)
 
-	return errors.Errorf("Invalid @if directive in upsert block")
+	return nil
 }
 
 // parseMutationBlock parses the mutation block
