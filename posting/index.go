@@ -265,8 +265,6 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	if err = plist.addMutation(ctx, txn, t); err != nil {
 		return err
 	}
-
-	txn.addConflictKey(fmt.Sprintf("cntIdx|%s|%d", t.Attr, t.ValueId))
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 

@@ -1641,7 +1641,7 @@ func TestParseMutationError(t *testing.T) {
 	`
 	_, err := ParseMutation(query)
 	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [mutation]`, err.Error())
+	require.Contains(t, err.Error(), `Invalid block: [mutation]`)
 }
 
 func TestParseMutationError2(t *testing.T) {
@@ -1656,7 +1656,7 @@ func TestParseMutationError2(t *testing.T) {
 	`
 	_, err := ParseMutation(query)
 	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [set]`, err.Error())
+	require.Contains(t, err.Error(), `Invalid block: [set]`)
 }
 
 func TestParseMutationAndQueryWithComments(t *testing.T) {
@@ -4362,10 +4362,10 @@ func TestParseMutationTooManyBlocks(t *testing.T) {
          }{
 		   set { _:b2 <reg> "b2 content" . }
 		 }`,
-			errStr: "Unexpected { after the end of the block.",
+			errStr: "Unrecognized character in lexText",
 		},
 		{m: `{set { _:a1 <reg> "a1 content" . }} something`,
-			errStr: "Invalid operation type: something after the end of the block",
+			errStr: "Invalid operation type: something",
 		},
 		{m: `
           # comments are ok

@@ -47,19 +47,19 @@ var (
 
 var startBal = 10
 
-type Account struct {
+type account struct {
 	Uid string `json:"uid"`
 	Key int    `json:"key,omitempty"`
 	Bal int    `json:"bal,omitempty"`
 	Typ string `json:"typ"`
 }
 
-type State struct {
+type state struct {
 	aborts int32
 	runs   int32
 }
 
-func (s *State) createAccounts(dg *dgo.Dgraph) {
+func (s *state) createAccounts(dg *dgo.Dgraph) {
 	op := api.Operation{DropAll: true}
 	x.Check(dg.Alter(context.Background(), &op))
 
@@ -71,9 +71,9 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	`
 	x.Check(dg.Alter(context.Background(), &op))
 
-	var all []Account
+	var all []account
 	for i := 1; i <= *users; i++ {
-		a := Account{
+		a := account{
 			Key: i,
 			Bal: startBal,
 			Typ: "ba",
@@ -84,7 +84,12 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	x.Check(err)
 
 	txn := dg.NewTxn()
-	defer func() { _ = txn.Discard(context.Background()) }()
+	defer func() {
+		if err := txn.Discard(context.Background()); err != nil {
+			log.Fatalf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	var mu api.Mutation
 	mu.SetJson = data
 	if *verbose {
@@ -95,7 +100,7 @@ func (s *State) createAccounts(dg *dgo.Dgraph) {
 	x.Check(txn.Commit(context.Background()))
 }
 
-func (s *State) runTotal(dg *dgo.Dgraph) error {
+func (s *state) runTotal(dg *dgo.Dgraph) error {
 	query := `
 		{
 			q(func: eq(typ, "ba")) {
@@ -106,13 +111,18 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 		}
 	`
 	txn := dg.NewReadOnlyTxn()
-	defer func() { _ = txn.Discard(context.Background()) }()
+	defer func() {
+		if err := txn.Discard(context.Background()); err != nil {
+			log.Fatalf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
 		return err
 	}
 
-	m := make(map[string][]Account)
+	m := make(map[string][]account)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
 		return err
 	}
@@ -136,13 +146,13 @@ func (s *State) runTotal(dg *dgo.Dgraph) error {
 	return nil
 }
 
-func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
+func (s *state) findAccount(txn *dgo.Txn, key int) (account, error) {
 	query := fmt.Sprintf(`{ q(func: eq(key, %d)) { key, uid, bal, typ }}`, key)
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
-		return Account{}, err
+		return account{}, err
 	}
-	m := make(map[string][]Account)
+	m := make(map[string][]account)
 	if err := json.Unmarshal(resp.Json, &m); err != nil {
 		log.Fatal(err)
 	}
@@ -155,12 +165,12 @@ func (s *State) findAccount(txn *dgo.Txn, key int) (Account, error) {
 		if *verbose {
 			log.Printf("Unable to find account for K_%02d. JSON: %s\n", key, resp.Json)
 		}
-		return Account{Key: key, Typ: "ba"}, nil
+		return account{Key: key, Typ: "ba"}, nil
 	}
 	return accounts[0], nil
 }
 
-func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
+func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	w := bufio.NewWriter(buf)
 	fmt.Fprintf(w, "==>\n")
 	defer func() {
@@ -170,7 +180,11 @@ func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(context.Background()); err != nil {
+			log.Fatalf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
 
 	var sk, sd int
 	for {
@@ -248,7 +262,7 @@ func (s *State) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	return nil
 }
 
-func (s *State) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
+func (s *state) loop(dg *dgo.Dgraph, wg *sync.WaitGroup) {
 	defer wg.Done()
 	dur, err := time.ParseDuration(*dur)
 	if err != nil {
@@ -304,7 +318,7 @@ func main() {
 		clients = append(clients, dg)
 	}
 
-	s := State{}
+	s := state{}
 	s.createAccounts(clients[0])
 
 	var wg sync.WaitGroup

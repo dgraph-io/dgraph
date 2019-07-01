@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Cert is the sub-command invoked when running "dgraph cert".
 var Cert x.SubCommand
 
 type options struct {

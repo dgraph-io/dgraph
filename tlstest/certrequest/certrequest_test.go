@@ -33,7 +33,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 		"https://localhost:8180/alter",
 		"-d", "name: string @index(exact) .",
 	}
-	z.VerifyCurlCmd(t, curlPlainTextArgs, &z.FailureConfig{
+	z.VerifyCurlCmd(t, curlPlainTextArgs, &z.CurlFailureConfig{
 		ShouldFail: true,
 		CurlErrMsg: "SSL certificate problem",
 	})
@@ -42,7 +42,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
 		"-d", "name: string @index(exact) .",
 	}
-	z.VerifyCurlCmd(t, curlArgs, &z.FailureConfig{
+	z.VerifyCurlCmd(t, curlArgs, &z.CurlFailureConfig{
 		ShouldFail: false,
 	})
 }

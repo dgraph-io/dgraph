@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package migrate
 
 import (
@@ -33,7 +34,7 @@ type blankNode interface {
 
 // usingColumns generates blank node labels using values in the primary key columns
 type usingColumns struct {
-	primaryKeyIndices []*ColumnIdx
+	primaryKeyIndices []*columnIdx
 }
 
 // As an example, if the employee table has 3 columns (f_name, l_name, and title),
@@ -163,21 +164,21 @@ func getValue(dataType dataType, value interface{}) (string, error) {
 	}
 
 	switch dataType {
-	case STRING:
+	case stringType:
 		return fmt.Sprintf("%s", value), nil
-	case INT:
+	case intType:
 		if !value.(sql.NullInt64).Valid {
 			return "", fmt.Errorf("found invalid nullint")
 		}
 		intVal, _ := value.(sql.NullInt64).Value()
 		return fmt.Sprintf("%v", intVal), nil
-	case DATETIME:
+	case datetimeType:
 		if !value.(mysql.NullTime).Valid {
 			return "", fmt.Errorf("found invalid nulltime")
 		}
 		dateVal, _ := value.(mysql.NullTime).Value()
 		return fmt.Sprintf("%v", dateVal), nil
-	case FLOAT:
+	case floatType:
 		if !value.(sql.NullFloat64).Valid {
 			return "", fmt.Errorf("found invalid nullfloat")
 		}
@@ -190,7 +191,7 @@ func getValue(dataType dataType, value interface{}) (string, error) {
 
 type ref struct {
 	allColumns       map[string]*columnInfo
-	refColumnIndices []*ColumnIdx
+	refColumnIndices []*columnIdx
 	tableName        string
 	colValues        []interface{}
 }
@@ -231,7 +232,7 @@ func createDgraphSchema(info *sqlTable) []string {
 	for _, cst := range info.foreignKeyConstraints {
 		pred := getPredFromConstraint(info.tableName, separator, cst)
 		dgraphIndices = append(dgraphIndices, fmt.Sprintf("%s: [%s] .\n",
-			pred, UID))
+			pred, uidType))
 	}
 	return dgraphIndices
 }

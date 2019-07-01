@@ -77,6 +77,7 @@ func GetState() (*StateResponse, error) {
 	return &st, nil
 }
 
+// GetClientToGroup returns a dgraph client connected to an alpha in the given group.
 func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
 	state, err := GetState()
 	if err != nil {

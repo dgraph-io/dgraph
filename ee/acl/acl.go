@@ -89,7 +89,7 @@ func userAdd(conf *viper.Viper, userid string, password string) error {
 
 	if len(password) == 0 {
 		var err error
-		password, err = askUserPassword(userid, "New", 2)
+		password, err = x.AskUserPassword(userid, "New", 2)
 		if err != nil {
 			return err
 		}
@@ -195,9 +195,12 @@ func del(conf *viper.Viper) error {
 		})
 }
 
+// AclEntity is an interface that must be met by all the types of entities (i.e users, groups)
+// in the ACL system.
 type AclEntity interface {
-	// the implementation of GetUid must check the case that the entity is nil
-	// and return an empty string accordingly
+	// GetUid returns the UID of the entity.
+	// The implementation of GetUid must check the case that the entity is nil
+	// and return an empty string accordingly.
 	GetUid() string
 }
 
@@ -290,7 +293,7 @@ func changePassword(conf *viper.Viper, userId string) error {
 	defer cancel()
 
 	// 2. get the new password
-	newPassword, err := askUserPassword(userId, "New", 2)
+	newPassword, err := x.AskUserPassword(userId, "New", 2)
 	if err != nil {
 		return err
 	}

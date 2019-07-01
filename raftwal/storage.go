@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/trace"
 )
 
+// DiskStorage handles disk access and writing for the RAFT write-ahead log.
 type DiskStorage struct {
 	db   *badger.DB
 	id   uint64
@@ -42,6 +43,7 @@ type DiskStorage struct {
 	cache *sync.Map
 }
 
+// Init initializes returns a properly initialized instance of DiskStorage.
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map)}
 	if prev, err := RaftId(db); err != nil || prev != id {
@@ -67,6 +69,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 
 var idKey = []byte("raftid")
 
+// RaftId reads the given badger store and returns the stored RAFT ID.
 func RaftId(db *badger.DB) (uint64, error) {
 	var id uint64
 	err := db.View(func(txn *badger.Txn) error {
@@ -93,6 +96,7 @@ func (w *DiskStorage) snapshotKey() []byte {
 	return b
 }
 
+// HardStateKey generates the key where the hard state is stored.
 func (w *DiskStorage) HardStateKey() []byte {
 	b := make([]byte, 14)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -101,6 +105,7 @@ func (w *DiskStorage) HardStateKey() []byte {
 	return b
 }
 
+// CheckpointKey generates the key where the checkpoint is stored.
 func (w *DiskStorage) CheckpointKey() []byte {
 	b := make([]byte, 14)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -109,6 +114,7 @@ func (w *DiskStorage) CheckpointKey() []byte {
 	return b
 }
 
+// EntryKey returns the key where the entry with the given ID is stored.
 func (w *DiskStorage) EntryKey(idx uint64) []byte {
 	b := make([]byte, 20)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -129,6 +135,7 @@ func (w *DiskStorage) entryPrefix() []byte {
 	return b
 }
 
+// StoreRaftId stores the given RAFT ID in disk.
 func (w *DiskStorage) StoreRaftId(id uint64) error {
 	return w.db.Update(func(txn *badger.Txn) error {
 		var b [8]byte
@@ -137,6 +144,7 @@ func (w *DiskStorage) StoreRaftId(id uint64) error {
 	})
 }
 
+// UpdateCheckpoint writes the given snapshot to disk.
 func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
 	return w.db.Update(func(txn *badger.Txn) error {
 		data, err := snap.Marshal()
@@ -147,6 +155,7 @@ func (w *DiskStorage) UpdateCheckpoint(snap *pb.Snapshot) error {
 	})
 }
 
+// Checkpoint reads the checkpoint stored in disk and returns index stored in it.
 func (w *DiskStorage) Checkpoint() (uint64, error) {
 	var applied uint64
 	err := w.db.View(func(txn *badger.Txn) error {
@@ -442,6 +451,7 @@ func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	return w.deleteKeys(batch, keys)
 }
 
+// HardState reads the RAFT hard state from disk and returns it.
 func (w *DiskStorage) HardState() (hd raftpb.HardState, rerr error) {
 	w.elog.Printf("HardState")
 	defer w.elog.Printf("Done")
@@ -476,6 +486,7 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 	return hs, snap.Metadata.ConfState, nil
 }
 
+// NumEntries returns the number of entries in the write-ahead log.
 func (w *DiskStorage) NumEntries() (int, error) {
 	var count int
 	err := w.db.View(func(txn *badger.Txn) error {
@@ -573,6 +584,7 @@ func (w *DiskStorage) Entries(lo, hi, maxSize uint64) (es []raftpb.Entry, rerr e
 	return w.allEntries(lo, hi, maxSize)
 }
 
+// CreateSnapshot generates a snapshot with the given ConfState and data and writes it to disk.
 func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte) error {
 	glog.V(2).Infof("CreateSnapshot i=%d, cs=%+v", i, cs)
 	first, err := w.FirstIndex()
@@ -674,6 +686,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entr
 	return nil
 }
 
+// Sync calls the Sync method in the underlying badger instance to write all the contents to disk.
 func (w *DiskStorage) Sync() error {
 	return w.db.Sync()
 }

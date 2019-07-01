@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -178,13 +179,13 @@ func (ld *loader) mapStage() {
 	}
 
 	// This is the main map loop.
-	thr := x.NewThrottle(ld.opt.NumGoroutines)
+	thr := y.NewThrottle(ld.opt.NumGoroutines)
 	for i, file := range files {
-		thr.Start()
+		x.Check(thr.Do())
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
 
 		go func(file string) {
-			defer thr.Done()
+			defer thr.Done(nil)
 
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
@@ -205,7 +206,7 @@ func (ld *loader) mapStage() {
 			x.Check(chunker.End(r))
 		}(file)
 	}
-	thr.Wait()
+	x.Check(thr.Finish())
 
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
@@ -217,11 +218,6 @@ func (ld *loader) mapStage() {
 	x.Check(ld.xids.Flush())
 	ld.xids = nil
 	runtime.GC()
-}
-
-type shuffleOutput struct {
-	writer     *badger.StreamWriter
-	mapEntries []*pb.MapEntry
 }
 
 func (ld *loader) reduceStage() {

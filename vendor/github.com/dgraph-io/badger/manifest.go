@@ -216,7 +216,7 @@ func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 	}
 
 	mf.appendLock.Unlock()
-	return mf.fp.Sync()
+	return y.FileSync(mf.fp)
 }
 
 // Has to be 4 bytes.  The value can never change, ever, anyway.
@@ -255,7 +255,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 		fp.Close()
 		return nil, 0, err
 	}
-	if err := fp.Sync(); err != nil {
+	if err := y.FileSync(fp); err != nil {
 		fp.Close()
 		return nil, 0, err
 	}
@@ -321,7 +321,8 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 }
 
 var (
-	errBadMagic = errors.New("manifest has bad magic")
+	errBadMagic    = errors.New("manifest has bad magic")
+	errBadChecksum = errors.New("manifest has checksum mismatch")
 )
 
 // ReplayManifestFile reads the manifest file and constructs two manifest objects.  (We need one
@@ -366,7 +367,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			return Manifest{}, 0, err
 		}
 		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
-			break
+			return Manifest{}, 0, errBadChecksum
 		}
 
 		var changeSet pb.ManifestChangeSet

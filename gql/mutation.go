@@ -109,38 +109,6 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 
 var emptyEdge pb.DirectedEdge
 
-func (nq NQuad) createEdge(subjectUid uint64, newToUid map[string]uint64) (
-	*pb.DirectedEdge, error) {
-
-	var err error
-	var objectUid uint64
-
-	out := &pb.DirectedEdge{
-		Entity: subjectUid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Facets: nq.Facets,
-	}
-
-	switch nq.valueType() {
-	case x.ValueUid:
-		objectUid, err = toUid(nq.ObjectId, newToUid)
-		if err != nil {
-			return out, err
-		}
-		x.AssertTrue(objectUid > 0)
-		out.ValueId = objectUid
-	case x.ValuePlain, x.ValueMulti:
-		if err = copyValue(out, nq); err != nil {
-			return &emptyEdge, err
-		}
-	default:
-		return &emptyEdge, errors.New("Unknown value type")
-	}
-	return out, nil
-}
-
 func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
 	return &pb.DirectedEdge{
 		Entity: subjectUid,

@@ -67,9 +67,10 @@ var (
 
 	// used for computing uptime
 	beginTime = time.Now()
-)
 
-var Alpha x.SubCommand
+	// Alpha is the sub-command invoked when running "dgraph alpha".
+	Alpha x.SubCommand
+)
 
 func init() {
 	Alpha.Cmd = &cobra.Command{
@@ -296,9 +297,9 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte("<pre>"))
-	w.Write([]byte(worker.StoreStats()))
-	w.Write([]byte("</pre>"))
+	x.Check2(w.Write([]byte("<pre>")))
+	x.Check2(w.Write([]byte(worker.StoreStats())))
+	x.Check2(w.Write([]byte("</pre>")))
 }
 
 func setupListener(addr string, port int) (net.Listener, error) {

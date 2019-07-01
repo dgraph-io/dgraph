@@ -1,5 +1,7 @@
+// +build !darwin go1.12
+
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +16,13 @@
  * limitations under the License.
  */
 
-package version
+package y
 
-import (
-	"fmt"
-	"os"
+import "os"
 
-	"github.com/spf13/cobra"
-
-	"github.com/dgraph-io/dgraph/x"
-)
-
-// Version is the sub-command invoked when running "dgraph version".
-var Version x.SubCommand
-
-func init() {
-	Version.Cmd = &cobra.Command{
-		Use:   "version",
-		Short: "Prints the dgraph version details",
-		Long:  "Version prints the dgraph version as reported by the build details.",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(x.BuildDetails())
-			os.Exit(0)
-		},
-	}
-}
+// FileSync calls os.File.Sync with the right parameters.
+// This function can be removed once we stop supporting Go 1.11
+// on MacOS.
+//
+// More info: https://golang.org/issue/26650.
+func FileSync(f *os.File) error { return f.Sync() }
