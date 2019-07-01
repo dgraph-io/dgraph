@@ -238,7 +238,7 @@ func GetMembershipState() *pb.MembershipState {
 	g := groups()
 	g.RLock()
 	defer g.RUnlock()
-	return g.state
+	return proto.Clone(g.state).(*pb.MembershipState)
 }
 
 // UpdateMembershipState contacts zero for an update on membership state.
