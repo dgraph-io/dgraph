@@ -60,6 +60,7 @@ type options struct {
 	IgnoreErrors     bool
 	CustomTokenizers string
 	NewUids          bool
+	SkipValidation   bool
 
 	MapShards    int
 	ReduceShards int
@@ -259,4 +260,60 @@ func (ld *loader) cleanup() {
 		x.Check(db.Close())
 	}
 	ld.prog.endSummary()
+}
+
+// TODO: @Animesh
+// Write tests for this function and see if this breaks entire program even in case of normal errors.
+func (ld *loader) validateInput() error {
+	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	if len(files) == 0 {
+		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
+		os.Exit(1)
+	}
+
+	// Because mappers must handle chunks that may be from different input files, they must all
+	// assume the same data format, either RDF or JSON. Use the one specified by the user or by
+	// the first load file.
+	loadType := chunker.DataFormat(files[0], ld.opt.DataFormat)
+	if loadType == chunker.UnknownFormat {
+		// Dont't try to detect JSON input in bulk loader.
+		fmt.Printf("Need --format=rdf or --format=json to load %s", files[0])
+		os.Exit(1)
+	}
+
+	thr := x.NewThrottle(ld.opt.NumGoroutines)
+	for i, file := range files {
+		thr.Start()
+		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
+
+		go func(file string) {
+			defer thr.Done()
+
+			r, cleanup := chunker.FileReader(file)
+			defer cleanup()
+
+			chunker := chunker.NewChunker(loadType)
+			x.Check(chunker.Begin(r))
+			for {
+				chunkBuf, err := chunker.Chunk(r)
+				if chunkBuf != nil && chunkBuf.Len() > 0 {
+					_, err = chunker.Parse(chunkBuf)
+					if err != nil {
+						// TODO: @Animesh
+						// Figure out way to print errors (all or some?) and error line numbers
+						// maybe.
+					}
+				}
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					x.Check(err)
+				}
+			}
+			x.Check(chunker.End(r))
+		}(file)
+	}
+	thr.Wait()
+
+	return nil
 }

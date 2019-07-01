@@ -94,6 +94,7 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.Bool("skip_validation", false, "Skip input file validation.")
 }
 
 func run() {
@@ -118,6 +119,7 @@ func run() {
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
+		SkipValidation:   Bulk.Conf.GetBool("skip_validation"),
 	}
 
 	x.PrintVersion()
@@ -196,6 +198,11 @@ func run() {
 	}
 
 	loader := newLoader(opt)
+	if !opt.SkipValidation {
+		err = loader.validateInput()
+		x.Check(err)
+	}
+
 	if !opt.SkipMapPhase {
 		loader.mapStage()
 		mergeMapShardsIntoReduceShards(opt)
