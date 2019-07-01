@@ -181,7 +181,7 @@ func (ld *loader) mapStage() {
 	// This is the main map loop.
 	thr := y.NewThrottle(ld.opt.NumGoroutines)
 	for i, file := range files {
-		thr.Do()
+		x.Check(thr.Do())
 		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
 
 		go func(file string) {
@@ -206,7 +206,7 @@ func (ld *loader) mapStage() {
 			x.Check(chunker.End(r))
 		}(file)
 	}
-	thr.Finish()
+	x.Check(thr.Finish())
 
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
