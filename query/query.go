@@ -929,7 +929,14 @@ func isDebug(ctx context.Context) bool {
 	// gRPC client passes information about debug as metadata.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// md is a map[string][]string
-		return len(md["debug"]) > 0 && md["debug"][0] == "true"
+		if len(md["debug"]) == 0 {
+			return false
+		}
+
+		// We ignore the error here, because debug would be false in
+		// case of an error which is what we would return.
+		debug, _ := strconv.ParseBool(md["debug"][0])
+		return debug
 	}
 
 	// HTTP passes information about debug as query parameter which is attached to context.
