@@ -241,6 +241,14 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+// GetMembershipState returns the current membership state.
+func GetMembershipState() *pb.MembershipState {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return proto.Clone(g.state).(*pb.MembershipState)
+}
+
 // UpdateMembershipState contacts zero for an update on membership state.
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()

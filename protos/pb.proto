@@ -441,7 +441,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (BackupResponse) {}
+	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -486,10 +486,6 @@ message BackupRequest {
   // True if no credentials should be used to access the S3 or minio bucket.
   // For example, when using a bucket with a public policy.
   bool anonymous = 9;
-}
-
-// Dummy empty response
-message BackupResponse {
 }
 
 message ExportRequest {

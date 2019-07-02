@@ -46,7 +46,7 @@ type Manifest struct {
 	// incremental backup.
 	Since uint64 `json:"since"`
 	// Groups is the list of valid groups at the time the backup was created.
-	Groups []uint32 `json:"groups"`
+	Groups map[uint32][]string `json:"groups"`
 	// BackupId is a unique ID assigned to all the backups in the same series
 	// (from the first full backup to the last incremental backup).
 	BackupId string `json:"backup_id"`
@@ -64,8 +64,8 @@ type Manifest struct {
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (pr *Processor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error) {
-	var emptyRes pb.BackupResponse
+func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
+	var emptyRes pb.Status
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
