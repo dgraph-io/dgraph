@@ -114,10 +114,17 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	if err := worker.UpdateMembershipState(ctx); err != nil {
 		return err
 	}
+
+	// Get the current membership state and parse it for easier processing.
 	state := worker.GetMembershipState()
 	var groups []uint32
-	for gid := range state.Groups {
+	predMap := make(map[uint32][]string)
+	for gid, group := range state.Groups {
 		groups = append(groups, gid)
+		predMap[gid] = make([]string, 0)
+		for pred := range group.Tablets {
+			predMap[gid] = append(predMap[gid], pred)
+		}
 	}
 
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, groups)
@@ -128,6 +135,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	for _, gid := range groups {
 		req := req
 		req.GroupId = gid
+		req.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
 			_, err := worker.BackupGroup(ctx, req)
 			errCh <- err
@@ -141,17 +149,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	// Convert state into a map for writing into the manifest.
-	manifestGroups := make(map[uint32][]string)
-	for gid, group := range state.Groups {
-		var preds []string
-		for key := range group.Tablets {
-			preds = append(preds, key)
-		}
-		manifestGroups[gid] = preds
-	}
-
-	m := backup.Manifest{Since: req.ReadTs, Groups: manifestGroups}
+	m := backup.Manifest{Since: req.ReadTs, Groups: predMap}
 	if req.SinceTs == 0 {
 		m.Type = "full"
 		m.BackupId = x.GetRandomName(1)
