@@ -1053,6 +1053,18 @@
 			"revisionTime": "2019-01-03T19:08:39Z"
 		},
 		{
+			"checksumSHA1": "YDIWRbVrzBVVapkMWodg3TzoqiU=",
+			"path": "github.com/tklauser/go-sysconf",
+			"revision": "d90dfe8b2f4be4b0a4df5db89401b0ba74fe24d9",
+			"revisionTime": "2019-06-04T08:01:57Z"
+		},
+		{
+			"checksumSHA1": "2aOz2uKl5mAB2bYsxfkk/BvvQws=",
+			"path": "github.com/tklauser/numcpus",
+			"revision": "6b5085e2650f774988405fe8a5f0cda86cec1f07",
+			"revisionTime": "2019-06-04T08:05:07Z"
+		},
+		{
 			"checksumSHA1": "y1kH4pl3IjGHaWcNbk5bZe3nITY=",
 			"path": "github.com/twpayne/go-geom",
 			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
