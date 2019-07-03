@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/go-sql-driver/mysql"
+	"github.com/pkg/errors"
 )
 
 var separator = "."
