@@ -334,7 +334,7 @@ type IteratorOptions struct {
 	Prefix      []byte // Only iterate over this given prefix.
 	prefixIsKey bool   // If set, use the prefix for bloom filter lookup.
 
-	internalAccess bool // Used to allow internal access to badger keys.
+	InternalAccess bool // Used to allow internal access to badger keys.
 }
 
 func (opt *IteratorOptions) pickTable(t table.TableInterface) bool {
@@ -539,7 +539,7 @@ func (it *Iterator) parseItem() bool {
 	}
 
 	// Skip badger keys.
-	if !it.opt.internalAccess && bytes.HasPrefix(key, badgerPrefix) {
+	if !it.opt.InternalAccess && bytes.HasPrefix(key, badgerPrefix) {
 		mi.Next()
 		return false
 	}
@@ -648,9 +648,9 @@ func (it *Iterator) prefetch() {
 	}
 }
 
-// Seek would seek to the provided key if present. If absent, it would seek to the next smallest key
-// greater than the provided key if iterating in the forward direction. Behavior would be reversed if
-// iterating backwards.
+// Seek would seek to the provided key if present. If absent, it would seek to the next
+// smallest key greater than the provided key if iterating in the forward direction.
+// Behavior would be reversed if iterating backwards.
 func (it *Iterator) Seek(key []byte) {
 	for i := it.data.pop(); i != nil; i = it.data.pop() {
 		i.wg.Wait()
