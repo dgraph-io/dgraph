@@ -642,9 +642,7 @@ func sizeHistogram(db *badger.DB) {
 }
 
 func run() {
-	bopts := badger.DefaultOptions("")
-	bopts.Dir = opt.pdir
-	bopts.ValueDir = opt.pdir
+	bopts := badger.DefaultOptions(opt.pdir)
 	bopts.TableLoadingMode = options.MemoryMap
 	bopts.ReadOnly = opt.readOnly
 

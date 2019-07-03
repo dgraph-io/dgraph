@@ -107,11 +107,9 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 	}
 }
 
-func setBadgerOptions(opt badger.Options, dir string) badger.Options {
+func setBadgerOptions(opt badger.Options) badger.Options {
 	opt.SyncWrites = false
 	opt.Truncate = true
-	opt.Dir = dir
-	opt.ValueDir = dir
 	opt.Logger = &conn.ToGlog{}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
@@ -143,8 +141,8 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions("")
-		opt = setBadgerOptions(opt, Config.WALDir)
+		opt := badger.LSMOnlyOptions(Config.WALDir)
+		opt = setBadgerOptions(opt)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 
 		// We should always force load LSM tables to memory, disregarding user settings, because
@@ -163,10 +161,10 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions("")
+		opt := badger.DefaultOptions(Config.PostingDir)
 		opt.ValueThreshold = 1 << 10 // 1KB
 		opt.NumVersionsToKeep = math.MaxInt32
-		opt = setBadgerOptions(opt, Config.PostingDir)
+		opt = setBadgerOptions(opt)
 
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
 		s.Pstore, err = badger.OpenManaged(opt)

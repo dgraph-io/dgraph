@@ -862,9 +862,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	opt := badger.DefaultOptions("")
-	opt.Dir = dir
-	opt.ValueDir = dir
+	opt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(opt)
 	x.Check(err)
 	Init(ps)
