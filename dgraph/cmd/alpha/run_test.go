@@ -122,12 +122,12 @@ func processToFastJSON(q string) string {
 }
 
 func runGraphqlQuery(q string) (string, error) {
-	output, _, err := queryWithTs(q, "application/graphql+-", 0)
+	output, _, err := queryWithTs(q, "application/graphql+-", "", 0)
 	return string(output), err
 }
 
 func runJSONQuery(q string) (string, error) {
-	output, _, err := queryWithTs(q, "application/json", 0)
+	output, _, err := queryWithTs(q, "application/json", "", 0)
 	return string(output), err
 }
 

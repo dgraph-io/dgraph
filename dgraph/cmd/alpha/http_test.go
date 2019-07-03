@@ -135,13 +135,17 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 	return string(output), resp, err
 }
 
-func queryWithTs(q, ct string, ts uint64) (string, uint64, error) {
-	url := addr + "/query"
-	if ts != 0 {
-		url += "?startTs=" + strconv.FormatUint(ts, 10)
+func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
+	params := make([]string, 0, 2)
+	if debug != "" {
+		params = append(params, "debug="+debug)
 	}
+	if ts != 0 {
+		params = append(params, fmt.Sprintf("startTs=%v", strconv.FormatUint(ts, 10)))
+	}
+	url := addr + "/query?" + strings.Join(params, "&")
 
-	_, body, err := runWithRetries("POST", ct, url, q)
+	_, body, err := runWithRetries("POST", contentType, url, queryText)
 	if err != nil {
 		return "", 0, err
 	}
@@ -301,7 +305,7 @@ func TestTransactionBasic(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql+-", 0)
+	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -327,18 +331,18 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, "balance", parsedPreds[0])
 	require.Equal(t, "name", parsedPreds[1])
 
-	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql+-", ts)
+	data, _, err = queryWithTs(q1, "application/graphql+-", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(keys, preds, ts))
-	data, _, err = queryWithTs(q1, "application/graphql+-", 0)
+	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -355,7 +359,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql+-", 0)
+	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -373,18 +377,18 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, mts, ts)
 	require.Equal(t, 4, len(keys))
 
-	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql+-", ts)
+	data, _, err = queryWithTs(q1, "application/graphql+-", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(keys, nil, ts))
-	data, _, err = queryWithTs(q1, "application/graphql+-", 0)
+	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
@@ -401,7 +405,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTs(q1, "application/graphql+-", 0)
+	_, ts, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 
 	m1 := `
@@ -419,25 +423,25 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.Equal(t, mts, ts)
 	require.Equal(t, 4, len(keys))
 
-	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	data, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[]}}`, data)
 
 	// Query with same timestamp.
-	data, _, err = queryWithTs(q1, "application/graphql+-", ts)
+	data, _, err = queryWithTs(q1, "application/graphql+-", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// One more time, with json body this time.
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
-	data, _, err = queryWithTs(string(d1), "application/json", ts)
+	data, _, err = queryWithTs(string(d1), "application/json", "", ts)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit (using a list of keys instead of a map) and query.
 	require.NoError(t, commitWithTsKeysOnly(keys, ts))
-	data, _, err = queryWithTs(q1, "application/graphql+-", 0)
+	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
@@ -645,6 +649,12 @@ func TestDebugSupport(t *testing.T) {
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
 	data, resp, err = queryWithGz(string(d1), "application/json", "true", "1s", false, false)
+	require.NoError(t, err)
+	requireEqual(t, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	// This test passes access token along with debug flag
+	data, _, err = queryWithTs(q1, "application/graphql+-", "true", 0)
 	require.NoError(t, err)
 	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
