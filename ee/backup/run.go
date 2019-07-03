@@ -13,17 +13,11 @@
 package backup
 
 import (
-	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
-	"math"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -211,33 +205,6 @@ func runRestoreCmd() error {
 
 	fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
 	return nil
-}
-
-// RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string) (uint64, error) {
-	// Scan location for backup files and load them. Each file represents a node group,
-	// and we create a new p dir for each.
-	return Load(location, backupId, func(r io.Reader, groupId int) error {
-		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-			WithSyncWrites(true).
-			WithTableLoadingMode(options.MemoryMap).
-			WithValueThreshold(1 << 10).
-			WithNumVersionsToKeep(math.MaxInt32))
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		fmt.Printf("Restoring groupId: %d\n", groupId)
-		if !pathExist(dir) {
-			fmt.Println("Creating new db:", dir)
-		}
-		gzReader, err := gzip.NewReader(r)
-		if err != nil {
-			return nil
-		}
-		return db.Load(gzReader, 16)
-	})
 }
 
 func runLsbackupCmd() error {

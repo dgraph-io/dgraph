@@ -13,16 +13,23 @@
 package backup
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Processor handles the different stages of the backup process.
@@ -89,6 +96,7 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
+	stream.KeyToList = toBackupList
 	gzWriter := gzip.NewWriter(handler)
 	newSince, err := stream.Backup(gzWriter, pr.Request.SinceTs)
 
@@ -149,4 +157,74 @@ func (pr *Processor) CompleteBackup(ctx context.Context, manifest *Manifest) err
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
 	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v}`, m.Since, m.Groups)
+}
+
+// toBackupList replaces the default KeyToList implementation so that the keys and
+// values are written in the backup format.
+func toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+	list := &bpb.KVList{}
+	for ; itr.Valid(); itr.Next() {
+		item := itr.Item()
+		if item.IsDeletedOrExpired() {
+			break
+		}
+		if !bytes.Equal(key, item.Key()) {
+			// Break out on the first encounter with another key.
+			break
+		}
+
+		keyCopy := item.KeyCopy(nil)
+		valCopy, err := item.ValueCopy(nil)
+		if err != nil {
+			panic("wtf")
+			return nil, err
+		}
+		var backupKey []byte
+		var backupVal []byte
+
+		switch item.UserMeta() {
+		case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+			var err error
+			parsedKey := x.Parse(keyCopy)
+			if parsedKey == nil {
+				return nil, errors.Errorf("could not parse key %s", hex.Dump(keyCopy))
+			}
+			backupKey, err = parsedKey.ToBackupKey().Marshal()
+			if err != nil {
+				return nil, errors.Wrapf(err, "while converting key for backup")
+			}
+
+			pl := &pb.PostingList{}
+			if err := pl.Unmarshal(valCopy); err != nil {
+				return nil, errors.Wrapf(err, "while reading posting list")
+			}
+			backupVal, err = posting.ToBackupPostingList(pl).Marshal()
+			if err != nil {
+				return nil, errors.Wrapf(err, "while converting posting list for backup")
+			}
+
+		case posting.BitSchemaPosting:
+			backupKey = keyCopy
+			backupVal = valCopy
+
+		default:
+			return nil, errors.Errorf(
+				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+		}
+
+		fmt.Printf("backup key at backup point: %s", hex.Dump(backupKey))
+		kv := &bpb.KV{
+			Key:       backupKey,
+			Value:     backupVal,
+			UserMeta:  []byte{item.UserMeta()},
+			Version:   item.Version(),
+			ExpiresAt: item.ExpiresAt(),
+		}
+		list.Kv = append(list.Kv, kv)
+
+		if item.DiscardEarlierVersions() {
+			break
+		}
+	}
+	return list, nil
 }
