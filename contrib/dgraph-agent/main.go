@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
-	"os"
 	"strconv"
 	"syscall"
 	"time"
@@ -15,15 +13,14 @@ import (
 	sysconf "github.com/tklauser/go-sysconf"
 )
 
-var logger = log.New(os.Stderr, "", 0)
-
+// getPID reads the process id from the given pid file
 func getPID(pfile string) (int64, error) {
 	if len(pfile) == 0 {
-		logger.Fatalf("The procfile must be set")
+		glog.Fatalf("The procfile must be set")
 	}
 	pidData, err := ioutil.ReadFile(pfile)
 	if err != nil {
-		logger.Fatalf("Error while reading the pid file: %v", err)
+		glog.Fatalf("Error while reading the pid file: %v", err)
 	}
 
 	return strconv.ParseInt(string(pidData), 0, 64)
@@ -32,7 +29,7 @@ func getPID(pfile string) (int64, error) {
 // format of the /proc/<pid>/stat file can be found at
 // http://man7.org/linux/man-pages/man5/proc.5.html
 // Here we only define the first section of field list up to the cpu time related fields
-// for easy scanning. For now, we only need the CPU fields.
+// because for now we only need the CPU fields.
 type proc struct {
 	id       int
 	name     string
@@ -54,7 +51,8 @@ type proc struct {
 }
 
 func main() {
-	pfile := pflag.StringP("procfile", "p", "", "The file storing process id")
+	pfile := pflag.StringP("procfile", "p", "",
+		"The file storing id of the process to be monitored")
 	pflag.Parse()
 
 	pid, err := getPID(*pfile)
@@ -63,23 +61,12 @@ func main() {
 	}
 
 	ticker := time.NewTicker(3 * time.Second)
-	go func() {
-		for range ticker.C {
-			refreshStat(pid)
-		}
-	}()
-	time.Sleep(300 * time.Second)
-	ticker.Stop()
-	fmt.Println("Ticker stopped")
+	for range ticker.C {
+		refreshStat(pid)
+	}
 }
 
 var hertz int64
-
-const (
-	uptime_file = "/proc/uptime"
-	stat_file   = "/proc/stat"
-)
-
 var smp_num_cpus int64
 
 func init() {
@@ -92,29 +79,6 @@ func init() {
 	if err != nil {
 		log.Fatalf("unable to get hertz")
 	}
-}
-
-// fileToBuf opens filename only if necessary and seeks to 0 so that
-// successive calls to the functions are more efficient.
-// It also reads the current content of the file into the buf
-func fileToBuf(filename string, file *os.File, buf []byte) (*os.File, error) {
-	if file == nil {
-		var err error
-		file, err = os.Open(filename)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	_, err := file.Seek(0, io.SeekStart)
-	if err != nil {
-		return nil, err
-	}
-	_, err = file.Read(buf)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
 }
 
 var oldtv syscall.Timeval
@@ -136,6 +100,8 @@ func refreshStat(pid int64) {
 	frame_tscale := 100.0 / (float64(hertz) * float64(et))
 	if oldproc.id != 0 {
 		tics := proc.utime + proc.stime - (oldproc.utime + oldproc.stime)
+		// TODO: instead of printing this on the command line, expose this
+		// as a promethus metric
 		fmt.Printf("got pcpu %v\n", float64(tics)*frame_tscale)
 	}
 	oldproc = *proc
