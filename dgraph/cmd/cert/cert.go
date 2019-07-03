@@ -174,7 +174,7 @@ func (c *certConfig) verifyCert(certFile string) error {
 
 	_, err = cert.Verify(opts)
 	if err != nil {
-		return errors.Errorf("%s: verification failed: %s", certFile, err)
+		return errors.Wrapf(err, "%s: verification failed", certFile)
 	}
 
 	return nil

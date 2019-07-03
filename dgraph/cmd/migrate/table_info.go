@@ -132,8 +132,8 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		*/
 		var fieldName, dbType string
 		if err := columns.Scan(&fieldName, &dbType); err != nil {
-			return nil, errors.Errorf("unable to scan table description result for table %s: %v",
-				tableName, err)
+			return nil, errors.Wrapf(err, "unable to scan table description result for table %s",
+				tableName)
 		}
 
 		// TODO, should store the column data types into the table info as an array
@@ -155,7 +155,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		var indexName, columnName string
 		err := indices.Scan(&indexName, &columnName)
 		if err != nil {
-			return nil, errors.Errorf("unable to scan index info for table %s: %v", tableName, err)
+			return nil, errors.Wrapf(err, "unable to scan index info for table %s", tableName)
 		}
 		switch indexName {
 		case "PRIMARY":
@@ -187,7 +187,7 @@ COLUMNS where TABLE_NAME = "%s" AND TABLE_SCHEMA="%s" ORDER BY COLUMN_NAME`, tab
 		*/
 		var col, constraintName, dstTable, dstCol string
 		if err := fkeys.Scan(&col, &constraintName, &dstTable, &dstCol); err != nil {
-			return nil, errors.Errorf("unable to scan usage info for table %s: %v", tableName, err)
+			return nil, errors.Wrapf(err, "unable to scan usage info for table %s", tableName)
 		}
 
 		table.dstTables[dstTable] = struct{}{}

@@ -116,7 +116,7 @@ func getError(rc io.ReadCloser) error {
 	defer rc.Close()
 	b, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return errors.Errorf("Read failed: %v", err)
+		return errors.Wrapf(err, "while reading")
 	}
 	if bytes.Contains(b, []byte("Error")) {
 		return errors.Errorf("%s", string(b))

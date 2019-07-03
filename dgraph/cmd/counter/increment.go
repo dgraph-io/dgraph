@@ -81,7 +81,7 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", pred, pred)
 	resp, err := txn.Query(ctx, query)
 	if err != nil {
-		return counter, errors.Errorf("Query error: %v", err)
+		return counter, errors.Wrapf(err, "while doing query")
 	}
 
 	// Total query latency is sum of encoding, parsing and processing latencies.

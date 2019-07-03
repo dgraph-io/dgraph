@@ -596,12 +596,12 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	if _, err := n.populateSnapshot(snap, pool); err != nil {
-		return errors.Errorf("Cannot retrieve snapshot from peer, error: %v", err)
+		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	if err := schema.LoadFromDb(); err != nil {
-		return errors.Errorf("Error while initilizating schema: %+v", err)
+		return errors.Wrapf(err, "while initializing schema")
 	}
 	groups().triggerMembershipSync()
 	return nil
@@ -843,7 +843,7 @@ func (n *node) Run() {
 			timer.Record("disk")
 			if rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %v", err)
+					glog.Errorf("Error while calling Store.Sync: %+v", err)
 				}
 				timer.Record("sync")
 			}

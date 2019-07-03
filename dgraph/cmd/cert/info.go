@@ -91,7 +91,7 @@ func getFileInfo(file string) *certInfo {
 		if file != defaultCACert {
 			parent, err := readCert(defaultCACert)
 			if err != nil {
-				info.err = errors.Errorf("Could not read parent cert: %s", err)
+				info.err = errors.Wrapf(err, "could not read parent cert")
 				return &info
 			}
 			if err := cert.CheckSignatureFrom(parent); err != nil {

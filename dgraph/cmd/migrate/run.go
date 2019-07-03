@@ -170,10 +170,10 @@ func generateSchemaAndData(dumpMeta *dumpMeta, schemaOutput string, dataOutput s
 	dumpMeta.schemaWriter = schemaWriter
 
 	if err := dumpMeta.dumpSchema(); err != nil {
-		return errors.Errorf("error while writing schema file: %v", err)
+		return errors.Wrapf(err, "while writing schema file")
 	}
 	if err := dumpMeta.dumpTables(); err != nil {
-		return errors.Errorf("error while writing data file: %v", err)
+		return errors.Wrapf(err, "while writing data file")
 	}
 	return nil
 }

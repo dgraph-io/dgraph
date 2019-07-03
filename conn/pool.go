@@ -34,9 +34,9 @@ import (
 
 var (
 	// ErrNoConnection indicates no connection exists to a node.
-	ErrNoConnection = errors.Errorf("No connection exists")
+	ErrNoConnection = errors.New("No connection exists")
 	// ErrUnhealthyConnection indicates the connection to a node is unhealthy.
-	ErrUnhealthyConnection = errors.Errorf("Unhealthy connection")
+	ErrUnhealthyConnection = errors.New("Unhealthy connection")
 	echoDuration           = 500 * time.Millisecond
 )
 

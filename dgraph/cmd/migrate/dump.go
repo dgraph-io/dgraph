@@ -57,7 +57,7 @@ func (m *dumpMeta) dumpSchema() error {
 		for _, index := range createDgraphSchema(tableInfo) {
 			_, err := m.schemaWriter.WriteString(index)
 			if err != nil {
-				return errors.Errorf("error while writing schema: %v", err)
+				return errors.Wrapf(err, "while writing schema")
 			}
 		}
 	}
@@ -71,14 +71,14 @@ func (m *dumpMeta) dumpTables() error {
 	for table := range m.tableInfos {
 		fmt.Printf("Dumping table %s\n", table)
 		if err := m.dumpTable(table); err != nil {
-			return errors.Errorf("error while dumping table %s: %v", table, err)
+			return errors.Wrapf(err, "while dumping table %s", table)
 		}
 	}
 
 	for table := range m.tableInfos {
 		fmt.Printf("Dumping table constraints %s\n", table)
 		if err := m.dumpTableConstraints(table); err != nil {
-			return errors.Errorf("error while dumping table %s: %v", table, err)
+			return errors.Wrapf(err, "while dumping table %s", table)
 		}
 	}
 

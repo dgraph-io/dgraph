@@ -101,7 +101,7 @@ func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 func GetError(rc io.ReadCloser) error {
 	b, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return errors.Errorf("Read failed: %v", err)
+		return errors.Wrapf(err, "while reading")
 	}
 	if bytes.Contains(b, []byte("Error")) {
 		return errors.Errorf("%s", string(b))

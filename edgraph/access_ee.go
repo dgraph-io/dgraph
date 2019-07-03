@@ -98,21 +98,21 @@ func (s *Server) Login(ctx context.Context,
 func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User,
 	error) {
 	if err := validateLoginRequest(request); err != nil {
-		return nil, errors.Errorf("invalid login request: %v", err)
+		return nil, errors.Wrapf(err, "invalid login request")
 	}
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, err := validateToken(request.RefreshToken)
 		if err != nil {
-			return nil, errors.Errorf("unable to authenticate the refresh token %v: %v",
-				request.RefreshToken, err)
+			return nil, errors.Wrapf(err, "unable to authenticate the refresh token %v",
+				request.RefreshToken)
 		}
 
 		userId := userData[0]
 		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
-			return nil, errors.Errorf("error while querying user with id %v: %v", userId, err)
+			return nil, errors.Wrapf(err, "while querying user with id %v", userId)
 		}
 
 		if user == nil {
@@ -128,8 +128,8 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	var err error
 	user, err = authorizeUser(ctx, request.Userid, request.Password)
 	if err != nil {
-		return nil, errors.Errorf("error while querying user with id %v: %v",
-			request.Userid, err)
+		return nil, errors.Wrapf(err, "while querying user with id %v",
+			request.Userid)
 	}
 
 	if user == nil {
@@ -358,13 +358,13 @@ func ResetAcl() {
 
 		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
 		if err != nil {
-			return errors.Errorf("error while querying user with id %s: %v", x.GrootId, err)
+			return errors.Wrapf(err, "while querying user with id %s", x.GrootId)
 		}
 		startTs := queryResp.GetTxn().StartTs
 
 		rootUser, err := acl.UnmarshalUser(queryResp, "user")
 		if err != nil {
-			return errors.Errorf("error while unmarshaling the root user: %v", err)
+			return errors.Wrapf(err, "while unmarshaling the root user")
 		}
 		if rootUser != nil {
 			glog.Infof("The groot account already exists, no need to insert again")
@@ -465,8 +465,8 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 		// if we get here, we know the user is not Groot.
 		if isDropAll(op) || op.DropOp == api.Operation_DATA {
-			return errors.Errorf("only Groot is allowed to drop all data, but the current user is %s",
-				userId)
+			return errors.Errorf(
+				"only Groot is allowed to drop all data, but the current user is %s", userId)
 		}
 
 		for _, pred := range preds {

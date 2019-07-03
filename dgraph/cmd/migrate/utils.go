@@ -54,7 +54,7 @@ func showTables(pool *sql.DB, tableNames string) ([]string, error) {
 	for rows.Next() {
 		var table string
 		if err := rows.Scan(&table); err != nil {
-			return nil, errors.Errorf("error while scanning table name: %v", err)
+			return nil, errors.Wrapf(err, "while scanning table name")
 		}
 		tables = append(tables, table)
 	}
@@ -124,7 +124,7 @@ func getColumnValues(columns []string, dataTypes []dataType,
 		}
 	}
 	if err := rows.Scan(valuePtrs...); err != nil {
-		return nil, errors.Errorf("error while scanning column values: %v", err)
+		return nil, errors.Wrapf(err, "while scanning column values")
 	}
 	colValues := ptrToValues(valuePtrs)
 	return colValues, nil

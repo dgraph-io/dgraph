@@ -145,7 +145,7 @@ func runJSONMutation(m string) error {
 func alterSchema(s string) error {
 	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
 	if err != nil {
-		return errors.Errorf("error while running request with retries: %v", err)
+		return errors.Wrapf(err, "while running request with retries")
 	}
 	return nil
 }

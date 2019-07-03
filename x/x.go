@@ -630,7 +630,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	fmt.Printf("%s password for %v:", pwdType, userid)
 	pd, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err != nil {
-		return "", errors.Errorf("error while reading password:%v", err)
+		return "", errors.Wrapf(err, "while reading password")
 	}
 	fmt.Println()
 	password := string(pd)
@@ -639,7 +639,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
 		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return "", errors.Errorf("error while reading password:%v", err)
+			return "", errors.Wrapf(err, "while reading password")
 		}
 		fmt.Println()
 
@@ -664,7 +664,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := dg.Login(ctx, opt.UserID, password); err != nil {
-		return errors.Errorf("unable to login to the %v account:%v", opt.UserID, err)
+		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token

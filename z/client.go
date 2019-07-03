@@ -207,24 +207,24 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 
 	body, err := json.Marshal(&loginPayload)
 	if err != nil {
-		return "", "", errors.Errorf("unable to marshal body: %v", err)
+		return "", "", errors.Wrapf(err, "unable to marshal body")
 	}
 
 	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
 	if err != nil {
-		return "", "", errors.Errorf("unable to create request: %v", err)
+		return "", "", errors.Wrapf(err, "unable to create request")
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", errors.Errorf("login through curl failed: %v", err)
+		return "", "", errors.Wrapf(err, "login through curl failed")
 	}
 	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", errors.Errorf("unable to read from response: %v", err)
+		return "", "", errors.Wrapf(err, "unable to read from response")
 	}
 
 	var outputJson map[string]map[string]string
@@ -235,12 +235,12 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 				return "", "", errors.Errorf("response error: %v", string(respBody))
 			}
 		}
-		return "", "", errors.Errorf("unable to unmarshal the output to get JWTs: %v", err)
+		return "", "", errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
 	}
 
 	data, found := outputJson["data"]
 	if !found {
-		return "", "", errors.Errorf("data entry found in the output: %v", err)
+		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
 
 	newAccessJwt, found := data["accessJWT"]
