@@ -73,7 +73,7 @@ func main() {
 	fmt.Println("Ticker stopped")
 }
 
-var hertz uint
+var hertz int64
 
 const (
 	uptime_file = "/proc/uptime"
@@ -88,7 +88,10 @@ func init() {
 	if err != nil {
 		log.Fatalf("unable to get the number of cpus")
 	}
-	old_Hertz_hack()
+	hertz, err = sysconf.Sysconf(sysconf.SC_CLK_TCK)
+	if err != nil {
+		log.Fatalf("unable to get hertz")
+	}
 }
 
 // fileToBuf opens filename only if necessary and seeks to 0 so that
