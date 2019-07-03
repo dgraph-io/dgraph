@@ -1,0 +1,25 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "YDIWRbVrzBVVapkMWodg3TzoqiU=",
+			"path": "github.com/tklauser/go-sysconf",
+			"revision": "d90dfe8b2f4be4b0a4df5db89401b0ba74fe24d9",
+			"revisionTime": "2019-06-04T08:01:57Z"
+		},
+		{
+			"checksumSHA1": "2aOz2uKl5mAB2bYsxfkk/BvvQws=",
+			"path": "github.com/tklauser/numcpus",
+			"revision": "6b5085e2650f774988405fe8a5f0cda86cec1f07",
+			"revisionTime": "2019-06-04T08:05:07Z"
+		},
+		{
+			"checksumSHA1": "oxQzknCJtgckDEKh+zp99Ph3Qkg=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "04f50cda93cbb67f2afa353c52f342100e80e625",
+			"revisionTime": "2019-06-26T21:29:17Z"
+		}
+	],
+	"rootPath": "github.com/dgraph-io/proc-reporter"
+}
