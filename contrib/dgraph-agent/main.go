@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"strconv"
 	"syscall"
 	"time"
@@ -13,7 +12,7 @@ import (
 	sysconf "github.com/tklauser/go-sysconf"
 )
 
-// getPID reads the process id from the given pid file
+// getPID reads the process id from the given pid file.
 func getPID(pfile string) (int64, error) {
 	if len(pfile) == 0 {
 		glog.Fatalf("The procfile must be set")
@@ -26,9 +25,9 @@ func getPID(pfile string) (int64, error) {
 	return strconv.ParseInt(string(pidData), 0, 64)
 }
 
-// format of the /proc/<pid>/stat file can be found at
+// Format of the /proc/<pid>/stat file can be found at
 // http://man7.org/linux/man-pages/man5/proc.5.html
-// Here we only define the first section of field list up to the cpu time related fields
+// Here we only define the first section of the field list up to the cpu time related fields
 // because for now we only need the CPU fields.
 type proc struct {
 	id      int
@@ -57,7 +56,7 @@ func main() {
 
 	pid, err := getPID(*pfile)
 	if err != nil {
-		glog.Fatalf("error while getting pid: %v", err)
+		glog.Fatalf("Error while getting pid: %v", err)
 	}
 
 	ticker := time.NewTicker(3 * time.Second)
@@ -73,39 +72,39 @@ func init() {
 	var err error
 	smpNumCpus, err = sysconf.Sysconf(sysconf.SC_NPROCESSORS_ONLN)
 	if err != nil {
-		log.Fatalf("unable to get the number of cpus")
+		glog.Fatalf("Unable to get the number of cpus")
 	}
 	hertz, err = sysconf.Sysconf(sysconf.SC_CLK_TCK)
 	if err != nil {
-		log.Fatalf("unable to get hertz")
+		glog.Fatalf("Unable to get hertz")
 	}
 }
 
-var oldtv syscall.Timeval
-var oldproc proc
+var oldTv syscall.Timeval
+var oldProc proc
 
 func refreshStat(pid int64) {
 	proc, err := readProc(pid)
 	if err != nil {
-		glog.Fatalf("error while reading proc data: %v", err)
+		glog.Fatalf("Error while reading proc data: %v", err)
 	}
 	tv := syscall.Timeval{}
 	err = syscall.Gettimeofday(&tv)
 	if err != nil {
-		glog.Fatalf("unable to read time: %v", err)
+		glog.Fatalf("Unable to read time: %v", err)
 	}
 	// et represents the elapsed time in seconds
-	et := (float64)(tv.Sec-oldtv.Sec) +
-		(float64(tv.Usec-oldtv.Usec))/1000000.0
-	oldtv = tv
+	et := (float64)(tv.Sec-oldTv.Sec) +
+		(float64(tv.Usec-oldTv.Usec))/1000000.0
+	oldTv = tv
 
 	// frameTsacel reprents the percent of cpu for each cpu tick
 	frameTscale := 100.0 / (float64(hertz) * float64(et))
-	if oldproc.id != 0 {
-		tics := proc.utime + proc.stime - (oldproc.utime + oldproc.stime)
+	if oldProc.id != 0 {
+		tics := proc.utime + proc.stime - (oldProc.utime + oldProc.stime)
 		// TODO: instead of printing this on the command line, expose this
 		// as a promethus metric
 		fmt.Printf("got pcpu %v\n", float64(tics)*frameTscale)
 	}
-	oldproc = *proc
+	oldProc = *proc
 }
