@@ -371,26 +371,26 @@ func main() {
 
 	// Do some sanity checks.
 	if opts.NumZeros < 1 || opts.NumZeros > 99 {
-		fatal(fmt.Errorf("number of zeros must be 1-99"))
+		fatal(errors.Errorf("number of zeros must be 1-99"))
 	}
 	if opts.NumAlphas < 1 || opts.NumAlphas > 99 {
-		fatal(fmt.Errorf("number of alphas must be 1-99"))
+		fatal(errors.Errorf("number of alphas must be 1-99"))
 	}
 	if opts.NumReplicas%2 == 0 {
-		fatal(fmt.Errorf("number of replicas must be odd"))
+		fatal(errors.Errorf("number of replicas must be odd"))
 	}
 	if opts.LruSizeMB < 1024 {
-		fatal(fmt.Errorf("LRU cache size must be >= 1024 MB"))
+		fatal(errors.Errorf("LRU cache size must be >= 1024 MB"))
 	}
 	if opts.AclSecret != "" && !opts.Enterprise {
 		warning("adding --enterprise because it is required by ACL feature")
 		opts.Enterprise = true
 	}
 	if opts.DataVol && opts.DataDir != "" {
-		fatal(fmt.Errorf("only one of --data_vol and --data_dir may be used at a time"))
+		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))
 	}
 	if opts.UserOwnership && opts.DataDir == "" {
-		fatal(fmt.Errorf("--user option requires --data_dir=<path>"))
+		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
 	}
 
 	services := make(map[string]service)
@@ -437,7 +437,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "Writing file: %s\n", opts.OutFile)
 		err = ioutil.WriteFile(opts.OutFile, []byte(doc), 0644)
 		if err != nil {
-			fatal(fmt.Errorf("unable to write file: %v", err))
+			fatal(errors.Errorf("unable to write file: %v", err))
 		}
 	}
 }

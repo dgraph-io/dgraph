@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/z"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -144,7 +145,7 @@ func runJSONMutation(m string) error {
 func alterSchema(s string) error {
 	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
 	if err != nil {
-		return fmt.Errorf("error while running request with retries: %v", err)
+		return errors.Errorf("error while running request with retries: %v", err)
 	}
 	return nil
 }

@@ -23,12 +23,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
-	"fmt"
 	"math"
 	"math/big"
 	"net"
 	"os"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -109,7 +110,7 @@ func (c *certConfig) generatePair(keyFile, certFile string) error {
 	if c.parent == nil {
 		c.parent = template
 	} else if template.NotAfter.After(c.parent.NotAfter) {
-		return fmt.Errorf("--duration: certificate expiration date '%s' exceeds parent '%s'",
+		return errors.Errorf("--duration: certificate expiration date '%s' exceeds parent '%s'",
 			template.NotAfter, c.parent.NotAfter)
 	}
 
@@ -173,7 +174,7 @@ func (c *certConfig) verifyCert(certFile string) error {
 
 	_, err = cert.Verify(opts)
 	if err != nil {
-		return fmt.Errorf("%s: verification failed: %s", certFile, err)
+		return errors.Errorf("%s: verification failed: %s", certFile, err)
 	}
 
 	return nil

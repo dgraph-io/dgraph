@@ -32,7 +32,7 @@ func (FactorTokenizer) Identifier() byte { return 0xfe }
 func (FactorTokenizer) Tokens(value interface{}) ([]string, error) {
 	x := value.(int64)
 	if x <= 1 {
-		return nil, fmt.Errorf("Cannot factor int <= 1: %d", x)
+		return nil, errors.Errorf("Cannot factor int <= 1: %d", x)
 	}
 	var toks []string
 	for p := int64(2); x > 1; p++ {

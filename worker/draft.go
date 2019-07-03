@@ -170,7 +170,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
 					return err
 				} else if !servesTablet {
-					return fmt.Errorf("group 1 should always serve reserved predicate %s",
+					return errors.Errorf("group 1 should always serve reserved predicate %s",
 						s.Predicate)
 				}
 			}
@@ -539,9 +539,9 @@ func (n *node) leaderBlocking() (*conn.Pool, error) {
 		// leader election for a group might not have happened when it is called. If we can't
 		// find a leader, get latest state from Zero.
 		if err := UpdateMembershipState(context.Background()); err != nil {
-			return nil, fmt.Errorf("Error while trying to update membership state: %+v", err)
+			return nil, errors.Errorf("Error while trying to update membership state: %+v", err)
 		}
-		return nil, fmt.Errorf("Unable to reach leader in group %d", n.gid)
+		return nil, errors.Errorf("Unable to reach leader in group %d", n.gid)
 	}
 	return pool, nil
 }
@@ -596,12 +596,12 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	if _, err := n.populateSnapshot(snap, pool); err != nil {
-		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v", err)
+		return errors.Errorf("Cannot retrieve snapshot from peer, error: %v", err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	if err := schema.LoadFromDb(); err != nil {
-		return fmt.Errorf("Error while initilizating schema: %+v", err)
+		return errors.Errorf("Error while initilizating schema: %+v", err)
 	}
 	groups().triggerMembershipSync()
 	return nil

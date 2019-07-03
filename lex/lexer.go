@@ -47,7 +47,7 @@ type Item struct {
 }
 
 func (i Item) Errorf(format string, args ...interface{}) error {
-	return fmt.Errorf("line %d column %d: "+format,
+	return errors.Errorf("line %d column %d: "+format,
 		append([]interface{}{i.line, i.column}, args...)...)
 }
 

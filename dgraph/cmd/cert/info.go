@@ -75,7 +75,7 @@ func getFileInfo(file string) *certInfo {
 				dnCommonNamePrefix, cert.Subject.CommonName)
 
 		default:
-			info.err = fmt.Errorf("Unsupported certificate")
+			info.err = errors.Errorf("Unsupported certificate")
 			return &info
 		}
 
@@ -91,7 +91,7 @@ func getFileInfo(file string) *certInfo {
 		if file != defaultCACert {
 			parent, err := readCert(defaultCACert)
 			if err != nil {
-				info.err = fmt.Errorf("Could not read parent cert: %s", err)
+				info.err = errors.Errorf("Could not read parent cert: %s", err)
 				return &info
 			}
 			if err := cert.CheckSignatureFrom(parent); err != nil {
@@ -112,7 +112,7 @@ func getFileInfo(file string) *certInfo {
 			info.commonName = dnCommonNamePrefix + " Client key"
 
 		default:
-			info.err = fmt.Errorf("Unsupported key")
+			info.err = errors.Errorf("Unsupported key")
 			return &info
 		}
 
@@ -136,7 +136,7 @@ func getFileInfo(file string) *certInfo {
 		}
 
 	default:
-		info.err = fmt.Errorf("Unsupported file")
+		info.err = errors.Errorf("Unsupported file")
 	}
 
 	return &info

@@ -18,7 +18,6 @@ package conn
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
 
 	"google.golang.org/grpc"
@@ -34,9 +34,9 @@ import (
 
 var (
 	// ErrNoConnection indicates no connection exists to a node.
-	ErrNoConnection = fmt.Errorf("No connection exists")
+	ErrNoConnection = errors.Errorf("No connection exists")
 	// ErrUnhealthyConnection indicates the connection to a node is unhealthy.
-	ErrUnhealthyConnection = fmt.Errorf("Unhealthy connection")
+	ErrUnhealthyConnection = errors.Errorf("Unhealthy connection")
 	echoDuration           = 500 * time.Millisecond
 )
 

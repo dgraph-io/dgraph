@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -1651,7 +1650,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return &emptyResult, fmt.Errorf(
+		return &emptyResult, errors.Errorf(
 			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 

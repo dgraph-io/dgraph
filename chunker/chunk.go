@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	encjson "encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -155,7 +154,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 		return err
 	}
 	if ch != '[' {
-		return fmt.Errorf("JSON file must contain array. Found: %v", ch)
+		return errors.Errorf("JSON file must contain array. Found: %v", ch)
 	}
 	return nil
 }
@@ -178,7 +177,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		// Handle loading an empty JSON array ("[]") without error.
 		return nil, io.EOF
 	} else if ch != '{' {
-		return nil, fmt.Errorf("Expected JSON map start. Found: %v", string(ch))
+		return nil, errors.Errorf("Expected JSON map start. Found: %v", string(ch))
 	}
 	x.Check2(out.WriteRune(ch))
 

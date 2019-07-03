@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -80,7 +81,7 @@ func queryCounter(txn *dgo.Txn, pred string) (Counter, error) {
 	query := fmt.Sprintf("{ q(func: has(%s)) { uid, val: %s }}", pred, pred)
 	resp, err := txn.Query(ctx, query)
 	if err != nil {
-		return counter, fmt.Errorf("Query error: %v", err)
+		return counter, errors.Errorf("Query error: %v", err)
 	}
 
 	// Total query latency is sum of encoding, parsing and processing latencies.

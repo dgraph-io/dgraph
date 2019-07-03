@@ -318,7 +318,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
 	if isDropAll(op) {
 		if len(op.DropValue) > 0 {
-			return empty, fmt.Errorf("If DropOp is set to ALL, DropValue must be empty")
+			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}
 
 		m.DropOp = pb.Mutations_ALL
@@ -331,7 +331,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if op.DropOp == api.Operation_DATA {
 		if len(op.DropValue) > 0 {
-			return empty, fmt.Errorf("If DropOp is set to DATA, DropValue must be empty")
+			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
 		m.DropOp = pb.Mutations_DATA
@@ -344,7 +344,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
 		if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
-			return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+			return empty, errors.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
 		}
 
 		var attr string
@@ -356,7 +356,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// Reserved predicates cannot be dropped.
 		if x.IsReservedPredicate(attr) {
-			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
+			err := errors.Errorf("predicate %s is reserved and is not allowed to be dropped",
 				attr)
 			return empty, err
 		}
@@ -379,7 +379,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if op.DropOp == api.Operation_TYPE {
 		if len(op.DropValue) == 0 {
-			return empty, fmt.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
+			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
 		m.DropOp = pb.Mutations_TYPE
@@ -397,7 +397,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsReservedPredicateChanged(update.Predicate, update) {
-			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
+			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err
 		}
@@ -490,7 +490,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 
 	if len(gmu.Set) == 0 && len(gmu.Del) == 0 {
 		span.Annotate(nil, "Empty mutation")
-		return resp, fmt.Errorf("Empty mutation")
+		return resp, errors.Errorf("Empty mutation")
 	}
 
 	if mu.StartTs == 0 {
@@ -596,7 +596,7 @@ func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
 	}
 
 	if len(qr.Vars) <= 0 {
-		return nil, fmt.Errorf("upsert query block has no variables")
+		return nil, errors.Errorf("upsert query block has no variables")
 	}
 
 	// TODO(Aman): allow multiple values for each variable.
@@ -607,7 +607,7 @@ func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
 			continue
 		}
 		if len(v.Uids.Uids) > 1 {
-			return nil, fmt.Errorf("more than one values found for var (%s)", name)
+			return nil, errors.Errorf("more than one values found for var (%s)", name)
 		} else if len(v.Uids.Uids) == 1 {
 			varToUID[name] = fmt.Sprintf("%d", v.Uids.Uids[0])
 		}
@@ -731,7 +731,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	resp = &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
-		return resp, fmt.Errorf("Empty query")
+		return resp, errors.Errorf("Empty query")
 	}
 
 	var l query.Latency
@@ -834,7 +834,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
-		return &api.TxnContext{}, fmt.Errorf(
+		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
@@ -1065,7 +1065,7 @@ func validateQuery(queries []*gql.GraphQuery) error {
 
 func validatePredName(name string) error {
 	if len(name) > math.MaxUint16 {
-		return fmt.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
+		return errors.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
 			name[:80])
 	}
 	return nil

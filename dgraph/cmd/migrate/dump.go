@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // dumpMeta serves as the global knowledge oracle that stores
@@ -55,7 +57,7 @@ func (m *dumpMeta) dumpSchema() error {
 		for _, index := range createDgraphSchema(tableInfo) {
 			_, err := m.schemaWriter.WriteString(index)
 			if err != nil {
-				return fmt.Errorf("error while writing schema: %v", err)
+				return errors.Errorf("error while writing schema: %v", err)
 			}
 		}
 	}
@@ -69,14 +71,14 @@ func (m *dumpMeta) dumpTables() error {
 	for table := range m.tableInfos {
 		fmt.Printf("Dumping table %s\n", table)
 		if err := m.dumpTable(table); err != nil {
-			return fmt.Errorf("error while dumping table %s: %v", table, err)
+			return errors.Errorf("error while dumping table %s: %v", table, err)
 		}
 	}
 
 	for table := range m.tableInfos {
 		fmt.Printf("Dumping table constraints %s\n", table)
 		if err := m.dumpTableConstraints(table); err != nil {
-			return fmt.Errorf("error while dumping table %s: %v", table, err)
+			return errors.Errorf("error while dumping table %s: %v", table, err)
 		}
 	}
 
@@ -215,7 +217,8 @@ func (m *dumpMeta) outputConstraints(row *sqlRow, tableInfo *sqlTable) {
 		}
 		foreignBlankNode := m.tableGuides[foreignTableName].valuesRecorder.getBlankNode(refLabel)
 		m.outputPlainCell(row.blankNodeLabel,
-			getPredFromConstraint(tableInfo.tableName, separator, constraint), uidType, foreignBlankNode)
+			getPredFromConstraint(tableInfo.tableName, separator, constraint), uidType,
+			foreignBlankNode)
 	}
 }
 
