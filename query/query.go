@@ -932,9 +932,9 @@ func isDebug(ctx context.Context) bool {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// md is a map[string][]string
 		if len(md["debug"]) != 0 {
-			// We ignore the error here.
-			d, _ := strconv.ParseBool(md["debug"][0])
-			debug = debug || d
+			// We ignore the error here, because in error case,
+			// debug would be false which is what we want.
+			debug, _ = strconv.ParseBool(md["debug"][0])
 		}
 	}
 
