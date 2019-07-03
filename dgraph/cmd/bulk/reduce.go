@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"sync/atomic"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -67,7 +68,7 @@ func (r *reducer) reduce(job shuffleOutput) {
 		pl.Pack = codec.Encode(uids, 256)
 		val, err := pl.Marshal()
 		x.Check(err)
-		x.Check(txn.SetWithMeta(currentKey, val, meta))
+		x.Check(txn.SetEntry(badger.NewEntry(currentKey, val).WithMeta(meta)))
 
 		uids = uids[:0]
 		pl.Reset()

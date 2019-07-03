@@ -91,11 +91,12 @@ func (w *TxnWriter) SetAt(key, val []byte, meta byte, ts uint64) error {
 	return w.Update(ts, func(txn *badger.Txn) error {
 		switch meta {
 		case BitCompletePosting, BitEmptyPosting:
-			if err := txn.SetWithDiscard(key, val, meta); err != nil {
+			if err := txn.SetEntry(
+				badger.NewEntry(key, val).WithMeta(meta).WithDiscard()); err != nil {
 				return err
 			}
 		default:
-			if err := txn.SetWithMeta(key, val, meta); err != nil {
+			if err := txn.SetEntry(badger.NewEntry(key, val).WithMeta(meta)); err != nil {
 				return err
 			}
 		}
