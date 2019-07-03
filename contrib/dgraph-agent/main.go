@@ -31,23 +31,23 @@ func getPID(pfile string) (int64, error) {
 // Here we only define the first section of field list up to the cpu time related fields
 // because for now we only need the CPU fields.
 type proc struct {
-	id       int
-	name     string
-	state    string
-	ppid     int
-	pgrp     int
-	session  int
-	tty      int
-	tpgid    int
-	flags    uint
-	min_flt  uint
-	cmin_flt uint
-	maj_flt  uint
-	cmaj_flt uint
-	utime    int
-	stime    int
-	cutime   int
-	cstime   int
+	id      int
+	name    string
+	state   string
+	ppid    int
+	pgrp    int
+	session int
+	tty     int
+	tpgid   int
+	flags   uint
+	minFlt  uint
+	cminFlt uint
+	majFlt  uint
+	cmajFlt uint
+	utime   int
+	stime   int
+	cutime  int
+	cstime  int
 }
 
 func main() {
@@ -67,11 +67,11 @@ func main() {
 }
 
 var hertz int64
-var smp_num_cpus int64
+var smpNumCpus int64
 
 func init() {
 	var err error
-	smp_num_cpus, err = sysconf.Sysconf(sysconf.SC_NPROCESSORS_ONLN)
+	smpNumCpus, err = sysconf.Sysconf(sysconf.SC_NPROCESSORS_ONLN)
 	if err != nil {
 		log.Fatalf("unable to get the number of cpus")
 	}
@@ -90,19 +90,22 @@ func refreshStat(pid int64) {
 		glog.Fatalf("error while reading proc data: %v", err)
 	}
 	tv := syscall.Timeval{}
-	syscall.Gettimeofday(&tv)
+	err = syscall.Gettimeofday(&tv)
+	if err != nil {
+		glog.Fatalf("unable to read time: %v", err)
+	}
 	// et represents the elapsed time in seconds
 	et := (float64)(tv.Sec-oldtv.Sec) +
 		(float64(tv.Usec-oldtv.Usec))/1000000.0
 	oldtv = tv
 
-	// frame_tsacel reprents the percent of cpu for each cpu tick
-	frame_tscale := 100.0 / (float64(hertz) * float64(et))
+	// frameTsacel reprents the percent of cpu for each cpu tick
+	frameTscale := 100.0 / (float64(hertz) * float64(et))
 	if oldproc.id != 0 {
 		tics := proc.utime + proc.stime - (oldproc.utime + oldproc.stime)
 		// TODO: instead of printing this on the command line, expose this
 		// as a promethus metric
-		fmt.Printf("got pcpu %v\n", float64(tics)*frame_tscale)
+		fmt.Printf("got pcpu %v\n", float64(tics)*frameTscale)
 	}
 	oldproc = *proc
 }

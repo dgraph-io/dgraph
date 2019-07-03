@@ -25,7 +25,7 @@ func readProc(pid int64) (*proc, error) {
 				"%d %d %d %d ", /* utime stime cutime cstime */
 			&p.id, &p.name, &p.state,
 			&p.ppid, &p.pgrp, &p.session, &p.tty, &p.tpgid,
-			&p.flags, &p.min_flt, &p.cmin_flt, &p.maj_flt, &p.cmaj_flt,
+			&p.flags, &p.minFlt, &p.cminFlt, &p.majFlt, &p.cmajFlt,
 			&p.utime, &p.stime, &p.cutime, &p.cstime,
 		)
 		return &p, nil
