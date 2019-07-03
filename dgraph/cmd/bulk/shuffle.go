@@ -64,7 +64,7 @@ func (s *shuffler) run() {
 }
 
 func (s *shuffler) createBadger(i int) *badger.DB {
-	opt := badger.DefaultOptions
+	opt := badger.DefaultOptions("")
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = s.opt.shardOutputDirs[i]

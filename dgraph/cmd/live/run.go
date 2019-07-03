@@ -244,7 +244,7 @@ func fileList(files string) []string {
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	x.Check(os.MkdirAll(opt.clientDir, 0700))
-	o := badger.DefaultOptions
+	o := badger.DefaultOptions("")
 	o.SyncWrites = true // So that checkpoints are persisted immediately.
 	o.TableLoadingMode = bopt.MemoryMap
 	o.Dir = opt.clientDir

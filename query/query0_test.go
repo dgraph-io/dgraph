@@ -1719,7 +1719,7 @@ func TestMain(m *testing.M) {
 	dir2, err := ioutil.TempDir("", "wal_")
 	x.Check(err)
 
-	kvOpt := badger.DefaultOptions
+	kvOpt := badger.DefaultOptions("")
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = dir2
 	kvOpt.ValueDir = dir2

@@ -31,7 +31,7 @@ import (
 )
 
 func openBadger(dir string) (*badger.DB, error) {
-	opt := badger.DefaultOptions
+	opt := badger.DefaultOptions("")
 	opt.Dir = dir
 	opt.ValueDir = dir
 

@@ -169,7 +169,7 @@ func (ld *loader) mapStage() {
 
 	xidDir := filepath.Join(ld.opt.TmpDir, "xids")
 	x.Check(os.Mkdir(xidDir, 0755))
-	opt := badger.DefaultOptions
+	opt := badger.DefaultOptions("")
 	opt.SyncWrites = false
 	opt.TableLoadingMode = bo.MemoryMap
 	opt.Dir = xidDir

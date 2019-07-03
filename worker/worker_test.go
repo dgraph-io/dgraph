@@ -619,7 +619,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	opt := badger.DefaultOptions
+	opt := badger.DefaultOptions("")
 	opt.Dir = dir
 	opt.ValueDir = dir
 	ps, err := badger.OpenManaged(opt)

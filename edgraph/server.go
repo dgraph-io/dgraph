@@ -143,7 +143,7 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions
+		opt := badger.LSMOnlyOptions("")
 		opt = setBadgerOptions(opt, Config.WALDir)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 
@@ -163,7 +163,7 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions
+		opt := badger.DefaultOptions("")
 		opt.ValueThreshold = 1 << 10 // 1KB
 		opt.NumVersionsToKeep = math.MaxInt32
 		opt = setBadgerOptions(opt, Config.PostingDir)
