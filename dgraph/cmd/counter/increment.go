@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// This binary would retrieve a value for UID=0x01, and increment it by 1. If
-// successful, it would print out the incremented value. It assumes that it has
+// Package counter builds a tool that retrieves a value for UID=0x01, and increments
+// it by 1. If successful, it prints out the incremented value. It assumes that it has
 // access to UID=0x01, and that `val` predicate is of type int.
 package counter
 
@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Increment is the sub-command invoked when calling "dgraph increment".
 var Increment x.SubCommand
 
 func init() {
@@ -47,6 +48,7 @@ func init() {
 	flag := Increment.Cmd.Flags()
 	flag.String("alpha", "localhost:9080", "Address of Dgraph Alpha.")
 	flag.Int("num", 1, "How many times to run.")
+	flag.Int("retries", 10, "How many times to retry setting up the connection.")
 	flag.Duration("wait", 0*time.Second, "How long to wait.")
 	flag.String("user", "", "Username if login is required.")
 	flag.String("password", "", "Password of the user.")
@@ -60,6 +62,7 @@ func init() {
 	x.RegisterClientTLSFlags(flag)
 }
 
+// Counter stores information about the value being incremented by this tool.
 type Counter struct {
 	Uid string `json:"uid"`
 	Val int    `json:"val"`
@@ -114,7 +117,11 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 	default:
 		txn = dg.NewTxn()
 	}
-	defer txn.Discard(nil)
+	defer func() {
+		if err := txn.Discard(nil); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
 
 	counter, err := queryCounter(txn, pred)
 	if err != nil {
@@ -148,28 +155,12 @@ func run(conf *viper.Viper) {
 	startTime := time.Now()
 	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()
 
-	alpha := conf.GetString("alpha")
 	waitDur := conf.GetDuration("wait")
 	num := conf.GetInt("num")
-
-	tlsCfg, err := x.LoadClientTLSConfig(conf)
-	x.CheckfNoTrace(err)
-
 	format := "0102 03:04:05.999"
 
-retryConn:
-	conn, err := x.SetupConnection(alpha, tlsCfg, false)
-	if err != nil {
-		fmt.Printf("[%s] While trying to setup connection: %v. Retrying...",
-			time.Now().UTC().Format(format), err)
-		time.Sleep(time.Second)
-		goto retryConn
-	}
-	dc := api.NewDgraphClient(conn)
-	dg := dgo.NewDgraphClient(dc)
-	if user := conf.GetString("user"); len(user) > 0 {
-		x.CheckfNoTrace(dg.Login(context.Background(), user, conf.GetString("password")))
-	}
+	dg, closeFunc := x.GetDgraphClient(Increment.Conf, true)
+	defer closeFunc()
 
 	for num > 0 {
 		txnStart := time.Now() // Start time of transaction
@@ -178,7 +169,7 @@ retryConn:
 		if err != nil {
 			fmt.Printf("%-17s While trying to process counter: %v. Retrying...\n", now, err)
 			time.Sleep(time.Second)
-			goto retryConn
+			continue
 		}
 		serverLat := cnt.qLatency + cnt.mLatency
 		clientLat := time.Since(txnStart).Round(time.Millisecond)

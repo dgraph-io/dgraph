@@ -1,7 +1,7 @@
-// +build oss
+// +build darwin,!go1.12
 
 /*
- * Copyright 2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,22 @@
  * limitations under the License.
  */
 
-package worker
+package y
 
 import (
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
+	"os"
+	"syscall"
 )
 
-// Backup implements the Worker interface.
-func (w *grpcWorker) Backup(ctx context.Context, req *pb.BackupRequest) (*pb.Status, error) {
-	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
-	return nil, x.ErrNotSupported
+// FileSync calls os.File.Sync with the right parameters.
+// This function can be removed once we stop supporting Go 1.11
+// on MacOS.
+//
+// More info: https://golang.org/issue/26650.
+func FileSync(f *os.File) error {
+	_, _, err := syscall.Syscall(syscall.SYS_FCNTL, f.Fd(), syscall.F_FULLFSYNC, 0)
+	if err == 0 {
+		return nil
+	}
+	return err
 }

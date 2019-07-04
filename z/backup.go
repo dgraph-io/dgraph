@@ -37,11 +37,8 @@ import (
 // attribute in a map.
 // TODO(martinmr): See if this method can be simplified (e.g not use stream framework).
 func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
-	opt := badger.DefaultOptions
-	opt.Dir = pdir
-	opt.ValueDir = pdir
-	opt.TableLoadingMode = options.MemoryMap
-	opt.ReadOnly = true
+	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
+		WithReadOnly(true)
 	db, err := badger.OpenManaged(opt)
 	if err != nil {
 		return nil, err

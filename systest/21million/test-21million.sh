@@ -112,7 +112,7 @@ if [[ $LOADER == bulk ]]; then
     DockerCompose run --name bulk_load --rm alpha1 \
         bash -s <<EOF
             /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                               --format=rdf --zero=zero1:5080 --out=/data/alpha1/bulk
+                               --format=rdf --zero=zero1:5180 --out=/data/alpha1/bulk
             mv /data/alpha1/bulk/0/p /data/alpha1
 EOF
 fi

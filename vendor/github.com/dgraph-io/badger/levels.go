@@ -610,7 +610,7 @@ func (s *levelsController) compactBuildTables(
 		// -- we're the only holders of a ref).
 		for j := 0; j < numBuilds; j++ {
 			if newTables[j] != nil {
-				newTables[j].DecrRef()
+				_ = newTables[j].DecrRef()
 			}
 		}
 		errorReturn := errors.Wrapf(firstErr, "While running compaction for: %+v", cd)
@@ -620,7 +620,9 @@ func (s *levelsController) compactBuildTables(
 	sort.Slice(newTables, func(i, j int) bool {
 		return y.CompareKeys(newTables[i].Biggest(), newTables[j].Biggest()) < 0
 	})
-	s.kv.vlog.updateDiscardStats(discardStats)
+	if err := s.kv.vlog.updateDiscardStats(discardStats); err != nil {
+		return nil, nil, errors.Wrap(err, "failed to update discard stats")
+	}
 	s.kv.opt.Debugf("Discard stats: %v", discardStats)
 	return newTables, func() error { return decrRefs(newTables) }, nil
 }

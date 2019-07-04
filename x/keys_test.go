@@ -145,7 +145,7 @@ func TestCountKey(t *testing.T) {
 		key := CountKey(sattr, count, true)
 		pk := Parse(key)
 
-		require.True(t, pk.IsCount())
+		require.True(t, pk.IsCountOrCountRev())
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, count, pk.Count)
 	}
@@ -161,7 +161,7 @@ func TestCountKeyWithStartUid(t *testing.T) {
 		key = GetSplitKey(key, startUid)
 		pk := Parse(key)
 
-		require.True(t, pk.IsCount())
+		require.True(t, pk.IsCountOrCountRev())
 		require.Equal(t, sattr, pk.Attr)
 		require.Equal(t, count, pk.Count)
 		require.Equal(t, pk.HasStartUid, true)

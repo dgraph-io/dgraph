@@ -54,30 +54,34 @@ type params struct {
 	Variables map[string]string `json:"variables"`
 }
 
-func queryWithGz(q, t string, gzReq bool, gzResp bool, timeout string) (
+func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bool) (
 	string, *http.Response, error) {
 
-	url := addr + "/query"
-	if timeout != "" {
-		url = url + fmt.Sprintf("?timeout=%v", timeout)
+	params := make([]string, 0, 2)
+	if debug != "" {
+		params = append(params, "debug="+debug)
 	}
+	if timeout != "" {
+		params = append(params, fmt.Sprintf("timeout=%v", timeout))
+	}
+	url := addr + "/query?" + strings.Join(params, "&")
 
 	var buf *bytes.Buffer
 	if gzReq {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		gz.Write([]byte(q))
+		gz.Write([]byte(queryText))
 		gz.Close()
 		buf = &b
 	} else {
-		buf = bytes.NewBufferString(q)
+		buf = bytes.NewBufferString(queryText)
 	}
 
 	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
 		return "", nil, err
 	}
-	req.Header.Add("Content-Type", t)
+	req.Header.Add("Content-Type", contentType)
 
 	if gzReq {
 		req.Header.Set("Content-Encoding", "gzip")
@@ -131,13 +135,13 @@ func queryWithGz(q, t string, gzReq bool, gzResp bool, timeout string) (
 	return string(output), resp, err
 }
 
-func queryWithTs(q, t string, ts uint64) (string, uint64, error) {
+func queryWithTs(q, ct string, ts uint64) (string, uint64, error) {
 	url := addr + "/query"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
 	}
 
-	_, body, err := runWithRetries("POST", t, url, q)
+	_, body, err := runWithRetries("POST", ct, url, q)
 	if err != nil {
 		return "", 0, err
 	}
@@ -158,17 +162,17 @@ func queryWithTs(q, t string, ts uint64) (string, uint64, error) {
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ignoreIndexConflict bool,
 	ts uint64) ([]string, []string, uint64, error) {
 
-	queryParams := make([]string, 0)
+	params := make([]string, 2)
 	if ts != 0 {
-		queryParams = append(queryParams, "startTs="+strconv.FormatUint(ts, 10))
+		params = append(params, "startTs="+strconv.FormatUint(ts, 10))
 	}
 	var keys []string
 	var preds []string
 	if commitNow {
-		queryParams = append(queryParams, "commitNow=true")
+		params = append(params, "commitNow=true")
 	}
 
-	url := addr + "/mutate?" + strings.Join(queryParams, "&")
+	url := addr + "/mutate?" + strings.Join(params, "&")
 	_, body, err := runWithRetries("POST", t, url, m)
 	if err != nil {
 		return keys, preds, 0, err
@@ -313,7 +317,7 @@ func TestTransactionBasic(t *testing.T) {
 	keys, preds, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
+	require.Equal(t, 4, len(keys))
 	require.Equal(t, 2, len(preds))
 	var parsedPreds []string
 	for _, pred := range preds {
@@ -367,7 +371,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
+	require.Equal(t, 4, len(keys))
 
 	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
 	require.NoError(t, err)
@@ -413,7 +417,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
-	require.Equal(t, 3, len(keys))
+	require.Equal(t, 4, len(keys))
 
 	data, _, err := queryWithTs(q1, "application/graphql+-", 0)
 	require.NoError(t, err)
@@ -507,39 +511,39 @@ func TestHttpCompressionSupport(t *testing.T) {
 	err := runMutation(m1)
 	require.NoError(t, err)
 
-	data, resp, err := queryWithGz(q1, "application/graphql+-", false, false, "")
+	data, resp, err := queryWithGz(q1, "application/graphql+-", "false", "", false, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", false, true, "")
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "", false, true)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", true, false, "")
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "", true, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", true, true, "")
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "", true, true)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
 
 	// query with timeout
-	data, resp, err = queryWithGz(q1, "application/graphql+-", false, false, "1ms")
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "1ms", false, false)
 	require.EqualError(t, err, ": context deadline exceeded")
 	require.Equal(t, "", data)
 
-	data, resp, err = queryWithGz(q1, "application/graphql+-", false, false, "1s")
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "", "1s", false, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 
 	d1, err := json.Marshal(params{Query: q1})
 	require.NoError(t, err)
-	data, resp, err = queryWithGz(string(d1), "application/json", false, false, "1s")
+	data, resp, err = queryWithGz(string(d1), "application/json", "", "1s", false, false)
 	require.NoError(t, err)
 	require.Equal(t, r1, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
@@ -551,10 +555,98 @@ func TestHttpCompressionSupport(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	data, resp, err = queryWithGz(string(d2), "application/json", false, false, "1s")
+	data, resp, err = queryWithGz(string(d2), "application/json", "", "1s", false, false)
 	require.NoError(t, err)
-	fmt.Println(data)
 	require.Equal(t, `{"data":{"names":[{"name":"Alice"}]}}`, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+}
+
+func TestDebugSupport(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`name: string @index(term) .`))
+
+	m1 := `
+	{
+	  set {
+		_:a <name> "Alice" .
+		_:b <name> "Bob" .
+		_:c <name> "Charlie" .
+		_:d <name> "David" .
+		_:e <name> "Emily" .
+		_:f <name> "Frank" .
+		_:g <name> "Gloria" .
+	  }
+	}
+	`
+	err := runMutation(m1)
+	require.NoError(t, err)
+
+	q1 := `
+	{
+	  users(func: has(name), orderasc: name) {
+	    name
+	  }
+	}
+	`
+
+	requireEqual := func(t *testing.T, data string) {
+		var r struct {
+			Data struct {
+				Users []struct {
+					Name string `json:"name"`
+					UID  string `json:"uid"`
+				} `json:"users"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(data), &r); err != nil {
+			require.NoError(t, err)
+		}
+
+		exp := []string{"Alice", "Bob", "Charlie", "David", "Emily", "Frank", "Gloria"}
+		actual := make([]string, 0, len(exp))
+		for _, u := range r.Data.Users {
+			actual = append(actual, u.Name)
+			require.NotEmpty(t, u.UID, "uid should be nonempty in debug mode")
+		}
+		sort.Strings(actual)
+		require.Equal(t, exp, actual)
+	}
+
+	data, resp, err := queryWithGz(q1, "application/graphql+-", "true", "", false, false)
+	require.NoError(t, err)
+	requireEqual(t, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "", false, true)
+	require.NoError(t, err)
+	requireEqual(t, data)
+	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "", true, false)
+	require.NoError(t, err)
+	requireEqual(t, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "", true, true)
+	require.NoError(t, err)
+	requireEqual(t, data)
+	require.Equal(t, "gzip", resp.Header.Get("Content-Encoding"))
+
+	// query with timeout
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "1ms", false, false)
+	require.EqualError(t, err, ": context deadline exceeded")
+	require.Equal(t, "", data)
+
+	data, resp, err = queryWithGz(q1, "application/graphql+-", "true", "1s", false, false)
+	require.NoError(t, err)
+	requireEqual(t, data)
+	require.Empty(t, resp.Header.Get("Content-Encoding"))
+
+	d1, err := json.Marshal(params{Query: q1})
+	require.NoError(t, err)
+	data, resp, err = queryWithGz(string(d1), "application/json", "true", "1s", false, false)
+	require.NoError(t, err)
+	requireEqual(t, data)
 	require.Empty(t, resp.Header.Get("Content-Encoding"))
 }
 
