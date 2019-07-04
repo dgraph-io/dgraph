@@ -931,7 +931,7 @@ func isDebug(ctx context.Context) bool {
 	// gRPC client passes information about debug as metadata.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// md is a map[string][]string
-		if len(md["debug"]) != 0 {
+		if len(md["debug"]) > 0 {
 			// We ignore the error here, because in error case,
 			// debug would be false which is what we want.
 			debug, _ = strconv.ParseBool(md["debug"][0])
