@@ -348,9 +348,7 @@ func TestMain(m *testing.M) {
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
-	kvOpt := badger.DefaultOptions
-	kvOpt.Dir = dir
-	kvOpt.ValueDir = dir
+	kvOpt := badger.DefaultOptions(dir)
 	ps, err = badger.OpenManaged(kvOpt)
 	x.Check(err)
 	Init(ps)

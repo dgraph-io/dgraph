@@ -1696,9 +1696,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	opt := badger.LSMOnlyOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
+	opt := badger.LSMOnlyOptions(dir)
 	opt.SyncWrites = false
 	ps, err = badger.OpenManaged(opt)
 	defer ps.Close()
@@ -1719,10 +1717,8 @@ func TestMain(m *testing.M) {
 	dir2, err := ioutil.TempDir("", "wal_")
 	x.Check(err)
 
-	kvOpt := badger.DefaultOptions
+	kvOpt := badger.DefaultOptions(dir2)
 	kvOpt.SyncWrites = true
-	kvOpt.Dir = dir2
-	kvOpt.ValueDir = dir2
 	kvOpt.TableLoadingMode = options.LoadToRAM
 	walStore, err := badger.Open(kvOpt)
 	x.Check(err)

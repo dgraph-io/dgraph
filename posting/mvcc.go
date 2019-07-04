@@ -109,7 +109,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
-				if err := btxn.SetWithMeta([]byte(key), data, BitDeltaPosting); err != nil {
+				if err := btxn.SetEntry(
+					badger.NewEntry([]byte(key), data).WithMeta(BitDeltaPosting)); err != nil {
 					return err
 				}
 			}

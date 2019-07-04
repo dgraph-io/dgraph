@@ -192,7 +192,7 @@ func Open(opt Options) (db *DB, err error) {
 	opt.maxBatchSize = (15 * opt.MaxTableSize) / 100
 	opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 
-	if opt.ValueThreshold > math.MaxUint16-16 {
+	if opt.ValueThreshold > ValueThresholdLimit {
 		return nil, ErrValueThreshold
 	}
 
@@ -210,7 +210,7 @@ func Open(opt Options) (db *DB, err error) {
 		}
 		if !dirExists {
 			if opt.ReadOnly {
-				return nil, y.Wrapf(err, "Cannot find Dir for read-only open: %q", path)
+				return nil, errors.Errorf("Cannot find directory %q for read-only open", path)
 			}
 			// Try to create the directory
 			err = os.Mkdir(path, 0700)
@@ -294,7 +294,9 @@ func Open(opt Options) (db *DB, err error) {
 		db.lc.startCompact(db.closers.compactors)
 
 		db.closers.memtable = y.NewCloser(1)
-		go db.flushMemtable(db.closers.memtable) // Need levels controller to be up.
+		go func() {
+			_ = db.flushMemtable(db.closers.memtable) // Need levels controller to be up.
+		}()
 	}
 
 	headKey := y.KeyWithTs(head, math.MaxUint64)
@@ -353,6 +355,11 @@ func (db *DB) Close() error {
 
 func (db *DB) close() (err error) {
 	db.elog.Printf("Closing database")
+
+	if err := db.vlog.flushDiscardStats(); err != nil {
+		return errors.Wrap(err, "failed to flush discard stats")
+	}
+
 	atomic.StoreInt32(&db.blockWrites, 1)
 
 	// Stop value GC first.
@@ -460,22 +467,6 @@ const (
 // more control to user to sync data whenever required.
 func (db *DB) Sync() error {
 	return db.vlog.sync(math.MaxUint32)
-}
-
-// When you create or delete a file, you have to ensure the directory entry for the file is synced
-// in order to guarantee the file is visible (if the system crashes).  (See the man page for fsync,
-// or see https://github.com/coreos/etcd/issues/6368 for an example.)
-func syncDir(dir string) error {
-	f, err := openDir(dir)
-	if err != nil {
-		return errors.Wrapf(err, "While opening directory: %s.", dir)
-	}
-	err = f.Sync()
-	closeErr := f.Close()
-	if err != nil {
-		return errors.Wrapf(err, "While syncing directory: %s.", dir)
-	}
-	return errors.Wrapf(closeErr, "While closing directory: %s.", dir)
 }
 
 // getMemtables returns the current memtables and get references.
@@ -880,10 +871,6 @@ func (db *DB) handleFlushTask(ft flushTask) error {
 	headTs := y.KeyWithTs(head, db.orc.nextTs())
 	ft.mt.Put(headTs, y.ValueStruct{Value: offset})
 
-	// Also store lfDiscardStats before flushing memtables
-	discardStatsKey := y.KeyWithTs(lfDiscardStatsKey, 1)
-	ft.mt.Put(discardStatsKey, y.ValueStruct{Value: db.vlog.encodedDiscardStats()})
-
 	fileID := db.lc.reserveFileID()
 	fd, err := y.CreateSyncedFile(table.NewFilename(fileID, db.opt.Dir), true)
 	if err != nil {
@@ -913,7 +900,7 @@ func (db *DB) handleFlushTask(ft flushTask) error {
 	}
 	// We own a ref on tbl.
 	err = db.lc.addLevel0Table(tbl) // This will incrRef (if we don't error, sure)
-	tbl.DecrRef()                   // Releases our ref.
+	_ = tbl.DecrRef()               // Releases our ref.
 	return err
 }
 
@@ -1112,7 +1099,7 @@ func (seq *Sequence) Release() error {
 	err := seq.db.Update(func(txn *Txn) error {
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], seq.next)
-		return txn.Set(seq.key, buf[:])
+		return txn.SetEntry(NewEntry(seq.key, buf[:]))
 	})
 	if err != nil {
 		return err
@@ -1142,7 +1129,7 @@ func (seq *Sequence) updateLease() error {
 		lease := seq.next + seq.bandwidth
 		var buf [8]byte
 		binary.BigEndian.PutUint64(buf[:], lease)
-		if err = txn.Set(seq.key, buf[:]); err != nil {
+		if err = txn.SetEntry(NewEntry(seq.key, buf[:])); err != nil {
 			return err
 		}
 		seq.leased = lease
@@ -1231,7 +1218,9 @@ func (db *DB) startCompactions() {
 	if db.closers.memtable != nil {
 		db.flushChan = make(chan flushTask, db.opt.NumMemtables)
 		db.closers.memtable = y.NewCloser(1)
-		go db.flushMemtable(db.closers.memtable)
+		go func() {
+			_ = db.flushMemtable(db.closers.memtable)
+		}()
 	}
 }
 

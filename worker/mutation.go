@@ -153,7 +153,8 @@ func updateSchema(attr string, s pb.SchemaUpdate) error {
 	defer txn.Discard()
 	data, err := s.Marshal()
 	x.Check(err)
-	if err := txn.SetWithMeta(x.SchemaKey(attr), data, posting.BitSchemaPosting); err != nil {
+	if err := txn.SetEntry(
+		badger.NewEntry(x.SchemaKey(attr), data).WithMeta(posting.BitSchemaPosting)); err != nil {
 		return err
 	}
 	return txn.CommitAt(1, nil)

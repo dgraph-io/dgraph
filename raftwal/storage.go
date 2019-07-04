@@ -341,7 +341,7 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s raftpb.Snapshot) e
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
-	if err := batch.Set(w.snapshotKey(), data, 0); err != nil {
+	if err := batch.Set(w.snapshotKey(), data); err != nil {
 		return err
 	}
 
@@ -350,7 +350,7 @@ func (w *DiskStorage) setSnapshot(batch *badger.WriteBatch, s raftpb.Snapshot) e
 	if err != nil {
 		return err
 	}
-	if err := batch.Set(w.entryKey(e.Index), data, 0); err != nil {
+	if err := batch.Set(w.entryKey(e.Index), data); err != nil {
 		return err
 	}
 
@@ -377,7 +377,7 @@ func (w *DiskStorage) setHardState(batch *badger.WriteBatch, st raftpb.HardState
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal hardstate")
 	}
-	return batch.Set(w.hardStateKey(), data, 0)
+	return batch.Set(w.hardStateKey(), data)
 }
 
 // reset resets the entries. Used for testing.
@@ -398,7 +398,7 @@ func (w *DiskStorage) reset(es []raftpb.Entry) error {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.entryKey(e.Index)
-		if err := batch.Set(k, data, 0); err != nil {
+		if err := batch.Set(k, data); err != nil {
 			return err
 		}
 	}
@@ -661,7 +661,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entr
 		if err != nil {
 			return x.Wrapf(err, "wal.Append: While marshal entry")
 		}
-		if err := batch.Set(k, data, 0); err != nil {
+		if err := batch.Set(k, data); err != nil {
 			return err
 		}
 	}

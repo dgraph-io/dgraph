@@ -100,13 +100,11 @@ func run() error {
 	// and we create a new p dir for each.
 	start := time.Now()
 	err := Load(opt.location, func(r io.Reader, object string) error {
-		bo := badger.DefaultOptions
+		bo := badger.DefaultOptions(filepath.Join(opt.pdir, pN(object)))
 		bo.SyncWrites = false
 		bo.TableLoadingMode = options.MemoryMap
 		bo.ValueThreshold = 1 << 10
 		bo.NumVersionsToKeep = math.MaxInt32
-		bo.Dir = filepath.Join(opt.pdir, pN(object))
-		bo.ValueDir = bo.Dir
 		db, err := badger.OpenManaged(bo)
 		if err != nil {
 			return err

@@ -244,11 +244,9 @@ func fileList(files string) []string {
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	x.Check(os.MkdirAll(opt.clientDir, 0700))
-	o := badger.DefaultOptions
+	o := badger.DefaultOptions(opt.clientDir)
 	o.SyncWrites = true // So that checkpoints are persisted immediately.
 	o.TableLoadingMode = bopt.MemoryMap
-	o.Dir = opt.clientDir
-	o.ValueDir = opt.clientDir
 
 	kv, err := badger.Open(o)
 	x.Checkf(err, "Error while creating badger KV posting store")
