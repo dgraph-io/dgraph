@@ -4,134 +4,102 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
 
-## [1.1.0] - Unreleased
+## 1.1.0 - [Unreleased]
 
 ### Changed
 
-- Tablet move and group removal. (#2880)
+**Breaking changes for datetime queries**
+
+- Use UTC Hour, Day, Month, Year for datetime comparison. **Backwards incompatible with v1.0.x** (#3251)
+
+**Breaking changes for users using the HTTP API**
+
+- Change `/commit` endpoint to accept a list of preds for conflict detection. (#3020)
+- Remove custom HTTP Headers, cleanup API. (#3365)
+  - The startTs path parameter is now a query parameter `startTs` for the `/query`, `/mutate`, and `/commit` endpoints.
+  - Dgraph custom HTTP Headers `X-Dgraph-CommitNow`, `X-Dgraph-MutationType`, and `X-Dgraph-Vars` are now ignored and no longer necessary.
+- Update HTTP API Content-Type headers. (#3550) (#3532)
+  - Queries over HTTP must have the Content-Type header `application/graphql+-`.
+  - Mutations over HTTP must have the Content-Type header set to `application/rdf` for RDF format or `application/json` for JSON format.
+- Update /health endpoint to return alpha version. (#3526)
+
+- reports line-column numbers for lexer/parser errors. (#2914)
 - Improve hash index. (#2887)
-
 - Use a stream connection for internal connection health checking. (#2956)
-
 - Use defer statements to release locks. (#2962)
-
 - Suppress logging before `flag.Parse` from glog. (#970)
-
 - VerifyUid should wait for membership information. (#2974)
-
 - Switching to perfect use case of sync.Map and remove the locks. (#2976)
 
 - Update govendor dependencies.
   - Add OpenCensus deps to vendor using govendor. (#2989)
+  - Govendor in latest dgo. (#3078)
+  - Vendor in the Jaeger and prometheus exporters from their own repos (#3322)
+  - Vendor in Shopify/sarama to use its Kafka clients. (#3523)
+  - Update dgo dependency in vendor. (#3412)
+  - Update vendored dependencies. (#3357)
+  - Bring in latest changes from badger and fix broken API calls. (#3502)
 
-- Optimize XidtoUID map used by live and bulk loader. With these changes, the live loader throughput jumps to 100K-120K NQuads/sec on my desktop. In particular, pre-assigning UIDs to the RDF/JSON file yields maximum throughput. I can load 140M friend graph RDFs in 25 mins. (#2998)
+- Error messages
+  - Output the line and column number in schema parsing error messages. (#2986)
+  - Improve error of empty block queries. (#3015)
+  - Update flag description and error messaging related to `--query_edge_limit` flag. (#2979)
 
-- Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. (#3004, #3045) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. (18277872f)
-
-- Remove xidmap storage on disk from bulk loader. Peaks to 4M edges/sec on my machine now, up from max 1M/s.
-
-- Add `--format` flag to Dgraph Live Loader and Dgraph Bulk Loader to specify input data format type. (#2991)
-
-Error messages:
-
-- Output the line and column number in schema parsing error messages. (#2986)
-- Improve error of empty block queries. (#3015)
-- Update flag description and error messaging related to `--query_edge_limit` flag. (#2979)
-
+- Tablet move and group removal. (#2880)
 - Delete tablets which don't belong after tablet move. (#3051)
-
 - Alphas inform Zero about tablets in its postings directory when Alpha starts. (3271f64e0)
-
-- Govendor in latest dgo. (#3078)
-
 - Move glog of missing value warning to verbosity level 3. (#3092)
-
 - Prevent alphas from asking zero to serve tablets during queries. (#3091)
-
 - Put data before extensions in JSON response. (#3194)
-
 - Always parse language tag. (#3243)
-
-- Populate the StartTs for the commit gRPC call so that clients can double check the startTs still matches (#3228)
-
+- Populate the StartTs for the commit gRPC call so that clients can double check the startTs still matches. (#3228)
 - Replace MD5 with SHA-256 in `dgraph cert ls`. (#3254)
-
 - Reduce required memory. (#3274)
-
-- Update live loader flag help text. (#3278)
-
 - Fix use of deprecated function `grpc.WithTimeout()`. (#3253)
-
-- Use UTC Hour, Day, Month, Year for datetime comparison. **Backwards incompatible with v1.0.x** (#3251)
-
-- Add timestamps during bulk/live load. (#3287)
 - Introduce multi-part posting lists. (#3105)
-  - Fix format of the keys to support startUid. (#3310)
-
-- Improve reporting of aborts and retries during live load. (#3313)
-
-- Vendor in the Jaeger and prometheus exporters from their own repos (#3322)
-
-- Use initial schema during bulk load. (#3333)
-
+- Fix format of the keys to support startUid for multi-part posting lists. (#3310)
 - Access groupi.gid atomically. (#3402)
-
-- Adding datadog trace collector. (#3428)
-
 - Use Stream Writer for full snapshot transfer. (#3442)
-
 - Add field to backup requests to force a full backup. (#3387)
 - Move Raft checkpoint key to w directory. (#3444)
-
-- Update vendored dependencies. (#3357)
-
-- Remove custom HTTP Headers, cleanup API. (#3365)
-  - Improve the content type error message by showing available content types (#3532)
-- Update HTTP API Content-Type to application/graphql+. (#3550)
-
 - Remove list.SetForDeletion method, remnant of the global LRU cache. (#3481)
-
-- Bring in latest changes from badger and fix broken API calls. (#3502)
-
-- Vendor in Shopify/sarama to use its Kafka clients. (#3523)
-
-- Update dgo dependency in vendor. (#3412)
-
-- Use StreamWriter in bulk loader. (#3542)
-
-- Update /health endpoint to return alpha version. (#3526)
-
+- Whitelist by hostname. (#2953)
+- Use CIDR format for whitelists instead of the previous range format.
+- Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. (#3060)
 
 #### Dgraph Debug Tool
 
 - When looking up a key, print if it's a multi-part list and its splits. (#3311)
-- Diagnose Raft WAL via debug tool (#3319)
-- Allow truncating raft logs via debug tool. (#3345)
-- Debug tool to modify Raft snapshot and hardstate (#3364)
+- Diagnose Raft WAL via debug tool. (#3319)
+- Allow truncating Raft logs via debug tool. (#3345)
+- Allow modifying Raft snapshot and hardstate in debug tool. (#3364)
+
+#### Dgraph Live Loader / Dgraph Bulk Loader
+
+- Add `--format` flag to Dgraph Live Loader and Dgraph Bulk Loader to specify input data format type. (#2991)
+- Update live loader flag help text. (#3278)
+- Improve reporting of aborts and retries during live load. (#3313)
+- Remove xidmap storage on disk from bulk loader. Peaks to 4M edges/sec on my machine now, up from max 1M/s.
+- Optimize XidtoUID map used by live and bulk loader. With these changes, the live loader throughput jumps to 100K-120K NQuads/sec on my desktop. In particular, pre-assigning UIDs to the RDF/JSON file yields maximum throughput. I can load 140M friend graph RDFs in 25 mins. (#2998)
+- Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. (#3004, #3045) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. (18277872f)
+- Use StreamWriter in bulk loader. (#3542)
+- Add timestamps during bulk/live load. (#3287)
+- Use initial schema during bulk load. (#3333)
 
 #### Dgraph Increment Tool
 
-- Add latency numbers to increment tool. (#3422)
-
-####  HTTP API
-- Change `/commit` endpoint to accept a list of preds for conflict detection. (#3020)
-
-#### Flags
-
-- Whitelist by hostname. (#2953)
-- User more readable CIDR format for whitelists.
-
+- Add server-side and client-side latency numbers to increment tool. (#3422)
 
 ### Added
 
-#### Query
+- Add bash and zsh shell completion. See `dgraph completion bash --help` or `dgraph completion zsh --help` for usage instructions. (#3084)
+- Add TLS support to `dgraph increment` command. (#3257)
+- Add support for ECDSA in dgraph cert. (#3269)
+- Add support for JSON export. (#3309)
+- Add the SQL-to-Dgraph migration tool `dgraph migrate`. (#3295)
+- Support exporting tracing data to oc_agent, then to datadog agent. (#3398)
 
-- Output non-list uid predicates as a map. (#2921)
-- Allow querying all lang values of a predicate. (#2910)
-- Support anyofterms query on facet if the input format is json. (#2885)
-- `regexp()` is valid in `@filter` even for predicates without the trigram index. (#2913)
-- Add `minweight` and `maxweight` arguments to k-shortest path algorithm. (#2915)
-- Allow variable assignment of `count(uid)`. (#2947)
+#### Query
 
 - Type system.
   - Add `type` function to query types. (#2933)
@@ -143,20 +111,18 @@ Error messages:
   - Use type when available to resolve expand predicates. (#3214)
   - Include types in results of export operation. (#3493)
   - Support types in the bulk loader. (#3506)
-  
+
+- Allow querying all lang values of a predicate. (#2910)
+- `regexp()` is valid in `@filter` even for predicates without the trigram index. (#2913)
+- Add `minweight` and `maxweight` arguments to k-shortest path algorithm. (#2915)
+- Allow variable assignment of `count(uid)`. (#2947)
 - Reserved predicates
   - During startup, don't upsert initial schema if it already exists. (#3374)
   - Use all reserved predicates in IsReservedPredicateChanged. (#3531)
-  
-- Fuzzy match support (#2916)
-
+- Fuzzy match support. (#2916)
 - Support for GraphQL variables in arrays. (#2981)
-
 - Show total weight of path in shortest path algorithm. (#2954)
-
-- Rename dgraph `--dgraph` option to `--alpha`. (#3273)
-
-- Allow the normalize limit to be set via a flag. (#3467)
+- Rename dgraph `--dgraph` option to `--alpha`. (#3273)d
 
 #### Mutation
 
@@ -169,13 +135,13 @@ Error messages:
 
 #### Schema
 
-- Add ability to set schema to a single UID schema. (#2895)
-  - REVIEWTODO: Fix bulk loader bug regarding unknown UID predicates. (#3173)
-- Prevent dropping or altering of reserved predicates. (#2967)
-- Reserved predicates should act as case-insensitive. (#2997)
+- **Breaking change** Add ability to set schema to a single UID schema. Fixes #2511. (#2895) (#3173) (#2921)
+  - If you wish to create one-to-one edges, use the schema type `uid`. The `uid` schema type in v1.0.x must be changed to `[uid]` to denote a one-to-many uid edge. 
+- Prevent dropping or altering reserved predicates. (#2967) (#2997)
+  - Reserved predicate names start with `dgraph.` .
 - Support comments in schema. (#3133)
 
-#### Enterprise Access Control Lists
+#### Enterprise feature: Access Control Lists
 
 - Enforcing ACLs for query, mutation and alter requests. (#2862)
 - Don't create ACL predicates when the ACL feature is not turned on. (#2924)
@@ -190,11 +156,11 @@ Error messages:
 - When HttpLogin response context error, unmarshal and return the response context. (#3275)
 - Refactor: avoid double parsing of mutation string in ACL. (#3494)
 
-#### Enterprise Backups
+#### Enterprise feature: Backups
 
 - Fixed bug with backup fan-out code. (#2973)
 - Incremental backups / partial restore. (#2963)
-- REVIEWTODO: Turn obsolete error into warning. (#3172)
+- Turn obsolete error into warning. (#3172)
 - Add `dgraph lsbackup` command to list backups. (#3219)
 - Add option to override credentials and use public buckets. (#3227)
 - Add field to backup requests to force a full backup. (#3387)
@@ -208,10 +174,8 @@ Error messages:
 
 #### Dgraph Live Loader
 
-- Support live loading JSON files or stdin streams. (#2961)
+- Support live loading JSON files or stdin streams. (#2961) (#3106)
 - Support live loading N-Quads from stdin streams. (#3266)
-
-  - Later changes: Fix error to print string instead of character in live loader. (#3106)
 
 #### Dgraph Bulk Loader
 
@@ -221,40 +185,30 @@ Error messages:
 
 - Measure latency of Alpha's Raft loop. (63f545568)
 
-- Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. (#3060)
-
-#### Misc
-
-- Add bash and zsh shell completion. See `dgraph completion bash --help` or `dgraph completion zsh --help` for installation instructions. (#3084)
-- Add TLS support to increment command. (#3257)
-- Add support for ECDSA in dgraph cert. (#3269)
-- Add support for JSON export. (#3309)
-
-- Adding the migration tool. (#3295)
-
-- Support exporting tracing data to oc_agent, then to datadog agent. (#3398)
-
 ### Removed
 
-- Remove `_predicate_` from Dgraph. (#3262)
-
-- Remove DebugMode option. (#3441)
+- **Breaking change** Remove `_predicate_` predicate and `expand()` in queries. (#3262)
+- Remove `--debug_mode` option. (#3441)
 
 ### Fixed
 
-- Fixes error found by gofuzz and reports line-column numbers for lexer/parser errors. (#2914)
+- Fix `anyofterms()` query for facets from mutations in JSON format. Fixes #2867. (#2885)
+- Fixes error found by gofuzz. (#2914)
 - Fix int/float conversion to bool. (#2893)
 - Handling of empty string to datetime conversion. (#2891)
 - Export schema with special chars. Fixes #2925. (#2929)
 
-- Fix a `/moveTablet` test to take into account that predicates could be in long URI form. Tablet names must be URI-escaped. (#2957)
-
-<!-- TODO: This sanity check was fixed? -->
+<!-- TODO: These sanity checks are fixed? -->
 - Default value should not be nil. (#2995)
 - Sanity check for empty variables. (#3021)
 - Panic due to nil maps. (#3042)
 - ValidateAddress should return true if IPv6 is valid. (#3027)
 - Throw error when @recurse queries contain nested fields. (#3182)
+- Fix panic in fillVars. (#3505)
+
+- Fix race condition in numShutDownSig in Alpha. (#3402)
+- Fix race condition in oracle.go. (#3417)
+- Fix tautological condition in zero.go (#3516)
 
 - Reject requests with predicates larger than the max size allowed (longer than 65,535 characters). (#3052)
 
@@ -272,24 +226,9 @@ Error messages:
 - Fix bug with pagination using `after`. (#3149)
 - Fix tablet error handling. (#3323)
 
-Code cleanup:
-- Remove unused function deleteEntries. (#3126)
-- Rename updateSchemaType to createSchema and remove unneeded parameter. (#3250)
-<!-- REVIEWTODO: Double check that this is just a code cleanup -->
-- Merge cases in handleUidPostings since their bodies are the same. (#3312)
-
-Reserved predicates:
+- Reserved predicates:
 - Ensure reserved predicates cannot be moved. (#3137)
 - Allow schema updates to reserved preds if the update is the same. (#3143
-
-Internal tooling:
-- Update protos, proto regeneration Makefile, and release script. (#3189)
-- Tool to benchmark posting list performance. (#3294)
-
-- Fix race condition in numShutDownSig in Alpha. (#3402)
-- Fix race condition in oracle.go. (#3417)
-- Fix tautological condition in zero.go (#3516)
-- Fix panic in fillVars. (#3505)
 
 ## [1.0.15] - 2019-05-30
 [1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
