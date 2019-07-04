@@ -107,7 +107,7 @@ func read(t *testing.T, dg *dgo.Dgraph, expected int) {
 					t.Logf("Error while reading: %v\n", err)
 				} else {
 					require.Equal(t, expected, cnt.Val)
-					require.Equal(t, ts, cnt.startTs)
+					require.True(t, cnt.startTs >= ts, "the timestamp should never decrease")
 				}
 			}
 		}()
