@@ -92,14 +92,14 @@ func New(s schema.Schema, dc *dgo.Dgraph) *RequestResolver {
 	}
 }
 
-// WithErrors records all errors errs in rh to be reported when a GraphQL
+// WithErrors records all errors errs in r to be reported when a GraphQL
 // response is generated
 func (r *RequestResolver) WithErrors(errs ...*gqlerror.Error) {
 	r.resp.Errors = append(r.resp.Errors, errs...)
 }
 
-// Resolve processes rh.GqlReq and returns a GraphQL response.
-// rh.GqlReq should be set with a request before Resolve is called
+// Resolve processes h.GqlReq and returns a GraphQL response.
+// h.GqlReq should be set with a request before Resolve is called
 // and a schema and backend should have been added.
 // Resolve records any errors in the response's error field.
 func (r *RequestResolver) Resolve() *schema.Response {

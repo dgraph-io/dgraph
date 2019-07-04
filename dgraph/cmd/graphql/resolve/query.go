@@ -68,6 +68,7 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 	if err != nil {
 		r.WithErrors(gqlerror.Errorf("Failed to query dgraph with error : %s", err))
 		glog.Infof("Dgraph query failed : %s", err) // maybe log more info if it could be a bug?
+		return
 	}
 
 	// TODO:
@@ -84,6 +85,14 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 		r.resp.Data.WriteRune(',')
 	}
 
+	// I think a Dgraph query always returns at least "{}" ??
+	// TODO: In any case, we need to inspect the response and the expected
+	// result type and maybe this should also cause GraphQL error propagation:
+	// e.g. if result is a `!` type
+	if len(res) < 2 {
+		return
+	}
+
 	// need to chop leading '{' and trailing '}' from response
 	// is this the safe way?
 	r.resp.Data.Write(res[1 : len(res)-1])
@@ -95,8 +104,16 @@ func newQueryBuilder() *queryBuilder {
 	}
 }
 
-func (qb *queryBuilder) withAttr(attr string) {
+func (qb *queryBuilder) hasErrors() bool {
 	if qb == nil || qb.graphQuery == nil || qb.err != nil {
+		return true
+	}
+
+	return false
+}
+
+func (qb *queryBuilder) withAttr(attr string) {
+	if qb.hasErrors() {
 		return
 	}
 
@@ -104,7 +121,7 @@ func (qb *queryBuilder) withAttr(attr string) {
 }
 
 func (qb *queryBuilder) withAlias(alias string) {
-	if qb == nil || qb.graphQuery == nil || qb.err != nil {
+	if qb.hasErrors() {
 		return
 	}
 
@@ -112,31 +129,34 @@ func (qb *queryBuilder) withAlias(alias string) {
 }
 
 func (qb *queryBuilder) withIDArgRoot(q schema.Query) {
-	if qb == nil || qb.graphQuery == nil || qb.err != nil {
+	if qb.hasErrors() {
 		return
 	}
 
 	idArg, err := q.ArgValue(idArgName)
 	if err != nil || idArg == nil {
 		qb.err = errors.New("ID arg not found (should be impossible in a valid schema)")
+		return
 	}
 
 	id, ok := idArg.(string)
 	if !ok {
 		qb.err = errors.New("ID arg not a string (should be impossible in a valid schema)")
+		return
 	}
 
 	uid, err := strconv.ParseUint(id, 0, 64)
 	if err != nil {
 		// FIXME: actually this should surface as a GraphQL error
 		qb.err = errors.New("ID argument wasn't a valid ID")
+		return
 	}
 
 	qb.withUIDRoot(uid)
 }
 
 func (qb *queryBuilder) withUIDRoot(uid uint64) {
-	if qb == nil || qb.graphQuery == nil || qb.err != nil {
+	if qb.hasErrors() {
 		return
 	}
 
@@ -147,7 +167,7 @@ func (qb *queryBuilder) withUIDRoot(uid uint64) {
 }
 
 func (qb *queryBuilder) withTypeFilter(f schema.Field) {
-	if qb == nil || qb.graphQuery == nil || qb.err != nil {
+	if qb.hasErrors() {
 		return
 	}
 
@@ -160,7 +180,7 @@ func (qb *queryBuilder) withTypeFilter(f schema.Field) {
 }
 
 func (qb *queryBuilder) withSelectionSetFrom(fld schema.Field) {
-	if qb == nil || qb.graphQuery == nil || qb.err != nil {
+	if qb.hasErrors() {
 		return
 	}
 

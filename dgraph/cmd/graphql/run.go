@@ -143,6 +143,10 @@ func run() error {
 		return errors.Wrap(err, "while reading GraphQL schema")
 	}
 
+	if len(schemas.Schemas) < 1 {
+		return fmt.Errorf("No GraphQL schema was found")
+	}
+
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
@@ -174,13 +178,7 @@ func initDgraph() error {
 
 	fmt.Printf("Processing schema file %q\n", opt.schemaFile)
 
-	f, err := os.Open(opt.schemaFile)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	b, err := ioutil.ReadAll(f)
+	b, err := ioutil.ReadFile(opt.schemaFile)
 	if err != nil {
 		return err
 	}
@@ -210,8 +208,8 @@ func initDgraph() error {
 				continue
 			}
 
-			var ty, preds strings.Builder
-			fmt.Fprintf(&ty, "type %s {\n", def.Name)
+			var typeDef, preds strings.Builder
+			fmt.Fprintf(&typeDef, "type %s {\n", def.Name)
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
@@ -220,22 +218,22 @@ func initDgraph() error {
 				switch schema.Types[f.Type.Name()].Kind {
 				case ast.Object:
 					// TODO: still need to write [] ! and reverse in here
-					fmt.Fprintf(&ty, "  %s.%s: uid\n", def.Name, f.Name)
+					fmt.Fprintf(&typeDef, "  %s.%s: uid\n", def.Name, f.Name)
 					fmt.Fprintf(&preds, "%s.%s: uid .\n", def.Name, f.Name)
 				case ast.Scalar:
 					// TODO: indexes needed here
-					fmt.Fprintf(&ty, "  %s.%s: %s\n",
+					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
 						def.Name, f.Name, strings.ToLower(f.Type.Name()))
 					fmt.Fprintf(&preds, "%s.%s: %s .\n",
 						def.Name, f.Name, strings.ToLower(f.Type.Name()))
 				case ast.Enum:
-					fmt.Fprintf(&ty, "  %s.%s: string\n", def.Name, f.Name)
+					fmt.Fprintf(&typeDef, "  %s.%s: string\n", def.Name, f.Name)
 					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)
 				}
 			}
-			fmt.Fprintf(&ty, "}\n")
+			fmt.Fprintf(&typeDef, "}\n")
 
-			fmt.Fprintf(&schemaB, "%s%s\n", ty.String(), preds.String())
+			fmt.Fprintf(&schemaB, "%s%s\n", typeDef.String(), preds.String())
 
 		case ast.Scalar:
 			// nothing to do here?  There should only be known scalars, and that
