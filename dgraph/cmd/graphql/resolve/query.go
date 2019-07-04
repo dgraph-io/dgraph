@@ -105,11 +105,7 @@ func newQueryBuilder() *queryBuilder {
 }
 
 func (qb *queryBuilder) hasErrors() bool {
-	if qb == nil || qb.graphQuery == nil || qb.err != nil {
-		return true
-	}
-
-	return false
+	return qb == nil || qb.graphQuery == nil || qb.err != nil
 }
 
 func (qb *queryBuilder) withAttr(attr string) {
