@@ -147,8 +147,8 @@ func (r *reducer) encodeAndWrite(
 		pk := x.Parse(kv.Key)
 		x.AssertTrue(len(pk.Attr) > 0)
 
-		// We don't need to consider the data prefix, count prefix, etc. because each predicate has
-		// a list of sorted keys the way they are produced.
+		// We don't need to consider the data prefix, count prefix, etc. because each predicate
+		// contains sorted keys, the way they are produced.
 		streamId := preds[pk.Attr]
 		if streamId == 0 {
 			streamId = atomic.AddUint32(&r.streamId, 1)
