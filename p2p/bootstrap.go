@@ -19,21 +19,22 @@ package p2p
 import (
 	"errors"
 	"fmt"
+	core "github.com/libp2p/go-libp2p-core"
+	pr "github.com/libp2p/go-libp2p-core/peer"
+	ps "github.com/libp2p/go-libp2p-core/peerstore"
+	ma "github.com/multiformats/go-multiaddr"
 	"log"
 	"sync"
-
-	ps "github.com/libp2p/go-libp2p-peerstore"
-	ma "github.com/multiformats/go-multiaddr"
 )
 
-func stringToPeerInfo(peer string) (*ps.PeerInfo, error) {
+func stringToPeerInfo(peer string) (*core.PeerAddrInfo, error) {
 	maddr := ma.StringCast(peer)
-	p, err := ps.InfoFromP2pAddr(maddr)
+	p, err := pr.AddrInfoFromP2pAddr(maddr)
 	return p, err
 }
 
-func stringsToPeerInfos(peers []string) ([]*ps.PeerInfo, error) {
-	pinfos := make([]*ps.PeerInfo, len(peers))
+func stringsToPeerInfos(peers []string) ([]*core.PeerAddrInfo, error) {
+	pinfos := make([]*core.PeerAddrInfo, len(peers))
 	for i, peer := range peers {
 		p, err := stringToPeerInfo(peer)
 		if err != nil {
@@ -63,7 +64,7 @@ func (s *Service) bootstrapConnect() error {
 		// fail/abort due to an expiring context.
 
 		wg.Add(1)
-		go func(p *ps.PeerInfo) {
+		go func(p *core.PeerAddrInfo) {
 			defer wg.Done()
 			defer log.Println(s.ctx, "bootstrapDial", s.host.ID(), p.ID)
 			log.Printf("%s bootstrapping to %s", s.host.ID(), p.ID)

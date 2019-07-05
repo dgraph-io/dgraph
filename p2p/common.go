@@ -6,11 +6,12 @@ import (
 
 	log "github.com/inconshreveable/log15"
 
-	datastore "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	config "github.com/ipfs/go-ipfs-config"
 	ipfs "github.com/ipfs/go-ipfs/core"
-	repo "github.com/ipfs/go-ipfs/repo"
+	"github.com/ipfs/go-ipfs/core/node/libp2p"
+	"github.com/ipfs/go-ipfs/repo"
 )
 
 type Simulator struct {
@@ -41,7 +42,7 @@ func StartIpfsNode() (*ipfs.IpfsNode, error) {
 
 	cfg := &ipfs.BuildCfg{
 		Online:    true,
-		Host:      ipfs.DefaultHostOption,
+		Host:      libp2p.DefaultHostOption,
 		Repo:      r,
 		Permanent: true,
 	}

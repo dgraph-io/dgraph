@@ -21,7 +21,7 @@ import (
 	"log"
 	"testing"
 
-	crypto "github.com/libp2p/go-libp2p-crypto"
+	crypto "github.com/libp2p/go-libp2p-core/crypto"
 )
 
 func TestBuildOpts(t *testing.T) {

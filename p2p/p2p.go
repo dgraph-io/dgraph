@@ -29,12 +29,11 @@ import (
 	ds "github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
 	libp2p "github.com/libp2p/go-libp2p"
-	crypto "github.com/libp2p/go-libp2p-crypto"
-	host "github.com/libp2p/go-libp2p-host"
+	core "github.com/libp2p/go-libp2p-core"
+	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	host "github.com/libp2p/go-libp2p-core/host"
+	net "github.com/libp2p/go-libp2p-core/network"
 	kaddht "github.com/libp2p/go-libp2p-kad-dht"
-	net "github.com/libp2p/go-libp2p-net"
-	peer "github.com/libp2p/go-libp2p-peer"
-	ps "github.com/libp2p/go-libp2p-peerstore"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -44,10 +43,10 @@ const protocolPrefix = "/polkadot/0.0.0"
 // Service describes a p2p service, including host and dht
 type Service struct {
 	ctx            context.Context
-	host           host.Host
+	host           core.Host
 	hostAddr       ma.Multiaddr
 	dht            *kaddht.IpfsDHT
-	bootstrapNodes []*ps.PeerInfo
+	bootstrapNodes []*core.PeerAddrInfo
 }
 
 // Config is used to configure a p2p service
@@ -136,7 +135,7 @@ func (s *Service) Broadcast(msg []byte) (err error) {
 }
 
 // Send sends a message to a specific peer
-func (s *Service) Send(peer ps.PeerInfo, msg []byte) error {
+func (s *Service) Send(peer core.PeerAddrInfo, msg []byte) error {
 	err := s.host.Connect(s.ctx, peer)
 	if err != nil {
 		return err
@@ -156,7 +155,7 @@ func (s *Service) Send(peer ps.PeerInfo, msg []byte) error {
 }
 
 // Ping pings a peer
-func (s *Service) Ping(peer peer.ID) error {
+func (s *Service) Ping(peer core.PeerID) error {
 	ps, err := s.dht.FindPeer(s.ctx, peer)
 	if err != nil {
 		return fmt.Errorf("could not find peer: %s", err)
