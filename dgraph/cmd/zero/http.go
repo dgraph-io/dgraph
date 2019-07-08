@@ -123,7 +123,10 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	w.Write([]byte(fmt.Sprintf("Removed node with group: %v, idx: %v", groupId, nodeId)))
+	_, err := w.Write([]byte(fmt.Sprintf("Removed node with group: %v, idx: %v", groupId, nodeId)))
+	if err != nil {
+		glog.Warningf("Error while writing response: %+v", err)
+	}
 }
 
 // moveTablet can be used to move a tablet to a specific group. It takes in tablet and group as
@@ -198,8 +201,11 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	w.Write([]byte(fmt.Sprintf("Predicate: [%s] moved from group: [%d] to [%d]",
+	_, err := w.Write([]byte(fmt.Sprintf("Predicate: [%s] moved from group: [%d] to [%d]",
 		tablet, srcGroup, dstGroup)))
+	if err != nil {
+		glog.Warningf("Error while writing response: %+v", err)
+	}
 }
 
 func (st *state) getState(w http.ResponseWriter, r *http.Request) {
