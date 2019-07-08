@@ -53,9 +53,9 @@ type StateResponse struct {
 	} `json:"removed"`
 }
 
-// GetState queries the /state endpoint in zero and returns the response.
-func GetState() (*StateResponse, error) {
-	resp, err := http.Get("http://" + SockAddrZeroHttp + "/state")
+// GetStateFrom queries the cluster state at /state from the given zero address
+func GetStateFrom(zeroAddr string) (*StateResponse, error) {
+	resp, err := http.Get("http://" + zeroAddr + "/state")
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +75,11 @@ func GetState() (*StateResponse, error) {
 		return nil, err
 	}
 	return &st, nil
+}
+
+// GetStateFrom queries the cluster state at /state from the default zero address SockAddrZeroHttp
+func GetState() (*StateResponse, error) {
+	return GetStateFrom(SockAddrZeroHttp)
 }
 
 // GetClientToGroup returns a dgraph client connected to an alpha in the given group.
