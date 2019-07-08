@@ -158,9 +158,8 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-IgnoreIndexConflict")
+	w.Header().Set("Access-Control-Allow-Headers", "X-Dgraph-AccessToken, "+
+		"Content-Type, Content-Length, Accept-Encoding, Cache-Control")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
@@ -547,7 +546,15 @@ func SpanTimer(span *trace.Span, name string) func() {
 	}
 }
 
+// CloseFunc needs to be called to close all the client connections.
 type CloseFunc func()
+
+// CredOpt stores the options for logging in, including the password and user.
+type CredOpt struct {
+	Conf        *viper.Viper
+	UserID      string
+	PasswordOpt string
+}
 
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
 // --alpha specifies a comma separated list of endpoints to connect to
@@ -614,12 +621,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	return dg, closeFunc
 }
 
-type CredOpt struct {
-	Conf        *viper.Viper
-	UserID      string
-	PasswordOpt string
-}
-
+// AskUserPassword prompts the user to enter the password for the given user ID.
 func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(times == 1 || times == 2)
 	AssertTrue(pwdType == "Current" || pwdType == "New")
@@ -648,6 +650,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	return password, nil
 }
 
+// GetPassAndLogin uses the given credentials and client to perform the login operation.
 func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	password := opt.Conf.GetString(opt.PasswordOpt)
 	if len(password) == 0 {

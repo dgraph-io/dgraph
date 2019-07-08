@@ -87,7 +87,9 @@ func (t *Table) DecrRef() error {
 
 		// It's necessary to delete windows files
 		if t.loadingMode == options.MemoryMap {
-			y.Munmap(t.mmap)
+			if err := y.Munmap(t.mmap); err != nil {
+				return err
+			}
 		}
 		if err := t.fd.Truncate(0); err != nil {
 			// This is very important to let the FS know that the file is deleted.
@@ -191,7 +193,9 @@ func OpenTable(fd *os.File, mode options.FileLoadingMode, cksum []byte) (*Table,
 // Close closes the open table.  (Releases resources back to the OS.)
 func (t *Table) Close() error {
 	if t.loadingMode == options.MemoryMap {
-		y.Munmap(t.mmap)
+		if err := y.Munmap(t.mmap); err != nil {
+			return err
+		}
 	}
 
 	return t.fd.Close()

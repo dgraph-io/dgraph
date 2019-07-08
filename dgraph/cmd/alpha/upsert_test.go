@@ -73,7 +73,7 @@ upsert {
     email
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Wrong")
 
@@ -98,7 +98,7 @@ upsert {
 	require.True(t, contains(preds, "name"))
 
 	// query should return correct name
-	res, _, err = queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
@@ -135,7 +135,7 @@ func TestUpsertExample0JSON(t *testing.T) {
     email
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Wrong")
 
@@ -156,7 +156,7 @@ func TestUpsertExample0JSON(t *testing.T) {
 	require.True(t, contains(preds, "name"))
 
 	// query should return correct name
-	res, _, err = queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "Ashish")
 }
@@ -190,7 +190,7 @@ upsert {
   }
 }`
 	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
-	require.Contains(t, err.Error(), "upsert query op has no variables")
+	require.Contains(t, err.Error(), "upsert query block has no variables")
 }
 
 func TestUpsertWithFragment(t *testing.T) {
@@ -369,7 +369,7 @@ upsert {
     oldest
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "56")
@@ -399,7 +399,7 @@ upsert {
     age
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", 0)
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user1")
 }
@@ -454,7 +454,7 @@ upsert {
     }
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user2")
 
@@ -487,7 +487,7 @@ upsert {
     }
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", 0)
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user2")
 }
@@ -535,7 +535,7 @@ friend: uid @reverse .`))
     oldest
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user3")
 	require.Contains(t, res, "56")
@@ -562,7 +562,7 @@ friend: uid @reverse .`))
     age
   }
 }`
-	res, _, err = queryWithTs(q2, "application/graphql+-", 0)
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user1")
 }
@@ -610,7 +610,7 @@ friend: uid @reverse .`))
     }
   }
 }`
-	res, _, err := queryWithTs(q1, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user2")
 
@@ -636,7 +636,7 @@ friend: uid @reverse .`))
     }
   }
 }`
-	res, _, err = queryWithTs(q3, "application/graphql+-", 0)
+	res, _, err = queryWithTs(q3, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.NotContains(t, res, "user2")
 }
@@ -670,7 +670,7 @@ upsert {
     name
   }
 }`
-	res, _, err := queryWithTs(q, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Contains(t, res, "user1")
 	require.Contains(t, res, "user2")
@@ -746,7 +746,7 @@ upsert {
     }
   }
 }`
-	res, _, err := queryWithTs(q, "application/graphql+-", 0)
+	res, _, err := queryWithTs(q, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	expected := `
 {

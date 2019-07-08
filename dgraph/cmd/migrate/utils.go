@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func getPool(user string, db string, password string) (*sql.DB,
@@ -66,11 +65,11 @@ type criteriaFunc func(info *sqlTable, column string) bool
 
 // getColumnIndices first sort the columns in the table alphabetically, and then
 // returns the indices of the columns satisfying the criteria function
-func getColumnIndices(info *sqlTable, criteria criteriaFunc) []*ColumnIdx {
-	indices := make([]*ColumnIdx, 0)
+func getColumnIndices(info *sqlTable, criteria criteriaFunc) []*columnIdx {
+	indices := make([]*columnIdx, 0)
 	for i, column := range info.columnNames {
 		if criteria(info, column) {
-			indices = append(indices, &ColumnIdx{
+			indices = append(indices, &columnIdx{
 				name:  column,
 				index: i,
 			})
@@ -79,7 +78,7 @@ func getColumnIndices(info *sqlTable, criteria criteriaFunc) []*ColumnIdx {
 	return indices
 }
 
-type ColumnIdx struct {
+type columnIdx struct {
 	name  string // the column name
 	index int    // the column index
 }
@@ -110,13 +109,13 @@ func getColumnValues(columns []string, dataTypes []dataType,
 	valuePtrs := make([]interface{}, 0, len(columns))
 	for i := 0; i < len(columns); i++ {
 		switch dataTypes[i] {
-		case STRING:
+		case stringType:
 			valuePtrs = append(valuePtrs, new([]byte)) // the value can be nil
-		case INT:
+		case intType:
 			valuePtrs = append(valuePtrs, new(sql.NullInt64))
-		case FLOAT:
+		case floatType:
 			valuePtrs = append(valuePtrs, new(sql.NullFloat64))
-		case DATETIME:
+		case datetimeType:
 			valuePtrs = append(valuePtrs, new(mysql.NullTime))
 		default:
 			panic(fmt.Sprintf("detected unsupported type %s on column %s",

@@ -278,6 +278,11 @@ message UidBlock {
 	// because when the PB is brought to memory, Go would always use 8-bytes per integer. Instead,
 	// storing it as a byte slice is a lot cheaper in memory.
 	bytes deltas = 2;
+	// num_uids is the number of UIDs in the block. We are including this because we want to 
+	// swtich encoding to groupvarint encoding. Current avaialble open source version implements
+	// encoding and decoding for uint32. We want to wrap it around our logic to use it here.
+	// Default Blocksize is 256 so uint32 would be sufficient.
+	uint32 num_uids = 3;
 }
 
 message UidPack {
@@ -441,7 +446,7 @@ service Worker {
 	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
-	rpc Backup (BackupRequest)              returns (BackupResponse) {}
+	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
@@ -486,10 +491,6 @@ message BackupRequest {
   // True if no credentials should be used to access the S3 or minio bucket.
   // For example, when using a bucket with a public policy.
   bool anonymous = 9;
-}
-
-// Dummy empty response
-message BackupResponse {
 }
 
 message ExportRequest {

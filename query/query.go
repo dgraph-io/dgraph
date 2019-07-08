@@ -927,13 +927,20 @@ const (
 
 func isDebug(ctx context.Context) bool {
 	var debug bool
+
 	// gRPC client passes information about debug as metadata.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// md is a map[string][]string
-		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+		if len(md["debug"]) > 0 {
+			// We ignore the error here, because in error case,
+			// debug would be false which is what we want.
+			debug, _ = strconv.ParseBool(md["debug"][0])
+		}
 	}
+
 	// HTTP passes information about debug as query parameter which is attached to context.
-	return debug || ctx.Value(DebugKey) == "true"
+	d, _ := ctx.Value(DebugKey).(bool)
+	return debug || d
 }
 
 func (sg *SubGraph) populate(uids []uint64) error {

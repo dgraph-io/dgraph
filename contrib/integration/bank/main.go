@@ -84,7 +84,12 @@ func (s *state) createAccounts(dg *dgo.Dgraph) {
 	x.Check(err)
 
 	txn := dg.NewTxn()
-	defer func() { _ = txn.Discard(context.Background()) }()
+	defer func() {
+		if err := txn.Discard(context.Background()); err != nil {
+			log.Fatalf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	var mu api.Mutation
 	mu.SetJson = data
 	if *verbose {
@@ -106,7 +111,12 @@ func (s *state) runTotal(dg *dgo.Dgraph) error {
 		}
 	`
 	txn := dg.NewReadOnlyTxn()
-	defer func() { _ = txn.Discard(context.Background()) }()
+	defer func() {
+		if err := txn.Discard(context.Background()); err != nil {
+			log.Fatalf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	resp, err := txn.Query(context.Background(), query)
 	if err != nil {
 		return err
@@ -170,7 +180,11 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 
 	ctx := context.Background()
 	txn := dg.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(context.Background()); err != nil {
+			log.Fatalf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
 
 	var sk, sd int
 	for {

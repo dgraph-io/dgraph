@@ -192,7 +192,7 @@ func Open(opt Options) (db *DB, err error) {
 	opt.maxBatchSize = (15 * opt.MaxTableSize) / 100
 	opt.maxBatchCount = opt.maxBatchSize / int64(skl.MaxNodeSize)
 
-	if opt.ValueThreshold > math.MaxUint16-16 {
+	if opt.ValueThreshold > ValueThresholdLimit {
 		return nil, ErrValueThreshold
 	}
 
@@ -467,22 +467,6 @@ const (
 // more control to user to sync data whenever required.
 func (db *DB) Sync() error {
 	return db.vlog.sync(math.MaxUint32)
-}
-
-// When you create or delete a file, you have to ensure the directory entry for the file is synced
-// in order to guarantee the file is visible (if the system crashes).  (See the man page for fsync,
-// or see https://github.com/coreos/etcd/issues/6368 for an example.)
-func syncDir(dir string) error {
-	f, err := openDir(dir)
-	if err != nil {
-		return errors.Wrapf(err, "While opening directory: %s.", dir)
-	}
-	err = y.FileSync(f)
-	closeErr := f.Close()
-	if err != nil {
-		return errors.Wrapf(err, "While syncing directory: %s.", dir)
-	}
-	return errors.Wrapf(closeErr, "While closing directory: %s.", dir)
 }
 
 // getMemtables returns the current memtables and get references.

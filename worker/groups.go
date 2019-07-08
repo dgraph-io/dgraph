@@ -241,6 +241,14 @@ func MaxLeaseId() uint64 {
 	return g.state.MaxLeaseId
 }
 
+// GetMembershipState returns the current membership state.
+func GetMembershipState() *pb.MembershipState {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return proto.Clone(g.state).(*pb.MembershipState)
+}
+
 // UpdateMembershipState contacts zero for an update on membership state.
 func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
@@ -827,7 +835,11 @@ func (g *groupi) processOracleDeltaStream() {
 		go func() {
 			// This would exit when either a Recv() returns error. Or, cancel() is called by
 			// something outside of this goroutine.
-			defer stream.CloseSend()
+			defer func() {
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
+			}()
 			defer close(deltaCh)
 
 			for {

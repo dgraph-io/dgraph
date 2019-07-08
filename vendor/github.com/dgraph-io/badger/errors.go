@@ -17,7 +17,14 @@
 package badger
 
 import (
+	"math"
+
 	"github.com/pkg/errors"
+)
+
+const (
+	// ValueThresholdLimit is the maximum permissible value of opt.ValueThreshold.
+	ValueThresholdLimit = math.MaxUint16 - 16 + 1
 )
 
 var (
@@ -27,7 +34,8 @@ var (
 
 	// ErrValueThreshold is returned when ValueThreshold is set to a value close to or greater than
 	// uint16.
-	ErrValueThreshold = errors.New("Invalid ValueThreshold, must be lower than uint16")
+	ErrValueThreshold = errors.Errorf(
+		"Invalid ValueThreshold, must be less than %d", ValueThresholdLimit)
 
 	// ErrKeyNotFound is returned when key isn't found on a txn.Get.
 	ErrKeyNotFound = errors.New("Key not found")
