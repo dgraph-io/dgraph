@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"math"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -59,9 +60,6 @@ func TestUidPack(t *testing.T) {
 
 		expected := getUids(size)
 		pack := Encode(expected, 256)
-		for _, block := range pack.Blocks {
-			require.True(t, len(block.Deltas) <= 255)
-		}
 		require.Equal(t, len(expected), ExactLen(pack))
 		actual := Decode(pack, 0)
 		require.Equal(t, expected, actual)
@@ -107,6 +105,12 @@ func TestSeek(t *testing.T) {
 		} else {
 			require.Equal(t, tc.out, uids[0])
 		}
+	}
+
+	dec.blockIdx = 0
+	for i := 100; i < 10000; i += 100 {
+		uids := dec.LinearSeek(uint64(i))
+		require.Contains(t, uids, uint64(i))
 	}
 }
 
@@ -247,5 +251,36 @@ func benchmarkUidPackDecode(b *testing.B, blockSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = Decode(pack, 0)
+	}
+}
+
+func TestEncoding(t *testing.T) {
+	bigInts := make([]uint64, 5)
+	bigInts[0] = 0xf000000000000000
+	bigInts[1] = 0xf00f000000000000
+	bigInts[2] = 0x00f00f0000000000
+	bigInts[3] = 0x000f0f0000000000
+	bigInts[4] = 0x0f0f0f0f00000000
+
+	rand.Seed(time.Now().UnixNano())
+	var lengths = []int{0, 1, 2, 3, 5, 13, 18, 100, 99, 98}
+
+	for tc := 0; tc < len(lengths); tc++ {
+		ints := make([]uint64, lengths[tc])
+
+		for i := 0; i < 50 && i < lengths[tc]; i++ {
+			ints[i] = uint64(rand.Uint32())
+		}
+
+		for i := 50; i < lengths[tc]; i++ {
+			ints[i] = uint64(rand.Uint32()) + bigInts[rand.Intn(5)]
+		}
+
+		sort.Slice(ints, func(i, j int) bool { return ints[i] < ints[j] })
+
+		encodedInts := Encode(ints, 256)
+		decodedInts := Decode(encodedInts, 0)
+
+		require.Equal(t, ints, decodedInts)
 	}
 }
