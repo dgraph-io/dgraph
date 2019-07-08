@@ -54,6 +54,7 @@ func (s *mathTreeStack) peek() *MathTree {
 	return s.a[len(s.a)-1]
 }
 
+// MathTree represents math operations in tree form for evaluation.
 type MathTree struct {
 	Fn    string
 	Var   string

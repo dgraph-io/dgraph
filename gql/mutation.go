@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ErrInvalidUID = errors.New("UID has to be greater than one")
+	errInvalidUID = errors.New("UID has to be greater than one")
 )
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -37,7 +37,8 @@ type Mutation struct {
 	Del []*api.NQuad
 }
 
-// Gets the uid corresponding
+// ParseUid parses the given string into an UID. This method returns with an error
+// if the string cannot be parsed or the parsed UID is zero.
 func ParseUid(xid string) (uint64, error) {
 	// If string represents a UID, convert to uint64 and return.
 	uid, err := strconv.ParseUint(xid, 0, 64)
@@ -45,11 +46,12 @@ func ParseUid(xid string) (uint64, error) {
 		return 0, err
 	}
 	if uid == 0 {
-		return 0, ErrInvalidUID
+		return 0, errInvalidUID
 	}
 	return uid, nil
 }
 
+// NQuad is an alias for the NQuad type in the API protobuf library.
 type NQuad struct {
 	*api.NQuad
 }
@@ -97,7 +99,7 @@ func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 }
 
 func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
-	if id, err := ParseUid(subject); err == nil || err == ErrInvalidUID {
+	if id, err := ParseUid(subject); err == nil || err == errInvalidUID {
 		return id, err
 	}
 	// It's an xid
@@ -119,6 +121,7 @@ func (nq NQuad) createEdgePrototype(subjectUid uint64) *pb.DirectedEdge {
 	}
 }
 
+// CreateUidEdge returns a Directed edge connecting the given subject and object UIDs.
 func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedEdge {
 	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
@@ -126,6 +129,8 @@ func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *pb.DirectedE
 	return out
 }
 
+// CreateValueEdge returns a DirectedEdge with the given subject. The predicate, label,
+// language, and facet values are derived from the NQuad.
 func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 	var err error
 
@@ -136,6 +141,8 @@ func (nq NQuad) CreateValueEdge(subjectUid uint64) (*pb.DirectedEdge, error) {
 	return out, nil
 }
 
+// ToDeletePredEdge takes an NQuad of the form '* p *' and returns the equivalent
+// directed edge. Returns an error if the NQuad does not have the expected form.
 func (nq NQuad) ToDeletePredEdge() (*pb.DirectedEdge, error) {
 	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
 		return &emptyEdge, errors.Errorf("Subject and object both should be *. Got: %+v", nq)
