@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -45,7 +46,7 @@ type Manifest struct {
 	// because it will become the timestamp from which to backup in the next
 	// incremental backup.
 	Since uint64 `json:"since"`
-	// Groups is the list of valid groups at the time the backup was created.
+	// Groups is the map of valid groups to predicates at the time the backup was created.
 	Groups map[uint32][]string `json:"groups"`
 	// BackupId is a unique ID assigned to all the backups in the same series
 	// (from the first full backup to the last incremental backup).
@@ -87,8 +88,18 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
+	predMap := make(map[string]struct{})
+	for _, pred := range pr.Request.Predicates {
+		predMap[pred] = struct{}{}
+	}
+
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
+	stream.ChooseKey = func(item *badger.Item) bool {
+		parsedKey := x.Parse(item.Key())
+		_, ok := predMap[parsedKey.Attr]
+		return ok
+	}
 	gzWriter := gzip.NewWriter(handler)
 	newSince, err := stream.Backup(gzWriter, pr.Request.SinceTs)
 

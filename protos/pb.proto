@@ -491,6 +491,10 @@ message BackupRequest {
   // True if no credentials should be used to access the S3 or minio bucket.
   // For example, when using a bucket with a public policy.
   bool anonymous = 9;
+
+  // The predicates to backup. All other predicates present in the group (e.g
+  // stale data from a predicate move) will be ignored.
+  repeated string predicates = 10;
 }
 
 message ExportRequest {
