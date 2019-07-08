@@ -74,7 +74,7 @@ go test -v ./...
 
 ## Contributing
 - Check out our contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)  
-- Have questions? Say hi on [Gitter](https://gitter.im/chainsafe/gossamer)!
+- Have questions? Say hi on [Discord](https://discord.gg/Xdc5xjE)!
 
 ## Donations
 Our work on gossamer is funded by grants. If you'd like to donate, you can send us ETH or DAI at the following address:
