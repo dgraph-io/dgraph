@@ -88,16 +88,17 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
+	predMap := make(map[string]struct{})
+	for _, pred := range pr.Request.Predicates {
+		predMap[pred] = struct{}{}
+	}
+
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey := x.Parse(item.Key())
-		for _, pred := range pr.Request.Predicates {
-			if pred == parsedKey.Attr {
-				return true
-			}
-		}
-		return false
+		_, ok := predMap[parsedKey.Attr]
+		return ok
 	}
 	gzWriter := gzip.NewWriter(handler)
 	newSince, err := stream.Backup(gzWriter, pr.Request.SinceTs)
