@@ -198,6 +198,9 @@ func toBackupList(since uint64) func([]byte, *badger.Iterator) (*bpb.KVList, err
 			switch item.UserMeta() {
 			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 				l, err := posting.ReadPostingList(key, itr)
+				if err != nil {
+					return nil, errors.Wrapf(err, "while reading posting list")
+				}
 				kvs, err := l.Rollup()
 				if err != nil {
 					return nil, errors.Wrapf(err, "while rolling up list")
