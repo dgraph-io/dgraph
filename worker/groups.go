@@ -268,6 +268,7 @@ func UpdateMembershipState(ctx context.Context) error {
 
 func (g *groupi) applyState(state *pb.MembershipState) {
 	x.AssertTrue(state != nil)
+	publishCommittedProposal(&pb.Proposal{State: state})
 	g.Lock()
 	defer g.Unlock()
 	// We don't update state if we get any old state. Counter stores the raftindex of

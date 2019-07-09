@@ -90,7 +90,7 @@ func SetupKafkaSource(c Callback, partition int32) {
 	s.partition = partition
 
 	sourceBrokers := Config.SourceBrokers
-	glog.Infof("source kafka brokers: %v", sourceBrokers)
+	glog.Infof("source kafka brokers: %v, source partition %d", sourceBrokers, partition)
 	if len(sourceBrokers) > 0 {
 		brokers := strings.Split(sourceBrokers, ",")
 
@@ -210,7 +210,7 @@ func getPOM(brokers []string) (sarama.PartitionOffsetManager, Cancel, error) {
 func SetupKafkaTarget(partition int32) {
 	targetBrokers := Config.TargetBrokers
 	s.partition = partition
-	glog.Infof("target kafka brokers: %v", targetBrokers)
+	glog.Infof("target kafka brokers: %v, target partition %d", targetBrokers, partition)
 	if len(targetBrokers) > 0 {
 		brokers := strings.Split(targetBrokers, ",")
 

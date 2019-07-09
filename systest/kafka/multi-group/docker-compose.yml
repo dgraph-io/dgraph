@@ -18,7 +18,7 @@ services:
       - zookeeper
     environment:
         KAFKA_PORT: 9192 # used for detecting kafka ready and creating topic
-        KAFKA_CREATE_TOPICS: "dgraph:1:2"
+        KAFKA_CREATE_TOPICS: "dgraph:3:2"
         KAFKA_ADVERTISED_LISTENERS: ALL://kafka1:9192
         KAFKA_LISTENERS: ALL://:9192
         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ALL:PLAINTEXT
@@ -37,7 +37,7 @@ services:
       - zookeeper
     environment:
         KAFKA_PORT: 9292 # used for detecting kafka ready and creating topic
-        KAFKA_CREATE_TOPICS: "dgraph:1:2"
+        KAFKA_CREATE_TOPICS: "dgraph:3:2"
         KAFKA_ADVERTISED_LISTENERS: ALL://kafka2:9292
         KAFKA_LISTENERS: ALL://:9292
         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ALL:PLAINTEXT
@@ -61,7 +61,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 100 --replicas 3 --idx=1 --my=zero1:5180 --logtostderr -v=2
+    command: /gobin/dgraph zero -o 100 --replicas 1 --idx=1 --my=zero1:5180 --logtostderr -v=2
       --bindall
   alpha100:
     image: dgraph/dgraph:latest
@@ -142,7 +142,7 @@ services:
       source: $GOPATH/bin
       target: /gobin
       read_only: true
-    command: /gobin/dgraph zero -o 200 --replicas 3 --idx=1 --my=zero2:5280 --logtostderr -v=2
+    command: /gobin/dgraph zero -o 200 --replicas 1 --idx=1 --my=zero2:5280 --logtostderr -v=2
       --bindall
   alpha200:
     image: dgraph/dgraph:latest

@@ -384,7 +384,13 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		x.Fatalf("Unknown proposal: %+v", proposal)
 	}
 
-	publishCommittedProposal(proposal)
+	if proposal.State == nil {
+		// don't publish the membership state again
+		// since the applyState function would have already
+		// published a message about the membership state change
+		publishCommittedProposal(proposal)
+	}
+
 	return nil
 }
 
@@ -983,9 +989,9 @@ func kafkaMsgCb(proposal *pb.Proposal) error {
 func onBecomeLeader() {
 	glog.Infof("onBecomeLeader setting up kafka")
 	groupID := int32(groups().groupId())
-	kafka.SetupKafkaTarget(groupID)
+	kafka.SetupKafkaTarget(groupID - 1)
 
-	kafka.SetupKafkaSource(kafkaMsgCb, groupID)
+	kafka.SetupKafkaSource(kafkaMsgCb, groupID-1)
 }
 
 func onBecomeFollower() {
