@@ -7,7 +7,6 @@ require (
 	github.com/ChainSafe/log15 v1.0.0
 	github.com/dgraph-io/badger v1.6.0-rc1
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
-	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
 	github.com/ipfs/go-datastore v0.0.5
 	github.com/ipfs/go-ipfs v0.4.22-0.20190703233353-70e499afbc16
 	github.com/ipfs/go-ipfs-config v0.0.6
@@ -15,6 +14,7 @@ require (
 	github.com/libp2p/go-libp2p v0.2.0
 	github.com/libp2p/go-libp2p-core v0.0.6
 	github.com/libp2p/go-libp2p-kad-dht v0.1.1
+	github.com/libp2p/go-libp2p-peer v0.2.0
 	github.com/multiformats/go-multiaddr v0.0.4
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1

@@ -9,7 +9,7 @@ import (
 
 	scale "github.com/ChainSafe/gossamer/codec"
 	trie "github.com/ChainSafe/gossamer/trie"
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 	exec "github.com/perlin-network/life/exec"
 )
 

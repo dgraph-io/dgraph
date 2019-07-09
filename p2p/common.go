@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 
 	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"

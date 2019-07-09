@@ -6,7 +6,7 @@ import (
 
 	common "github.com/ChainSafe/gossamer/common"
 	trie "github.com/ChainSafe/gossamer/trie"
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 	exec "github.com/perlin-network/life/exec"
 )
 

@@ -24,7 +24,7 @@ import (
 	"github.com/ChainSafe/gossamer/p2p"
 	"github.com/ChainSafe/gossamer/polkadb"
 	"github.com/ChainSafe/gossamer/rpc"
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 )
 
 // Config is a collection of configurations throughout the system

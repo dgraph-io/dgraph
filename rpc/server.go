@@ -24,7 +24,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/internal/api"
 	"github.com/ChainSafe/gossamer/rpc/modules"
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 )
 
 // Codec defines the interface for creating a CodecRequest.

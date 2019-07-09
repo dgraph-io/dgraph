@@ -21,7 +21,7 @@ import (
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/internal/api"
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 )
 
 // Config contains eneral RPC configuration options

@@ -20,7 +20,7 @@ import (
 	"os"
 
 	"github.com/ChainSafe/gossamer/cmd/utils"
-	log "github.com/inconshreveable/log15"
+	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 

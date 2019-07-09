@@ -18,7 +18,6 @@ package trie
 
 import (
 	"fmt"
-	//log "github.com/inconshreveable/log15"
 )
 
 // Print prints the trie through pre-order traversal
