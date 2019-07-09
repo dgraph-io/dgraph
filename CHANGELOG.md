@@ -23,6 +23,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Mutations over HTTP must have the Content-Type header set to `application/rdf` for RDF format or `application/json` for JSON format.
 - Update /health endpoint to return alpha version. (#3526)
 
+- Correctness fix: Block before proposing mutations and improve conflict key generation. Fixes #3528. (#3565)
 - reports line-column numbers for lexer/parser errors. (#2914)
 - Improve hash index. (#2887)
 - Use a stream connection for internal connection health checking. (#2956)
@@ -39,6 +40,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Update dgo dependency in vendor. (#3412)
   - Update vendored dependencies. (#3357)
   - Bring in latest changes from badger and fix broken API calls. (#3502)
+  - Vendor badger with the latest changes. (#3606)
 
 - Error messages
   - Output the line and column number in schema parsing error messages. (#2986)
@@ -66,6 +68,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Whitelist by hostname. (#2953)
 - Use CIDR format for whitelists instead of the previous range format.
 - Introduce Badger's DropPrefix API into Dgraph to simplify how predicate deletions and drop all work internally. (#3060)
+- Replace integer compression in UID Pack with groupvariant algorithm. (#3527)
 
 #### Dgraph Debug Tool
 
@@ -82,13 +85,17 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Remove xidmap storage on disk from bulk loader. Peaks to 4M edges/sec on my machine now, up from max 1M/s.
 - Optimize XidtoUID map used by live and bulk loader. With these changes, the live loader throughput jumps to 100K-120K NQuads/sec on my desktop. In particular, pre-assigning UIDs to the RDF/JSON file yields maximum throughput. I can load 140M friend graph RDFs in 25 mins. (#2998)
 - Export data contains UID literals instead of blank nodes. Using Live Loader or Bulk Loader to load exported data will result in the same UIDs as the original database. (#3004, #3045) To preserve the previous behavior, set the `--new_uids` flag in the live or bulk loader. (18277872f)
-- Use StreamWriter in bulk loader. (#3542)
+- Use StreamWriter in bulk loader. (#3542) (#3635)
 - Add timestamps during bulk/live load. (#3287)
 - Use initial schema during bulk load. (#3333)
+ Adding the verbose flag to suppress excessive logging in live loader (#3560)
+** SKIPPED a9d0554bf Fix golint warnings in the migrate package. (#3613)
+- Adding the verbose flag to suppress excessive logging in live loader. (#3560)
 
 #### Dgraph Increment Tool
 
 - Add server-side and client-side latency numbers to increment tool. (#3422)
+- Add `--retries` flag to specify number of retry requests to set up a gRPC connection. (#3584)
 
 ### Added
 
@@ -111,6 +118,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - Use type when available to resolve expand predicates. (#3214)
   - Include types in results of export operation. (#3493)
   - Support types in the bulk loader. (#3506)
+
+- Add the `upsert` query block to send "query-mutate-commit" updates as a single
+  call to Dgraph. This is especially helpful to do upserts with the `@upsert`
+  schema directive. Addresses #3059. (#3412)
 
 - Allow querying all lang values of a predicate. (#2910)
 - `regexp()` is valid in `@filter` even for predicates without the trigram index. (#2913)
@@ -167,6 +178,10 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - More refactoring of backup code. (#3515)
 - Use gzip compression in backups. (#3536)
 - Allow partial restores and restoring different backup series. (#3547)
+- Store group to predicate mapping as part of the backup manifest. (#3570)
+- Only backup the predicates belonging to a group. (#3621)
+- Introduce backup data formats for cross-version compatibility. (#3575)
+-  Add series and backup number information to manifest. (#3559)
 
 #### Dgraph Zero
 
