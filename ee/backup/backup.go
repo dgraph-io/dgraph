@@ -69,6 +69,19 @@ type Manifest struct {
 	Path string `json:"-"`
 }
 
+func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
+	preds, ok := m.Groups[gid]
+	if !ok {
+		return nil
+	}
+
+	predSet := make(predicateSet)
+	for _, pred := range preds {
+		predSet[pred] = struct{}{}
+	}
+	return predSet
+}
+
 // WriteBackup uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.

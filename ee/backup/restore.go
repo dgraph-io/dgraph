@@ -36,7 +36,7 @@ import (
 func RunRestore(pdir, location, backupId string) (uint64, error) {
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(location, backupId, func(r io.Reader, groupId int) error {
+	return Load(location, backupId, func(r io.Reader, groupId int, preds predicateSet) error {
 		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 			WithSyncWrites(true).
@@ -55,13 +55,13 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 		if err != nil {
 			return nil
 		}
-		return loadFromBackup(db, gzReader, 16)
+		return loadFromBackup(db, gzReader, 16, preds)
 	})
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB.
-func loadFromBackup(db *badger.DB, r io.Reader, maxPendingWrites int) error {
+func loadFromBackup(db *badger.DB, r io.Reader, maxPendingWrites int, preds predicateSet) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
@@ -97,6 +97,17 @@ func loadFromBackup(db *badger.DB, r io.Reader, maxPendingWrites int) error {
 			restoreKey, err := fromBackupKey(kv.Key)
 			if err != nil {
 				return err
+			}
+
+			// Filter keys using the preds set. Do not do this filtering for type keys
+			// as they are meant to be in every group and their Attr value does not
+			// match a predicate name.
+			parsedKey := x.Parse(restoreKey)
+			if parsedKey == nil {
+				return errors.Errorf("could not parse key %s", hex.Dump(restoreKey))
+			}
+			if _, ok := preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
+				continue
 			}
 
 			var restoreVal []byte
