@@ -94,16 +94,15 @@ func loadFromBackup(db *badger.DB, r io.Reader, maxPendingWrites int) error {
 					"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
 			}
 
-			var restoreKey []byte
+			restoreKey, err := fromBackupKey(kv.Key)
+			if err != nil {
+				return err
+			}
+
 			var restoreVal []byte
 			switch kv.GetUserMeta()[0] {
 			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 				var err error
-				restoreKey, err = fromBackupKey(kv.Key)
-				if err != nil {
-					return err
-				}
-
 				backupPl := &pb.BackupPostingList{}
 				if err := backupPl.Unmarshal(kv.Value); err != nil {
 					return errors.Wrapf(err, "while reading backup posting list")
@@ -114,11 +113,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, maxPendingWrites int) error {
 				}
 
 			case posting.BitSchemaPosting:
-				var err error
-				restoreKey, err = fromBackupKey(kv.Key)
-				if err != nil {
-					return err
-				}
 				restoreVal = kv.Value
 
 			default:
