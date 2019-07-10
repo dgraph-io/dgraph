@@ -78,14 +78,14 @@ options are there to allow for greater flexibility.
 The `anonymous` parameter can be set to "true" to a allow backing up to S3 or
 Minio bucket that requires no credentials (i.e a public bucket).
 
-#### Backup to NFS.
+#### Backup to NFS
 ```
 # localhost:8080 is the default Alpha HTTP port
 $ curl -XPOST localhost:8080/admin/backup -d "destination=/path/to/local/directory"
 ```
 
-A local filesystem will work only if all the alphas have access to it (e.g all
-the alphas are running on the same filesystems as a normal process, not a docker
+A local filesystem will work only if all the Alphas have access to it (e.g all
+the Alphas are running on the same filesystems as a normal process, not a Docker
 container). However, a NFS is recommended so that backups work seamlessly across
 multiple machines and/or containers.
 
