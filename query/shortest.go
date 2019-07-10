@@ -89,7 +89,7 @@ type mapItem struct {
 	facet *pb.Facets
 }
 
-// We manintain a map from UID to nodeInfo for Djikstras.
+// We maintain a map from UID to nodeInfo for Djikstras.
 type nodeInfo struct {
 	mapItem
 	parent uint64
