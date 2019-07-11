@@ -123,7 +123,7 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	_, err := w.Write([]byte(fmt.Sprintf("Removed node with group: %v, idx: %v", groupId, nodeId)))
+	_, err := fmt.Fprintf(w, "Removed node with group: %v, idx: %v", groupId, nodeId)
 	if err != nil {
 		glog.Warningf("Error while writing response: %+v", err)
 	}
