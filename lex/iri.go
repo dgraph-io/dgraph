@@ -20,9 +20,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// IRIRef emits an IRIREF or returns an error if the input is invalid.
 func IRIRef(l *Lexer, styp ItemType) error {
 	l.Ignore() // ignore '<'
-	l.AcceptRunRec(IsIRIChar)
+	l.AcceptRunRec(isIRIRefChar)
 	l.Emit(styp) // will emit without '<' and '>'
 	r := l.Next()
 	if r == EOF {
@@ -35,8 +36,9 @@ func IRIRef(l *Lexer, styp ItemType) error {
 	return nil
 }
 
+// isIRIRefChar returns whether the rune is a character allowed in an IRIRef.
 // IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
-func IsIRIChar(r rune, l *Lexer) bool {
+func isIRIRefChar(r rune, l *Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false
 	}
@@ -54,6 +56,7 @@ func IsIRIChar(r rune, l *Lexer) bool {
 	return true
 }
 
+// HasUChars returns whether the lexer is at the beginning of a escaped Unicode character.
 // UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
 func HasUChars(r rune, l *Lexer) bool {
 	if r != 'u' && r != 'U' {
@@ -66,6 +69,7 @@ func HasUChars(r rune, l *Lexer) bool {
 	return times == l.AcceptRunTimes(isHex, times)
 }
 
+// HasXChars returns whether the lexer is at the start of a escaped hexadecimal byte (e.g \xFE)
 // XCHAR ::= '\x' HEX HEX
 func HasXChars(r rune, l *Lexer) bool {
 	if r != 'x' {
