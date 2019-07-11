@@ -18,7 +18,8 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
+
+	"github.com/pkg/errors"
 )
 
 func Tokenizer() interface{} { return FactorTokenizer{} }
