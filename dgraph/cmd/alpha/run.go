@@ -383,7 +383,6 @@ func setupServer() {
 	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/share", shareHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
