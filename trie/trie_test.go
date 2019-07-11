@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -48,11 +49,14 @@ var commonPrefixTests = []commonPrefixTest{
 }
 
 func TestCommonPrefix(t *testing.T) {
-	for _, test := range commonPrefixTests {
-		output := lenCommonPrefix(test.a, test.b)
-		if output != test.output {
-			t.Errorf("Fail: got %d expected %d", output, test.output)
-		}
+	for i, test := range commonPrefixTests {
+		test := test
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			output := lenCommonPrefix(test.a, test.b)
+			if output != test.output {
+				t.Errorf("Fail: got %d expected %d", output, test.output)
+			}
+		})
 	}
 }
 
@@ -178,36 +182,39 @@ func buildSmallTrie() *Trie {
 }
 
 func runTests(t *testing.T, trie *Trie, tests []trieTest) {
-	for _, test := range tests {
-		if test.op == PUT {
-			err := trie.Put(test.key, test.value)
-			if err != nil {
-				t.Errorf("Fail to put key %x with value %x: %s", test.key, test.value, err)
+	for i, test := range tests {
+		test := test
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			if test.op == PUT {
+				err := trie.Put(test.key, test.value)
+				if err != nil {
+					t.Errorf("Fail to put key %x with value %x: %s", test.key, test.value, err)
+				}
+			} else if test.op == GET {
+				val, err := trie.Get(test.key)
+				if err != nil {
+					t.Errorf("Error when attempting to get key %x: %s", test.key, err.Error())
+				} else if !bytes.Equal(val, test.value) {
+					t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, val)
+				}
+			} else if test.op == DEL {
+				err := trie.Delete(test.key)
+				if err != nil {
+					t.Errorf("Fail to delete key %x: %s", test.key, err.Error())
+				}
+			} else if test.op == GETLEAF {
+				leaf, err := trie.getLeaf(test.key)
+				if leaf == nil {
+					t.Errorf("Fail to get key %x: nil leaf", test.key)
+				} else if err != nil {
+					t.Errorf("Fail to get key %x: %s", test.key, err.Error())
+				} else if !bytes.Equal(leaf.value, test.value) {
+					t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, leaf.value)
+				} else if !bytes.Equal(leaf.key, test.pk) {
+					t.Errorf("Fail to get correct partial key %x with key %x: got %x", test.pk, test.key, leaf.key)
+				}
 			}
-		} else if test.op == GET {
-			val, err := trie.Get(test.key)
-			if err != nil {
-				t.Errorf("Error when attempting to get key %x: %s", test.key, err.Error())
-			} else if !bytes.Equal(val, test.value) {
-				t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, val)
-			}
-		} else if test.op == DEL {
-			err := trie.Delete(test.key)
-			if err != nil {
-				t.Errorf("Fail to delete key %x: %s", test.key, err.Error())
-			}
-		} else if test.op == GETLEAF {
-			leaf, err := trie.getLeaf(test.key)
-			if leaf == nil {
-				t.Errorf("Fail to get key %x: nil leaf", test.key)
-			} else if err != nil {
-				t.Errorf("Fail to get key %x: %s", test.key, err.Error())
-			} else if !bytes.Equal(leaf.value, test.value) {
-				t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, leaf.value)
-			} else if !bytes.Equal(leaf.key, test.pk) {
-				t.Errorf("Fail to get correct partial key %x with key %x: got %x", test.pk, test.key, leaf.key)
-			}
-		}
+		})
 	}
 }
 
@@ -491,28 +498,31 @@ func TestDelete(t *testing.T) {
 		}
 	}
 
-	for _, test := range rt {
-		r := rand.Int() % 2
-		switch r {
-		case 0:
-			err := trie.Delete(test.key)
-			if err != nil {
-				t.Errorf("Fail to delete key %x: %s", test.key, err.Error())
-			}
+	for i, test := range rt {
+		test := test
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			r := rand.Int() % 2
+			switch r {
+			case 0:
+				err := trie.Delete(test.key)
+				if err != nil {
+					t.Errorf("Fail to delete key %x: %s", test.key, err.Error())
+				}
 
-			val, err := trie.Get(test.key)
-			if err != nil {
-				t.Errorf("Error when attempting to get deleted key %x: %s", test.key, err.Error())
-			} else if val != nil {
-				t.Errorf("Fail to delete key %x with value %x: got %x", test.key, test.value, val)
+				val, err := trie.Get(test.key)
+				if err != nil {
+					t.Errorf("Error when attempting to get deleted key %x: %s", test.key, err.Error())
+				} else if val != nil {
+					t.Errorf("Fail to delete key %x with value %x: got %x", test.key, test.value, val)
+				}
+			case 1:
+				val, err := trie.Get(test.key)
+				if err != nil {
+					t.Errorf("Error when attempting to get key %x: %s", test.key, err.Error())
+				} else if !bytes.Equal(test.value, val) {
+					t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, val)
+				}
 			}
-		case 1:
-			val, err := trie.Get(test.key)
-			if err != nil {
-				t.Errorf("Error when attempting to get key %x: %s", test.key, err.Error())
-			} else if !bytes.Equal(test.value, val) {
-				t.Errorf("Fail to get key %x with value %x: got %x", test.key, test.value, val)
-			}
-		}
+		})
 	}
 }

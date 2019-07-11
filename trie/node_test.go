@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"strconv"
 	"testing"
 
 	scale "github.com/ChainSafe/gossamer/codec"
@@ -85,6 +86,7 @@ func TestBranchHeader(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		res, err := test.br.header()
 		if err != nil {
 			t.Fatalf("Error when encoding header: %s", err)
@@ -126,13 +128,16 @@ func TestLeafHeader(t *testing.T) {
 		{&leaf{byteArray(573), []byte{0x01}, true}, []byte{0x7f, 0xff, 0xff, 0}},
 	}
 
-	for _, test := range tests {
-		res, err := test.br.header()
-		if err != nil {
-			t.Fatalf("Error when encoding header: %s", err)
-		} else if !bytes.Equal(res, test.header) {
-			t.Errorf("Leaf header fail: got %x expected %x", res, test.header)
-		}
+	for i, test := range tests {
+		test := test
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			res, err := test.br.header()
+			if err != nil {
+				t.Fatalf("Error when encoding header: %s", err)
+			} else if !bytes.Equal(res, test.header) {
+				t.Errorf("Leaf header fail: got %x expected %x", res, test.header)
+			}
+		})
 	}
 }
 
