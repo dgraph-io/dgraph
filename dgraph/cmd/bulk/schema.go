@@ -145,7 +145,7 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		x.Check(txn.SetEntry(&badger.Entry{
 			Key:      k,
 			Value:    v,
-			UserMeta: posting.BitCompletePosting}))
+			UserMeta: posting.BitSchemaPosting}))
 	}
 
 	// Write all the types as all groups should have access to all the types.
@@ -156,7 +156,7 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 		x.Check(txn.SetEntry(&badger.Entry{
 			Key:      k,
 			Value:    v,
-			UserMeta: posting.BitCompletePosting,
+			UserMeta: posting.BitSchemaPosting,
 		}))
 	}
 

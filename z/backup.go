@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 // GetPValues reads the specified p directory and returns the values for the given
@@ -100,10 +101,10 @@ func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 func GetError(rc io.ReadCloser) error {
 	b, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return fmt.Errorf("Read failed: %v", err)
+		return errors.Wrapf(err, "while reading")
 	}
 	if bytes.Contains(b, []byte("Error")) {
-		return fmt.Errorf("%s", string(b))
+		return errors.Errorf("%s", string(b))
 	}
 	return nil
 }

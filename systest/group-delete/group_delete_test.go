@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/z"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -115,10 +116,10 @@ func getError(rc io.ReadCloser) error {
 	defer rc.Close()
 	b, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return fmt.Errorf("Read failed: %v", err)
+		return errors.Wrapf(err, "while reading")
 	}
 	if bytes.Contains(b, []byte("Error")) {
-		return fmt.Errorf("%s", string(b))
+		return errors.Errorf("%s", string(b))
 	}
 	return nil
 }

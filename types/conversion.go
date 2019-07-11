@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -112,7 +111,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				if math.IsNaN(val) {
-					return to, fmt.Errorf("Got invalid value: NaN")
+					return to, errors.Errorf("Got invalid value: NaN")
 				}
 				*res = val
 			case StringID, DefaultID:

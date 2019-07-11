@@ -215,7 +215,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	c := pb.NewWorkerClient(pl.Get())
 	s, err := c.ReceivePredicate(ctx)
 	if err != nil {
-		return fmt.Errorf("While calling ReceivePredicate: %+v", err)
+		return errors.Wrapf(err, "while calling ReceivePredicate")
 	}
 
 	// This txn is only reading the schema. Doesn't really matter what read timestamp we use,
