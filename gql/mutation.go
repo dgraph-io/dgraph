@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -175,7 +174,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error
 	}
 
 	if sUid == 0 {
-		return nil, fmt.Errorf("Subject should be > 0 for nquad: %+v", nq)
+		return nil, errors.Errorf("Subject should be > 0 for nquad: %+v", nq)
 	}
 
 	switch nq.valueType() {
@@ -185,7 +184,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*pb.DirectedEdge, error
 			return nil, err
 		}
 		if oUid == 0 {
-			return nil, fmt.Errorf("ObjectId should be > 0 for nquad: %+v", nq)
+			return nil, errors.Errorf("ObjectId should be > 0 for nquad: %+v", nq)
 		}
 		edge = nq.CreateUidEdge(sUid, oUid)
 	case x.ValuePlain, x.ValueMulti:

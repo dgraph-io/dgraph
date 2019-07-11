@@ -40,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
@@ -50,7 +51,7 @@ import (
 // Error constants representing different types of errors.
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
-	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
+	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
@@ -630,7 +631,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	fmt.Printf("%s password for %v:", pwdType, userid)
 	pd, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err != nil {
-		return "", fmt.Errorf("error while reading password:%v", err)
+		return "", errors.Wrapf(err, "while reading password")
 	}
 	fmt.Println()
 	password := string(pd)
@@ -639,13 +640,13 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
 		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return "", fmt.Errorf("error while reading password:%v", err)
+			return "", errors.Wrapf(err, "while reading password")
 		}
 		fmt.Println()
 
 		password2 := string(pd2)
 		if password2 != password {
-			return "", fmt.Errorf("the two typed passwords do not match")
+			return "", errors.Errorf("the two typed passwords do not match")
 		}
 	}
 	return password, nil
@@ -664,7 +665,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := dg.Login(ctx, opt.UserID, password); err != nil {
-		return fmt.Errorf("unable to login to the %v account:%v", opt.UserID, err)
+		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token

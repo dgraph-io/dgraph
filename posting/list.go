@@ -42,9 +42,9 @@ import (
 var (
 	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
 	// In such a case, retry.
-	ErrRetry = fmt.Errorf("Temporary error. Please retry")
+	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = fmt.Errorf("No value found")
+	ErrNoValue       = errors.New("No value found")
 	errStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
@@ -102,7 +102,7 @@ type pIterator struct {
 
 func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 	if deleteBelowTs > 0 && deleteBelowTs <= l.minTs {
-		return fmt.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
+		return errors.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
 			deleteBelowTs, l.minTs)
 	}
 
@@ -377,7 +377,7 @@ func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
 
 	return l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
 		if obj.Uid != edge.GetValueId() {
-			return fmt.Errorf(
+			return errors.Errorf(
 				"cannot add value with uid %x to predicate %s because one of the existing "+
 					"values does not match this uid, either delete the existing values first or "+
 					"modify the schema to '%s: [uid]'",

@@ -17,8 +17,7 @@
 package lex
 
 import (
-	"errors"
-	"fmt"
+	"github.com/pkg/errors"
 )
 
 func IRIRef(l *Lexer, styp ItemType) error {
@@ -30,7 +29,7 @@ func IRIRef(l *Lexer, styp ItemType) error {
 		return errors.New("Unexpected end of IRI")
 	}
 	if r != '>' {
-		return fmt.Errorf("Unexpected character %q while parsing IRI", r)
+		return errors.Errorf("Unexpected character %q while parsing IRI", r)
 	}
 	l.Ignore() // ignore '>'
 	return nil

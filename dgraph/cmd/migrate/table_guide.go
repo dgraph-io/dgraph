@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/pkg/errors"
 )
 
 var separator = "."
@@ -160,7 +161,7 @@ func getCstColumns(cst *fkConstraint) map[string]interface{} {
 
 func getValue(dataType dataType, value interface{}) (string, error) {
 	if value == nil {
-		return "", fmt.Errorf("nil value found")
+		return "", errors.Errorf("nil value found")
 	}
 
 	switch dataType {
@@ -168,19 +169,19 @@ func getValue(dataType dataType, value interface{}) (string, error) {
 		return fmt.Sprintf("%s", value), nil
 	case intType:
 		if !value.(sql.NullInt64).Valid {
-			return "", fmt.Errorf("found invalid nullint")
+			return "", errors.Errorf("found invalid nullint")
 		}
 		intVal, _ := value.(sql.NullInt64).Value()
 		return fmt.Sprintf("%v", intVal), nil
 	case datetimeType:
 		if !value.(mysql.NullTime).Valid {
-			return "", fmt.Errorf("found invalid nulltime")
+			return "", errors.Errorf("found invalid nulltime")
 		}
 		dateVal, _ := value.(mysql.NullTime).Value()
 		return fmt.Sprintf("%v", dateVal), nil
 	case floatType:
 		if !value.(sql.NullFloat64).Valid {
-			return "", fmt.Errorf("found invalid nullfloat")
+			return "", errors.Errorf("found invalid nullfloat")
 		}
 		floatVal, _ := value.(sql.NullFloat64).Value()
 		return fmt.Sprintf("%v", floatVal), nil

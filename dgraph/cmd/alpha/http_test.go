@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -31,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/query"
@@ -97,7 +97,7 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 		return "", nil, err
 	}
 	if status := resp.StatusCode; status != http.StatusOK {
-		return "", nil, fmt.Errorf("Unexpected status code: %v", status)
+		return "", nil, errors.Errorf("Unexpected status code: %v", status)
 	}
 
 	defer resp.Body.Close()
@@ -110,7 +110,7 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 			}
 			defer rd.Close()
 		} else {
-			return "", resp, fmt.Errorf("Response not compressed")
+			return "", resp, errors.Errorf("Response not compressed")
 		}
 	}
 	body, err := ioutil.ReadAll(rd)
@@ -237,13 +237,13 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 		return nil, nil, err
 	}
 	if status := resp.StatusCode; status != http.StatusOK {
-		return nil, nil, fmt.Errorf("Unexpected status code: %v", status)
+		return nil, nil, errors.Errorf("Unexpected status code: %v", status)
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to read from body: %v", err)
+		return nil, nil, errors.Errorf("unable to read from body: %v", err)
 	}
 
 	qr := new(x.QueryResWithData)

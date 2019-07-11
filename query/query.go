@@ -985,7 +985,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 	if err := args.fill(gq); err != nil {
-		return nil, fmt.Errorf("error while filling args: %v", err)
+		return nil, errors.Wrapf(err, "while filling args")
 	}
 
 	sg := &SubGraph{Params: args}
@@ -1009,7 +1009,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	if isUidFnWithoutVar(gq.Func) && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
-			return nil, fmt.Errorf("error while populating UIDs: %v", err)
+			return nil, errors.Wrapf(err, "while populating UIDs")
 		}
 	}
 
@@ -1017,14 +1017,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
 		if err := filterCopy(sgf, gq.Filter); err != nil {
-			return nil, fmt.Errorf("error while copying filter: %v", err)
+			return nil, errors.Wrapf(err, "while copying filter")
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
 	if gq.FacetsFilter != nil {
 		facetsFilter, err := toFacetsFilter(gq.FacetsFilter)
 		if err != nil {
-			return nil, fmt.Errorf("error while converting to facets filter: %v", err)
+			return nil, errors.Wrapf(err, "while converting to facets filter")
 		}
 		sg.facetsFilter = facetsFilter
 	}
@@ -1651,7 +1651,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							}
 
 							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
-								return errors.Errorf("Repeated id with non int/float value for facet var encountered.")
+								return errors.Errorf("Repeated id with non int/float value for " +
+									"facet var encountered.")
 							}
 							ag := aggregator{name: "sum"}
 							ag.Apply(pVal)
@@ -1951,7 +1952,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
-					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)
+					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()",
+						ch.Attr)
 				}
 			}
 			out = append(out, temp)
@@ -2628,7 +2630,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return fmt.Errorf("error while converting to subgraph: %v", err)
+			return errors.Wrapf(err, "while converting to subgraph")
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs

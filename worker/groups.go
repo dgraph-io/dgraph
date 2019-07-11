@@ -345,7 +345,7 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 				return nil
 			}
 		case <-ctx.Done():
-			return fmt.Errorf("Group checksum mismatch for id: %d", g.groupId())
+			return errors.Errorf("Group checksum mismatch for id: %d", g.groupId())
 		}
 	}
 }

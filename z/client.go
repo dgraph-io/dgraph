@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -206,24 +207,24 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 
 	body, err := json.Marshal(&loginPayload)
 	if err != nil {
-		return "", "", fmt.Errorf("unable to marshal body: %v", err)
+		return "", "", errors.Wrapf(err, "unable to marshal body")
 	}
 
 	req, err := http.NewRequest("POST", params.Endpoint, bytes.NewBuffer(body))
 	if err != nil {
-		return "", "", fmt.Errorf("unable to create request: %v", err)
+		return "", "", errors.Wrapf(err, "unable to create request")
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("login through curl failed: %v", err)
+		return "", "", errors.Wrapf(err, "login through curl failed")
 	}
 	defer resp.Body.Close()
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("unable to read from response: %v", err)
+		return "", "", errors.Wrapf(err, "unable to read from response")
 	}
 
 	var outputJson map[string]map[string]string
@@ -231,24 +232,24 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		var errOutputJson map[string]interface{}
 		if err := json.Unmarshal(respBody, &errOutputJson); err == nil {
 			if _, ok := errOutputJson["errors"]; ok {
-				return "", "", fmt.Errorf("response error: %v", string(respBody))
+				return "", "", errors.Errorf("response error: %v", string(respBody))
 			}
 		}
-		return "", "", fmt.Errorf("unable to unmarshal the output to get JWTs: %v", err)
+		return "", "", errors.Wrapf(err, "unable to unmarshal the output to get JWTs")
 	}
 
 	data, found := outputJson["data"]
 	if !found {
-		return "", "", fmt.Errorf("data entry found in the output: %v", err)
+		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
 
 	newAccessJwt, found := data["accessJWT"]
 	if !found {
-		return "", "", fmt.Errorf("no access JWT found in the output")
+		return "", "", errors.Errorf("no access JWT found in the output")
 	}
 	newRefreshJwt, found := data["refreshJWT"]
 	if !found {
-		return "", "", fmt.Errorf("no refresh JWT found in the output")
+		return "", "", errors.Errorf("no refresh JWT found in the output")
 	}
 
 	return newAccessJwt, newRefreshJwt, nil

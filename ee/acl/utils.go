@@ -14,7 +14,6 @@ package acl
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -137,7 +136,7 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 		return nil, nil
 	}
 	if len(groups) > 1 {
-		return nil, fmt.Errorf("found multiple groups: %s", input)
+		return nil, errors.Errorf("found multiple groups: %s", input)
 	}
 
 	return &groups[0], nil
