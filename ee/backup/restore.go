@@ -39,7 +39,7 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 	return Load(location, backupId, func(r io.Reader, groupId int) error {
 		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
 		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-			WithSyncWrites(true).
+			WithSyncWrites(false).
 			WithTableLoadingMode(options.MemoryMap).
 			WithValueThreshold(1 << 10).
 			WithNumVersionsToKeep(math.MaxInt32))
