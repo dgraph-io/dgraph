@@ -55,17 +55,17 @@ func RunRestore(pdir, location, backupId string) (uint64, error) {
 		if err != nil {
 			return nil
 		}
-		return loadFromBackup(db, gzReader, 16, preds)
+		return loadFromBackup(db, gzReader, preds)
 	})
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB.
-func loadFromBackup(db *badger.DB, r io.Reader, maxPendingWrites int, preds predicateSet) error {
+func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
-	loader := db.NewKVLoader(maxPendingWrites)
+	loader := db.NewKVLoader(16)
 	for {
 		var sz uint64
 		err := binary.Read(br, binary.LittleEndian, &sz)
