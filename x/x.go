@@ -142,7 +142,9 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
 	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
@@ -181,7 +183,9 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
