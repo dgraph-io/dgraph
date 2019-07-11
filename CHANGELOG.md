@@ -9,20 +9,20 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Changed
 
-- Vendor in Badger v1.6.0. ([#3631][])
 - Vendor in prometheus/client_golang/prometheus v0.9.4. ([#3653][])
 
 ### Fixed
 
 - Fix panic with value variables in queries. Fixes [#3470][]. ([#3554][])
 - Remove unused reserved predicates in the schema. Fixes [#3535][]. ([#3557][])
+- Vendor in Badger v1.6.0 for StreamWriter bug fixes. ([#3631][])
 
+[#3470]: https://github.com/dgraph-io/dgraph/issue/3470
+[#3535]: https://github.com/dgraph-io/dgraph/issue/3535
+[#3554]: https://github.com/dgraph-io/dgraph/issue/3554
+[#3557]: https://github.com/dgraph-io/dgraph/issue/3557
 [#3631]: https://github.com/dgraph-io/dgraph/issue/3631
 [#3653]: https://github.com/dgraph-io/dgraph/issue/3653
-[#3470]: https://github.com/dgraph-io/dgraph/issue/3470
-[#3554]: https://github.com/dgraph-io/dgraph/issue/3554
-[#3535]: https://github.com/dgraph-io/dgraph/issue/3535
-[#3557]: https://github.com/dgraph-io/dgraph/issue/3557
 
 ## [1.0.15] - 2019-05-30
 [1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
