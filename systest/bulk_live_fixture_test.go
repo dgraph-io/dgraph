@@ -48,9 +48,17 @@ var rootDir = filepath.Join(os.TempDir(), "dgraph_systest")
 type suite struct {
 	t           *testing.T
 	bulkCluster *DgraphCluster
+	opts        suiteOpts
 }
 
-func newSuite(t *testing.T, schema, rdfs string) *suite {
+type suiteOpts struct {
+	schema         string
+	rdfs           string
+	skipBulkLoader bool
+	skipLiveLoader bool
+}
+
+func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 	dg := z.DgraphClientWithGroot(z.SockAddr)
 	err := dg.Alter(context.Background(), &api.Operation{
 		DropAll: true,
@@ -62,14 +70,36 @@ func newSuite(t *testing.T, schema, rdfs string) *suite {
 	if testing.Short() {
 		t.Skip("Skipping system test with long runtime.")
 	}
-	s := &suite{t: t}
+
+	s := &suite{
+		t:    t,
+		opts: opts,
+	}
+
 	s.checkFatal(makeDirEmpty(rootDir))
 	rdfFile := filepath.Join(rootDir, "rdfs.rdf")
-	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(rdfs), 0644))
+	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(rootDir, "schema.txt")
-	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(schema), 0644))
+	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
 	s.setup(schemaFile, rdfFile)
 	return s
+}
+
+func newSuite(t *testing.T, schema, rdfs string) *suite {
+	opts := suiteOpts{
+		schema: schema,
+		rdfs:   rdfs,
+	}
+	return newSuiteInternal(t, opts)
+}
+
+func newBulkOnlySuite(t *testing.T, schema, rdfs string) *suite {
+	opts := suiteOpts{
+		schema:         schema,
+		rdfs:           rdfs,
+		skipLiveLoader: true,
+	}
+	return newSuiteInternal(t, opts)
 }
 
 func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
@@ -77,6 +107,7 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
 		t.Skip("Skipping system test with long runtime.")
 	}
 	s := &suite{t: t}
+
 	s.setup(schemaFile, rdfFile)
 	return s
 }
@@ -92,43 +123,47 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		makeDirEmpty(filepath.Join(bulkDir, "out", "0")),
 	)
 
-	s.bulkCluster = NewDgraphCluster(filepath.Join(bulkDir, "out", "0"))
-	if err := s.bulkCluster.StartZeroOnly(); err != nil {
-		s.cleanup()
-		s.t.Fatalf("Couldn't start zero in Dgraph cluster: %v\n", err)
+	if !s.opts.skipBulkLoader {
+		s.bulkCluster = NewDgraphCluster(filepath.Join(bulkDir, "out", "0"))
+		if err := s.bulkCluster.StartZeroOnly(); err != nil {
+			s.cleanup()
+			s.t.Fatalf("Couldn't start zero in Dgraph cluster: %v\n", err)
+		}
+
+		bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
+			"-f", rdfFile,
+			"-s", schemaFile,
+			"--http", "localhost:"+strconv.Itoa(freePort(0)),
+			"-j=1",
+			"-x=true",
+			"-z", "localhost:"+s.bulkCluster.zeroPort,
+		)
+		bulkCmd.Dir = bulkDir
+		if out, err := bulkCmd.Output(); err != nil {
+			s.cleanup()
+			s.t.Logf("%s", out)
+			s.t.Fatalf("Bulkloader didn't run: %v\n", err)
+		}
+
+		if err := s.bulkCluster.StartAlphaOnly(); err != nil {
+			s.cleanup()
+			s.t.Fatalf("Couldn't start alpha in Dgraph cluster: %v\n", err)
+		}
 	}
 
-	bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
-		"-f", rdfFile,
-		"-s", schemaFile,
-		"--http", "localhost:"+strconv.Itoa(freePort(0)),
-		"-j=1",
-		"-x=true",
-		"-z", "localhost:"+s.bulkCluster.zeroPort,
-	)
-	bulkCmd.Dir = bulkDir
-	if out, err := bulkCmd.Output(); err != nil {
-		s.cleanup()
-		s.t.Logf("%s", out)
-		s.t.Fatalf("Bulkloader didn't run: %v\n", err)
-	}
-
-	if err := s.bulkCluster.StartAlphaOnly(); err != nil {
-		s.cleanup()
-		s.t.Fatalf("Couldn't start alpha in Dgraph cluster: %v\n", err)
-	}
-
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
-		"--files", rdfFile,
-		"--schema", schemaFile,
-		"--alpha", z.SockAddr,
-		"--zero", z.SockAddrZero,
-	)
-	liveCmd.Dir = liveDir
-	if out, err := liveCmd.Output(); err != nil {
-		s.cleanup()
-		s.t.Logf("%s", out)
-		s.t.Fatalf("Live Loader didn't run: %v\n", err)
+	if !s.opts.skipLiveLoader {
+		liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+			"--files", rdfFile,
+			"--schema", schemaFile,
+			"--alpha", z.SockAddr,
+			"--zero", z.SockAddrZero,
+		)
+		liveCmd.Dir = liveDir
+		if out, err := liveCmd.Output(); err != nil {
+			s.cleanup()
+			s.t.Logf("%s", out)
+			s.t.Fatalf("Live Loader didn't run: %v\n", err)
+		}
 	}
 }
 
@@ -148,29 +183,33 @@ func (s *suite) cleanup() {
 
 func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
-		// Check results of the live loader.
-		dg := z.DgraphClientWithGroot(z.SockAddr)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		if !s.opts.skipLiveLoader {
+			// Check results of the live loader.
+			dg := z.DgraphClientWithGroot(z.SockAddr)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
 
-		txn := dg.NewTxn()
-		resp, err := txn.Query(ctx, query)
-		if err != nil {
-			t.Fatalf("Could not query: %v", err)
+			txn := dg.NewTxn()
+			resp, err := txn.Query(ctx, query)
+			if err != nil {
+				t.Fatalf("Could not query: %v", err)
+			}
+			z.CompareJSON(t, wantResult, string(resp.GetJson()))
 		}
-		z.CompareJSON(t, wantResult, string(resp.GetJson()))
 
-		// Check results of the bulk loader.
-		dg = z.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
-		ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel2()
+		if !s.opts.skipBulkLoader {
+			// Check results of the bulk loader.
+			dg := z.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
+			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel2()
 
-		txn = dg.NewTxn()
-		resp, err = txn.Query(ctx2, query)
-		if err != nil {
-			t.Fatalf("Could not query: %v", err)
+			txn := dg.NewTxn()
+			resp, err := txn.Query(ctx2, query)
+			if err != nil {
+				t.Fatalf("Could not query: %v", err)
+			}
+			z.CompareJSON(t, wantResult, string(resp.GetJson()))
 		}
-		z.CompareJSON(t, wantResult, string(resp.GetJson()))
 	}
 }
 

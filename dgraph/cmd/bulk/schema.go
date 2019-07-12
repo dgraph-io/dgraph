@@ -79,6 +79,16 @@ func (s *schemaStore) getSchema(pred string) *pb.SchemaUpdate {
 	return s.schemaMap[pred]
 }
 
+func (s *schemaStore) setSchemaAsList(pred string) {
+	s.Lock()
+	defer s.Unlock()
+	schema, ok := s.schemaMap[pred]
+	if !ok {
+		return
+	}
+	schema.List = true
+}
+
 func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
 		de.ValueType = pb.Posting_UID
