@@ -48,8 +48,8 @@ type options struct {
 
 type gqlSchema struct {
 	Type   string    `json:"dgraph.type,omitempty"`
-	Schema string    `json:"dgraph.graphql.schema.schema,omitempty"`
-	Date   time.Time `json:"dgraph.graphql.schema.date,omitempty"`
+	Schema string    `json:"dgraph.graphql.schema,omitempty"`
+	Date   time.Time `json:"dgraph.graphql.date,omitempty"`
 }
 
 type gqlSchemas struct {
@@ -76,15 +76,20 @@ func init() {
 			}
 		},
 	}
-
 	GraphQL.EnvPrefix = "DGRAPH_GRAPHQL"
 
-	GraphQL.Cmd.PersistentFlags().StringP("alpha", "a", "127.0.0.1:9080",
+	// TODO: ones passed to sub commands should be persistent flags
+	flags := GraphQL.Cmd.Flags()
+	flags.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
-	GraphQL.Cmd.PersistentFlags().StringP("schema", "s", "schema.graphql",
+	flags.StringP("schema", "s", "schema.graphql",
 		"Location of GraphQL schema file")
 
-	cmdInit := &cobra.Command{
+	// TLS configuration
+	x.RegisterClientTLSFlags(flags)
+
+	var cmdInit x.SubCommand
+	cmdInit.Cmd = &cobra.Command{
 		Use:   "init",
 		Short: "Initializes Dgraph for a GraphQL schema",
 		Args:  cobra.NoArgs,
@@ -100,10 +105,10 @@ func init() {
 			}
 		},
 	}
-	GraphQL.Cmd.AddCommand(cmdInit)
+	GraphQL.Cmd.AddCommand(cmdInit.Cmd)
 
-	// TLS configuration
-	x.RegisterClientTLSFlags(GraphQL.Cmd.Flags())
+	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("alpha"))
+	cmdInit.Cmd.Flags().AddFlag(GraphQL.Cmd.Flag("schema"))
 }
 
 func run() error {
