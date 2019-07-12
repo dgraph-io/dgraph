@@ -183,6 +183,12 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 
 				// Send the destuids in res chan.
 				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
+					// This can happen when trying to go traverse a predicate of type password
+					// for example.
+					if len(subgraph.uidMatrix) < mIdx+1 {
+						continue
+					}
+
 					for lIdx, toUID := range subgraph.uidMatrix[mIdx].Uids {
 						if adjacencyMap[fromUID] == nil {
 							adjacencyMap[fromUID] = make(map[uint64]mapItem)
