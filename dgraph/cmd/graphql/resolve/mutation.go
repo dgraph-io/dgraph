@@ -58,7 +58,7 @@ const (
 	createdNode = "newnode"
 )
 
-func (r *RequestResolver) resolveMutation(m schema.Mutation) {
+func (r *RequestResolver) resolveMutation(ctx context.Context, m schema.Mutation) {
 	// A mutation operation can contain any number of mutation fields.  Those should be executed
 	// serially.
 	// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
@@ -119,18 +119,20 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 		return
 	}
 
-	jsonMut, err := json.Marshal(buildMutationJSON(m, val))
-	glog.V(2).Infof("Generated Dgraph mutation for %s: \n%s\n", m.Name(), jsonMut)
+	jsonMu, err := json.Marshal(buildMutationJSON(m, val))
+
+	if glog.V(3) {
+		glog.Infof("Generated Dgraph mutation for %s: \n%s\n", m.Name(), jsonMu)
+	}
 	if err != nil {
 		r.WithErrors(gqlerror.Errorf("couldn't marshal mutation for %s : %s", m.Name(), err))
 		return
 	}
 	mu := &api.Mutation{
 		CommitNow: true,
-		SetJson:   jsonMut,
+		SetJson:   jsonMu,
 	}
 
-	ctx := context.Background()
 	assigned, err := r.dgraphClient.NewTxn().Mutate(ctx, mu)
 	if err != nil {
 		r.WithErrors(gqlerror.Errorf("couldn't execute mutation for %s : %s", m.Name(), err))
@@ -159,7 +161,7 @@ func (r *RequestResolver) resolveMutation(m schema.Mutation) {
 		return
 	}
 
-	res, err := executeQuery(gq, r.dgraphClient)
+	res, err := executeQuery(ctx, gq, r.dgraphClient)
 	if err != nil {
 		r.WithErrors(gqlerror.Errorf("Failed to query dgraph with error : %s", err))
 		glog.Infof("Dgraph query failed : %s", err) // maybe log more info if it could be a bug?

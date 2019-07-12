@@ -17,6 +17,8 @@
 package resolve
 
 import (
+	"context"
+
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
@@ -102,7 +104,7 @@ func (r *RequestResolver) WithErrors(errs ...*gqlerror.Error) {
 // h.GqlReq should be set with a request before Resolve is called
 // and a schema and backend should have been added.
 // Resolve records any errors in the response's error field.
-func (r *RequestResolver) Resolve() *schema.Response {
+func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	if r == nil {
 		glog.Error("Call to Resolve with nil RequestResolver")
 		return schema.ErrorResponsef("Internal error")
@@ -127,12 +129,12 @@ func (r *RequestResolver) Resolve() *schema.Response {
 	case op.IsQuery():
 		// TODO: this should handle queries in parallel
 		for _, q := range op.Queries() {
-			r.resolveQuery(q)
+			r.resolveQuery(ctx, q)
 		}
 	case op.IsMutation():
 		// unlike queries, mutations are always handled serially
 		for _, m := range op.Mutations() {
-			r.resolveMutation(m)
+			r.resolveMutation(ctx, m)
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("Subscriptions not yet supported")

@@ -18,7 +18,6 @@ package graphql
 
 import (
 	"encoding/json"
-	"errors"
 	"mime"
 	"net/http"
 
@@ -31,7 +30,7 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-type graphqlHTTPHandler struct {
+type graphqlHandler struct {
 	dgraphClient *dgo.Dgraph
 	schema       *ast.Schema
 }
@@ -39,34 +38,27 @@ type graphqlHTTPHandler struct {
 // ServeHTTP handles GraphQL queries and mutations that get resolved
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
-func (gh *graphqlHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if gh == nil || gh.schema == nil || gh.dgraphClient == nil {
-		glog.Error(errors.New("Handler not initialised"))
-
-		b, err := json.Marshal(schema.ErrorResponsef("Server not correctly initialised"))
-		if err != nil {
-			glog.Error(err)
-			return
-		}
-		_, err = w.Write(b)
-		if err != nil {
-			glog.Error(err)
-			return
-		}
+	if !gh.isValid() {
+		panic("graphqlHandler not initialised")
 	}
 
 	rh := gh.resolverForRequest(r)
-	res := rh.Resolve()
+	res := rh.Resolve(r.Context())
 	_, err := res.WriteTo(w)
 	if err != nil {
 		glog.Error(err)
 	}
 }
 
-func (gh *graphqlHTTPHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
+func (gh *graphqlHandler) isValid() bool {
+	return !(gh == nil || gh.schema == nil || gh.dgraphClient == nil)
+}
+
+func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
 	rr = resolve.New(schema.AsSchema(gh.schema), gh.dgraphClient)
 
 	switch r.Method {

@@ -46,14 +46,14 @@ type options struct {
 	useCompression bool
 }
 
-type graphqlSchema struct {
+type gqlSchema struct {
 	Type   string    `json:"dgraph.type,omitempty"`
 	Schema string    `json:"dgraph.graphql.schema.schema,omitempty"`
 	Date   time.Time `json:"dgraph.graphql.schema.date,omitempty"`
 }
 
-type graphqlSchemas struct {
-	Schemas []graphqlSchema `json:"graphqlSchemas,omitempty"`
+type gqlSchemas struct {
+	Schemas []gqlSchema `json:"gqlSchemas,omitempty"`
 }
 
 var opt options
@@ -79,10 +79,9 @@ func init() {
 
 	GraphQL.EnvPrefix = "DGRAPH_GRAPHQL"
 
-	flags := GraphQL.Cmd.Flags()
-	flags.StringP("alpha", "a", "127.0.0.1:9080",
+	GraphQL.Cmd.PersistentFlags().StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
-	flags.StringP("schema", "s", "schema.graphql",
+	GraphQL.Cmd.PersistentFlags().StringP("schema", "s", "schema.graphql",
 		"Location of GraphQL schema file")
 
 	cmdInit := &cobra.Command{
@@ -101,12 +100,10 @@ func init() {
 			}
 		},
 	}
-	cmdInit.Flags().AddFlag(GraphQL.Cmd.Flag("alpha"))
-	cmdInit.Flags().AddFlag(GraphQL.Cmd.Flag("schema"))
 	GraphQL.Cmd.AddCommand(cmdInit)
 
 	// TLS configuration
-	x.RegisterClientTLSFlags(flags)
+	x.RegisterClientTLSFlags(GraphQL.Cmd.Flags())
 }
 
 func run() error {
@@ -125,9 +122,9 @@ func run() error {
 	defer disconnect()
 
 	q := `query {
-		graphqlSchemas(func: type(dgraph.graphql.schema)) {
-			dgraph.graphql.schema.schema
-			dgraph.graphql.schema.date
+		gqlSchemas(func: type(dgraph.graphql)) {
+			dgraph.graphql.schema
+			dgraph.graphql.date
 		}
 	}`
 
@@ -137,7 +134,7 @@ func run() error {
 		return errors.Wrap(err, "while querying GraphQL schema from Dgraph")
 	}
 
-	var schemas graphqlSchemas
+	var schemas gqlSchemas
 	err = json.Unmarshal(resp.Json, &schemas)
 	if err != nil {
 		return errors.Wrap(err, "while reading GraphQL schema")
@@ -157,7 +154,7 @@ func run() error {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	handler := &graphqlHTTPHandler{
+	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
 		schema:       schema,
 	}
@@ -182,9 +179,9 @@ func initDgraph() error {
 	if err != nil {
 		return err
 	}
-	gqlSchema := string(b)
+	inputSchema := string(b)
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
 	if gqlErr != nil {
 		return fmt.Errorf("cannot parse schema %s", gqlErr)
 	}
@@ -249,7 +246,10 @@ func initDgraph() error {
 	}
 
 	dgSchema := schemaB.String()
-	glog.V(2).Infof("Built Dgraph schema:\n\n%s\n", dgSchema)
+
+	if glog.V(2) {
+		fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)
+	}
 
 	fmt.Printf("Loading schema into Dgraph at %q\n", opt.alpha)
 	dgraphClient, disconnect, err := connect()
@@ -274,9 +274,9 @@ func initDgraph() error {
 		return errors.Wrap(err, "failed to write Dgraph schema")
 	}
 
-	s := graphqlSchema{
-		Type:   "dgraph.graphql.schema",
-		Schema: gqlSchema,
+	s := gqlSchema{
+		Type:   "dgraph.graphql",
+		Schema: inputSchema,
 		Date:   time.Now(),
 	}
 
@@ -289,8 +289,7 @@ func initDgraph() error {
 	}
 
 	mu.SetJson = pb
-	_, err = dgraphClient.NewTxn().Mutate(ctx, mu)
-	if err != nil {
+	if _, err = dgraphClient.NewTxn().Mutate(ctx, mu); err != nil {
 		return errors.Wrap(err, "failed to save GraphQL schema to Dgraph")
 		// But this would mean we are in an inconsistent state,
 		// so would that mean they just had to re-apply the same schema?

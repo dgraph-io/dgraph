@@ -28,12 +28,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-func executeQuery(query *gql.GraphQuery, dgraphClient *dgo.Dgraph) ([]byte, error) {
+func executeQuery(ctx context.Context, query *gql.GraphQuery, dgraphClient *dgo.Dgraph) ([]byte, error) {
 
 	q := asString(query)
-	glog.V(2).Infof("Executing Dgraph query: \n%s\n", q)
+	if glog.V(3) {
+		glog.Infof("Executing Dgraph query: \n%s\n", q)
+	}
 
-	ctx := context.Background()
 	resp, err := dgraphClient.NewTxn().Query(ctx, q)
 	if err != nil {
 		// should I be inspecting this to work out if it's a bug,
@@ -52,13 +53,13 @@ func asString(query *gql.GraphQuery) string {
 	var b strings.Builder
 
 	b.WriteString("query {\n")
-	writeQuery(query, &b, "  ")
+	writeQuery(&b, query, "  ")
 	b.WriteString("}")
 
 	return b.String()
 }
 
-func writeQuery(query *gql.GraphQuery, b *strings.Builder, prefix string) {
+func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 	b.WriteString(prefix)
 	if query.Alias != "" {
 		b.WriteString(query.Alias)
@@ -66,13 +67,13 @@ func writeQuery(query *gql.GraphQuery, b *strings.Builder, prefix string) {
 	}
 	b.WriteString(query.Attr)
 
-	writeFunction(query.Func, b)
-	writeFilter(query.Filter, b)
+	writeFunction(b, query.Func)
+	writeFilter(b, query.Filter)
 
 	if len(query.Children) > 0 {
 		b.WriteString(" { \n")
 		for _, c := range query.Children {
-			writeQuery(c, b, prefix+"  ")
+			writeQuery(b, c, prefix+"  ")
 		}
 		b.WriteString(prefix)
 		b.WriteString("}")
@@ -80,20 +81,20 @@ func writeQuery(query *gql.GraphQuery, b *strings.Builder, prefix string) {
 	b.WriteString("\n")
 }
 
-func writeFunction(f *gql.Function, b *strings.Builder) {
+func writeFunction(b *strings.Builder, f *gql.Function) {
 	if f != nil {
 		b.WriteString(fmt.Sprintf("(func: %s(0x%x)) ", f.Name, f.UID[0]))
 		// there's only uid(...) functions so far
 	}
 }
 
-func writeFilterFunction(f *gql.Function, b *strings.Builder) {
+func writeFilterFunction(b *strings.Builder, f *gql.Function) {
 	if f != nil {
 		b.WriteString(fmt.Sprintf("%s(%s) ", f.Name, f.Args[0].Value))
 	}
 }
 
-func writeFilter(f *gql.FilterTree, b *strings.Builder) {
+func writeFilter(b *strings.Builder, f *gql.FilterTree) {
 	if f == nil {
 		return
 	}
@@ -102,7 +103,7 @@ func writeFilter(f *gql.FilterTree, b *strings.Builder) {
 		b.WriteString(fmt.Sprintf("@filter(type(%s)) ", f.Func.Args[0].Value))
 	} else {
 		b.WriteString("@filter(")
-		writeFilterFunction(f.Func, b)
+		writeFilterFunction(b, f.Func)
 		b.WriteString(")")
 	}
 }

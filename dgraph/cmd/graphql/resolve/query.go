@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"context"
 	"errors"
 	"strconv"
 
@@ -32,7 +33,7 @@ type queryBuilder struct {
 	err        error
 }
 
-func (r *RequestResolver) resolveQuery(q schema.Query) {
+func (r *RequestResolver) resolveQuery(ctx context.Context, q schema.Query) {
 	// All queries in an operation should run (in parallel) regardless of
 	// errors in other queries
 
@@ -64,7 +65,7 @@ func (r *RequestResolver) resolveQuery(q schema.Query) {
 		return
 	}
 
-	res, err := executeQuery(gq, r.dgraphClient)
+	res, err := executeQuery(ctx, gq, r.dgraphClient)
 	if err != nil {
 		r.WithErrors(gqlerror.Errorf("Failed to query dgraph with error : %s", err))
 		glog.Infof("Dgraph query failed : %s", err) // maybe log more info if it could be a bug?
