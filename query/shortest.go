@@ -185,7 +185,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
 					// This can happen when trying to go traverse a predicate of type password
 					// for example.
-					if len(subgraph.uidMatrix) < mIdx+1 {
+					if mIdx >= len(subgraph.uidMatrix) {
 						continue
 					}
 
