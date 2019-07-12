@@ -101,23 +101,41 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	req.SinceTs, err = handler.GetSinceTs(uri)
+	latestManifest, err := handler.GetLatestManifest(uri)
 	if err != nil {
 		return err
 	}
+	req.SinceTs = latestManifest.Since
 	if forceFull {
 		req.SinceTs = 0
 	}
 
-	groups := worker.KnownGroups()
+	// Update the membership state to get the latest mapping of groups to predicates.
+	if err := worker.UpdateMembershipState(ctx); err != nil {
+		return err
+	}
+
+	// Get the current membership state and parse it for easier processing.
+	state := worker.GetMembershipState()
+	var groups []uint32
+	predMap := make(map[uint32][]string)
+	for gid, group := range state.Groups {
+		groups = append(groups, gid)
+		predMap[gid] = make([]string, 0)
+		for pred := range group.Tablets {
+			predMap[gid] = append(predMap[gid], pred)
+		}
+	}
+
 	glog.Infof("Created backup request: %s. Groups=%v\n", &req, groups)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	errCh := make(chan error, len(groups))
+	errCh := make(chan error, len(state.Groups))
 	for _, gid := range groups {
 		req := req
 		req.GroupId = gid
+		req.Predicates = predMap[gid]
 		go func(req *pb.BackupRequest) {
 			_, err := worker.BackupGroup(ctx, req)
 			errCh <- err
@@ -131,8 +149,17 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 		}
 	}
 
-	m := backup.Manifest{Groups: groups}
-	m.Since = req.ReadTs
+	m := backup.Manifest{Since: req.ReadTs, Groups: predMap}
+	if req.SinceTs == 0 {
+		m.Type = "full"
+		m.BackupId = x.GetRandomName(1)
+		m.BackupNum = 1
+	} else {
+		m.Type = "incremental"
+		m.BackupId = latestManifest.BackupId
+		m.BackupNum = latestManifest.BackupNum + 1
+	}
+
 	bp := &backup.Processor{Request: &req}
 	return bp.CompleteBackup(ctx, &m)
 }

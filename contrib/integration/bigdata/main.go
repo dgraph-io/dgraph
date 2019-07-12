@@ -152,7 +152,7 @@ func mutate(c *dgo.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
 	}
-	defer r.txn.Discard(ctx)
+	defer func() { _ = r.txn.Discard(ctx) }()
 
 	char := 'a' + rune(rand.Intn(26))
 
@@ -204,7 +204,7 @@ func showNode(c *dgo.Dgraph) error {
 	r := &runner{
 		txn: c.NewTxn(),
 	}
-	defer r.txn.Discard(ctx)
+	defer func() { _ = r.txn.Discard(ctx) }()
 
 	char := 'a' + rune(rand.Intn(26))
 	var result struct {

@@ -161,12 +161,12 @@ func (h *s3Handler) createObject(uri *url.URL, req *pb.BackupRequest, mc *minio.
 	}()
 }
 
-// GetSinceTs reads the manifests at the given URL and returns the appropriate
-// timestamp from which the current backup should be started.
-func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
+// GetLatestManifest reads the manifests at the given URL and returns the
+// latest manifest.
+func (h *s3Handler) GetLatestManifest(uri *url.URL) (*Manifest, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Find the max Since value from the latest backup.
@@ -180,15 +180,15 @@ func (h *s3Handler) GetSinceTs(uri *url.URL) (uint64, error) {
 		}
 	}
 
+	var m Manifest
 	if lastManifest == "" {
-		return 0, nil
+		return &m, nil
 	}
 
-	var m Manifest
 	if err := h.readManifest(mc, lastManifest, &m); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return m.Since, nil
+	return &m, nil
 }
 
 // CreateBackupFile creates a new session and prepares the data stream for the backup.
@@ -206,7 +206,7 @@ func (h *s3Handler) CreateBackupFile(uri *url.URL, req *pb.BackupRequest) error 
 		return err
 	}
 
-	objectName := fmt.Sprintf(backupNameFmt, req.ReadTs, req.GroupId)
+	objectName := backupName(req.ReadTs, req.GroupId)
 	h.createObject(uri, req, mc, objectName)
 	return nil
 }
@@ -239,13 +239,13 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
+func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
 	mc, err := h.setup(uri)
 	if err != nil {
 		return 0, err
 	}
 
-	var manifests []string
+	var paths []string
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
@@ -253,43 +253,56 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 	suffix := "/" + backupManifest
 	for object := range mc.ListObjects(h.bucketName, h.objectPrefix, true, doneCh) {
 		if strings.HasSuffix(object.Key, suffix) {
-			manifests = append(manifests, object.Key)
+			paths = append(paths, object.Key)
 		}
 	}
-	if len(manifests) == 0 {
+	if len(paths) == 0 {
 		return 0, errors.Errorf("No manifests found at: %s", uri.String())
 	}
-	sort.Strings(manifests)
+	sort.Strings(paths)
 	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
+		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, paths)
 	}
 
 	// since is returned with the max manifest Since value found.
 	var since uint64
 
-	// Process each manifest, first check that they are valid and then confirm the
-	// backup files for each group exist. Each group in manifest must have a backup file,
-	// otherwise this is a failure and the user must remedy.
-	for _, manifest := range manifests {
+	// Read and filter the manifests to get the list of manifests to consider
+	// for this restore operation.
+	var manifests []*Manifest
+	for _, path := range paths {
 		var m Manifest
-		if err := h.readManifest(mc, manifest, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", manifest)
+		if err := h.readManifest(mc, path, &m); err != nil {
+			return 0, errors.Wrapf(err, "While reading %q", path)
 		}
-		if m.Since == 0 || len(m.Groups) == 0 {
+		m.Path = path
+		manifests = append(manifests, &m)
+	}
+	manifests, err = filterManifests(manifests, backupId)
+	if err != nil {
+		return 0, err
+	}
+
+	// Process each manifest, first check that they are valid and then confirm the
+	// backup manifests for each group exist. Each group in manifest must have a backup file,
+	// otherwise this is a failure and the user must remedy.
+	for i, manifest := range manifests {
+		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %s: %#v\n", manifest, &m)
+				fmt.Printf("Restore: skip backup: %#v\n", manifest)
 			}
 			continue
 		}
 
-		path := filepath.Dir(manifest)
-		for _, groupId := range m.Groups {
-			object := filepath.Join(path, fmt.Sprintf(backupNameFmt, m.Since, groupId))
+		path := filepath.Dir(manifests[i].Path)
+		for gid := range manifest.Groups {
+			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)
 			}
 			defer reader.Close()
+
 			st, err := reader.Stat()
 			if err != nil {
 				return 0, errors.Wrapf(err, "Stat failed %q", object)
@@ -298,11 +311,15 @@ func (h *s3Handler) Load(uri *url.URL, fn loadFn) (uint64, error) {
 				return 0, errors.Errorf("Remote object is empty or inaccessible: %s", object)
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
-			if err = fn(reader, int(groupId)); err != nil {
+
+			// Only restore the predicates that were assigned to this group at the time
+			// of the last backup.
+			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
+			if err = fn(reader, int(gid), predSet); err != nil {
 				return 0, err
 			}
 		}
-		since = m.Since
+		since = manifest.Since
 	}
 	return since, nil
 }

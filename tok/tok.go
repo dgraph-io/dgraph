@@ -18,7 +18,6 @@ package tok
 
 import (
 	"encoding/binary"
-	"fmt"
 	"plugin"
 	"time"
 
@@ -113,6 +112,7 @@ func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
 	return tokens, nil
 }
 
+// LoadCustomTokenizer reads and loads a custom tokenizer from the given file.
 func LoadCustomTokenizer(soFile string) {
 	glog.Infof("Loading custom tokenizer from %q", soFile)
 	pl, err := plugin.Open(soFile)
@@ -154,7 +154,7 @@ func GetTokenizers(names []string) ([]Tokenizer, error) {
 	for _, name := range names {
 		t, found := GetTokenizer(name)
 		if !found {
-			return nil, fmt.Errorf("Invalid tokenizer %s", name)
+			return nil, errors.Errorf("Invalid tokenizer %s", name)
 		}
 		tokenizers = append(tokenizers, t)
 	}
@@ -169,6 +169,7 @@ func registerTokenizer(t Tokenizer) {
 	tokenizers[t.Name()] = t
 }
 
+// GeoTokenizer generates tokens from geo data.
 type GeoTokenizer struct{}
 
 func (t GeoTokenizer) Name() string { return "geo" }
@@ -180,6 +181,7 @@ func (t GeoTokenizer) Identifier() byte { return IdentGeo }
 func (t GeoTokenizer) IsSortable() bool { return false }
 func (t GeoTokenizer) IsLossy() bool    { return true }
 
+// IntTokenizer generates tokens from integer data.
 type IntTokenizer struct{}
 
 func (t IntTokenizer) Name() string { return "int" }
@@ -191,6 +193,7 @@ func (t IntTokenizer) Identifier() byte { return IdentInt }
 func (t IntTokenizer) IsSortable() bool { return true }
 func (t IntTokenizer) IsLossy() bool    { return false }
 
+// FloatTokenizer generates tokens from floating-point data.
 type FloatTokenizer struct{}
 
 func (t FloatTokenizer) Name() string { return "float" }
@@ -202,6 +205,7 @@ func (t FloatTokenizer) Identifier() byte { return IdentFloat }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
 
+// YearTokenizer generates year tokens from datetime data.
 type YearTokenizer struct{}
 
 func (t YearTokenizer) Name() string { return "year" }
@@ -216,6 +220,7 @@ func (t YearTokenizer) Identifier() byte { return IdentYear }
 func (t YearTokenizer) IsSortable() bool { return true }
 func (t YearTokenizer) IsLossy() bool    { return true }
 
+// MonthTokenizer generates month tokens from datetime data.
 type MonthTokenizer struct{}
 
 func (t MonthTokenizer) Name() string { return "month" }
@@ -231,6 +236,7 @@ func (t MonthTokenizer) Identifier() byte { return IdentMonth }
 func (t MonthTokenizer) IsSortable() bool { return true }
 func (t MonthTokenizer) IsLossy() bool    { return true }
 
+// DayTokenizer generates day tokens from datetime data.
 type DayTokenizer struct{}
 
 func (t DayTokenizer) Name() string { return "day" }
@@ -247,6 +253,7 @@ func (t DayTokenizer) Identifier() byte { return IdentDay }
 func (t DayTokenizer) IsSortable() bool { return true }
 func (t DayTokenizer) IsLossy() bool    { return true }
 
+// HourTokenizer generates hour tokens from datetime data.
 type HourTokenizer struct{}
 
 func (t HourTokenizer) Name() string { return "hour" }
@@ -264,6 +271,7 @@ func (t HourTokenizer) Identifier() byte { return IdentHour }
 func (t HourTokenizer) IsSortable() bool { return true }
 func (t HourTokenizer) IsLossy() bool    { return true }
 
+// TermTokenizer generates term tokens from string data.
 type TermTokenizer struct{}
 
 func (t TermTokenizer) Name() string { return "term" }
@@ -280,6 +288,7 @@ func (t TermTokenizer) Identifier() byte { return IdentTerm }
 func (t TermTokenizer) IsSortable() bool { return false }
 func (t TermTokenizer) IsLossy() bool    { return true }
 
+// ExactTokenizer returns the exact string as a token.
 type ExactTokenizer struct{}
 
 func (t ExactTokenizer) Name() string { return "exact" }
@@ -294,6 +303,7 @@ func (t ExactTokenizer) Identifier() byte { return IdentExact }
 func (t ExactTokenizer) IsSortable() bool { return true }
 func (t ExactTokenizer) IsLossy() bool    { return false }
 
+// FullTextTokenizer generates full-text tokens from string data.
 type FullTextTokenizer struct{ lang string }
 
 func (t FullTextTokenizer) Name() string { return "fulltext" }
@@ -317,39 +327,7 @@ func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
 
-func encodeInt(val int64) string {
-	buf := make([]byte, 9)
-	binary.BigEndian.PutUint64(buf[1:], uint64(val))
-	if val < 0 {
-		buf[0] = 0
-	} else {
-		buf[0] = 1
-	}
-	return string(buf)
-}
-
-func encodeToken(tok string, typ byte) string {
-	return string(typ) + tok
-}
-
-func EncodeGeoTokens(tokens []string) {
-	for i := 0; i < len(tokens); i++ {
-		tokens[i] = encodeToken(tokens[i], GeoTokenizer{}.Identifier())
-	}
-}
-
-func EncodeRegexTokens(tokens []string) {
-	for i := 0; i < len(tokens); i++ {
-		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
-	}
-}
-
-func EncodeTokens(id byte, tokens []string) {
-	for i := 0; i < len(tokens); i++ {
-		tokens[i] = encodeToken(tokens[i], id)
-	}
-}
-
+// BoolTokenizer returns tokens from boolean data.
 type BoolTokenizer struct{}
 
 func (t BoolTokenizer) Name() string { return "bool" }
@@ -365,6 +343,7 @@ func (t BoolTokenizer) Identifier() byte { return IdentBool }
 func (t BoolTokenizer) IsSortable() bool { return false }
 func (t BoolTokenizer) IsLossy() bool    { return false }
 
+// TrigramTokenizer returns trigram tokens from string data.
 type TrigramTokenizer struct{}
 
 func (t TrigramTokenizer) Name() string { return "trigram" }
@@ -389,6 +368,7 @@ func (t TrigramTokenizer) Identifier() byte { return IdentTrigram }
 func (t TrigramTokenizer) IsSortable() bool { return false }
 func (t TrigramTokenizer) IsLossy() bool    { return true }
 
+// HashTokenizer returns hash tokens from string data.
 type HashTokenizer struct{}
 
 func (t HashTokenizer) Name() string { return "hash" }
@@ -409,7 +389,7 @@ func (t HashTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t HashTokenizer) Identifier() byte { return IdentHash }
 func (t HashTokenizer) IsSortable() bool { return false }
 
-// We have switched HashTokenizer to be non-lossy. This allows us to avoid having to retrieve values
+// IsLossy false for the HashTokenizer. This allows us to avoid having to retrieve values
 // for the returned results, and compare them against the value in the query, which is slow. There
 // is very low probability of collisions with a 256-bit hash. We use that fact to speed up equality
 // query operations using the hash index.
@@ -427,8 +407,39 @@ type PluginTokenizer interface {
 	Identifier() byte
 }
 
+// CustomTokenizer generates tokens from custom logic.
+// It doesn't make sense for plugins to implement the IsSortable and IsLossy methods,
+// so they're hard-coded.
 type CustomTokenizer struct{ PluginTokenizer }
 
-// It doesn't make sense for plugins to implement the following methods, so they're hardcoded.
 func (t CustomTokenizer) IsSortable() bool { return false }
 func (t CustomTokenizer) IsLossy() bool    { return true }
+
+func encodeInt(val int64) string {
+	buf := make([]byte, 9)
+	binary.BigEndian.PutUint64(buf[1:], uint64(val))
+	if val < 0 {
+		buf[0] = 0
+	} else {
+		buf[0] = 1
+	}
+	return string(buf)
+}
+
+func encodeToken(tok string, typ byte) string {
+	return string(typ) + tok
+}
+
+// EncodeGeoTokens encodes the given list of tokens as geo tokens.
+func EncodeGeoTokens(tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], GeoTokenizer{}.Identifier())
+	}
+}
+
+// EncodeRegexTokens encodes the given list of strings as regex tokens.
+func EncodeRegexTokens(tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
+	}
+}

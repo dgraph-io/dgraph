@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
@@ -67,7 +68,7 @@ func GetState() (*StateResponse, error) {
 	}
 
 	if bytes.Contains(b, []byte("Error")) {
-		return nil, fmt.Errorf("Failed to get state: %s", string(b))
+		return nil, errors.Errorf("Failed to get state: %s", string(b))
 	}
 
 	var st StateResponse
@@ -77,6 +78,7 @@ func GetState() (*StateResponse, error) {
 	return &st, nil
 }
 
+// GetClientToGroup returns a dgraph client connected to an alpha in the given group.
 func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
 	state, err := GetState()
 	if err != nil {
@@ -85,22 +87,22 @@ func GetClientToGroup(groupID string) (*dgo.Dgraph, error) {
 
 	group, ok := state.Groups[groupID]
 	if !ok {
-		return nil, fmt.Errorf("group %s does not exist", groupID)
+		return nil, errors.Errorf("group %s does not exist", groupID)
 	}
 
 	if len(group.Members) == 0 {
-		return nil, fmt.Errorf("the group %s has no members", groupID)
+		return nil, errors.Errorf("the group %s has no members", groupID)
 	}
 
 	member := group.Members["1"]
 	parts := strings.Split(member.Addr, ":")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("the member has an invalid address: %v", member.Addr)
+		return nil, errors.Errorf("the member has an invalid address: %v", member.Addr)
 	}
 	// internalPort is used for communication between alpha nodes
 	internalPort, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse the port number from %s", parts[1])
+		return nil, errors.Errorf("unable to parse the port number from %s", parts[1])
 	}
 
 	// externalPort is for handling connections from clients

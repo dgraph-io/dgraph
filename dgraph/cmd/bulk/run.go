@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Bulk is the sub-command invoked when running "dgraph bulk".
 var Bulk x.SubCommand
 
 var defaultOutDir = "./out"

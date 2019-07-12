@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
 	ctx, span := otrace.StartSpan(ctx, "server.Login")
@@ -56,7 +57,7 @@ func (s *Server) Login(ctx context.Context,
 	if err != nil {
 		errMsg := fmt.Sprintf("Authentication from address %s failed: %v", addr, err)
 		glog.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.Errorf(errMsg)
 	}
 
 	resp := &api.Response{}
@@ -65,14 +66,14 @@ func (s *Server) Login(ctx context.Context,
 		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.Errorf(errMsg)
 	}
 	refreshJwt, err := getRefreshJwt(user.UserID)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.Errorf(errMsg)
 	}
 
 	loginJwt := api.Jwt{
@@ -85,7 +86,7 @@ func (s *Server) Login(ctx context.Context,
 		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.Errorf(errMsg)
 	}
 	resp.Json = jwtBytes
 	return resp, nil
@@ -97,25 +98,25 @@ func (s *Server) Login(ctx context.Context,
 func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User,
 	error) {
 	if err := validateLoginRequest(request); err != nil {
-		return nil, fmt.Errorf("invalid login request: %v", err)
+		return nil, errors.Wrapf(err, "invalid login request")
 	}
 
 	var user *acl.User
 	if len(request.RefreshToken) > 0 {
 		userData, err := validateToken(request.RefreshToken)
 		if err != nil {
-			return nil, fmt.Errorf("unable to authenticate the refresh token %v: %v",
-				request.RefreshToken, err)
+			return nil, errors.Wrapf(err, "unable to authenticate the refresh token %v",
+				request.RefreshToken)
 		}
 
 		userId := userData[0]
 		user, err = authorizeUser(ctx, userId, "")
 		if err != nil {
-			return nil, fmt.Errorf("error while querying user with id %v: %v", userId, err)
+			return nil, errors.Wrapf(err, "while querying user with id %v", userId)
 		}
 
 		if user == nil {
-			return nil, fmt.Errorf("unable to authenticate through refresh token: "+
+			return nil, errors.Errorf("unable to authenticate through refresh token: "+
 				"user not found for id %v", userId)
 		}
 
@@ -127,16 +128,16 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 	var err error
 	user, err = authorizeUser(ctx, request.Userid, request.Password)
 	if err != nil {
-		return nil, fmt.Errorf("error while querying user with id %v: %v",
-			request.Userid, err)
+		return nil, errors.Wrapf(err, "while querying user with id %v",
+			request.Userid)
 	}
 
 	if user == nil {
-		return nil, fmt.Errorf("unable to authenticate through password: "+
+		return nil, errors.Errorf("unable to authenticate through password: "+
 			"user not found for id %v", request.Userid)
 	}
 	if !user.PasswordMatch {
-		return nil, fmt.Errorf("password mismatch for user: %v", request.Userid)
+		return nil, errors.Errorf("password mismatch for user: %v", request.Userid)
 	}
 	return user, nil
 }
@@ -147,30 +148,30 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 func validateToken(jwtStr string) ([]string, error) {
 	token, err := jwt.Parse(jwtStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return Config.HmacSecret, nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse jwt token:%v", err)
+		return nil, errors.Errorf("unable to parse jwt token:%v", err)
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return nil, fmt.Errorf("claims in jwt token is not map claims")
+		return nil, errors.Errorf("claims in jwt token is not map claims")
 	}
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
 	if !claims.VerifyExpiresAt(now, true) {
-		return nil, fmt.Errorf("Token is expired") // the same error msg that's used inside jwt-go
+		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
 	userId, ok := claims["userid"].(string)
 	if !ok {
-		return nil, fmt.Errorf("userid in claims is not a string:%v", userId)
+		return nil, errors.Errorf("userid in claims is not a string:%v", userId)
 	}
 
 	groups, ok := claims["groups"].([]interface{})
@@ -181,7 +182,7 @@ func validateToken(jwtStr string) ([]string, error) {
 			groupId, ok := group.(string)
 			if !ok {
 				// This shouldn't happen. So, no need to make the client try to refresh the tokens.
-				return nil, fmt.Errorf("unable to convert group to string:%v", group)
+				return nil, errors.Errorf("unable to convert group to string:%v", group)
 			}
 
 			groupIds = append(groupIds, groupId)
@@ -194,7 +195,7 @@ func validateToken(jwtStr string) ([]string, error) {
 // <user id, password> pair
 func validateLoginRequest(request *api.LoginRequest) error {
 	if request == nil {
-		return fmt.Errorf("the request should not be nil")
+		return errors.Errorf("the request should not be nil")
 	}
 	// we will use the refresh token for authentication if it's set
 	if len(request.RefreshToken) > 0 {
@@ -203,10 +204,10 @@ func validateLoginRequest(request *api.LoginRequest) error {
 
 	// otherwise make sure both userid and password are set
 	if len(request.Userid) == 0 {
-		return fmt.Errorf("the userid should not be empty")
+		return errors.Errorf("the userid should not be empty")
 	}
 	if len(request.Password) == 0 {
-		return fmt.Errorf("the password should not be empty")
+		return errors.Errorf("the password should not be empty")
 	}
 	return nil
 }
@@ -223,7 +224,7 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
 	if err != nil {
-		return "", fmt.Errorf("unable to encode jwt to string: %v", err)
+		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
 	return jwtString, nil
 }
@@ -238,7 +239,7 @@ func getRefreshJwt(userId string) (string, error) {
 
 	jwtString, err := token.SignedString(Config.HmacSecret)
 	if err != nil {
-		return "", fmt.Errorf("unable to encode jwt to string: %v", err)
+		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
 	return jwtString, nil
 }
@@ -281,6 +282,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (*acl.Us
 	return user, nil
 }
 
+// RefreshAcls queries for the ACL triples and refreshes the ACLs accordingly.
 func RefreshAcls(closer *y.Closer) {
 	defer closer.Done()
 	if len(Config.HmacSecret) == 0 {
@@ -292,7 +294,7 @@ func RefreshAcls(closer *y.Closer) {
 	defer ticker.Stop()
 
 	// retrieve the full data set of ACLs from the corresponding alpha server, and update the
-	// aclCache
+	// aclCachePtr
 	retrieveAcls := func() error {
 		glog.V(3).Infof("Refreshing ACLs")
 		queryRequest := api.Request{
@@ -304,14 +306,14 @@ func RefreshAcls(closer *y.Closer) {
 		var err error
 		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
 		if err != nil {
-			return fmt.Errorf("unable to retrieve acls: %v", err)
+			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
 		groups, err := acl.UnmarshalGroups(queryResp.GetJson(), "allAcls")
 		if err != nil {
 			return err
 		}
 
-		aclCache.update(groups)
+		aclCachePtr.update(groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
@@ -337,10 +339,10 @@ const queryAcls = `
 }
 `
 
-// clear the aclCache and upsert the Groot account.
+// ResetAcl clears the aclCachePtr and upserts the Groot account.
 func ResetAcl() {
 	if len(Config.HmacSecret) == 0 {
-		// the acl feature is not turned on
+		// The acl feature is not turned on.
 		return
 	}
 
@@ -356,13 +358,13 @@ func ResetAcl() {
 
 		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
 		if err != nil {
-			return fmt.Errorf("error while querying user with id %s: %v", x.GrootId, err)
+			return errors.Wrapf(err, "while querying user with id %s", x.GrootId)
 		}
 		startTs := queryResp.GetTxn().StartTs
 
 		rootUser, err := acl.UnmarshalUser(queryResp, "user")
 		if err != nil {
-			return fmt.Errorf("error while unmarshaling the root user: %v", err)
+			return errors.Wrapf(err, "while unmarshaling the root user")
 		}
 		if rootUser != nil {
 			glog.Infof("The groot account already exists, no need to insert again")
@@ -413,7 +415,8 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 	return validateToken(accessJwt[0])
 }
 
-//authorizeAlter parses the Schema in the operation and authorizes the operation using the aclCache
+// authorizeAlter parses the Schema in the operation and authorizes the operation
+// using the aclCachePtr
 func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -432,7 +435,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 			return err
 		}
 
-		for _, u := range update.Schemas {
+		for _, u := range update.Preds {
 			preds = append(preds, u.Predicate)
 		}
 	}
@@ -462,14 +465,14 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 
 		// if we get here, we know the user is not Groot.
 		if isDropAll(op) || op.DropOp == api.Operation_DATA {
-			return fmt.Errorf("only Groot is allowed to drop all data, but the current user is %s",
-				userId)
+			return errors.Errorf(
+				"only Groot is allowed to drop all data, but the current user is %s", userId)
 		}
 
 		for _, pred := range preds {
-			err := aclCache.authorizePredicate(groupIds, pred, acl.Modify)
+			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Modify)
 			if err != nil {
-				logAccess(&AccessEntry{
+				logAccess(&accessEntry{
 					userId:    userId,
 					groups:    groupIds,
 					preds:     preds,
@@ -487,7 +490,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 	err := doAuthorizeAlter()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&AccessEntry{
+		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			preds:     preds,
@@ -540,7 +543,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 	return false
 }
 
-// authorizeMutation authorizes the mutation using the aclCache
+// authorizeMutation authorizes the mutation using the aclCachePtr
 func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -562,7 +565,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			if userId == x.GrootId {
 				// groot is allowed to mutate anything except the permission of the acl predicates
 				if isAclPredMutation(gmu.Set) {
-					return fmt.Errorf("the permission of ACL predicates can not be changed")
+					return errors.Errorf("the permission of ACL predicates can not be changed")
 				}
 				return nil
 			}
@@ -574,9 +577,9 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 		}
 
 		for _, pred := range preds {
-			err := aclCache.authorizePredicate(groupIds, pred, acl.Write)
+			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Write)
 			if err != nil {
-				logAccess(&AccessEntry{
+				logAccess(&accessEntry{
 					userId:    userId,
 					groups:    groupIds,
 					preds:     preds,
@@ -594,7 +597,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	err := doAuthorizeMutation()
 	span := otrace.FromContext(ctx)
 	if span != nil {
-		span.Annotatef(nil, (&AccessEntry{
+		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			preds:     preds,
@@ -630,7 +633,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	return preds
 }
 
-type AccessEntry struct {
+type accessEntry struct {
 	userId    string
 	groups    []string
 	preds     []string
@@ -638,17 +641,17 @@ type AccessEntry struct {
 	allowed   bool
 }
 
-func (log *AccessEntry) String() string {
+func (log *accessEntry) String() string {
 	return fmt.Sprintf("ACL-LOG Authorizing user %q with groups %q on predicates %q "+
 		"for %q, allowed:%v", log.userId, strings.Join(log.groups, ","),
 		strings.Join(log.preds, ","), log.operation.Name, log.allowed)
 }
 
-func logAccess(log *AccessEntry) {
+func logAccess(log *accessEntry) {
 	glog.V(1).Infof(log.String())
 }
 
-//authorizeQuery authorizes the query using the aclCache
+//authorizeQuery authorizes the query using the aclCachePtr
 func authorizeQuery(ctx context.Context, req *api.Request) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
@@ -684,9 +687,9 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		}
 
 		for _, pred := range preds {
-			err := aclCache.authorizePredicate(groupIds, pred, acl.Read)
+			err := aclCachePtr.authorizePredicate(groupIds, pred, acl.Read)
 			if err != nil {
-				logAccess(&AccessEntry{
+				logAccess(&accessEntry{
 					userId:    userId,
 					groups:    groupIds,
 					preds:     preds,
@@ -703,7 +706,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 
 	err = doAuthorizeQuery()
 	if span := otrace.FromContext(ctx); span != nil {
-		span.Annotatef(nil, (&AccessEntry{
+		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
 			groups:    groupIds,
 			preds:     preds,

@@ -22,10 +22,7 @@ func withDB(t *testing.T, test func(db *badger.DB)) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	opt := badger.LSMOnlyOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-
+	opt := badger.LSMOnlyOptions(dir)
 	db, err := badger.Open(opt)
 	require.NoError(t, err)
 	defer db.Close()

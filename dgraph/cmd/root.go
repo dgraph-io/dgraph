@@ -91,7 +91,7 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	_ = rootConf.BindPFlags(RootCmd.PersistentFlags())
+	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
 	// Add all existing global flag (eg: from glog) to rootCmd's flags
 	RootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
@@ -104,8 +104,8 @@ func initCmds() {
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
 		sc.Conf = viper.New()
-		sc.Conf.BindPFlags(sc.Cmd.Flags())
-		sc.Conf.BindPFlags(RootCmd.PersistentFlags())
+		x.Check(sc.Conf.BindPFlags(sc.Cmd.Flags()))
+		x.Check(sc.Conf.BindPFlags(RootCmd.PersistentFlags()))
 		sc.Conf.AutomaticEnv()
 		sc.Conf.SetEnvPrefix(sc.EnvPrefix)
 		// Options that contain a "." should use "_" in its place when provided as an

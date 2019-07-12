@@ -43,7 +43,7 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type JepsenTest struct {
+type jepsenTest struct {
 	workload          string
 	nemesis           string
 	timeLimit         int
@@ -56,9 +56,9 @@ type JepsenTest struct {
 }
 
 const (
-	TestPass = iota
-	TestFail
-	TestIncomplete
+	testPass = iota
+	testFail
+	testIncomplete
 )
 
 var (
@@ -119,15 +119,15 @@ var (
 	testAll = pflag.Bool("test-all", false, "Run all workload and nemesis combinations.")
 )
 
-func Command(command ...string) *exec.Cmd {
-	return CommandContext(ctxb, command...)
+func command(cmd ...string) *exec.Cmd {
+	return commandContext(ctxb, cmd...)
 }
 
-func CommandContext(ctx context.Context, command ...string) *exec.Cmd {
+func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 	if *dryRun {
 		// Properly quote the args so the echoed output can run via copy/paste.
 		quoted := []string{}
-		for _, c := range command {
+		for _, c := range cmd {
 			if strings.Contains(c, " ") {
 				quoted = append(quoted, strconv.Quote(c))
 			} else {
@@ -137,11 +137,11 @@ func CommandContext(ctx context.Context, command ...string) *exec.Cmd {
 		}
 		return exec.CommandContext(ctx, "echo", quoted...)
 	}
-	return exec.CommandContext(ctx, command[0], command[1:]...)
+	return exec.CommandContext(ctx, cmd[0], cmd[1:]...)
 }
 
 func jepsenUp() {
-	cmd := Command("./up.sh",
+	cmd := command("./up.sh",
 		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
 	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
 	cmd.Stdout = os.Stdout
@@ -152,7 +152,7 @@ func jepsenUp() {
 }
 
 func jepsenDown() {
-	cmd := Command("docker-compose",
+	cmd := command("docker-compose",
 		"-f", "./docker-compose.yml",
 		"-f", "../dgraph/docker/docker-compose.yml",
 		"down")
@@ -165,7 +165,7 @@ func jepsenDown() {
 }
 
 func jepsenServe() {
-	cmd := Command(
+	cmd := command(
 		"docker", "exec", "--workdir", "/jepsen/dgraph", "jepsen-control",
 		"lein", "run", "serve")
 	// Ignore output and errors. It's okay if "lein run serve" already ran before.
@@ -173,7 +173,7 @@ func jepsenServe() {
 }
 
 func openJepsenBrowser() {
-	cmd := Command(
+	cmd := command(
 		"docker", "inspect", "--format",
 		`{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}`,
 		"jepsen-control")
@@ -187,7 +187,7 @@ func openJepsenBrowser() {
 	browser.Open(jepsenUrl)
 }
 
-func runJepsenTest(test *JepsenTest) int {
+func runJepsenTest(test *jepsenTest) int {
 	dockerCmd := []string{
 		"docker", "exec", "jepsen-control",
 		"/bin/bash", "-c",
@@ -214,14 +214,14 @@ func runJepsenTest(test *JepsenTest) int {
 		testCmd = append(testCmd, "--dgraph-jaeger-collector", *jaeger)
 		testCmd = append(testCmd, "--tracing", *jaeger+"/api/traces")
 	}
-	command := append(dockerCmd, strings.Join(testCmd, " "))
+	dockerCmd = append(dockerCmd, strings.Join(testCmd, " "))
 
 	// Timeout should be a bit longer than the Jepsen test time limit to account
 	// for post-analysis time.
 	commandTimeout := 10*time.Minute + time.Duration(test.timeLimit)*time.Second
 	ctx, cancel := context.WithTimeout(ctxb, commandTimeout)
 	defer cancel()
-	cmd := CommandContext(ctx, command...)
+	cmd := commandContext(ctx, dockerCmd...)
 
 	var out bytes.Buffer
 	var stdout io.Writer
@@ -240,14 +240,14 @@ func runJepsenTest(test *JepsenTest) int {
 		// TODO The exit code could probably be checked instead of checking the output.
 		// Check jepsen source to be sure.
 		if strings.Contains(out.String(), "Analysis invalid") {
-			return TestFail
+			return testFail
 		}
-		return TestIncomplete
+		return testIncomplete
 	}
 	if strings.Contains(out.String(), "Everything looks good!") {
-		return TestPass
+		return testPass
 	}
-	return TestIncomplete
+	return testIncomplete
 }
 
 func inCi() bool {
@@ -263,11 +263,11 @@ func tcStart(testName string) func(pass int) {
 	return func(pass int) {
 		durMs := time.Since(now).Nanoseconds() / 1e6
 		switch pass {
-		case TestPass:
+		case testPass:
 			fmt.Printf("##teamcity[testFinished name='%v' duration='%v']\n", testName, durMs)
-		case TestFail:
+		case testFail:
 			fmt.Printf("##teamcity[testFailed='%v' duration='%v']\n", testName, durMs)
-		case TestIncomplete:
+		case testIncomplete:
 			fmt.Printf("##teamcity[testFailed='%v' duration='%v' message='Test incomplete.']\n",
 				testName, durMs)
 		}
@@ -340,7 +340,7 @@ func main() {
 	for _, n := range nemeses {
 		for _, w := range workloads {
 			tcEnd := tcStart(fmt.Sprintf("Workload:%v,Nemeses:%v", w, n))
-			status := runJepsenTest(&JepsenTest{
+			status := runJepsenTest(&jepsenTest{
 				workload:          w,
 				nemesis:           n,
 				timeLimit:         *timeLimit,

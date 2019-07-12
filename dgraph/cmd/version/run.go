@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// Version is the sub-command invoked when running "dgraph version".
 var Version x.SubCommand
 
 func init() {

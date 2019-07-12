@@ -84,11 +84,13 @@ type GraphQuery struct {
 	IsEmpty bool
 }
 
+// RecurseArgs stores the arguments needed to process the @recurse directive.
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
 }
 
+// GroupByAttr stores the arguments needed to process the @groupby directive.
 type GroupByAttr struct {
 	Attr  string
 	Alias string
@@ -101,7 +103,7 @@ type pair struct {
 	Val string
 }
 
-// Internal structure for doing dfs on fragments.
+// fragmentNode is an internal structure for doing dfs on fragments.
 type fragmentNode struct {
 	Name    string
 	Gq      *GraphQuery
@@ -109,7 +111,7 @@ type fragmentNode struct {
 	Exited  bool // Exited in dfs.
 }
 
-// Key is fragment names.
+// fragmentMap is used to associate fragment names to their corresponding fragmentNode.
 type fragmentMap map[string]*fragmentNode
 
 const (
@@ -119,6 +121,7 @@ const (
 	ListVar  = 3
 )
 
+// VarContext stores information about the vars needed to complete a query.
 type VarContext struct {
 	Name string
 	Typ  int //  1 for UID vars, 2 for value vars
@@ -142,6 +145,7 @@ type FilterTree struct {
 	Func  *Function
 }
 
+// Arg stores an argument to a function.
 type Arg struct {
 	Value        string
 	IsValueVar   bool // If argument is val(a)
@@ -194,10 +198,12 @@ var mathOpPrecedence = map[string]int{
 	"!=": 5,
 }
 
+// IsAggregator returns true if the function name is an aggregation function.
 func (f *Function) IsAggregator() bool {
 	return isAggregator(f.Name)
 }
 
+// IsPasswordVerifier returns true if the function name is "checkpwd".
 func (f *Function) IsPasswordVerifier() bool {
 	return f.Name == "checkpwd"
 }
@@ -267,6 +273,7 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 	return vm
 }
 
+// Request stores the query text and the variable mapping.
 type Request struct {
 	Str       string
 	Variables map[string]string
@@ -450,7 +457,32 @@ type Result struct {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(r Request) (res Result, rerr error) {
+func Parse(r Request) (Result, error) {
+	return ParseWithNeedVars(r, nil)
+}
+
+// ParseWithNeedVars performs parsing of a query with given needVars.
+//
+// The needVars parameter is passed in the case of upsert block.
+// For example, when parsing the query block inside -
+// upsert {
+//   query {
+//     me(func: eq(email, "someone@gmail.com"), first: 1) {
+//       v as uid
+//     }
+//   }
+//
+//   mutation {
+//     set {
+//       uid(v) <name> "Some One" .
+//       uid(v) <email> "someone@gmail.com" .
+//     }
+//   }
+// }
+//
+// The variable name v needs to be passed through the needVars parameter. Otherwise, an error
+// is reported complaining that the variable v is defined but not used in the query block.
+func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 	query := r.Str
 	vmap := convertToVarMap(r.Variables)
 
@@ -530,6 +562,12 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 
 		allVars := res.QueryVars
+		// Add the variables that are needed outside the query block.
+		// For example, mutation block in upsert block will be using
+		// variables from the query block that is getting parsed here.
+		if len(needVars) != 0 {
+			allVars = append(allVars, &Vars{Needs: needVars})
+		}
 		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
@@ -575,12 +613,10 @@ func checkDependency(vl []*Vars) error {
 	if len(defines) != lenBefore {
 		return errors.Errorf("Some variables are declared multiple times.")
 	}
-
 	if len(defines) > len(needs) {
 		return errors.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
-
 	if len(defines) < len(needs) {
 		return errors.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
@@ -787,7 +823,9 @@ L:
 				gq.Cascade = true
 			case "groupby":
 				gq.IsGroupby = true
-				parseGroupby(it, gq)
+				if err := parseGroupby(it, gq); err != nil {
+					return nil, err
+				}
 			case "ignorereflex":
 				gq.IgnoreReflex = true
 			case "recurse":
@@ -2189,7 +2227,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 				return item.Errorf("Only one group by directive allowed.")
 			}
 			curp.IsGroupby = true
-			parseGroupby(it, curp)
+			if err := parseGroupby(it, curp); err != nil {
+				return err
+			}
 		case "type":
 			err := parseType(it, curp)
 			if err != nil {
@@ -2463,12 +2503,12 @@ func isSortkey(k string) bool {
 	return k == "orderasc" || k == "orderdesc"
 }
 
-type Count int
+type countType int
 
 const (
-	notSeen      Count = iota // default value
-	seen                      // when we see count keyword
-	seenWithPred              // when we see a predicate within count.
+	notSeen      countType = iota // default value
+	seen                          // when we see count keyword
+	seenWithPred                  // when we see a predicate within count.
 )
 
 func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
@@ -2500,7 +2540,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
 		return it.Errorf("Bad nesting of predicates or functions")
 	}
-	var count Count
+	var count countType
 	var alias, varName string
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {

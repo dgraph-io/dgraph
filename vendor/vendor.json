@@ -459,22 +459,22 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "LmxXlda5frwORaWcfAZW0OWyERI=",
+			"checksumSHA1": "/zLwX0xbiXk6JSb0qw8FVsnZ6io=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "SV7o4+eEK7/XNWC7H7Z5vWCoHP0=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "d8wE18ae6lOhmJqh0jwwhmQCkII=",
@@ -483,22 +483,22 @@
 			"revisionTime": "2018-11-26T21:07:12Z"
 		},
 		{
-			"checksumSHA1": "00T6XbLV4d95J7hm6kTXDReaQHM=",
+			"checksumSHA1": "7dxXjygrynDxvPE1UBHFDxVn7kE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
-			"checksumSHA1": "6b+M6HOosiA2HlPwO0DGN8jDn4w=",
+			"checksumSHA1": "0nZcXky/WdTWm3io4j6z2XbH4oM=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
-			"checksumSHA1": "ozi+AzOCsxkBoTXDQiwS4a7M0mU=",
+			"checksumSHA1": "6Ya7Kr114SVcXRqa3UaglreBrY8=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "3f5a4cb1b0b2f1c11d28943247216f8b87866a4c",
-			"revisionTime": "2019-06-07T23:13:53Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "g06KOc9faGeu0J6262AQfpL1x/o=",
@@ -535,6 +535,12 @@
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
 			"revisionTime": "2015-09-09T17:09:13Z"
+		},
+		{
+			"checksumSHA1": "ECbM44U/bpyQjtSG5y2sjjQ80ls=",
+			"path": "github.com/dgryski/go-groupvarint",
+			"revision": "5ce5df8ca4e1994e4f90374734b86ed9e0be7454",
+			"revisionTime": "2019-03-18T18:18:31Z"
 		},
 		{
 			"checksumSHA1": "tJd2T/eyW6ejAev7WzGxTeUVOPQ=",

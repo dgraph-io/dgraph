@@ -19,11 +19,11 @@ package x
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"path"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -110,7 +110,7 @@ func LoadClientTLSConfig(v *viper.Viper) (*tls.Config, error) {
 	if v.GetString("tls_server_name") != "" ||
 		v.GetString("tls_cert") != "" ||
 		v.GetString("tls_key") != "" {
-		return nil, fmt.Errorf("--tls_cacert is required for enabling TLS")
+		return nil, errors.Errorf("--tls_cacert is required for enabling TLS")
 	}
 	return nil, nil
 }
@@ -132,7 +132,7 @@ func generateCertPool(certPath string, useSystemCA bool) (*x509.CertPool, error)
 			return nil, err
 		}
 		if !pool.AppendCertsFromPEM(caFile) {
-			return nil, fmt.Errorf("error reading CA file %q", certPath)
+			return nil, errors.Errorf("error reading CA file %q", certPath)
 		}
 	}
 
@@ -151,7 +151,7 @@ func setupClientAuth(authType string) (tls.ClientAuthType, error) {
 		if v, has := auth[strings.ToUpper(authType)]; has {
 			return v, nil
 		}
-		return tls.NoClientCert, fmt.Errorf("Invalid client auth. Valid values " +
+		return tls.NoClientCert, errors.Errorf("Invalid client auth. Valid values " +
 			"[REQUEST, REQUIREANY, VERIFYIFGIVEN, REQUIREANDVERIFY]")
 	}
 

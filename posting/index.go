@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"time"
 
@@ -265,8 +264,6 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	if err = plist.addMutation(ctx, txn, t); err != nil {
 		return err
 	}
-
-	txn.addConflictKey(fmt.Sprintf("cntIdx|%s|%d", t.Attr, t.ValueId))
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 
@@ -429,7 +426,7 @@ func deleteTokensFor(attr, tokenizerName string) error {
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
-		return fmt.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	prefix = append(prefix, tokenizer.Identifier())
 	if err := pstore.DropPrefix(prefix); err != nil {
@@ -898,7 +895,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 		return true, nil
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
-		return false, fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
+		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
 			" without dropping it first.", rb.CurrentSchema.Predicate)
 	}
 

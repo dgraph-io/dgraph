@@ -86,13 +86,9 @@ func (r *reducer) run() error {
 }
 
 func (r *reducer) createBadger(i int) *badger.DB {
-	opt := badger.DefaultOptions
-	opt.SyncWrites = false
-	opt.TableLoadingMode = bo.MemoryMap
-	opt.ValueThreshold = 1 << 10 // 1 KB.
-	opt.Dir = r.opt.shardOutputDirs[i]
-	opt.ValueDir = opt.Dir
-	opt.Logger = nil
+	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
+		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
+		WithLogger(nil)
 	db, err := badger.OpenManaged(opt)
 	x.Check(err)
 	r.dbs = append(r.dbs, db)
@@ -143,27 +139,32 @@ func (r *reducer) encodeAndWrite(
 	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
 	defer closer.Done()
 
-	preds := make(map[string]uint32)
-
 	var listSize int
 	list := &bpb.KVList{}
+
+	preds := make(map[string]uint32)
+	setStreamId := func(kv *bpb.KV) {
+		pk := x.Parse(kv.Key)
+		x.AssertTrue(len(pk.Attr) > 0)
+
+		// We don't need to consider the data prefix, count prefix, etc. because each predicate
+		// contains sorted keys, the way they are produced.
+		streamId := preds[pk.Attr]
+		if streamId == 0 {
+			streamId = atomic.AddUint32(&r.streamId, 1)
+			preds[pk.Attr] = streamId
+		}
+		// TODO: Having many stream ids can cause memory issues with StreamWriter. So, we
+		// should build a way in StreamWriter to indicate that the stream is over, so the
+		// table for that stream can be flushed and memory released.
+		kv.StreamId = streamId
+	}
+
 	for batch := range entryCh {
 		listSize += r.toList(batch, list)
 		if listSize > 4<<20 {
 			for _, kv := range list.Kv {
-				pk := x.Parse(kv.Key)
-				if len(pk.Attr) == 0 {
-					continue
-				}
-				streamId := preds[pk.Attr]
-				if streamId == 0 {
-					streamId = atomic.AddUint32(&r.streamId, 1)
-					preds[pk.Attr] = streamId
-				}
-				// TODO: Having many stream ids can cause memory issues with StreamWriter. So, we
-				// should build a way in StreamWriter to indicate that the stream is over, so the
-				// table for that stream can be flushed and memory released.
-				kv.StreamId = streamId
+				setStreamId(kv)
 			}
 			x.Check(writer.Write(list))
 			list = &bpb.KVList{}
@@ -171,6 +172,9 @@ func (r *reducer) encodeAndWrite(
 		}
 	}
 	if len(list.Kv) > 0 {
+		for _, kv := range list.Kv {
+			setStreamId(kv)
+		}
 		x.Check(writer.Write(list))
 	}
 }

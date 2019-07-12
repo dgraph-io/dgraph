@@ -13,6 +13,7 @@
 package backup
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
@@ -58,9 +59,9 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
-	// GetSinceTs reads the manifests at the given URL and returns the appropriate
-	// timestamp from which the current backup should be started.
-	GetSinceTs(*url.URL) (uint64, error)
+	// GetLatestManifest reads the manifests at the given URL and returns the
+	// latest manifest.
+	GetLatestManifest(*url.URL) (*Manifest, error)
 
 	// CreateBackupFile prepares the object or file to save the backup file.
 	CreateBackupFile(*url.URL, *pb.BackupRequest) error
@@ -69,9 +70,11 @@ type UriHandler interface {
 	CreateManifest(*url.URL, *pb.BackupRequest) error
 
 	// Load will scan location URI for backup files, then load them via loadFn.
+	// It optionally takes the name of the last directory to consider. Any backup directories
+	// created after will be ignored.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
-	Load(*url.URL, loadFn) (uint64, error)
+	Load(*url.URL, string, loadFn) (uint64, error)
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
@@ -125,14 +128,18 @@ func NewUriHandler(uri *url.URL) (UriHandler, error) {
 	return h, nil
 }
 
-// loadFn is a function that will receive the current file being read.
-// A reader and the backup groupId are passed as arguments.
-type loadFn func(reader io.Reader, groupId int) error
+// predicateSet is a map whose keys are predicates. It is meant to be used as a set.
+type predicateSet map[string]struct{}
 
-// Load will scan location l for backup files, then load them sequentially through reader.
-// Returns the maximum Since value on success, otherwise an error.
-func Load(l string, fn loadFn) (since uint64, err error) {
-	uri, err := url.Parse(l)
+// loadFn is a function that will receive the current file being read.
+// A reader, the backup groupId, and a map whose keys are the predicates to restore
+// are passed as arguments.
+type loadFn func(reader io.Reader, groupId int, preds predicateSet) error
+
+// Load will scan location l for backup files in the given backup series and load them
+// sequentially. Returns the maximum Since value on success, otherwise an error.
+func Load(location, backupId string, fn loadFn) (since uint64, err error) {
+	uri, err := url.Parse(location)
 	if err != nil {
 		return 0, err
 	}
@@ -142,7 +149,7 @@ func Load(l string, fn loadFn) (since uint64, err error) {
 		return 0, errors.Errorf("Unsupported URI: %v", uri)
 	}
 
-	return h.Load(uri, fn)
+	return h.Load(uri, backupId, fn)
 }
 
 // ListManifests scans location l for backup files and returns the list of manifests.
@@ -172,4 +179,70 @@ func ListManifests(l string) (map[string]*Manifest, error) {
 	}
 
 	return listedManifests, nil
+}
+
+// filterManifests takes a list of manifests and returns the list of manifests
+// that should be considered during a restore.
+func filterManifests(manifests []*Manifest, backupId string) ([]*Manifest, error) {
+	// Go through the files in reverse order and stop when the latest full backup is found.
+	var filteredManifests []*Manifest
+	for i := len(manifests) - 1; i >= 0; i-- {
+		// If backupId is not empty, skip all the manifests that do not match the given
+		// backupId. If it's empty, do not skip any manifests as the default behavior is
+		// to restore the latest series of backups.
+		if len(backupId) > 0 && manifests[i].BackupId != backupId {
+			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
+				manifests[i].Path, backupId)
+			continue
+		}
+
+		filteredManifests = append(filteredManifests, manifests[i])
+		if manifests[i].Type == "full" {
+			break
+		}
+	}
+
+	// Reverse the filtered lists since the original iteration happened in reverse.
+	for i := len(filteredManifests)/2 - 1; i >= 0; i-- {
+		opp := len(filteredManifests) - 1 - i
+		filteredManifests[i], filteredManifests[opp] = filteredManifests[opp], filteredManifests[i]
+	}
+
+	if err := verifyManifests(filteredManifests); err != nil {
+		return nil, err
+	}
+
+	return filteredManifests, nil
+}
+
+func verifyManifests(manifests []*Manifest) error {
+	if len(manifests) == 0 {
+		return nil
+	}
+
+	if manifests[0].BackupNum != 1 {
+		return errors.Errorf("expected a BackupNum value of 1 for first manifest but got %d",
+			manifests[0].BackupNum)
+	}
+
+	backupId := manifests[0].BackupId
+	var backupNum uint64
+	for _, manifest := range manifests {
+		if manifest.BackupId != backupId {
+			return errors.Errorf("found a manifest with backup ID %s but expected %s",
+				manifest.BackupId, backupId)
+		}
+
+		backupNum++
+		if manifest.BackupNum != backupNum {
+			return errors.Errorf("found a manifest with backup number %d but expected %d",
+				manifest.BackupNum, backupNum)
+		}
+	}
+
+	return nil
+}
+
+func backupName(since uint64, groupId uint32) string {
+	return fmt.Sprintf(backupNameFmt, since, groupId)
 }

@@ -201,7 +201,15 @@ func (g *groupi) upsertSchema(schema *pb.SchemaUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
-	m.StartTs = 1
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
+	cancel()
+	if err != nil {
+		glog.Errorf("error while requesting timestamp for schema %v: %v", schema, err)
+		return
+	}
+
+	m.StartTs = ts.StartId
 	m.Schema = append(m.Schema, schema)
 
 	// This would propose the schema mutation and make sure some node serves this predicate
@@ -231,6 +239,14 @@ func MaxLeaseId() uint64 {
 		return 0
 	}
 	return g.state.MaxLeaseId
+}
+
+// GetMembershipState returns the current membership state.
+func GetMembershipState() *pb.MembershipState {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	return proto.Clone(g.state).(*pb.MembershipState)
 }
 
 // UpdateMembershipState contacts zero for an update on membership state.
@@ -300,7 +316,12 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 		for _, member := range g.state.Removed {
 			if member.GroupId == g.Node.gid && g.Node.AmLeader() {
-				go g.Node.ProposePeerRemoval(context.Background(), member.Id)
+				go func() {
+					if err := g.Node.ProposePeerRemoval(
+						context.Background(), member.Id); err != nil {
+						glog.Errorf("Error while proposing node removal: %+v", err)
+					}
+				}()
 			}
 		}
 		conn.GetPools().RemoveInvalid(g.state)
@@ -324,7 +345,7 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 				return nil
 			}
 		case <-ctx.Done():
-			return fmt.Errorf("Group checksum mismatch for id: %d", g.groupId())
+			return errors.Errorf("Group checksum mismatch for id: %d", g.groupId())
 		}
 	}
 }
@@ -748,10 +769,14 @@ OUTER:
 	for {
 		select {
 		case <-g.closer.HasBeenClosed():
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case <-ctx.Done():
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				glog.Errorf("Error closing send stream: %+v", err)
+			}
 			break OUTER
 		case state := <-stateCh:
 			lastRecv = time.Now()
@@ -760,7 +785,9 @@ OUTER:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
-				stream.CloseSend()
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
 				break OUTER
 			}
 		}
@@ -797,9 +824,6 @@ func (g *groupi) processOracleDeltaStream() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		c := pb.NewZeroClient(pl.Get())
-		// The first entry send by Zero contains the entire state of transactions. Zero periodically
-		// confirms receipt from the group, and truncates its state. This 2-way acknowledgement is a
-		// safe way to get the status of all the transactions.
 		stream, err := c.Oracle(ctx, &api.Payload{})
 		if err != nil {
 			glog.Errorf("Error while calling Oracle %v\n", err)
@@ -811,7 +835,11 @@ func (g *groupi) processOracleDeltaStream() {
 		go func() {
 			// This would exit when either a Recv() returns error. Or, cancel() is called by
 			// something outside of this goroutine.
-			defer stream.CloseSend()
+			defer func() {
+				if err := stream.CloseSend(); err != nil {
+					glog.Errorf("Error closing send stream: %+v", err)
+				}
+			}()
 			defer close(deltaCh)
 
 			for {

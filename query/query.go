@@ -212,10 +212,12 @@ func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
 	}
 }
 
+// IsGroupBy returns whether this subgraph is part of a groupBy query.
 func (sg *SubGraph) IsGroupBy() bool {
 	return sg.Params.isGroupBy
 }
 
+// IsInternal returns whether this subgraph is marked as internal.
 func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.isInternal
 }
@@ -925,13 +927,20 @@ const (
 
 func isDebug(ctx context.Context) bool {
 	var debug bool
+
 	// gRPC client passes information about debug as metadata.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// md is a map[string][]string
-		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+		if len(md["debug"]) > 0 {
+			// We ignore the error here, because in error case,
+			// debug would be false which is what we want.
+			debug, _ = strconv.ParseBool(md["debug"][0])
+		}
 	}
+
 	// HTTP passes information about debug as query parameter which is attached to context.
-	return debug || ctx.Value(DebugKey) == "true"
+	d, _ := ctx.Value(DebugKey).(bool)
+	return debug || d
 }
 
 func (sg *SubGraph) populate(uids []uint64) error {
@@ -976,7 +985,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 	if err := args.fill(gq); err != nil {
-		return nil, fmt.Errorf("error while filling args: %v", err)
+		return nil, errors.Wrapf(err, "while filling args")
 	}
 
 	sg := &SubGraph{Params: args}
@@ -1000,7 +1009,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	if isUidFnWithoutVar(gq.Func) && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
-			return nil, fmt.Errorf("error while populating UIDs: %v", err)
+			return nil, errors.Wrapf(err, "while populating UIDs")
 		}
 	}
 
@@ -1008,14 +1017,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
 		if err := filterCopy(sgf, gq.Filter); err != nil {
-			return nil, fmt.Errorf("error while copying filter: %v", err)
+			return nil, errors.Wrapf(err, "while copying filter")
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
 	if gq.FacetsFilter != nil {
 		facetsFilter, err := toFacetsFilter(gq.FacetsFilter)
 		if err != nil {
-			return nil, fmt.Errorf("error while converting to facets filter: %v", err)
+			return nil, errors.Wrapf(err, "while converting to facets filter")
 		}
 		sg.facetsFilter = facetsFilter
 	}
@@ -1491,7 +1500,7 @@ AssignStep:
 
 // Updates the doneVars map by picking up uid/values from the current Subgraph
 func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	// NOTE: although we initialize doneVars (req.vars) in ProcessQuery, this nil check is for
+	// NOTE: although we initialize doneVars (req.Vars) in ProcessQuery, this nil check is for
 	// non-root lookups that happen to other nodes. Don't use len(doneVars) == 0 !
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
@@ -1642,7 +1651,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							}
 
 							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
-								return errors.Errorf("Repeated id with non int/float value for facet var encountered.")
+								return errors.Errorf("Repeated id with non int/float value for " +
+									"facet var encountered.")
 							}
 							ag := aggregator{name: "sum"}
 							ag.Apply(pVal)
@@ -1942,7 +1952,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
-					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)
+					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()",
+						ch.Attr)
 				}
 			}
 			out = append(out, temp)
@@ -2543,6 +2554,7 @@ func getReversePredicates(ctx context.Context, preds []string) ([]string, error)
 	return rpreds, nil
 }
 
+// GetAllPredicates returns the list of all the unique predicates present in the list of subgraphs.
 func GetAllPredicates(subGraphs []*SubGraph) []string {
 	predicatesMap := make(map[string]struct{})
 	for _, sg := range subGraphs {
@@ -2593,7 +2605,7 @@ type Request struct {
 
 	Subgraphs []*SubGraph
 
-	vars map[string]varValue
+	Vars map[string]varValue
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2605,7 +2617,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	defer stop()
 
 	// doneVars stores the processed variables.
-	req.vars = make(map[string]varValue)
+	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query
 	for i := 0; i < len(queries); i++ {
@@ -2618,7 +2630,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return fmt.Errorf("error while converting to subgraph: %v", err)
+			return errors.Wrapf(err, "while converting to subgraph")
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
@@ -2647,7 +2659,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// The variable should be defined in this block or should have already been
 			// populated by some other block, otherwise we are not ready to execute yet.
-			_, ok := req.vars[v]
+			_, ok := req.Vars[v]
 			if !ok && !selfDep {
 				return false
 			}
@@ -2671,7 +2683,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
-			err = sg.recursiveFillVars(req.vars)
+			err = sg.recursiveFillVars(req.Vars)
 			if err != nil {
 				return err
 			}
@@ -2719,10 +2731,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			sg := req.Subgraphs[idx]
 
 			var sgPath []*SubGraph
-			if err := sg.populateVarMap(req.vars, sgPath); err != nil {
+			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
 				return err
 			}
-			if err := sg.populatePostAggregation(req.vars, []*SubGraph{}, nil); err != nil {
+			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
 		}

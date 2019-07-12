@@ -13,20 +13,13 @@
 package backup
 
 import (
-	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
-	"math"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -39,7 +32,7 @@ var Restore x.SubCommand
 var LsBackup x.SubCommand
 
 var opt struct {
-	location, pdir, zero string
+	backupId, location, pdir, zero string
 }
 
 func init() {
@@ -109,6 +102,8 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.pdir, "postings", "p", "",
 		"Directory where posting lists are stored (required).")
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
+	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
+		"restore. If empty, it will restore the latest series.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -189,16 +184,14 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := RunRestore(opt.pdir, opt.location)
+	version, err := RunRestore(opt.pdir, opt.location, opt.backupId)
 	if err != nil {
 		return err
 	}
 	if version == 0 {
 		return errors.Errorf("Failed to obtain a restore version")
 	}
-	if glog.V(2) {
-		fmt.Printf("Restore version: %d\n", version)
-	}
+	fmt.Printf("Restore version: %d\n", version)
 
 	if zc != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -212,42 +205,6 @@ func runRestoreCmd() error {
 
 	fmt.Printf("Restore: Time elapsed: %s\n", time.Since(start).Round(time.Second))
 	return nil
-}
-
-// RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location string) (uint64, error) {
-	bo := badger.DefaultOptions
-	bo.SyncWrites = true
-	bo.TableLoadingMode = options.MemoryMap
-	bo.ValueThreshold = 1 << 10
-	bo.NumVersionsToKeep = math.MaxInt32
-	if !glog.V(2) {
-		bo.Logger = nil
-	}
-
-	// Scan location for backup files and load them. Each file represents a node group,
-	// and we create a new p dir for each.
-	return Load(location, func(r io.Reader, groupId int) error {
-		bo := bo
-		bo.Dir = filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-		bo.ValueDir = bo.Dir
-		db, err := badger.OpenManaged(bo)
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		if glog.V(2) {
-			fmt.Printf("Restoring groupId: %d\n", groupId)
-			if !pathExist(bo.Dir) {
-				fmt.Println("Creating new db:", bo.Dir)
-			}
-		}
-		gzReader, err := gzip.NewReader(r)
-		if err != nil {
-			return nil
-		}
-		return db.Load(gzReader, 16)
-	})
 }
 
 func runLsbackupCmd() error {
