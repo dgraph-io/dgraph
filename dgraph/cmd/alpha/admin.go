@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,6 +45,43 @@ func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
 		return false
 	}
 	return true
+}
+
+func lameGetHandler(w http.ResponseWriter, r *http.Request) {
+	ldMode := atomic.LoadInt32(&edgraph.State.LameDuckMode)
+	ldEnabled := ldMode == 1
+	w.Header().Set("Content-Type", "application/json")
+	x.Check2(w.Write([]byte(fmt.Sprintf(`{"lameDuckMode": %v}`, ldEnabled))))
+}
+
+func lamePutHandler(w http.ResponseWriter, r *http.Request) {
+	enable := r.URL.Query().Get("enable")
+	var ldMode int32
+	switch enable {
+	case "true":
+		ldMode = 1
+	case "false":
+		ldMode = 0
+	default:
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"the enable parameter must be set to true or false")
+		return
+	}
+
+	atomic.StoreInt32(&edgraph.State.LameDuckMode, ldMode)
+	x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
+		`"message": "lame duck mode has been set to %v"}`, enable))))
+}
+
+func lameHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		lameGetHandler(w, r)
+	case http.MethodPost:
+		lamePutHandler(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {

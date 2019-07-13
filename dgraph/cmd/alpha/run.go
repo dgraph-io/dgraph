@@ -388,6 +388,7 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
+	http.HandleFunc("/admin/lame", lameHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 

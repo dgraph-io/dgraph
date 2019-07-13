@@ -24,6 +24,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -73,6 +74,11 @@ type ServerState struct {
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
 	needTs chan tsReq
+
+	// the LameDuckMode variable should be accessed through the atomic.Store and atomic.Load
+	// functions. The value 0 means the lame-duck-mode is disabled, and the value 1 means the
+	// mode is enabled
+	LameDuckMode int32
 }
 
 // State is the instance of ServerState used by the current server.
@@ -274,8 +280,24 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 	return <-tr.ch
 }
 
+// checkLDMode checks if the State.LameDuckMode is enabled
+// if so, it will return an error indicating that any request from the client
+// should be denied
+func checkLDMode() error {
+	ldMode := atomic.LoadInt32(&State.LameDuckMode)
+	if ldMode == 1 {
+		return fmt.Errorf("the server is in lame duck mode, " +
+			"and hence client requests are not allowed")
+	}
+	return nil
+}
+
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	if err := checkLDMode(); err != nil {
+		return nil, err
+	}
+
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 	span.Annotatef(nil, "Alter operation: %+v", op)
@@ -421,6 +443,9 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 
 // Mutate handles requests to perform mutations.
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
+	if err := checkLDMode(); err != nil {
+		return nil, err
+	}
 	return s.doMutate(ctx, mu, true)
 }
 
@@ -686,6 +711,9 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string]string) {
 
 // Query handles queries and returns the data.
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	if err := checkLDMode(); err != nil {
+		return nil, err
+	}
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
@@ -825,6 +853,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
+	if err := checkLDMode(); err != nil {
+		return nil, err
+	}
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
 	defer span.End()
 
