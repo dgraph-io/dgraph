@@ -1,15 +1,17 @@
-package schemarules
+package schema
 
 import (
-	. "github.com/vektah/gqlparser/ast"
+	. "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+
+	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	. "github.com/vektah/gqlparser/validator"
 )
 
 func init() {
-	AddSchRule("OneIDPerType", func(schema *Schema) *gqlerror.Error {
+	AddSchRule("OneIDPerType", func(sch *ast.SchemaDocument) *gqlerror.Error {
 		var flag bool
-		for _, typeVal := range schema.Types {
+		for _, typeVal := range sch.Definitions {
+			flag = false
 			for _, fields := range typeVal.Fields {
 				if fields.Type.NamedType == "ID" {
 					if flag {

@@ -1,19 +1,18 @@
-package schemarules
+package schema
 
 import (
-	. "github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	. "github.com/vektah/gqlparser/validator"
+	. "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 
-	sch "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
 )
 
 func init() {
-	AddSchRule("TypeNameCantBeReservedKeyWords", func(schema *Schema) *gqlerror.Error {
-		for name := range schema.Types {
-			if isReservedKeyWord(name) {
+	AddSchRule("TypeNameCantBeReservedKeyWords", func(sch *ast.SchemaDocument) *gqlerror.Error {
+		for _, defn := range sch.Definitions {
+			if isReservedKeyWord(defn.Name) {
 				return &gqlerror.Error{
-					Message: name + " is reserved keyword. You can't declare" +
+					Message: defn.Name + " is reserved keyword. You can't declare" +
 						"type with this name",
 				}
 			}
@@ -24,9 +23,9 @@ func init() {
 }
 
 func isReservedKeyWord(name string) bool {
-	if name == string(sch.INT) || name == string(sch.BOOLEAN) ||
-		name == string(sch.FLOAT) || name == string(sch.STRING) ||
-		name == string(sch.DATETIME) || name == string(sch.ID) {
+	if name == string(INT) || name == string(BOOLEAN) ||
+		name == string(FLOAT) || name == string(STRING) ||
+		name == string(DATETIME) || name == string(ID) || name == "Query" || name == "Mutation" {
 		return true
 	}
 

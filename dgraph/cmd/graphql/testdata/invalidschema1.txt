@@ -1,0 +1,7 @@
+# More than 1 id field
+
+type Person {
+    id: ID!
+    id2: ID!
+    name: String!
+}

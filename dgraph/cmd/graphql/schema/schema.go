@@ -11,7 +11,7 @@ import (
 // SupportedScalars will be the list of scalar types that we will support.
 type SupportedScalars string
 
-type schRuleFunc func(schema *ast.Schema) *gqlerror.Error
+type schRuleFunc func(schema *ast.SchemaDocument) *gqlerror.Error
 
 type schRule struct {
 	name        string
@@ -58,7 +58,7 @@ func AddSchRule(name string, f schRuleFunc) {
 }
 
 // ValidateSchema function validates the schema against dgraph's rules of schema.
-func ValidateSchema(schema *ast.Schema) gqlerror.List {
+func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
 	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	_ "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema/schemarules"
 )
 
 type options struct {
@@ -130,6 +132,15 @@ func run() {
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(schemas.Schemas[0].Schema)})
 	if gqlErr != nil {
 		x.Checkf(gqlErr, "Error parsing GraphQL schema")
+	}
+
+	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
+		var errStr strings.Builder
+		for _, err := range gqlErrList {
+			errStr.WriteString(err.Message + "\n")
+		}
+
+		log.Fatalf(errStr.String())
 	}
 
 	gschema.AddScalars(doc)

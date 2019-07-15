@@ -6,7 +6,7 @@ type Post {
   postType: PostType!
 }
 
-type Author { 
+type Author {
   id: ID!
   name: String!
   posts: [Post!]!
@@ -37,7 +37,7 @@ input PostInput {
   postType: PostType!
 }
 
-input AuthorInput { 
+input AuthorInput {
   name: String!
   posts: [PostRef!]!
   friends: [AuthorRef!]!
@@ -50,7 +50,7 @@ input PostUpdate {
   postType: PostType
 }
 
-input AuthorUpdate { 
+input AuthorUpdate {
   name: String
   posts: [PostRef!]
   friends: [AuthorRef!]

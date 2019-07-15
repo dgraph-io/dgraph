@@ -1,14 +1,15 @@
-package schemarules
+package schema
 
 import (
-	. "github.com/vektah/gqlparser/ast"
+	. "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+
+	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	. "github.com/vektah/gqlparser/validator"
 )
 
 func init() {
-	AddSchRule("OnlyTypeEnumInInitialSchema", func(schema *Schema) *gqlerror.Error {
-		for _, typ := range schema.Types {
+	AddSchRule("OnlyTypeEnumInInitialSchema", func(sch *ast.SchemaDocument) *gqlerror.Error {
+		for _, typ := range sch.Definitions {
 			for _, fld := range typ.Fields {
 				if fld.Type.Elem != nil && fld.Type.NonNull && !fld.Type.Elem.NonNull {
 					return &gqlerror.Error{
