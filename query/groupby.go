@@ -221,8 +221,9 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 				if algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
+
 				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
+				for _, uid := range ul.GetUids() {
 					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
