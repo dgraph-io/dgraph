@@ -224,7 +224,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 
 				ul := child.uidMatrix[i]
 				// Workaround for issue #3642.
-				if ul == nil  {
+				if ul == nil {
 					continue
 				}
 				for _, uid := range ul.Uids {
