@@ -976,8 +976,10 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) error {
 	attr := arg.q.Attr
 	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
-	// We should already have checked this in getInequalityTokens.
-	x.Check(err)
+	if err != nil {
+		return err
+	}
+
 	// Only if the tokenizer that we used IsLossy, then we need to fetch
 	// and compare the actual values.
 	if tokenizer.IsLossy() {
