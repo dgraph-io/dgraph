@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -158,25 +157,10 @@ func run() error {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
-	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
-		var errStr strings.Builder
-		for _, err := range gqlErrList {
-			errStr.WriteString(err.Message + "\n")
-		}
-
-		log.Fatalf(errStr.String())
-	}
-
-	gschema.AddScalars(doc)
-
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
-
-	gschema.GenerateCompleteSchema(schema)
-
-	fmt.Println(gschema.Stringify(schema))
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
@@ -210,9 +194,21 @@ func initDgraph() error {
 		return fmt.Errorf("cannot parse schema %s", gqlErr)
 	}
 
+	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
+		return gqlErrList
+	}
+
+	gschema.AddScalars(doc)
+
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
+	}
+
+	gschema.GenerateCompleteSchema(schema)
+	completeSchema := gschema.Stringify(schema)
+	if glog.V(2) {
+		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
 	}
 
 	// TODO: extract out as todo's below are done
@@ -300,7 +296,7 @@ func initDgraph() error {
 
 	s := gqlSchema{
 		Type:   "dgraph.graphql",
-		Schema: inputSchema,
+		Schema: completeSchema,
 		Date:   time.Now(),
 	}
 
