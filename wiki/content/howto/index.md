@@ -44,7 +44,7 @@ go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/heap
 
 #### Block Profile
 
-Dgraph by default doesn't collect the block profile. Dgraph must be started with `--block=<N>` with N > 1.
+Dgraph by default doesn't collect the block profile. Dgraph must be started with `--profile_mode=block` and `--block_rate=<N>` with N > 1.
 
 ```
 go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
