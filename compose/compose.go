@@ -78,6 +78,7 @@ type Options struct {
 	Verbosity     int
 	OutFile       string
 	LocalBin      bool
+	Tag           string
 	WhiteList     bool
 }
 
@@ -107,7 +108,7 @@ func initService(basename string, idx, grpcPort int) Service {
 	var svc Service
 
 	svc.name = name(basename, idx)
-	svc.Image = "dgraph/dgraph:latest"
+	svc.Image = "dgraph/dgraph:" + opts.Tag
 	svc.ContainerName = svc.name
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
 	if idx > 1 {
@@ -358,6 +359,8 @@ func main() {
 		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
+	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
+		"Docker tag for dgraph/dgraph image.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
 
