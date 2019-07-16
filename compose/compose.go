@@ -50,7 +50,7 @@ type Service struct {
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
 	Volumes       []Volume  `yaml:",omitempty"`
-	TempFS        []string  `yaml:",omitempty"`
+	TmpFS         []string  `yaml:",omitempty"`
 	User          string    `yaml:",omitempty"`
 	Command       string    `yaml:",omitempty"`
 }
@@ -70,7 +70,7 @@ type Options struct {
 	AclSecret     string
 	DataDir       string
 	DataVol       bool
-	TempFS        bool
+	TmpFS         bool
 	UserOwnership bool
 	Jaeger        bool
 	Metrics       bool
@@ -173,8 +173,8 @@ func getZero(idx int) Service {
 
 	svc := initService(basename, idx, grpcPort)
 
-	if opts.TempFS {
-		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
+	if opts.TmpFS {
+		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
 	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
@@ -199,8 +199,8 @@ func getAlpha(idx int) Service {
 
 	svc := initService(basename, idx, grpcPort)
 
-	if opts.TempFS {
-		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
+	if opts.TmpFS {
+		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
@@ -345,7 +345,7 @@ func main() {
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
-	cmd.PersistentFlags().BoolVar(&opts.TempFS, "tmpfs", false,
+	cmd.PersistentFlags().BoolVar(&opts.TmpFS, "tmpfs", false,
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
