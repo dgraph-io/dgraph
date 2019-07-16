@@ -86,13 +86,16 @@ var (
 
 	// Jepsen test flags
 	workload = pflag.StringP("workload", "w", "",
-		"Test workload to run.")
+		"Test workload to run. Specify a space-separated list of workloads. "+
+			fmt.Sprintf("%q", availableWorkloads))
 	nemesis = pflag.StringP("nemesis", "n", "",
-		"A space-separated, comma-separated list of nemesis types.")
+		"A space-separated, comma-separated list of nemesis types. "+
+			"Specify a space-separated list of nemeses."+
+			fmt.Sprintf("%q", availableNemeses))
 	timeLimit = pflag.IntP("time-limit", "l", 600,
 		"Time limit per Jepsen test in seconds.")
 	concurrency = pflag.String("concurrency", "6n",
-		"Number of concurrent workers. \"6n\" means 6 workers per node.")
+		"Number of concurrent workers per test. \"6n\" means 6 workers per node.")
 	rebalanceInterval = pflag.String("rebalance-interval", "10h",
 		"Interval of Dgraph's tablet rebalancing.")
 	localBinary = pflag.StringP("local-binary", "b", "/gobin/dgraph",
