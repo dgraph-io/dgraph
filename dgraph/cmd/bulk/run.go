@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Bulk is the sub-command invoked when running "dgraph bulk".
 var Bulk x.SubCommand
 
 var defaultOutDir = "./out"
@@ -71,8 +72,8 @@ func init() {
 	flag.Bool("cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
 			" bulk loader can be re-run while skipping the map phase.")
-	flag.Int("shufflers", 1,
-		"Number of shufflers to run concurrently. Increasing this can improve performance, and "+
+	flag.Int("reducers", 1,
+		"Number of reducers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
 	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
@@ -107,7 +108,7 @@ func run() {
 		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumShufflers:     Bulk.Conf.GetInt("shufflers"),
+		NumReducers:      Bulk.Conf.GetInt("reducers"),
 		Version:          Bulk.Conf.GetBool("version"),
 		StoreXids:        Bulk.Conf.GetBool("store_xids"),
 		ZeroAddr:         Bulk.Conf.GetString("zero"),
@@ -142,9 +143,9 @@ func run() {
 			opt.ReduceShards, opt.MapShards)
 		os.Exit(1)
 	}
-	if opt.NumShufflers > opt.ReduceShards {
+	if opt.NumReducers > opt.ReduceShards {
 		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
-			opt.NumShufflers, opt.ReduceShards)
+			opt.NumReducers, opt.ReduceShards)
 		os.Exit(1)
 	}
 	if opt.CustomTokenizers != "" {

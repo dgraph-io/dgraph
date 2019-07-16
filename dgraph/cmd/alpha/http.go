@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
@@ -39,6 +39,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/pkg/errors"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -104,7 +105,7 @@ func parseUint64(r *http.Request, name string) (uint64, error) {
 
 	uintVal, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
-		return 0, fmt.Errorf("Error: %+v while parsing %s as uint64", err, name)
+		return 0, errors.Wrapf(err, "while parsing %s as uint64", name)
 	}
 
 	return uintVal, nil
@@ -120,7 +121,7 @@ func parseBool(r *http.Request, name string) (bool, error) {
 
 	boolval, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("Error: %+v while parsing %s as bool", err, name)
+		return false, errors.Wrapf(err, "while parsing %s as bool", name)
 	}
 
 	return boolval, nil
@@ -136,7 +137,7 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 
 	durationValue, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("Error: %+v while parsing %s as time.Duration", err, name)
+		return 0, errors.Wrapf(err, "while parsing %s as time.Duration", name)
 	}
 
 	return durationValue, nil
@@ -196,11 +197,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-	case "application/graphqlpm":
+	case "application/graphql+-":
 		params.Query = string(body)
 
 	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
+			"Supported content types are application/json, application/graphql+-")
 		return
 	}
 
@@ -274,7 +276,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	out.WriteRune('}')
 
-	writeResponse(w, r, out.Bytes())
+	x.Check2(writeResponse(w, r, out.Bytes()))
 }
 
 func mutationHandler(w http.ResponseWriter, r *http.Request) {
@@ -317,6 +319,13 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		if delJSON, ok := ms["delete"]; ok && delJSON != nil {
 			mu.DeleteJson = delJSON.bs
 		}
+		if queryText, ok := ms["query"]; ok && queryText != nil {
+			mu.Query, err = strconv.Unquote(string(queryText.bs))
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+		}
 
 	case "application/rdf":
 		// Parse N-Quads.
@@ -327,7 +336,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Unsupported Content-Type. "+
+			"Supported content types are application/json, application/rdf")
 		return
 	}
 
@@ -427,14 +437,19 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 		StartTs: startTs,
 		Aborted: true,
 	}
-	if _, err := worker.CommitOverNetwork(context.Background(), tc); err != nil {
+
+	_, err := worker.CommitOverNetwork(context.Background(), tc)
+	switch err {
+	case y.ErrAborted:
+		return map[string]interface{}{
+			"code":    x.Success,
+			"message": "Done",
+		}, nil
+	case nil:
+		return nil, errors.Errorf("transaction could not be aborted")
+	default:
 		return nil, err
 	}
-
-	response := map[string]interface{}{}
-	response["code"] = x.Success
-	response["message"] = "Done"
-	return response, nil
 }
 
 func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {

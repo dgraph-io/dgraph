@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -46,6 +45,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +54,6 @@ type options struct {
 	dataFiles           string
 	dataFormat          string
 	schemaFile          string
-	alpha               string
 	zero                string
 	concurrent          int
 	batchSize           int
@@ -62,12 +62,14 @@ type options struct {
 	authToken           string
 	useCompression      bool
 	newUids             bool
+	verbose             bool
 }
 
 var (
 	opt    options
 	tlsCfg *tls.Config
-	Live   x.SubCommand
+	// Live is the sub-command invoked when running "dgraph live".
+	Live x.SubCommand
 )
 
 func init() {
@@ -103,29 +105,12 @@ func init() {
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+	flag.Bool("verbose", false, "Run the live loader in verbose mode")
+	flag.StringP("user", "u", "", "Username if login is required.")
+	flag.StringP("password", "p", "", "Password of the user.")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
-}
-
-// Reads a single line from a buffered reader. The line is read into the
-// passed in buffer to minimize allocations. This is the preferred
-// method for loading long lines which could be longer than the buffer
-// size of bufio.Scanner.
-func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
-	isPrefix := true
-	var err error
-	for isPrefix && err == nil {
-		var line []byte
-		// The returned line is an pb.buffer in bufio and is only
-		// valid until the next call to ReadLine. It needs to be copied
-		// over to our own buffer.
-		line, isPrefix, err = r.ReadLine()
-		if err == nil {
-			buf.Write(line)
-		}
-	}
-	return err
 }
 
 // processSchemaFile process schema for a given gz file.
@@ -189,7 +174,7 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 			if isJson {
 				loadType = chunker.JsonFormat
 			} else {
-				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
+				return errors.Errorf("need --format=rdf or --format=json to load %s", filename)
 			}
 		}
 	}
@@ -261,14 +246,11 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
-		o := badger.DefaultOptions
-		o.Dir = opt.clientDir
-		o.ValueDir = opt.clientDir
-		o.TableLoadingMode = bopt.MemoryMap
-		o.SyncWrites = false
 
 		var err error
-		db, err = badger.Open(o)
+		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
+			WithTableLoadingMode(bopt.MemoryMap).
+			WithSyncWrites(false))
 		x.Checkf(err, "Error while creating badger KV posting store")
 	}
 
@@ -302,7 +284,6 @@ func run() error {
 		dataFiles:           Live.Conf.GetString("files"),
 		dataFormat:          Live.Conf.GetString("format"),
 		schemaFile:          Live.Conf.GetString("schema"),
-		alpha:               Live.Conf.GetString("alpha"),
 		zero:                Live.Conf.GetString("zero"),
 		concurrent:          Live.Conf.GetInt("conc"),
 		batchSize:           Live.Conf.GetInt("batch"),
@@ -311,13 +292,13 @@ func run() error {
 		authToken:           Live.Conf.GetString("auth_token"),
 		useCompression:      Live.Conf.GetBool("use_compression"),
 		newUids:             Live.Conf.GetBool("new_uids"),
+		verbose:             Live.Conf.GetBool("verbose"),
 	}
-	tlsCfg, err := x.LoadClientTLSConfig(Live.Conf)
-	if err != nil {
-		return err
-	}
-
-	go http.ListenAndServe("localhost:6060", nil)
+	go func() {
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			glog.Errorf("Error while starting HTTP server in port 6060: %+v", err)
+		}
+	}()
 	ctx := context.Background()
 	bmOpts := batchMutationOptions{
 		Size:          opt.batchSize,
@@ -327,23 +308,14 @@ func run() error {
 		MaxRetries:    math.MaxUint32,
 	}
 
-	ds := strings.Split(opt.alpha, ",")
-	var clients []api.DgraphClient
-	for _, d := range ds {
-		conn, err := x.SetupConnection(d, tlsCfg, opt.useCompression)
-		x.Checkf(err, "While trying to setup connection to Dgraph alpha %v", ds)
-		defer conn.Close()
+	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
+	defer closeFunc()
 
-		dc := api.NewDgraphClient(conn)
-		clients = append(clients, dc)
-	}
-	dgraphClient := dgo.NewDgraphClient(clients...)
-
-	l := setup(bmOpts, dgraphClient)
+	l := setup(bmOpts, dg)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		if err := processSchemaFile(ctx, opt.schemaFile, dgraphClient); err != nil {
+		if err := processSchemaFile(ctx, opt.schemaFile, dg); err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
 				return nil
@@ -361,7 +333,7 @@ func run() error {
 	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		return fmt.Errorf("No data files found in %s", opt.dataFiles)
+		return errors.Errorf("No data files found in %s", opt.dataFiles)
 	}
 	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 

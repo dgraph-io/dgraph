@@ -33,8 +33,8 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/z"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func NodesSetup(t *testing.T, c *dgo.Dgraph) {
@@ -116,18 +116,17 @@ func getError(rc io.ReadCloser) error {
 	defer rc.Close()
 	b, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return fmt.Errorf("Read failed: %v", err)
+		return errors.Wrapf(err, "while reading")
 	}
 	if bytes.Contains(b, []byte("Error")) {
-		return fmt.Errorf("%s", string(b))
+		return errors.Errorf("%s", string(b))
 	}
 	return nil
 }
 
 func TestNodes(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	dg, err := z.GetClientToGroup("1")
+	require.NoError(t, err, "error while getting connection to group 1")
 
 	NodesSetup(t, dg)
 

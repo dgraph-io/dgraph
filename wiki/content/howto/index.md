@@ -44,7 +44,7 @@ go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/heap
 
 #### Block Profile
 
-Dgraph by default doesn't collect the block profile. Dgraph must be started with `--block=<N>` with N > 1.
+Dgraph by default doesn't collect the block profile. Dgraph must be started with `--profile_mode=block` and `--block_rate=<N>` with N > 1.
 
 ```
 go tool pprof http://<IP>:<HTTP_PORT>/debug/pprof/block
@@ -659,6 +659,12 @@ in the `Assigned` object returned from the mutation.
 4. Now that you have the `uid` of the account (either new or existing), you can
    modify the account (using additional mutations) or perform queries on it in
 whichever way you wish.
+
+### Upsert Block
+
+You can also use the `Upsert Block` to achieve the upsert procedure in a single mutation.
+The request will contain both the query and the mutation as explained
+[here]({{< relref "mutations/index.md#upsert-block" >}}).
 
 ### Conflicts
 

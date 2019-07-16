@@ -61,16 +61,13 @@ This would trigger G1 to get latest state. Wait for it.
 //  TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(opts.rebalanceInterval)
-	for {
-		select {
-		case <-ticker.C:
-			predicate, srcGroup, dstGroup := s.chooseTablet()
-			if len(predicate) == 0 {
-				break
-			}
-			if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
-				glog.Errorln(err)
-			}
+	for range ticker.C {
+		predicate, srcGroup, dstGroup := s.chooseTablet()
+		if len(predicate) == 0 {
+			break
+		}
+		if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+			glog.Errorln(err)
 		}
 	}
 }
@@ -137,7 +134,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	span.Annotatef(nil, "Starting move: %+v", in)
 	glog.Infof("Starting move: %+v", in)
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
-		return fmt.Errorf("While calling MovePredicate: %+v\n", err)
+		return errors.Wrapf(err, "while calling MovePredicate")
 	}
 
 	p := &pb.ZeroProposal{}

@@ -18,7 +18,6 @@ package badger
 
 import (
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger/y"
 )
@@ -102,16 +101,9 @@ func (wb *WriteBatch) SetEntry(e *Entry) error {
 	return nil
 }
 
-// Set is equivalent of Txn.SetWithMeta.
-func (wb *WriteBatch) Set(k, v []byte, meta byte) error {
-	e := &Entry{Key: k, Value: v, UserMeta: meta}
-	return wb.SetEntry(e)
-}
-
-// SetWithTTL is equivalent of Txn.SetWithTTL.
-func (wb *WriteBatch) SetWithTTL(key, val []byte, dur time.Duration) error {
-	expire := time.Now().Add(dur).Unix()
-	e := &Entry{Key: key, Value: val, ExpiresAt: uint64(expire)}
+// Set is equivalent of Txn.Set().
+func (wb *WriteBatch) Set(k, v []byte) error {
+	e := &Entry{Key: k, Value: v}
 	return wb.SetEntry(e)
 }
 

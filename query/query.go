@@ -212,10 +212,12 @@ func (sg *SubGraph) recurse(set func(sg *SubGraph)) {
 	}
 }
 
+// IsGroupBy returns whether this subgraph is part of a groupBy query.
 func (sg *SubGraph) IsGroupBy() bool {
 	return sg.Params.isGroupBy
 }
 
+// IsInternal returns whether this subgraph is marked as internal.
 func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.isInternal
 }
@@ -343,10 +345,12 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	return fieldName
 }
 
+func isEmptyIneqFnWithVar(sg *SubGraph) bool {
+	return sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && len(sg.SrcFunc.Args) == 0 &&
+		len(sg.Params.NeedsVar) > 0
+}
+
 func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
-	if len(pc.Params.uidToVal) == 0 {
-		return nil
-	}
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
@@ -923,13 +927,20 @@ const (
 
 func isDebug(ctx context.Context) bool {
 	var debug bool
+
 	// gRPC client passes information about debug as metadata.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// md is a map[string][]string
-		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+		if len(md["debug"]) > 0 {
+			// We ignore the error here, because in error case,
+			// debug would be false which is what we want.
+			debug, _ = strconv.ParseBool(md["debug"][0])
+		}
 	}
+
 	// HTTP passes information about debug as query parameter which is attached to context.
-	return debug || ctx.Value(DebugKey) == "true"
+	d, _ := ctx.Value(DebugKey).(bool)
+	return debug || d
 }
 
 func (sg *SubGraph) populate(uids []uint64) error {
@@ -974,7 +985,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 	if err := args.fill(gq); err != nil {
-		return nil, fmt.Errorf("error while filling args: %v", err)
+		return nil, errors.Wrapf(err, "while filling args")
 	}
 
 	sg := &SubGraph{Params: args}
@@ -998,7 +1009,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	if isUidFnWithoutVar(gq.Func) && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
-			return nil, fmt.Errorf("error while populating UIDs: %v", err)
+			return nil, errors.Wrapf(err, "while populating UIDs")
 		}
 	}
 
@@ -1006,14 +1017,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
 		if err := filterCopy(sgf, gq.Filter); err != nil {
-			return nil, fmt.Errorf("error while copying filter: %v", err)
+			return nil, errors.Wrapf(err, "while copying filter")
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
 	if gq.FacetsFilter != nil {
 		facetsFilter, err := toFacetsFilter(gq.FacetsFilter)
 		if err != nil {
-			return nil, fmt.Errorf("error while converting to facets filter: %v", err)
+			return nil, errors.Wrapf(err, "while converting to facets filter")
 		}
 		sg.facetsFilter = facetsFilter
 	}
@@ -1489,7 +1500,7 @@ AssignStep:
 
 // Updates the doneVars map by picking up uid/values from the current Subgraph
 func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	// NOTE: although we initialize doneVars (req.vars) in ProcessQuery, this nil check is for
+	// NOTE: although we initialize doneVars (req.Vars) in ProcessQuery, this nil check is for
 	// non-root lookups that happen to other nodes. Don't use len(doneVars) == 0 !
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
@@ -1640,7 +1651,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							}
 
 							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
-								return errors.Errorf("Repeated id with non int/float value for facet var encountered.")
+								return errors.Errorf("Repeated id with non int/float value for " +
+									"facet var encountered.")
 							}
 							ag := aggregator{name: "sum"}
 							ag.Apply(pVal)
@@ -1659,6 +1671,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 	return nil
 }
 
+// recursiveFillVars fills the value of variables before a query is to be processed using the result
+// of the values (doneVars) computed by other queries that were successfully run before this query.
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	err := sg.fillVars(doneVars)
 	if err != nil {
@@ -1691,7 +1705,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 				lists = append(lists, l.Uids)
 
-			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar) && len(l.Vals) != 0:
+			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
 				// This should happen only once.
 				// TODO: This allows only one value var per subgraph, change it later
 				sg.Params.uidToVal = l.Vals
@@ -1709,21 +1723,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
 			default:
-				// This var does not match any uids or vals but we are still trying to access it.
-				if v.Typ == gql.ValueVar {
-					// * * * * * * * * * * * * * * * * * * *
-					// Default value vars
-					// * * * * * * * * * * * * * * * * * * *
-					//
-					// Provide a default value for valueVarAggregation() to eval val().
-					// This is a noop for aggregation funcs that would fail.
-					// The zero aggs won't show because there are no uids matched.
-					//
-					// NOTE: If you need to make type assertions that might involve
-					// default value vars, use `Safe()` func and not val.Value directly.
-					mp[v.Name].Vals[0] = types.Val{}
-					sg.Params.uidToVal = mp[v.Name].Vals
-				}
+				glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
 			}
 		}
 	}
@@ -1749,7 +1749,9 @@ func (sg *SubGraph) replaceVarInFunc() error {
 			continue
 		}
 		if len(sg.Params.uidToVal) == 0 {
-			return errors.Errorf("No value found for value variable %q", arg.Value)
+			// This means that the variable didn't have any values and hence there is nothing to add
+			// to args.
+			break
 		}
 		// We don't care about uids, just take all the values and put as args.
 		// There would be only one value var per subgraph as per current assumptions.
@@ -1950,7 +1952,8 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
-					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()", ch.Attr)
+					return out, errors.Errorf("Repeated subgraph: [%s] while using expand()",
+						ch.Attr)
 				}
 			}
 			out = append(out, temp)
@@ -2409,7 +2412,10 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 }
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
-	if len(sg.Params.uidToVal) == 0 {
+	// nil has a different meaning from an initialized map of zero length here. If the variable
+	// didn't return any values then uidToVal would be an empty with zero length. If the variable
+	// was used before definition, uidToVal would be nil.
+	if sg.Params.uidToVal == nil {
 		return errors.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
 
@@ -2548,6 +2554,7 @@ func getReversePredicates(ctx context.Context, preds []string) ([]string, error)
 	return rpreds, nil
 }
 
+// GetAllPredicates returns the list of all the unique predicates present in the list of subgraphs.
 func GetAllPredicates(subGraphs []*SubGraph) []string {
 	predicatesMap := make(map[string]struct{})
 	for _, sg := range subGraphs {
@@ -2598,7 +2605,7 @@ type Request struct {
 
 	Subgraphs []*SubGraph
 
-	vars map[string]varValue
+	Vars map[string]varValue
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2610,7 +2617,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	defer stop()
 
 	// doneVars stores the processed variables.
-	req.vars = make(map[string]varValue)
+	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query
 	for i := 0; i < len(queries); i++ {
@@ -2623,7 +2630,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return fmt.Errorf("error while converting to subgraph: %v", err)
+			return errors.Wrapf(err, "while converting to subgraph")
 		}
 		sg.recurse(func(sg *SubGraph) {
 			sg.ReadTs = req.ReadTs
@@ -2652,7 +2659,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			}
 			// The variable should be defined in this block or should have already been
 			// populated by some other block, otherwise we are not ready to execute yet.
-			_, ok := req.vars[v]
+			_, ok := req.Vars[v]
 			if !ok && !selfDep {
 				return false
 			}
@@ -2676,15 +2683,18 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
-			err = sg.recursiveFillVars(req.vars)
+			err = sg.recursiveFillVars(req.Vars)
 			if err != nil {
 				return err
 			}
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
-			// Doesn't need to be executed as it just does aggregation and math functions.
-			if sg.Params.IsEmpty {
+			// A query doesn't need to be executed if
+			// 1. It just does aggregation and math functions which is when sg.Params.IsEmpty is true.
+			// 2. Its has an inequality fn at root without any args which can happen when it uses
+			// value variables for args which don't expand to any value.
+			if sg.Params.IsEmpty || isEmptyIneqFnWithVar(sg) {
 				errChan <- nil
 				continue
 			}
@@ -2721,10 +2731,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			sg := req.Subgraphs[idx]
 
 			var sgPath []*SubGraph
-			if err := sg.populateVarMap(req.vars, sgPath); err != nil {
+			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
 				return err
 			}
-			if err := sg.populatePostAggregation(req.vars, []*SubGraph{}, nil); err != nil {
+			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
 		}

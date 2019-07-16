@@ -39,7 +39,7 @@ func TestCurlAccessWithoutClientCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt", "https://localhost:8180/alter",
 		"-d", "name: string @index(exact) .",
 	}
-	z.VerifyCurlCmd(t, curlArgs, &z.FailureConfig{
+	z.VerifyCurlCmd(t, curlArgs, &z.CurlFailureConfig{
 		ShouldFail: false,
 	})
 }
@@ -52,7 +52,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 		"https://localhost:8180/alter",
 		"-d", "name: string @index(exact) .",
 	}
-	z.VerifyCurlCmd(t, curlArgs, &z.FailureConfig{
+	z.VerifyCurlCmd(t, curlArgs, &z.CurlFailureConfig{
 		ShouldFail: false,
 	})
 }

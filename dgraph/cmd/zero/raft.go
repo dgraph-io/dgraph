@@ -42,11 +42,9 @@ import (
 
 type node struct {
 	*conn.Node
-	server      *Server
-	ctx         context.Context
-	reads       map[uint64]chan uint64
-	subscribers map[uint32]chan struct{}
-	closer      *y.Closer // to stop Run.
+	server *Server
+	ctx    context.Context
+	closer *y.Closer // to stop Run.
 
 	// The last timestamp when this Zero was able to reach quorum.
 	mu         sync.RWMutex
@@ -378,7 +376,9 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	cc.Unmarshal(e.Data)
+	if err := cc.Unmarshal(e.Data); err != nil {
+		glog.Errorf("While unmarshalling confchange: %+v", err)
+	}
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		if cc.NodeID == n.Id {

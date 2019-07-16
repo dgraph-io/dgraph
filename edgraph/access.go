@@ -28,6 +28,8 @@ import (
 	"github.com/golang/glog"
 )
 
+// Login handles login requests from clients. This version rejects all requests
+// since ACL is only supported in the enterprise version.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
 
@@ -35,10 +37,12 @@ func (s *Server) Login(ctx context.Context,
 	return &api.Response{}, x.ErrNotSupported
 }
 
+// ResetAcl is an empty method since ACL is only supported in the enterprise version.
 func ResetAcl() {
 	// do nothing
 }
 
+// ResetAcls is an empty method since ACL is only supported in the enterprise version.
 func RefreshAcls(closer *y.Closer) {
 	// do nothing
 	<-closer.HasBeenClosed()

@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	encjson "encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -37,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Chunker describes the interface to parse and process the input to the live and bulk loaders.
 type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
@@ -47,13 +47,20 @@ type Chunker interface {
 type rdfChunker struct{}
 type jsonChunker struct{}
 
+// InputFormat represents the multiple formats supported by Chunker.
+type InputFormat byte
+
 const (
-	UnknownFormat int = iota
+	// UnknownFormat is a constant to denote a format not supported by the bulk/live loaders.
+	UnknownFormat InputFormat = iota
+	// RdfFormat is a constant to denote the input to the live/bulk loader is in the RDF format.
 	RdfFormat
+	// JsonFormat is a constant to denote the input to the live/bulk loader is in the JSON format.
 	JsonFormat
 )
 
-func NewChunker(inputFormat int) Chunker {
+// NewChunker returns a new chunker for the specified format.
+func NewChunker(inputFormat InputFormat) Chunker {
 	switch inputFormat {
 	case RdfFormat:
 		return &rdfChunker{}
@@ -147,7 +154,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 		return err
 	}
 	if ch != '[' {
-		return fmt.Errorf("JSON file must contain array. Found: %v", ch)
+		return errors.Errorf("JSON file must contain array. Found: %v", ch)
 	}
 	return nil
 }
@@ -170,7 +177,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		// Handle loading an empty JSON array ("[]") without error.
 		return nil, io.EOF
 	} else if ch != '{' {
-		return nil, fmt.Errorf("Expected JSON map start. Found: %v", string(ch))
+		return nil, errors.Errorf("Expected JSON map start. Found: %v", string(ch))
 	}
 	x.Check2(out.WriteRune(ch))
 
@@ -329,7 +336,7 @@ func IsJSONData(r *bufio.Reader) (bool, error) {
 
 // DataFormat returns a file's data format (RDF, JSON, or unknown) based on the filename
 // or the user-provided format option. The file extension has precedence.
-func DataFormat(filename string, format string) int {
+func DataFormat(filename string, format string) InputFormat {
 	format = strings.ToLower(format)
 	filename = strings.TrimSuffix(strings.ToLower(filename), ".gz")
 	switch {

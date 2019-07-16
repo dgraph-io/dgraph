@@ -548,12 +548,12 @@ new transaction is initiated.**
 ### Run a query
 
 To query the database, the `/query` endpoint is used. Remember to set the `Content-Type` header
-to `application/graphqlpm` in order to ensure that the body of the request is correctly parsed.
+to `application/graphql+-` in order to ensure that the body of the request is correctly parsed.
 
 To get the balances for both accounts:
 
 ```sh
-$ curl -H "Content-Type: application/graphqlpm" -X POST localhost:8080/query -d $'
+$ curl -H "Content-Type: application/graphql+-" -X POST localhost:8080/query -d $'
 {
   balances(func: anyofterms(name, "Alice Bob")) {
     uid
@@ -644,18 +644,17 @@ The result:
   },
   "extensions": {
     "server_latency": {
-      "parsing_ns": 17000,
-      "processing_ns": 4722207
+      "parsing_ns": 50901,
+      "processing_ns": 14631082
     },
     "txn": {
       "start_ts": 4,
       "keys": [
-        "i4elpex2rwx3",
-        "nkvfdz3ltmvv"
-      ]
+        "2ahy9oh4s9csc",
+        "3ekeez23q5149"
+      ],
       "preds": [
-        "1-balance",
-        "1-_predicate_"
+        "1-balance"
       ]
     }
   }
@@ -687,16 +686,17 @@ accepts the old format, which was a single array of keys.
 ```sh
 $ curl -X POST localhost:8080/commit?startTs=4 -d $'
 {
-    "keys": [
-		"i4elpex2rwx3",
-		"nkvfdz3ltmvv"
+  "keys": [
+		"2ahy9oh4s9csc",
+		"3ekeez23q5149"
 	],
-	"preds": [
-		"1-predicate",
-		"1-name"
+  "preds": [
+    "1-balance"
 	]
 }' | jq
 ```
+
+The result:
 
 ```json
 {
@@ -732,6 +732,23 @@ successful.  This is indicated in the response when the commit is attempted.
 In this case, it should be up to the user of the client to decide if they wish
 to retry the transaction.
 
+### Aborting the transaction
+To abort a transaction, use the same `/commit` endpoint with the `abort=true` parameter
+while specifying the `startTs` value for the transaction.
+
+```sh
+$ curl -X POST "localhost:8080/commit?startTs=4&abort=true" | jq
+```
+
+The result:
+
+```json
+{
+  "code": "Success",
+  "message": "Done"
+}
+```
+
 ### Compression via HTTP
 
 Dgraph supports gzip-compressed requests to and from Dgraph Alphas for `/query`, `/mutate`, and `/alter`.
@@ -756,7 +773,7 @@ Example of a compressed request via curl:
 ```sh
 $ curl -X POST \
   -H 'Accept-Encoding: gzip' \
-  -H "Content-Type: application/graphqlpm" \
+  -H "Content-Type: application/graphql+-" \
   localhost:8080/query -d $'schema {}' | gzip --decompress
 ```
 
@@ -776,7 +793,7 @@ $ zcat query.gz # query.gz is gzipped compressed
 $ curl -X POST \
   -H 'Content-Encoding: gzip' \
   -H 'Accept-Encoding: gzip' \
-  -H "Content-Type: application/graphqlpm" \
+  -H "Content-Type: application/graphql+-" \
   localhost:8080/query --data-binary @query.gz | gzip --decompress
 ```
 
@@ -784,6 +801,25 @@ $ curl -X POST \
 Curl has a `--compressed` option that automatically requests for a compressed response (`Accept-Encoding` header) and decompresses the compressed response.
 
 ```sh
-$ curl -X POST --compressed -H "Content-Type: application/graphqlpm" localhost:8080/query -d $'schema {}'
+$ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8080/query -d $'schema {}'
 ```
 {{% /notice %}}
+
+### Health Check and Alpha Info
+
+`/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
+The body of the response contains information about the running alpha and its version.
+
+```sh
+$ curl localhost:8080/health
+```
+
+```json
+{
+  "version": "v1.1.0",
+  "instance": "alpha",
+  "uptime": 1928423
+}
+```
+
+Here, `uptime` is in nanoseconds (type `time.Duration` in Go).

@@ -24,12 +24,14 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 var (
-	logger  = log.New(os.Stderr, "", 0)
+	logger = log.New(os.Stderr, "", 0)
+	// Migrate is the sub-command invoked when running "dgraph migrate".
 	Migrate x.SubCommand
 	quiet   bool // enabling quiet mode would suppress the warning logs
 )
@@ -102,7 +104,7 @@ func run(conf *viper.Viper) error {
 		return err
 	}
 
-	tableInfos := make(map[string]*sqlTable, 0)
+	tableInfos := make(map[string]*sqlTable)
 	for _, table := range tablesToRead {
 		tableInfo, err := parseTables(pool, table, db)
 		if err != nil {
@@ -136,7 +138,7 @@ func checkFile(file string) error {
 			text = strings.TrimSpace(text)
 
 			if len(text) == 0 || strings.ToLower(text) == "n" {
-				return fmt.Errorf("not allowed to overwrite %s", file)
+				return errors.Errorf("not allowed to overwrite %s", file)
 			}
 			if strings.ToLower(text) == "y" {
 				return nil
@@ -168,10 +170,10 @@ func generateSchemaAndData(dumpMeta *dumpMeta, schemaOutput string, dataOutput s
 	dumpMeta.schemaWriter = schemaWriter
 
 	if err := dumpMeta.dumpSchema(); err != nil {
-		return fmt.Errorf("error while writing schema file: %v", err)
+		return errors.Wrapf(err, "while writing schema file")
 	}
 	if err := dumpMeta.dumpTables(); err != nil {
-		return fmt.Errorf("error while writing data file: %v", err)
+		return errors.Wrapf(err, "while writing data file")
 	}
 	return nil
 }

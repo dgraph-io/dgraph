@@ -26,23 +26,24 @@ import (
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.
 const (
-	itemText       lex.ItemType = 5 + iota // plain text
-	itemSubject                            // subject, 6
-	itemPredicate                          // predicate, 7
-	itemObject                             // object, 8
-	itemLabel                              // label, 9
-	itemLiteral                            // literal, 10
-	itemLanguage                           // language, 11
-	itemObjectType                         // object type, 12
-	itemValidEnd                           // end with dot, 13
-	itemComment                            // comment, 14
-	itemComma                              // comma, 15
-	itemEqual                              // equal, 16
-	itemLeftRound                          // '(', 17
-	itemRightRound                         // ')', 18
-	itemStar                               // *, 19
-	itemVarKeyword                         // var, 20
-	itemVarName                            // 21
+	itemText        lex.ItemType = 5 + iota // plain text
+	itemSubject                             // subject, 6
+	itemPredicate                           // predicate, 7
+	itemObject                              // object, 8
+	itemLabel                               // label, 9
+	itemLiteral                             // literal, 10
+	itemLanguage                            // language, 11
+	itemObjectType                          // object type, 12
+	itemValidEnd                            // end with dot, 13
+	itemComment                             // comment, 14
+	itemComma                               // comma, 15
+	itemEqual                               // equal, 16
+	itemLeftRound                           // '(', 17
+	itemRightRound                          // ')', 18
+	itemStar                                // *, 19
+	itemSubjectFunc                         // uid, 20
+	itemObjectFunc                          // uid, 21
+	itemVarName                             // 22
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -56,7 +57,6 @@ const (
 
 const (
 	lsThan     = '<'
-	grThan     = '>'
 	underscore = '_'
 	colon      = ':'
 	dash       = '-'
@@ -138,6 +138,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 				l.Depth = atSubject
 			}
 
+		// TODO(Aman): add support for more functions here.
 		case r == 'u':
 			if l.Depth != atSubject && l.Depth != atObject {
 				return l.Errorf("Unexpected char 'u'")
@@ -423,49 +424,44 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 func lexVariable(l *lex.Lexer) lex.StateFn {
 	var r rune
 
+	// TODO(Aman): add support for more functions here.
 	for _, c := range "uid" {
 		if r = l.Next(); r != c {
-			return l.Errorf("Unexpected char '%c' when parsing var keyword", r)
+			return l.Errorf("Unexpected char '%c' when parsing uid keyword", r)
 		}
 	}
-	l.Emit(itemVarKeyword)
+	if l.Depth == atObject {
+		l.Emit(itemObjectFunc)
+	} else if l.Depth == atSubject {
+		l.Emit(itemSubjectFunc)
+	}
 	l.IgnoreRun(isSpace)
 
 	if r = l.Next(); r != '(' {
-		return l.Errorf("Expected '(' after var keyword, found: '%c'", r)
+		return l.Errorf("Expected '(' after uid keyword, found: '%c'", r)
 	}
 	l.Emit(itemLeftRound)
-
 	l.IgnoreRun(isSpace)
 
-	for {
-		r := l.Next()
-		if r == lex.EOF {
-			return l.Errorf("Unexpected end of input while reading variable name.")
-		}
-		if r == ')' {
-			l.Backup()
-			break
-		}
-		if isSpace(r) {
-			break
-		}
+	// TODO(Aman): we support all characters in variable names except space and
+	// right bracket. we should support only limited characters in variable names.
+	// For now, this is fine because variables names must be used once in query
+	// block before they can be used here. And, we throw an error if number of
+	// used variables are different than number of defined variables.
+	acceptVar := func(r rune) bool { return !(isSpace(r) || r == ')') }
+	if _, valid := l.AcceptRun(acceptVar); !valid {
+		return l.Errorf("Unexpected end of input while reading variable name")
 	}
 	l.Emit(itemVarName)
-
 	l.IgnoreRun(isSpace)
 
 	if r = l.Next(); r != ')' {
-		return l.Errorf("Expected ')' while reading var, found: '%c'", r)
+		return l.Errorf("Expected ')' while reading uid func, found: '%c'", r)
 	}
 	l.Emit(itemRightRound)
 	l.Depth++
 
 	return lexText
-}
-
-func isClosingBracket(r rune) bool {
-	return r == grThan
 }
 
 // isSpace returns true if the rune is a tab or space.

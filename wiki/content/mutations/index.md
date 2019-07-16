@@ -116,7 +116,7 @@ _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
 ```
 
-As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+As Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
 
 ```
 <0x123> <xid> "http://schema.org/Person" .
@@ -163,7 +163,83 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
+## External IDs and Upsert Block
 
+The Upsert Block makes managing external IDs easy.
+
+Set the schema.
+```
+xid: string @index(exact) .
+<http://schema.org/name>: string @index(exact) .
+<http://schema.org/type>: [uid] @reverse .
+```
+
+Set the type first of all.
+```
+{
+  set {
+    _:blank <xid> "http://schema.org/Person" .
+  }
+}
+```
+
+Now you can create a new person and attach its type using the Upsert Block.
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          set {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+You can also delete a person and detach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+
+```
+   upsert {
+      query {
+        var(func: eq(xid, "http://schema.org/Person")) {
+          Type as uid
+        }
+        var(func: eq(<http://schema.org/name>, "Robin Wright")) {
+          Person as uid
+        }
+      }
+      mutation {
+          delete {
+           uid(Person) <xid> "https://www.themoviedb.org/person/32-robin-wright" .
+           uid(Person) <http://schema.org/type> uid(Type) .
+           uid(Person) <http://schema.org/name> "Robin Wright" .
+          }
+      }
+    }
+```
+
+Query by user.
+```
+{
+  q(func: eq(<http://schema.org/name>, "Robin Wright")) {
+    uid
+    xid
+    <http://schema.org/name>
+    <http://schema.org/type> {
+      uid
+      xid
+    }
+  }
+}
+```
 
 ## Language and RDF Types
 
@@ -394,6 +470,22 @@ _:blank-0 <rating> "tastes good"@en .
 _:blank-0 <rating> "sabe bien"@es .
 _:blank-0 <rating> "c'est bon"@fr .
 _:blank-0 <rating> "è buono"@it .
+```
+
+### Geolocation support
+
+Support for geo-location data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support the Point, Polygon, and MultiPolygon types. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
 ```
 
 ### Referencing existing nodes
@@ -702,3 +794,203 @@ Mutation with a JSON file:
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
 ```
+
+where the contents of data.json looks like the following:
+
+```json
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+The JSON file must follow the same format for mutations over HTTP: a single JSON
+object with the `"set"` or `"delete"` key and an array of JSON objects for the
+mutation. If you already have a file with an array of data, you can use `jq` to
+transform your data to the proper format. For example, if your data.json file
+looks like this:
+
+```json
+[
+  {
+    "name": "Alice"
+  },
+  {
+    "name": "Bob"
+  }
+]
+```
+
+then you can transform your data to the proper format with the following `jq`
+command, where the `.` in the `jq` string represents the contents of data.json:
+
+```sh
+cat data.json | jq '{set: .}'
+```
+
+```
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+## Upsert Block
+
+The Upsert block allows performing queries and mutations in a single request. The Upsert
+block contains one query block and one mutation block. Variables defined in the
+query block can be used in the mutation block using the `uid` function.
+
+In general, the structure of the Upsert block is as follows:
+
+```
+upsert {
+  query <query block>
+  [fragment <fragment block>]
+  mutation <mutation block>
+}
+```
+
+The Mutation block currently only allows the `uid` function, which allows extracting UIDs
+from variables defined in the query block. There are 3 possible outcomes based on the
+results of executing the query block:
+
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+* If the variable stores exactly one UID, the `uid` function returns the uid stored in the variable.
+* If the variable stores more than one UID, the mutation fails. We plan to support this use case in the future.
+
+### Example
+
+Consider an example with following schema:
+
+```sh
+curl localhost:8080/alter -X POST -d $'
+  name: string @index(term) .
+  email: string @index(exact) @upsert .
+  age: int @index(int) .
+  friend: uid @reverse .
+' | jq
+```
+
+### Insert Use Case
+
+Now, let's say we want to create a new user with `email`, and `name` information.
+We also want to make sure that two users cannot have same email id in the database.
+
+We can do this using the Upsert block as follows:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    me(func: eq(email, "user@dgraph.io")) {
+      v as uid
+    }
+  }
+
+  mutation {
+    set {
+      uid(v) <name> "first last" .
+      uid(v) <email> "user@dgraph.io" .
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "uid(v)": "0x2"
+    }
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 71033,
+      "processing_ns": 22994018
+    },
+    "txn": {
+      "start_ts": 4,
+      "commit_ts": 5,
+      "preds": [
+        "1-email",
+        "1-name"
+      ]
+    }
+  }
+}
+```
+
+The upsert first checks whether a user with the email `user@dgraph.io` exists. Because
+the database is currently empty, no such user exists. Hence, the variable `v` will be
+empty. In this case, the `uid` function returns a new UID for the variable `v` replacing
+with the new UID value wherever `uid(v)` is used.
+
+### Update Use Case
+
+Now, we want to add the `age` information for the same user having email ID
+`user@dgraph.io`. We can use the Upsert block to do the same as follows:
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d  $'
+upsert {
+  query {
+    me(func: eq(email, "user@dgraph.io")) {
+      v as uid
+    }
+  }
+
+  mutation {
+    set {
+      uid(v) <age> "28" .
+    }
+  }
+}
+' | jq
+```
+
+Result:
+
+```json
+{
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {}
+  },
+  "extensions": {
+    "server_latency": {
+      "parsing_ns": 39017,
+      "processing_ns": 21231954
+    },
+    "txn": {
+      "start_ts": 7,
+      "commit_ts": 8,
+      "preds": [
+        "1-age"
+      ]
+    }
+  }
+}
+```
+
+Here, the query block queries for a user with `email` as `user@dgraph.io`. It stores the
+`uid` of the user in variable `v`. The mutation block then updates the `age` of the
+user. The `uid` function extracts the uid from the variable `v`.

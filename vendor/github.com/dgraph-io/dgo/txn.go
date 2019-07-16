@@ -177,6 +177,11 @@ func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, er
 
 	if err != nil {
 		_ = txn.Discard(ctx) // Ignore error - user should see the original error.
+
+		// If the transaction was aborted, return the right error so the caller can handle it.
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
+			err = y.ErrAborted
+		}
 		return nil, err
 	}
 
@@ -219,11 +224,8 @@ func (txn *Txn) Commit(ctx context.Context) error {
 // is unavailable. In these cases, the server will eventually do the
 // transaction clean up.
 func (txn *Txn) Discard(ctx context.Context) error {
-	err := txn.commitOrAbort(ctx)
-	if err != nil {
-		txn.context.Aborted = true
-	}
-	return err
+	txn.context.Aborted = true
+	return txn.commitOrAbort(ctx)
 }
 
 func (txn *Txn) commitOrAbort(ctx context.Context) error {

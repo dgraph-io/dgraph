@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sort"
 	"sync"
@@ -97,27 +96,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 	return n
 }
 
-type header struct {
-	proposalId uint32
-	msgId      uint16
-}
-
-func (h *header) Length() int {
-	return 6 // 4 bytes for proposalId, 2 bytes for msgId.
-}
-
-func (h *header) Encode() []byte {
-	result := make([]byte, h.Length())
-	binary.LittleEndian.PutUint32(result[0:4], h.proposalId)
-	binary.LittleEndian.PutUint16(result[4:6], h.msgId)
-	return result
-}
-
-func (h *header) Decode(in []byte) {
-	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
-	h.msgId = binary.LittleEndian.Uint16(in[4:6])
-}
-
 func (n *node) Ctx(key string) context.Context {
 	if pctx := n.Proposals.Get(key); pctx != nil {
 		return pctx.Ctx
@@ -127,7 +105,9 @@ func (n *node) Ctx(key string) context.Context {
 
 func (n *node) applyConfChange(e raftpb.Entry) {
 	var cc raftpb.ConfChange
-	cc.Unmarshal(e.Data)
+	if err := cc.Unmarshal(e.Data); err != nil {
+		glog.Errorf("While unmarshalling confchange: %+v", err)
+	}
 
 	if cc.Type == raftpb.ConfChangeRemoveNode {
 		n.DeletePeer(cc.NodeID)
@@ -183,14 +163,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
-				if err := updateSchema(s.Predicate, *s); err != nil {
+				if err := updateSchema(s); err != nil {
 					return err
 				}
 
 				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
 					return err
 				} else if !servesTablet {
-					return fmt.Errorf("group 1 should always serve reserved predicate %s",
+					return errors.Errorf("group 1 should always serve reserved predicate %s",
 						s.Predicate)
 				}
 			}
@@ -482,7 +462,7 @@ func (n *node) processApplyCh() {
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 				}
 				ms := x.SinceMs(start)
-				ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(proposal.Key, perr)
@@ -552,23 +532,16 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	return nil
 }
 
-func (n *node) applyAllMarks(ctx context.Context) {
-	// Get index of last committed.
-	lastIndex := n.Applied.LastIndex()
-	n.Applied.WaitForMark(ctx, lastIndex)
-}
-
 func (n *node) leaderBlocking() (*conn.Pool, error) {
 	pool := groups().Leader(groups().groupId())
 	if pool == nil {
 		// Functions like retrieveSnapshot and joinPeers are blocking at initial start and
 		// leader election for a group might not have happened when it is called. If we can't
-		// find a leader, get latest state from
-		// Zero.
+		// find a leader, get latest state from Zero.
 		if err := UpdateMembershipState(context.Background()); err != nil {
-			return nil, fmt.Errorf("Error while trying to update membership state: %+v", err)
+			return nil, errors.Errorf("Error while trying to update membership state: %+v", err)
 		}
-		return nil, fmt.Errorf("Unable to reach leader in group %d", n.gid)
+		return nil, errors.Errorf("Unable to reach leader in group %d", n.gid)
 	}
 	return pool, nil
 }
@@ -623,12 +596,12 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	if _, err := n.populateSnapshot(snap, pool); err != nil {
-		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v", err)
+		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	if err := schema.LoadFromDb(); err != nil {
-		return fmt.Errorf("Error while initilizating schema: %+v", err)
+		return errors.Wrapf(err, "while initializing schema")
 	}
 	groups().triggerMembershipSync()
 	return nil
@@ -713,7 +686,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 					if first, err := n.Store.FirstIndex(); err == nil {
 						// Save some cycles by only calculating snapshot if the checkpoint has gone
 						// quite a bit further than the first index.
-						calculate = chk-first >= uint64(x.WorkerConfig.SnapshotAfter)
+						calculate = chk >= first+uint64(x.WorkerConfig.SnapshotAfter)
 					}
 				}
 				// We keep track of the applied index in the p directory. Even if we don't take
@@ -829,7 +802,9 @@ func (n *node) Run() {
 					maxIndex := n.Applied.LastIndex()
 					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
 						" retrieving snapshot\n", maxIndex)
-					n.Applied.WaitForMark(context.Background(), maxIndex)
+					if err := n.Applied.WaitForMark(context.Background(), maxIndex); err != nil {
+						glog.Errorf("Error waiting for mark for index %d: %+v", maxIndex, err)
+					}
 
 					if currSnap, err := n.Snapshot(); err != nil {
 						// Retrieve entire snapshot from leader if node does not have
@@ -868,7 +843,7 @@ func (n *node) Run() {
 			timer.Record("disk")
 			if rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %v", err)
+					glog.Errorf("Error while calling Store.Sync: %+v", err)
 				}
 				timer.Record("sync")
 			}
@@ -955,15 +930,21 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			if firstRun && n.canCampaign {
-				go n.Raft().Campaign(n.ctx)
+				go func() {
+					if err := n.Raft().Campaign(n.ctx); err != nil {
+						glog.Errorf("Error starting campaign for node %v: %+v", n.gid, err)
+					}
+				}()
 				firstRun = false
 			}
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
-				ostats.RecordWithTags(context.Background(),
+				if err := ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
-					x.LatencyMs.M(float64(timer.Total())/1e6))
+					x.LatencyMs.M(float64(timer.Total())/1e6)); err != nil {
+					glog.Errorf("Error recording stats: %+v", err)
+				}
 			}
 			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(

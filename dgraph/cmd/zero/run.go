@@ -56,6 +56,7 @@ type options struct {
 
 var opts options
 
+// Zero is the sub-command used to start Zero servers.
 var Zero x.SubCommand
 
 func init() {
@@ -202,12 +203,8 @@ func run() {
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.LSMOnlyOptions
-	kvOpt.SyncWrites = false
-	kvOpt.Truncate = true
-	kvOpt.Dir = opts.w
-	kvOpt.ValueDir = opts.w
-	kvOpt.ValueLogFileSize = 64 << 20
+	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
+		WithValueLogFileSize(64 << 20)
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
@@ -236,16 +233,10 @@ func run() {
 
 	// handle signals
 	go func() {
-		for {
-			select {
-			case sig, ok := <-sdCh:
-				if !ok {
-					return
-				}
-				glog.Infof("--- Received %s signal", sig)
-				signal.Stop(sdCh)
-				st.zero.closer.Signal()
-			}
+		for sig := range sdCh {
+			glog.Infof("--- Received %s signal", sig)
+			signal.Stop(sdCh)
+			st.zero.closer.Signal()
 		}
 	}()
 

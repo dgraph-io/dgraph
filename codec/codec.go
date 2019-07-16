@@ -18,12 +18,11 @@ package codec
 
 import (
 	"bytes"
-	"encoding/binary"
 	"math"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-groupvarint"
 )
 
 type seekPos int
@@ -35,6 +34,11 @@ const (
 	SeekCurrent
 )
 
+var (
+	bitMask uint64 = 0xffffffff00000000
+)
+
+// Encoder is used to convert a list of UIDs into a pb.UidPack object.
 type Encoder struct {
 	BlockSize int
 	pack      *pb.UidPack
@@ -45,26 +49,51 @@ func (e *Encoder) packBlock() {
 	if len(e.uids) == 0 {
 		return
 	}
-	block := &pb.UidBlock{Base: e.uids[0]}
+	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
 	last := e.uids[0]
+	e.uids = e.uids[1:]
 
-	count := 1
 	var out bytes.Buffer
-	var buf [binary.MaxVarintLen64]byte
-	for _, uid := range e.uids[1:] {
-		n := binary.PutUvarint(buf[:], uid-last)
-		x.Check2(out.Write(buf[:n]))
-		last = uid
-		count++
+	buf := make([]byte, 17)
+	tmpUids := make([]uint32, 4)
+	for {
+		for i := 0; i < 4; i++ {
+			if i >= len(e.uids) {
+				// Padding with '0' because Encode4 encodes only in batch of 4.
+				tmpUids[i] = 0
+			} else {
+				tmpUids[i] = uint32(e.uids[i] - last)
+				last = e.uids[i]
+			}
+		}
+
+		data := groupvarint.Encode4(buf, tmpUids)
+		out.Write(data)
+
+		// e.uids has ended and we have padded tmpUids with 0s
+		if len(e.uids) <= 4 {
+			e.uids = e.uids[:0]
+			break
+		}
+		e.uids = e.uids[4:]
 	}
+
 	block.Deltas = out.Bytes()
 	e.pack.Blocks = append(e.pack.Blocks, block)
 }
 
+// Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
+
+	size := len(e.uids)
+	if size > 0 && !match32MSB(e.uids[size-1], uid) {
+		e.packBlock()
+		e.uids = e.uids[:0]
+	}
+
 	e.uids = append(e.uids, uid)
 	if len(e.uids) >= e.BlockSize {
 		e.packBlock()
@@ -72,11 +101,13 @@ func (e *Encoder) Add(uid uint64) {
 	}
 }
 
+// Done returns the final output of the encoder.
 func (e *Encoder) Done() *pb.UidPack {
 	e.packBlock()
 	return e.pack
 }
 
+// Decoder is used to read a pb.UidPack object back into a list of UIDs.
 type Decoder struct {
 	Pack     *pb.UidPack
 	blockIdx int
@@ -98,19 +129,32 @@ func (d *Decoder) unpackBlock() []uint64 {
 	last := block.Base
 	d.uids = append(d.uids, last)
 
-	// Read back the encoded varints.
-	var offset int
-	for offset < len(block.Deltas) {
-		delta, n := binary.Uvarint(block.Deltas[offset:])
-		x.AssertTrue(n > 0)
-		offset += n
-		uid := last + delta
-		d.uids = append(d.uids, uid)
-		last = uid
+	tmpUids := make([]uint32, 4)
+	var sum uint64
+	encData := block.Deltas
+
+	for uint32(len(d.uids)) < block.NumUids {
+		if len(encData) < 17 {
+			// Decode4 decodes 4 uids from encData. It moves slice(encData) forward while
+			// decoding and expects it to be of length >= 4 at all the stages. Padding
+			// with zero to make sure lenght is always >= 4.
+			encData = append(encData, 0, 0, 0)
+		}
+
+		groupvarint.Decode4(tmpUids, encData)
+		encData = encData[groupvarint.BytesUsed[encData[0]]:]
+		for i := 0; i < 4; i++ {
+			sum = last + uint64(tmpUids[i])
+			d.uids = append(d.uids, sum)
+			last = sum
+		}
 	}
+
+	d.uids = d.uids[:block.NumUids]
 	return d.uids
 }
 
+// ApproxLen returns the approximate number of UIDs in the pb.UidPack object.
 func (d *Decoder) ApproxLen() int {
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
@@ -183,29 +227,29 @@ func (d *Decoder) Seek(uid uint64, whence seekPos) []uint64 {
 	return d.Next()
 }
 
-// Uids are owned by the Decoder, and the slice contents would be changed on the next call. They
+// Uids returns all the uids in the pb.UidPack object as an array of integers.
+// uids are owned by the Decoder, and the slice contents would be changed on the next call. They
 // should be copied if passed around.
 func (d *Decoder) Uids() []uint64 {
 	return d.uids
 }
 
+// LinearSeek returns uids of the last block whose base is less than seek.
+// If there are no such blocks i.e. seek < base of first block, it returns uids of first
+// block. LinearSeek is used to get closest uids which are >= seek.
 func (d *Decoder) LinearSeek(seek uint64) []uint64 {
-	prev := d.blockIdx
 	for {
 		v := d.PeekNextBase()
-		if seek <= v {
+		if seek < v {
 			break
 		}
 		d.blockIdx++
 	}
-	if d.blockIdx == prev {
-		// The seek id is <= base of next block. But, we have already searched this
-		// block. So, let's move to the next block anyway.
-		return d.Next()
-	}
+
 	return d.unpackBlock()
 }
 
+// PeekNextBase returns the base of the next block without advancing the decoder.
 func (d *Decoder) PeekNextBase() uint64 {
 	bidx := d.blockIdx + 1
 	if bidx < len(d.Pack.Blocks) {
@@ -214,10 +258,12 @@ func (d *Decoder) PeekNextBase() uint64 {
 	return math.MaxUint64
 }
 
+// Valid returns true if the decoder has not reached the end of the packed data.
 func (d *Decoder) Valid() bool {
 	return d.blockIdx < len(d.Pack.Blocks)
 }
 
+// Next moves the decoder on to the next block.
 func (d *Decoder) Next() []uint64 {
 	d.blockIdx++
 	return d.unpackBlock()
@@ -238,7 +284,7 @@ func Encode(uids []uint64, blockSize int) *pb.UidPack {
 	return enc.Done()
 }
 
-// ApproxNum would indicate the total number of UIDs in the pack. Can be used for int slice
+// ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice
 // allocations.
 func ApproxLen(pack *pb.UidPack) int {
 	if pack == nil {
@@ -257,16 +303,10 @@ func ExactLen(pack *pb.UidPack) int {
 	if sz == 0 {
 		return 0
 	}
-	block := pack.Blocks[sz-1]
-	num := 1 // Count the base.
-	for _, b := range block.Deltas {
-		// If the MSB in varint encoding is zero, then it is the final byte, not a continuation of
-		// the integer. Thus, we can count it as one delta.
-		if b&0x80 == 0 {
-			num++
-		}
+	num := 0
+	for _, b := range pack.Blocks {
+		num += int(b.NumUids) // NumUids includes the base UID.
 	}
-	num += (sz - 1) * int(pack.BlockSize)
 	return num
 }
 
@@ -280,4 +320,8 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 		uids = append(uids, block...)
 	}
 	return uids
+}
+
+func match32MSB(num1, num2 uint64) bool {
+	return (num1 & bitMask) == (num2 & bitMask)
 }

@@ -109,13 +109,13 @@ func readKey(keyFile string) (crypto.PrivateKey, error) {
 	block, _ := pem.Decode(b)
 	switch {
 	case block == nil:
-		return nil, fmt.Errorf("Failed to read key block")
+		return nil, errors.Errorf("Failed to read key block")
 	case block.Type == "EC PRIVATE KEY":
 		return x509.ParseECPrivateKey(block.Bytes)
 	case block.Type == "RSA PRIVATE KEY":
 		return x509.ParsePKCS1PrivateKey(block.Bytes)
 	}
-	return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
+	return nil, errors.Errorf("Unknown PEM type: %s", block.Type)
 }
 
 // readCert tries to read and decode the contents of a signed cert file.
@@ -129,9 +129,9 @@ func readCert(certFile string) (*x509.Certificate, error) {
 	block, _ := pem.Decode(b)
 	switch {
 	case block == nil:
-		return nil, fmt.Errorf("Failed to read cert block")
+		return nil, errors.Errorf("Failed to read cert block")
 	case block.Type != "CERTIFICATE":
-		return nil, fmt.Errorf("Unknown PEM type: %s", block.Type)
+		return nil, errors.Errorf("Unknown PEM type: %s", block.Type)
 	}
 
 	return x509.ParseCertificate(block.Bytes)

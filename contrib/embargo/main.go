@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 var ctxb = context.Background()
@@ -35,10 +37,6 @@ func run(ctx context.Context, command string) error {
 	return nil
 }
 
-func partition(instance string) error {
-	return run(ctxb, fmt.Sprintf("embargo partition %s", instance))
-}
-
 func increment(atLeast int, args string) error {
 	errCh := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(ctxb, 1*time.Minute)
@@ -60,7 +58,7 @@ func increment(atLeast int, args string) error {
 		}
 	}
 	if ok < atLeast {
-		return fmt.Errorf("Increment with atLeast=%d failed. OK: %d", atLeast, ok)
+		return errors.Errorf("Increment with atLeast=%d failed. OK: %d", atLeast, ok)
 	}
 	dur := time.Since(start).Round(time.Millisecond)
 	fmt.Printf("\n[%v] ===> TIME taken to converge %d alphas: %s\n\n",
@@ -80,7 +78,7 @@ func getStatus(zero string) error {
 	output := out.String()
 	if strings.Contains(output, "errors") {
 		fmt.Printf("ERROR. Status at %s. Output:\n%s\n", zero, output)
-		return fmt.Errorf(output)
+		return errors.Errorf(output)
 	}
 	// var m map[string]interface{}
 	// if err := json.Unmarshal([]byte(output), &m); err != nil {
