@@ -3,10 +3,8 @@
 
 package codec
 
-import (
-	"github.com/golang/glog"
-)
+import "fmt"
 
 func init() {
-	glog.Infof("[Decoder]: Using assembly version of decoder")
+	fmt.Println("[Decoder]: Using assembly version of decoder")
 }
