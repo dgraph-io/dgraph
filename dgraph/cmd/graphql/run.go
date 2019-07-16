@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -157,25 +156,10 @@ func run() error {
 		return errors.Wrap(gqlErr, "while parsing GraphQL schema")
 	}
 
-	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
-		var errStr strings.Builder
-		for _, err := range gqlErrList {
-			errStr.WriteString(err.Message + "\n")
-		}
-
-		log.Fatalf(errStr.String())
-	}
-
-	gschema.AddScalars(doc)
-
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
-
-	gschema.GenerateCompleteSchema(schema)
-
-	fmt.Println(gschema.Stringify(schema))
 
 	handler := &graphqlHandler{
 		dgraphClient: dgraphClient,
