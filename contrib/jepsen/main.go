@@ -15,7 +15,7 @@
  */
 
 // Runs Dgraph Jepsen tests with a local Dgraph binary.
-// Set JEPSEN_ROOT environment variable before running.
+// Set the --jepsen-root flag or the JEPSEN_ROOT environment variable before running.
 //
 // Example usage:
 //
@@ -117,7 +117,8 @@ var (
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
-	ciOutput = pflag.BoolP("ci-output", "q", false,
+	jepsenRoot = pflag.StringP("jepsen-root", "r", os.Getenv("JEPSEN_ROOT"), "Directory path to jepsen repo.")
+	ciOutput   = pflag.BoolP("ci-output", "q", false,
 		"Output TeamCity test result directives instead of Jepsen test output.")
 	testAll = pflag.Bool("test-all", false, "Run all workload and nemesis combinations.")
 )
@@ -146,7 +147,7 @@ func commandContext(ctx context.Context, cmd ...string) *exec.Cmd {
 func jepsenUp() {
 	cmd := command("./up.sh",
 		"--dev", "--daemon", "--compose", "../dgraph/docker/docker-compose.yml")
-	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
+	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -159,7 +160,7 @@ func jepsenDown() {
 		"-f", "./docker-compose.yml",
 		"-f", "../dgraph/docker/docker-compose.yml",
 		"down")
-	cmd.Dir = os.Getenv("JEPSEN_ROOT") + "/docker/"
+	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
