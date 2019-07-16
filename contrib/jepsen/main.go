@@ -117,8 +117,9 @@ var (
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
-	jepsenRoot = pflag.StringP("jepsen-root", "r", os.Getenv("JEPSEN_ROOT"), "Directory path to jepsen repo.")
-	ciOutput   = pflag.BoolP("ci-output", "q", false,
+	jepsenRoot = pflag.StringP("jepsen-root", "r", os.Getenv("JEPSEN_ROOT"),
+		"Directory path to jepsen repo. Also settable with JEPSEN_ROOT env var.")
+	ciOutput = pflag.BoolP("ci-output", "q", false,
 		"Output TeamCity test result directives instead of Jepsen test output.")
 	testAll = pflag.Bool("test-all", false, "Run all workload and nemesis combinations.")
 )
@@ -150,6 +151,8 @@ func jepsenUp() {
 	cmd.Dir = *jepsenRoot + "/docker/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	env := os.Environ()
+	cmd.Env = append(env, fmt.Sprintf("JEPSEN_ROOT=%s", *jepsenRoot))
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -281,8 +284,8 @@ func tcStart(testName string) func(pass int) {
 func main() {
 	pflag.Parse()
 
-	if os.Getenv("JEPSEN_ROOT") == "" {
-		log.Fatal("JEPSEN_ROOT must be set.")
+	if *jepsenRoot == "" {
+		log.Fatal("--jepsen-root must be set.")
 	}
 	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH must be set.")
