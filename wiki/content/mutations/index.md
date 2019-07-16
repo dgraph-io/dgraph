@@ -474,9 +474,10 @@ _:blank-0 <rating> "è buono"@it .
 
 ### Geolocation support
 
-Support for geo-location data is available in JSON. Geo-location data is entered
+Support for geolocation data is available in JSON. Geo-location data is entered
 as a JSON object with keys "type" and "coordinates". Keep in mind we only
-support the Point, Polygon, and MultiPolygon types. Below is an example:
+support indexing on the Point, Polygon, and MultiPolygon types, but we can store
+other types of geolocation data. Below is an example:
 
 ```
 {
