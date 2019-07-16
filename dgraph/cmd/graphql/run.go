@@ -40,7 +40,6 @@ import (
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
 	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	_ "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema/schemarules"
 )
 
 type options struct {

@@ -12,8 +12,6 @@ import (
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 
-	_ "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema/schemarules"
-
 	. "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
