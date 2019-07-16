@@ -370,6 +370,22 @@ _:blank-0 <rating> "c'est bon"@fr .
 _:blank-0 <rating> "è buono"@it .
 ```
 
+### Geolocation support
+
+Support for geo-location data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support the Point, Polygon, and MultiPolygon types. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
+```
+
 ### Referencing existing nodes
 
 If a JSON object contains a field named `"uid"`, then that field is interpreted
