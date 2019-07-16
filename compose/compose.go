@@ -360,7 +360,7 @@ func main() {
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
 	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
-		"Docker tag for dgraph/dgraph image.")
+		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
 
