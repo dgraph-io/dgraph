@@ -30,6 +30,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -279,13 +280,15 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := struct {
-		Version  string        `json:"version"`
-		Instance string        `json:"instance"`
-		Uptime   time.Duration `json:"uptime"`
+		Version      string        `json:"version"`
+		Instance     string        `json:"instance"`
+		Uptime       time.Duration `json:"uptime"`
+		DrainingMode bool          `json:drainingMode`
 	}{
-		Version:  x.Version(),
-		Instance: "alpha",
-		Uptime:   time.Since(beginTime),
+		Version:      x.Version(),
+		Instance:     "alpha",
+		Uptime:       time.Since(beginTime),
+		DrainingMode: atomic.LoadInt32(&edgraph.State.DrainingMode) == 1,
 	}
 	data, _ := json.Marshal(info)
 
@@ -388,7 +391,7 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/lame", lameHandler)
+	http.HandleFunc("/admin/draining", drainingHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 

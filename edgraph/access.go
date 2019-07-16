@@ -32,7 +32,7 @@ import (
 // since ACL is only supported in the enterprise version.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
-	if err := checkLDMode(); err != nil {
+	if err := checkDrainingMode(); err != nil {
 		return nil, err
 	}
 

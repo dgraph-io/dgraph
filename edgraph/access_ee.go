@@ -40,7 +40,7 @@ import (
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
-	if err := checkLDMode(); err != nil {
+	if err := checkDrainingMode(); err != nil {
 		return nil, err
 	}
 
