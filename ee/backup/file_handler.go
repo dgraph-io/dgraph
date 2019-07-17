@@ -157,14 +157,18 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 		}
 
 		path := filepath.Dir(manifests[i].Path)
-		for _, groupId := range manifest.Groups {
-			file := filepath.Join(path, backupName(manifest.Since, groupId))
+		for gid := range manifest.Groups {
+			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to open %q", file)
 			}
 			defer fp.Close()
-			if err = fn(fp, int(groupId)); err != nil {
+
+			// Only restore the predicates that were assigned to this group at the time
+			// of the last backup.
+			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
+			if err = fn(fp, int(gid), predSet); err != nil {
 				return 0, err
 			}
 		}

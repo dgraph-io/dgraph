@@ -472,6 +472,22 @@ _:blank-0 <rating> "c'est bon"@fr .
 _:blank-0 <rating> "è buono"@it .
 ```
 
+### Geolocation support
+
+Support for geo-location data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support the Point, Polygon, and MultiPolygon types. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
+```
+
 ### Referencing existing nodes
 
 If a JSON object contains a field named `"uid"`, then that field is interpreted
@@ -777,6 +793,58 @@ Mutation with a JSON file:
 
 ```sh
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
+```
+
+where the contents of data.json looks like the following:
+
+```json
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+The JSON file must follow the same format for mutations over HTTP: a single JSON
+object with the `"set"` or `"delete"` key and an array of JSON objects for the
+mutation. If you already have a file with an array of data, you can use `jq` to
+transform your data to the proper format. For example, if your data.json file
+looks like this:
+
+```json
+[
+  {
+    "name": "Alice"
+  },
+  {
+    "name": "Bob"
+  }
+]
+```
+
+then you can transform your data to the proper format with the following `jq`
+command, where the `.` in the `jq` string represents the contents of data.json:
+
+```sh
+cat data.json | jq '{set: .}'
+```
+
+```
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
 ```
 
 ## Upsert Block

@@ -18,7 +18,6 @@ package live
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -37,10 +36,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
 	"github.com/dustin/go-humanize/english"
-)
-
-var (
-	ErrMaxTries = errors.New("Max retries exceeded for request while doing batch mutations")
 )
 
 // batchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.

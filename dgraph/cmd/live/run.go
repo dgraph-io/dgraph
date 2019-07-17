@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -47,6 +46,7 @@ import (
 	"github.com/dgraph-io/dgraph/xidmap"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -174,7 +174,7 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 			if isJson {
 				loadType = chunker.JsonFormat
 			} else {
-				return fmt.Errorf("need --format=rdf or --format=json to load %s", filename)
+				return errors.Errorf("need --format=rdf or --format=json to load %s", filename)
 			}
 		}
 	}
@@ -333,7 +333,7 @@ func run() error {
 	filesList := x.FindDataFiles(opt.dataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	totalFiles := len(filesList)
 	if totalFiles == 0 {
-		return fmt.Errorf("No data files found in %s", opt.dataFiles)
+		return errors.Errorf("No data files found in %s", opt.dataFiles)
 	}
 	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 

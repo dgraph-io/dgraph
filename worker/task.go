@@ -18,7 +18,6 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -1037,8 +1036,10 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	attr := arg.q.Attr
 	span.Annotatef(nil, "Attr: %s. Fname: %s", attr, arg.srcFn.fname)
 	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
-	// We should already have checked this in getInequalityTokens.
-	x.Check(err)
+	if err != nil {
+		return err
+	}
+
 	// Only if the tokenizer that we used IsLossy, then we need to fetch
 	// and compare the actual values.
 	span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
@@ -1651,7 +1652,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return &emptyResult, fmt.Errorf(
+		return &emptyResult, errors.Errorf(
 			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 

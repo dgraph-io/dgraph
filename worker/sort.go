@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -57,7 +56,7 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
-		return &emptySortResult, fmt.Errorf("Cannot sort by unknown attribute %s", q.Order[0].Attr)
+		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", q.Order[0].Attr)
 	}
 
 	if span := otrace.FromContext(ctx); span != nil {

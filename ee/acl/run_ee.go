@@ -22,12 +22,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type options struct {
-	alpha string
-}
-
 var (
-	opt options
 	// CmdAcl is the sub-command used to manage the ACL system.
 	CmdAcl x.SubCommand
 )

@@ -295,13 +295,14 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 		}
 
 		path := filepath.Dir(manifests[i].Path)
-		for _, groupId := range manifest.Groups {
-			object := filepath.Join(path, backupName(manifest.Since, groupId))
+		for gid := range manifest.Groups {
+			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
 				return 0, errors.Wrapf(err, "Failed to get %q", object)
 			}
 			defer reader.Close()
+
 			st, err := reader.Stat()
 			if err != nil {
 				return 0, errors.Wrapf(err, "Stat failed %q", object)
@@ -310,7 +311,11 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 				return 0, errors.Errorf("Remote object is empty or inaccessible: %s", object)
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
-			if err = fn(reader, int(groupId)); err != nil {
+
+			// Only restore the predicates that were assigned to this group at the time
+			// of the last backup.
+			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
+			if err = fn(reader, int(gid), predSet); err != nil {
 				return 0, err
 			}
 		}

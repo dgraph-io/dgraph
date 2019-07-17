@@ -40,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
@@ -50,7 +51,7 @@ import (
 // Error constants representing different types of errors.
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
-	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
+	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
@@ -141,7 +142,9 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
 	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
@@ -158,9 +161,9 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-IgnoreIndexConflict")
+	w.Header().Set("Access-Control-Allow-Headers", "X-Dgraph-AccessToken, "+
+		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, "+
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
@@ -180,7 +183,9 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
@@ -547,7 +552,15 @@ func SpanTimer(span *trace.Span, name string) func() {
 	}
 }
 
+// CloseFunc needs to be called to close all the client connections.
 type CloseFunc func()
+
+// CredOpt stores the options for logging in, including the password and user.
+type CredOpt struct {
+	Conf        *viper.Viper
+	UserID      string
+	PasswordOpt string
+}
 
 // GetDgraphClient creates a Dgraph client based on the following options in the configuration:
 // --alpha specifies a comma separated list of endpoints to connect to
@@ -614,12 +627,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 	return dg, closeFunc
 }
 
-type CredOpt struct {
-	Conf        *viper.Viper
-	UserID      string
-	PasswordOpt string
-}
-
+// AskUserPassword prompts the user to enter the password for the given user ID.
 func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	AssertTrue(times == 1 || times == 2)
 	AssertTrue(pwdType == "Current" || pwdType == "New")
@@ -627,7 +635,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	fmt.Printf("%s password for %v:", pwdType, userid)
 	pd, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err != nil {
-		return "", fmt.Errorf("error while reading password:%v", err)
+		return "", errors.Wrapf(err, "while reading password")
 	}
 	fmt.Println()
 	password := string(pd)
@@ -636,18 +644,19 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
 		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return "", fmt.Errorf("error while reading password:%v", err)
+			return "", errors.Wrapf(err, "while reading password")
 		}
 		fmt.Println()
 
 		password2 := string(pd2)
 		if password2 != password {
-			return "", fmt.Errorf("the two typed passwords do not match")
+			return "", errors.Errorf("the two typed passwords do not match")
 		}
 	}
 	return password, nil
 }
 
+// GetPassAndLogin uses the given credentials and client to perform the login operation.
 func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	password := opt.Conf.GetString(opt.PasswordOpt)
 	if len(password) == 0 {
@@ -660,7 +669,7 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := dg.Login(ctx, opt.UserID, password); err != nil {
-		return fmt.Errorf("unable to login to the %v account:%v", opt.UserID, err)
+		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
 	}
 	fmt.Println("Login successful.")
 	// update the context so that it has the admin jwt token

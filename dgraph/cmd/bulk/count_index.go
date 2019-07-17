@@ -89,7 +89,7 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 		list.Kv = append(list.Kv, &bpb.KV{
 			Key:      x.CountKey(pred, uint32(count), rev),
 			Value:    data,
-			Meta:     []byte{posting.BitCompletePosting},
+			UserMeta: []byte{posting.BitCompletePosting},
 			Version:  c.state.writeTs,
 			StreamId: streamId,
 		})

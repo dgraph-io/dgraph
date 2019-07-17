@@ -128,9 +128,13 @@ func NewUriHandler(uri *url.URL) (UriHandler, error) {
 	return h, nil
 }
 
+// predicateSet is a map whose keys are predicates. It is meant to be used as a set.
+type predicateSet map[string]struct{}
+
 // loadFn is a function that will receive the current file being read.
-// A reader and the backup groupId are passed as arguments.
-type loadFn func(reader io.Reader, groupId int) error
+// A reader, the backup groupId, and a map whose keys are the predicates to restore
+// are passed as arguments.
+type loadFn func(reader io.Reader, groupId int, preds predicateSet) error
 
 // Load will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.

@@ -17,13 +17,13 @@
 package migrate
 
 const (
-	UNKNOWN dataType = iota
-	INT
-	STRING
-	FLOAT
-	DOUBLE
-	DATETIME
-	UID // foreign key reference, which would corrspond to uid type in Dgraph
+	unknownType dataType = iota
+	intType
+	stringType
+	floatType
+	doubleType
+	datetimeType
+	uidType // foreign key reference, which would corrspond to uid type in Dgraph
 )
 
 // the typeToString map is used to generate the Dgraph schema file
@@ -34,24 +34,24 @@ var sqlTypeToInternal map[string]dataType
 
 func initDataTypes() {
 	typeToString = make(map[dataType]string)
-	typeToString[UNKNOWN] = "unknown"
-	typeToString[INT] = "int"
-	typeToString[STRING] = "string"
-	typeToString[FLOAT] = "float"
-	typeToString[DOUBLE] = "double"
-	typeToString[DATETIME] = "datetime"
-	typeToString[UID] = "uid"
+	typeToString[unknownType] = "unknown"
+	typeToString[intType] = "int"
+	typeToString[stringType] = "string"
+	typeToString[floatType] = "float"
+	typeToString[doubleType] = "double"
+	typeToString[datetimeType] = "datetime"
+	typeToString[uidType] = "uid"
 
 	sqlTypeToInternal = make(map[string]dataType)
-	sqlTypeToInternal["int"] = INT
-	sqlTypeToInternal["varchar"] = STRING
-	sqlTypeToInternal["text"] = STRING
-	sqlTypeToInternal["date"] = DATETIME
-	sqlTypeToInternal["time"] = DATETIME
-	sqlTypeToInternal["datetime"] = DATETIME
-	sqlTypeToInternal["float"] = FLOAT
-	sqlTypeToInternal["double"] = DOUBLE
-	sqlTypeToInternal["decimal"] = FLOAT
+	sqlTypeToInternal["int"] = intType
+	sqlTypeToInternal["varchar"] = stringType
+	sqlTypeToInternal["text"] = stringType
+	sqlTypeToInternal["date"] = datetimeType
+	sqlTypeToInternal["time"] = datetimeType
+	sqlTypeToInternal["datetime"] = datetimeType
+	sqlTypeToInternal["float"] = floatType
+	sqlTypeToInternal["double"] = doubleType
+	sqlTypeToInternal["decimal"] = floatType
 }
 
 func (t dataType) String() string {

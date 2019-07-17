@@ -482,7 +482,6 @@ func TestTwoShortestPathMinWeight(t *testing.T) {
 }
 
 func TestShortestPath(t *testing.T) {
-
 	query := `
 		{
 			A as shortest(from:0x01, to:31) {
@@ -515,6 +514,25 @@ func TestShortestPathRev(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"_path_":[{"uid":"0x17","_weight_":1, "friend":{"uid":"0x1"}}],"me":[{"name":"Rick Grimes"},{"name":"Michonne"}]}}`,
 		js)
+}
+
+// Regression test for https://github.com/dgraph-io/dgraph/issues/3657.
+func TestShortestPathPassword(t *testing.T) {
+	query := `
+		{
+			A as shortest(from:0x01, to:31) {
+				password
+				friend
+			}
+
+			me(func: uid( A)) {
+				name
+			}
+		}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"_path_":[{"uid":"0x1", "_weight_": 1, "friend":{"uid":"0x1f"}}],
+			"me":[{"name":"Michonne"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestFacetVarRetrieval(t *testing.T) {

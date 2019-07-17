@@ -110,7 +110,7 @@ var uidFmtStrJson = "\"0x%x\""
 func valToStr(v types.Val) (string, error) {
 	v2, err := types.Convert(v, types.StringID)
 	if err != nil {
-		return "", fmt.Errorf("converting %v to string: %v\n", v2.Value, err)
+		return "", errors.Wrapf(err, "while converting %v to string", v2.Value)
 	}
 
 	// Strip terminating null, if any.
@@ -121,12 +121,12 @@ func valToStr(v types.Val) (string, error) {
 func facetToString(fct *api.Facet) (string, error) {
 	v1, err := facets.ValFor(fct)
 	if err != nil {
-		return "", fmt.Errorf("getting value from facet %#v: %v", fct, err)
+		return "", errors.Wrapf(err, "getting value from facet %#v", fct)
 	}
 
 	v2 := &types.Val{Tid: types.StringID}
 	if err = types.Marshal(v1, v2); err != nil {
-		return "", fmt.Errorf("marshaling facet value %v to string: %v", v1, err)
+		return "", errors.Wrapf(err, "marshaling facet value %v to string", v1)
 	}
 
 	return v2.Value.(string), nil
@@ -421,7 +421,7 @@ func (writer *fileWriter) Close() error {
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) error {
 	if in.GroupId != groups().groupId() {
-		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
+		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
 	glog.Infof("Export requested at %d.", in.ReadTs)
@@ -679,7 +679,7 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 	for i := 0; i < len(gids); i++ {
 		err := <-ch
 		if err != nil {
-			rerr := fmt.Errorf("Export failed at readTs %d. Err=%v", readTs, err)
+			rerr := errors.Wrapf(err, "Export failed at readTs %d", readTs)
 			glog.Errorln(rerr)
 			return rerr
 		}

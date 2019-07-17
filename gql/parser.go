@@ -84,11 +84,13 @@ type GraphQuery struct {
 	IsEmpty bool
 }
 
+// RecurseArgs stores the arguments needed to process the @recurse directive.
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
 }
 
+// GroupByAttr stores the arguments needed to process the @groupby directive.
 type GroupByAttr struct {
 	Attr  string
 	Alias string
@@ -101,7 +103,7 @@ type pair struct {
 	Val string
 }
 
-// Internal structure for doing dfs on fragments.
+// fragmentNode is an internal structure for doing dfs on fragments.
 type fragmentNode struct {
 	Name    string
 	Gq      *GraphQuery
@@ -109,7 +111,7 @@ type fragmentNode struct {
 	Exited  bool // Exited in dfs.
 }
 
-// Key is fragment names.
+// fragmentMap is used to associate fragment names to their corresponding fragmentNode.
 type fragmentMap map[string]*fragmentNode
 
 const (
@@ -119,6 +121,7 @@ const (
 	ListVar  = 3
 )
 
+// VarContext stores information about the vars needed to complete a query.
 type VarContext struct {
 	Name string
 	Typ  int //  1 for UID vars, 2 for value vars
@@ -142,6 +145,7 @@ type FilterTree struct {
 	Func  *Function
 }
 
+// Arg stores an argument to a function.
 type Arg struct {
 	Value        string
 	IsValueVar   bool // If argument is val(a)
@@ -194,10 +198,12 @@ var mathOpPrecedence = map[string]int{
 	"!=": 5,
 }
 
+// IsAggregator returns true if the function name is an aggregation function.
 func (f *Function) IsAggregator() bool {
 	return isAggregator(f.Name)
 }
 
+// IsPasswordVerifier returns true if the function name is "checkpwd".
 func (f *Function) IsPasswordVerifier() bool {
 	return f.Name == "checkpwd"
 }
@@ -267,6 +273,7 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 	return vm
 }
 
+// Request stores the query text and the variable mapping.
 type Request struct {
 	Str       string
 	Variables map[string]string
@@ -2496,12 +2503,12 @@ func isSortkey(k string) bool {
 	return k == "orderasc" || k == "orderdesc"
 }
 
-type Count int
+type countType int
 
 const (
-	notSeen      Count = iota // default value
-	seen                      // when we see count keyword
-	seenWithPred              // when we see a predicate within count.
+	notSeen      countType = iota // default value
+	seen                          // when we see count keyword
+	seenWithPred                  // when we see a predicate within count.
 )
 
 func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
@@ -2533,7 +2540,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
 		return it.Errorf("Bad nesting of predicates or functions")
 	}
-	var count Count
+	var count countType
 	var alias, varName string
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {

@@ -14,13 +14,13 @@ package edgraph
 
 import (
 	"encoding/json"
-	"fmt"
 	"regexp"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 type predRegexRule struct {
@@ -117,7 +117,7 @@ func (cache *aclCache) update(groups []acl.Group) {
 func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	operation *acl.Operation) error {
 	if x.IsAclPredicate(predicate) {
-		return fmt.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
+		return errors.Errorf("only groot is allowed to access the ACL predicate: %s", predicate)
 	}
 
 	aclCachePtr.RLock()
@@ -145,7 +145,7 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	if singlePredMatch || predRegexMatch {
 		// there is an ACL rule defined that can match the predicate
 		// and the operation has not been allowed
-		return fmt.Errorf("unauthorized to do %s on predicate %s",
+		return errors.Errorf("unauthorized to do %s on predicate %s",
 			operation.Name, predicate)
 	}
 

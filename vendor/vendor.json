@@ -459,22 +459,22 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "xNw25IDral2xen+ekQicZluFJfw=",
+			"checksumSHA1": "/zLwX0xbiXk6JSb0qw8FVsnZ6io=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
-			"revisionTime": "2019-06-26T23:27:49Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
-			"revisionTime": "2019-06-26T23:27:49Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "SV7o4+eEK7/XNWC7H7Z5vWCoHP0=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
-			"revisionTime": "2019-06-26T23:27:49Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "d8wE18ae6lOhmJqh0jwwhmQCkII=",
@@ -485,20 +485,20 @@
 		{
 			"checksumSHA1": "7dxXjygrynDxvPE1UBHFDxVn7kE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
-			"revisionTime": "2019-06-26T23:27:49Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "0nZcXky/WdTWm3io4j6z2XbH4oM=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
-			"revisionTime": "2019-06-26T23:27:49Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "6Ya7Kr114SVcXRqa3UaglreBrY8=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "b116882676f2894a1d901ed06e474ac369e37999",
-			"revisionTime": "2019-06-26T23:27:49Z"
+			"revision": "50ccc861a93d4f68fb4c0698ee6c4ffeb300229a",
+			"revisionTime": "2019-07-01T23:45:46Z"
 		},
 		{
 			"checksumSHA1": "g06KOc9faGeu0J6262AQfpL1x/o=",
@@ -535,6 +535,12 @@
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
 			"revisionTime": "2015-09-09T17:09:13Z"
+		},
+		{
+			"checksumSHA1": "ECbM44U/bpyQjtSG5y2sjjQ80ls=",
+			"path": "github.com/dgryski/go-groupvarint",
+			"revision": "5ce5df8ca4e1994e4f90374734b86ed9e0be7454",
+			"revisionTime": "2019-03-18T18:18:31Z"
 		},
 		{
 			"checksumSHA1": "tJd2T/eyW6ejAev7WzGxTeUVOPQ=",
