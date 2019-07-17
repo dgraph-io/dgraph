@@ -1430,7 +1430,7 @@ There are two different tools that can be used for fast data loading:
 - `dgraph bulk` runs the Dgraph Bulk Loader
 
 {{% notice "note" %}} Both tools only accept [RDF N-Quad/Triple
-data](https://www.w3.org/TR/n-quads/) in plain or gzipped format. Data
+data](https://www.w3.org/TR/n-quads/) or JSON in plain or gzipped format. Data
 in other formats must be converted.{{% /notice %}}
 
 ### Live Loader
