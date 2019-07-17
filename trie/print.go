@@ -83,5 +83,4 @@ func printHexBytes(in []byte) {
 		}
 	}
 	fmt.Println("]")
-
 }

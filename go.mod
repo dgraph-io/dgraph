@@ -18,8 +18,8 @@ require (
 	github.com/multiformats/go-multiaddr v0.0.4
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1
-	github.com/perlin-network/life v0.0.0-20190625155037-103174020946
 	github.com/pkg/errors v0.8.1
 	github.com/urfave/cli v1.20.0
+	github.com/wasmerio/go-ext-wasm v0.0.0-20190612094245-722faa9f1b90
 	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443
 )
