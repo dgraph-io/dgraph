@@ -198,6 +198,7 @@ func initDgraph() error {
 	}
 
 	gschema.AddScalars(doc)
+	gschema.AddDirectives(doc)
 
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {

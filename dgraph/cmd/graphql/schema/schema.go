@@ -56,6 +56,11 @@ func AddScalars(doc *ast.SchemaDocument) {
 	addScalarInSchema(BOOLEAN, doc)
 }
 
+// AddDirectives add all the supported directives to schema.
+func AddDirectives(doc *ast.SchemaDocument) {
+	addDirectiveInSchema("hasInverse", []ast.DirectiveLocation{ast.LocationField}, doc)
+}
+
 func addScalarInSchema(sType SupportedScalars, doc *ast.SchemaDocument) {
 	doc.Definitions = append(
 		doc.Definitions,

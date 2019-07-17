@@ -57,6 +57,7 @@ func TestSchemaString(t *testing.T) {
 		}
 
 		AddScalars(doc)
+		AddDirectives(doc)
 
 		schema, gqlerr := validator.ValidateSchemaDocument(doc)
 		if gqlerr != nil {
