@@ -24,7 +24,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -74,11 +73,6 @@ type ServerState struct {
 	mandatoryVlogTicker *time.Ticker // runs every 10m, we always run vlog GC.
 
 	needTs chan tsReq
-
-	// the DrainingMode variable should be accessed through the atomic.Store and atomic.Load
-	// functions. The value 0 means the draining-mode is disabled, and the value 1 means the
-	// mode is enabled
-	DrainingMode int32
 }
 
 // State is the instance of ServerState used by the current server.
@@ -284,11 +278,8 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 // if so, it will return an error indicating that any request from the client
 // should be denied
 func checkDrainingMode() error {
-	ldMode := atomic.LoadInt32(&State.DrainingMode)
-	if ldMode == 1 {
-		return errors.Errorf("the server is in draining mode, " +
-			"and client requests will only be allowed after exiting the mode " +
-			" by sending a POST request to /admin/draining?enable=false")
+	if x.DrainingMode() {
+		return x.ErrDrainingMode
 	}
 	return nil
 }

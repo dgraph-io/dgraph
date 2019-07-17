@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
@@ -60,13 +59,7 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 				"Found invalid value for the enable parameter")
 		}
 
-		var ldMode int32
-		if enable {
-			ldMode = 1
-		} else {
-			ldMode = 0
-		}
-		atomic.StoreInt32(&edgraph.State.DrainingMode, ldMode)
+		x.UpdateDrainingMode(enable)
 		x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
 			`"message": "draining mode has been set to %v"}`, enable))))
 	default:

@@ -30,7 +30,6 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -276,6 +275,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -283,12 +283,12 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 		Version      string        `json:"version"`
 		Instance     string        `json:"instance"`
 		Uptime       time.Duration `json:"uptime"`
-		DrainingMode bool          `json:drainingMode`
+		DrainingMode bool          `json:"drainingMode"`
 	}{
 		Version:      x.Version(),
 		Instance:     "alpha",
 		Uptime:       time.Since(beginTime),
-		DrainingMode: atomic.LoadInt32(&edgraph.State.DrainingMode) == 1,
+		DrainingMode: x.DrainingMode(),
 	}
 	data, _ := json.Marshal(info)
 
