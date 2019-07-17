@@ -551,8 +551,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	case "json":
 		separator = []byte(",\n")
 	case "rdf":
-		// the separator for RDF should be empty since the toRDF function already
-		// adds newline to each RDF entry
+		// The separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry.
 	default:
 		glog.Fatalf("Invalid export format found: %s", in.Format)
 	}
