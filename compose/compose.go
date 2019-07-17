@@ -51,7 +51,7 @@ type service struct {
 	Environment   []string  `yaml:",omitempty"`
 	Ports         []string  `yaml:",omitempty"`
 	Volumes       []volume  `yaml:",omitempty"`
-	TempFS        []string  `yaml:",omitempty"`
+	TmpFS         []string  `yaml:",omitempty"`
 	User          string    `yaml:",omitempty"`
 	Command       string    `yaml:",omitempty"`
 }
@@ -71,7 +71,7 @@ type options struct {
 	AclSecret     string
 	DataDir       string
 	DataVol       bool
-	TempFS        bool
+	TmpFS         bool
 	UserOwnership bool
 	Jaeger        bool
 	Metrics       bool
@@ -79,6 +79,7 @@ type options struct {
 	Verbosity     int
 	OutFile       string
 	LocalBin      bool
+	Tag           string
 	WhiteList     bool
 }
 
@@ -108,7 +109,7 @@ func initService(basename string, idx, grpcPort int) service {
 	var svc service
 
 	svc.name = name(basename, idx)
-	svc.Image = "dgraph/dgraph:latest"
+	svc.Image = "dgraph/dgraph:" + opts.Tag
 	svc.ContainerName = svc.name
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
 	if idx > 1 {
@@ -173,8 +174,8 @@ func getZero(idx int) service {
 
 	svc := initService(basename, idx, grpcPort)
 
-	if opts.TempFS {
-		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/zw", svc.name))
+	if opts.TmpFS {
+		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/zw", svc.name))
 	}
 
 	svc.Command += fmt.Sprintf(" -o %d --idx=%d", opts.PortOffset+getOffset(idx), idx)
@@ -199,8 +200,8 @@ func getAlpha(idx int) service {
 
 	svc := initService(basename, idx, grpcPort)
 
-	if opts.TempFS {
-		svc.TempFS = append(svc.TempFS, fmt.Sprintf("/data/%s/w", svc.name))
+	if opts.TmpFS {
+		svc.TmpFS = append(svc.TmpFS, fmt.Sprintf("/data/%s/w", svc.name))
 	}
 
 	svc.Command += fmt.Sprintf(" -o %d", opts.PortOffset+getOffset(idx))
@@ -343,7 +344,7 @@ func main() {
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
 		"run as the current user rather than root")
-	cmd.PersistentFlags().BoolVar(&opts.TempFS, "tmpfs", false,
+	cmd.PersistentFlags().BoolVar(&opts.TmpFS, "tmpfs", false,
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
 		"include jaeger service")
@@ -357,6 +358,8 @@ func main() {
 		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
+	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
+		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
 
