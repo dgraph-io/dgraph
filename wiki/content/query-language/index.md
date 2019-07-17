@@ -3069,6 +3069,7 @@ Some points to keep in mind while using recurse queries are:
 - The `loop` parameter can be set to false, in which case paths which lead to a loop would be ignored
   while traversing.
 - If not specified, the value of the `loop` parameter defaults to false.
+- If the value of the `loop` parameter is false and depth is not specified, `depth` will default to `math.MaxUint64`, which means that the entire graph might be traversed until all the leaf nodes are reached.
 
 
 ## Fragments
