@@ -58,6 +58,7 @@ func AddScalars(doc *ast.SchemaDocument) {
 
 // AddDirectives add all the supported directives to schema.
 func AddDirectives(doc *ast.SchemaDocument) {
+	// It would be better to have a list of supported directives
 	addDirectiveInSchema("hasInverse", []ast.DirectiveLocation{ast.LocationField}, doc)
 }
 
@@ -495,8 +496,28 @@ func genFieldsString(flds ast.FieldList) string {
 
 func genFieldString(fld *ast.FieldDefinition) string {
 	return fmt.Sprintf(
-		"\t%s%s: %s\n", fld.Name, genArgumentsString(fld.Arguments), fld.Type.String(),
+		"\t%s%s: %s %s\n",
+		fld.Name, genArgumentsString(fld.Arguments),
+		fld.Type.String(), genDirectivesString(fld.Directives),
 	)
+}
+
+func genDirectivesString(direcs ast.DirectiveList) string {
+	var sch strings.Builder
+	if len(direcs) == 0 {
+		return ""
+	}
+
+	var direcArgs []string
+	for _, dir := range direcs {
+		direcArgs = append(direcArgs, "@"+dir.Name+genArgumentsString(dir.Arguments))
+	}
+
+	sort.Slice(direcArgs, func(i, j int) bool { return direcArgs[i] < direcArgs[j] })
+	// Assuming multiple directives are space separated.
+	sch.WriteString(strings.Join(direcArgs, " "))
+
+	return sch.String()
 }
 
 func genArgumentString(arg *ast.ArgumentDefinition) string {
