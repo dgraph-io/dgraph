@@ -215,7 +215,7 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 ```
 dgraph live --help
 ```
-See also [Bulk Data Loading](/deploy#bulk-data-loading).
+See also [Fast Data Loading](/deploy#fast-data-loading).
 
 ## Delete
 
