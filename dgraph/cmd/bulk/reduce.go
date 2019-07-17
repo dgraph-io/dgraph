@@ -283,6 +283,24 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		if len(uids) == 0 {
 			return
 		}
+
+		// If the schema is of type uid and not a list but we have more than one uid in this
+		// list, we cannot enforce the constraint without losing data. Inform the user and
+		// force the schema to be a list so that all the data can be found when Dgraph is started.
+		// The user should fix their data once Dgraph is up.
+		parsedKey := x.Parse(currentKey)
+		x.AssertTrue(parsedKey != nil)
+		if parsedKey.IsData() {
+			schema := r.state.schema.getSchema(parsedKey.Attr)
+			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(uids) > 1 {
+				fmt.Printf("Schema for pred %s specifies that this is not a list but more than  "+
+					"one UID has been found. Forcing the schema to be a list to avoid any "+
+					"data loss. Please fix the data to your specifications once Dgraph is up.\n",
+					parsedKey.Attr)
+				r.state.schema.setSchemaAsList(parsedKey.Attr)
+			}
+		}
+
 		pl.Pack = codec.Encode(uids, 256)
 		val, err := pl.Marshal()
 		x.Check(err)
