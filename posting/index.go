@@ -530,7 +530,9 @@ func (r *rebuild) Run(ctx context.Context) error {
 		// so this function doesn't have any work to do.
 		return nil
 	}
-	stream.Orchestrate(ctx)
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
+	}
 	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
 	// Convert data into deltas.
