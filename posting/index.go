@@ -581,10 +581,10 @@ func (rb *IndexRebuild) Run(ctx context.Context) error {
 	if err := rebuildIndex(ctx, rb); err != nil {
 		return err
 	}
-	if err := rebuildCountIndex(ctx, rb); err != nil {
+	if err := rebuildReverseEdges(ctx, rb); err != nil {
 		return err
 	}
-	return rebuildReverseEdges(ctx, rb)
+	return rebuildCountIndex(ctx, rb)
 }
 
 type indexRebuildInfo struct {
@@ -806,7 +806,10 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 		return err
 	}
 
-	// Create the reverse index.
+	// Create the reverse index. The count reverse index is created if this
+	// predicate has both a count and reverse directive in the schema. It's safe
+	// to call builder.Run even if that's not the case as the reverse prefix
+	// will be empty.
 	reverse = true
 	builder = rebuild{prefix: pk.ReversePrefix(), startTs: rb.StartTs}
 	builder.fn = fn
