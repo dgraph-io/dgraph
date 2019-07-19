@@ -81,7 +81,7 @@ Our work on gossamer is funded by grants. If you'd like to donate, you can send 
 `0x764001D60E69f0C3D0b41B0588866cFaE796972c`
 
 ## License
-_GNU General Public License v3.0_
+_GNU Lesser General Public License v3.0_
 
 <p align="center">
 	<img src=".github/gopher.png">
