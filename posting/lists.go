@@ -242,6 +242,33 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 	return lc.Set(skey, pl), nil
 }
 
+// GetFromDelta gets the cached version of the list without reading from disk
+// and only applies the existing deltas. This is used in situations where the
+// posting list will only be modified and not read (e.g adding index mutations).
+func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
+	if lc == nil {
+		return getNew(key, pstore)
+	}
+	skey := string(key)
+	if pl := lc.getNoStore(skey); pl != nil {
+		return pl, nil
+	}
+
+	// If there's a cache miss, create and initialize a list with an empty
+	// immutable layer.
+	pl := &List{}
+	pl.key = key
+	pl.mutationMap = make(map[uint64]*pb.PostingList)
+	pl.plist = new(pb.PostingList)
+
+	lc.RLock()
+	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
+		pl.setMutation(lc.startTs, delta)
+	}
+	lc.RUnlock()
+	return lc.Set(skey, pl), nil
+}
+
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
 func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.Lock()
