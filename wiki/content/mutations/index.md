@@ -291,7 +291,7 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 ```
 dgraph live --help
 ```
-See also [Bulk Data Loading](/deploy#bulk-data-loading).
+See also [Fast Data Loading](/deploy#fast-data-loading).
 
 ## Delete
 
@@ -470,6 +470,22 @@ _:blank-0 <rating> "tastes good"@en .
 _:blank-0 <rating> "sabe bien"@es .
 _:blank-0 <rating> "c'est bon"@fr .
 _:blank-0 <rating> "è buono"@it .
+```
+
+### Geolocation support
+
+Support for geo-location data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support the Point, Polygon, and MultiPolygon types. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
 ```
 
 ### Referencing existing nodes
