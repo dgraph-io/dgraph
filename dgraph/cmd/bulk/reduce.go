@@ -135,9 +135,7 @@ func newMapIterator(filename string) *mapIterator {
 }
 
 func (r *reducer) encodeAndWrite(
-	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
-	defer closer.Done()
-
+	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry) {
 	var listSize int
 	list := &bpb.KVList{}
 
@@ -180,9 +178,6 @@ func (r *reducer) encodeAndWrite(
 
 func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	entryCh := make(chan []*pb.MapEntry, 100)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-
 	var ph postingHeap
 	for _, itr := range mapItrs {
 		me := itr.Next()
@@ -194,7 +189,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	}
 
 	writer := ci.writer
-	go r.encodeAndWrite(writer, entryCh, closer)
+	r.encodeAndWrite(writer, entryCh)
 
 	const batchSize = 10000
 	const batchAlloc = batchSize * 11 / 10
