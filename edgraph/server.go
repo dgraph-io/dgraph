@@ -787,6 +787,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, errors.Wrap(err, "")
 	}
+	// Transport is the time between the completion of query processing and receiving
+	// a response. This value can be significant if latency between servers is high.
 	l.Transport = time.Since(l.Start) - l.Parsing - l.Processing
 
 	var js []byte
@@ -815,11 +817,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	resp.Json = js
 	span.Annotatef(nil, "Response = %s", js)
 
-	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
-	// since it involves modifying the API protos.
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
 		ProcessingNs: uint64(l.Processing.Nanoseconds()),
+		TransportNs:  uint64(l.Transport.Nanoseconds()),
 		EncodingNs:   uint64(l.Json.Nanoseconds()),
 	}
 
