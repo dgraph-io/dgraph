@@ -28,6 +28,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -489,56 +490,53 @@ type rebuild struct {
 }
 
 func (r *rebuild) Run(ctx context.Context) error {
-	t := pstore.NewTransactionAt(r.startTs, false)
-	defer t.Discard()
-
 	glog.V(1).Infof("Rebuild: Starting process. StartTs=%d. Prefix=\n%s\n",
 		r.startTs, hex.Dump(r.prefix))
-	opts := badger.DefaultIteratorOptions
-	opts.AllVersions = true
-	opts.Prefix = r.prefix
-	it := t.NewIterator(opts)
-	defer it.Close()
 
 	// We create one txn for all the mutations to be housed in. We also create a
 	// localized posting list cache, to avoid stressing or mixing up with the
 	// global lcache (the LRU cache).
 	txn := NewTxn(r.startTs)
 
-	var prevKey []byte
-	for it.Rewind(); it.Valid(); {
-		item := it.Item()
-		if bytes.Equal(item.Key(), prevKey) {
-			it.Next()
-			continue
-		}
-		key := item.KeyCopy(nil)
-		prevKey = key
-
-		pk := x.Parse(key)
-		if pk == nil {
-			it.Next()
-			continue
-		}
-
+	stream := pstore.NewStreamAt(r.startTs)
+	stream.Prefix = r.prefix
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
-		l, err := ReadPostingList(key, it)
+		pk := x.Parse(key)
+		if pk == nil {
+			return nil, errors.Errorf("could not parse key %s", hex.Dump(key))
+		}
+
+		item := itr.Item()
+		keyCopy := item.KeyCopy(nil)
+		l, err := ReadPostingList(keyCopy, itr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := r.fn(pk.Uid, l, txn); err != nil {
-			return err
+			return nil, err
 		}
+
+		return nil, nil
+	}
+	stream.Send = func(*bpb.KVList) error {
+		// The work of adding the index edges to the transaction is done by r.fn
+		// so this function doesn't have any work to do.
+		return nil
+	}
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
 	}
 	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
-	txn.Update() // Convert data into deltas.
+	// Convert data into deltas.
+	txn.Update()
 
 	// Now we write all the created posting lists to disk.
 	writer := NewTxnWriter(pstore)
