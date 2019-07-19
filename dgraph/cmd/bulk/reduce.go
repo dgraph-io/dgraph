@@ -70,7 +70,6 @@ func (r *reducer) run() error {
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			r.reduce(mapItrs, ci)
-			ci.wait()
 
 			if err := writer.Flush(); err != nil {
 				x.Check(err)
