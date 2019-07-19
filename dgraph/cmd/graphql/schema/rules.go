@@ -17,6 +17,8 @@
 package schema
 
 import (
+	"fmt"
+
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 )
@@ -31,9 +33,8 @@ func init() {
 func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typ := range sch.Definitions {
 		if typ.Kind != ast.Object && typ.Kind != ast.Enum {
-			return &gqlerror.Error{
-				Message: "Only type and enums are allowed in initial schema.",
-			}
+			return gqlerror.ErrorPosf(typ.Position,
+				"Only type and enums are allowed in initial schema.")
 		}
 	}
 
@@ -41,18 +42,19 @@ func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 }
 
 func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
-	var flag bool
+	var found bool
 	for _, typeVal := range sch.Definitions {
-		flag = false
-		for _, fields := range typeVal.Fields {
-			if fields.Type.NamedType == "ID" {
-				if flag {
-					return &gqlerror.Error{
-						Message: "More than one ID field for type " + typeVal.Name,
-					}
+		found = false
+		for _, fld := range typeVal.Fields {
+			if fld.Type.NamedType == string(ID) {
+				if found {
+					return gqlerror.ErrorPosf(
+						fld.Position,
+						fmt.Sprintf("More than one ID field found for type %s", typeVal.Name),
+					)
 				}
 
-				flag = true
+				found = true
 			}
 		}
 	}
@@ -63,23 +65,27 @@ func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 func nameCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, defn := range sch.Definitions {
 		if isReservedKeyWord(defn.Name) {
-			return &gqlerror.Error{
-				Message: defn.Name + " is reserved keyword. You can't declare" +
-					"type with this name",
-			}
+			return gqlerror.ErrorPosf(
+				defn.Position,
+				fmt.Sprintf(
+					"%s is reserved keyword. You can't declare type with this name", defn.Name,
+				),
+			)
 		}
 	}
 
 	return nil
 }
 
+// [Posts]! -> invalid, [Posts!]! -> valid
 func listValidityCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typ := range sch.Definitions {
 		for _, fld := range typ.Fields {
 			if fld.Type.Elem != nil && fld.Type.NonNull && !fld.Type.Elem.NonNull {
-				return &gqlerror.Error{
-					Message: "[" + fld.Type.Name() + "]! type of lists are invalid",
-				}
+				return gqlerror.ErrorPosf(
+					fld.Position,
+					fmt.Sprintf("[%s]! type of lists are invalid", fld.Type.Name()),
+				)
 			}
 		}
 	}

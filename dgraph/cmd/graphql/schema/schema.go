@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -24,7 +25,7 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// SupportedScalars will be the list of scalar types that we will support.
+// SupportedScalars is the list of scalar types that we support.
 type SupportedScalars string
 
 type schRuleFunc func(schema *ast.SchemaDocument) *gqlerror.Error
@@ -45,7 +46,7 @@ const (
 	BOOLEAN  SupportedScalars = "Boolean"
 )
 
-// AddScalars adds simply adds all the supported scalars in the schema.
+// AddScalars adds all the supported scalars in the schema.
 func AddScalars(doc *ast.SchemaDocument) {
 	addScalarInSchema(INT, doc)
 	addScalarInSchema(FLOAT, doc)
@@ -56,16 +57,14 @@ func AddScalars(doc *ast.SchemaDocument) {
 }
 
 func addScalarInSchema(sType SupportedScalars, doc *ast.SchemaDocument) {
-	for _, def := range doc.Definitions {
-		if def.Kind == "SCALAR" && def.Name == string(sType) { // Just to check if it is already added
-			return
-		}
-	}
-
-	doc.Definitions = append(doc.Definitions, &ast.Definition{Kind: ast.Scalar, Name: string(sType)})
+	doc.Definitions = append(
+		doc.Definitions,
+		// Empty Position because it is being inserted by the engine.
+		&ast.Definition{Kind: ast.Scalar, Name: string(sType), Position: &ast.Position{}},
+	)
 }
 
-// AddRule function adds a new schema rule to the global array schRules.
+// AddRule adds a new schema rule to the global array schRules.
 func AddRule(name string, f schRuleFunc) {
 	schRules = append(schRules, schRule{
 		name:        name,
@@ -73,13 +72,12 @@ func AddRule(name string, f schRuleFunc) {
 	})
 }
 
-// ValidateSchema function validates the schema against dgraph's rules of schema.
+// ValidateSchema validates the schema against dgraph's rules of schema.
 func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {
-		gqlErr := schRules[i].schRuleFunc(schema)
-		if gqlErr != nil {
+		if gqlErr := schRules[i].schRuleFunc(schema); gqlErr != nil {
 			errs = append(errs, gqlErr)
 		}
 	}
@@ -87,7 +85,7 @@ func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-// GenerateCompleteSchema will generate all the required query/mutation/update functions
+// GenerateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
 func GenerateCompleteSchema(schema *ast.Schema) {
 	extenderMap := make(map[string]*ast.Definition)
@@ -107,7 +105,7 @@ func GenerateCompleteSchema(schema *ast.Schema) {
 	}
 
 	for _, defn := range schema.Types {
-		if defn.Kind == "OBJECT" {
+		if defn.Kind == ast.Object {
 			extenderMap[defn.Name+"Input"] = genInputType(schema, defn)
 			extenderMap[defn.Name+"Ref"] = genRefType(defn)
 			extenderMap[defn.Name+"Update"] = genUpdateType(schema, defn)
@@ -179,17 +177,7 @@ func AreEqualFields(flds1, flds2 ast.FieldList) bool {
 			return false
 		}
 
-		var s1, s2 strings.Builder
-
-		s1.WriteString("\t" + fld.Name)
-		s1.WriteString(genArgumentsString(fld.Arguments) + ": ")
-		s1.WriteString(fld.Type.String() + "\n")
-
-		s2.WriteString("\t" + val.Name)
-		s2.WriteString(genArgumentsString(val.Arguments) + ": ")
-		s2.WriteString(val.Type.String() + "\n")
-
-		if s1.String() != s2.String() {
+		if genFieldString(fld) != genFieldString(val) {
 			return false
 		}
 	}
@@ -236,70 +224,54 @@ func genFilterType(defn *ast.Definition) *ast.Definition {
 }
 
 func genAddResultType(defn *ast.Definition) *ast.Definition {
-	addFldList := make([]*ast.FieldDefinition, 0)
-	parentFld := &ast.FieldDefinition{ // Field type is same as the parent object type
-		Name: strings.ToLower(defn.Name),
-		Type: &ast.Type{
-			NamedType: defn.Name,
-			NonNull:   true,
-		},
-	}
-	addFldList = append(addFldList, parentFld)
-
 	return &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Add" + defn.Name + "Payload",
-		Fields: addFldList,
+		Kind: ast.Object,
+		Name: "Add" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{
+			&ast.FieldDefinition{
+				Name: strings.ToLower(defn.Name),
+				Type: &ast.Type{
+					NamedType: defn.Name,
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
 func genUpdResultType(defn *ast.Definition) *ast.Definition {
-	updFldList := make([]*ast.FieldDefinition, 0)
-	parentFld := &ast.FieldDefinition{ // Field type is same as the parent object type
-		Name: strings.ToLower(defn.Name),
-		Type: &ast.Type{
-			NamedType: defn.Name,
-			NonNull:   true,
-		},
-	}
-	updFldList = append(updFldList, parentFld)
-
 	return &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Update" + defn.Name + "Payload",
-		Fields: updFldList,
+		Kind: ast.Object,
+		Name: "Update" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{
+			&ast.FieldDefinition{ // Field type is same as the parent object type
+				Name: strings.ToLower(defn.Name),
+				Type: &ast.Type{
+					NamedType: defn.Name,
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
 func genDelResultType(defn *ast.Definition) *ast.Definition {
-	delFldList := make([]*ast.FieldDefinition, 0)
-	delFld := &ast.FieldDefinition{
-		Name: "msg",
-		Type: &ast.Type{
-			NamedType: "String",
-			NonNull:   true,
-		},
-	}
-	delFldList = append(delFldList, delFld)
-
 	return &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Delete" + defn.Name + "Payload",
-		Fields: delFldList,
+		Kind: ast.Object,
+		Name: "Delete" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{
+			&ast.FieldDefinition{
+				Name: "msg",
+				Type: &ast.Type{
+					NamedType: "String",
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
 func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
-	getArgs := make([]*ast.ArgumentDefinition, 0)
-	getArg := &ast.ArgumentDefinition{
-		Name: "id",
-		Type: &ast.Type{
-			NamedType: "ID",
-			NonNull:   true,
-		},
-	}
-	getArgs = append(getArgs, getArg)
-
 	return &ast.FieldDefinition{
 		Description: "Query " + defn.Name + " by ID",
 		Name:        "get" + defn.Name,
@@ -307,21 +279,19 @@ func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
 			NamedType: defn.Name,
 			NonNull:   true,
 		},
-		Arguments: getArgs,
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "id",
+				Type: &ast.Type{
+					NamedType: string(ID),
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
 func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
-	qryArgs := make([]*ast.ArgumentDefinition, 0)
-	qryArg := &ast.ArgumentDefinition{
-		Name: "filter",
-		Type: &ast.Type{
-			NamedType: defn.Name + "Filter",
-			NonNull:   true,
-		},
-	}
-	qryArgs = append(qryArgs, qryArg)
-
 	return &ast.FieldDefinition{
 		Description: "Query " + defn.Name,
 		Name:        "query" + defn.Name,
@@ -332,7 +302,15 @@ func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
 				NonNull:   true,
 			},
 		},
-		Arguments: qryArgs,
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "filter",
+				Type: &ast.Type{
+					NamedType: defn.Name + "Filter",
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
@@ -344,16 +322,6 @@ func addQueryType(defn *ast.Definition) (flds []*ast.FieldDefinition) {
 }
 
 func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
-	addArgs := make([]*ast.ArgumentDefinition, 0)
-	addArg := &ast.ArgumentDefinition{
-		Name: "input",
-		Type: &ast.Type{
-			NamedType: defn.Name + "Input",
-			NonNull:   true,
-		},
-	}
-	addArgs = append(addArgs, addArg)
-
 	return &ast.FieldDefinition{
 		Description: "Function for adding " + defn.Name,
 		Name:        "add" + defn.Name,
@@ -361,7 +329,15 @@ func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
 			NamedType: "Add" + defn.Name + "Payload",
 			NonNull:   true,
 		},
-		Arguments: addArgs,
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "input",
+				Type: &ast.Type{
+					NamedType: defn.Name + "Input",
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
@@ -370,7 +346,7 @@ func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
 	updArg := &ast.ArgumentDefinition{
 		Name: "id",
 		Type: &ast.Type{
-			NamedType: "ID",
+			NamedType: string(ID),
 			NonNull:   true,
 		},
 	}
@@ -396,16 +372,6 @@ func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
 }
 
 func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
-	delArgs := make([]*ast.ArgumentDefinition, 0)
-	delArg := &ast.ArgumentDefinition{
-		Name: "id",
-		Type: &ast.Type{
-			NamedType: "ID",
-			NonNull:   true,
-		},
-	}
-	delArgs = append(delArgs, delArg)
-
 	return &ast.FieldDefinition{
 		Description: "Function for deleting " + defn.Name,
 		Name:        "delete" + defn.Name,
@@ -413,7 +379,15 @@ func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
 			NamedType: "Delete" + defn.Name + "Payload",
 			NonNull:   true,
 		},
-		Arguments: delArgs,
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "id",
+				Type: &ast.Type{
+					NamedType: string(ID),
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
@@ -426,26 +400,23 @@ func addMutationType(defn *ast.Definition) (flds []*ast.FieldDefinition) {
 }
 
 func getFilterField() ast.FieldList {
-	fldList := make([]*ast.FieldDefinition, 0)
-
-	newDefn := &ast.FieldDefinition{
-		Name: "dgraph",
-		Type: &ast.Type{
-			NamedType: string(STRING),
+	return []*ast.FieldDefinition{
+		&ast.FieldDefinition{
+			Name: "dgraph",
+			Type: &ast.Type{
+				NamedType: string(STRING),
+			},
 		},
 	}
-
-	fldList = append(fldList, newDefn)
-	return fldList
 }
 
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if fld.Type.Name() == "ID" {
+		if fld.Type.Name() == string(ID) {
 			continue
 		}
-		if schema.Types[fld.Type.Name()].Kind == "OBJECT" {
+		if schema.Types[fld.Type.Name()].Kind == ast.Object {
 			newDefn := &ast.FieldDefinition{
 				Name: fld.Name,
 			}
@@ -475,8 +446,8 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if fld.Type.Name() == "ID" {
-			// Deepcopy is not required because we will never modify values other than nonull
+		if fld.Type.Name() == string(ID) {
+			// Deepcopy is not required because we don't modify values other than nonull
 			newFld := *fld
 			fldList = append(fldList, &newFld)
 			break
@@ -486,22 +457,18 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 }
 
 func genArgumentsString(args ast.ArgumentDefinitionList) string {
-	if args == nil {
+	if args == nil || len(args) == 0 {
 		return ""
 	}
 
-	var sch strings.Builder
 	var argsStrs []string
 
-	sch.WriteString("(")
 	for _, arg := range args {
-		argsStrs = append(argsStrs, arg.Name+": "+arg.Type.String())
+		argsStrs = append(argsStrs, genArgumentString(arg))
 	}
 
 	sort.Slice(argsStrs, func(i, j int) bool { return argsStrs[i] < argsStrs[j] })
-	sch.WriteString(strings.Join(argsStrs, ",") + ")")
-
-	return sch.String()
+	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
 }
 
 func genFieldsString(flds ast.FieldList) string {
@@ -514,30 +481,34 @@ func genFieldsString(flds ast.FieldList) string {
 	for _, fld := range flds {
 		// Some extra types are generated by gqlparser for internal purpose.
 		if !strings.HasPrefix(fld.Name, "__") {
-			sch.WriteString("\t" + fld.Name)
-			sch.WriteString(genArgumentsString(fld.Arguments) + ": ")
-			sch.WriteString(fld.Type.String() + "\n")
+			sch.WriteString(genFieldString(fld))
 		}
 	}
 
 	return sch.String()
 }
 
-func generateInputString(typ *ast.Definition) string {
-	var sch strings.Builder
+func genFieldString(fld *ast.FieldDefinition) string {
+	return fmt.Sprintf(
+		"\t%s%s: %s\n", fld.Name, genArgumentsString(fld.Arguments), fld.Type.String(),
+	)
+}
 
-	sch.WriteString("input " + typ.Name + " {\n")
-	sch.WriteString(genFieldsString(typ.Fields) + "}\n")
-	return sch.String()
+func genArgumentString(arg *ast.ArgumentDefinition) string {
+	return fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
+}
+
+func generateInputString(typ *ast.Definition) string {
+	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
 }
 
 func generateEnumString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	sch.WriteString("enum " + typ.Name + " {\n")
+	sch.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
 	for _, val := range typ.EnumValues {
 		if !strings.HasPrefix(val.Name, "__") {
-			sch.WriteString("\t" + val.Name + "\n")
+			sch.WriteString(fmt.Sprintf("\t%s\n", val.Name))
 		}
 	}
 	sch.WriteString("}\n")
@@ -546,45 +517,25 @@ func generateEnumString(typ *ast.Definition) string {
 }
 
 func generateObjectString(typ *ast.Definition) string {
-	var sch strings.Builder
-
-	sch.WriteString("type " + typ.Name + " {\n")
-	sch.WriteString(genFieldsString(typ.Fields) + "}\n")
-
-	return sch.String()
+	return fmt.Sprintf("type %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
 }
 
 func generateScalarString(typ *ast.Definition) string {
 	var sch strings.Builder
 
-	sch.WriteString("scalar " + typ.Name + "\n")
+	sch.WriteString(fmt.Sprintf("scalar %s\n", typ.Name))
 	return sch.String()
 }
 
-func generateQMString(flag bool, def *ast.Definition) string {
-	var sch strings.Builder
-	var opType string
-	if flag {
-		opType = "Query"
-	} else {
-		opType = "Mutation"
-	}
-
-	sch.WriteString("type " + opType + " {\n")
-	sch.WriteString(genFieldsString(def.Fields) + "}\n")
-
-	return sch.String()
-}
-
-// Stringify will return entire schema in string format
+// Stringify returns entire schema in string format
 func Stringify(schema *ast.Schema) string {
-	var sch, object, scalar, input, ref, filter, payload, query, mutation strings.Builder
+	var sch, object, scalar, input, query, mutation, enum strings.Builder
 
 	if schema.Types == nil {
 		return ""
 	}
 
-	for name, typ := range schema.Types {
+	for _, typ := range schema.Types {
 		if typ.Kind == ast.Object {
 			object.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Scalar {
@@ -592,29 +543,29 @@ func Stringify(schema *ast.Schema) string {
 		} else if typ.Kind == ast.InputObject {
 			input.WriteString(generateInputString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
-			input.WriteString(generateEnumString(typ) + "\n")
-		} else if len(name) >= 7 && name[len(name)-7:len(name)] == "Payload" {
-			payload.WriteString(generateObjectString(typ) + "\n")
-		} else if len(name) >= 3 && name[len(name)-3:len(name)] == "Ref" {
-			ref.WriteString(generateInputString(typ) + "\n")
+			enum.WriteString(generateEnumString(typ) + "\n")
 		}
 	}
 
 	if schema.Query != nil {
-		query.WriteString(generateQMString(true, schema.Query))
+		query.WriteString(generateObjectString(schema.Query))
 	}
 
 	if schema.Mutation != nil {
-		mutation.WriteString(generateQMString(false, schema.Mutation))
+		mutation.WriteString(generateObjectString(schema.Mutation))
 	}
 
+	sch.WriteString("#######################\n# Generated Types\n#######################\n")
 	sch.WriteString(object.String())
-	sch.WriteString(scalar.String() + "\n")
+	sch.WriteString("#######################\n# Scalar Definitions\n#######################\n")
+	sch.WriteString(scalar.String())
+	sch.WriteString("#######################\n# Enum Definitions\n#######################\n")
+	sch.WriteString(enum.String())
+	sch.WriteString("#######################\n# Input Definitions\n#######################\n")
 	sch.WriteString(input.String())
-	sch.WriteString(ref.String())
-	sch.WriteString(filter.String())
-	sch.WriteString(payload.String())
+	sch.WriteString("#######################\n# Generated Query\n#######################\n")
 	sch.WriteString(query.String())
+	sch.WriteString("#######################\n# Generated Mutations\n#######################\n")
 	sch.WriteString(mutation.String())
 
 	return sch.String()

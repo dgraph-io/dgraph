@@ -1,0 +1,20 @@
+type Post {
+  title: String!
+  id: ID!
+  author: Author!
+  postType: PostType!
+  text: String
+}
+
+type Author {
+  id: ID!
+  friends: [Author!]!
+  name: String!
+  posts: [Post!]!
+}
+
+enum PostType {
+  Question
+  Statement
+  Answer
+}

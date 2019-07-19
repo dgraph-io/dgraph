@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -66,7 +67,7 @@ func TestSchemaString(t *testing.T) {
 		GenerateCompleteSchema(schema)
 
 		newSchemaStr := Stringify(schema)
-		// fmt.Println(newSchemaStr)
+		fmt.Println(newSchemaStr)
 		newDoc, gqlerr := parser.ParseSchema(&ast.Source{Input: newSchemaStr})
 		if gqlerr != nil {
 			t.Errorf("Unable to parse new schema "+gqlerr.Message+" %+v", gqlerr.Locations[0])
@@ -103,7 +104,7 @@ func TestSchemaString(t *testing.T) {
 }
 
 func TestInvalidSchemas(t *testing.T) {
-	numTests := 3
+	numTests := 4
 
 	for i := 0; i < numTests; i++ {
 		fileName := "../testdata/invalidschema" + strconv.Itoa(i+1) + ".txt" // run from pwd
@@ -122,13 +123,67 @@ func TestInvalidSchemas(t *testing.T) {
 		if gqlErrList == nil {
 			t.Errorf("Invalid schema passed tests.")
 		}
+	}
+}
 
-		AddScalars(doc)
+func TestEqualSchema(t *testing.T) {
+	numTests := 2
 
-		_, gqlerr = validator.ValidateSchemaDocument(doc)
+	for i := 1; i <= numTests; i++ {
+		fileName1 := "../testdata/equalschema" + strconv.Itoa(i) + "_1.txt" // run from pwd
+		str1, err := ioutil.ReadFile(fileName1)
+		if err != nil {
+			t.Errorf("Unable to read file %s", fileName1)
+		}
+
+		doc1, gqlerr := parser.ParseSchema(&ast.Source{Input: string(str1)})
 		if gqlerr != nil {
-			t.Errorf("Unable to validate schema for " + fileName + " " + gqlerr.Message)
+			t.Errorf("Unable to parse file %s\n%s", fileName1, gqlerr.Error())
 			continue
 		}
+
+		gqlErrList1 := ValidateSchema(doc1)
+		if gqlErrList1 != nil {
+			t.Errorf("Unable to validate schemafile %s\n%s", fileName1, gqlErrList1.Error())
+		}
+
+		AddScalars(doc1)
+
+		schema1, gqlerr := validator.ValidateSchemaDocument(doc1)
+		if gqlerr != nil {
+			t.Errorf("Unable to validate schemafile %s\n%s", fileName1, gqlerr.Error())
+			continue
+		}
+
+		GenerateCompleteSchema(schema1)
+
+		fileName2 := "../testdata/equalschema" + strconv.Itoa(i) + "_2.txt" // run from pwd
+		str2, err := ioutil.ReadFile(fileName2)
+		if err != nil {
+			t.Errorf("Unable to read file %s", fileName2)
+		}
+
+		doc2, gqlerr := parser.ParseSchema(&ast.Source{Input: string(str2)})
+		if gqlerr != nil {
+			t.Errorf("Unable to parse file %s\n%s", fileName2, gqlerr.Error())
+			continue
+		}
+
+		gqlErrList2 := ValidateSchema(doc2)
+		if gqlErrList2 != nil {
+			t.Errorf("Unable to validate schemafile %s\n%s", fileName2, gqlErrList2.Error())
+		}
+
+		AddScalars(doc2)
+
+		schema2, gqlerr := validator.ValidateSchemaDocument(doc2)
+		if gqlerr != nil {
+			t.Errorf("Unable to validate schemafile %s\n%s", fileName2, gqlerr.Error())
+			continue
+		}
+
+		GenerateCompleteSchema(schema2)
+
+		require.True(t, AreEqualSchema(schema1, schema2))
 	}
 }

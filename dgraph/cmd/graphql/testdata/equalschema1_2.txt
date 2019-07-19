@@ -1,0 +1,5 @@
+type Post {
+    id: ID!
+    name: String
+    published: DateTime
+}
