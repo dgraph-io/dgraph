@@ -468,10 +468,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	e := &exporter{
-		readTs: in.ReadTs,
-	}
-
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -496,7 +492,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
-
+		e := &exporter{
+			readTs: in.ReadTs,
+		}
 		e.uid = pk.Uid
 		e.attr = pk.Attr
 
@@ -528,6 +526,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return toType(pk.Attr, update)
 
 		case pk.IsData():
+			// defining a local error variable to avoid concurrent write
+			// to the err variable defined in the export method
+			var err error
 			e.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
@@ -553,8 +554,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	case "json":
 		separator = []byte(",\n")
 	case "rdf":
-		// the separator for RDF should be empty since the toRDF function already
-		// adds newline to each RDF entry
+		// The separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry.
 	default:
 		glog.Fatalf("Invalid export format found: %s", in.Format)
 	}
@@ -571,15 +572,19 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
 
-			if hasDataBefore {
-				if _, err := writer.gw.Write(separator); err != nil {
-					return err
+			if kv.Version == 1 { // only insert separator for data
+				if hasDataBefore {
+					if _, err := writer.gw.Write(separator); err != nil {
+						return err
+					}
 				}
+				// change the hasDataBefore flag so that the next data entry will have a separator
+				// prepended
+				hasDataBefore = true
 			}
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
-			hasDataBefore = true
 		}
 		// Once all the sends are done, writers must be flushed and closed in order.
 		return nil
