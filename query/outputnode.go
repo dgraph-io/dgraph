@@ -495,7 +495,7 @@ type Extensions struct {
 
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	defer func() {
-		l.Json = time.Since(l.Start) - l.Parsing - l.Processing
+		l.Json = time.Since(l.Start) - l.Parsing - l.Processing - l.Transport
 	}()
 
 	var seedNode *fastJsonNode
