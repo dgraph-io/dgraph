@@ -45,19 +45,6 @@ type countIndexer struct {
 // addUid adds the uid from rawKey to a count index if a count index is
 // required by the schema. This method expects keys to be passed into it in
 // sorted order.
-
-// record that the given key has the given count
-
-// convert rawKey into key
-// key must be non nill and neither data nor reverse
-// check if key matches the current countIndexer by comparing the pred and reverse
-// if not the same as the current count indexer
-//    if the current counts is greater than 0, launch go routines to write the index
-//    clean counts to prepare for the new key
-
-//
-// set the pred, rev and track to the current key's pred, reverse,
-// and track to see if we need to track the count index according to the schema
 func (c *countIndexer) addUid(rawKey []byte, count int) {
 	key := x.Parse(rawKey)
 	if key == nil || (!key.IsData() && !key.IsReverse()) {
