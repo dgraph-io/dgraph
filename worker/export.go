@@ -68,11 +68,10 @@ var exportFormats = map[string]exportFormat{
 }
 
 type exporter struct {
-	pl      *posting.List
-	uid     uint64
-	attr    string
-	readTs  uint64
-	counter int
+	pl     *posting.List
+	uid    uint64
+	attr   string
+	readTs uint64
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -149,11 +148,6 @@ func escapedString(str string) string {
 
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
-
-	if e.counter != 1 {
-		fmt.Fprint(bp, ",\n")
-	}
-
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
 
@@ -475,8 +469,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 
 	e := &exporter{
-		readTs:  in.ReadTs,
-		counter: 0,
+		readTs: in.ReadTs,
 	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
@@ -504,7 +497,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
 
-		e.counter += 1
 		e.uid = pk.Uid
 		e.attr = pk.Attr
 
@@ -540,7 +532,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			if err != nil {
 				return nil, err
 			}
-
 			switch in.Format {
 			case "json":
 				return e.toJSON()
@@ -556,6 +547,18 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil, nil
 	}
 
+	hasDataBefore := false
+	var separator []byte
+	switch in.Format {
+	case "json":
+		separator = []byte(",\n")
+	case "rdf":
+		// the separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry
+	default:
+		glog.Fatalf("Invalid export format found: %s", in.Format)
+	}
+
 	stream.Send = func(list *bpb.KVList) error {
 		for _, kv := range list.Kv {
 			var writer *fileWriter
@@ -568,9 +571,15 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
 
+			if hasDataBefore {
+				if _, err := writer.gw.Write(separator); err != nil {
+					return err
+				}
+			}
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
+			hasDataBefore = true
 		}
 		// Once all the sends are done, writers must be flushed and closed in order.
 		return nil
