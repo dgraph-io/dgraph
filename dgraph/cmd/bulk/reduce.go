@@ -137,8 +137,8 @@ func newMapIterator(filename string) *mapIterator {
 // encodeAndWrite converts the given batch into a KVList and then
 // send the list to the stream writer
 // while iterating the kvs in the batch, it also sets the kv's stream id
-// to a previous mapped stream id for the attribute (predicate), or a newly assigned
-// stream id if the attribute does not exist in the preds map
+// to a previously recorded stream id corresponding to the kv's attribute (predicate),
+// or a newly assigned stream id if the attribute has never been recorded
 func (r *reducer) encodeAndWrite(
 	writer *badger.StreamWriter, batch []*pb.MapEntry, preds map[string]uint32) {
 
