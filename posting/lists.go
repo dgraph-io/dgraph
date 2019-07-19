@@ -218,8 +218,7 @@ func (lc *LocalCache) Set(key string, updated *List) *List {
 	return updated
 }
 
-// Get retrieves the cached version of the list associated with the given key.
-func (lc *LocalCache) Get(key []byte) (*List, error) {
+func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	if lc == nil {
 		return getNew(key, pstore)
 	}
@@ -228,10 +227,21 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 		return pl, nil
 	}
 
-	pl, err := getNew(key, pstore)
-	if err != nil {
-		return nil, err
+	var pl *List
+	if readFromDisk {
+		var err error
+		pl, err = getNew(key, pstore)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pl = &List{
+			key:         key,
+			mutationMap: make(map[uint64]*pb.PostingList),
+			plist:       new(pb.PostingList),
+		}
 	}
+
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
 	lc.RLock()
@@ -242,31 +252,16 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 	return lc.Set(skey, pl), nil
 }
 
+// Get retrieves the cached version of the list associated with the given key.
+func (lc *LocalCache) Get(key []byte) (*List, error) {
+	return lc.getInternal(key, true)
+}
+
 // GetFromDelta gets the cached version of the list without reading from disk
 // and only applies the existing deltas. This is used in situations where the
 // posting list will only be modified and not read (e.g adding index mutations).
 func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
-	if lc == nil {
-		return getNew(key, pstore)
-	}
-	skey := string(key)
-	if pl := lc.getNoStore(skey); pl != nil {
-		return pl, nil
-	}
-
-	// If there's a cache miss, create and initialize a list with an empty
-	// immutable layer.
-	pl := &List{}
-	pl.key = key
-	pl.mutationMap = make(map[uint64]*pb.PostingList)
-	pl.plist = new(pb.PostingList)
-
-	lc.RLock()
-	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
-		pl.setMutation(lc.startTs, delta)
-	}
-	lc.RUnlock()
-	return lc.Set(skey, pl), nil
+	return lc.getInternal(key, false)
 }
 
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.

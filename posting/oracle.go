@@ -77,13 +77,6 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
 
-// GetFromDelta retrieves the posting list for the given list from the local cache.
-// If there's a cache miss, the posting list stored on disk will not be read.
-// See documentation for LocalCache.GetFromDelta for more info.
-func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
-	return txn.cache.GetFromDelta(key)
-}
-
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()

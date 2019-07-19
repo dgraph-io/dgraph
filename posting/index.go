@@ -113,7 +113,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
-	plist, err := txn.GetFromDelta(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := txn.GetFromDelta(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist, err := txn.GetFromDelta(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
