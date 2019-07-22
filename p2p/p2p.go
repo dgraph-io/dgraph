@@ -124,8 +124,20 @@ func (s *Service) start(e chan error) {
 }
 
 // Stop stops the p2p service
-func (s *Service) Stop() {
-	// TODO
+func (s *Service) Stop() <-chan error {
+	e := make(chan error)
+
+	//Stop the host & IpfsDHT
+	err := s.host.Close()
+	if err != nil {
+		e <- err
+	}
+
+	err = s.dht.Close()
+	if err != nil {
+		e <- err
+	}
+	return e
 }
 
 // Broadcast sends a message to all peers

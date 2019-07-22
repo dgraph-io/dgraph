@@ -1,6 +1,8 @@
 package services
 
-import "testing"
+import (
+	"testing"
+)
 
 // ------------------- Mock Services --------------------
 type MockSrvcA struct {
@@ -11,8 +13,9 @@ func (s *MockSrvcA) Start() <-chan error {
 	s.running = true
 	return make(chan error)
 }
-func (s *MockSrvcA) Stop() {
+func (s *MockSrvcA) Stop() <-chan error {
 	s.running = false
+	return make(chan error)
 }
 
 type MockSrvcB struct {
@@ -23,8 +26,9 @@ func (s *MockSrvcB) Start() <-chan error {
 	s.running = true
 	return make(chan error)
 }
-func (s *MockSrvcB) Stop() {
+func (s *MockSrvcB) Stop() <-chan error {
 	s.running = false
+	return make(chan error)
 }
 
 type FakeService struct{}
@@ -48,7 +52,7 @@ func TestServiceRegistry_RegisterService(t *testing.T) {
 	}
 }
 
-func TestServiceRegistry_StartAll(t *testing.T) {
+func TestServiceRegistry_StartStopAll(t *testing.T) {
 	r := NewServiceRegistry()
 
 	a := &MockSrvcA{}
@@ -62,6 +66,13 @@ func TestServiceRegistry_StartAll(t *testing.T) {
 	if a.running != true || b.running != true {
 		t.Fatal("failed to start service")
 	}
+
+	r.StopAll()
+
+	if a.running != false || b.running != false {
+		t.Fatal("failed to stop service")
+	}
+
 }
 
 func TestServiceRegistry_Get_Err(t *testing.T) {

@@ -26,7 +26,7 @@ import (
 // Service must be implemented by all services
 type Service interface {
 	Start() <-chan error
-	Stop()
+	Stop() <-chan error
 }
 
 // ServiceRegistry is a structure to manage core system services
@@ -68,7 +68,13 @@ func (s *ServiceRegistry) StartAll() {
 
 // StopAll calls `Service.Stop()` for all registered services
 func (s *ServiceRegistry) StopAll() {
-	// TODO: Implement
+	log.Info(fmt.Sprintf("Stopping services: %v", s.serviceTypes))
+	for _, typ := range s.serviceTypes {
+		log.Debug(fmt.Sprintf("Stopping service %v", typ))
+		err := s.services[typ].Stop()
+		s.errs[typ] = err
+	}
+	log.Debug("All services stopped.")
 }
 
 // Get retrieves a service and stores a reference to it in the passed in `srvc`

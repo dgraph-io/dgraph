@@ -66,8 +66,14 @@ func (b *BadgerService) Start() <-chan error {
 	return b.err
 }
 
-func (b *BadgerService) Stop() {
-	// TODO: Implement
+func (db *BadgerService) Stop() <-chan error {
+	e := make(chan error)
+	// Closing Badger Database
+	err := db.db.Close()
+	if err != nil {
+		e <- err
+	}
+	return e
 }
 
 // NewBadgerService opens and returns a new DB object

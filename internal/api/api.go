@@ -54,10 +54,10 @@ func NewApiService(p2p P2pApi, rt RuntimeApi) *Service {
 
 // Start creates, stores and returns an error channel
 func (s *Service) Start() <-chan error {
-	s.err = make(<-chan error)
+	s.err = make(chan error)
 	return s.err
 }
 
-func (s *Service) Stop() {
-	// TODO: Implement
+func (s *Service) Stop() <-chan error {
+	return nil
 }
