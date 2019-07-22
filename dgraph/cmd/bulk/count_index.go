@@ -19,6 +19,7 @@ package bulk
 import (
 	"bytes"
 	"sort"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -40,6 +41,7 @@ type countIndexer struct {
 	writer *badger.StreamWriter
 	cur    current
 	counts map[int][]uint64
+	wg     sync.WaitGroup
 }
 
 // addUid adds the uid from rawKey to a count index if a count index is
@@ -57,7 +59,8 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 
 	if !sameIndexKey {
 		if len(c.counts) > 0 {
-			c.writeIndex(c.cur.pred, c.cur.rev, c.counts)
+			c.wg.Add(1)
+			go c.writeIndex(c.cur.pred, c.cur.rev, c.counts)
 		}
 		if len(c.counts) > 0 || c.counts == nil {
 			c.counts = make(map[int][]uint64)
@@ -72,6 +75,8 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
+	defer c.wg.Done()
+
 	streamId := atomic.AddUint32(&c.streamId, 1)
 	list := &bpb.KVList{}
 	for count, uids := range counts {
@@ -95,4 +100,8 @@ func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64
 	if err := c.writer.Write(list); err != nil {
 		x.Check(err)
 	}
+}
+
+func (c *countIndexer) wait() {
+	c.wg.Wait()
 }
