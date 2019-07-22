@@ -207,7 +207,10 @@ func (lc *LocalCache) getNoStore(key string) *List {
 	return nil
 }
 
-// TODO(martinmr): add documentation.
+// Set adds the list for the specified key to the cache. If a list for the same
+// key already exists, the cache will not be modified and the existing list
+// will be returned instead. This behavior is meant to prevent the goroutines
+// using the cache from ending up with an orphaned version of a list.
 func (lc *LocalCache) Set(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
