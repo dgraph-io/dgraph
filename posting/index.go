@@ -486,7 +486,7 @@ type rebuild struct {
 
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
-	fn func(uid uint64, itr *badger.Iterator, txn *Txn) error
+	fn func(uid uint64, pl *List, txn *Txn) error
 }
 
 func (r *rebuild) Run(ctx context.Context) error {
@@ -513,7 +513,13 @@ func (r *rebuild) Run(ctx context.Context) error {
 			return nil, errors.Errorf("could not parse key %s", hex.Dump(key))
 		}
 
-		if err := r.fn(pk.Uid, itr, txn); err != nil {
+		item := itr.Item()
+		keyCopy := item.KeyCopy(nil)
+		l, err := ReadPostingList(keyCopy, itr)
+		if err != nil {
+			return nil, err
+		}
+		if err := r.fn(pk.Uid, l, txn); err != nil {
 			return nil, err
 		}
 
@@ -697,12 +703,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, itr *badger.Iterator, txn *Txn) error {
-		pl, err := getPostingList(itr, txn)
-		if err != nil {
-			return err
-		}
-
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
@@ -774,12 +775,7 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	glog.Infof("Rebuilding count index for %s", rb.Attr)
 	var reverse bool
-	fn := func(uid uint64, itr *badger.Iterator, txn *Txn) error {
-		pl, err := getPostingList(itr, txn)
-		if err != nil {
-			return err
-		}
-
+	fn := func(uid uint64, pl *List, txn *Txn) error {
 		t := &pb.DirectedEdge{
 			ValueId: uid,
 			Attr:    rb.Attr,
@@ -864,12 +860,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, itr *badger.Iterator, txn *Txn) error {
-		pl, err := getPostingList(itr, txn)
-		if err != nil {
-			return err
-		}
-
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
 			puid := pp.Uid
@@ -921,14 +912,9 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	builder.fn = func(uid uint64, itr *badger.Iterator, txn *Txn) error {
-		pl, err := getPostingList(itr, txn)
-		if err != nil {
-			return err
-		}
-
+	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
-		err = pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// We only want to modify the untagged value. There could be other values with a
 			// lang tag.
 			if p.Uid == math.MaxUint64 {
@@ -967,27 +953,6 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 		return pl.addMutation(ctx, txn, newEdge)
 	}
 	return builder.Run(ctx)
-}
-
-func getPostingList(itr *badger.Iterator, txn *Txn) (*List, error) {
-	item := itr.Item()
-	keyCopy := item.KeyCopy(nil)
-	keyString := string(keyCopy)
-	pl, err := txn.cache.Get(keyCopy)
-	if err != nil {
-		return nil, err
-	}
-
-	if pl != nil {
-		return pl, nil
-	}
-
-	pl, err = ReadPostingList(keyCopy, itr)
-	if err != nil {
-		return nil, err
-	}
-	pl = txn.cache.Set(keyString, pl)
-	return pl, nil
 }
 
 // DeleteAll deletes all entries in the posting list.
