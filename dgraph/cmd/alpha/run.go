@@ -275,6 +275,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -388,6 +389,7 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
+	http.HandleFunc("/admin/draining", drainingHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
