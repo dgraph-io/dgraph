@@ -46,27 +46,6 @@ func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
 	return true
 }
 
-func drainingHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPut:
-		fallthrough
-	case http.MethodPost:
-		enableStr := r.URL.Query().Get("enable")
-
-		enable, err := strconv.ParseBool(enableStr)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Found invalid value for the enable parameter")
-		}
-
-		x.UpdateDrainingMode(enable)
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
-			`"message": "draining mode has been set to %v"}`, enable))))
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, http.MethodGet) {
 		return

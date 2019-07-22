@@ -275,20 +275,17 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
 	info := struct {
-		Version      string        `json:"version"`
-		Instance     string        `json:"instance"`
-		Uptime       time.Duration `json:"uptime"`
-		DrainingMode bool          `json:"drainingMode"`
+		Version  string        `json:"version"`
+		Instance string        `json:"instance"`
+		Uptime   time.Duration `json:"uptime"`
 	}{
-		Version:      x.Version(),
-		Instance:     "alpha",
-		Uptime:       time.Since(beginTime),
-		DrainingMode: x.DrainingMode(),
+		Version:  x.Version(),
+		Instance: "alpha",
+		Uptime:   time.Since(beginTime),
 	}
 	data, _ := json.Marshal(info)
 
@@ -391,7 +388,6 @@ func setupServer() {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/draining", drainingHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
