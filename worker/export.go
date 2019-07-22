@@ -526,9 +526,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return toType(pk.Attr, update)
 
 		case pk.IsData():
-			// defining a local error variable to avoid concurrent write
-			// to the err variable defined in the export method
-			var err error
 			e.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
