@@ -274,22 +274,8 @@ func (s *ServerState) getTimestamp(readOnly bool) uint64 {
 	return <-tr.ch
 }
 
-// checkDrainingMode checks if the State.DrainingMode is enabled
-// if so, it will return an error indicating that any request from the client
-// should be denied
-func checkDrainingMode() error {
-	if x.DrainingMode() {
-		return x.ErrDrainingMode
-	}
-	return nil
-}
-
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	if err := checkDrainingMode(); err != nil {
-		return nil, err
-	}
-
 	ctx, span := otrace.StartSpan(ctx, "Server.Alter")
 	defer span.End()
 	span.Annotatef(nil, "Alter operation: %+v", op)
@@ -435,9 +421,6 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 
 // Mutate handles requests to perform mutations.
 func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
-	if err := checkDrainingMode(); err != nil {
-		return nil, err
-	}
 	return s.doMutate(ctx, mu, true)
 }
 
@@ -703,9 +686,6 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string]string) {
 
 // Query handles queries and returns the data.
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	if err := checkDrainingMode(); err != nil {
-		return nil, err
-	}
 	if err := authorizeQuery(ctx, req); err != nil {
 		return nil, err
 	}
@@ -849,9 +829,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 
 // CommitOrAbort commits or aborts a transaction.
 func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.TxnContext, error) {
-	if err := checkDrainingMode(); err != nil {
-		return nil, err
-	}
 	ctx, span := otrace.StartSpan(ctx, "Server.CommitOrAbort")
 	defer span.End()
 
