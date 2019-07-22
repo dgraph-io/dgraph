@@ -39,6 +39,7 @@ import (
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
+	dgsch "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
@@ -211,7 +212,7 @@ func initDgraph() error {
 		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
 	}
 
-	dgSchema := GenDgSchema(schema)
+	dgSchema := dgsch.GenDgSchema(schema)
 
 	if glog.V(2) {
 		fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)

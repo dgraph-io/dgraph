@@ -58,6 +58,8 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 						typStr = "[" + typStr + "]"
 					}
 
+					direcStr = genDirecStr(f)
+
 					fmt.Fprintf(&typeDef, "  %s.%s: %s %s\n", def.Name, f.Name, typStr, direcStr)
 					fmt.Fprintf(&preds, "%s.%s: %s %s .\n", def.Name, f.Name, typStr, direcStr)
 				case ast.Scalar:
@@ -90,4 +92,16 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 	}
 
 	return schemaB.String()
+}
+
+func genDirecStr(fld *ast.FieldDefinition) string {
+	var sch strings.Builder
+
+	for _, dir := range fld.Directives {
+		if dir.Name == "hasInverse" {
+			sch.WriteString("@reverse")
+		}
+	}
+
+	return sch.String()
 }

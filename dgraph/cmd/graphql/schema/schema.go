@@ -70,6 +70,13 @@ func addScalarInSchema(sType SupportedScalars, doc *ast.SchemaDocument) {
 	)
 }
 
+func addDirectiveInSchema(name string, locations []ast.DirectiveLocation, doc *ast.SchemaDocument) {
+	doc.Directives = append(doc.Directives, &ast.DirectiveDefinition{
+		Name:      name,
+		Locations: locations,
+	})
+}
+
 // AddRule adds a new schema rule to the global array schRules.
 func AddRule(name string, f schRuleFunc) {
 	schRules = append(schRules, schRule{
@@ -508,14 +515,33 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 		return ""
 	}
 
-	var direcArgs []string
+	var directives []string
 	for _, dir := range direcs {
-		direcArgs = append(direcArgs, "@"+dir.Name+genArgumentsString(dir.Arguments))
+		directives = append(directives, genDirectiveString(dir))
+	}
+
+	sort.Slice(directives, func(i, j int) bool { return directives[i] < directives[j] })
+	// Assuming multiple directives are space separated.
+	sch.WriteString(strings.Join(directives, " "))
+
+	return sch.String()
+}
+
+func genDirectiveString(dir *ast.Directive) string {
+	return fmt.Sprintf("@%s%s", dir.Name, genDirectiveArgumentsString(dir.Arguments))
+}
+
+func genDirectiveArgumentsString(args ast.ArgumentList) string {
+	var direcArgs []string
+	var sch strings.Builder
+
+	sch.WriteString("(")
+	for _, arg := range args {
+		direcArgs = append(direcArgs, fmt.Sprintf("%s:\"%s\"", arg.Name, arg.Value.Raw))
 	}
 
 	sort.Slice(direcArgs, func(i, j int) bool { return direcArgs[i] < direcArgs[j] })
-	// Assuming multiple directives are space separated.
-	sch.WriteString(strings.Join(direcArgs, " "))
+	sch.WriteString(strings.Join(direcArgs, ",") + ")")
 
 	return sch.String()
 }

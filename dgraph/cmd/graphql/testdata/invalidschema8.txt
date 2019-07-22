@@ -1,0 +1,22 @@
+# No reverse link to Author.posts
+
+type Post {
+  id: ID!
+  title: String!
+  text: String
+  author: Author!
+  postType: PostType!
+}
+
+type Author {
+  id: ID!
+  name: String!
+  posts: [Post!]! @hasInverse(field: "Post.author")
+  friends: [Author!]!
+}
+
+enum PostType {
+  Statement
+  Question
+  Answer
+}

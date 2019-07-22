@@ -105,7 +105,7 @@ func TestSchemaString(t *testing.T) {
 }
 
 func TestInvalidSchemas(t *testing.T) {
-	numTests := 7
+	numTests := 8
 
 	for i := 0; i < numTests; i++ {
 		fileName := "../testdata/invalidschema" + strconv.Itoa(i+1) + ".txt" // run from pwd
