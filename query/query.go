@@ -107,6 +107,7 @@ type Latency struct {
 	Start      time.Time     `json:"-"`
 	Parsing    time.Duration `json:"query_parsing"`
 	Processing time.Duration `json:"processing"`
+	Transport  time.Duration `json:"transport"`
 	Json       time.Duration `json:"json_conversion"`
 }
 

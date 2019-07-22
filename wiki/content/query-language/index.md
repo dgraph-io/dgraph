@@ -740,7 +740,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 ### Geolocation
 
-{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
+{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types). However, Dgraph can store other types of gelocation data. {{% /notice %}}
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
