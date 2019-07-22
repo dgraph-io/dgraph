@@ -38,6 +38,8 @@ import (
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
+
+	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
 type options struct {
@@ -191,9 +193,21 @@ func initDgraph() error {
 		return fmt.Errorf("cannot parse schema %s", gqlErr)
 	}
 
+	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
+		return gqlErrList
+	}
+
+	gschema.AddScalars(doc)
+
 	schema, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
+	}
+
+	gschema.GenerateCompleteSchema(schema)
+	completeSchema := gschema.Stringify(schema)
+	if glog.V(2) {
+		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
 	}
 
 	// TODO: extract out as todo's below are done
@@ -281,7 +295,7 @@ func initDgraph() error {
 
 	s := gqlSchema{
 		Type:   "dgraph.graphql",
-		Schema: inputSchema,
+		Schema: completeSchema,
 		Date:   time.Now(),
 	}
 

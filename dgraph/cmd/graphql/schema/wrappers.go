@@ -235,5 +235,5 @@ func (m *mutation) ResponseName() string {
 func (m *mutation) MutatedTypeName() string {
 	// Currently only supporting addT(...) mutations.
 	// This'll change.
-	return strings.TrimSuffix(strings.TrimPrefix(m.TypeName(), "Add"), "PayLoad")
+	return strings.TrimSuffix(strings.TrimPrefix(m.TypeName(), "Add"), "Payload")
 }

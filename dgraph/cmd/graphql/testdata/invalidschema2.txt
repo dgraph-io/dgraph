@@ -1,0 +1,10 @@
+# Query in initial schema
+
+type Author {
+    id: ID!
+    name: String
+}
+
+type Query {
+    getAuthro(id: ID): Author!
+}

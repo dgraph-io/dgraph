@@ -1,0 +1,13 @@
+# Invalid list type
+
+type Author {
+    id: ID!
+    name: String
+    posts: [Post]!
+}
+
+type Post {
+    id: ID!
+    text: String!
+    author: Author!
+}
