@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
