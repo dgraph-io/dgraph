@@ -32,6 +32,9 @@ import (
 // since ACL is only supported in the enterprise version.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+	if err := checkDrainingMode(); err != nil {
+		return nil, err
+	}
 
 	glog.Warningf("Login failed: %s", x.ErrNotSupported)
 	return &api.Response{}, x.ErrNotSupported
