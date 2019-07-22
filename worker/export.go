@@ -88,20 +88,6 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:password",
 }
 
-// Having '<' and '>' around all predicates makes the exported schema harder
-// for humans to look at, so only put them on predicates containing "exotic"
-// characters (i.e. ones not in this list).
-var predNonSpecialChars = unicode.RangeTable{
-	R16: []unicode.Range16{
-		// Ranges must be in order.
-		{'.', '.', 1},
-		{'0', '9', 1},
-		{'A', 'Z', 1},
-		{'_', '_', 1},
-		{'a', 'z', 1},
-	},
-}
-
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
@@ -293,16 +279,9 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	isSpecial := func(r rune) bool {
-		return !(unicode.In(r, &predNonSpecialChars))
-	}
-	if strings.IndexFunc(attr, isSpecial) >= 0 {
-		buf.WriteRune('<')
-		buf.WriteString(attr)
-		buf.WriteRune('>')
-	} else {
-		buf.WriteString(attr)
-	}
+	buf.WriteRune('<')
+	buf.WriteString(attr)
+	buf.WriteRune('>')
 	buf.WriteByte(':')
 	if update.List {
 		buf.WriteRune('[')
