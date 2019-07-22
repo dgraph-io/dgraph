@@ -46,7 +46,7 @@ func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typeVal := range sch.Definitions {
 		found = false
 		for _, fld := range typeVal.Fields {
-			if fld.Type.NamedType == string(ID) {
+			if isIDField(fld) {
 				if found {
 					return gqlerror.ErrorPosf(
 						fld.Position,
