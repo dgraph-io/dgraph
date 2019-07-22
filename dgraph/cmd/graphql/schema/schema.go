@@ -413,7 +413,7 @@ func getFilterField() ast.FieldList {
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if fld.Type.Name() == string(ID) {
+		if isIDField(fld) {
 			continue
 		}
 		if schema.Types[fld.Type.Name()].Kind == ast.Object {
@@ -446,7 +446,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if fld.Type.Name() == string(ID) {
+		if isIDField(fld) {
 			// Deepcopy is not required because we don't modify values other than nonull
 			newFld := *fld
 			fldList = append(fldList, &newFld)
@@ -569,4 +569,8 @@ func Stringify(schema *ast.Schema) string {
 	sch.WriteString(mutation.String())
 
 	return sch.String()
+}
+
+func isIDField(fld *ast.FieldDefinition) bool {
+	return fld.Type.Name() == string(ID)
 }
