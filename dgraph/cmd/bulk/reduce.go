@@ -70,7 +70,6 @@ func (r *reducer) run() error {
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			r.reduce(mapItrs, ci)
-			ci.wait()
 
 			if err := writer.Flush(); err != nil {
 				x.Check(err)
@@ -135,14 +134,14 @@ func newMapIterator(filename string) *mapIterator {
 	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(fd, 16<<10)}
 }
 
+// encodeAndWrite converts the given batch into a KVList and then
+// send the list to the stream writer
+// while iterating the kvs in the batch, it also sets the kv's stream id
+// to a previously recorded stream id corresponding to the kv's attribute (predicate),
+// or a newly assigned stream id if the attribute has never been recorded
 func (r *reducer) encodeAndWrite(
-	writer *badger.StreamWriter, entryCh chan []*pb.MapEntry, closer *y.Closer) {
-	defer closer.Done()
+	writer *badger.StreamWriter, batch []*pb.MapEntry, preds map[string]uint32) {
 
-	var listSize int
-	list := &bpb.KVList{}
-
-	preds := make(map[string]uint32)
 	setStreamId := func(kv *bpb.KV) {
 		pk := x.Parse(kv.Key)
 		x.AssertTrue(len(pk.Attr) > 0)
@@ -160,30 +159,15 @@ func (r *reducer) encodeAndWrite(
 		kv.StreamId = streamId
 	}
 
-	for batch := range entryCh {
-		listSize += r.toList(batch, list)
-		if listSize > 4<<20 {
-			for _, kv := range list.Kv {
-				setStreamId(kv)
-			}
-			x.Check(writer.Write(list))
-			list = &bpb.KVList{}
-			listSize = 0
-		}
+	list := &bpb.KVList{}
+	r.toList(batch, list)
+	for _, kv := range list.Kv {
+		setStreamId(kv)
 	}
-	if len(list.Kv) > 0 {
-		for _, kv := range list.Kv {
-			setStreamId(kv)
-		}
-		x.Check(writer.Write(list))
-	}
+	x.Check(writer.Write(list))
 }
 
 func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
-	entryCh := make(chan []*pb.MapEntry, 100)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-
 	var ph postingHeap
 	for _, itr := range mapItrs {
 		me := itr.Next()
@@ -195,7 +179,6 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	}
 
 	writer := ci.writer
-	go r.encodeAndWrite(writer, entryCh, closer)
 
 	const batchSize = 10000
 	const batchAlloc = batchSize * 11 / 10
@@ -203,6 +186,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 	var prevKey []byte
 	var plistLen int
 
+	preds := make(map[string]uint32)
 	for len(ph.nodes) > 0 {
 		node0 := &ph.nodes[0]
 		me := node0.mapEntry
@@ -223,7 +207,7 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		}
 
 		if len(batch) >= batchSize && keyChanged {
-			entryCh <- batch
+			r.encodeAndWrite(writer, batch, preds)
 			batch = make([]*pb.MapEntry, 0, batchAlloc)
 		}
 		prevKey = me.Key
@@ -231,12 +215,11 @@ func (r *reducer) reduce(mapItrs []*mapIterator, ci *countIndexer) {
 		plistLen++
 	}
 	if len(batch) > 0 {
-		entryCh <- batch
+		r.encodeAndWrite(writer, batch, preds)
 	}
 	if plistLen > 0 {
 		ci.addUid(prevKey, plistLen)
 	}
-	close(entryCh)
 }
 
 type heapNode struct {
