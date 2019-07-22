@@ -47,10 +47,12 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 	switch t.(type) {
 	case *big.Int:
 		out, err = sd.DecodeBigInt()
-	case int8, int16, int32:
+	case int8, uint8, int16, uint16, int32, uint32:
 		out, err = sd.DecodeFixedWidthInt(t)
 	case int64:
 		out, err = sd.DecodeInteger()
+	case uint64:
+		out, err = sd.DecodeUnsignedInteger()
 	case []byte:
 		out, err = sd.DecodeByteArray()
 	case bool:
@@ -78,8 +80,7 @@ func (sd *Decoder) ReadByte() (byte, error) {
 
 // decodeSmallInt is used in the DecodeInteger and DecodeBigInteger functions when the mode is <= 2
 // need to pass in the first byte, since we assume it's already been read
-func (sd *Decoder) decodeSmallInt(firstByte byte) (o int64, err error) {
-	mode := firstByte & 3
+func (sd *Decoder) decodeSmallInt(firstByte byte, mode byte) (o int64, err error) {
 	if mode == 0 { // 1 byte mode
 		o = int64(firstByte >> 2)
 	} else if mode == 1 { // 2 byte mode
@@ -108,13 +109,17 @@ func (sd *Decoder) DecodeFixedWidthInt(t interface{}) (o int, err error) {
 		var b byte
 		b, err = sd.ReadByte()
 		o = int(b)
-	case int16:
+	case uint8:
+		var b byte
+		b, err = sd.ReadByte()
+		o = int(uint8(b))
+	case int16, uint16:
 		buf := make([]byte, 2)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
 			o = int(binary.LittleEndian.Uint16(buf))
 		}
-	case int32:
+	case int32, uint32:
 		buf := make([]byte, 4)
 		_, err = sd.Reader.Read(buf)
 		if err == nil {
@@ -128,7 +133,13 @@ func (sd *Decoder) DecodeFixedWidthInt(t interface{}) (o int, err error) {
 // if the encoding is valid, it then returns (o, bytesDecoded, err) where o is the decoded integer, bytesDecoded is the
 // number of input bytes decoded, and err is nil
 // otherwise, it returns 0, 0, and error
-func (sd *Decoder) DecodeInteger() (o int64, err error) {
+func (sd *Decoder) DecodeInteger() (_ int64, err error) {
+	o, err := sd.DecodeUnsignedInteger()
+
+	return int64(o), err
+}
+
+func (sd *Decoder) DecodeUnsignedInteger() (o uint64, err error) {
 	b, err := sd.ReadByte()
 	if err != nil {
 		return 0, err
@@ -137,29 +148,28 @@ func (sd *Decoder) DecodeInteger() (o int64, err error) {
 	// check mode of encoding, stored at 2 least significant bits
 	mode := b & 3
 	if mode <= 2 {
-		return sd.decodeSmallInt(b)
+		val, e := sd.decodeSmallInt(b, mode)
+		return uint64(val), e
 	}
 
 	// >4 byte mode
 	topSixBits := b >> 2
-	byteLen := int(topSixBits) + 4
+	byteLen := uint(topSixBits) + 4
 
 	buf := make([]byte, byteLen)
 	_, err = sd.Reader.Read(buf)
 	if err != nil {
 		return 0, err
-	} else {
-		if byteLen == 4 {
-			o = int64(binary.LittleEndian.Uint32(buf))
-		} else if byteLen > 4 && byteLen < 8 {
-			tmp := make([]byte, 8)
-			copy(tmp, buf)
-			o = int64(binary.LittleEndian.Uint64(tmp))
-		}
+	}
 
-		if o == 0 {
-			err = errors.New("could not decode invalid integer")
-		}
+	if byteLen == 4 {
+		o = uint64(binary.LittleEndian.Uint32(buf))
+	} else if byteLen > 4 && byteLen < 8 {
+		tmp := make([]byte, 8)
+		copy(tmp, buf)
+		o = uint64(binary.LittleEndian.Uint64(tmp))
+	} else {
+		err = errors.New("could not decode invalid integer")
 	}
 
 	return o, err
@@ -177,7 +187,7 @@ func (sd *Decoder) DecodeBigInt() (output *big.Int, err error) {
 	mode := b & 0x03
 	if mode <= 2 {
 		var tmp int64
-		tmp, err = sd.decodeSmallInt(b)
+		tmp, err = sd.decodeSmallInt(b, mode)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +196,7 @@ func (sd *Decoder) DecodeBigInt() (output *big.Int, err error) {
 
 	// >4 byte mode
 	topSixBits := b >> 2
-	byteLen := int(topSixBits) + 4
+	byteLen := uint(topSixBits) + 4
 
 	buf := make([]byte, byteLen)
 	_, err = sd.Reader.Read(buf)

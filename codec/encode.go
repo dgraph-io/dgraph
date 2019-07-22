@@ -48,12 +48,22 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 		n, err = se.encodeByteArray(v[:])
 	case *big.Int:
 		n, err = se.encodeBigInteger(v)
+	case int8:
+		n, err = se.encodeFixedWidthInteger(int(v))
 	case int16:
 		n, err = se.encodeFixedWidthInteger(int(v))
 	case int32:
 		n, err = se.encodeFixedWidthInteger(int(v))
 	case int64:
-		n, err = se.encodeInteger(int(v))
+		n, err = se.encodeInteger(uint(v))
+	case uint8:
+		n, err = se.encodeFixedWidthInteger(int(v))
+	case uint16:
+		n, err = se.encodeFixedWidthInteger(int(v))
+	case uint32:
+		n, err = se.encodeFixedWidthInteger(int(v))
+	case uint64:
+		n, err = se.encodeInteger(uint(v))
 	case string:
 		n, err = se.encodeByteArray([]byte(v))
 	case bool:
@@ -81,7 +91,7 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 // byte array b itself
 func (se *Encoder) encodeByteArray(b []byte) (bytesEncoded int, err error) {
 	var n int
-	n, err = se.encodeInteger(len(b))
+	n, err = se.encodeInteger(uint(len(b)))
 	if err != nil {
 		return 0, err
 	}
@@ -119,7 +129,8 @@ func (se *Encoder) encodeFixedWidthInteger(i int) (bytesEncoded int, err error) 
 // if 2^14 <= n < 2^30 write [10 i^2...i^32] [ 32 bits = 4 byte encoded ]
 // if n >= 2^30 write [lower 2 bits of first byte = 11] [upper 6 bits of first byte = # of bytes following less 4]
 // [append i as a byte array to the first byte]
-func (se *Encoder) encodeInteger(i int) (bytesEncoded int, err error) {
+func (se *Encoder) encodeInteger(i uint) (bytesEncoded int, err error) {
+
 	if i < 1<<6 {
 		err = binary.Write(se.Writer, binary.LittleEndian, byte(i)<<2)
 		return 1, err
@@ -223,11 +234,11 @@ func (se *Encoder) encodeTuple(t interface{}) (bytesEncoded int, err error) {
 
 func (se *Encoder) encodeIntegerElements(arr []int) (bytesEncoded int, err error) {
 	var n int
-	n, err = se.encodeInteger(len(arr))
+	n, err = se.encodeInteger(uint(len(arr)))
 	bytesEncoded += n
 
 	for _, elem := range arr {
-		n, err = se.encodeInteger(elem)
+		n, err = se.encodeInteger(uint(elem))
 		bytesEncoded += n
 	}
 
@@ -243,7 +254,7 @@ func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
 		n, err = se.encodeIntegerElements(arr)
 		bytesEncoded += n
 	case []*big.Int:
-		n, err = se.encodeInteger(len(arr))
+		n, err = se.encodeInteger(uint(len(arr)))
 		bytesEncoded += n
 
 		for _, elem := range arr {
@@ -251,7 +262,7 @@ func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
 			bytesEncoded += n
 		}
 	case []bool:
-		n, err = se.encodeInteger(len(arr))
+		n, err = se.encodeInteger(uint(len(arr)))
 		bytesEncoded += n
 
 		for _, elem := range arr {
@@ -259,7 +270,7 @@ func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
 			bytesEncoded += n
 		}
 	case [][]byte:
-		n, err = se.encodeInteger(len(arr))
+		n, err = se.encodeInteger(uint(len(arr)))
 		bytesEncoded += n
 
 		for _, elem := range arr {
@@ -267,7 +278,7 @@ func (se *Encoder) encodeArray(t interface{}) (bytesEncoded int, err error) {
 			bytesEncoded += n
 		}
 	case [][]int:
-		n, err = se.encodeInteger(len(arr))
+		n, err = se.encodeInteger(uint(len(arr)))
 		bytesEncoded += n
 
 		for _, elem := range arr {

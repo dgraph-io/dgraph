@@ -30,15 +30,24 @@ type encodeTest struct {
 }
 
 var encodeTests = []encodeTest{
+
 	// fixed width
-	{val: int32(0), output: []byte{0x00}, bytesEncoded: 1},
+	{val: int8(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: uint8(1), output: []byte{0x01}, bytesEncoded: 1},
+
+	{val: int16(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: int16(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
+
+	{val: uint16(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: uint16(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
+
 	{val: int32(1), output: []byte{0x01}, bytesEncoded: 1},
-	{val: int32(42), output: []byte{0x2a}, bytesEncoded: 1},
-	{val: int32(69), output: []byte{0x45}, bytesEncoded: 1},
 	{val: int32(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
-	{val: int32(16384), output: []byte{0x00, 0x40}, bytesEncoded: 2},
 	{val: int32(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f}, bytesEncoded: 4},
-	{val: int32(1073741824), output: []byte{0x00, 0x00, 0x00, 0x40}, bytesEncoded: 4},
+
+	{val: uint32(1), output: []byte{0x01}, bytesEncoded: 1},
+	{val: uint32(16383), output: []byte{0xff, 0x3f}, bytesEncoded: 2},
+	{val: uint32(1073741823), output: []byte{0xff, 0xff, 0xff, 0x3f}, bytesEncoded: 4},
 
 	// compact integers
 	{val: int64(0), output: []byte{0x00}, bytesEncoded: 1},
@@ -51,6 +60,18 @@ var encodeTests = []encodeTest{
 	{val: int64(1073741824), output: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, bytesEncoded: 5},
 	{val: int64(1<<32 - 1), output: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, bytesEncoded: 5},
 	{val: int64(1 << 32), output: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, bytesEncoded: 6},
+
+	{val: uint64(0), output: []byte{0x00}, bytesEncoded: 1},
+	{val: uint64(1), output: []byte{0x04}, bytesEncoded: 1},
+	{val: uint64(42), output: []byte{0xa8}, bytesEncoded: 1},
+	{val: uint64(69), output: []byte{0x15, 0x01}, bytesEncoded: 2},
+	{val: uint64(16383), output: []byte{0xfd, 0xff}, bytesEncoded: 2},
+	{val: uint64(16384), output: []byte{0x02, 0x00, 0x01, 0x00}, bytesEncoded: 4},
+	{val: uint64(1 << 63), output: []byte{0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80}, bytesEncoded: 9},
+	{val: uint64(1073741823), output: []byte{0xfe, 0xff, 0xff, 0xff}, bytesEncoded: 4},
+	{val: uint64(1073741824), output: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, bytesEncoded: 5},
+	{val: uint64(1<<32 - 1), output: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, bytesEncoded: 5},
+	{val: uint64(1 << 32), output: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, bytesEncoded: 6},
 
 	// byte arrays
 	{val: []byte{0x01}, output: []byte{0x04, 0x01}, bytesEncoded: 2},

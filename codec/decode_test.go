@@ -31,16 +31,6 @@ type reverseByteTest struct {
 	output []byte
 }
 
-type decodeFixedWidthIntTest struct {
-	val    []byte
-	output int32
-}
-
-type decodeIntTest struct {
-	val    []byte
-	output int64
-}
-
 type decodeBigIntTest struct {
 	val    []byte
 	output *big.Int
@@ -68,7 +58,58 @@ type decodeArrayTest struct {
 	output interface{}
 }
 
-var decodeFixedWidthIntTests = []decodeFixedWidthIntTest{
+var decodeFixedWidthIntTestsInt8 = []struct {
+	val    []byte
+	output int8
+}{
+	{val: []byte{0x00}, output: int8(0)},
+	{val: []byte{0x01}, output: int8(1)},
+	{val: []byte{0x2a}, output: int8(42)},
+	{val: []byte{0x40}, output: int8(64)},
+	{val: []byte{0x45}, output: int8(69)},
+}
+
+var decodeFixedWidthIntTestsUint8 = []struct {
+	val    []byte
+	output uint8
+}{
+	{val: []byte{0x00}, output: uint8(0)},
+	{val: []byte{0x01}, output: uint8(1)},
+	{val: []byte{0x2a}, output: uint8(42)},
+	{val: []byte{0x40}, output: uint8(64)},
+	{val: []byte{0x45}, output: uint8(69)},
+}
+
+var decodeFixedWidthIntTestsInt16 = []struct {
+	val    []byte
+	output int16
+}{
+	{val: []byte{0x00}, output: int16(0)},
+	{val: []byte{0x01}, output: int16(1)},
+	{val: []byte{0x2a}, output: int16(42)},
+	{val: []byte{0x40}, output: int16(64)},
+	{val: []byte{0x45}, output: int16(69)},
+	{val: []byte{0xff, 0x3f}, output: int16(16383)},
+	{val: []byte{0x00, 0x40}, output: int16(16384)},
+}
+
+var decodeFixedWidthIntTestsUint16 = []struct {
+	val    []byte
+	output uint16
+}{
+	{val: []byte{0x00}, output: uint16(0)},
+	{val: []byte{0x01}, output: uint16(1)},
+	{val: []byte{0x2a}, output: uint16(42)},
+	{val: []byte{0x40}, output: uint16(64)},
+	{val: []byte{0x45}, output: uint16(69)},
+	{val: []byte{0xff, 0x3f}, output: uint16(16383)},
+	{val: []byte{0x00, 0x40}, output: uint16(16384)},
+}
+
+var decodeFixedWidthIntTestsInt32 = []struct {
+	val    []byte
+	output int32
+}{
 	{val: []byte{0x00}, output: int32(0)},
 	{val: []byte{0x01}, output: int32(1)},
 	{val: []byte{0x2a}, output: int32(42)},
@@ -80,7 +121,25 @@ var decodeFixedWidthIntTests = []decodeFixedWidthIntTest{
 	{val: []byte{0x00, 0x00, 0x00, 0x40}, output: int32(1073741824)},
 }
 
-var decodeIntTests = []decodeIntTest{
+var decodeFixedWidthIntTestsUint32 = []struct {
+	val    []byte
+	output uint32
+}{
+	{val: []byte{0x00}, output: uint32(0)},
+	{val: []byte{0x01}, output: uint32(1)},
+	{val: []byte{0x2a}, output: uint32(42)},
+	{val: []byte{0x40}, output: uint32(64)},
+	{val: []byte{0x45}, output: uint32(69)},
+	{val: []byte{0xff, 0x3f}, output: uint32(16383)},
+	{val: []byte{0x00, 0x40}, output: uint32(16384)},
+	{val: []byte{0xff, 0xff, 0xff, 0x3f}, output: uint32(1073741823)},
+	{val: []byte{0x00, 0x00, 0x00, 0x40}, output: uint32(1073741824)},
+}
+
+var decodeIntTests = []struct {
+	val    []byte
+	output int64
+}{
 	// compact integers
 	{val: []byte{0x00}, output: int64(0)},
 	{val: []byte{0x04}, output: int64(1)},
@@ -93,6 +152,24 @@ var decodeIntTests = []decodeIntTest{
 	{val: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, output: int64(1073741824)},
 	{val: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, output: int64(1<<32 - 1)},
 	{val: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, output: int64(1 << 32)},
+}
+
+var decodeUintTests = []struct {
+	val    []byte
+	output uint64
+}{
+	// compact unsigned integers
+	{val: []byte{0x00}, output: uint64(0)},
+	{val: []byte{0x04}, output: uint64(1)},
+	{val: []byte{0xa8}, output: uint64(42)},
+	{val: []byte{0x01, 0x01}, output: uint64(64)},
+	{val: []byte{0x15, 0x01}, output: uint64(69)},
+	{val: []byte{0xfd, 0xff}, output: uint64(16383)},
+	{val: []byte{0x02, 0x00, 0x01, 0x00}, output: uint64(16384)},
+	{val: []byte{0xfe, 0xff, 0xff, 0xff}, output: uint64(1073741823)},
+	{val: []byte{0x03, 0x00, 0x00, 0x00, 0x40}, output: uint64(1073741824)},
+	{val: []byte{0x03, 0xff, 0xff, 0xff, 0xff}, output: uint64(1<<32 - 1)},
+	{val: []byte{0x07, 0x00, 0x00, 0x00, 0x00, 0x01}, output: uint64(1 << 32)},
 }
 
 var decodeBigIntTests = []decodeBigIntTest{
@@ -251,8 +328,53 @@ func TestReadByte(t *testing.T) {
 }
 
 func TestDecodeFixedWidthInts(t *testing.T) {
-	for _, test := range decodeFixedWidthIntTests {
+	for _, test := range decodeFixedWidthIntTestsInt8 {
+		output, err := Decode(test.val, int8(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != int(test.output) {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+
+	for _, test := range decodeFixedWidthIntTestsUint8 {
+		output, err := Decode(test.val, uint8(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != int(test.output) {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+
+	for _, test := range decodeFixedWidthIntTestsInt16 {
+		output, err := Decode(test.val, int16(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != int(test.output) {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+
+	for _, test := range decodeFixedWidthIntTestsUint16 {
+		output, err := Decode(test.val, uint16(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != int(test.output) {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+
+	for _, test := range decodeFixedWidthIntTestsInt32 {
 		output, err := Decode(test.val, int32(0))
+		if err != nil {
+			t.Error(err)
+		} else if output.(int) != int(test.output) {
+			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+
+	for _, test := range decodeFixedWidthIntTestsUint32 {
+		output, err := Decode(test.val, uint32(0))
 		if err != nil {
 			t.Error(err)
 		} else if output.(int) != int(test.output) {
@@ -268,6 +390,17 @@ func TestDecodeInts(t *testing.T) {
 			t.Error(err)
 		} else if output != test.output {
 			t.Errorf("Fail: input %d got %d expected %d", test.val, output, test.output)
+		}
+	}
+}
+
+func TestDecodeUints(t *testing.T) {
+	for _, test := range decodeUintTests {
+		output, err := Decode(test.val, uint64(0))
+		if err != nil {
+			t.Error(err)
+		} else if output != test.output {
+			t.Errorf("Fail: input %d got %d (%T) expected %d (%T)", test.val, output, output, test.output, test.output)
 		}
 	}
 }
