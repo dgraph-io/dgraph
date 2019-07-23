@@ -775,9 +775,13 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		}
 		queryRequest.Cache = worker.NoTxnCache
 	}
+
 	if req.StartTs == 0 {
+		assignTimestampStart := time.Now()
 		req.StartTs = State.getTimestamp(req.ReadOnly)
+		l.AssignTimestamp = time.Since(assignTimestampStart)
 	}
+
 	queryRequest.ReadTs = req.StartTs
 	resp.Txn = &api.TxnContext{StartTs: req.StartTs}
 	annotateStartTs(span, req.StartTs)
@@ -787,7 +791,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, errors.Wrap(err, "")
 	}
-	l.Transport = time.Since(l.Start) - l.Parsing - l.Processing
 
 	var js []byte
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
@@ -818,9 +821,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
 	// since it involves modifying the API protos.
 	gl := &api.Latency{
-		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
-		ProcessingNs: uint64(l.Processing.Nanoseconds()),
-		EncodingNs:   uint64(l.Json.Nanoseconds()),
+		AssignTimestampNs: uint64(l.AssignTimestamp.Nanoseconds()),
+		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
+		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
+		EncodingNs:        uint64(l.Json.Nanoseconds()),
 	}
 
 	resp.Latency = gl
