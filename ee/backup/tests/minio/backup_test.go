@@ -225,14 +225,21 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
+
 	files := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
-	require.True(t, len(files) == numExpectedFiles)
+	require.Equal(t, numExpectedFiles, len(files))
+
 	dirs := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
 		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
 	})
-	require.True(t, len(dirs) == numExpectedDirs)
+	require.Equal(t, numExpectedDirs, len(dirs))
+
+	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+		return !isdir && strings.Contains(path, "manifest.json")
+	})
+	require.Equal(t, numExpectedDirs, len(manifests))
 
 	return dirs
 }
