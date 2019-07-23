@@ -883,8 +883,6 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		if gq.ShortestPathArgs.From == nil || gq.ShortestPathArgs.To == nil {
 			return errors.Errorf("Unexpected error: from/to can't be nil for shortest path")
 		}
-		// TODO - Add validation, either length of UID slice should be greater than zero or
-		// NeedsVar.
 		if len(gq.ShortestPathArgs.From.UID) > 0 {
 			args.From = gq.ShortestPathArgs.From.UID[0]
 		}
@@ -1693,37 +1691,43 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	return nil
 }
 
+func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
+	if sg.Params.ShortestPathArgs.From != nil && len(sg.Params.ShortestPathArgs.From.NeedsVar) > 0 {
+		fromVar := sg.Params.ShortestPathArgs.From.NeedsVar[0].Name
+		uidVar, ok := mp[fromVar]
+		if !ok {
+			return errors.Errorf("value of from var(%s) should have already been populated",
+				fromVar)
+		}
+		if uidVar.Uids != nil {
+			if len(uidVar.Uids.Uids) > 1 {
+				return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
+			}
+			sg.Params.From = uidVar.Uids.Uids[0]
+		}
+	}
+
+	if sg.Params.ShortestPathArgs.To != nil && len(sg.Params.ShortestPathArgs.To.NeedsVar) > 0 {
+		toVar := sg.Params.ShortestPathArgs.To.NeedsVar[0].Name
+		uidVar, ok := mp[toVar]
+		if !ok {
+			return errors.Errorf("value of to var(%s) should have already been populated",
+				toVar)
+		}
+		if uidVar.Uids != nil {
+			if len(uidVar.Uids.Uids) > 1 {
+				return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
+			}
+			sg.Params.To = uidVar.Uids.Uids[0]
+		}
+	}
+	return nil
+}
+
 func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if sg.Params.Alias == "shortest" {
-		if sg.Params.ShortestPathArgs.From != nil && len(sg.Params.ShortestPathArgs.From.NeedsVar) > 0 {
-			fromVar := sg.Params.ShortestPathArgs.From.NeedsVar[0].Name
-			uidVar, ok := mp[fromVar]
-			if !ok {
-				return errors.Errorf("value of from var(%s) should have already been populated",
-					fromVar)
-			}
-			if uidVar.Uids != nil {
-				if len(uidVar.Uids.Uids) > 1 {
-					return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
-				}
-				sg.Params.From = uidVar.Uids.Uids[0]
-			}
-		}
-
-		if sg.Params.ShortestPathArgs.To != nil && len(sg.Params.ShortestPathArgs.To.NeedsVar) > 0 {
-			toVar := sg.Params.ShortestPathArgs.To.NeedsVar[0].Name
-			uidVar, ok := mp[toVar]
-			if !ok {
-				return errors.Errorf("value of to var(%s) should have already been populated",
-					toVar)
-			}
-			if uidVar.Uids != nil {
-				if len(uidVar.Uids.Uids) > 1 {
-					return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
-				}
-				sg.Params.To = uidVar.Uids.Uids[0]
-			}
-			fmt.Println("to: ", sg.Params.To)
+		if err := sg.fillShortestPathVars(mp); err != nil {
+			return err
 		}
 	}
 

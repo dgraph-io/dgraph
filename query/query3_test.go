@@ -583,6 +583,21 @@ func TestShortestPathWithUidVariableError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestShortestPathWithUidVariableNoMatch(t *testing.T) {
+	query := `
+	{
+		a as var(func: eq(name, "blah blah"))
+		b as var(func: eq(name, "foo bar"))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{}}`, js)
+}
+
 func TestFacetVarRetrieval(t *testing.T) {
 
 	query := `

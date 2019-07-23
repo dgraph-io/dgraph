@@ -430,6 +430,9 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
+	if sg.Params.From == 0 || sg.Params.To == 0 {
+		return nil, nil
+	}
 	numPaths := sg.Params.numPaths
 	if numPaths == 0 {
 		// Return 1 path by default.
