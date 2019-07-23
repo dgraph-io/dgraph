@@ -1097,6 +1097,21 @@ func TestParseShortestPathWithVariables(t *testing.T) {
 	require.Equal(t, 1, len(res.Query[0].ShortestPathArgs.To.NeedsVar))
 }
 
+func TestParseShortestPathWithUidVars(t *testing.T) {
+	query := `{
+		a as var(func: uid(0x01))
+		b as var(func: uid(0x02))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+
+	}`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func TestParseMultipleQueries(t *testing.T) {
 	query := `
 	{

@@ -659,6 +659,16 @@ func (gq *GraphQuery) collectVars(v *Vars) {
 	if gq.MathExp != nil {
 		gq.MathExp.collectVars(v)
 	}
+	if gq.ShortestPathArgs.From != nil && len(gq.ShortestPathArgs.From.NeedsVar) > 0 {
+		for _, uidVar := range gq.ShortestPathArgs.From.NeedsVar {
+			v.Needs = append(v.Needs, uidVar.Name)
+		}
+	}
+	if gq.ShortestPathArgs.To != nil && len(gq.ShortestPathArgs.To.NeedsVar) > 0 {
+		for _, uidVar := range gq.ShortestPathArgs.To.NeedsVar {
+			v.Needs = append(v.Needs, uidVar.Name)
+		}
+	}
 }
 
 func (f *MathTree) collectVars(v *Vars) {
