@@ -77,6 +77,10 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
 
+func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
+	return txn.cache.GetFromDelta(key)
+}
+
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()

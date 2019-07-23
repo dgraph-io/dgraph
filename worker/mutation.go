@@ -77,7 +77,28 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 
 	t := time.Now()
 	key := x.DataKey(edge.Attr, edge.Entity)
-	plist, err := txn.Get(key)
+
+	var fn func(key []byte) (*posting.List, error)
+
+	switch {
+	case len(su.GetTokenizer()) > 0 || su.GetCount():
+		// Any index or count index.
+		fn = txn.Get
+	case su.GetValueType() == pb.Posting_UID && !su.GetList():
+		// Single UID, not a list.
+		fn = txn.Get
+	case edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star:
+		// Delete all. To keep things simple, don't worry about whether indexed or not.
+		fn = txn.Get
+	default:
+		// Reverse index doesn't need the posting list to be read. We already covered count index,
+		// single uid and delete all above.
+		// Values, whether single or list, don't need to read.
+		// Uid list doesn't need to read.
+		fn = txn.GetFromDelta
+	}
+	plist, err := fn(key)
+
 	if dur := time.Since(t); dur > time.Millisecond {
 		if span := otrace.FromContext(ctx); span != nil {
 			span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-get", true)},
