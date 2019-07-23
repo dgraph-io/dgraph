@@ -207,8 +207,11 @@ func (lc *LocalCache) getNoStore(key string) *List {
 	return nil
 }
 
-// TODO(martinmr): add documentation.
-func (lc *LocalCache) Set(key string, updated *List) *List {
+// SetIfAbsent adds the list for the specified key to the cache. If a list for the same
+// key already exists, the cache will not be modified and the existing list
+// will be returned instead. This behavior is meant to prevent the goroutines
+// using the cache from ending up with an orphaned version of a list.
+func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
 	if pl, ok := lc.plists[key]; ok {
@@ -239,7 +242,7 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
-	return lc.Set(skey, pl), nil
+	return lc.SetIfAbsent(skey, pl), nil
 }
 
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
