@@ -75,11 +75,14 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 		return err
 	}
 
-	t := time.Now()
 	key := x.DataKey(edge.Attr, edge.Entity)
-
+	// The following is a performance optimization which allows us to not read a posting list from
+	// disk. We calculate this based on how AddMutationWithIndex works. General idea is that if
+	// we're not using the read posting list, we don't need to retrieve it. We need posting list if
+	// we're doing indexing or count index or enforcing single UID, etc. In other cases, we can just
+	// create a posting list facade in memory and use it to store the delta in Badger. Later, Rollup
+	// operation would consolidate all these deltas into a posting list.
 	var fn func(key []byte) (*posting.List, error)
-
 	switch {
 	case len(su.GetTokenizer()) > 0 || su.GetCount():
 		// Any index or count index.
@@ -97,8 +100,9 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 		// Uid list doesn't need to read.
 		fn = txn.GetFromDelta
 	}
-	plist, err := fn(key)
 
+	t := time.Now()
+	plist, err := fn(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if span := otrace.FromContext(ctx); span != nil {
 			span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-get", true)},
@@ -108,11 +112,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if err != nil {
 		return err
 	}
-
-	if err = plist.AddMutationWithIndex(ctx, edge, txn); err != nil {
-		return err // abort applying the rest of them.
-	}
-	return nil
+	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
 // This is serialized with mutations, called after applied watermarks catch up
