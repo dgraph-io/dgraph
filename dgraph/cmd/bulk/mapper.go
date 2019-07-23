@@ -41,7 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
-	"github.com/gogo/protobuf/proto"
 )
 
 type mapper struct {
@@ -52,8 +51,10 @@ type mapper struct {
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	entriesBuf []byte
-	mu         sync.Mutex // Allow only 1 write per shard at a time.
+	//entriesBuf []byte
+	entries     []*pb.MapEntry
+	encodedSize uint64
+	mu          sync.Mutex // Allow only 1 write per shard at a time.
 }
 
 func newMapper(st *state) *mapper {
@@ -78,26 +79,14 @@ func less(lhs, rhs *pb.MapEntry) bool {
 	return lhsUID < rhsUID
 }
 
-func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
+func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {
 	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
-
-	buf := entriesBuf
-	var entries []*pb.MapEntry
-	for len(buf) > 0 {
-		sz, n := binary.Uvarint(buf)
-		x.AssertTrue(n > 0)
-		buf = buf[n:]
-		me := new(pb.MapEntry)
-		x.Check(proto.Unmarshal(buf[:sz], me))
-		buf = buf[sz:]
-		entries = append(entries, me)
-	}
 
 	sort.Slice(entries, func(i, j int) bool {
 		return less(entries[i], entries[j])
 	})
 
-	buf = entriesBuf
+	buf := make([]byte, 0, encodedSize)
 	for _, me := range entries {
 		n := binary.PutUvarint(buf, uint64(me.Size()))
 		buf = buf[n:]
@@ -105,7 +94,6 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 		x.Check(err)
 		buf = buf[n:]
 	}
-	x.AssertTrue(len(buf) == 0)
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
@@ -115,7 +103,7 @@ func (m *mapper) writeMapEntriesToFile(entriesBuf []byte, shardIdx int) {
 		fmt.Sprintf("%06d.map", fileNum),
 	)
 	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	x.Check(x.WriteFileSync(filename, entriesBuf, 0644))
+	x.Check(x.WriteFileSync(filename, buf, 0644))
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
@@ -147,10 +135,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 			for i := range m.shards {
 				sh := &m.shards[i]
-				if len(sh.entriesBuf) >= int(m.opt.MapBufSize) {
+				if sh.encodedSize >= m.opt.MapBufSize {
 					sh.mu.Lock() // One write at a time.
-					go m.writeMapEntriesToFile(sh.entriesBuf, i)
-					sh.entriesBuf = make([]byte, 0, m.opt.MapBufSize*11/10)
+					go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
 				}
 			}
 		}
@@ -158,9 +145,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 
 	for i := range m.shards {
 		sh := &m.shards[i]
-		if len(sh.entriesBuf) > 0 {
+		if len(sh.entries) > 0 {
 			sh.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(sh.entriesBuf, i)
+			m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
 		}
 		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
@@ -180,8 +167,8 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	sh := &m.shards[shard]
 
 	var err error
-	sh.entriesBuf = x.AppendUvarint(sh.entriesBuf, uint64(me.Size()))
-	sh.entriesBuf, err = x.AppendProtoMsg(sh.entriesBuf, me)
+	sh.entries = append(sh.entries, me)
+	sh.encodedSize += binary.MaxVarintLen64 + uint64(me.Size())
 	x.Check(err)
 }
 
