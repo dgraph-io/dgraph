@@ -30,11 +30,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgo/y"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -407,17 +405,14 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var response map[string]interface{}
-	if abort {
-		response, err = handleAbort(startTs)
-	} else {
-		// Keys are sent as an array in the body.
-		reqText := readRequest(w, r)
-		if reqText == nil {
-			return
-		}
 
-		response, err = handleCommit(startTs, reqText)
+	// Keys are sent as an array in the body.
+	reqText := readRequest(w, r)
+	if reqText == nil {
+		return
 	}
+	response, err = handleCommitOrAbort(startTs, reqText, abort)
+
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -432,29 +427,10 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = writeResponse(w, r, js)
 }
 
-func handleAbort(startTs uint64) (map[string]interface{}, error) {
+func handleCommitOrAbort(startTs uint64, reqText []byte, abort bool) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
-		Aborted: true,
-	}
-
-	_, err := worker.CommitOverNetwork(context.Background(), tc)
-	switch err {
-	case y.ErrAborted:
-		return map[string]interface{}{
-			"code":    x.Success,
-			"message": "Done",
-		}, nil
-	case nil:
-		return nil, errors.Errorf("transaction could not be aborted")
-	default:
-		return nil, err
-	}
-}
-
-func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
-	tc := &api.TxnContext{
-		StartTs: startTs,
+		Aborted: abort,
 	}
 
 	var reqList []string
@@ -475,14 +451,14 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 		tc.Preds = reqMap["preds"]
 	}
 
-	cts, err := worker.CommitOverNetwork(context.Background(), tc)
+	tctx, err := (&edgraph.Server{}).CommitOrAbort(context.Background(), tc)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &api.Assigned{}
 	resp.Context = tc
-	resp.Context.CommitTs = cts
+	resp.Context.CommitTs = tctx.CommitTs
 	e := query.Extensions{
 		Txn: resp.Context,
 	}

@@ -847,6 +847,11 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	commitTs, err := worker.CommitOverNetwork(ctx, tc)
 	if err == y.ErrAborted {
 		tctx.Aborted = true
+		if tc.Aborted {
+			// if the intention is to abort the transaction,
+			// then we should treat the y.ErrAborted not as an error
+			return tctx, nil
+		}
 		return tctx, status.Errorf(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs
