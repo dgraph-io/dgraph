@@ -92,6 +92,10 @@ type RecurseArgs struct {
 }
 
 type ShortestPathArgs struct {
+	// From, To can have a uid or a uid function as the argument.
+	// 1. from: 0x01
+	// 2. from: uid(0x01)
+	// 3. from: uid(p) // a variable
 	From *Function
 	To   *Function
 }
@@ -659,15 +663,14 @@ func (gq *GraphQuery) collectVars(v *Vars) {
 	if gq.MathExp != nil {
 		gq.MathExp.collectVars(v)
 	}
-	if gq.ShortestPathArgs.From != nil && len(gq.ShortestPathArgs.From.NeedsVar) > 0 {
-		for _, uidVar := range gq.ShortestPathArgs.From.NeedsVar {
-			v.Needs = append(v.Needs, uidVar.Name)
-		}
+
+	shortestPathFrom := gq.ShortestPathArgs.From
+	if shortestPathFrom != nil && len(shortestPathFrom.NeedsVar) > 0 {
+		v.Needs = append(v.Needs, shortestPathFrom.NeedsVar[0].Name)
 	}
-	if gq.ShortestPathArgs.To != nil && len(gq.ShortestPathArgs.To.NeedsVar) > 0 {
-		for _, uidVar := range gq.ShortestPathArgs.To.NeedsVar {
-			v.Needs = append(v.Needs, uidVar.Name)
-		}
+	shortestPathTo := gq.ShortestPathArgs.To
+	if shortestPathTo != nil && len(shortestPathTo.NeedsVar) > 0 {
+		v.Needs = append(v.Needs, shortestPathTo.NeedsVar[0].Name)
 	}
 }
 
@@ -2430,48 +2433,48 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 
 			fn := &Function{}
-			// from, to can have a uid or a uid function as the argument.
-			// 1. from: 0x01
-			// 2. from: uid(0x01)
-			// 3. from: uid(p) // a variable
 			peekIt, err := it.Peek(1)
 			if err != nil {
 				return nil, item.Errorf("Invalid query")
 			}
 
-			if peekIt[0].Val != uid {
-				// This means its not a uid function, so it has to be an actual uid.
-				it.Next()
-				item := it.Item()
-				val := collectName(it, item.Val)
-				uid, err := strconv.ParseUint(val, 0, 64)
-				switch e := err.(type) {
-				case nil:
-					fn.UID = append(fn.UID, uid)
-				case *strconv.NumError:
-					if e.Err == strconv.ErrRange {
-						return nil, item.Errorf("The uid value %q is too large.", val)
-					}
-				}
+			assignShortestPathFn := func(fn *Function, key string) {
 				if key == "from" {
 					gq.ShortestPathArgs.From = fn
 				} else {
 					gq.ShortestPathArgs.To = fn
 				}
+			}
+
+			if peekIt[0].Val == uid {
+				gen, err := parseFunction(it, gq)
+				if err != nil {
+					return gq, err
+				}
+				fn.NeedsVar = gen.NeedsVar
+				fn.Name = gen.Name
+				assignShortestPathFn(fn, key)
 				continue
 			}
 
-			gen, err := parseFunction(it, gq)
-			if err != nil {
-				return gq, err
+			// This means its not a uid function, so it has to be an actual uid.
+			it.Next()
+			item := it.Item()
+			val := collectName(it, item.Val)
+			uid, err := strconv.ParseUint(val, 0, 64)
+			switch e := err.(type) {
+			case nil:
+				fn.UID = append(fn.UID, uid)
+			case *strconv.NumError:
+				if e.Err == strconv.ErrRange {
+					return nil, item.Errorf("The uid value %q is too large.", val)
+				}
+				return nil,
+					item.Errorf("from/to in shortest path can only accept uid function or an uid. Got: %s",
+						val)
 			}
-			fn.NeedsVar = gen.NeedsVar
-			fn.Name = gen.Name
-			if key == "from" {
-				gq.ShortestPathArgs.From = fn
-			} else {
-				gq.ShortestPathArgs.To = fn
-			}
+			assignShortestPathFn(fn, key)
+
 		default:
 			var val string
 			if !it.Next() {
