@@ -262,7 +262,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "Alice:string @reverse @count @lang @upsert . \n",
+			expected: "<Alice>:string @reverse @count @lang @upsert . \n",
 		},
 		{
 			skv: &skv{

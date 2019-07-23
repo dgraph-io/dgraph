@@ -156,13 +156,9 @@ func toRDF(pl *posting.List, prefix string, readTs uint64) (*bpb.KVList, error) 
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	if strings.ContainsRune(attr, ':') {
-		buf.WriteRune('<')
-		buf.WriteString(attr)
-		buf.WriteRune('>')
-	} else {
-		buf.WriteString(attr)
-	}
+	buf.WriteRune('<')
+	buf.WriteString(attr)
+	buf.WriteRune('>')
 	buf.WriteByte(':')
 	if update.List {
 		buf.WriteRune('[')
