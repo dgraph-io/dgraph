@@ -90,8 +90,8 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	case su.GetValueType() == pb.Posting_UID && !su.GetList():
 		// Single UID, not a list.
 		fn = txn.Get
-	case edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star:
-		// Delete all. To keep things simple, don't worry about whether indexed or not.
+	case edge.Op == pb.DirectedEdge_DEL:
+		// Covers various delete cases to keep things simple.
 		fn = txn.Get
 	default:
 		// Reverse index doesn't need the posting list to be read. We already covered count index,
