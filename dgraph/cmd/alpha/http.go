@@ -440,13 +440,11 @@ func handleCommitOrAbort(startTs uint64, reqText []byte, abort bool) (map[string
 	}
 
 	var reqMap map[string][]string
-	if err := json.Unmarshal(reqText, &reqMap); err != nil && !useList {
-		return nil, err
-	}
+	err := json.Unmarshal(reqText, &reqMap)
 
 	if useList {
 		tc.Keys = reqList
-	} else {
+	} else if err != nil {
 		tc.Keys = reqMap["keys"]
 		tc.Preds = reqMap["preds"]
 	}
