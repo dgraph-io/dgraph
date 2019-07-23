@@ -727,7 +727,11 @@ func (n *node) Run() {
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
-	ticker := time.NewTicker(20 * time.Millisecond)
+	// Before we used to have 20ms ticks, but they would overload the Raft tick channel, causing
+	// "tick missed to fire" logs. Etcd uses 100ms and they haven't seen those issues.
+	// Additionally, using 100ms for ticks does not cause proposals to slow down, because they get
+	// sent out asap and don't rely on ticks. So, setting this to 100ms instead of 20ms is a NOOP.
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	done := make(chan struct{})

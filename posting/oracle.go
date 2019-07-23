@@ -84,7 +84,7 @@ func (txn *Txn) Update() {
 
 // Store is used by tests.
 func (txn *Txn) Store(pl *List) *List {
-	return txn.cache.Set(string(pl.key), pl)
+	return txn.cache.SetIfAbsent(string(pl.key), pl)
 }
 
 type oracle struct {
