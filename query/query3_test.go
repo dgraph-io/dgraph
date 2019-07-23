@@ -535,6 +535,22 @@ func TestShortestPathPassword(t *testing.T) {
 			"me":[{"name":"Michonne"},{"name":"Andrea"}]}}`, js)
 }
 
+func TestShortestPathWithUidVariable(t *testing.T) {
+	query := `
+	{
+		a as var(func: uid(0x01))
+		b as var(func: uid(31))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"_path_":[{"uid":"0x1", "_weight_": 1, "friend":{"uid":"0x1f"}}]}}`, js)
+}
+
 func TestFacetVarRetrieval(t *testing.T) {
 
 	query := `
