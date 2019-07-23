@@ -275,7 +275,10 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(err.Error()))
+		_, err = w.Write([]byte(err.Error()))
+		if err != nil {
+			glog.V(2).Infof("Error while writing health check response: %v", err)
+		}
 		return
 	}
 
