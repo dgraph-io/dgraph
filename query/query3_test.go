@@ -551,6 +551,38 @@ func TestShortestPathWithUidVariable(t *testing.T) {
 		`{"data": {"_path_":[{"uid":"0x1", "_weight_": 1, "friend":{"uid":"0x1f"}}]}}`, js)
 }
 
+func TestShortestPathWithUidVariableAndFunc(t *testing.T) {
+	query := `
+	{
+		a as var(func: eq(name, "Michonne"))
+		b as var(func: eq(name, "Andrea"))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"_path_":[{"uid":"0x1", "_weight_": 1, "friend":{"uid":"0x1f"}}]}}`, js)
+}
+
+func TestShortestPathWithUidVariableError(t *testing.T) {
+	query := `
+	{
+		a as var(func: eq(name, "Alice"))
+		b as var(func: eq(name, "Andrea"))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+	}`
+
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+}
+
 func TestFacetVarRetrieval(t *testing.T) {
 
 	query := `
@@ -696,6 +728,30 @@ func TestShortestPath_filter2(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{"data": { "me": []}}`, js)
+}
+
+func TestTwoShortestPathVariable(t *testing.T) {
+
+	query := `
+		{
+			a as var(func: uid(1))
+			b as var(func: uid(1002))
+
+			A as shortest(from: uid(a), to: uid(b), numpaths: 2) {
+				path
+			}
+
+			me(func: uid(A)) {
+				name
+			}
+		}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t,
+		`{"data": {"_path_":[
+			{"uid":"0x1","_weight_":3,"path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3ea"}}}},
+			{"uid":"0x1","_weight_":4,"path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3e9","path":{"uid":"0x3ea"}}}}}],
+		"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}}`,
+		js)
 }
 
 func TestUseVarsFilterMultiId(t *testing.T) {
