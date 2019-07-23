@@ -53,21 +53,22 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	Order        []*pb.Order
-	Children     []*GraphQuery
-	Filter       *FilterTree
-	MathExp      *MathTree
-	Normalize    bool
-	Recurse      bool
-	RecurseArgs  RecurseArgs
-	Cascade      bool
-	IgnoreReflex bool
-	Facets       *pb.FacetParams
-	FacetsFilter *FilterTree
-	GroupbyAttrs []GroupByAttr
-	FacetVar     map[string]string
-	FacetOrder   string
-	FacetDesc    bool
+	Order            []*pb.Order
+	Children         []*GraphQuery
+	Filter           *FilterTree
+	MathExp          *MathTree
+	Normalize        bool
+	Recurse          bool
+	RecurseArgs      RecurseArgs
+	ShortestPathArgs ShortestPathArgs
+	Cascade          bool
+	IgnoreReflex     bool
+	Facets           *pb.FacetParams
+	FacetsFilter     *FilterTree
+	GroupbyAttrs     []GroupByAttr
+	FacetVar         map[string]string
+	FacetOrder       string
+	FacetDesc        bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -88,6 +89,11 @@ type GraphQuery struct {
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
+}
+
+type ShortestPathArgs struct {
+	From *Function
+	To   *Function
 }
 
 // GroupByAttr stores the arguments needed to process the @groupby directive.
@@ -2365,7 +2371,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
-			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 {
+			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 &&
+				gq.ShortestPathArgs.From == nil && gq.ShortestPathArgs.To == nil {
 				// Used to do aggregation at root which would be fetched in another block.
 				gq.IsEmpty = true
 			}
@@ -2392,7 +2399,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, item.Errorf("Expecting a colon. Got: %v", item)
 		}
 
-		if key == "func" {
+		switch key {
+		case "func":
 			// Store the generator function.
 			if gq.Func != nil {
 				return gq, item.Errorf("Only one function allowed at root")
@@ -2406,7 +2414,55 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			gq.Func = gen
 			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
-		} else {
+		case "from", "to":
+			if gq.Alias != "shortest" {
+				return gq, item.Errorf("from/to only allowed for shortest path queries")
+			}
+
+			fn := &Function{}
+			// from, to can have a uid or a uid function as the argument.
+			// 1. from: 0x01
+			// 2. from: uid(0x01)
+			// 3. from: uid(p) // a variable
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return nil, item.Errorf("Invalid query")
+			}
+
+			if peekIt[0].Val != uid {
+				// This means its not a uid function, so it has to be an actual uid.
+				it.Next()
+				item := it.Item()
+				val := collectName(it, item.Val)
+				uid, err := strconv.ParseUint(val, 0, 64)
+				switch e := err.(type) {
+				case nil:
+					fn.UID = append(fn.UID, uid)
+				case *strconv.NumError:
+					if e.Err == strconv.ErrRange {
+						return nil, item.Errorf("The uid value %q is too large.", val)
+					}
+				}
+				if key == "from" {
+					gq.ShortestPathArgs.From = fn
+				} else {
+					gq.ShortestPathArgs.To = fn
+				}
+				continue
+			}
+
+			gen, err := parseFunction(it, gq)
+			if err != nil {
+				return gq, err
+			}
+			fn.NeedsVar = gen.NeedsVar
+			fn.Name = gen.Name
+			if key == "from" {
+				gq.ShortestPathArgs.From = fn
+			} else {
+				gq.ShortestPathArgs.To = fn
+			}
+		default:
 			var val string
 			if !it.Next() {
 				return nil, it.Errorf("Invalid query")

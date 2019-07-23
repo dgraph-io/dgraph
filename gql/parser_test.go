@@ -1071,11 +1071,30 @@ func TestParseShortestPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "0x0a", res.Query[0].Args["from"])
-	require.Equal(t, "0x0b", res.Query[0].Args["to"])
+	require.Equal(t, uint64(0xa), res.Query[0].ShortestPathArgs.From.UID[0])
+	require.Equal(t, uint64(0xb), res.Query[0].ShortestPathArgs.To.UID[0])
 	require.Equal(t, "3", res.Query[0].Args["numpaths"])
 	require.Equal(t, "3", res.Query[0].Args["minweight"])
 	require.Equal(t, "6", res.Query[0].Args["maxweight"])
+}
+
+func TestParseShortestPathWithVariables(t *testing.T) {
+	query := `
+	{
+		shortest(from: uid(p), to: uid(q)) {
+			friends
+			name
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0].ShortestPathArgs.From)
+	require.Equal(t, 1, len(res.Query[0].ShortestPathArgs.From.NeedsVar))
+	require.Equal(t, "p", res.Query[0].ShortestPathArgs.From.NeedsVar[0].Name)
+	require.Equal(t, "uid", res.Query[0].ShortestPathArgs.From.Name)
+	require.NotNil(t, res.Query[0].ShortestPathArgs.To)
+	require.Equal(t, 1, len(res.Query[0].ShortestPathArgs.To.NeedsVar))
 }
 
 func TestParseMultipleQueries(t *testing.T) {
