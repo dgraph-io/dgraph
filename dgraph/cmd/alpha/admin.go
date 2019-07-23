@@ -48,9 +48,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request, method string) bool {
 
 func drainingHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case http.MethodPut:
-		fallthrough
-	case http.MethodPost:
+	case http.MethodPut, http.MethodPost:
 		enableStr := r.URL.Query().Get("enable")
 
 		enable, err := strconv.ParseBool(enableStr)

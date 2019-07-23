@@ -427,7 +427,8 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = writeResponse(w, r, js)
 }
 
-func handleCommitOrAbort(startTs uint64, reqText []byte, abort bool) (map[string]interface{}, error) {
+func handleCommitOrAbort(startTs uint64, reqText []byte,
+	abort bool) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
 		StartTs: startTs,
 		Aborted: abort,

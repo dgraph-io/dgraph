@@ -453,6 +453,41 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestAbortTxn(t *testing.T) {
+	require.NoError(t, dropAll())
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+	  }
+	}
+	`
+
+	_, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, 0)
+	require.NoError(t, err, "the mutation should have succeeded")
+
+	// abort the transaction
+	url := fmt.Sprintf("%s/commit?startTs=%d&abort=true", addr, mts)
+	req, err := http.NewRequest("POST", url, nil)
+	require.NoError(t, err)
+	_, _, err = runRequest(req)
+	require.NoError(t, err)
+
+	// verify that the result does not show up in a subsequent query
+	q1 := `
+	{
+	  names(func: has(name), orderasc: name) {
+	    name
+	  }
+	}
+	`
+
+	r1 := `{"data":{"names":[]}}`
+	data, _, err := queryWithGz(q1, "application/graphql+-", "false", "", false, false)
+	require.NoError(t, err)
+	require.Equal(t, r1, data)
+}
+
 func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	req, err := http.NewRequest("PUT", "/alter", bytes.NewBufferString(
 		`{"dropall":true}`, // "dropall" is spelt incorrect - should be "drop_all"

@@ -46,6 +46,7 @@ func TestSystem(t *testing.T) {
 		}
 	}
 
+	t.Run("abort transaction", wrap(AbortTxnTest))
 	t.Run("n-quad mutation", wrap(NQuadMutationTest))
 	t.Run("list with languages", wrap(ListWithLanguagesTest))
 	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
@@ -150,6 +151,30 @@ func ListWithLanguagesTest(t *testing.T, c *dgo.Dgraph) {
 		Schema: `pred: [string] @lang .`,
 	})
 	require.Error(t, err)
+}
+
+func AbortTxnTest(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	txn := c.NewTxn()
+	txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+			_:breakfast <name> "" .`)})
+
+	err := txn.Discard(ctx)
+	require.NoError(t, err, "The abort request should have succeeded")
+
+	// after aborting the transaction, the mutation result should have been discarded
+	const breakfastQuery = `
+	{
+		q(func: has(name)) {
+			name
+		}
+	}`
+	queryTxn := c.NewReadOnlyTxn()
+	resp, err := queryTxn.Query(ctx, breakfastQuery)
+	require.NoError(t, err)
+	z.CompareJSON(t, `{"q": []}`, string(resp.Json))
 }
 
 func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
