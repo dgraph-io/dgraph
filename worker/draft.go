@@ -757,7 +757,6 @@ func (n *node) Run() {
 			// start an election process. And that election process would just continue to happen
 			// indefinitely because checkpoints and snapshots are being calculated indefinitely.
 		case <-ticker.C:
-			glog.Infof("Called n.Raft().Tick().\n")
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
