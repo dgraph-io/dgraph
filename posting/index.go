@@ -940,7 +940,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
-		txn.cache.Set(string(pl.key), pl)
+		txn.cache.SetIfAbsent(string(pl.key), pl)
 		if err := pl.addMutation(ctx, txn, t); err != nil {
 			return err
 		}
