@@ -727,7 +727,7 @@ func (n *node) Run() {
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	done := make(chan struct{})
