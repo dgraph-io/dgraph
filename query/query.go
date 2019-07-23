@@ -134,6 +134,7 @@ type params struct {
 	Cascade      bool
 	IgnoreReflex bool
 
+	// From and To are uids of the nodes between which we run the shortest path query.
 	From           uint64
 	To             uint64
 	Facet          *pb.FacetParams
@@ -858,22 +859,6 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			args.numPaths = int(numPaths)
 		}
 
-		if v, ok := gq.Args["from"]; ok {
-			from, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			args.From = uint64(from)
-		}
-
-		if v, ok := gq.Args["to"]; ok {
-			to, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			args.To = uint64(to)
-		}
-
 		if v, ok := gq.Args["maxweight"]; ok {
 			maxWeight, err := strconv.ParseFloat(v, 64)
 			if err != nil {
@@ -892,6 +877,18 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			args.MinWeight = minWeight
 		} else if !ok {
 			args.MinWeight = -math.MaxFloat64
+		}
+
+		if gq.ShortestPathArgs.From == nil || gq.ShortestPathArgs.To == nil {
+			return errors.Errorf("Unexpected error: from/to can't be nil for shortest path")
+		}
+		// TODO - Add validation, either length of UID slice should be greater than zero or
+		// NeedsVar.
+		if len(gq.ShortestPathArgs.From.UID) > 0 {
+			args.From = gq.ShortestPathArgs.From.UID[0]
+		}
+		if len(gq.ShortestPathArgs.To.UID) > 0 {
+			args.To = gq.ShortestPathArgs.To.UID[0]
 		}
 	}
 
