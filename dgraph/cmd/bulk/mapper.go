@@ -86,7 +86,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		return less(entries[i], entries[j])
 	})
 
-	buf := make([]byte, 0, encodedSize)
+	buf := make([]byte, encodedSize, encodedSize)
 	offset := 0
 	for _, me := range entries {
 		n := binary.PutUvarint(buf[offset:], uint64(me.Size()))
