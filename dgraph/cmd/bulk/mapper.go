@@ -87,13 +87,16 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	})
 
 	buf := make([]byte, 0, encodedSize)
+	offset := 0
 	for _, me := range entries {
-		n := binary.PutUvarint(buf, uint64(me.Size()))
-		buf = buf[n:]
-		n, err := me.MarshalTo(buf)
+		n := binary.PutUvarint(buf[offset:], uint64(me.Size()))
+		offset += n
+		n, err := me.MarshalTo(buf[offset:])
 		x.Check(err)
-		buf = buf[n:]
+		offset += n
 	}
+	// enlarge buf to include all the data
+	buf = buf[0:offset]
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(
