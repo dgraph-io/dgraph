@@ -51,7 +51,6 @@ type mapper struct {
 type shardState struct {
 	// Buffer up map entries until we have a sufficient amount, then sort and
 	// write them to file.
-	//entriesBuf []byte
 	entries     []*pb.MapEntry
 	encodedSize uint64
 	mu          sync.Mutex // Allow only 1 write per shard at a time.
@@ -86,7 +85,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		return less(entries[i], entries[j])
 	})
 
-	buf := make([]byte, encodedSize, encodedSize)
+	buf := make([]byte, encodedSize)
 	offset := 0
 	for _, me := range entries {
 		n := binary.PutUvarint(buf[offset:], uint64(me.Size()))
