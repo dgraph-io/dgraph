@@ -48,24 +48,33 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 					continue
 				}
 
+				var prefix, suffix string
+				if f.Type.Elem != nil {
+					prefix = "["
+					suffix = "]"
+				}
+
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object:
-					// TODO: still need to write [] ! and reverse in here
-					var typStr string
-
-					typStr = "uid"
-					if f.Type.Elem != nil {
-						typStr = "[" + typStr + "]"
-					}
+					typStr := fmt.Sprintf("%suid%s", prefix, suffix)
 
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", def.Name, f.Name, typStr)
 					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, typStr)
 				case ast.Scalar:
+					var typStr string
+					if f.Type.Elem != nil {
+						typStr = strings.ToLower(f.Type.Elem.Name())
+					} else {
+						typStr = strings.ToLower(f.Type.Name())
+					}
+
+					typStr = fmt.Sprintf("%s%s%s", prefix, typStr, suffix)
+
 					// TODO: indexes needed here
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
-						def.Name, f.Name, strings.ToLower(f.Type.Name()))
+						def.Name, f.Name, typStr)
 					fmt.Fprintf(&preds, "%s.%s: %s .\n",
-						def.Name, f.Name, strings.ToLower(f.Type.Name()))
+						def.Name, f.Name, typStr)
 				case ast.Enum:
 					fmt.Fprintf(&typeDef, "  %s.%s: string\n", def.Name, f.Name)
 					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)
@@ -73,19 +82,7 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 			}
 			fmt.Fprintf(&typeDef, "}\n")
 
-			// Why are we printing both typedefs and predicates ?
 			fmt.Fprintf(&schemaB, "%s%s\n", typeDef.String(), preds.String())
-
-		case ast.Scalar:
-			// nothing to do here?  There should only be known scalars, and that
-			// should have been checked by the validation.
-			// fmt.Printf("Got a scalar: %v %v\n", name, def)
-		case ast.Enum:
-			// ignore this? it's handled by the edges
-			// fmt.Printf("Got an enum: %v %v\n", name, def)
-		default:
-			// ignore anything else?
-			// fmt.Printf("Got something else: %v %v\n", name, def)
 		}
 	}
 
