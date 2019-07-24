@@ -1692,6 +1692,8 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 }
 
 func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
+	// The uidVar.Uids can be nil if the variable didn't return any uids. This would mean
+	// sg.Params.From or sg.Params.To is 0 and the query would return an empty result.
 	if sg.Params.ShortestPathArgs.From != nil && len(sg.Params.ShortestPathArgs.From.NeedsVar) > 0 {
 		fromVar := sg.Params.ShortestPathArgs.From.NeedsVar[0].Name
 		uidVar, ok := mp[fromVar]

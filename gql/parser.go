@@ -91,6 +91,7 @@ type RecurseArgs struct {
 	AllowLoop bool
 }
 
+// SHortestPathArgs stores the arguments needed to process the shortest path query.
 type ShortestPathArgs struct {
 	// From, To can have a uid or a uid function as the argument.
 	// 1. from: 0x01
@@ -2337,6 +2338,11 @@ func attrAndLang(attrData string) (attr string, langs []string) {
 	return
 }
 
+func isEmpty(gq *GraphQuery) bool {
+	return gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 &&
+		gq.ShortestPathArgs.From == nil && gq.ShortestPathArgs.To == nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2384,8 +2390,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
-			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 &&
-				gq.ShortestPathArgs.From == nil && gq.ShortestPathArgs.To == nil {
+			if isEmpty(gq) {
 				// Used to do aggregation at root which would be fetched in another block.
 				gq.IsEmpty = true
 			}
