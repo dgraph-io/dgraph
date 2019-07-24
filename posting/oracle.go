@@ -77,6 +77,11 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
 }
 
+// GetFromDelta retrieves the posting list from delta cache, not from Badger.
+func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
+	return txn.cache.GetFromDelta(key)
+}
+
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()

@@ -128,12 +128,14 @@ type params struct {
 	Langs      []string
 
 	// directives.
-	Normalize    bool
-	Recurse      bool
-	RecurseArgs  gql.RecurseArgs
-	Cascade      bool
-	IgnoreReflex bool
+	Normalize        bool
+	Recurse          bool
+	RecurseArgs      gql.RecurseArgs
+	ShortestPathArgs gql.ShortestPathArgs
+	Cascade          bool
+	IgnoreReflex     bool
 
+	// From and To are uids of the nodes between which we run the shortest path query.
 	From           uint64
 	To             uint64
 	Facet          *pb.FacetParams
@@ -858,22 +860,6 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			args.numPaths = int(numPaths)
 		}
 
-		if v, ok := gq.Args["from"]; ok {
-			from, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			args.From = uint64(from)
-		}
-
-		if v, ok := gq.Args["to"]; ok {
-			to, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			args.To = uint64(to)
-		}
-
 		if v, ok := gq.Args["maxweight"]; ok {
 			maxWeight, err := strconv.ParseFloat(v, 64)
 			if err != nil {
@@ -892,6 +878,16 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			args.MinWeight = minWeight
 		} else if !ok {
 			args.MinWeight = -math.MaxFloat64
+		}
+
+		if gq.ShortestPathArgs.From == nil || gq.ShortestPathArgs.To == nil {
+			return errors.Errorf("from/to can't be nil for shortest path")
+		}
+		if len(gq.ShortestPathArgs.From.UID) > 0 {
+			args.From = gq.ShortestPathArgs.From.UID[0]
+		}
+		if len(gq.ShortestPathArgs.To.UID) > 0 {
+			args.To = gq.ShortestPathArgs.To.UID[0]
 		}
 	}
 
@@ -961,23 +957,24 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		Alias:         gq.Alias,
-		Cascade:       gq.Cascade,
-		GetUid:        isDebug(ctx),
-		IgnoreReflex:  gq.IgnoreReflex,
-		IsEmpty:       gq.IsEmpty,
-		Langs:         gq.Langs,
-		NeedsVar:      append(gq.NeedsVar[:0:0], gq.NeedsVar...),
-		Normalize:     gq.Normalize,
-		Order:         gq.Order,
-		ParentVars:    make(map[string]varValue),
-		Recurse:       gq.Recurse,
-		RecurseArgs:   gq.RecurseArgs,
-		Var:           gq.Var,
-		groupbyAttrs:  gq.GroupbyAttrs,
-		isGroupBy:     gq.IsGroupby,
-		uidCount:      gq.UidCount,
-		uidCountAlias: gq.UidCountAlias,
+		Alias:            gq.Alias,
+		Cascade:          gq.Cascade,
+		GetUid:           isDebug(ctx),
+		IgnoreReflex:     gq.IgnoreReflex,
+		IsEmpty:          gq.IsEmpty,
+		Langs:            gq.Langs,
+		NeedsVar:         append(gq.NeedsVar[:0:0], gq.NeedsVar...),
+		Normalize:        gq.Normalize,
+		Order:            gq.Order,
+		ParentVars:       make(map[string]varValue),
+		Recurse:          gq.Recurse,
+		RecurseArgs:      gq.RecurseArgs,
+		ShortestPathArgs: gq.ShortestPathArgs,
+		Var:              gq.Var,
+		groupbyAttrs:     gq.GroupbyAttrs,
+		isGroupBy:        gq.IsGroupby,
+		uidCount:         gq.UidCount,
+		uidCountAlias:    gq.UidCountAlias,
 	}
 
 	for argk := range gq.Args {
@@ -1694,7 +1691,48 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	return nil
 }
 
+func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
+	// The uidVar.Uids can be nil if the variable didn't return any uids. This would mean
+	// sg.Params.From or sg.Params.To is 0 and the query would return an empty result.
+	if sg.Params.ShortestPathArgs.From != nil && len(sg.Params.ShortestPathArgs.From.NeedsVar) > 0 {
+		fromVar := sg.Params.ShortestPathArgs.From.NeedsVar[0].Name
+		uidVar, ok := mp[fromVar]
+		if !ok {
+			return errors.Errorf("value of from var(%s) should have already been populated",
+				fromVar)
+		}
+		if uidVar.Uids != nil {
+			if len(uidVar.Uids.Uids) > 1 {
+				return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
+			}
+			sg.Params.From = uidVar.Uids.Uids[0]
+		}
+	}
+
+	if sg.Params.ShortestPathArgs.To != nil && len(sg.Params.ShortestPathArgs.To.NeedsVar) > 0 {
+		toVar := sg.Params.ShortestPathArgs.To.NeedsVar[0].Name
+		uidVar, ok := mp[toVar]
+		if !ok {
+			return errors.Errorf("value of to var(%s) should have already been populated",
+				toVar)
+		}
+		if uidVar.Uids != nil {
+			if len(uidVar.Uids.Uids) > 1 {
+				return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
+			}
+			sg.Params.To = uidVar.Uids.Uids[0]
+		}
+	}
+	return nil
+}
+
 func (sg *SubGraph) fillVars(mp map[string]varValue) error {
+	if sg.Params.Alias == "shortest" {
+		if err := sg.fillShortestPathVars(mp); err != nil {
+			return err
+		}
+	}
+
 	var lists []*pb.List
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
