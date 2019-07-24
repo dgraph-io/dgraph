@@ -2446,7 +2446,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			assignShortestPathFn := func(fn *Function, key string) {
 				if key == "from" {
 					gq.ShortestPathArgs.From = fn
-				} else {
+				} else if key == "to" {
 					gq.ShortestPathArgs.To = fn
 				}
 			}
@@ -2475,8 +2475,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, item.Errorf("The uid value %q is too large.", val)
 				}
 				return nil,
-					item.Errorf("from/to in shortest path can only accept uid function or an uid. Got: %s",
-						val)
+					item.Errorf("from/to in shortest path can only accept uid function or an uid."+
+						" Got: %s", val)
 			}
 			assignShortestPathFn(fn, key)
 

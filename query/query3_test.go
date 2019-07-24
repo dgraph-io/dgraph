@@ -778,9 +778,11 @@ func TestTwoShortestPathVariable(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
 		`{"data": {"_path_":[
-			{"uid":"0x1","_weight_":3,"path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3ea"}}}},
-			{"uid":"0x1","_weight_":4,"path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3e9","path":{"uid":"0x3ea"}}}}}],
-		"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}}`,
+			{"uid":"0x1","_weight_":3,"path":{"uid":"0x1f","path":{"uid":"0x3e8",
+			"path":{"uid":"0x3ea"}}}}, {"uid":"0x1","_weight_":4,
+			"path":{"uid":"0x1f","path":{"uid":"0x3e8","path":{"uid":"0x3e9",
+			"path":{"uid":"0x3ea"}}}}}], "me":[{"name":"Michonne"},{"name":"Andrea"}
+			,{"name":"Alice"},{"name":"Matt"}]}}`,
 		js)
 }
 
