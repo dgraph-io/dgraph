@@ -88,7 +88,7 @@ if [[ $LOADER != none ]]; then
     trap "rm -f $VERSION_FILE" EXIT
     curl -LSs --head $SCHEMA_URL | awk 'toupper($0)~/^ETAG:/ {print "Schema:"$2}' >> $VERSION_FILE
     curl -LSs --head $DATA_URL | awk 'toupper($0)~/^ETAG:/ {print "Data:"$2}' >> $VERSION_FILE
-    diff -bi $VERSION_FILE queries/data-version || true
+    diff -bi $VERSION_FILE $QUERY_DIR/data-version || true
 fi
 
 Info "entering directory $SRCDIR"
