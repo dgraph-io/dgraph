@@ -211,16 +211,17 @@ func handleGeoType(val map[string]interface{}, nq *api.NQuad) (bool, error) {
 func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	var g geom.T
 	err := geojson.Unmarshal(b, &g)
-	if err == nil {
-		geo, err := types.ObjectValue(types.GeoID, g)
-		if err != nil {
-			return false, errors.Errorf("Couldn't convert value: %s to geo type", string(b))
-		}
-
-		nq.ObjectValue = geo
-		return true, nil
+	if err != nil {
+		return false, nil
 	}
-	return false, nil
+
+	geo, err := types.ObjectValue(types.GeoID, g)
+	if err != nil {
+		return false, errors.Errorf("Couldn't convert value: %s to geo type", string(b))
+	}
+
+	nq.ObjectValue = geo
+	return true, nil
 }
 
 // TODO - Abstract these parameters to a struct.
