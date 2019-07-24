@@ -53,21 +53,22 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	Order        []*pb.Order
-	Children     []*GraphQuery
-	Filter       *FilterTree
-	MathExp      *MathTree
-	Normalize    bool
-	Recurse      bool
-	RecurseArgs  RecurseArgs
-	Cascade      bool
-	IgnoreReflex bool
-	Facets       *pb.FacetParams
-	FacetsFilter *FilterTree
-	GroupbyAttrs []GroupByAttr
-	FacetVar     map[string]string
-	FacetOrder   string
-	FacetDesc    bool
+	Order            []*pb.Order
+	Children         []*GraphQuery
+	Filter           *FilterTree
+	MathExp          *MathTree
+	Normalize        bool
+	Recurse          bool
+	RecurseArgs      RecurseArgs
+	ShortestPathArgs ShortestPathArgs
+	Cascade          bool
+	IgnoreReflex     bool
+	Facets           *pb.FacetParams
+	FacetsFilter     *FilterTree
+	GroupbyAttrs     []GroupByAttr
+	FacetVar         map[string]string
+	FacetOrder       string
+	FacetDesc        bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -88,6 +89,16 @@ type GraphQuery struct {
 type RecurseArgs struct {
 	Depth     uint64
 	AllowLoop bool
+}
+
+// SHortestPathArgs stores the arguments needed to process the shortest path query.
+type ShortestPathArgs struct {
+	// From, To can have a uid or a uid function as the argument.
+	// 1. from: 0x01
+	// 2. from: uid(0x01)
+	// 3. from: uid(p) // a variable
+	From *Function
+	To   *Function
 }
 
 // GroupByAttr stores the arguments needed to process the @groupby directive.
@@ -652,6 +663,15 @@ func (gq *GraphQuery) collectVars(v *Vars) {
 	}
 	if gq.MathExp != nil {
 		gq.MathExp.collectVars(v)
+	}
+
+	shortestPathFrom := gq.ShortestPathArgs.From
+	if shortestPathFrom != nil && len(shortestPathFrom.NeedsVar) > 0 {
+		v.Needs = append(v.Needs, shortestPathFrom.NeedsVar[0].Name)
+	}
+	shortestPathTo := gq.ShortestPathArgs.To
+	if shortestPathTo != nil && len(shortestPathTo.NeedsVar) > 0 {
+		v.Needs = append(v.Needs, shortestPathTo.NeedsVar[0].Name)
 	}
 }
 
@@ -2318,6 +2338,11 @@ func attrAndLang(attrData string) (attr string, langs []string) {
 	return
 }
 
+func isEmpty(gq *GraphQuery) bool {
+	return gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 &&
+		gq.ShortestPathArgs.From == nil && gq.ShortestPathArgs.To == nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2365,7 +2390,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
-			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 {
+			if isEmpty(gq) {
 				// Used to do aggregation at root which would be fetched in another block.
 				gq.IsEmpty = true
 			}
@@ -2392,7 +2417,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, item.Errorf("Expecting a colon. Got: %v", item)
 		}
 
-		if key == "func" {
+		switch key {
+		case "func":
 			// Store the generator function.
 			if gq.Func != nil {
 				return gq, item.Errorf("Only one function allowed at root")
@@ -2406,7 +2432,55 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			gq.Func = gen
 			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
-		} else {
+		case "from", "to":
+			if gq.Alias != "shortest" {
+				return gq, item.Errorf("from/to only allowed for shortest path queries")
+			}
+
+			fn := &Function{}
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return nil, item.Errorf("Invalid query")
+			}
+
+			assignShortestPathFn := func(fn *Function, key string) {
+				if key == "from" {
+					gq.ShortestPathArgs.From = fn
+				} else if key == "to" {
+					gq.ShortestPathArgs.To = fn
+				}
+			}
+
+			if peekIt[0].Val == uid {
+				gen, err := parseFunction(it, gq)
+				if err != nil {
+					return gq, err
+				}
+				fn.NeedsVar = gen.NeedsVar
+				fn.Name = gen.Name
+				assignShortestPathFn(fn, key)
+				continue
+			}
+
+			// This means it's not a uid function, so it has to be an actual uid.
+			it.Next()
+			item := it.Item()
+			val := collectName(it, item.Val)
+			uid, err := strconv.ParseUint(val, 0, 64)
+			switch e := err.(type) {
+			case nil:
+				fn.UID = append(fn.UID, uid)
+			case *strconv.NumError:
+				if e.Err == strconv.ErrRange {
+					return nil, item.Errorf("The uid value %q is too large.", val)
+				}
+				return nil,
+					item.Errorf("from/to in shortest path can only accept uid function or an uid."+
+						" Got: %s", val)
+			}
+			assignShortestPathFn(fn, key)
+
+		default:
 			var val string
 			if !it.Next() {
 				return nil, it.Errorf("Invalid query")
