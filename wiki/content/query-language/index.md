@@ -2490,6 +2490,16 @@ schema(pred: [name, friend]) {
 }
 ```
 
+Types can also be queried. Below are some example queries.
+
+```
+schema(type: Movie) {}
+schema(type: [Person, Animal]) {}
+```
+
+Note that type queries do not contain anything between the curly brackets. The
+output will bee the entire definition of the requested types.
+
 ## Facets : Edge attributes
 
 Dgraph supports facets --- **key value pairs on edges** --- as an extension to RDF triples. That is, facets add properties to edges, rather than to nodes.
