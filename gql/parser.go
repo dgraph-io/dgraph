@@ -2462,7 +2462,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				continue
 			}
 
-			// This means its not a uid function, so it has to be an actual uid.
+			// This means it's not a uid function, so it has to be an actual uid.
 			it.Next()
 			item := it.Item()
 			val := collectName(it, item.Val)

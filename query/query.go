@@ -881,7 +881,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 
 		if gq.ShortestPathArgs.From == nil || gq.ShortestPathArgs.To == nil {
-			return errors.Errorf("Unexpected error: from/to can't be nil for shortest path")
+			return errors.Errorf("from/to can't be nil for shortest path")
 		}
 		if len(gq.ShortestPathArgs.From.UID) > 0 {
 			args.From = gq.ShortestPathArgs.From.UID[0]
