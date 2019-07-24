@@ -550,11 +550,11 @@ func genArgumentString(arg *ast.ArgumentDefinition) string {
 	return fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
 }
 
-func generateInputString(typ *ast.Definition) string {
+func genInputString(typ *ast.Definition) string {
 	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
 }
 
-func generateEnumString(typ *ast.Definition) string {
+func genEnumString(typ *ast.Definition) string {
 	var sch strings.Builder
 
 	sch.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
@@ -568,20 +568,57 @@ func generateEnumString(typ *ast.Definition) string {
 	return sch.String()
 }
 
-func generateObjectString(typ *ast.Definition) string {
+func genObjectString(typ *ast.Definition) string {
 	return fmt.Sprintf("type %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
 }
 
-func generateScalarString(typ *ast.Definition) string {
+func genScalarString(typ *ast.Definition) string {
 	var sch strings.Builder
 
 	sch.WriteString(fmt.Sprintf("scalar %s\n", typ.Name))
 	return sch.String()
 }
 
+func genDirectiveDefnString(dir *ast.DirectiveDefinition) string {
+	var args, locations []string
+
+	for _, arg := range dir.Arguments {
+		args = append(args, fmt.Sprintf("%s: %s", arg.Name, arg.Type.String()))
+	}
+	sort.Slice(args, func(i, j int) bool { return args[i] < args[j] })
+
+	for _, loc := range dir.Locations {
+		locations = append(locations, string(loc))
+	}
+	sort.Slice(locations, func(i, j int) bool { return locations[i] < locations[j] })
+
+	if len(args) == 0 {
+		return fmt.Sprintf(
+			"directive @%s on %s\n", dir.Name, strings.Join(locations, ","),
+		)
+	}
+
+	return fmt.Sprintf(
+		"directive @%s(%s) on %s\n", dir.Name, strings.Join(args, ","), strings.Join(locations, ","),
+	)
+}
+
+func genDirectivesDefnString(direcs map[string]*ast.DirectiveDefinition) string {
+	var sch strings.Builder
+	if direcs == nil || len(direcs) == 0 {
+		return ""
+	}
+
+	for _, dir := range direcs {
+		sch.WriteString(genDirectiveDefnString(dir))
+	}
+
+	return sch.String()
+}
+
 // Stringify returns entire schema in string format
 func Stringify(schema *ast.Schema) string {
-	var sch, object, scalar, input, query, mutation, enum strings.Builder
+	var sch, object, scalar, input, query, mutation, enum, direcDefn strings.Builder
 
 	if schema.Types == nil {
 		return ""
@@ -589,28 +626,34 @@ func Stringify(schema *ast.Schema) string {
 
 	for _, typ := range schema.Types {
 		if typ.Kind == ast.Object {
-			object.WriteString(generateObjectString(typ) + "\n")
+			object.WriteString(genObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Scalar {
-			scalar.WriteString(generateScalarString(typ))
+			scalar.WriteString(genScalarString(typ))
 		} else if typ.Kind == ast.InputObject {
-			input.WriteString(generateInputString(typ) + "\n")
+			input.WriteString(genInputString(typ) + "\n")
 		} else if typ.Kind == ast.Enum {
-			enum.WriteString(generateEnumString(typ) + "\n")
+			enum.WriteString(genEnumString(typ) + "\n")
 		}
 	}
 
 	if schema.Query != nil {
-		query.WriteString(generateObjectString(schema.Query))
+		query.WriteString(genObjectString(schema.Query))
 	}
 
 	if schema.Mutation != nil {
-		mutation.WriteString(generateObjectString(schema.Mutation))
+		mutation.WriteString(genObjectString(schema.Mutation))
+	}
+
+	if schema.Directives != nil {
+		direcDefn.WriteString(genDirectivesDefnString(schema.Directives))
 	}
 
 	sch.WriteString("#######################\n# Generated Types\n#######################\n")
 	sch.WriteString(object.String())
 	sch.WriteString("#######################\n# Scalar Definitions\n#######################\n")
 	sch.WriteString(scalar.String())
+	sch.WriteString("#######################\n# Directive Definitions\n#######################\n")
+	sch.WriteString(direcDefn.String())
 	sch.WriteString("#######################\n# Enum Definitions\n#######################\n")
 	sch.WriteString(enum.String())
 	sch.WriteString("#######################\n# Input Definitions\n#######################\n")

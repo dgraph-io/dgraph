@@ -1,15 +1,15 @@
 type Post {
-  id: ID!
+  postId: ID!
   title: String!
   text: String
-  author: Author! @hasInverse(field: "Author.posts")
+  author: Author!
   postType: PostType!
 }
 
 type Author {
   id: ID!
   name: String!
-  posts: [Post!]! @hasInverse(field: "Post.author")
+  posts: [Post!]!
   friends: [Author!]!
 }
 

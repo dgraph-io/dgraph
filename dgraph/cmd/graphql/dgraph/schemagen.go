@@ -36,7 +36,7 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 				def.Name == "Mutation" ||
 				((strings.HasPrefix(def.Name, "Add") ||
 					strings.HasPrefix(def.Name, "Delete") ||
-					strings.HasPrefix(def.Name, "Mutate")) &&
+					strings.HasPrefix(def.Name, "Update")) &&
 					strings.HasSuffix(def.Name, "Payload")) {
 				continue
 			}
@@ -51,17 +51,15 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object:
 					// TODO: still need to write [] ! and reverse in here
-					var typStr, direcStr string
+					var typStr string
 
 					typStr = "uid"
 					if f.Type.Elem != nil {
 						typStr = "[" + typStr + "]"
 					}
 
-					direcStr = genDirecStr(f)
-
-					fmt.Fprintf(&typeDef, "  %s.%s: %s %s\n", def.Name, f.Name, typStr, direcStr)
-					fmt.Fprintf(&preds, "%s.%s: %s %s .\n", def.Name, f.Name, typStr, direcStr)
+					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", def.Name, f.Name, typStr)
+					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, typStr)
 				case ast.Scalar:
 					// TODO: indexes needed here
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
@@ -92,16 +90,4 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 	}
 
 	return schemaB.String()
-}
-
-func genDirecStr(fld *ast.FieldDefinition) string {
-	var sch strings.Builder
-
-	for _, dir := range fld.Directives {
-		if dir.Name == "hasInverse" {
-			sch.WriteString("@reverse")
-		}
-	}
-
-	return sch.String()
 }
