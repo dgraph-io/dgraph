@@ -2497,8 +2497,8 @@ schema(type: Movie) {}
 schema(type: [Person, Animal]) {}
 ```
 
-Note that type queries do not contain anything between the curly brackets. The
-output will bee the entire definition of the requested types.
+Note that type queries do not contain anything between the curly braces. The
+output will be the entire definition of the requested types.
 
 ## Facets : Edge attributes
 
