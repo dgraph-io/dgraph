@@ -1,0 +1,42 @@
+schemas:
+  -
+    name: ""
+    input: |
+      type Post {
+        postId: ID!
+        title: String!
+        text: String
+        author: Author!
+        postType: PostType!
+      }
+      type Author {
+        id: ID!
+        name: String!
+        posts: [Post!]!
+        friends: [Author!]!
+      }
+      enum PostType {
+        Statement
+        Question
+        Answer
+      }
+    output: |
+      type Author {
+        Author.name: string
+        Author.posts: [uid]
+        Author.friends: [uid]
+      }
+      Author.name: string .
+      Author.posts: [uid] .
+      Author.friends: [uid] .
+
+      type Post {
+        Post.title: string
+        Post.text: string
+        Post.author: uid
+        Post.postType: string
+      }
+      Post.title: string .
+      Post.text: string .
+      Post.author: uid .
+      Post.postType: string @index(exact) .

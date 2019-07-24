@@ -18,6 +18,7 @@ package dgschema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -26,8 +27,17 @@ import (
 // GenDgSchema generates Dgraph schema from a valid graphql schema.
 func GenDgSchema(gqlSch *ast.Schema) string {
 	// TODO: extract out as todo's below are done
-	var schemaB strings.Builder
-	for _, def := range gqlSch.Types {
+	var typeStrings []string
+
+	var keys []string
+	for k := range gqlSch.Types {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	for _, key := range keys {
+		def := gqlSch.Types[key]
+
 		switch def.Kind {
 		case ast.Object:
 			// It is assuming that there are no types with name having "Add" as a prefix.
@@ -71,10 +81,9 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)
 				}
 			}
-			fmt.Fprintf(&typeDef, "}\n")
+			fmt.Fprintf(&typeDef, "}")
 
-			// Why are we printing both typedefs and predicates ?
-			fmt.Fprintf(&schemaB, "%s%s\n", typeDef.String(), preds.String())
+			typeStrings = append(typeStrings, fmt.Sprintf("%s\n%s", typeDef.String(), preds.String()))
 
 		case ast.Scalar:
 			// nothing to do here?  There should only be known scalars, and that
@@ -89,5 +98,5 @@ func GenDgSchema(gqlSch *ast.Schema) string {
 		}
 	}
 
-	return schemaB.String()
+	return strings.Join(typeStrings, "\n")
 }

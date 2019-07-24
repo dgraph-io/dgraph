@@ -39,7 +39,7 @@ func directivesCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 		for _, fld := range typ.Fields {
 			for _, direc := range fld.Directives {
 				if !isSupportedFieldDirective(direc) {
-					return gqlerror.ErrorPosf(direc.Position, "Unsupported diretive "+direc.Name)
+					return gqlerror.ErrorPosf(direc.Position, "Unsupported directive @%s", direc.Name)
 				}
 
 				if err := validateDirectiveArguments(typ, fld, direc, sch); err != nil {
@@ -64,7 +64,7 @@ func directivesCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 		for _, val := range vals {
 
 			if _, ok := inverseMap[val]; !ok {
-				return gqlerror.Errorf("Inverse link doesn't exists for " + key + " and " + val)
+				return gqlerror.Errorf("Inverse link doesn't exists for %s and %s", key, val)
 			}
 
 			for _, invVal := range inverseMap[val] {
@@ -73,7 +73,7 @@ func directivesCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 				}
 			}
 
-			return gqlerror.Errorf("Inverse link doesn't exists for " + key + " and " + val)
+			return gqlerror.Errorf("Inverse link doesn't exists for %s and %s", key, val)
 		}
 	}
 
@@ -82,7 +82,7 @@ func directivesCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 
 func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typ := range sch.Definitions {
-		if typ.Kind != ast.Object && typ.Kind != ast.Enum {
+		if (typ.Kind != ast.Object && typ.Kind != ast.Enum) || isReservedKeyWord(typ.Name) {
 			return gqlerror.ErrorPosf(typ.Position,
 				"Only type and enums are allowed in initial schema.")
 		}
@@ -112,6 +112,7 @@ func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	return nil
 }
 
+// TODO: even field names can't be reserved keywords. @michael ?
 func nameCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, defn := range sch.Definitions {
 		if isReservedKeyWord(defn.Name) {
@@ -164,8 +165,8 @@ func isSupportedFieldDirective(direc *ast.Directive) bool {
 
 func checkHasInverseArgs(direcTyp *ast.Definition, fld *ast.FieldDefinition,
 	args ast.ArgumentList, sch *ast.SchemaDocument) *gqlerror.Error {
-	if len(args) != 1 {
-		return gqlerror.Errorf("Invalid number of arguments to hasInverse\n" +
+	if args == nil || len(args) != 1 {
+		return gqlerror.Errorf("Invalid number of arguments to hasInverse\n%s",
 			genDirectiveArgumentsString(args))
 	}
 
@@ -183,21 +184,22 @@ func checkHasInverseArgs(direcTyp *ast.Definition, fld *ast.FieldDefinition,
 			if defn.Name == invrseType && defn.Kind == ast.Object {
 				for _, fld := range defn.Fields {
 					if fld.Name == invrseFld {
-						if direcTyp.Name == fld.Type.Name() ||
-							direcTyp.Name == fld.Type.Elem.Name() {
+						if (fld.Type != nil && direcTyp.Name == fld.Type.Name()) ||
+							(fld.Type != nil && fld.Type.Elem != nil &&
+								direcTyp.Name == fld.Type.Elem.Name()) {
 							return nil
 						}
 
 						return gqlerror.ErrorPosf(arg.Position,
-							"Inverse type doesn't match "+direcTyp.Name)
+							"Inverse of %s should be of type %s", arg.Value.String(), direcTyp.Name)
 					}
 				}
 
-				return gqlerror.ErrorPosf(arg.Position, "Undefined field "+invrseFld)
+				return gqlerror.ErrorPosf(arg.Position, "Undefined field %s", invrseFld)
 			}
 		}
 
-		return gqlerror.ErrorPosf(arg.Position, "Undefined type "+invrseType)
+		return gqlerror.ErrorPosf(arg.Position, "Undefined type %s", invrseType)
 	}
 
 	return gqlerror.ErrorPosf(arg.Position, "Invalid argument to hasInverse")

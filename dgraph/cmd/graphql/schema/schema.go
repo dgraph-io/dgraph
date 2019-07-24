@@ -23,6 +23,8 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/validator"
 )
 
 // SupportedScalars is the list of scalar types that we support.
@@ -100,7 +102,25 @@ func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 
 // GenerateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func GenerateCompleteSchema(schema *ast.Schema) {
+func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
+	if gqlErr != nil {
+		return nil, []*gqlerror.Error{gqlErr}
+	}
+
+	if gqlErrList := ValidateSchema(doc); gqlErrList != nil {
+		return nil, gqlErrList
+	}
+
+	AddScalars(doc)
+	AddDirectives(doc)
+
+	schema, gqlErr := validator.ValidateSchemaDocument(doc)
+	if gqlErr != nil {
+		return nil, []*gqlerror.Error{gqlErr}
+	}
+
 	extenderMap := make(map[string]*ast.Definition)
 
 	schema.Query = &ast.Definition{
@@ -135,6 +155,8 @@ func GenerateCompleteSchema(schema *ast.Schema) {
 	for name, extType := range extenderMap {
 		schema.Types[name] = extType
 	}
+
+	return schema, nil
 }
 
 // AreEqualSchema checks if sch1 and sch2 are the same schema.

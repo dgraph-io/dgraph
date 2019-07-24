@@ -189,30 +189,17 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
-	if gqlErr != nil {
-		return fmt.Errorf("cannot parse schema %s", gqlErr)
+	sch, errlist := gschema.GenerateCompleteSchema(inputSchema)
+	if errlist != nil {
+		return fmt.Errorf(errlist.Error())
 	}
 
-	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
-		return gqlErrList
-	}
-
-	gschema.AddScalars(doc)
-	gschema.AddDirectives(doc)
-
-	schema, gqlErr := validator.ValidateSchemaDocument(doc)
-	if gqlErr != nil {
-		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
-	}
-
-	gschema.GenerateCompleteSchema(schema)
-	completeSchema := gschema.Stringify(schema)
+	completeSchema := gschema.Stringify(sch)
 	if glog.V(2) {
 		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
 	}
 
-	dgSchema := dgsch.GenDgSchema(schema)
+	dgSchema := dgsch.GenDgSchema(sch)
 
 	if glog.V(2) {
 		fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)

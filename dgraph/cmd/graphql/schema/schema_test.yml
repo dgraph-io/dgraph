@@ -1,0 +1,139 @@
+invalid_schems:
+  -
+    name: "More than 1 id field"
+    input: |
+      type Person {
+        id: ID!
+        id2: ID!
+        name: String!
+      }
+    output: "input:3: More than one ID field found for type Person\n"
+
+  -
+    name: "Query in initial schema"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+      }
+      type Query {
+        getAuthro(id: ID): Author!
+      }
+    output: "input:5: Only type and enums are allowed in initial schema.\ninput:5: Query is reserved keyword. You can't declare type with this name\n"
+
+  -
+    name: "Invalid list type"
+    input: |
+      type Author {
+        id: ID!
+        name: String
+        posts: [Post]!
+      }
+      type Post {
+        id: ID!
+        text: String!
+        author: Author!
+      }
+    output: "input:4: [Post]! type of lists are invalid\n"
+
+  -
+    name: "Scalar in initial schema"
+    input: |
+      type Post {
+        id: ID!
+        name: String
+      }
+      scalar Int
+    output: "input:5: Only type and enums are allowed in initial schema.\ninput:5: Int is reserved keyword. You can't declare type with this name\n"
+
+  -
+    name: "Invalid argument to hasInverse"
+    input: |
+      type Post {
+        id: ID!
+        title: String!
+        text: String
+        author: Author! @hasInverse(field: "Author.posts")
+        postType: PostType!
+      }
+      type Author {
+        id: ID!
+        name: String!
+        posts: [Post!]! @hasInverse(fields: "Post.author")
+        friends: [Author!]!
+      }
+      enum PostType {
+        Statement
+        Question
+        Answer
+      }
+    output: "input:11: Invalid argument to hasInverse\n"
+
+  -
+    name: "Unsupported Directive"
+    input: |
+      type Post {
+        id: ID!
+        title: String!
+        text: String
+        author: Author!
+        postType: PostType!
+      }
+      type Author {
+        id: ID!
+        name: String!
+        posts: [Post!]! @hasNothing(field: "Post.author")
+        friends: [Author!]!
+      }
+      enum PostType {
+        Statement
+        Question
+        Answer
+      }
+    output: "input:11: Unsupported directive @hasNothing\n"
+
+  -
+    name: "Directive on wrong field"
+    input: |
+      type Post {
+        id: ID!
+        title: String!
+        text: String
+        author: Author!
+        postType: PostType!
+      }
+      type Author {
+        id: ID!
+        name: String!
+        posts: [Post!]!
+        friends: [Author!]! @hasInverse(field: "Post.author")
+      }
+      enum PostType {
+        Statement
+        Question
+        Answer
+      }
+    output: "input: Inverse link doesn't exists for Author.friends and Post.author\n"
+
+  -
+    name: "No reverse link to Author.posts"
+    input: |
+      type Post {
+        id: ID!
+        title: String!
+        text: String
+        author: Author!
+        postType: PostType!
+      }
+      type Author {
+        id: ID!
+        name: String!
+        posts: [Post!]! @hasInverse(field: "Post.author")
+        friends: [Author!]!
+      }
+      enum PostType {
+        Statement
+        Question
+        Answer
+      }
+    output: "input: Inverse link doesn't exists for Author.posts and Post.author\n"

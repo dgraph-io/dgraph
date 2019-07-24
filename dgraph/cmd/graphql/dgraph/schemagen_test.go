@@ -16,8 +16,51 @@
 
 package dgschema
 
-import "testing"
+import (
+	"io/ioutil"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
+	"gopkg.in/yaml.v2"
+)
+
+type Tests map[string][]TestCase
+
+type TestCase struct {
+	Name   string
+	Input  string
+	Output string
+}
 
 func TestDGSchemaGen(t *testing.T) {
+	fileName := "schemagen_test.yml" // run from pwd
+	byts, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+
+	var tests Tests
+	err = yaml.Unmarshal(byts, &tests)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+
+	for _, schemas := range tests {
+		for _, sch := range schemas {
+			t.Run(sch.Name, func(t *testing.T) {
+				dgsch, err := gschema.GenerateCompleteSchema(sch.Input)
+				if err != nil {
+					t.Errorf(err.Error())
+					return
+				}
+
+				require.Equal(t, sch.Output, GenDgSchema(dgsch))
+			})
+		}
+	}
 
 }
