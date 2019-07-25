@@ -32,6 +32,7 @@ import (
 	common "github.com/ChainSafe/gossamer/common"
 	trie "github.com/ChainSafe/gossamer/trie"
 	log "github.com/ChainSafe/log15"
+	xxhash "github.com/OneOfOne/xxhash"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 	ed25519 "golang.org/x/crypto/ed25519"
 )
@@ -265,6 +266,35 @@ func ext_blake2_256(context unsafe.Pointer, data, length, out int32) {
 //export ext_twox_128
 func ext_twox_128(context unsafe.Pointer, data, len, out int32) {
 	log.Debug("[ext_twox_128] executing...")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+	log.Debug("[ext_twox_128]", "value", memory[data:data+len])
+
+	// compute xxHash64 twice with seeds 0 and 1 applied on given byte array
+	h0 := xxhash.NewS64(0) // create xxHash with 0 seed
+	_, err := h0.Write(memory[data : data+len])
+	if err != nil {
+		log.Error("[ext_twox_128]", "error", err)
+	}
+	res0 := h0.Sum64()
+	log.Debug("[ext_twox_128]", "xxH64(0) of value", res0)
+	hash0 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash0, uint64(res0))
+
+	h1 := xxhash.NewS64(1) // create xxHash with 1 seed
+	_, err = h1.Write(memory[data : data+len])
+	if err != nil {
+		log.Error("[ext_twox_128]", "error", err)
+	}
+	res1 := h1.Sum64()
+	log.Debug("[ext_twox_128]", "xxH64(1) of value", res1)
+	hash1 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash1, uint64(res1))
+
+	//concatenaded result
+	both := append(hash0, hash1...)
+
+	copy(memory[out:out+16], both)
 }
 
 //export ext_sr25519_verify

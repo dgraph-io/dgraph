@@ -5,6 +5,7 @@ replace github.com/go-interpreter/wagon v0.0.0 => github.com/perlin-network/wago
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/ChainSafe/log15 v1.0.0
+	github.com/OneOfOne/xxhash v1.2.5
 	github.com/dgraph-io/badger v1.6.0-rc1
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 	github.com/ipfs/go-datastore v0.0.5

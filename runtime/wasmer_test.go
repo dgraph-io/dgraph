@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"os"
@@ -11,9 +12,9 @@ import (
 	"reflect"
 	"testing"
 
-	common "github.com/ChainSafe/gossamer/common"
-	trie "github.com/ChainSafe/gossamer/trie"
-	ed25519 "golang.org/x/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/common"
+	"github.com/ChainSafe/gossamer/trie"
+	"golang.org/x/crypto/ed25519"
 )
 
 const POLKADOT_RUNTIME_FP string = "polkadot_runtime.compact.wasm"
@@ -593,5 +594,60 @@ func TestExt_blake2_256_enumerated_trie_root(t *testing.T) {
 	// confirm that returned hash matches expected hash
 	if !bytes.Equal(mem[result:result+32], expectedHash[:]) {
 		t.Error("did not get expected trie")
+	}
+}
+
+// test that ext_twox_128 performs a xxHash64 twice on give byte array of the data
+func TestExt_twox_128(t *testing.T) {
+	runtime, err := newTestRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mem := runtime.vm.Memory.Data()
+	// save data in memory
+	// test for empty []byte
+	data := []byte(nil)
+	pos := 170
+	out := pos + len(data)
+	copy(mem[pos:pos+len(data)], data)
+
+	// call wasm function
+	testFunc, ok := runtime.vm.Exports["test_ext_twox_128"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(pos, len(data), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//check result against expected value
+	t.Logf("Ext_twox_128 data: %s, result: %s", data, hex.EncodeToString(mem[out:out+16]))
+	if "99e9d85137db46ef4bbea33613baafd5" != hex.EncodeToString(mem[out:out+16]) {
+		t.Error("hash saved in memory does not equal calculated hash")
+	}
+
+	// test for data value "Hello world!"
+	data = []byte("Hello world!")
+	out = pos + len(data)
+	copy(mem[pos:pos+len(data)], data)
+
+	// call wasm function
+	testFunc, ok = runtime.vm.Exports["test_ext_twox_128"]
+	if !ok {
+		t.Fatal("could not find exported function")
+	}
+
+	_, err = testFunc(pos, len(data), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//check result against expected value
+	t.Logf("Ext_twox_128 data: %s, result: %s", data, hex.EncodeToString(mem[out:out+16]))
+	if "b27dfd7f223f177f2a13647b533599af" != hex.EncodeToString(mem[out:out+16]) {
+		t.Error("hash saved in memory does not equal calculated hash")
 	}
 }
