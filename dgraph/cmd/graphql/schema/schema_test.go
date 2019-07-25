@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/vektah/gqlparser/gqlerror"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/stretchr/testify/require"
@@ -116,7 +118,7 @@ func TestEqualSchema(t *testing.T) {
 			continue
 		}
 
-		require.True(t, AreEqualSchema(sch1, sch2))
+		require.Equal(t, Stringify(sch2), Stringify(sch1))
 	}
 }
 
@@ -125,7 +127,7 @@ type Tests map[string][]TestCase
 type TestCase struct {
 	Name   string
 	Input  string
-	Output string
+	Output gqlerror.List
 }
 
 func TestInvalidSchemaTable(t *testing.T) {
@@ -153,7 +155,8 @@ func TestInvalidSchemaTable(t *testing.T) {
 
 			t.Run(sch.Name, func(t *testing.T) {
 				gqlErrList := ValidateSchema(doc)
-				require.Equal(t, sch.Output, gqlErrList.Error())
+
+				require.Equal(t, sch.Output, gqlErrList)
 			})
 		}
 	}

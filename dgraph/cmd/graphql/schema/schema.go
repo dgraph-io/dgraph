@@ -511,6 +511,8 @@ func genFieldsString(flds ast.FieldList) string {
 		return ""
 	}
 
+	sort.Slice(flds, func(i, j int) bool { return flds[i].Name < flds[j].Name })
+
 	var sch strings.Builder
 
 	for _, fld := range flds {
@@ -579,6 +581,9 @@ func genInputString(typ *ast.Definition) string {
 func genEnumString(typ *ast.Definition) string {
 	var sch strings.Builder
 
+	valList := typ.EnumValues
+	sort.Slice(valList, func(i, j int) bool { return valList[i].Name < valList[j].Name })
+
 	sch.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
 	for _, val := range typ.EnumValues {
 		if !strings.HasPrefix(val.Name, "__") {
@@ -639,14 +644,22 @@ func genDirectivesDefnString(direcs map[string]*ast.DirectiveDefinition) string 
 }
 
 // Stringify returns entire schema in string format
-func Stringify(schema *ast.Schema) string {
-	var sch, object, scalar, input, query, mutation, enum, direcDefn strings.Builder
+func Stringify(sch *ast.Schema) string {
+	var schStr, object, scalar, input, query, mutation, enum, direcDefn strings.Builder
 
-	if schema.Types == nil {
+	if sch.Types == nil {
 		return ""
 	}
 
-	for _, typ := range schema.Types {
+	var keys []string
+	for k := range sch.Types {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	for _, key := range keys {
+		typ := sch.Types[key]
+
 		if typ.Kind == ast.Object {
 			object.WriteString(genObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Scalar {
@@ -658,34 +671,34 @@ func Stringify(schema *ast.Schema) string {
 		}
 	}
 
-	if schema.Query != nil {
-		query.WriteString(genObjectString(schema.Query))
+	if sch.Query != nil {
+		query.WriteString(genObjectString(sch.Query))
 	}
 
-	if schema.Mutation != nil {
-		mutation.WriteString(genObjectString(schema.Mutation))
+	if sch.Mutation != nil {
+		mutation.WriteString(genObjectString(sch.Mutation))
 	}
 
-	if schema.Directives != nil {
-		direcDefn.WriteString(genDirectivesDefnString(schema.Directives))
+	if sch.Directives != nil {
+		direcDefn.WriteString(genDirectivesDefnString(sch.Directives))
 	}
 
-	sch.WriteString("#######################\n# Generated Types\n#######################\n")
-	sch.WriteString(object.String())
-	sch.WriteString("#######################\n# Scalar Definitions\n#######################\n")
-	sch.WriteString(scalar.String())
-	sch.WriteString("#######################\n# Directive Definitions\n#######################\n")
-	sch.WriteString(direcDefn.String())
-	sch.WriteString("#######################\n# Enum Definitions\n#######################\n")
-	sch.WriteString(enum.String())
-	sch.WriteString("#######################\n# Input Definitions\n#######################\n")
-	sch.WriteString(input.String())
-	sch.WriteString("#######################\n# Generated Query\n#######################\n")
-	sch.WriteString(query.String())
-	sch.WriteString("#######################\n# Generated Mutations\n#######################\n")
-	sch.WriteString(mutation.String())
+	schStr.WriteString("#######################\n# Generated Types\n#######################\n")
+	schStr.WriteString(object.String())
+	schStr.WriteString("#######################\n# Scalar Definitions\n#######################\n")
+	schStr.WriteString(scalar.String())
+	schStr.WriteString("#######################\n# Directive Definitions\n#######################\n")
+	schStr.WriteString(direcDefn.String())
+	schStr.WriteString("#######################\n# Enum Definitions\n#######################\n")
+	schStr.WriteString(enum.String())
+	schStr.WriteString("#######################\n# Input Definitions\n#######################\n")
+	schStr.WriteString(input.String())
+	schStr.WriteString("#######################\n# Generated Query\n#######################\n")
+	schStr.WriteString(query.String())
+	schStr.WriteString("#######################\n# Generated Mutations\n#######################\n")
+	schStr.WriteString(mutation.String())
 
-	return sch.String()
+	return schStr.String()
 }
 
 func isIDField(fld *ast.FieldDefinition) bool {
