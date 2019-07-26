@@ -47,7 +47,7 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		if gqlErrList := ValidateSchema(doc); gqlErrList != nil {
+		if gqlErrList := PreGQLValidtion(doc); gqlErrList != nil {
 			var errStr strings.Builder
 			for _, err := range gqlErrList {
 				errStr.WriteString(err.Message)
@@ -120,9 +120,20 @@ func TestInvalidSchemas(t *testing.T) {
 			continue
 		}
 
-		gqlErrList := ValidateSchema(doc)
-		if gqlErrList == nil {
-			t.Errorf("Invalid schema passed tests.")
+		gqlErrList1 := PreGQLValidtion(doc)
+		if gqlErrList1 != nil {
+			continue
+		}
+		AddScalars(doc)
+		AddDirectives(doc)
+		sch, gqlErr := validator.ValidateSchemaDocument(doc)
+		if gqlErr != nil {
+			continue
+		}
+
+		gqlErrList2 := PostGQLValidation(sch)
+		if gqlErrList2 == nil {
+			t.Errorf("Invalid schema %s passed tests", fileName)
 		}
 	}
 }
@@ -143,7 +154,7 @@ func TestEqualSchema(t *testing.T) {
 			continue
 		}
 
-		gqlErrList1 := ValidateSchema(doc1)
+		gqlErrList1 := PreGQLValidtion(doc1)
 		if gqlErrList1 != nil {
 			t.Errorf("Unable to validate schemafile %s\n%s", fileName1, gqlErrList1.Error())
 		}
@@ -170,7 +181,7 @@ func TestEqualSchema(t *testing.T) {
 			continue
 		}
 
-		gqlErrList2 := ValidateSchema(doc2)
+		gqlErrList2 := PreGQLValidtion(doc2)
 		if gqlErrList2 != nil {
 			t.Errorf("Unable to validate schemafile %s\n%s", fileName2, gqlErrList2.Error())
 		}

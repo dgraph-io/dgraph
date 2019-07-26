@@ -25,55 +25,25 @@ import (
 )
 
 func init() {
-	AddRule("OnlyTypeEnumInInitialSchema", dataTypeCheck)
-	AddRule("OneIDPerType", idCountCheck)
-	AddRule("TypeNameCantBeReservedKeyWords", nameCheck)
-	AddRule("ValidListType", listValidityCheck)
-	AddRule("DirectiveCheck", directivesCheck)
+	AddPreRule("OnlyTypeEnumInInitialSchema", dataTypeCheck)
+	AddPreRule("TypeNameCantBeReservedKeyWords", nameCheck)
+
+	AddPostRule("OneIDPerType", idCountCheck)
+	AddPostRule("ValidListType", listValidityCheck)
+	AddPostRule("DirectiveCheck", directivesCheck)
 }
 
-func directivesCheck(sch *ast.SchemaDocument) *gqlerror.Error {
-	inverseMap := make(map[string][]string)
+func directivesCheck(sch *ast.Schema) *gqlerror.Error {
 
-	for _, typ := range sch.Definitions {
+	for _, typ := range sch.Types {
 		for _, fld := range typ.Fields {
 			for _, direc := range fld.Directives {
-				if !isSupportedFieldDirective(direc) {
-					return gqlerror.ErrorPosf(direc.Position, "Unsupported diretive "+direc.Name)
-				}
 
 				if err := validateDirectiveArguments(typ, fld, direc, sch); err != nil {
 					return err
 				}
 
-				if _, ok := inverseMap[typ.Name+"."+fld.Name]; !ok {
-					inverseMap[typ.Name+"."+fld.Name] = make([]string, 0)
-				}
-
-				for _, arg := range direc.Arguments {
-					if arg.Name == "field" {
-						inverseMap[typ.Name+"."+fld.Name] =
-							append(inverseMap[typ.Name+"."+fld.Name], arg.Value.Raw)
-					}
-				}
 			}
-		}
-	}
-
-	for key, vals := range inverseMap {
-		for _, val := range vals {
-
-			if _, ok := inverseMap[val]; !ok {
-				return gqlerror.Errorf("Inverse link doesn't exists for " + key + " and " + val)
-			}
-
-			for _, invVal := range inverseMap[val] {
-				if invVal == key {
-					return nil
-				}
-			}
-
-			return gqlerror.Errorf("Inverse link doesn't exists for " + key + " and " + val)
 		}
 	}
 
@@ -91,9 +61,9 @@ func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	return nil
 }
 
-func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
+func idCountCheck(sch *ast.Schema) *gqlerror.Error {
 	var found bool
-	for _, typeVal := range sch.Definitions {
+	for _, typeVal := range sch.Types {
 		found = false
 		for _, fld := range typeVal.Fields {
 			if isIDField(fld) {
@@ -128,8 +98,8 @@ func nameCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 }
 
 // [Posts]! -> invalid, [Posts!]! -> valid
-func listValidityCheck(sch *ast.SchemaDocument) *gqlerror.Error {
-	for _, typ := range sch.Definitions {
+func listValidityCheck(sch *ast.Schema) *gqlerror.Error {
+	for _, typ := range sch.Types {
 		for _, fld := range typ.Fields {
 			if fld.Type.Elem != nil && fld.Type.NonNull && !fld.Type.Elem.NonNull {
 				return gqlerror.ErrorPosf(
@@ -153,60 +123,94 @@ func isReservedKeyWord(name string) bool {
 	return false
 }
 
-func isSupportedFieldDirective(direc *ast.Directive) bool {
+func checkHasInverseArgs(typ *ast.Definition, fld *ast.FieldDefinition,
+	directive *ast.Directive, sch *ast.Schema) *gqlerror.Error {
+	args := directive.Arguments
 
-	if direc.Name == "hasInverse" {
-		return true
-	}
-
-	return false
-}
-
-func checkHasInverseArgs(direcTyp *ast.Definition, fld *ast.FieldDefinition,
-	args ast.ArgumentList, sch *ast.SchemaDocument) *gqlerror.Error {
+	// @hasInverse should have only one argument i.e "field"
 	if len(args) != 1 {
 		return gqlerror.Errorf("Invalid number of arguments to hasInverse\n" +
 			genDirectiveArgumentsString(args))
 	}
 
-	arg := args[0]
-	if arg.Name == "field" {
-		splitVal := strings.Split(arg.Value.Raw, ".")
-		if len(splitVal) < 2 {
-			return gqlerror.ErrorPosf(arg.Position, "Invalid inverse field")
-		}
-
-		invrseType := splitVal[0]
-		invrseFld := splitVal[1]
-
-		for _, defn := range sch.Definitions {
-			if defn.Name == invrseType && defn.Kind == ast.Object {
-				for _, fld := range defn.Fields {
-					if fld.Name == invrseFld {
-						if direcTyp.Name == fld.Type.Name() ||
-							direcTyp.Name == fld.Type.Elem.Name() {
-							return nil
-						}
-
-						return gqlerror.ErrorPosf(arg.Position,
-							"Inverse type doesn't match "+direcTyp.Name)
-					}
-				}
-
-				return gqlerror.ErrorPosf(arg.Position, "Undefined field "+invrseFld)
-			}
-		}
-
-		return gqlerror.ErrorPosf(arg.Position, "Undefined type "+invrseType)
+	fldArg := args.ForName(string(FIELD))
+	if fldArg == nil {
+		return gqlerror.ErrorPosf(directive.Position, "Invalid argument to hasInverse")
 	}
 
-	return gqlerror.ErrorPosf(arg.Position, "Invalid argument to hasInverse")
+	// Value of field argument should be of the form "typ.fld". typ should be
+	// one of the types in schema. fld should be one of the fields of typ.
+	// e.g. @hasInverse(field: "Posts.author")
+	splitVal := strings.Split(fldArg.Value.Raw, ".")
+	if len(splitVal) < 2 {
+		return gqlerror.ErrorPosf(fldArg.Position, "Invalid value of field argument")
+	}
+
+	invrseTypeName := splitVal[0]
+	invrseFldName := splitVal[1]
+
+	if invType, ok := sch.Types[invrseTypeName]; ok {
+		if invFld := invType.Fields.ForName(invrseFldName); invFld != nil {
+
+			// Type of the field to which a directive is pointing should be same as the
+			// type contains the field containing directive. e.g.
+			//
+			// type Post { author: Author @hasInverse(field: "Author.posts") }
+			// type Author { posts: [Posts!]! @hasInverse(field: "Post.author") }
+			if invFld.Type.Name() != typ.Name {
+				return gqlerror.ErrorPosf(
+					fld.Position, "Inverse type doesn't match %s",
+					typ.Name,
+				)
+			}
+
+			if invFld.Directives == nil {
+				return gqlerror.ErrorPosf(
+					fld.Position, "Inverse of %s: %s, doesn't have inverse directive pointing back",
+					fld.Name, fldArg.Value.Raw,
+				)
+			}
+
+			if invDirective := invFld.Directives.ForName(string(HASINVERSE)); invDirective != nil {
+				if invFldArg := invDirective.Arguments.ForName(string(FIELD)); invFldArg != nil {
+					invSplitVal := strings.Split(invFldArg.Value.Raw, ".")
+					if len(invSplitVal) == 2 &&
+						!(invSplitVal[0] == typ.Name && invSplitVal[1] == fld.Name) {
+						return gqlerror.ErrorPosf(
+							fld.Position,
+							"Inverse of %s: %s, doesn't have inverse directive pointing back",
+							fld.Name, fldArg.Value.Raw,
+						)
+					}
+				}
+			} else {
+				return gqlerror.ErrorPosf(
+					fld.Position, "Inverse of %s: %s, doesn't have inverse directive pointing back",
+					fld.Name, fldArg.Value.Raw,
+				)
+			}
+
+		} else {
+			return gqlerror.ErrorPosf(
+				fld.Position, "@hasInverse: Specified field %s doesn't exist",
+				invrseFldName,
+			)
+		}
+	} else {
+		return gqlerror.ErrorPosf(
+			fld.Position, "@hasInverse: Specified type %s doesn't exist",
+			invrseTypeName,
+		)
+	}
+
+	return nil
 }
 
-func validateDirectiveArguments(typ *ast.Definition, fld *ast.FieldDefinition, direc *ast.Directive, sch *ast.SchemaDocument) *gqlerror.Error {
+func validateDirectiveArguments(typ *ast.Definition,
+	fld *ast.FieldDefinition, direc *ast.Directive, sch *ast.Schema) *gqlerror.Error {
 
-	if direc.Name == "hasInverse" {
-		return checkHasInverseArgs(typ, fld, direc.Arguments, sch)
+	if direc.Name == string(HASINVERSE) {
+		return checkHasInverseArgs(typ, fld, direc, sch)
 	}
 
 	return nil

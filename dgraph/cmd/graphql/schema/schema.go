@@ -18,7 +18,6 @@ package schema
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -27,15 +26,24 @@ import (
 
 // SupportedScalars is the list of scalar types that we support.
 type SupportedScalars string
+type SupportedDirectives string
+type SupportedDirectiveFields string
 
-type schRuleFunc func(schema *ast.SchemaDocument) *gqlerror.Error
+type preGQLValidationFunc func(sch *ast.SchemaDocument) *gqlerror.Error
+type postGQLValidationFunc func(sch *ast.Schema) *gqlerror.Error
 
-type schRule struct {
+type preGQLValidationRule struct {
 	name        string
-	schRuleFunc schRuleFunc
+	schRuleFunc preGQLValidationFunc
 }
 
-var schRules []schRule
+type postGQLValidationRule struct {
+	name        string
+	schRuleFunc postGQLValidationFunc
+}
+
+var preGQLValidtion []preGQLValidationRule
+var postGQLValidation []postGQLValidationRule
 
 const (
 	INT      SupportedScalars = "Int"
@@ -44,6 +52,10 @@ const (
 	DATETIME SupportedScalars = "DateTime"
 	ID       SupportedScalars = "ID"
 	BOOLEAN  SupportedScalars = "Boolean"
+
+	HASINVERSE SupportedDirectives = "hasInverse"
+
+	FIELD SupportedDirectiveFields = "field"
 )
 
 // AddScalars adds all the supported scalars in the schema.
@@ -77,20 +89,41 @@ func addDirectiveInSchema(name string, locations []ast.DirectiveLocation, doc *a
 	})
 }
 
-// AddRule adds a new schema rule to the global array schRules.
-func AddRule(name string, f schRuleFunc) {
-	schRules = append(schRules, schRule{
+// AddPreRule adds a new schema rule to the global array preGQLValidtin.
+func AddPreRule(name string, f preGQLValidationFunc) {
+	preGQLValidtion = append(preGQLValidtion, preGQLValidationRule{
 		name:        name,
 		schRuleFunc: f,
 	})
 }
 
-// ValidateSchema validates the schema against dgraph's rules of schema.
-func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
+// AddPostRule adds a new schema rule to the global array postGQLValidtin.
+func AddPostRule(name string, f postGQLValidationFunc) {
+	postGQLValidation = append(postGQLValidation, postGQLValidationRule{
+		name:        name,
+		schRuleFunc: f,
+	})
+}
+
+// PreGQLValidtion validates the schema against dgraph's rules of schema.
+func PreGQLValidtion(sch *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for i := range schRules {
-		if gqlErr := schRules[i].schRuleFunc(schema); gqlErr != nil {
+	for i := range preGQLValidtion {
+		if gqlErr := preGQLValidtion[i].schRuleFunc(sch); gqlErr != nil {
+			errs = append(errs, gqlErr)
+		}
+	}
+
+	return errs
+}
+
+// PostGQLValidation validates the schema against dgraph's rules of schema.
+func PostGQLValidation(sch *ast.Schema) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for i := range postGQLValidation {
+		if gqlErr := postGQLValidation[i].schRuleFunc(sch); gqlErr != nil {
 			errs = append(errs, gqlErr)
 		}
 	}
@@ -480,7 +513,6 @@ func genArgumentsString(args ast.ArgumentDefinitionList) string {
 		argsStrs = append(argsStrs, genArgumentString(arg))
 	}
 
-	sort.Slice(argsStrs, func(i, j int) bool { return argsStrs[i] < argsStrs[j] })
 	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
 }
 
@@ -520,7 +552,6 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 		directives = append(directives, genDirectiveString(dir))
 	}
 
-	sort.Slice(directives, func(i, j int) bool { return directives[i] < directives[j] })
 	// Assuming multiple directives are space separated.
 	sch.WriteString(strings.Join(directives, " "))
 
@@ -540,7 +571,6 @@ func genDirectiveArgumentsString(args ast.ArgumentList) string {
 		direcArgs = append(direcArgs, fmt.Sprintf("%s:\"%s\"", arg.Name, arg.Value.Raw))
 	}
 
-	sort.Slice(direcArgs, func(i, j int) bool { return direcArgs[i] < direcArgs[j] })
 	sch.WriteString(strings.Join(direcArgs, ",") + ")")
 
 	return sch.String()
@@ -585,21 +615,18 @@ func genDirectiveDefnString(dir *ast.DirectiveDefinition) string {
 	for _, arg := range dir.Arguments {
 		args = append(args, fmt.Sprintf("%s: %s", arg.Name, arg.Type.String()))
 	}
-	sort.Slice(args, func(i, j int) bool { return args[i] < args[j] })
 
 	for _, loc := range dir.Locations {
 		locations = append(locations, string(loc))
 	}
-	sort.Slice(locations, func(i, j int) bool { return locations[i] < locations[j] })
 
-	if len(args) == 0 {
-		return fmt.Sprintf(
-			"directive @%s on %s\n", dir.Name, strings.Join(locations, ","),
-		)
+	var argsStr string
+	if len(args) != 0 {
+		argsStr = fmt.Sprintf("(%s)", strings.Join(args, ""))
 	}
 
 	return fmt.Sprintf(
-		"directive @%s(%s) on %s\n", dir.Name, strings.Join(args, ","), strings.Join(locations, ","),
+		"directive @%s%s on %s\n", dir.Name, argsStr, strings.Join(locations, ","),
 	)
 }
 
