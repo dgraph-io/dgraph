@@ -32,7 +32,7 @@ func init() {
 
 func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typ := range sch.Definitions {
-		if typ.Kind != ast.Object && typ.Kind != ast.Enum {
+		if (typ.Kind != ast.Object && typ.Kind != ast.Enum) || isReservedKeyWord(typ.Name) {
 			return gqlerror.ErrorPosf(typ.Position,
 				"Only type and enums are allowed in initial schema.")
 		}
@@ -46,7 +46,7 @@ func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typeVal := range sch.Definitions {
 		found = false
 		for _, fld := range typeVal.Fields {
-			if isIDField(fld) {
+			if isIDField(typeVal, fld) {
 				if found {
 					return gqlerror.ErrorPosf(
 						fld.Position,
@@ -93,10 +93,17 @@ func listValidityCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	return nil
 }
 
+func isScalar(s string) bool {
+	for _, sc := range supportedScalars {
+		if s == sc.name {
+			return true
+		}
+	}
+	return false
+}
+
 func isReservedKeyWord(name string) bool {
-	if name == string(INT) || name == string(BOOLEAN) ||
-		name == string(FLOAT) || name == string(STRING) ||
-		name == string(DATETIME) || name == string(ID) || name == "Query" || name == "Mutation" {
+	if isScalar(name) || name == "Query" || name == "Mutation" {
 		return true
 	}
 

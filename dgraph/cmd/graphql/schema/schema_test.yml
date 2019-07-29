@@ -1,0 +1,34 @@
+invalid_schems:
+  -
+    name: "More than 1 id field"
+    input: |
+      type P {
+        id: ID!
+        id2: ID!
+        name: String!
+      }
+    output: [{"message":"More than one ID field found for type P","locations":[{"line":3,"column":3}]}]
+
+  -
+    name: "Query in initial schema"
+    input: |
+      type Query {
+        getAuthro(id: ID): Author!
+      }
+    output: [{"message":"Only type and enums are allowed in initial schema.","locations":[{"line":1,"column":6}]},{"message":"Query is reserved keyword. You can't declare type with this name","locations":[{"line":1,"column":6}]}]
+
+  -
+    name: "Invalid list type"
+    input: |
+      type A {
+        id: ID!
+        name: String
+        posts: [P]!
+      }
+    output: [{"message":"[P]! type of lists are invalid","locations":[{"line":4,"column":3}]}]
+
+  -
+    name: "Scalar in initial schema"
+    input: |
+      scalar Int
+    output: [{"message":"Only type and enums are allowed in initial schema.","locations":[{"line":1,"column":8}]},{"message":"Int is reserved keyword. You can't declare type with this name","locations":[{"line":1,"column":8}]}]
