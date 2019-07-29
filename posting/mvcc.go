@@ -18,10 +18,12 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"math"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -29,6 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 )
 
 var (
@@ -141,7 +145,18 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 // ReadPostingList constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
-func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+func ReadPostingList(key []byte, it *badger.Iterator) (rpl *List, rerr error) {
+	startTime := time.Now()
+	defer func() {
+		v := x.TagValueStatusOK
+		if rerr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ := tag.New(context.Background(), tag.Upsert(x.KeyStatus, v))
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyMethod, "ReadPostingList"))
+		timeMs := x.SinceMs(startTime)
+		ostats.Record(ctx, x.LatencyMs.M(timeMs))
+	}()
 	l := new(List)
 	l.key = key
 	l.mutationMap = make(map[uint64]*pb.PostingList)
