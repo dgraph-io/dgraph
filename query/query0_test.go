@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestGetUID(t *testing.T) {
@@ -2083,7 +2083,7 @@ func TestDateTimeQuery(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = z.DgraphClientWithGroot(z.SockAddr)
+	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
 
 	populateCluster()
 	os.Exit(m.Run())

@@ -30,7 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +48,7 @@ func TestQueries(t *testing.T) {
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg := z.DgraphClient(z.SockAddr)
+	dg := testutil.DgraphClient(testutil.SockAddr)
 
 	files, err := ioutil.ReadDir(queryDir)
 	x.CheckfNoTrace(err)
@@ -85,7 +85,7 @@ func TestQueries(t *testing.T) {
 			savepath = path.Join(*savedir, file.Name())
 		}
 
-		if !z.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
+		if !testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), savepath, *quiet) {
 			diffs++
 		}
 	}

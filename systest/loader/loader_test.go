@@ -28,7 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 func TestLoaderXidmap(t *testing.T) {
@@ -39,8 +39,8 @@ func TestLoaderXidmap(t *testing.T) {
 	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/first.rdf.gz")
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
-		"--alpha", z.SockAddr,
-		"--zero", z.SockAddrZero,
+		"--alpha", testutil.SockAddr,
+		"--zero", testutil.SockAddrZero,
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
@@ -50,8 +50,8 @@ func TestLoaderXidmap(t *testing.T) {
 	data = os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/second.rdf.gz")
 	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
-		"--alpha", z.SockAddr,
-		"--zero", z.SockAddrZero,
+		"--alpha", testutil.SockAddr,
+		"--zero", testutil.SockAddrZero,
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
@@ -59,7 +59,7 @@ func TestLoaderXidmap(t *testing.T) {
 	liveCmd.Stderr = os.Stdout
 	require.NoError(t, liveCmd.Run())
 
-	resp, err := http.Get(fmt.Sprintf("http://%s/admin/export", z.SockAddrHttp))
+	resp, err := http.Get(fmt.Sprintf("http://%s/admin/export", testutil.SockAddrHttp))
 	require.NoError(t, err)
 
 	b, _ := ioutil.ReadAll(resp.Body)
@@ -92,7 +92,7 @@ func copyExportFiles(tmpDir string) error {
 
 	srcPath := "alpha1:/data/alpha1/export"
 	dstPath := filepath.Join(tmpDir, "export")
-	return z.DockerCp(srcPath, dstPath)
+	return testutil.DockerCp(srcPath, dstPath)
 }
 
 func findFile(dir string, ext string) (string, error) {

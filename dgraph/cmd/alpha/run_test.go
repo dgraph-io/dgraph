@@ -36,7 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -265,7 +265,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
-	z.CompareJSON(t, `{"data":{"schema":[`+
+	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+
@@ -1218,7 +1218,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
-	z.CompareJSON(t, `{"data":{"schema":[`+
+	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		x.AclPredicates+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
@@ -1438,7 +1438,7 @@ func TestDropAll(t *testing.T) {
 	q3 := "schema{}"
 	output, err = runGraphqlQuery(q3)
 	require.NoError(t, err)
-	z.CompareJSON(t,
+	testutil.CompareJSON(t,
 		`{"data":{"schema":[`+
 			x.AclPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
@@ -1494,7 +1494,7 @@ func TestJsonUnicode(t *testing.T) {
 }
 
 func TestGrpcCompressionSupport(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr,
+	conn, err := grpc.Dial(testutil.SockAddr,
 		grpc.WithInsecure(),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
@@ -1677,7 +1677,7 @@ var grootRefreshJwt string
 
 func TestMain(m *testing.M) {
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial(z.SockAddrZero, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1685,7 +1685,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = z.GrootHttpLogin(addr + "/login")
+	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/login")
 
 	r := m.Run()
 	os.Exit(r)

@@ -33,7 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -52,7 +52,7 @@ var (
 )
 
 func TestBackupFilesystem(t *testing.T) {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -74,7 +74,7 @@ func TestBackupFilesystem(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	// Move tablet to group 1 to avoid messes later.
-	_, err = http.Get("http://" + z.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
+	_, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
 
 	// After the move, we need to pause a bit to give zero a chance to quorum.
@@ -82,7 +82,7 @@ func TestBackupFilesystem(t *testing.T) {
 	moveOk := false
 	for retry := 5; retry > 0; retry-- {
 		time.Sleep(3 * time.Second)
-		state, err := z.GetState()
+		state, err := testutil.GetState()
 		require.NoError(t, err)
 		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
 			moveOk = true
@@ -214,7 +214,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.NoError(t, z.GetError(resp.Body))
+	require.NoError(t, testutil.GetError(resp.Body))
 	time.Sleep(time.Second)
 
 	// Verify that the right amount of files and directories were created.
@@ -248,7 +248,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
 	require.NoError(t, err)
 
-	restored, err := z.GetPValues("./data/restore/p1", "movie", commitTs)
+	restored, err := testutil.GetPValues("./data/restore/p1", "movie", commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 
@@ -277,7 +277,7 @@ func dirSetup() {
 
 	for _, alpha := range alphaContainers {
 		cmd := []string{"mkdir", "-p", alphaBackupDir}
-		x.Check(z.DockerExec(alpha, cmd...))
+		x.Check(testutil.DockerExec(alpha, cmd...))
 	}
 }
 
@@ -286,7 +286,7 @@ func dirCleanup() {
 	x.Check(os.RemoveAll(copyBackupDir))
 
 	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
-	x.Check(z.DockerExec(alphaContainers[0], cmd...))
+	x.Check(testutil.DockerExec(alphaContainers[0], cmd...))
 }
 
 func copyToLocalFs() {
@@ -295,5 +295,5 @@ func copyToLocalFs() {
 	// "docker cp" to create a copy that is not owned by the root user.
 	x.Check(os.RemoveAll(copyBackupDir))
 	srcPath := "alpha1:/data/backups"
-	x.Check(z.DockerCp(srcPath, copyBackupDir))
+	x.Check(testutil.DockerCp(srcPath, copyBackupDir))
 }

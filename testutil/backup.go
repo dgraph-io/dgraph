@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package z
+package testutil
 
 import (
 	"bytes"

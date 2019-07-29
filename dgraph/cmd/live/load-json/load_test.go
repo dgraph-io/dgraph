@@ -29,11 +29,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
-var alphaService = z.SockAddr
-var zeroService = z.SockAddrZero
+var alphaService = testutil.SockAddr
+var zeroService = testutil.SockAddrZero
 
 var (
 	testDataDir string
@@ -54,7 +54,7 @@ func checkLoadedData(t *testing.T) {
 		}
 	`)
 	require.NoError(t, err)
-	z.CompareJSON(t, `
+	testutil.CompareJSON(t, `
 		{
 			"q": [
 					{
@@ -79,7 +79,7 @@ func checkLoadedData(t *testing.T) {
 		}
 	`)
 	require.NoError(t, err)
-	z.CompareJSON(t, `
+	testutil.CompareJSON(t, `
 		{
 			"q": [
 				{
@@ -96,7 +96,7 @@ func checkLoadedData(t *testing.T) {
 }
 
 func TestLiveLoadJSONFileEmpty(t *testing.T) {
-	z.DropAll(t, dg)
+	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
 		{"echo", "[]"},
@@ -104,26 +104,26 @@ func TestLiveLoadJSONFileEmpty(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
 			"--alpha", alphaService, "--zero", zeroService},
 	}
-	err := z.Pipeline(pipeline)
+	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file ran successfully")
 }
 
 func TestLiveLoadJSONFile(t *testing.T) {
-	z.DropAll(t, dg)
+	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
 		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService},
 	}
-	err := z.Pipeline(pipeline)
+	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t)
 }
 
 func TestLiveLoadJSONCompressedStream(t *testing.T) {
-	z.DropAll(t, dg)
+	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
 		{"gzip", "-c", testDataDir + "/family.json"},
@@ -131,14 +131,14 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
 			"--alpha", alphaService, "--zero", zeroService},
 	}
-	err := z.Pipeline(pipeline)
+	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON stream exited with error")
 
 	checkLoadedData(t)
 }
 
 func TestLiveLoadJSONMultipleFiles(t *testing.T) {
-	z.DropAll(t, dg)
+	testutil.DropAll(t, dg)
 
 	files := []string{
 		testDataDir + "/family1.json",
@@ -152,7 +152,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", fileList,
 			"--alpha", alphaService, "--zero", zeroService},
 	}
-	err := z.Pipeline(pipeline)
+	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading multiple JSON files exited with error")
 
 	checkLoadedData(t)
@@ -162,7 +162,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
 
-	dg = z.DgraphClientWithGroot(z.SockAddr)
+	dg = testutil.DgraphClientWithGroot(testutil.SockAddr)
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up
 	// instead of all over /tmp or the working directory.

@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +33,7 @@ import (
 var (
 	userid         = "alice"
 	userpassword   = "simplepassword"
-	dgraphEndpoint = z.SockAddr
+	dgraphEndpoint = testutil.SockAddr
 )
 
 func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
@@ -91,10 +91,10 @@ func TestReservedPredicates(t *testing.T) {
 	// cannot be altered even if the permissions allow it.
 	ctx := context.Background()
 
-	dg1 := z.DgraphClientWithGroot(z.SockAddr)
+	dg1 := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	alterReservedPredicates(t, dg1)
 
-	dg2 := z.DgraphClientWithGroot(z.SockAddr)
+	dg2 := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
 		t.Fatalf("unable to login using the groot account:%v", err)
 	}
@@ -107,12 +107,12 @@ func TestAuthorization(t *testing.T) {
 	}
 
 	glog.Infof("testing with port 9180")
-	dg1 := z.DgraphClientWithGroot(z.SockAddr)
+	dg1 := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	testAuthorization(t, dg1)
 	glog.Infof("done")
 
 	glog.Infof("testing with port 9182")
-	dg2 := z.DgraphClientWithGroot(":9182")
+	dg2 := testutil.DgraphClientWithGroot(":9182")
 	testAuthorization(t, dg2)
 	glog.Infof("done")
 }
@@ -346,7 +346,7 @@ func TestPredicateRegex(t *testing.T) {
 	}
 
 	glog.Infof("testing with port 9180")
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	createAccountAndData(t, dg)
 	ctx := context.Background()
 	err := dg.Login(ctx, userid, userpassword)
@@ -418,7 +418,7 @@ func TestPredicateRegex(t *testing.T) {
 }
 
 func TestAccessWithoutLoggingIn(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 
 	createAccountAndData(t, dg)
 	// without logging in,
