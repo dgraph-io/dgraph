@@ -127,20 +127,43 @@ func ShouldCrash(err error) bool {
 // WhiteSpace Replacer removes spaces and tabs from a string.
 var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")
 
-type errRes struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+// GqlError is a GraphQL spec compliant error structure.  See GraphQL spec on
+// errors here: https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+//
+// Note: "Every error must contain an entry with the key message with a string
+// description of the error intended for the developer as a guide to understand
+// and correct the error."
+//
+// "If an error can be associated to a particular point in the request [the error]
+// should contain an entry with the key locations with a list of locations"
+//
+// Path is about GraphQL results and Errors for GraphQL layer.
+//
+// Extensions is for everything else.
+type GqlError struct {
+	Message    string                 `json:"message"`
+	Locations  []Location             `json:"locations,omitempty"`
+	Path       []interface{}          `json:"path,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+// A Location is the Line+Column index of an error in a request.
+type Location struct {
+	Line   int `json:"line,omitempty"`
+	Column int `json:"column,omitempty"`
 }
 
 type queryRes struct {
-	Errors []errRes `json:"errors"`
+	Errors []GqlError `json:"errors"`
 }
 
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
-	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
 			glog.Errorf("Error while writing: %+v", err)
@@ -170,8 +193,8 @@ func AddCorsHeaders(w http.ResponseWriter) {
 
 // QueryResWithData represents a response that holds errors as well as data.
 type QueryResWithData struct {
-	Errors []errRes `json:"errors"`
-	Data   *string  `json:"data"`
+	Errors []GqlError `json:"errors"`
+	Data   *string    `json:"data"`
 }
 
 // SetStatusWithData sets the errors in the response and ensures that the data key
@@ -180,7 +203,9 @@ type QueryResWithData struct {
 // key with null value according to GraphQL spec.
 func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	var qr QueryResWithData
-	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
 		if _, err := w.Write(js); err != nil {
