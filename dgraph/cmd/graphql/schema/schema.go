@@ -41,12 +41,6 @@ type scalar struct {
 	dgraphType string
 }
 
-type args struct {
-	name    string
-	gqlType string
-	nonNull bool
-}
-
 var supportedScalars = []scalar{
 	{name: "ID", dgraphType: "uid"},
 	{name: "Boolean", dgraphType: "bool"},

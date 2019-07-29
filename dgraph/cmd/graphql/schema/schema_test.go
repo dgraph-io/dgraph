@@ -139,7 +139,7 @@ func TestInvalidSchemas(t *testing.T) {
 
 			t.Run(sch.Name, func(t *testing.T) {
 				gqlErrList := ValidateSchema(doc)
-				require.Equal(t, sch.Output, gqlErrList)
+				require.Equal(t, sch.Output, gqlErrList, fmt.Sprintf(sch.Name))
 			})
 		}
 	}

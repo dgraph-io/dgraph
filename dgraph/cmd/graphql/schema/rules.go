@@ -32,7 +32,7 @@ func init() {
 
 func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 	for _, typ := range sch.Definitions {
-		if (typ.Kind != ast.Object && typ.Kind != ast.Enum) || isReservedKeyWord(typ.Name) {
+		if typ.Kind != ast.Object && typ.Kind != ast.Enum {
 			return gqlerror.ErrorPosf(typ.Position,
 				"Only type and enums are allowed in initial schema.")
 		}
@@ -50,7 +50,7 @@ func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 				if found {
 					return gqlerror.ErrorPosf(
 						fld.Position,
-						fmt.Sprintf("More than one ID field found for type %s", typeVal.Name),
+						fmt.Sprintf("More than one ID field found for type %s.", typeVal.Name),
 					)
 				}
 
@@ -68,7 +68,7 @@ func nameCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 			return gqlerror.ErrorPosf(
 				defn.Position,
 				fmt.Sprintf(
-					"%s is reserved keyword. You can't declare type with this name", defn.Name,
+					"%s is reserved keyword. You can't declare type with this name.", defn.Name,
 				),
 			)
 		}
@@ -84,7 +84,10 @@ func listValidityCheck(sch *ast.SchemaDocument) *gqlerror.Error {
 			if fld.Type.Elem != nil && fld.Type.NonNull && !fld.Type.Elem.NonNull {
 				return gqlerror.ErrorPosf(
 					fld.Position,
-					fmt.Sprintf("[%s]! type of lists are invalid", fld.Type.Name()),
+					fmt.Sprintf(
+						"[%s]! type of lists are invalid. Valid options are [%s!]! and [%s!].",
+						fld.Type.Name(), fld.Type.Name(), fld.Type.Name(),
+					),
 				)
 			}
 		}
