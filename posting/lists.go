@@ -207,8 +207,11 @@ func (lc *LocalCache) getNoStore(key string) *List {
 	return nil
 }
 
-// TODO(martinmr): add documentation.
-func (lc *LocalCache) Set(key string, updated *List) *List {
+// SetIfAbsent adds the list for the specified key to the cache. If a list for the same
+// key already exists, the cache will not be modified and the existing list
+// will be returned instead. This behavior is meant to prevent the goroutines
+// using the cache from ending up with an orphaned version of a list.
+func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
 	if pl, ok := lc.plists[key]; ok {
@@ -218,8 +221,7 @@ func (lc *LocalCache) Set(key string, updated *List) *List {
 	return updated
 }
 
-// Get retrieves the cached version of the list associated with the given key.
-func (lc *LocalCache) Get(key []byte) (*List, error) {
+func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	if lc == nil {
 		return getNew(key, pstore)
 	}
@@ -228,10 +230,21 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 		return pl, nil
 	}
 
-	pl, err := getNew(key, pstore)
-	if err != nil {
-		return nil, err
+	var pl *List
+	if readFromDisk {
+		var err error
+		pl, err = getNew(key, pstore)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pl = &List{
+			key:         key,
+			mutationMap: make(map[uint64]*pb.PostingList),
+			plist:       new(pb.PostingList),
+		}
 	}
+
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
 	lc.RLock()
@@ -239,7 +252,19 @@ func (lc *LocalCache) Get(key []byte) (*List, error) {
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
-	return lc.Set(skey, pl), nil
+	return lc.SetIfAbsent(skey, pl), nil
+}
+
+// Get retrieves the cached version of the list associated with the given key.
+func (lc *LocalCache) Get(key []byte) (*List, error) {
+	return lc.getInternal(key, true)
+}
+
+// GetFromDelta gets the cached version of the list without reading from disk
+// and only applies the existing deltas. This is used in situations where the
+// posting list will only be modified and not read (e.g adding index mutations).
+func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
+	return lc.getInternal(key, false)
 }
 
 // UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.

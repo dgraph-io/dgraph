@@ -370,7 +370,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "Alice:string @reverse @count @lang @upsert . \n",
+			expected: "<Alice>:string @reverse @count @lang @upsert . \n",
 		},
 		{
 			skv: &skv{
@@ -445,7 +445,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "data_base:string @lang . \n",
+			expected: "<data_base>:string @lang . \n",
 		},
 		{
 			skv: &skv{
@@ -460,7 +460,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "data.base:string @lang . \n",
+			expected: "<data.base>:string @lang . \n",
 		},
 	}
 	for _, testCase := range testCases {
