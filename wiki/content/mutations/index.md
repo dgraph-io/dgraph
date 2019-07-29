@@ -616,7 +616,7 @@ All edges for a predicate emanating from a single node can be deleted at once
 }
 ```
 
-If no predicates specified, then all of the node's known outbound edges (to
+If no predicates are specified, then all of the node's known outbound edges (to
 other nodes and to literal values) are deleted (corresponding to deleting `S *
 *`). The predicates to delete are derived using the type system. Refer to the
 [RDF format]({{< relref "#delete" >}}) documentation and the section on the
