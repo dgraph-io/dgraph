@@ -17,7 +17,9 @@
 package bulk
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -78,6 +80,18 @@ func less(lhs, rhs *pb.MapEntry) bool {
 	return lhsUID < rhsUID
 }
 
+func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
+	fileNum := atomic.AddUint32(&m.mapFileId, 1)
+	filename := filepath.Join(
+		m.opt.TmpDir,
+		"shards",
+		fmt.Sprintf("%03d", shardIdx),
+		fmt.Sprintf("%06d.map.gz", fileNum),
+	)
+	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
+	return os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+}
+
 func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint64, shardIdx int) {
 	defer m.shards[shardIdx].mu.Unlock() // Locked by caller.
 
@@ -85,27 +99,24 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		return less(entries[i], entries[j])
 	})
 
-	buf := make([]byte, encodedSize)
-	offset := 0
-	for _, me := range entries {
-		n := binary.PutUvarint(buf[offset:], uint64(me.Size()))
-		offset += n
-		n, err := me.MarshalTo(buf[offset:])
-		x.Check(err)
-		offset += n
-	}
-	// enlarge buf to include all the data
-	buf = buf[0:offset]
+	f, err := m.openOutputFile(shardIdx)
+	x.Check(err)
+	defer func() {
+		x.Check(f.Sync())
+		x.Check(f.Close())
+	}()
+	gzWriter := gzip.NewWriter(f)
+	defer gzWriter.Flush()
+	w := bufio.NewWriter(gzWriter)
+	defer w.Flush()
 
-	fileNum := atomic.AddUint32(&m.mapFileId, 1)
-	filename := filepath.Join(
-		m.opt.TmpDir,
-		"shards",
-		fmt.Sprintf("%03d", shardIdx),
-		fmt.Sprintf("%06d.map", fileNum),
-	)
-	x.Check(os.MkdirAll(filepath.Dir(filename), 0755))
-	x.Check(x.WriteFileSync(filename, buf, 0644))
+	for _, me := range entries {
+		binary.Write(w, binary.LittleEndian, uint64(me.Size()))
+
+		buf, err := me.Marshal()
+		x.Check(err)
+		binary.Write(w, binary.LittleEndian, buf)
+	}
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
