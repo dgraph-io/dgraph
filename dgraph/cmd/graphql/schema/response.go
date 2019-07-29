@@ -27,6 +27,9 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
+// GraphQL spec on response is here:
+// https://graphql.github.io/graphql-spec/June2018/#sec-Response
+
 // GraphQL spec on errors is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 
@@ -37,11 +40,10 @@ type Response struct {
 	// - spec error format is different to x.errRes
 	// - I think we should mostly return 200 status code
 	// - for spec we need to return errors and data in same response
-	//
-	// see https://graphql.github.io/graphql-spec/June2018/#sec-Response
-	//
-	Errors gqlerror.List
-	Data   bytes.Buffer
+
+	Errors   gqlerror.List
+	Data     bytes.Buffer
+	NullData bool
 }
 
 // ErrorResponsef returns a Response containing a single GraphQL error with a
@@ -52,39 +54,81 @@ func ErrorResponsef(format string, args ...interface{}) *Response {
 	}
 }
 
+// ErrorResponse formats an error as a list of GraphQL errors and builds
+// a response with that error list and no data.
+func ErrorResponse(err error) *Response {
+	return &Response{
+		Errors: AsGQLErrors(err),
+	}
+}
+
 // WithNullData sets the data response of r such that subsequent calls
 // to r.WriteTo will write `"data": null`
 func (r *Response) WithNullData() {
+	r.NullData = true
 	r.Data.Reset()
-	r.Data.WriteString(`null`)
+}
+
+// AddData adds p to r's data buffer.  If p is empty, the call has no effect.
+// If r.Data is empty before the call, then r.Data becomes {p}
+// If r.Data contains data it always looks like {f,g,...}, and
+// adding to that results in {f,g,...,p}
+func (r *Response) AddData(p []byte) {
+	if r == nil || len(p) == 0 {
+		return
+	}
+
+	r.NullData = false
+
+	if r.Data.Len() > 0 {
+		// The end of the buffer is always the closing `}`
+		r.Data.Truncate(r.Data.Len() - 1)
+		r.Data.WriteRune(',')
+	}
+
+	if r.Data.Len() == 0 {
+		r.Data.WriteRune('{')
+	}
+
+	r.Data.Write(p)
+	r.Data.WriteRune('}')
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w
 // and returns the number of bytes written and error, if any.
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
-	var out bytes.Buffer
-
-	out.WriteRune('{')
-	if len(r.Errors) > 0 {
-		js, err := json.Marshal(r.Errors)
-		if err != nil {
-			msg := "Server failed to marshal a valid JSON error response"
-			glog.Errorf(msg, errors.Wrap(err, msg))
-			out.WriteString("\"errors\": [ { \"message\": \"" + msg + "\" } ]")
-			out.WriteRune('}')
-			return out.WriteTo(w)
-		}
-
-		out.WriteString("\"errors\":")
-		out.Write(js)
+	if r == nil {
+		w.Write([]byte(
+			"{ \"errors\": [ { \"message\": \"Internal error - no response to write.\" } ] }"))
 	}
 
-	if r.Data.Len() > 0 {
-		out.WriteString("\"data\": {")
-		out.Write(r.Data.Bytes())
-		out.WriteRune('}')
+	var js []byte
+	var err error
+
+	if r.NullData {
+		js, err = json.Marshal(
+			struct {
+				Errors gqlerror.List `json:"errors"`
+				Data   *string       `json:"data"`
+			}{
+				Errors: r.Errors,
+			})
+	} else {
+		js, err = json.Marshal(struct {
+			Errors gqlerror.List   `json:"errors,omitempty"`
+			Data   json.RawMessage `json:"data,omitempty"`
+		}{
+			Errors: r.Errors,
+			Data:   r.Data.Bytes(),
+		})
 	}
 
-	out.WriteRune('}')
-	return out.WriteTo(w)
+	if err != nil {
+		msg := "Internal error - failed to marshal a valid JSON response"
+		glog.Errorf("%v+", errors.Wrap(err, msg))
+		js = []byte("{ \"errors\": [ { \"message\": \"" + msg + "\" } ] }")
+	}
+
+	i, err := w.Write(js)
+	return int64(i), err
 }
