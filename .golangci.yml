@@ -18,3 +18,13 @@ linters:
     - lll
     - varcheck
     - unused
+
+issues:
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    - linters:
+        - golint
+      text: "(const|var|type|method|func|struct field) .+ should be"
+    - linters:
+        - golint
+      text: "(method parameter|func parameter|func result) .+ should be"
