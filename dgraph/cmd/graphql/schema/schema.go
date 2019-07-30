@@ -27,7 +27,7 @@ import (
 	"github.com/vektah/gqlparser/validator"
 )
 
-type schRuleFunc func(schema *ast.SchemaDocument) *gqlerror.Error
+type schRuleFunc func(schema *ast.SchemaDocument) gqlerror.List
 
 type schRule struct {
 	name        string
@@ -41,28 +41,24 @@ type scalar struct {
 	dgraphType string
 }
 
-var supportedScalars = []scalar{
-	{name: "ID", dgraphType: "uid"},
-	{name: "Boolean", dgraphType: "bool"},
-	{name: "Int", dgraphType: "int"},
-	{name: "Float", dgraphType: "float"},
-	{name: "String", dgraphType: "string"},
-	{name: "DateTime", dgraphType: "dateTime"},
+var supportedScalars = map[string]scalar{
+	"ID":       scalar{name: "ID", dgraphType: "uid"},
+	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
+	"Int":      scalar{name: "Int", dgraphType: "int"},
+	"Float":    scalar{name: "Float", dgraphType: "float"},
+	"String":   scalar{name: "String", dgraphType: "string"},
+	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
 }
 
 // AddScalars adds all the supported scalars in the schema.
 func AddScalars(doc *ast.SchemaDocument) {
 	for _, s := range supportedScalars {
-		addScalar(s, doc)
+		doc.Definitions = append(
+			doc.Definitions,
+			// Empty Position because it is being inserted by the engine.
+			&ast.Definition{Kind: ast.Scalar, Name: s.name, Position: &ast.Position{}},
+		)
 	}
-}
-
-func addScalar(s scalar, doc *ast.SchemaDocument) {
-	doc.Definitions = append(
-		doc.Definitions,
-		// Empty Position because it is being inserted by the engine.
-		&ast.Definition{Kind: ast.Scalar, Name: s.name, Position: &ast.Position{}},
-	)
 }
 
 // AddRule adds a new schema rule to the global array schRules.
@@ -78,8 +74,8 @@ func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {
-		if gqlErr := schRules[i].schRuleFunc(schema); gqlErr != nil {
-			errs = append(errs, gqlErr)
+		if gqlErrs := schRules[i].schRuleFunc(schema); gqlErrs != nil {
+			errs = append(errs, gqlErrs...)
 		}
 	}
 

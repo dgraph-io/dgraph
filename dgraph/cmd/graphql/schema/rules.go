@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -30,70 +31,101 @@ func init() {
 	AddRule("ValidListType", listValidityCheck)
 }
 
-func dataTypeCheck(sch *ast.SchemaDocument) *gqlerror.Error {
+func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
+
 	for _, typ := range sch.Definitions {
 		if typ.Kind != ast.Object && typ.Kind != ast.Enum {
-			return gqlerror.ErrorPosf(typ.Position,
-				"Only type and enums are allowed in initial schema.")
+			errs = append(errs, gqlerror.ErrorPosf(
+				typ.Position,
+				"Only type and enums are allowed in initial schema.",
+			))
 		}
 	}
 
-	return nil
+	return errs
 }
 
-func idCountCheck(sch *ast.SchemaDocument) *gqlerror.Error {
-	var found bool
-	for _, typeVal := range sch.Definitions {
-		found = false
-		for _, fld := range typeVal.Fields {
-			if isIDField(typeVal, fld) {
-				if found {
-					return gqlerror.ErrorPosf(
-						fld.Position,
-						fmt.Sprintf("More than one ID field found for type %s.", typeVal.Name),
-					)
-				}
+func idCountCheck(sch *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
 
-				found = true
+	for _, typeVal := range sch.Definitions {
+		var idFields []*ast.FieldDefinition
+		for _, field := range typeVal.Fields {
+			if isIDField(typeVal, field) {
+				idFields = append(idFields, field)
 			}
 		}
-	}
 
-	return nil
-}
+		if len(idFields) > 1 {
+			var fieldNames []string
+			var errLocations []gqlerror.Location
 
-func nameCheck(sch *ast.SchemaDocument) *gqlerror.Error {
-	for _, defn := range sch.Definitions {
-		if isReservedKeyWord(defn.Name) {
-			return gqlerror.ErrorPosf(
-				defn.Position,
-				fmt.Sprintf(
-					"%s is reserved keyword. You can't declare type with this name.", defn.Name,
-				),
+			for _, f := range idFields {
+				fieldNames = append(fieldNames, f.Name)
+				errLocations = append(errLocations, gqlerror.Location{
+					Line:   f.Position.Line,
+					Column: f.Position.Column,
+				})
+			}
+
+			fieldNamesString := strings.Join(fieldNames, ", ")
+			errMessage := fmt.Sprintf(
+				"Fields %s are listed as IDs for type %s,"+
+					"but we can have only one ID for any type."+
+					"Pick a single field as the ID for type %s",
+				fieldNamesString, typeVal.Name, typeVal.Name,
 			)
+
+			errs = append(errs, &gqlerror.Error{
+				Message:   errMessage,
+				Locations: errLocations,
+			})
 		}
 	}
 
-	return nil
+	return errs
+}
+
+func nameCheck(sch *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, defn := range sch.Definitions {
+		if isReservedKeyWord(defn.Name) {
+			errs = append(errs, gqlerror.ErrorPosf(
+				defn.Position,
+				fmt.Sprintf(
+					"%s is a reserved word, so you can't declare a type with this name."+
+						"Pick a different name for the type. You also don't need to define the "+
+						"Query or Mutation types - those are built automatically for you.",
+					defn.Name,
+				),
+			))
+		}
+	}
+
+	return errs
 }
 
 // [Posts]! -> invalid, [Posts!]! -> valid
-func listValidityCheck(sch *ast.SchemaDocument) *gqlerror.Error {
+func listValidityCheck(sch *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
+
 	for _, typ := range sch.Definitions {
-		for _, fld := range typ.Fields {
-			if fld.Type.Elem != nil && fld.Type.NonNull && !fld.Type.Elem.NonNull {
-				return gqlerror.ErrorPosf(
-					fld.Position,
+		for _, field := range typ.Fields {
+			if field.Type.Elem != nil && field.Type.NonNull && !field.Type.Elem.NonNull {
+				errs = append(errs, gqlerror.ErrorPosf(
+					field.Position,
 					fmt.Sprintf(
 						"[%s]! type of lists are invalid. Valid options are [%s!]! and [%s!].",
-						fld.Type.Name(), fld.Type.Name(), fld.Type.Name(),
+						field.Type.Name(), field.Type.Name(), field.Type.Name(),
 					),
-				)
+				))
 			}
 		}
 	}
 
-	return nil
+	return errs
 }
 
 func isScalar(s string) bool {

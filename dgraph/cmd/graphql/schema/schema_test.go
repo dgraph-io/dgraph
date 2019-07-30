@@ -74,39 +74,6 @@ func TestSchemaString(t *testing.T) {
 	}
 }
 
-func TestEqualSchema(t *testing.T) {
-	numTests := 2
-
-	for i := 1; i <= numTests; i++ {
-		fileName1 := "../testdata/equalschema" + strconv.Itoa(i) + "_1.txt" // run from pwd
-		str1, err := ioutil.ReadFile(fileName1)
-		if err != nil {
-			t.Errorf("Unable to read file %s", fileName1)
-			continue
-		}
-
-		sch1, errlist1 := GenerateCompleteSchema(string(str1))
-		if errlist1 != nil {
-			t.Errorf(errlist1.Error())
-			continue
-		}
-
-		fileName2 := "../testdata/equalschema" + strconv.Itoa(i) + "_2.txt" // run from pwd
-		str2, err := ioutil.ReadFile(fileName2)
-		if err != nil {
-			t.Errorf("Unable to read file %s", fileName2)
-		}
-
-		sch2, errlist2 := GenerateCompleteSchema(string(str2))
-		if errlist2 != nil {
-			t.Errorf(errlist2.Error())
-			continue
-		}
-
-		require.True(t, AreEqualSchema(sch1, sch2))
-	}
-}
-
 type Tests map[string][]TestCase
 type TestCase struct {
 	Name   string

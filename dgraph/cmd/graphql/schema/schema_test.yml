@@ -7,16 +7,17 @@ invalid_schems:
         id2: ID!
       }
     output: [
-      {"message":"More than one ID field found for type P.","locations":[{"line":3,"column":3}]},
+      {"message":"Fields id, id2 are listed as IDs for type P,but we can have only one ID for any type.Pick a single field as the ID for type P", "locations":[{"line":2, "column":3}, {"line":3, "column":3}]},
     ]
 
   -
     name: "Query in initial schema"
     input: |
       type Query {
+        getAuthro(id: ID): Author!
       }
     output: [
-      {"message":"Query is reserved keyword. You can't declare type with this name.","locations":[{"line":1,"column":6}]},
+      {"message":"Query is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.","locations":[{"line":1,"column":6}]},
     ]
 
   -
@@ -35,24 +36,29 @@ invalid_schems:
       scalar Int
     output: [
       {"message":"Only type and enums are allowed in initial schema.","locations":[{"line":1,"column":8}]},
-      {"message":"Int is reserved keyword. You can't declare type with this name.","locations":[{"line":1,"column":8}]},
+      {"message":"Int is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.","locations":[{"line":1,"column":8}]},
     ]
 
   -
-    name: "Typename is reserved keyword"
+    name: "Typename is reserved word"
     input: |
       type String {
         id: ID!
       }
     output: [
-      {"message": "String is reserved keyword. You can't declare type with this name.", "locations":[{"line":1,"column":6}]},
+      {"message": "String is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.", "locations":[{"line":1,"column":6}]},
     ]
 
   -
     name: "Mutation in initial schema"
     input: |
       type Mutation {
+        getAuthro(id: ID): Author!
+      }
+      type X {
+        y: [Z]!
       }
     output: [
-      {"message":"Mutation is reserved keyword. You can't declare type with this name.","locations":[{"line":1,"column":6}]},
+      {"message":"Mutation is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.","locations":[{"line":1,"column":6}]},
+      {"message": "[Z]! type of lists are invalid. Valid options are [Z!]! and [Z!].", "locations":[{"line":5, "column":3}]},
     ]

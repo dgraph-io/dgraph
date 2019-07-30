@@ -194,9 +194,7 @@ func initDgraph() error {
 	}
 
 	completeSchema := gschema.Stringify(sch)
-	if glog.V(2) {
-		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
-	}
+	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
 
 	// TODO: extract out as todo's below are done
 	var schemaB strings.Builder
