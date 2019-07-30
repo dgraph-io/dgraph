@@ -178,7 +178,7 @@ func GetNoStore(key []byte) (rlist *List, err error) {
 	return getNew(key, pstore)
 }
 
-// LocalCache stores a plCache of posting lists and deltas.
+// LocalCache stores a cache of posting lists and deltas.
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks
 type LocalCache struct {

@@ -18,13 +18,13 @@ package posting
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"strconv"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -163,7 +163,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 		// If this version exists in the plCache, the list can be derived by merging
 		// the cached version with the list that's been computed so far.
-		cachedVal, ok := plCache.Get(plCacheKey(key, item.Version()))
+		cachedVal, ok := plCache.Get(y.KeyWithTs(key, item.Version()))
 		if ok {
 			base := cachedVal.(*List)
 			l = mergePostingLists(base, l)
@@ -211,20 +211,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		it.Next()
 	}
 
-	cacheKey := plCacheKey(l.key, l.maxTs)
+	cacheKey := y.KeyWithTs(l.key, l.maxTs)
 	if _, ok := plCache.Get(cacheKey); !ok {
 		plCache.Set(cacheKey, l, l.cacheCost())
 	}
 
 	return l, nil
-}
-
-func plCacheKey(key []byte, version uint64) []byte {
-	cacheKey := make([]byte, len(key)+8)
-	copy(cacheKey, key)
-	rest := cacheKey[len(key):]
-	binary.BigEndian.PutUint64(rest, version)
-	return cacheKey
 }
 
 func mergePostingLists(base *List, deltas *List) *List {
@@ -233,20 +225,19 @@ func mergePostingLists(base *List, deltas *List) *List {
 	deltas.RLock()
 	defer deltas.RUnlock()
 
-	new := &List{}
-	new.key = make([]byte, len(base.key))
-	copy(new.key, base.key)
-	new.plist = proto.Clone(base.plist).(*pb.PostingList)
-	new.mutationMap = make(map[uint64]*pb.PostingList)
+	out := &List{}
+	out.key = append([]byte{}, base.key...)
+	out.plist = proto.Clone(base.plist).(*pb.PostingList)
+	out.mutationMap = make(map[uint64]*pb.PostingList)
 	for commitTs, pl := range base.mutationMap {
-		new.mutationMap[commitTs] = proto.Clone(pl).(*pb.PostingList)
+		out.mutationMap[commitTs] = proto.Clone(pl).(*pb.PostingList)
 	}
-	new.minTs = base.minTs
+	out.minTs = base.minTs
 	// The maxTs was set in the list with the deltas when reading the version
 	// of the corresponding item.
-	new.maxTs = deltas.maxTs
+	out.maxTs = deltas.maxTs
 
-	return new
+	return out
 }
 
 // TODO: We should only create a posting list with a specific readTs.
