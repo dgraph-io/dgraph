@@ -25,10 +25,10 @@ import (
 )
 
 func init() {
-	AddRule("OnlyTypeEnumInInitialSchema", dataTypeCheck)
-	AddRule("OneIDPerType", idCountCheck)
-	AddRule("TypeNameCantBeReservedKeyWords", nameCheck)
-	AddRule("ValidListType", listValidityCheck)
+	addRule("OnlyTypeEnumInInitialSchema", dataTypeCheck)
+	addRule("OneIDPerType", idCountCheck)
+	addRule("TypeNameCantBeReservedKeyWords", nameCheck)
+	addRule("ValidListType", listValidityCheck)
 }
 
 func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
@@ -38,7 +38,8 @@ func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
 		if typ.Kind != ast.Object && typ.Kind != ast.Enum {
 			errs = append(errs, gqlerror.ErrorPosf(
 				typ.Position,
-				"Only type and enums are allowed in initial schema.",
+				"You can't add %s definitions. Only type and enums are allowed in initial schema.",
+				strings.ToLower(string(typ.Kind)),
 			))
 		}
 	}
@@ -69,11 +70,14 @@ func idCountCheck(sch *ast.SchemaDocument) gqlerror.List {
 				})
 			}
 
-			fieldNamesString := strings.Join(fieldNames, ", ")
+			fieldNamesString := fmt.Sprintf(
+				"%s and %s",
+				strings.Join(fieldNames[:len(fieldNames)-1], ", "), fieldNames[len(fieldNames)-1],
+			)
 			errMessage := fmt.Sprintf(
-				"Fields %s are listed as IDs for type %s,"+
-					"but we can have only one ID for any type."+
-					"Pick a single field as the ID for type %s",
+				"Fields %s are listed as IDs for type %s, "+
+					"but a type can have only one ID field. "+
+					"Pick a single field as the ID for type %s.",
 				fieldNamesString, typeVal.Name, typeVal.Name,
 			)
 
@@ -91,16 +95,20 @@ func nameCheck(sch *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range sch.Definitions {
-		if isReservedKeyWord(defn.Name) {
-			errs = append(errs, gqlerror.ErrorPosf(
-				defn.Position,
-				fmt.Sprintf(
-					"%s is a reserved word, so you can't declare a type with this name."+
-						"Pick a different name for the type. You also don't need to define the "+
-						"Query or Mutation types - those are built automatically for you.",
-					defn.Name,
-				),
-			))
+		if (defn.Kind == ast.Object || defn.Kind == ast.Enum) && isReservedKeyWord(defn.Name) {
+			var errMesg string
+
+			if defn.Name == "Query" || defn.Name == "Mutation" {
+				errMesg = "You don't need to define the GraphQL Query or Mutation types." +
+					" Those are built automatically for you."
+			} else {
+				errMesg = fmt.Sprintf(
+					"%s is a reserved word, so you can't declare a type with this name. "+
+						"Pick a different name for the type.", defn.Name,
+				)
+			}
+
+			errs = append(errs, gqlerror.ErrorPosf(defn.Position, errMesg))
 		}
 	}
 
@@ -117,7 +125,7 @@ func listValidityCheck(sch *ast.SchemaDocument) gqlerror.List {
 				errs = append(errs, gqlerror.ErrorPosf(
 					field.Position,
 					fmt.Sprintf(
-						"[%s]! type of lists are invalid. Valid options are [%s!]! and [%s!].",
+						"[%s]! lists are invalid. Valid options are [%s!]! and [%s!].",
 						field.Type.Name(), field.Type.Name(), field.Type.Name(),
 					),
 				))
@@ -129,12 +137,8 @@ func listValidityCheck(sch *ast.SchemaDocument) gqlerror.List {
 }
 
 func isScalar(s string) bool {
-	for _, sc := range supportedScalars {
-		if s == sc.name {
-			return true
-		}
-	}
-	return false
+	_, ok := supportedScalars[s]
+	return ok
 }
 
 func isReservedKeyWord(name string) bool {

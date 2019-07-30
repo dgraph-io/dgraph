@@ -7,7 +7,7 @@ invalid_schems:
         id2: ID!
       }
     output: [
-      {"message":"Fields id, id2 are listed as IDs for type P,but we can have only one ID for any type.Pick a single field as the ID for type P", "locations":[{"line":2, "column":3}, {"line":3, "column":3}]},
+      {"message":"Fields id and id2 are listed as IDs for type P, but a type can have only one ID field. Pick a single field as the ID for type P.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}]},
     ]
 
   -
@@ -17,7 +17,7 @@ invalid_schems:
         getAuthro(id: ID): Author!
       }
     output: [
-      {"message":"Query is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.","locations":[{"line":1,"column":6}]},
+      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":1, "column":6}]},
     ]
 
   -
@@ -27,16 +27,25 @@ invalid_schems:
         posts: [P]!
       }
     output: [
-      {"message":"[P]! type of lists are invalid. Valid options are [P!]! and [P!].","locations":[{"line":2,"column":3}]},
+      {"message":"[P]! lists are invalid. Valid options are [P!]! and [P!].", "locations":[{"line":2, "column":3}]},
     ]
 
   -
-    name: "Scalar in initial schema"
+    name: "Unsupported definitions in initial schema"
     input: |
       scalar Int
+      interface P {
+        t: T!
+      }
+      union Q = R | S | T
+      input U {
+        x: X!
+      }
     output: [
-      {"message":"Only type and enums are allowed in initial schema.","locations":[{"line":1,"column":8}]},
-      {"message":"Int is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.","locations":[{"line":1,"column":8}]},
+      {"message":"You can't add scalar definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
+      {"message":"You can't add interface definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":2, "column":11}]},
+      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
+      {"message":"You can't add input_object definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
     ]
 
   -
@@ -46,7 +55,7 @@ invalid_schems:
         id: ID!
       }
     output: [
-      {"message": "String is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.", "locations":[{"line":1,"column":6}]},
+      {"message":"String is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":1, "column":6}]},
     ]
 
   -
@@ -59,6 +68,6 @@ invalid_schems:
         y: [Z]!
       }
     output: [
-      {"message":"Mutation is a reserved word, so you can't declare a type with this name.Pick a different name for the type. You also don't need to define the Query or Mutation types - those are built automatically for you.","locations":[{"line":1,"column":6}]},
-      {"message": "[Z]! type of lists are invalid. Valid options are [Z!]! and [Z!].", "locations":[{"line":5, "column":3}]},
+      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":1, "column":6}]},
+      {"message":"[Z]! lists are invalid. Valid options are [Z!]! and [Z!].", "locations":[{"line":5, "column":3}]},
     ]

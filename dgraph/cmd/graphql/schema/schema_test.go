@@ -84,28 +84,19 @@ type TestCase struct {
 func TestInvalidSchemas(t *testing.T) {
 	fileName := "schema_test.yml" // run from pwd
 	byts, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	require.Nil(t, err)
 
 	var tests Tests
 	err = yaml.Unmarshal(byts, &tests)
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	require.Nil(t, err)
 
 	for _, schemas := range tests {
 		for _, sch := range schemas {
 			doc, gqlerr := parser.ParseSchema(&ast.Source{Input: string(sch.Input)})
-			if gqlerr != nil {
-				t.Errorf(gqlerr.Error())
-				continue
-			}
+			require.Nil(t, gqlerr)
 
 			t.Run(sch.Name, func(t *testing.T) {
-				gqlErrList := ValidateSchema(doc)
+				gqlErrList := validateSchema(doc)
 				require.Equal(t, sch.Output, gqlErrList, fmt.Sprintf(sch.Name))
 			})
 		}

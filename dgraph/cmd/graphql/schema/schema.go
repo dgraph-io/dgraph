@@ -50,8 +50,8 @@ var supportedScalars = map[string]scalar{
 	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
 }
 
-// AddScalars adds all the supported scalars in the schema.
-func AddScalars(doc *ast.SchemaDocument) {
+// addScalars adds all the supported scalars in the schema.
+func addScalars(doc *ast.SchemaDocument) {
 	for _, s := range supportedScalars {
 		doc.Definitions = append(
 			doc.Definitions,
@@ -61,22 +61,20 @@ func AddScalars(doc *ast.SchemaDocument) {
 	}
 }
 
-// AddRule adds a new schema rule to the global array schRules.
-func AddRule(name string, f schRuleFunc) {
+// addRule adds a new schema rule to the global array schRules.
+func addRule(name string, f schRuleFunc) {
 	schRules = append(schRules, schRule{
 		name:        name,
 		schRuleFunc: f,
 	})
 }
 
-// ValidateSchema validates the schema against dgraph's rules of schema.
-func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
+// validateSchema validates the schema against dgraph's rules of schema.
+func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {
-		if gqlErrs := schRules[i].schRuleFunc(schema); gqlErrs != nil {
-			errs = append(errs, gqlErrs...)
-		}
+		errs = append(errs, schRules[i].schRuleFunc(schema)...)
 	}
 
 	return errs
@@ -91,11 +89,11 @@ func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
 		return nil, []*gqlerror.Error{gqlErr}
 	}
 
-	if gqlErrList := ValidateSchema(doc); gqlErrList != nil {
+	if gqlErrList := validateSchema(doc); gqlErrList != nil {
 		return nil, gqlErrList
 	}
 
-	AddScalars(doc)
+	addScalars(doc)
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
@@ -592,5 +590,6 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 }
 
 func idTypeFor(defn *ast.Definition) string {
+	// Placeholder till more ID types are introduced.
 	return "ID"
 }
