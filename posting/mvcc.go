@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -159,6 +161,15 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			break
 		}
 
+		// If this version exists in the plCache, the list can be derived by merging
+		// the cached version with the list that's been computed so far.
+		cachedVal, ok := plCache.Get(plCacheKey(key, item.Version()))
+		if ok {
+			base := cachedVal.(*List)
+			l = mergePostingLists(base, l)
+			break
+		}
+
 		switch item.UserMeta() {
 		case BitEmptyPosting:
 			l.minTs = item.Version()
@@ -199,7 +210,43 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
+
+	cacheKey := plCacheKey(l.key, l.maxTs)
+	if _, ok := plCache.Get(cacheKey); !ok {
+		plCache.Set(cacheKey, l, l.cacheCost())
+	}
+
 	return l, nil
+}
+
+func plCacheKey(key []byte, version uint64) []byte {
+	cacheKey := make([]byte, len(key)+8)
+	copy(cacheKey, key)
+	rest := cacheKey[len(key):]
+	binary.BigEndian.PutUint64(rest, version)
+	return cacheKey
+}
+
+func mergePostingLists(base *List, deltas *List) *List {
+	base.RLock()
+	defer base.RUnlock()
+	deltas.RLock()
+	defer deltas.RUnlock()
+
+	new := &List{}
+	new.key = make([]byte, len(base.key))
+	copy(new.key, base.key)
+	new.plist = proto.Clone(base.plist).(*pb.PostingList)
+	new.mutationMap = make(map[uint64]*pb.PostingList)
+	for commitTs, pl := range base.mutationMap {
+		new.mutationMap[commitTs] = proto.Clone(pl).(*pb.PostingList)
+	}
+	new.minTs = base.minTs
+	// The maxTs was set in the list with the deltas when reading the version
+	// of the corresponding item.
+	new.maxTs = deltas.maxTs
+
+	return new
 }
 
 // TODO: We should only create a posting list with a specific readTs.

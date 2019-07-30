@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/ristretto"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -146,14 +147,23 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore *badger.DB
-	closer *y.Closer
+	pstore  *badger.DB
+	closer  *y.Closer
+	plCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
 	closer = y.NewCloser(1)
+	var err error
+	plCache, err = ristretto.NewCache(&ristretto.Config{
+		NumCounters: 200e6,
+		MaxCost:     1e9,
+		BufferItems: 64,
+		Log:         false,
+	})
+	x.Check(err)
 	go updateMemoryMetrics(closer)
 }
 
@@ -163,12 +173,12 @@ func Cleanup() {
 }
 
 // GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
-// It does not store the list in any cache.
+// It does not store the list in any plCache.
 func GetNoStore(key []byte) (rlist *List, err error) {
 	return getNew(key, pstore)
 }
 
-// LocalCache stores a cache of posting lists and deltas.
+// LocalCache stores a plCache of posting lists and deltas.
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks
 type LocalCache struct {
@@ -207,10 +217,10 @@ func (lc *LocalCache) getNoStore(key string) *List {
 	return nil
 }
 
-// SetIfAbsent adds the list for the specified key to the cache. If a list for the same
-// key already exists, the cache will not be modified and the existing list
+// SetIfAbsent adds the list for the specified key to the plCache. If a list for the same
+// key already exists, the plCache will not be modified and the existing list
 // will be returned instead. This behavior is meant to prevent the goroutines
-// using the cache from ending up with an orphaned version of a list.
+// using the plCache from ending up with an orphaned version of a list.
 func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 	lc.Lock()
 	defer lc.Unlock()
@@ -267,7 +277,7 @@ func (lc *LocalCache) GetFromDelta(key []byte) (*List, error) {
 	return lc.getInternal(key, false)
 }
 
-// UpdateDeltasAndDiscardLists updates the delta cache before removing the stored posting lists.
+// UpdateDeltasAndDiscardLists updates the delta plCache before removing the stored posting lists.
 func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	lc.Lock()
 	defer lc.Unlock()
