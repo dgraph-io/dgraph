@@ -28,8 +28,8 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var alphaService = testutil.SockAddr

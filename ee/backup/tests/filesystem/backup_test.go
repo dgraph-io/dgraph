@@ -32,8 +32,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/ee/backup"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
