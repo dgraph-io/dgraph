@@ -163,7 +163,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 				if sh.encodedSize >= m.opt.MapBufSize {
 					sh.mu.Lock() // One write at a time.
 					go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
-					// clear the entries and encodedSize for the next batch
+					// Clear the entries and encodedSize for the next batch.
+					// Proactively allocate 10 slots to bootstrap the entries slice.
 					sh.entries = make([]*pb.MapEntry, 0, 10)
 					sh.encodedSize = 0
 				}
