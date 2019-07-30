@@ -82,6 +82,15 @@ func (l *List) maxVersion() uint64 {
 	return l.maxTs
 }
 
+func (l *List) cacheCost() int64 {
+	var cost int64
+	cost += int64(l.plist.Size())
+	for _, pl := range l.mutationMap {
+		cost += int64(pl.Size())
+	}
+	return cost
+}
+
 type pIterator struct {
 	l          *List
 	plist      *pb.PostingList
