@@ -101,21 +101,33 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 
 	f, err := m.openOutputFile(shardIdx)
 	x.Check(err)
+
 	defer func() {
 		x.Check(f.Sync())
 		x.Check(f.Close())
 	}()
+
 	gzWriter := gzip.NewWriter(f)
-	defer gzWriter.Flush()
+	defer func() {
+		x.Check(gzWriter.Flush())
+		x.Check(gzWriter.Close())
+	}()
+
 	w := bufio.NewWriter(gzWriter)
-	defer w.Flush()
+	defer func() {
+		x.Check(w.Flush())
+	}()
 
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
 	for _, me := range entries {
-		binary.Write(w, binary.LittleEndian, uint64(me.Size()))
-
-		buf, err := me.Marshal()
+		n := binary.PutUvarint(sizeBuf, uint64(me.Size()))
+		_, err := w.Write(sizeBuf[:n])
 		x.Check(err)
-		binary.Write(w, binary.LittleEndian, buf)
+
+		meBuf, err := me.Marshal()
+		x.Check(err)
+		_, err = w.Write(meBuf)
+		x.Check(err)
 	}
 }
 
