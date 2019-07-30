@@ -321,6 +321,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 }
 
 // debugString converts mathTree to a string. Good for testing, debugging.
+// nolint: unused
 func (t *MathTree) debugString() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
 	t.stringHelper(buf)
@@ -328,6 +329,7 @@ func (t *MathTree) debugString() string {
 }
 
 // stringHelper does simple DFS to convert MathTree to string.
+// nolint: unused
 func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTruef(t != nil, "Nil Math tree")
 	if t.Var != "" {

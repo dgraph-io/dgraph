@@ -1243,6 +1243,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 }
 
 // debugString converts FilterTree to a string. Good for testing, debugging.
+// nolint: unused
 func (f *FilterTree) debugString() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
 	f.stringHelper(buf)
@@ -1250,6 +1251,7 @@ func (f *FilterTree) debugString() string {
 }
 
 // stringHelper does simple DFS to convert FilterTree to string.
+// nolint: unused
 func (f *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(f != nil)
 	if f.Func != nil && len(f.Func.Name) > 0 {
