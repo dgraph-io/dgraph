@@ -38,9 +38,9 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/z"
 
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -332,17 +332,17 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	resp, err := http.Get("http://" + z.SockAddrHttp + "/admin/export?format=json")
+	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
 	require.NoError(t, err)
 
-	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?format=rdf")
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
 	require.NoError(t, err)
 
-	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?format=xml")
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
 	require.NoError(t, err)
 	require.NotEqual(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + z.SockAddrHttp + "/admin/export?output=rdf")
+	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
 	require.NoError(t, err)
 	require.Equal(t, resp.StatusCode, http.StatusOK)
 }
@@ -370,7 +370,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "Alice:string @reverse @count @lang @upsert . \n",
+			expected: "<Alice>:string @reverse @count @lang @upsert . \n",
 		},
 		{
 			skv: &skv{
@@ -445,7 +445,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "data_base:string @lang . \n",
+			expected: "<data_base>:string @lang . \n",
 		},
 		{
 			skv: &skv{
@@ -460,7 +460,7 @@ func TestToSchema(t *testing.T) {
 					Lang:      true,
 				},
 			},
-			expected: "data.base:string @lang . \n",
+			expected: "<data.base>:string @lang . \n",
 		},
 	}
 	for _, testCase := range testCases {

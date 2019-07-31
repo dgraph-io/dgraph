@@ -88,7 +88,7 @@ if [[ $LOADER != none ]]; then
     trap "rm -f $VERSION_FILE" EXIT
     curl -LSs --head $SCHEMA_URL | awk 'toupper($0)~/^ETAG:/ {print "Schema:"$2}' >> $VERSION_FILE
     curl -LSs --head $DATA_URL | awk 'toupper($0)~/^ETAG:/ {print "Data:"$2}' >> $VERSION_FILE
-    diff -bi $VERSION_FILE queries/data-version || true
+    diff -bi $VERSION_FILE $QUERY_DIR/data-version || true
 fi
 
 Info "entering directory $SRCDIR"
@@ -122,6 +122,9 @@ DockerCompose up -d --force-recreate alpha1
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
+# after the server prints the log "Server is ready", it may be still loading data from badger
+Info "sleeping for 10 seconds for the server to be ready"
+sleep 10
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"

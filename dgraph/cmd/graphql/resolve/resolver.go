@@ -17,11 +17,13 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
+
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
 )
@@ -72,32 +74,26 @@ import (
 // - The "data" works just like a Dgraph query
 //
 
-const (
-	idArgName    = "id"
-	inputArgName = "input"
-)
-
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
 type RequestResolver struct {
-	GqlReq       *schema.Request
-	Schema       schema.Schema
-	dgraphClient *dgo.Dgraph
-	resp         *schema.Response
+	GqlReq *schema.Request
+	Schema schema.Schema
+	dgraph dgraph.Client
+	resp   *schema.Response
 }
 
 // New creates a new RequestResolver
-func New(s schema.Schema, dc *dgo.Dgraph) *RequestResolver {
+func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
 	return &RequestResolver{
-		Schema:       s,
-		dgraphClient: dc,
-		resp:         &schema.Response{},
+		Schema: s,
+		dgraph: dg,
+		resp:   &schema.Response{},
 	}
 }
 
-// WithErrors records all errors errs in r to be reported when a GraphQL
-// response is generated
-func (r *RequestResolver) WithErrors(errs ...*gqlerror.Error) {
-	r.resp.Errors = append(r.resp.Errors, errs...)
+// WithError generates GraphQL errors from err and records those in r.
+func (r *RequestResolver) WithError(err error) {
+	r.resp.Errors = append(r.resp.Errors, schema.AsGQLErrors(err)...)
 }
 
 // Resolve processes h.GqlReq and returns a GraphQL response.
@@ -120,21 +116,62 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
-	op, resp := r.Schema.Operation(r.GqlReq)
-	if resp != nil {
-		return resp
+	op, err := r.Schema.Operation(r.GqlReq)
+	if err != nil {
+		return schema.ErrorResponse(err)
 	}
 
+	// A single request can contain either queries or mutations - not both.
+	// GraphQL validation on the request would have caught that error case
+	// before we get here.  At this point, we know it's valid, it's passed
+	// GraphQL validation and any additional validation we've added.  So here,
+	// we can just execute it.
 	switch {
 	case op.IsQuery():
-		// TODO: this should handle queries in parallel
+		// Queries run in parallel and are independent of each other: e.g.
+		// an error in one query, doesn't affect the others.
+
+		// TODO: this should handle all the queries in parallel.
 		for _, q := range op.Queries() {
-			r.resolveQuery(ctx, q)
+			qr := &QueryResolver{
+				query:  q,
+				schema: r.Schema,
+				dgraph: r.dgraph,
+			}
+			resp, err := qr.Resolve(ctx)
+			r.WithError(err)
+
+			// Errors and data in the same response is valid.  Both WithError and
+			// AddData handle nil cases.
+			r.resp.AddData(resp)
 		}
 	case op.IsMutation():
-		// unlike queries, mutations are always handled serially
+		// Mutations, unlike queries, are handled serially and the results are
+		// not independent: e.g. if one mutation errors, we don't run the
+		// remaining mutations.
 		for _, m := range op.Mutations() {
-			r.resolveMutation(ctx, m)
+			if r.resp.Errors != nil {
+				r.WithError(
+					gqlerror.Errorf("mutation %s not executed because of previous error", m.Name()))
+				continue
+			}
+
+			mr := &MutationResolver{
+				mutation: m,
+				schema:   r.Schema,
+				dgraph:   r.dgraph,
+			}
+			resp, err := mr.Resolve(ctx)
+			r.WithError(err)
+			if len(resp) > 0 {
+				var b bytes.Buffer
+				b.WriteRune('"')
+				b.WriteString(m.ResponseName())
+				b.WriteString(`":`)
+				b.Write(resp)
+
+				r.resp.AddData(b.Bytes())
+			}
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("Subscriptions not yet supported")

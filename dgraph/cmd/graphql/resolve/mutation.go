@@ -18,12 +18,10 @@ package resolve
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"strconv"
 
-	"github.com/golang/glog"
-
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
 )
@@ -54,11 +52,19 @@ import (
 // For now, all mutations are only 1 level deep (cause of how we build the
 // input objects) and only create a single node (again cause of inputs)
 
+// MutationResolver can resolve a single GraphQL mutation field
+type MutationResolver struct {
+	mutation schema.Mutation
+	schema   schema.Schema
+	dgraph   dgraph.Client
+}
+
 const (
 	createdNode = "newnode"
 )
 
-func (r *RequestResolver) resolveMutation(ctx context.Context, m schema.Mutation) {
+// Resolve a single mutation.
+func (mr *MutationResolver) Resolve(ctx context.Context) ([]byte, error) {
 	// A mutation operation can contain any number of mutation fields.  Those should be executed
 	// serially.
 	// (spec https://graphql.github.io/graphql-spec/June2018/#sec-Normal-and-Serial-Execution)
@@ -104,81 +110,117 @@ func (r *RequestResolver) resolveMutation(ctx context.Context, m schema.Mutation
 	// TODO: we should be picking through all results and propagating errors according to spec
 	// TODO: and, we should have all mutation return types not have ! so we avoid the above
 
-	if r.resp.Errors != nil {
-		r.WithErrors(
-			gqlerror.Errorf("mutation %s not executed because of previous error", m.Name()))
-		return
+	// only
+	//   addT(input: TInput)
+	// and
+	//   deleteT(id: ID!)
+	// mutations are supported ATM
+	switch mr.mutation.MutationType() {
+	case schema.AddMutation:
+		return mr.resolveAddMutation(ctx)
+	case schema.DeleteMutation:
+		return mr.resolveDeleteMutation(ctx)
+	case schema.UpdateMutation:
+		return mr.resolveUpdateMutation(ctx)
 	}
 
-	// only addT(input: TInput) mutations are supported ATM
+	return nil, gqlerror.Errorf("Only only add, delete and update mutations are implemented")
+}
 
-	val, err := m.ArgValue(inputArgName)
+func (mr *MutationResolver) resolveAddMutation(ctx context.Context) ([]byte, error) {
+
+	val := mr.mutation.ArgValue(schema.InputArgName)
+
+	assigned, err := mr.dgraph.Mutate(ctx, buildMutationJSON(mr.mutation, val))
 	if err != nil {
-		r.WithErrors(
-			gqlerror.Errorf("couldn't read input argument in mutation %s : %s", m.Name(), err))
-		return
+		return nil, schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
 	}
 
-	jsonMu, err := json.Marshal(buildMutationJSON(m, val))
-
-	if glog.V(3) {
-		glog.Infof("Generated Dgraph mutation for %s: \n%s\n", m.Name(), jsonMu)
-	}
+	uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
 	if err != nil {
-		r.WithErrors(gqlerror.Errorf("couldn't marshal mutation for %s : %s", m.Name(), err))
-		return
-	}
-	mu := &api.Mutation{
-		CommitNow: true,
-		SetJson:   jsonMu,
-	}
-
-	assigned, err := r.dgraphClient.NewTxn().Mutate(ctx, mu)
-	if err != nil {
-		r.WithErrors(gqlerror.Errorf("couldn't execute mutation for %s : %s", m.Name(), err))
-		return
-	}
-
-	uid, err := strconv.ParseUint(assigned.Uids[createdNode], 0, 64)
-	if err != nil {
-		// FIXME:
-		r.WithErrors(gqlerror.Errorf("couldn't execute mutation for %s : %s", m.Name(), err))
-		return
+		return nil,
+			schema.GQLWrapf(err, "recieved assigned from Dgraph, but couldn't parse as uint64")
 	}
 
 	// All our mutations currently have exactly 1 field
-	f := m.SelectionSet()[0]
-	qb := newQueryBuilder()
-	qb.withAttr(f.ResponseName())
-	qb.withUIDRoot(uid)
-	qb.withSelectionSetFrom(f)
+	f := mr.mutation.SelectionSet()[0]
+	qb := dgraph.NewQueryBuilder().
+		WithAttr(f.ResponseName()).
+		WithUIDRoot(uid).
+		WithSelectionSetFrom(f)
 
-	gq, err := qb.query()
+	res, err := mr.dgraph.Query(ctx, qb)
 	if err != nil {
-		r.WithErrors(
-			gqlerror.Errorf("unable to query after mutation that created 0x%x in %s : %s",
-				uid, m.Name(), err))
-		return
+		return nil,
+			schema.GQLWrapf(err, "mutation %s created node 0x%x but query failed",
+				mr.mutation.Name(), uid)
 	}
 
-	res, err := executeQuery(ctx, gq, r.dgraphClient)
-	if err != nil {
-		r.WithErrors(gqlerror.Errorf("Failed to query dgraph with error : %s", err))
-		glog.Infof("Dgraph query failed : %s", err) // maybe log more info if it could be a bug?
-	}
-
-	r.resp.Data.WriteRune('"')
-	r.resp.Data.WriteString(m.ResponseName())
-	r.resp.Data.WriteString(`":`)
-	r.resp.Data.Write(res)
-
-	// TODO: As with query case, we need to do error propagation etc on the above
+	// TODO: As with query case, we need to do error propagation etc
+	return res, nil
 }
 
-func buildMutationJSON(f schema.Mutation, v interface{}) map[string]interface{} {
+func (mr *MutationResolver) resolveDeleteMutation(ctx context.Context) ([]byte, error) {
+
+	uid, err := mr.mutation.IDArgValue()
+	if err != nil {
+		return nil,
+			schema.GQLWrapf(err, "couldn't read ID argument in mutation %s", mr.mutation.Name())
+	}
+
+	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
+	}
+
+	err = mr.dgraph.DeleteNode(ctx, uid)
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
+		// FIXME: ^^ also add the GraphQL path etc to link properly to the operation
+	}
+
+	return []byte(`{ "msg": "Deleted" }`), nil
+}
+
+func (mr *MutationResolver) resolveUpdateMutation(ctx context.Context) ([]byte, error) {
+
+	val := mr.mutation.ArgValue(schema.InputArgName)
+
+	uid, err := mr.mutation.IDArgValue()
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't read id argument in mutation")
+	}
+
+	// We'll need to do better than this once there's deepper mutations
+	mut := buildMutationJSON(mr.mutation, val)
+	mut["uid"] = fmt.Sprintf("0x%x", uid)
+	_, err = mr.dgraph.Mutate(ctx, mut)
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't run mutation mutation")
+	}
+
+	// All our mutations currently have exactly 1 field
+	f := mr.mutation.SelectionSet()[0]
+	qb := dgraph.NewQueryBuilder().
+		WithAttr(f.ResponseName()).
+		WithUIDRoot(uid).
+		WithSelectionSetFrom(f)
+
+	res, err := mr.dgraph.Query(ctx, qb)
+	if err != nil {
+		return nil,
+			schema.GQLWrapf(err, "mutation %s updated node 0x%x but query failed",
+				mr.mutation.Name(), uid)
+	}
+
+	// TODO: As with query case, we need to do error propagation etc
+	return res, nil
+}
+
+func buildMutationJSON(m schema.Mutation, v interface{}) map[string]interface{} {
 	mut := make(map[string]interface{})
 
-	typeName := f.MutatedTypeName()
+	typeName := m.MutatedTypeName()
 	mut["uid"] = "_:" + createdNode
 	mut["dgraph.type"] = typeName
 

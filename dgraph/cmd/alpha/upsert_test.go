@@ -21,7 +21,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 
 	"github.com/dgraph-io/dgo/y"
 	"github.com/stretchr/testify/require"
@@ -763,7 +763,7 @@ upsert {
     ]
   }
 }`
-	z.CompareJSON(t, expected, res)
+	testutil.CompareJSON(t, expected, res)
 }
 
 func TestUpsertDeleteNonExistent(t *testing.T) {

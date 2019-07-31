@@ -26,13 +26,13 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"google.golang.org/grpc"
 )
 
 func getNewClient() *dgo.Dgraph {
-	conn, err := grpc.Dial(z.SockAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	x.Check(err)
 	return dgo.NewDgraphClient(api.NewDgraphClient(conn))
 }
@@ -273,7 +273,7 @@ func populateCluster() {
 	}
 
 	setSchema(testSchema)
-	z.AssignUids(100000)
+	testutil.AssignUids(100000)
 
 	addTriplesToCluster(`
 		<1> <name> "Michonne" .

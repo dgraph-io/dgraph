@@ -34,8 +34,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 )
 
 type respError struct {
@@ -212,7 +212,7 @@ func runWithRetries(method, contentType, url string, body string) (
 
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		grootAccessJwt, grootRefreshJwt, err = z.HttpLogin(&z.LoginParams{
+		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
 			Endpoint:   addr + "/login",
 			RefreshJwt: grootRefreshJwt,
 		})
