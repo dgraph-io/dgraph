@@ -276,6 +276,15 @@ func (m *mutation) ResponseName() string {
 	return (*field)(m).ResponseName()
 }
 
+// MutatedTypeName returns the actual name of the underlying type that gets
+// mutated by m.
+//
+// It's not the same as the response type of m because mutations don't directly
+// return what they mutate.  Mutations return a payload package that includes
+// the actual node mutated as a field.
+//
+// Currently, everything works by convention, so we know the underlying type
+// by stripping away the prefix and suffix.
 func (m *mutation) MutatedTypeName() string {
 	prefix := strings.TrimSuffix(m.TypeName(), "Payload")
 	switch {
