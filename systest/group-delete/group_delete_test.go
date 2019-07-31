@@ -32,7 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -90,7 +90,7 @@ func doTestQuery(t *testing.T, c *dgo.Dgraph) {
   }`)
 	require.NoError(t, err)
 
-	z.CompareJSON(t, `
+	testutil.CompareJSON(t, `
   {
     "q": [
       {
@@ -125,16 +125,16 @@ func getError(rc io.ReadCloser) error {
 }
 
 func TestNodes(t *testing.T) {
-	dg, err := z.GetClientToGroup("1")
+	dg, err := testutil.GetClientToGroup("1")
 	require.NoError(t, err, "error while getting connection to group 1")
 
 	NodesSetup(t, dg)
 
-	state1, err := z.GetState()
+	state1, err := testutil.GetState()
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["3"].Tablets {
-		url := fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
+		url := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=2",
 			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
@@ -142,18 +142,18 @@ func TestNodes(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	state2, err := z.GetState()
+	state2, err := testutil.GetState()
 	require.NoError(t, err)
 
 	if len(state2.Groups["3"].Tablets) > 0 {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err := http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=3&id=3")
+	resp, err := http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=3&id=3")
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
-	state2, err = z.GetState()
+	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
 	if _, ok := state2.Groups["3"]; ok {
@@ -162,11 +162,11 @@ func TestNodes(t *testing.T) {
 
 	doTestQuery(t, dg)
 
-	state1, err = z.GetState()
+	state1, err = testutil.GetState()
 	require.NoError(t, err)
 
 	for pred := range state1.Groups["2"].Tablets {
-		url := fmt.Sprintf("http://"+z.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=1",
+		url := fmt.Sprintf("http://"+testutil.SockAddrZeroHttp+"/moveTablet?tablet=%s&group=1",
 			url.QueryEscape(pred))
 		resp, err := http.Get(url)
 		require.NoError(t, err)
@@ -174,18 +174,18 @@ func TestNodes(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	state2, err = z.GetState()
+	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
 	if len(state2.Groups["2"].Tablets) > 0 {
 		t.Errorf("moving tablets failed")
 	}
 
-	resp, err = http.Get("http://" + z.SockAddrZeroHttp + "/removeNode?group=2&id=2")
+	resp, err = http.Get("http://" + testutil.SockAddrZeroHttp + "/removeNode?group=2&id=2")
 	require.NoError(t, err)
 	require.NoError(t, getError(resp.Body))
 
-	state2, err = z.GetState()
+	state2, err = testutil.GetState()
 	require.NoError(t, err)
 
 	if _, ok := state2.Groups["2"]; ok {

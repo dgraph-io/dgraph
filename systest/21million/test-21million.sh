@@ -122,6 +122,9 @@ DockerCompose up -d --force-recreate alpha1
 
 Info "waiting for alpha to be ready"
 DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
+# after the server prints the log "Server is ready", it may be still loading data from badger
+Info "sleeping for 10 seconds for the server to be ready"
+sleep 10
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"

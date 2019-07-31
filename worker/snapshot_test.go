@@ -29,14 +29,14 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSnapshot(t *testing.T) {
 	snapshotTs := uint64(0)
 
-	dg1 := z.DgraphClient("localhost:9180")
+	dg1 := testutil.DgraphClient("localhost:9180")
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
 	}))
@@ -44,11 +44,11 @@ func TestSnapshot(t *testing.T) {
 		Schema: "value: int .",
 	}))
 
-	err := z.DockerStop("alpha2")
+	err := testutil.DockerStop("alpha2")
 	require.NoError(t, err)
 
 	for i := 1; i <= 200; i++ {
-		err := z.RetryMutation(dg1, &api.Mutation{
+		err := testutil.RetryMutation(dg1, &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 			CommitNow: true,
 		})
@@ -56,17 +56,17 @@ func TestSnapshot(t *testing.T) {
 	}
 	snapshotTs = waitForSnapshot(t, snapshotTs)
 
-	err = z.DockerStart("alpha2")
+	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 := z.DgraphClient("localhost:9182")
+	dg2 := testutil.DgraphClient("localhost:9182")
 	verifySnapshot(t, dg2, 200)
 
-	err = z.DockerStop("alpha2")
+	err = testutil.DockerStop("alpha2")
 	require.NoError(t, err)
 
 	for i := 201; i <= 400; i++ {
-		err := z.RetryMutation(dg1, &api.Mutation{
+		err := testutil.RetryMutation(dg1, &api.Mutation{
 			SetNquads: []byte(fmt.Sprintf(`_:node <value> "%d" .`, i)),
 			CommitNow: true,
 		})
@@ -74,10 +74,10 @@ func TestSnapshot(t *testing.T) {
 	}
 	_ = waitForSnapshot(t, snapshotTs)
 
-	err = z.DockerStart("alpha2")
+	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
-	dg2 = z.DgraphClient("localhost:9182")
+	dg2 = testutil.DgraphClient("localhost:9182")
 	verifySnapshot(t, dg2, 400)
 }
 
@@ -92,7 +92,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 	}`
 
 	resMap := make(map[string][]map[string]int)
-	resp, err := z.RetryQuery(dg, q1)
+	resp, err := testutil.RetryQuery(dg, q1)
 	require.NoError(t, err)
 	err = json.Unmarshal(resp.Json, &resMap)
 	require.NoError(t, err)

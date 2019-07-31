@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgo/y"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -70,7 +70,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := z.DgraphClientWithGroot(*alpha)
+	c := testutil.DgraphClientWithGroot(*alpha)
 	setup(c)
 	fmt.Println("Doing upserts")
 	doUpserts(c)

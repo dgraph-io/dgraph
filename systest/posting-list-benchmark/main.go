@@ -26,8 +26,8 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/spf13/cobra"
 )
 
@@ -84,7 +84,7 @@ func runBenchmark() {
 			opt.mutationsPerTxn, opt.numMutations)
 	}
 
-	dg := z.DgraphClientWithGroot(opt.addr)
+	dg := testutil.DgraphClientWithGroot(opt.addr)
 	var err error
 
 	// Drop all existing data.
