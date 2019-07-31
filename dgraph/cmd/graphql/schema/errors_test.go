@@ -58,6 +58,10 @@ func TestGQLWrapf(t *testing.T) {
 	}
 }
 
+func TestGQLWrapf_nil(t *testing.T) {
+	require.Nil(t, GQLWrapf(nil, "nothing"))
+}
+
 func TestGQLWrapf_IsAlwaysgqlableError(t *testing.T) {
 	tests := []struct {
 		err error
@@ -97,4 +101,8 @@ func TestAsGQLErrors(t *testing.T) {
 
 		assert.JSONEq(t, tt.req, string(gqlErrs))
 	}
+}
+
+func TestAsGQLErrors_nil(t *testing.T) {
+	require.Nil(t, AsGQLErrors(nil))
 }

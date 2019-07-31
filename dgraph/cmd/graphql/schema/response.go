@@ -98,8 +98,9 @@ func (r *Response) AddData(p []byte) {
 // and returns the number of bytes written and error, if any.
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	if r == nil {
-		w.Write([]byte(
+		i, err := w.Write([]byte(
 			"{ \"errors\": [ { \"message\": \"Internal error - no response to write.\" } ] }"))
+		return int64(i), err
 	}
 
 	var js []byte
@@ -126,7 +127,7 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
 		glog.Errorf("%v+", errors.Wrap(err, msg))
-		js = []byte("{ \"errors\": [ { \"message\": \"" + msg + "\" } ] }")
+		js = []byte(`{ "errors": [ { "message": "` + msg + `" } ] }`)
 	}
 
 	i, err := w.Write(js)

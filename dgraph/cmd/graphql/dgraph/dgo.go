@@ -58,7 +58,7 @@ func (dg *dgraph) Query(ctx context.Context, query *QueryBuilder) ([]byte, error
 
 	q, err := query.AsQueryString()
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't biuld Dgraph query")
+		return nil, schema.GQLWrapf(err, "couldn't build Dgraph query")
 	}
 
 	if glog.V(3) {
@@ -66,11 +66,7 @@ func (dg *dgraph) Query(ctx context.Context, query *QueryBuilder) ([]byte, error
 	}
 
 	resp, err := dg.client.NewTxn().Query(ctx, q)
-	if err != nil {
-		return nil, schema.GQLWrapf(err, "Dgraph query failed")
-	}
-
-	return resp.Json, nil
+	return resp.Json, schema.GQLWrapf(err, "Dgraph query failed")
 }
 
 func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
@@ -90,11 +86,7 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 	}
 
 	assigned, err := dg.client.NewTxn().Mutate(ctx, mu)
-	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't execute mutation")
-	}
-
-	return assigned.Uids, nil
+	return assigned.Uids, schema.GQLWrapf(err, "couldn't execute mutation")
 }
 
 // DeleteNode deletes a single node from the graph.
@@ -117,8 +109,8 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 	return err
 }
 
-// AssertType checks if uid is of type typ.  It returns true if the type assertion
-// hold, false if it doesn't, and an error if something goes wrong.
+// AssertType checks if uid is of type typ.  It returns nil if the type assertion
+// holds, and an error if something goes wrong.
 func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error {
 
 	qb := NewQueryBuilder().

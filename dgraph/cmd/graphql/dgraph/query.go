@@ -41,7 +41,7 @@ func NewQueryBuilder() *QueryBuilder {
 
 // HasErrors returns true if qb contains errors and false otherwise.
 func (qb *QueryBuilder) HasErrors() bool {
-	return qb == nil || qb.graphQuery == nil || qb.err != nil
+	return qb.err != nil
 }
 
 // WithAttr sets the root query name.
@@ -73,12 +73,7 @@ func (qb *QueryBuilder) WithIDArgRoot(q schema.Query) *QueryBuilder {
 
 	uid, err := q.IDArgValue()
 	if err != nil {
-		// FIXME: actually this should surface as a GraphQL error
-		// location is q ... ID arg if it exists
-
-		qb.err = schema.GQLWrapf(err, "??? because ???")
-
-		//qb.err = graphql.GQLWrapf("??? because ???")   errors.New("ID argument wasn't a valid ID")
+		qb.err = err
 		return qb
 	}
 
@@ -170,10 +165,6 @@ func (qb *QueryBuilder) WithSelectionSetFrom(fld schema.Field) *QueryBuilder {
 func (qb *QueryBuilder) query() (*gql.GraphQuery, error) {
 	if qb == nil || qb.graphQuery == nil {
 		return nil, errors.New("nil query builder")
-	}
-
-	if qb.err != nil {
-		return nil, qb.err
 	}
 
 	return qb.graphQuery, qb.err

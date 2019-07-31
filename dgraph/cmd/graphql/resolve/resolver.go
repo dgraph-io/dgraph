@@ -139,16 +139,11 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				dgraph: r.dgraph,
 			}
 			resp, err := qr.Resolve(ctx)
+			r.WithError(err)
 
-			// Errors and data in the same response is valid.
-
-			if err != nil {
-				r.WithError(err)
-			}
-
-			if len(resp) > 0 {
-				r.resp.AddData(resp)
-			}
+			// Errors and data in the same response is valid.  Both WithError and
+			// AddData handle nil cases.
+			r.resp.AddData(resp)
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
@@ -167,11 +162,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				dgraph:   r.dgraph,
 			}
 			resp, err := mr.Resolve(ctx)
-
-			if err != nil {
-				r.WithError(err)
-			}
-
+			r.WithError(err)
 			if len(resp) > 0 {
 				var b bytes.Buffer
 				b.WriteRune('"')

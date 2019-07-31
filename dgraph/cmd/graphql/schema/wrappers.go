@@ -191,7 +191,7 @@ func (f *field) IDArgValue() (uint64, error) {
 
 	if !ok || err != nil {
 		err = gqlerror.ErrorPosf(f.field.GetPosition(),
-			"ID argument of %s was not able to be parsed", f.Name())
+			"ID argument (%s) of %s was not able to be parsed", id, f.Name())
 	}
 
 	return uid, err

@@ -32,8 +32,13 @@ func (gqlerr *gqlableError) Error() string {
 // AsGQLErrors formats an error as a list of GraphQL errors.
 // A gqlerror.List gets returned as is, a gqlerror.Error gets returned as a one
 // item list, GQLWrap'd errors have their messages formatted from all underlying causes,
-// and all other errors get printed into a gqlerror.Error.
+// and all other errors get printed into a gqlerror.Error.  A nil input results
+// in nil output.
 func AsGQLErrors(err error) gqlerror.List {
+	if err == nil {
+		return nil
+	}
+
 	switch e := err.(type) {
 	case *gqlerror.Error:
 		return gqlerror.List{e}
@@ -53,11 +58,15 @@ func AsGQLErrors(err error) gqlerror.List {
 // GQLWrapf takes an existing error and wraps it as a GraphQL error.
 // If err is already a GraphQL error, any location information is kept in the
 // new error. err is saved as the underlying error (recoverable with
-// Cause() - same style as pkg/errors).
+// Cause() - same style as pkg/errors).  If err is nil, GQLWrapf returns nil.
 //
 // Wrapping GraphQL errors like this allows us to bubble errors up the stack
 // and add context, location and path info to them as we go.
 func GQLWrapf(err error, format string, args ...interface{}) error {
+	if err == nil {
+		return nil
+	}
+
 	wrapped := &gqlableError{
 		gqlErr: gqlerror.Errorf(format, args...),
 		cause:  err,
@@ -75,15 +84,20 @@ func GQLWrapf(err error, format string, args ...interface{}) error {
 // GQLWrapLocationf wraps an error as a GraphQL error and includes location
 // information in the GraphQL error.
 func GQLWrapLocationf(err error, line int, col int, format string, args ...interface{}) error {
-	var wrapped *gqlableError
+	wrapped := GQLWrapf(err, format, args...)
+	if wrapped == nil {
+		return nil
+	}
+
+	var gqlable *gqlableError
 	var ok bool
-	if wrapped, ok = GQLWrapf(err, format, args...).(*gqlableError); !ok {
+	if gqlable, ok = wrapped.(*gqlableError); !ok {
 		panic("GQLWrapf didn't result in a gqlableError")
 	}
-	wrapped.gqlErr.Locations =
-		append(wrapped.gqlErr.Locations, gqlerror.Location{Line: line, Column: col})
+	gqlable.gqlErr.Locations =
+		append(gqlable.gqlErr.Locations, gqlerror.Location{Line: line, Column: col})
 
-	return wrapped
+	return gqlable
 }
 
 // Cause returns the underlying cause of an error.  If it's a GQLWrapf'd
