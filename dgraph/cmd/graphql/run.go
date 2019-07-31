@@ -188,31 +188,17 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
-	if gqlErr != nil {
-		return fmt.Errorf("cannot parse schema %s", gqlErr)
+	sch, errlist := gschema.GenerateCompleteSchema(inputSchema)
+	if errlist != nil {
+		return fmt.Errorf(errlist.Error())
 	}
 
-	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
-		return gqlErrList
-	}
-
-	gschema.AddScalars(doc)
-
-	schema, gqlErr := validator.ValidateSchemaDocument(doc)
-	if gqlErr != nil {
-		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
-	}
-
-	gschema.GenerateCompleteSchema(schema)
-	completeSchema := gschema.Stringify(schema)
-	if glog.V(2) {
-		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
-	}
+	completeSchema := gschema.Stringify(sch)
+	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
 
 	// TODO: extract out as todo's below are done
 	var schemaB strings.Builder
-	for _, def := range schema.Types {
+	for _, def := range sch.Types {
 		switch def.Kind {
 		case ast.Object:
 			if def.Name == "Query" ||
@@ -231,7 +217,7 @@ func initDgraph() error {
 					continue
 				}
 
-				switch schema.Types[f.Type.Name()].Kind {
+				switch sch.Types[f.Type.Name()].Kind {
 				case ast.Object:
 					// TODO: still need to write [] ! and reverse in here
 					fmt.Fprintf(&typeDef, "  %s.%s: uid\n", def.Name, f.Name)
