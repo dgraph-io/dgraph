@@ -39,14 +39,31 @@ func TestSchemaString(t *testing.T) {
 		fileName := "../testdata/schema" + strconv.Itoa(i+1) + ".txt" // run from pwd
 		str1, err := ioutil.ReadFile(fileName)
 		if err != nil {
-			t.Errorf("Unable to read schema file " + fileName)
+			t.Errorf("Unable to read schema file %s", fileName)
 			continue
 		}
 
-		sch, errlist1 := GenerateCompleteSchema(string(str1))
-		if errlist1 != nil {
-			t.Errorf(errlist1.Error())
+		doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(str1)})
+		if gqlErr != nil {
+			t.Errorf(gqlErr.Error())
+			continue
 		}
+
+		gqlErrList := ValidateSchema(doc)
+		if gqlErrList != nil {
+			t.Errorf(gqlErrList.Error())
+			continue
+		}
+
+		AddScalars(doc)
+
+		sch, gqlErr := validator.ValidateSchemaDocument(doc)
+		if gqlErr != nil {
+			t.Errorf(gqlErr.Error())
+			continue
+		}
+
+		GenerateCompleteSchema(sch)
 
 		newSchemaStr := Stringify(sch)
 		fmt.Println(newSchemaStr)
@@ -84,17 +101,22 @@ type TestCase struct {
 func TestInvalidSchemas(t *testing.T) {
 	fileName := "schema_test.yml" // run from pwd
 	byts, err := ioutil.ReadFile(fileName)
-	require.Nil(t, err)
+	require.Nil(t, err, "Unable to read file %s", fileName)
 
 	var tests Tests
 	err = yaml.Unmarshal(byts, &tests)
-	require.Nil(t, err)
+	require.Nil(t, err, "Error Unmarshalling to yaml!")
 
 	for _, schemas := range tests {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, gqlErrList := GenerateCompleteSchema(sch.Input)
-				require.Equal(t, sch.Output, gqlErrList, fmt.Sprintf(sch.Name))
+
+				doc, gqlErr := parser.ParseSchema(&ast.Source{Input: sch.Input})
+				require.Nil(t, gqlErr, gqlErr.Error())
+
+				gqlErrList := ValidateSchema(doc)
+
+				require.Equal(t, sch.Output, gqlErrList, sch.Name)
 			})
 		}
 	}

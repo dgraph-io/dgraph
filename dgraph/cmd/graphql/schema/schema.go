@@ -23,8 +23,6 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 )
 
 type schRuleFunc func(schema *ast.SchemaDocument) gqlerror.List
@@ -51,7 +49,7 @@ var supportedScalars = map[string]scalar{
 }
 
 // addScalars adds all the supported scalars in the schema.
-func addScalars(doc *ast.SchemaDocument) {
+func AddScalars(doc *ast.SchemaDocument) {
 	for _, s := range supportedScalars {
 		doc.Definitions = append(
 			doc.Definitions,
@@ -69,8 +67,8 @@ func addRule(name string, f schRuleFunc) {
 	})
 }
 
-// validateSchema validates the schema against dgraph's rules of schema.
-func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
+// ValidateSchema validates the schema against dgraph's rules of schema.
+func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {
@@ -82,23 +80,7 @@ func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
 
 // GenerateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
-
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
-	if gqlErr != nil {
-		return nil, []*gqlerror.Error{gqlErr}
-	}
-
-	if gqlErrList := validateSchema(doc); gqlErrList != nil {
-		return nil, gqlErrList
-	}
-
-	addScalars(doc)
-
-	sch, gqlErr := validator.ValidateSchemaDocument(doc)
-	if gqlErr != nil {
-		return nil, []*gqlerror.Error{gqlErr}
-	}
+func GenerateCompleteSchema(sch *ast.Schema) {
 
 	extenderMap := make(map[string]*ast.Definition)
 
@@ -134,8 +116,6 @@ func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
 	for name, extType := range extenderMap {
 		sch.Types[name] = extType
 	}
-
-	return sch, nil
 }
 
 // AreEqualSchema checks if sch1 and sch2 are the same schema.

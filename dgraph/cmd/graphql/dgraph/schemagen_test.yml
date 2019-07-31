@@ -1,0 +1,61 @@
+schemas:
+  -
+    name: "Scalar data type"
+    input: |
+      type P {
+        id: ID!
+        q: String!
+      }
+    output: |
+      type P {
+        P.q: string
+      }
+      P.q: string .
+
+  -
+    name: "Object data type"
+    input: |
+      type A {
+        id: ID!
+        p: P
+      }
+      type P {
+        id: ID!
+      }
+    output: |
+      type A {
+        A.p: uid
+      }
+      A.p: uid .
+      type P {
+      }
+
+  -
+    name: "Scalar list"
+    input: |
+      type X {
+        id: ID!
+        names: [String!]
+      }
+    output: |
+      type X {
+        X.names: [string]
+      }
+      X.names: [string] .
+
+  -
+    name: "Object list"
+    input: |
+      type X {
+        p: [P!]!
+      }
+      type P {
+        id: ID!
+      }
+    output: |
+      type P {
+      }
+      type X {
+        X.p: [uid]
+      }
+      X.p: [uid] .
