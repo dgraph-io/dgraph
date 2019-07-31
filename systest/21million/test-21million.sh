@@ -109,10 +109,14 @@ DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
+    SCHEMA_FILE="$(mktemp --suffix=.schema test-21millionXXX)"
+    DATA_FILE="$(mktemp --suffix=.rdf.gz test-21millionXXX)"
+    curl -LSs $SCHEMA_URL -o $SCHEMA_FILE
+    curl -LSs $DATA_URL -o $DATA_FILE
     DockerCompose run --name bulk_load --rm alpha1 \
         bash -s <<EOF
-            /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                               --format=rdf --zero=zero1:5180 --out=/data/alpha1/bulk
+            /gobin/dgraph bulk --schema_file=$SCHEMA_FILE --rdfs=$DATA_FILE \
+                               --zero=zero1:5180 --out=/data/alpha1/bulk
             mv /data/alpha1/bulk/0/p /data/alpha1
 EOF
 fi
@@ -128,8 +132,12 @@ sleep 10
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
-    dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
-                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr
+    SCHEMA_FILE="$(mktemp --suffix=.schema test-21millionXXX)"
+    DATA_FILE="$(mktemp --suffix=.rdf.gz test-21millionXXX)"
+    curl -LSs $SCHEMA_URL -o $SCHEMA_FILE
+    curl -LSs $DATA_URL -o $DATA_FILE
+    dgraph live --schema=$SCHEMA_FILE --rdfs=$DATA_FILE \
+                --zero=:5180 --alpha=:9180 --logtostderr
 fi
 
 if [[ $LOAD_ONLY ]]; then
