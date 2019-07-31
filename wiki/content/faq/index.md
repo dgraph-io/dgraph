@@ -20,7 +20,7 @@ If you're running more than five tables in a traditional relational database man
 If your data doesn't have graph structure, i.e., there's only one predicate, then any graph database might not be a good fit for you. A NoSQL datastore is best for key-value type storage.
 
 ### Is Dgraph production ready?
-We recommend Dgraph to be used in production at companies. Minor releases at this stage might not be backward compatible; so we highly recommend using [frequent exports](/deploy#export).
+We recommend Dgraph to be used in production at companies. Minor releases at this stage might not be backward compatible; so we highly recommend using [frequent exports](/deploy#export-database).
 
 ### Is Dgraph fast?
 Every other graph system that we've run it against, Dgraph has been at least a 10x factor faster. It only goes up from there. But, that's anecdotal observations.
