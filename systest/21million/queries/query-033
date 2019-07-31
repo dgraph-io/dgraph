@@ -1,0 +1,501 @@
+{
+  Mackenzie(func:allofterms(name@en, "Mackenzie Crook")) {
+    name@en
+    actor.film {
+      performance.film {
+        name@en
+      }
+      performance.character {
+        name@en
+      }
+    }
+  }
+
+  Jack(func:allofterms(name@en, "Jack Davenport")) {
+    name@en
+    actor.film {
+      performance.film {
+        name@en
+      }
+      performance.character {
+        name@en
+      }
+    }
+  }
+}
+---
+{
+  "Jack": [
+    {
+      "actor.film": [
+        {
+          "performance.film": [
+            {
+              "name@en": "Eroica"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "James Norrington"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Pirates of the Caribbean: The Curse of the Black Pearl"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "Gypsy Woman"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Harry Fairfield"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Wyvern Mystery"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "Tale of the Mummy"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "The Bunker"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Student Zoo Keeper #2"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Fierce Creatures"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Edward Fletcher-Wooten"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Wedding Date"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "A man"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Cookie Thief"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "James Norrington"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Pirates of the Caribbean: Dead Man's Chest"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "James Norrington"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Pirates of the Caribbean: At World's End"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Twatt"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Boat That Rocked"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Peter Smith-Kingsley"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Talented Mr. Ripley"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "The Key Man"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "The Wisdom of Crocodiles"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "The Incredible Journey of Mary Bryant"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Harris"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Libertine"
+            }
+          ]
+        }
+      ],
+      "name@en": "Jack Davenport"
+    }
+  ],
+  "Mackenzie": [
+    {
+      "actor.film": [
+        {
+          "performance.character": [
+            {
+              "name@en": "Tom Moody"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "I Am Tom Moody"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Ragetti"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Pirates of the Caribbean: The Curse of the Black Pearl"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Hidlick"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Brothers Grimm"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Scientist"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Spider-Plant Man"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "David Dakin"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Cheerful Weather for the Wedding"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Dutch Kid"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Still Crazy"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "Sex Lives of the Potato Men"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Ernie"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Adventures of Tintin: The Secret of the Unicorn"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Father"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Orbit Ever After"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Launcelot Gobbo"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Merchant of Venice"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Daniel Marks"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Ironclad"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Russell"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Sex \u0026 Drugs \u0026 Rock \u0026 Roll"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Dan"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The Principles Of Lust"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Paul Callow"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Three and Out"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Looper"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "City of Ember"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Mr. Jaspers"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Finding Neverland"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Father Michael"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Solomon Kane"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Derren Brown"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The All Star Impressions Show"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Braddon"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "One Chance"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Dulberg"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "I Want Candy"
+            }
+          ]
+        },
+        {
+          "performance.film": [
+            {
+              "name@en": "Abraham's Point"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Albert Steptoe"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "The All Star Impressions Show"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Ragetti"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Pirates of the Caribbean: At World's End"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Ragetti"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "Pirates of the Caribbean: Dead Man's Chest"
+            }
+          ]
+        },
+        {
+          "performance.character": [
+            {
+              "name@en": "Grivet"
+            }
+          ],
+          "performance.film": [
+            {
+              "name@en": "In Secret"
+            }
+          ]
+        }
+      ],
+      "name@en": "Mackenzie Crook"
+    }
+  ]
+}

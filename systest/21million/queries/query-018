@@ -1,0 +1,556 @@
+{
+  var(func: allofterms(name@en, "Taraji Henson")) {
+    actor.film {
+      F as performance.film {
+        G as count(genre)
+        genre {
+          C as count(~genre @filter(uid(F)))
+        }
+      }
+    }
+  }
+
+  Taraji_films_by_genre_count(func: uid(G), orderdesc: val(G)) {
+    film_name : name@en
+    genres : genre (orderdesc: val(C)) {
+      genre_name : name@en
+    }
+  }
+}
+---
+{
+  "Taraji_films_by_genre_count": [
+    {
+      "film_name": "Date Night",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Thriller"
+        },
+        {
+          "genre_name": "Action Film"
+        },
+        {
+          "genre_name": "Romantic comedy"
+        },
+        {
+          "genre_name": "Action/Adventure"
+        },
+        {
+          "genre_name": "Action Comedy"
+        },
+        {
+          "genre_name": "Chase Movie"
+        },
+        {
+          "genre_name": "Screwball comedy"
+        }
+      ]
+    },
+    {
+      "film_name": "I Can Do Bad All by Myself",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Romantic comedy"
+        },
+        {
+          "genre_name": "Comedy-drama"
+        },
+        {
+          "genre_name": "Musical Drama"
+        },
+        {
+          "genre_name": "Backstage Musical"
+        },
+        {
+          "genre_name": "Musical comedy"
+        }
+      ]
+    },
+    {
+      "film_name": "Four Brothers",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Thriller"
+        },
+        {
+          "genre_name": "Action Film"
+        },
+        {
+          "genre_name": "Action/Adventure"
+        },
+        {
+          "genre_name": "Family Drama"
+        },
+        {
+          "genre_name": "Crime Drama"
+        }
+      ]
+    },
+    {
+      "film_name": "Hustle & Flow",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Indie film"
+        },
+        {
+          "genre_name": "Musical Drama"
+        },
+        {
+          "genre_name": "Music"
+        },
+        {
+          "genre_name": "Hip hop film"
+        }
+      ]
+    },
+    {
+      "film_name": "Smokin' Aces",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Thriller"
+        },
+        {
+          "genre_name": "Action Film"
+        },
+        {
+          "genre_name": "Black comedy"
+        },
+        {
+          "genre_name": "Action Thriller"
+        }
+      ]
+    },
+    {
+      "film_name": "The Adventures of Rocky and Bullwinkle",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Adventure Film"
+        },
+        {
+          "genre_name": "Family"
+        },
+        {
+          "genre_name": "Adventure Comedy"
+        },
+        {
+          "genre_name": "Children's/Family"
+        },
+        {
+          "genre_name": "Buddy film"
+        },
+        {
+          "genre_name": "Fantasy Adventure"
+        }
+      ]
+    },
+    {
+      "film_name": "Satan's School for Girls",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Mystery"
+        },
+        {
+          "genre_name": "Horror"
+        },
+        {
+          "genre_name": "Television film"
+        },
+        {
+          "genre_name": "Cult film"
+        }
+      ]
+    },
+    {
+      "film_name": "The Karate Kid",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Action Film"
+        },
+        {
+          "genre_name": "Sports films"
+        },
+        {
+          "genre_name": "Family"
+        },
+        {
+          "genre_name": "Martial Arts Film"
+        }
+      ]
+    },
+    {
+      "film_name": "The Family That Preys",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Comedy-drama"
+        },
+        {
+          "genre_name": "Family Drama"
+        }
+      ]
+    },
+    {
+      "film_name": "Talk to Me",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Music"
+        },
+        {
+          "genre_name": "Biographical film"
+        },
+        {
+          "genre_name": "History"
+        },
+        {
+          "genre_name": "War film"
+        }
+      ]
+    },
+    {
+      "film_name": "Not Easily Broken",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Film adaptation"
+        }
+      ]
+    },
+    {
+      "film_name": "All or Nothing",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Indie film"
+        }
+      ]
+    },
+    {
+      "film_name": "Larry Crowne",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Romantic comedy"
+        }
+      ]
+    },
+    {
+      "film_name": "Term Life",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Thriller"
+        },
+        {
+          "genre_name": "Crime"
+        }
+      ]
+    },
+    {
+      "film_name": "Peep World",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Indie film"
+        },
+        {
+          "genre_name": "Comedy-drama"
+        }
+      ]
+    },
+    {
+      "film_name": "Something New",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Romance Film"
+        }
+      ]
+    },
+    {
+      "film_name": "Baby Boy",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Coming of age"
+        }
+      ]
+    },
+    {
+      "film_name": "The Brotherly Love Table Read",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Short Film"
+        },
+        {
+          "genre_name": "Animation"
+        }
+      ]
+    },
+    {
+      "film_name": "The Curious Case of Benjamin Button",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Adventure Film"
+        }
+      ]
+    },
+    {
+      "film_name": "Think Like A Man",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Romance Film"
+        },
+        {
+          "genre_name": "Romantic comedy"
+        }
+      ]
+    },
+    {
+      "film_name": "Once Fallen",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Indie film"
+        }
+      ]
+    },
+    {
+      "film_name": "Hurricane Season",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Sports films"
+        }
+      ]
+    },
+    {
+      "film_name": "Forehead Tittaes",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Short Film"
+        }
+      ]
+    },
+    {
+      "film_name": "Madly Madagascar",
+      "genres": [
+        {
+          "genre_name": "Short Film"
+        },
+        {
+          "genre_name": "Animation"
+        }
+      ]
+    },
+    {
+      "film_name": "No Good Deed",
+      "genres": [
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Thriller"
+        }
+      ]
+    },
+    {
+      "film_name": "The Good Doctor",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Thriller"
+        }
+      ]
+    },
+    {
+      "film_name": "Hair Show",
+      "genres": [
+        {
+          "genre_name": "Comedy"
+        },
+        {
+          "genre_name": "Indie film"
+        }
+      ]
+    },
+    {
+      "film_name": "Animal",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Crime Fiction"
+        }
+      ]
+    },
+    {
+      "film_name": "From the Rough",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        },
+        {
+          "genre_name": "Sports films"
+        }
+      ]
+    },
+    {
+      "film_name": "Streetwise",
+      "genres": [
+        {
+          "genre_name": "Crime Fiction"
+        },
+        {
+          "genre_name": "Action Film"
+        }
+      ]
+    },
+    {
+      "film_name": "Murder, She Wrote: The Last Free Man",
+      "genres": [
+        {
+          "genre_name": "Mystery"
+        }
+      ]
+    },
+    {
+      "film_name": "Taken From Me: The Tiffany Rubin Story",
+      "genres": [
+        {
+          "genre_name": "Drama"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,607 @@
+{
+  ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
+    director.film {
+      stars as count(starring)
+    }
+    totalActors as sum(val(stars))
+  }
+
+  mostStars(func: uid(ID), orderdesc: val(totalActors), first: 3) {
+    name@en
+    stars : val(totalActors)
+
+    director.film {
+      name@en
+    }
+  }
+}
+---
+{
+  "mostStars": [
+    {
+      "name@en": "Steven Spielberg",
+      "stars": 1665,
+      "director.film": [
+        {
+          "name@en": "Twilight Zone: The Movie"
+        },
+        {
+          "name@en": "Duel"
+        },
+        {
+          "name@en": "Lincoln"
+        },
+        {
+          "name@en": "Minority Report"
+        },
+        {
+          "name@en": "Indiana Jones and the Temple of Doom"
+        },
+        {
+          "name@en": "Schindler's List"
+        },
+        {
+          "name@en": "Amistad"
+        },
+        {
+          "name@en": "1941"
+        },
+        {
+          "name@en": "Jaws"
+        },
+        {
+          "name@en": "Indiana Jones and the Last Crusade"
+        },
+        {
+          "name@en": "Saving Private Ryan"
+        },
+        {
+          "name@en": "War Horse"
+        },
+        {
+          "name@en": "Close Encounters of the Third Kind"
+        },
+        {
+          "name@en": "Empire of the Sun"
+        },
+        {
+          "name@en": "The Adventures of Tintin: The Secret of the Unicorn"
+        },
+        {
+          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
+        },
+        {
+          "name@en": "Jurassic Park"
+        },
+        {
+          "name@en": "The Lost World: Jurassic Park"
+        },
+        {
+          "name@en": "Hook"
+        },
+        {
+          "name@en": "The Color Purple"
+        },
+        {
+          "name@en": "Slipstream"
+        },
+        {
+          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
+        },
+        {
+          "name@en": "Munich"
+        },
+        {
+          "name@en": "The Terminal"
+        },
+        {
+          "name@en": "Catch Me If You Can"
+        },
+        {
+          "name@en": "War of the Worlds"
+        },
+        {
+          "name@en": "A.I. Artificial Intelligence"
+        },
+        {
+          "name@en": "Bridge of Spies"
+        },
+        {
+          "name@en": "The Sugarland Express"
+        },
+        {
+          "name@en": "E.T. the Extra-Terrestrial"
+        },
+        {
+          "name@en": "The BFG"
+        },
+        {
+          "name@en": "Amblin"
+        },
+        {
+          "name@en": "Something Evil"
+        },
+        {
+          "name@en": "Savage"
+        },
+        {
+          "name@en": "Always"
+        },
+        {
+          "name@en": "Robopocalypse"
+        },
+        {
+          "name@en": "The Attack of the Mummies"
+        },
+        {
+          "name@en": "Firelight"
+        },
+        {
+          "name@en": "Amazing Stories: Book One"
+        }
+      ]
+    },
+    {
+      "name@en": "Steven Scarborough",
+      "stars": 1169,
+      "director.film": [
+        {
+          "name@en": "Head Hunters, Inc."
+        },
+        {
+          "name@en": "Falcon Four Hours - Muscle Madness"
+        },
+        {
+          "name@en": "Trunks"
+        },
+        {
+          "name@en": "The Road Home"
+        },
+        {
+          "name@en": "Communion"
+        },
+        {
+          "name@en": "Stark Naked"
+        },
+        {
+          "name@en": "Sure Thing"
+        },
+        {
+          "name@en": "Trunks 4: White Heat"
+        },
+        {
+          "name@en": "Perfect Fit"
+        },
+        {
+          "name@en": "Manhunt 2.0"
+        },
+        {
+          "name@en": "Spokes II: The Graduation"
+        },
+        {
+          "name@en": "Overload"
+        },
+        {
+          "name@en": "Resurrection"
+        },
+        {
+          "name@en": "The Hard Way"
+        },
+        {
+          "name@en": "Trunks 3"
+        },
+        {
+          "name@en": "Best of the 2000s Vol. 1"
+        },
+        {
+          "name@en": "Conflict: Abduction, Part II"
+        },
+        {
+          "name@en": "The Abduction"
+        },
+        {
+          "name@en": "Guys Like Us"
+        },
+        {
+          "name@en": "The Road To Temptation"
+        },
+        {
+          "name@en": "Skuff 3: Downright Wrong"
+        },
+        {
+          "name@en": "Man Hunt 2"
+        },
+        {
+          "name@en": "Bootstrap"
+        },
+        {
+          "name@en": "Best Of The 1980's, Volume 1"
+        },
+        {
+          "name@en": "Best Of The 2000s 2"
+        },
+        {
+          "name@en": "On The Mark"
+        },
+        {
+          "name@en": "The Missing"
+        },
+        {
+          "name@en": "Kris Lord vs. Ken Ryker"
+        },
+        {
+          "name@en": "Falcon Studios 35th Anniversary Limited Edition"
+        },
+        {
+          "name@en": "Acres of Ass"
+        },
+        {
+          "name@en": "Best of Dean Monroe"
+        },
+        {
+          "name@en": "Plunge"
+        },
+        {
+          "name@en": "Redemption: Abduction, Part III"
+        },
+        {
+          "name@en": "Screw 2: Cut to the Chase"
+        },
+        {
+          "name@en": "Backstage Pass"
+        },
+        {
+          "name@en": "Masterpiece"
+        },
+        {
+          "name@en": "Movers N Shakers"
+        },
+        {
+          "name@en": "Skuff 4: Downright Fierce"
+        },
+        {
+          "name@en": "Deep in Hot Water"
+        },
+        {
+          "name@en": "Hold Me Again"
+        },
+        {
+          "name@en": "The Pledgemasters"
+        },
+        {
+          "name@en": "Blue"
+        },
+        {
+          "name@en": "Perfect Summer"
+        },
+        {
+          "name@en": "Best of Matthew Rush 2"
+        },
+        {
+          "name@en": "Manrammer"
+        },
+        {
+          "name@en": "Special Handling"
+        },
+        {
+          "name@en": "Cruisin'"
+        },
+        {
+          "name@en": "Best Of Jeff Hammond"
+        },
+        {
+          "name@en": "Justice"
+        },
+        {
+          "name@en": "Dickin' Around"
+        },
+        {
+          "name@en": "Trunks 5"
+        },
+        {
+          "name@en": "Best Of Chip Daniels"
+        },
+        {
+          "name@en": "Beefcake"
+        },
+        {
+          "name@en": "Made For You"
+        },
+        {
+          "name@en": "Big Bang"
+        },
+        {
+          "name@en": "Cruisin' 2"
+        },
+        {
+          "name@en": "Down Home"
+        },
+        {
+          "name@en": "VERBOTEN 1-2"
+        },
+        {
+          "name@en": "Basic Plumbing"
+        },
+        {
+          "name@en": "Best Of Chet Roberts"
+        },
+        {
+          "name@en": "Private Workout"
+        },
+        {
+          "name@en": "True Stories: Letters from the Hot House Files"
+        },
+        {
+          "name@en": "Another Man's Pleasure"
+        },
+        {
+          "name@en": "The Big Ones"
+        },
+        {
+          "name@en": "Full Length"
+        },
+        {
+          "name@en": "Jumpin' Jacks"
+        },
+        {
+          "name@en": "Pushing It"
+        },
+        {
+          "name@en": "Jockstrap"
+        },
+        {
+          "name@en": "Buttbusters"
+        },
+        {
+          "name@en": "Mischief"
+        },
+        {
+          "name@en": "Shadows In The Night"
+        },
+        {
+          "name@en": "Layin' Pipe"
+        },
+        {
+          "name@en": "Best Of Derrick Vinyard"
+        },
+        {
+          "name@en": "Descent"
+        },
+        {
+          "name@en": "The Road To Hopeful"
+        },
+        {
+          "name@en": "Directors Picks Steven Scarborough"
+        },
+        {
+          "name@en": "At Your Service"
+        },
+        {
+          "name@en": "Compulsion"
+        },
+        {
+          "name@en": "Wild Country"
+        },
+        {
+          "name@en": "Raw Material"
+        },
+        {
+          "name@en": "Black -N- Blue"
+        },
+        {
+          "name@en": "Dr.'s Orders 1: Manipulation"
+        },
+        {
+          "name@en": "Mandriven"
+        },
+        {
+          "name@en": "Command Performance"
+        },
+        {
+          "name@en": "Nothin' Nice"
+        },
+        {
+          "name@en": "To the Max"
+        },
+        {
+          "name@en": "Bareback Classics"
+        },
+        {
+          "name@en": "Head Hunters Two"
+        },
+        {
+          "name@en": "Ram Tough"
+        },
+        {
+          "name@en": "Skuff II"
+        },
+        {
+          "name@en": "Grand Prize"
+        },
+        {
+          "name@en": "Hot Pursuit"
+        },
+        {
+          "name@en": "Behind Closed Doors"
+        },
+        {
+          "name@en": "Summer Buddies"
+        },
+        {
+          "name@en": "Trunks 2"
+        },
+        {
+          "name@en": "Paging Dr. Finger"
+        },
+        {
+          "name@en": "Reckless"
+        },
+        {
+          "name@en": "Skuff: Downright Dirty"
+        },
+        {
+          "name@en": "Mo' Betta' Butt"
+        },
+        {
+          "name@en": "Acres of Ass 2"
+        },
+        {
+          "name@en": "One Man's Poison"
+        },
+        {
+          "name@en": "Best Of Rex Chandler Vs Steve Hammond"
+        },
+        {
+          "name@en": "Loading Zone"
+        },
+        {
+          "name@en": "Fucking The Boss"
+        },
+        {
+          "name@en": "Mission Accomplished"
+        },
+        {
+          "name@en": "Billy's Tale"
+        },
+        {
+          "name@en": "Touch Me"
+        },
+        {
+          "name@en": "Dr. Good Glove"
+        },
+        {
+          "name@en": "Black"
+        },
+        {
+          "name@en": "Rear-Ended"
+        },
+        {
+          "name@en": "Friction"
+        },
+        {
+          "name@en": "Reckless 2"
+        },
+        {
+          "name@en": "Bottoms Up"
+        },
+        {
+          "name@en": "Dr.'s Orders 2: Dilation"
+        },
+        {
+          "name@en": "Screw: Right to the Point"
+        }
+      ]
+    },
+    {
+      "name@en": "Steven Soderbergh",
+      "stars": 1023,
+      "director.film": [
+        {
+          "name@en": "The Girlfriend Experience"
+        },
+        {
+          "name@en": "Traffic"
+        },
+        {
+          "name@en": "Behind the Candelabra"
+        },
+        {
+          "name@en": "9012Live"
+        },
+        {
+          "name@en": "Erin Brockovich"
+        },
+        {
+          "name@en": "Eros"
+        },
+        {
+          "name@en": "Solaris"
+        },
+        {
+          "name@en": "Ocean's Twelve"
+        },
+        {
+          "name@en": "Ocean's Thirteen"
+        },
+        {
+          "name@en": "Sex, Lies, and Videotape"
+        },
+        {
+          "name@en": "Magic Mike"
+        },
+        {
+          "name@en": "The Informant!"
+        },
+        {
+          "name@en": "The Last Time I Saw Michael Gregg"
+        },
+        {
+          "name@en": "Haywire"
+        },
+        {
+          "name@en": "The Limey"
+        },
+        {
+          "name@en": "Side Effects"
+        },
+        {
+          "name@en": "Che: Part One"
+        },
+        {
+          "name@en": "Ocean's Eleven"
+        },
+        {
+          "name@en": "Che: Part Two"
+        },
+        {
+          "name@en": "Out of Sight"
+        },
+        {
+          "name@en": "Contagion"
+        },
+        {
+          "name@en": "Bubble"
+        },
+        {
+          "name@en": "Arthur & Lancelot"
+        },
+        {
+          "name@en": "Kafka"
+        },
+        {
+          "name@en": "The Good German"
+        },
+        {
+          "name@en": "Cleo"
+        },
+        {
+          "name@en": "Full Frontal"
+        },
+        {
+          "name@en": "Schizopolis"
+        },
+        {
+          "name@en": "Gray's Anatomy"
+        },
+        {
+          "name@en": "The Underneath"
+        },
+        {
+          "name@en": "And Everything Is Going Fine"
+        },
+        {
+          "name@en": "King of the Hill"
+        },
+        {
+          "name@en": "The Great Antonio"
+        },
+        {
+          "name@en": "Wholphin: Issue 2"
+        },
+        {
+          "name@en": "Life Interrupted"
+        }
+      ]
+    }
+  ]
+}

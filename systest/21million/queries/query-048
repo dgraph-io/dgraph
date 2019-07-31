@@ -1,0 +1,25 @@
+{
+	steven as var(func:eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
+		director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as math(p + q + r)
+		}
+		directorScore as sum(val(score))
+	}
+
+	score(func: uid(steven)){
+		name@en
+		val(directorScore)
+	}
+}
+---
+{
+  "score": [
+    {
+      "name@en": "Steven Spielberg",
+      "val(directorScore)": 1865
+    }
+  ]
+}

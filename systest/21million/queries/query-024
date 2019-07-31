@@ -1,0 +1,43 @@
+{
+  me(func: allofterms(name@en, "Steven Spielberg")) {
+    director.film (first: -2) {
+      name@en
+      initial_release_date
+      genre (orderasc: name@en) (first: 3) {
+          name@en
+      }
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "director.film": [
+        {
+          "name@en": "Firelight",
+          "initial_release_date": "1964-03-24T00:00:00Z",
+          "genre": [
+            {
+              "name@en": "Science Fiction"
+            },
+            {
+              "name@en": "Thriller"
+            }
+          ]
+        },
+        {
+          "name@en": "Amazing Stories: Book One",
+          "genre": [
+            {
+              "name@en": "Comedy"
+            },
+            {
+              "name@en": "Drama"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

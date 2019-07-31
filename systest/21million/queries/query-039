@@ -1,0 +1,3826 @@
+{
+	movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
+
+    paths as math(1)
+    total_films : num_films as count(director.film)
+    director : name@en
+
+    director.film {
+      starring {
+        performance.actor {
+          fraction : math(paths / (num_films/paths))
+          actor : name@en
+        }
+      }
+    }
+  }
+}
+---
+{
+  "movie_fraction": [
+    {
+      "actor": "John Noble",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "John Noble",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jason Whyte",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kathy Burns",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Kathy Burns",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Ahl",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Ahl",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Paris Howe Strewe",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Gary Beck",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Hambleton",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Hambleton",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Hambleton",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "John Leigh",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "John Leigh",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Alan Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Alan Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Sarah McLeod",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Sarah McLeod",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Sarah Peirse",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jake Abel",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Thomas McCarthy",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Astin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Rachel Clentworth",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jesse Rasmussen",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sam Neill",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Sam Neill",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Dominic Monaghan",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Dominic Monaghan",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Dominic Monaghan",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Clive Merrison",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Max Grover",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Pearl Carpenter",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Barrie M. Osborne",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Hall",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Graham McTavish",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Graham McTavish",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Timothy Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Hilton Denis",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Robbie Magasiva",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sam Manzanza",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "AJ Michalka",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee McDonald",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter McKenzie",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter McKenzie",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Bret McKenzie",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Bret McKenzie",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Ray Woolf",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian McKellen",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian McKellen",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian McKellen",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian McKellen",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian McKellen",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian McKellen",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Brent McIntyre",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Angela Bloomfield",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Troy Evans",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Rawls",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sam Shore",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michaela Morgan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Tina Graham",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bernard Hill",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Bernard Hill",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Freya Milner",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Anna Dawson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jonathan Blick",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Phillip Spencer Harris",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bob Burns",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Bob Burns",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Susan Sarandon",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Chris Clarkson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Marguerite Hurst",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Corrigan",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Corrigan",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Asofa Manase",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Terence Griffiths",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Edward Campbell",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jennifer Gertler",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Toa Waaka",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Frank Darabont",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ray Trickett",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Adam Brown",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Adam Brown",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Anna George",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Joe Folau",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Steve Reinsfield",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sean Astin",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Sean Astin",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Sean Astin",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Tom Hobbs",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Tom Hobbs",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Thomas Kretschmann",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Tom Delconte",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Donoghue",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Geraldine Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David Weatherley",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Olivia Tennet",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Diana Kent",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Joseph Mika-Hunt",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Joseph Mika-Hunt",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Tamihana Nuku",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bravo",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Evan Parke",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Doug Wren",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kyle Chandler",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Chris Streeter",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Harry Sinclair",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Tania Rodger",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Brendan Casey",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "K.C. Kelly",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lorraine Ashbourne",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stefania LaVie Owen",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Geoff Allen",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Geoff Timblick",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David C. Roehm Sr.",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Craig Hall",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Connolly",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Connolly",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen A. Buckley",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Viggo Mortensen",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Viggo Mortensen",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Viggo Mortensen",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "John Bach",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Mikael Persbrandt",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Mikael Persbrandt",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Lobo Chan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Gene de Marco",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Matthew Dravitzki",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Henry Mortensen",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Gledhill",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Kavanagh",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jamie Bell",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "William Hummel",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ben Skjellerup",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Martyn Sanderson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Dan Kern",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kate O'Rourke",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Tim Wong",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Tim Gordon",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Tim Gordon",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Dean O'Gorman",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Dean O'Gorman",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Anthony Ray Parker",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Andrew James Allen",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Glenys Lloyd-Smith",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Gregory R. Campbell",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Louis Sutherland",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Taea Hartwell",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Taea Hartwell",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Elijah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Elijah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Elijah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Elijah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Elijah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Elijah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Tim McLachlan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Latham Gaines",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Vicky Haughton",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Charlie Kirkwood",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Christian Rivers",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Simon O'Connor",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Elizabeth Hawthorne",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Benedict Cumberbatch",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Benedict Cumberbatch",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Benedict Cumberbatch",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Benedict Cumberbatch",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "James Trevena-Brown",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Randall William Cook",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sam Comery",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Naomi Watts",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Chris Bailey",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ross Duncan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Karlos Drinkwater",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Saoirse Ronan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Brad Dourif",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Brad Dourif",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Ford",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Thomas Robins",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Thomas Robins",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Thomas Rimmer",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Ferguson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kirsti Ferry",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David Wenham",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "David Wenham",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Ben Fransham",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jarred Blakiston",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Costa Botes",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Graves",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Todd Rippon",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Todd Rippon",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Marcus Thorne",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Chic Littlewood",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Todd Morgan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nick Baker",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Rick Baker",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Melanie Carrington",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Orlando Bloom",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Orlando Bloom",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Orlando Bloom",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Orlando Bloom",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Orlando Bloom",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Bruce Allpress",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sandro Kopp",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Daniel Van Wert",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lance Fabian Kemp",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Grant Aldridge",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Hamish Bruce",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Elizabeth Moody",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Elizabeth Moody",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Elizabeth Moody",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Scott Evans",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jack Black",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David Dennis",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Jed Brophy",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Vincent Riviezzo",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Daniel Falconer",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Gilbert Goldie",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kurt Runkle",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Leonard Maltin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "William Zielinski",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Crawford Thomson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jim Fyfe",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Donna Akersten",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Frazer Anderson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Patrick Kalyn",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lewis Martin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Trini Alvarado",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Matt Wilson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Catherine Corcoran",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Papps",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Karl Urban",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Karl Urban",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "director": "Peter Jackson",
+      "total_films": 0
+    },
+    {
+      "director": "Peter Jackson",
+      "total_films": 0
+    },
+    {
+      "director": "Peter Jackson",
+      "total_films": 0
+    },
+    {
+      "actor": "Jodie Taylor",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Rhys-Davies",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "John Rhys-Davies",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "John Rhys-Davies",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "John Rhys-Davies",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "John Rhys-Davies",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Julie Holmes",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ran Grumolis",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Harvey Weinstein",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Robert Bizik",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "James Vassanelli",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sosina Wogayehu",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Dobson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Robinson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Alexandra Astin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Violi",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Cate Blanchett",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Cate Blanchett",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Cate Blanchett",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Cate Blanchett",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Cate Blanchett",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Cate Blanchett",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Mike Minett",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Greg Smith",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Geoffrey Heath",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Paul Yates",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kyle Ashley",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Marley McKay",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Whiteside",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Whiteside",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Rachel Weisz",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "George Grover",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Gabby Greig",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kiran Shah",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Howard Shore",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Walter Walsh",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Miller",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Adrien Brody",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stanley Tucci",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Charlie Saxton",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Mike Wilson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Brian Michael Scully",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sylvester McCoy",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Sylvester McCoy",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jennifer Butler",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Camille Keenan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Piripi Waretini",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jan Gopperth",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Evangeline Lilly",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Evangeline Lilly",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Luanne Gordon",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Vivienne Kaplan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Darryl John",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Christian Thomas Ashdale",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bruce Spence",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Pace",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Pace",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Pace",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lou Dobson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lawrence Jarden",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Daniel Tusia",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "George Port",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "April Phillips",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Grace Carden-Horton",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Elsworth",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bruce Phillips",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Bruce Phillips",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Rose McIver",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jeffrey Combs",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Wahlberg",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ken Blackburn",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Charlie McClellan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Martha Gay",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Darien Takle",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Moreen Eason",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Glen Drake",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Glen Drake",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Glen Drake",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Greg Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sean Bean",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Sean Bean",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Sean Bean",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Hadlow",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Hadlow",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Hadlow",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Hadlow",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Hadlow",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Samuel Taylor",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Crushanin Dixor-McIvor",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Roussel Dubois",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "R. Lee Ermey",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sala Baker",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Sala Baker",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Sala Baker",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Jarl Benzon",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Jarl Benzon",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Jarl Benzon",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Paul Norell",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Paul Norell",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Chuck Schanamann",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Paul Wilson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Paul Bryson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Barry Humphries",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Barry Humphries",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Luke Evans",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Luke Evans",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Luke Evans",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Luke Evans",
+      "director": "Peter Jackson",
+      "fraction": 0.210526,
+      "total_films": 19
+    },
+    {
+      "actor": "Maximilian Law",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ken Stott",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Ken Stott",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Ken Stott",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "JaQuinley Kerr",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nichola Jones",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Matt Gillanders",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael J. Fox",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Leslie Wing",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michelle Nagy",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Danielle Souza",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stink Fisher",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Rocky Curby",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Victoria Beynon-Cole",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Victoria Beynon-Cole",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jake Busey",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Timothy Bartlett",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Timothy Bartlett",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Phil Grieve",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Phil Grieve",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Phil Grieve",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Boyd",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Boyd",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Boyd",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Diana Peñalver",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Paul Holmes",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nicola Cliff",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Belindalee Hope",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Lawrence",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Genevieve Westcott",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ben Price",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Rick Porras",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lili Bayliss",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Fry",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Fry",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Melanie Lynskey",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Melanie Lynskey",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Stuart Devenie",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Stuart Devenie",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Stuart Devenie",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "William Kircher",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "William Kircher",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "William Kircher",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Tim Balme",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kirit Kapadia",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Wraight",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Brian Sergent",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Frank Edwards",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Frank Edwards",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Mark Trotter",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Barry Thomson",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Barry Thomson",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Stig Eldred",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Susan Eastwood",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Liv Tyler",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Liv Tyler",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Liv Tyler",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Calum Gittins",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Calum Gittins",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jessica Bradley",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lindsay Shelton",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Hartley",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Hartley",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Hartley",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Ryan Gage",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Megan Edwards",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Colin Bogaars",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Danny Lineham",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nathan Meister",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Conan Stevens",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Conan Stevens",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jim Knobeloch",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Imperioli",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Alan O'Leary",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Liz Mullane",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Liz Mullane",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Andrea Sanders",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jim McLarty",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jim McLarty",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jim Dietz",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ray Henwood",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Ray Henwood",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Noel Appleby",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Noel Appleby",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Kate Winslet",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Burkett",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Billy Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Sandra Landers",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Sandra Landers",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "William Pomeroy",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Scott Yannick",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Robert Pollock",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ric Herbert",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Julia Walshaw",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Johnny Pulcinella",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Armitage",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Armitage",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Armitage",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.684211,
+      "total_films": 19
+    },
+    {
+      "actor": "Joe Gertler",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sophie Watkins",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bruce Hopkins",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Phoebe Gittins",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Mizrahi",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Mizrahi",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Pete O'Herne",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Pete O'Herne",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Katie Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Katie Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Katie Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Katie Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Katie Jackson",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Holm",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Holm",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Holm",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Holm",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Holm",
+      "director": "Peter Jackson",
+      "fraction": 0.263158,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Edward Brooks",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Dee Wallace",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Reece Ritchie",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lee Donahue",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Pip Mushin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Thomas McGinty",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Mune",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stan The Wonder Pug",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Martin Freeman",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Martin Freeman",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Martin Freeman",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Jack Hoffman",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Seth F. Miller",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Robyn Malcolm",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Robyn Malcolm",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Tony Hopkins",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Glenn Boswell",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Hugo Weaving",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Hugo Weaving",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Hugo Weaving",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Hugo Weaving",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Hugo Weaving",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Hugo Weaving",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Nakia Dillard",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "William Johnson",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "William Johnson",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Dominic Keating",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Ure",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Ure",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Ure",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Christopher Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Christopher Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Christopher Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Christopher Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Christopher Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Christopher Lee",
+      "director": "Peter Jackson",
+      "fraction": 0.315789,
+      "total_films": 19
+    },
+    {
+      "actor": "Jean Orlando",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ashley Brimfield",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael Maxwell",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jean Guérin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Brian Blessed",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Brian Blessed",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Brenda Kendall",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Peter Elliott",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sam La Hood",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Richard Lambeth",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nic Farra",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Manu Bennett",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Manu Bennett",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Manu Bennett",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "William Wallace",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Joseph Tornatore",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Felicia O'Brien",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "James Nesbitt",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "James Nesbitt",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "James Nesbitt",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Geoff Dunstan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David Dengelo",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Craig Parker",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Craig Parker",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Craig Parker",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Chi McBride",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Fallon Maressa",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jesse Griffin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Shane Boulton",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Kylie Cushman",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Sabine Crossen",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Renee Cataldo",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jacinta Wawatai",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Shannon Wilson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ryan O'Kane",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Andy Serkis",
+      "director": "Peter Jackson",
+      "fraction": 0.421053,
+      "total_films": 19
+    },
+    {
+      "actor": "Alan Howard",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jeffrey Thomas",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jeffrey Thomas",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Courtney Baxter",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Dean Knowsley",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Nicoll",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Wooten",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Callen",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "John Callen",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Eric Leighton",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Dan Hennah",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Tiriel Mora",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ken Hammon",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Colin Hanks",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Shane Rangi",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Clarke",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lawrence Makoare",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lawrence Makoare",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "Lawrence Makoare",
+      "director": "Peter Jackson",
+      "fraction": 0.157895,
+      "total_films": 19
+    },
+    {
+      "actor": "John Dybvig",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Bruce Kirkpatrick",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nathaniel Lees",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jonathan Jordan",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Miranda Otto",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Miranda Otto",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Ian Watkin",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Eric Vespe",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John O'Shea",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Hannah Wood",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David Pittu",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Semi Kuresa",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Terry Potter",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Raewyn Pelham",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Caron Dallas",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Cameron Rhodes",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Marton Csokas",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jono Manks",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Toni Jones",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Edwin Wright",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Wendy Watson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Norman Forsey",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Craig Smith",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Evelyn Lennon",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Troy O'Kane",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Ruby Hudson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Clinton Ulyatt",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Julianna McCarthy",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Alex Shirtcliffe-Scott",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Clay Nelson",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Shawnee Robertson",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Shawnee Robertson",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "John Jezior",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "John Sumner",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "John Sumner",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Reilly",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Leslie Klein",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Carolyn Dando",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Hunter",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Stephen Hunter",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Veronica Horn",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Michael A. Salvato",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Jørn Benzon",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Jørn Benzon",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Aidan Turner",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Aidan Turner",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Matthew Chamberlain",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Matthew Chamberlain",
+      "director": "Peter Jackson",
+      "fraction": 0.105263,
+      "total_films": 19
+    },
+    {
+      "actor": "Brian Hotter",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "James Willingham III",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "David Kneeream",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Terry Notary",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Lori Dungey",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Desmond Kelly",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    },
+    {
+      "actor": "Nikki SooHoo",
+      "director": "Peter Jackson",
+      "fraction": 0.052632,
+      "total_films": 19
+    }
+  ]
+}

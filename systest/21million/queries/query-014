@@ -1,0 +1,30 @@
+{
+  me(func: eq(name@en, "Ridley Scott")) {
+    name@en
+    director.film @filter(lt(initial_release_date, "1980-01-01"))  {
+      initial_release_date
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Ridley Scott",
+      "director.film": [
+        {
+          "initial_release_date": "1979-05-25T00:00:00Z",
+          "name@en": "Alien"
+        },
+        {
+          "initial_release_date": "1977-12-01T00:00:00Z",
+          "name@en": "The Duellists"
+        }
+      ]
+    },
+    {
+      "name@en": "Ridley Scott"
+    }
+  ]
+}

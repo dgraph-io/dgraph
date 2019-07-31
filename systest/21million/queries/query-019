@@ -1,0 +1,174 @@
+{
+  me(func: has(director.film), first: 5) {
+    name@en
+    director.film @filter(has(initial_release_date))  {
+      initial_release_date
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Martin Clunes",
+      "director.film": [
+        {
+          "initial_release_date": "1994-07-08T00:00:00Z",
+          "name@en": "Staggered"
+        }
+      ]
+    },
+    {
+      "name@en": "Mitsuo Toyama",
+      "director.film": [
+        {
+          "initial_release_date": "2012-03-10T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "name@en": "Ben Rivers",
+      "director.film": [
+        {
+          "initial_release_date": "2006-01-01T00:00:00Z",
+          "name@en": "Astika"
+        },
+        {
+          "initial_release_date": "2008-01-01T00:00:00Z",
+          "name@en": "A World Rattled of Habit"
+        },
+        {
+          "initial_release_date": "2011-09-09T00:00:00Z",
+          "name@en": "Two Years at Sea"
+        },
+        {
+          "initial_release_date": "2011-01-01T00:00:00Z",
+          "name@en": "Sack Barrow"
+        },
+        {
+          "initial_release_date": "2012-01-01T00:00:00Z",
+          "name@en": "Phantoms of a Libertine"
+        },
+        {
+          "initial_release_date": "2004-01-01T00:00:00Z",
+          "name@en": "We the People"
+        },
+        {
+          "initial_release_date": "2011-01-28T00:00:00Z",
+          "name@en": "Slow Action"
+        },
+        {
+          "initial_release_date": "2009-01-01T00:00:00Z",
+          "name@en": "I Know Where I'm Going"
+        },
+        {
+          "initial_release_date": "2005-01-01T00:00:00Z",
+          "name@en": "The Hyrcynium Wood"
+        },
+        {
+          "initial_release_date": "2013-08-08T00:00:00Z",
+          "name@en": "A Spell to Ward Off the Darkness"
+        },
+        {
+          "initial_release_date": "2012-08-07T00:00:00Z",
+          "name@en": "The Creation As We Saw It"
+        },
+        {
+          "initial_release_date": "2006-01-01T00:00:00Z",
+          "name@en": "The Coming Race"
+        },
+        {
+          "initial_release_date": "2005-01-01T00:00:00Z",
+          "name@en": "The Bomb with a Man in His Shoe"
+        },
+        {
+          "initial_release_date": "2008-01-01T00:00:00Z",
+          "name@en": "Ah, Liberty!"
+        },
+        {
+          "initial_release_date": "1993-01-01T00:00:00Z",
+          "name@en": "The Big Sink"
+        },
+        {
+          "initial_release_date": "2014-01-01T00:00:00Z",
+          "name@en": "Things"
+        },
+        {
+          "initial_release_date": "2006-01-01T00:00:00Z",
+          "name@en": "This Is My Land"
+        },
+        {
+          "initial_release_date": "2008-10-01T00:00:00Z",
+          "name@en": "Origin of the Species"
+        },
+        {
+          "initial_release_date": "2003-01-01T00:00:00Z",
+          "name@en": "Old Dark House"
+        },
+        {
+          "initial_release_date": "2005-01-01T00:00:00Z",
+          "name@en": "House"
+        },
+        {
+          "initial_release_date": "2007-01-01T00:00:00Z",
+          "name@en": "Terror!"
+        },
+        {
+          "initial_release_date": "2007-01-01T00:00:00Z",
+          "name@en": "Sørdal"
+        }
+      ]
+    },
+    {
+      "name@en": "J. Mahendran",
+      "director.film": [
+        {
+          "initial_release_date": "1986-01-01T00:00:00Z",
+          "name@en": "Kannukku Mai Ezhuthu"
+        },
+        {
+          "initial_release_date": "1980-08-15T00:00:00Z",
+          "name@en": "Johnny"
+        },
+        {
+          "initial_release_date": "2006-07-28T00:00:00Z",
+          "name@en": "Sasanam"
+        },
+        {
+          "initial_release_date": "1979-10-19T00:00:00Z",
+          "name@en": "Uthiri Pookkal"
+        },
+        {
+          "initial_release_date": "1981-01-01T00:00:00Z",
+          "name@en": "Nenjathai Killathe"
+        },
+        {
+          "initial_release_date": "1984-06-15T00:00:00Z",
+          "name@en": "Kai Kodukkum Kai"
+        },
+        {
+          "initial_release_date": "1981-04-17T00:00:00Z",
+          "name@en": "Nandu"
+        },
+        {
+          "initial_release_date": "1982-01-01T00:00:00Z",
+          "name@en": "Metti"
+        },
+        {
+          "initial_release_date": "1978-08-15T00:00:00Z",
+          "name@en": "Mullum Malarum"
+        }
+      ]
+    },
+    {
+      "name@en": "Jayke Lewis",
+      "director.film": [
+        {
+          "initial_release_date": "2008-06-07T00:00:00Z",
+          "name@en": "30 Minute Guarantee"
+        }
+      ]
+    }
+  ]
+}

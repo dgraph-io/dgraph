@@ -1,0 +1,893 @@
+{
+  stevens as var(func: allofterms(name@en, "steven")) {
+    director.film {
+      ird as initial_release_date
+      # ird is a value variable mapping a film UID to its release date
+    }
+    minIRD as min(val(ird))
+    # minIRD is a value variable mapping a director UID to their first release date
+  }
+
+  byIRD(func: uid(stevens), orderasc: val(minIRD)) {
+    name@en
+    firstRelease: val(minIRD)
+  }
+}
+---
+{
+  "byIRD": [
+    {
+      "firstRelease": "1999-01-01T00:00:00Z",
+      "name@en": "Jon Steven Ward"
+    },
+    {
+      "firstRelease": "1980-01-01T00:00:00Z",
+      "name@en": "Steven Paul"
+    },
+    {
+      "firstRelease": "2000-01-01T00:00:00Z",
+      "name@en": "Steven Rush"
+    },
+    {
+      "firstRelease": "2014-01-01T00:00:00Z",
+      "name@en": "Steven Bram"
+    },
+    {
+      "firstRelease": "2006-01-01T00:00:00Z",
+      "name@en": "Steven Hahn"
+    },
+    {
+      "firstRelease": "2003-01-01T00:00:00Z",
+      "name@en": "Steven Tsuchida"
+    },
+    {
+      "firstRelease": "2013-08-24T00:00:00Z",
+      "name@en": "Steven Cerritos"
+    },
+    {
+      "firstRelease": "1985-10-11T00:00:00Z",
+      "name@en": "Steven Hahn"
+    },
+    {
+      "firstRelease": "1995-01-01T00:00:00Z",
+      "name@en": "Steven D. White"
+    },
+    {
+      "firstRelease": "2013-10-11T00:00:00Z",
+      "name@en": "Steven-Charles Jaffe"
+    },
+    {
+      "firstRelease": "1985-01-01T00:00:00Z",
+      "name@en": "Steven Ford"
+    },
+    {
+      "firstRelease": "2006-01-01T00:00:00Z",
+      "name@en": "Steven Hope"
+    },
+    {
+      "firstRelease": "1964-03-24T00:00:00Z",
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "firstRelease": "2006-01-01T00:00:00Z",
+      "name@en": "Steven Shea"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven Decraene"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Judd"
+    },
+    {
+      "firstRelease": "2007-01-01T00:00:00Z",
+      "name@en": "Steven Chow"
+    },
+    {
+      "firstRelease": "2007-10-26T00:00:00Z",
+      "name@en": "Steven Sawalich"
+    },
+    {
+      "firstRelease": "2004-10-02T00:00:00Z",
+      "name@en": "Steven Dieveney"
+    },
+    {
+      "firstRelease": "2012-09-20T00:00:00Z",
+      "name@en": "Steven Deneault"
+    },
+    {
+      "firstRelease": "1988-01-01T00:00:00Z",
+      "name@en": "Steven Scarborough"
+    },
+    {
+      "firstRelease": "2002-10-25T00:00:00Z",
+      "name@en": "Steven Stockage"
+    },
+    {
+      "firstRelease": "2013-07-11T00:00:00Z",
+      "name@en": "Steven Daly"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Danz"
+    },
+    {
+      "firstRelease": "1990-05-01T00:00:00Z",
+      "name@en": "Steven Lovy"
+    },
+    {
+      "firstRelease": "2005-07-22T00:00:00Z",
+      "name@en": "Steven Greenstreet"
+    },
+    {
+      "firstRelease": "2005-01-01T00:00:00Z",
+      "name@en": "Steven M. Smith"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Williford"
+    },
+    {
+      "firstRelease": "1973-01-01T00:00:00Z",
+      "name@en": "Steven Lisberger"
+    },
+    {
+      "firstRelease": "2000-01-01T00:00:00Z",
+      "name@en": "Steven Matheson"
+    },
+    {
+      "firstRelease": "2005-10-01T00:00:00Z",
+      "name@en": "Steven E. Gordon"
+    },
+    {
+      "firstRelease": "1989-01-01T00:00:00Z",
+      "name@en": "Steven Paul Contreras"
+    },
+    {
+      "firstRelease": "0214-02-28T00:00:00Z",
+      "name@en": "Steven McMillan"
+    },
+    {
+      "firstRelease": "2004-01-01T00:00:00Z",
+      "name@en": "Steven Morrison"
+    },
+    {
+      "firstRelease": "2005-01-01T00:00:00Z",
+      "name@en": "Mark Steven Grove"
+    },
+    {
+      "firstRelease": "1993-01-01T00:00:00Z",
+      "name@en": "Steven M. Martin"
+    },
+    {
+      "firstRelease": "2014-08-12T00:00:00Z",
+      "name@en": "Steven McIntyre"
+    },
+    {
+      "firstRelease": "2006-01-01T00:00:00Z",
+      "name@en": "Steven J. Niles"
+    },
+    {
+      "firstRelease": "1991-01-01T00:00:00Z",
+      "name@en": "Mark Steven Bosko"
+    },
+    {
+      "firstRelease": "2014-01-01T00:00:00Z",
+      "name@en": "Steven Wouterlood"
+    },
+    {
+      "firstRelease": "2013-06-15T00:00:00Z",
+      "name@en": "Steven McGregor"
+    },
+    {
+      "firstRelease": "2006-10-18T00:00:00Z",
+      "name@en": "Steven C. Miller"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Michaels"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven C. Barber"
+    },
+    {
+      "firstRelease": "1993-08-11T00:00:00Z",
+      "name@en": "Steven Zaillian"
+    },
+    {
+      "firstRelease": "2003-12-30T00:00:00Z",
+      "name@en": "Steven Ayromlooi"
+    },
+    {
+      "firstRelease": "1996-01-01T00:00:00Z",
+      "name@en": "Steven R. Monroe"
+    },
+    {
+      "firstRelease": "1982-01-01T00:00:00Z",
+      "name@en": "Steven J. Santos"
+    },
+    {
+      "firstRelease": "1966-01-01T00:00:00Z",
+      "name@en": "Steven Jacobson"
+    },
+    {
+      "firstRelease": "2007-04-12T00:00:00Z",
+      "name@en": "Steven F. Hayward"
+    },
+    {
+      "firstRelease": "1980-01-01T00:00:00Z",
+      "name@en": "Steven Fischler"
+    },
+    {
+      "firstRelease": "1985-01-01T00:00:00Z",
+      "name@en": "Steven Subotnick"
+    },
+    {
+      "firstRelease": "2004-09-28T00:00:00Z",
+      "name@en": "Steven Grandison"
+    },
+    {
+      "firstRelease": "1998-01-01T00:00:00Z",
+      "name@en": "Steven Greenberg"
+    },
+    {
+      "firstRelease": "1992-01-01T00:00:00Z",
+      "name@en": "Steven Bernstein"
+    },
+    {
+      "firstRelease": "2008-01-01T00:00:00Z",
+      "name@en": "Steven Lewis Simpson"
+    },
+    {
+      "firstRelease": "2012-06-25T00:00:00Z",
+      "name@en": "Steven Tylor O'Connor"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Jonathan Steven Green"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven De Castro"
+    },
+    {
+      "firstRelease": "2003-01-01T00:00:00Z",
+      "name@en": "Steven F. Zambo"
+    },
+    {
+      "firstRelease": "2009-04-11T00:00:00Z",
+      "name@en": "Steven Ray Morris"
+    },
+    {
+      "firstRelease": "1991-01-24T00:00:00Z",
+      "name@en": "Steven Fierberg"
+    },
+    {
+      "firstRelease": "2013-08-07T00:00:00Z",
+      "name@en": "Steven Feinberg"
+    },
+    {
+      "firstRelease": "2003-03-22T00:00:00Z",
+      "name@en": "Steven James Creazzo"
+    },
+    {
+      "firstRelease": "1998-01-01T00:00:00Z",
+      "name@en": "Steven Ho"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Huffaker"
+    },
+    {
+      "firstRelease": "2007-01-01T00:00:00Z",
+      "name@en": "Steven Charles Castle"
+    },
+    {
+      "firstRelease": "2012-01-01T00:00:00Z",
+      "name@en": "Ryan Steven Green"
+    },
+    {
+      "firstRelease": "2012-01-01T00:00:00Z",
+      "name@en": "Steven Holloway"
+    },
+    {
+      "firstRelease": "1971-01-01T00:00:00Z",
+      "name@en": "Steven Hilliard Stern"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Caple Jr."
+    },
+    {
+      "firstRelease": "2004-07-16T00:00:00Z",
+      "name@en": "Steven E. Mallorca"
+    },
+    {
+      "firstRelease": "1997-08-05T00:00:00Z",
+      "name@en": "Steven Dean Moore"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Christopher Young"
+    },
+    {
+      "firstRelease": "1929-01-01T00:00:00Z",
+      "name@en": "J. Steven Edwards"
+    },
+    {
+      "firstRelease": "2004-01-01T00:00:00Z",
+      "name@en": "Steven Woodcock"
+    },
+    {
+      "firstRelease": "2014-01-01T00:00:00Z",
+      "name@en": "Steven Gomez"
+    },
+    {
+      "firstRelease": "2003-06-02T00:00:00Z",
+      "name@en": "Steven Goldmann"
+    },
+    {
+      "firstRelease": "1973-01-01T00:00:00Z",
+      "name@en": "Steven E. de Souza"
+    },
+    {
+      "firstRelease": "1999-01-27T00:00:00Z",
+      "name@en": "Steven Maler"
+    },
+    {
+      "firstRelease": "2009-10-25T00:00:00Z",
+      "name@en": "Steven Peros"
+    },
+    {
+      "firstRelease": "2005-01-01T00:00:00Z",
+      "name@en": "Steven Gillilan"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Gorelick"
+    },
+    {
+      "firstRelease": "2007-01-01T00:00:00Z",
+      "name@en": "Steven Oritt"
+    },
+    {
+      "firstRelease": "2000-02-11T00:00:00Z",
+      "name@en": "Steven Feder"
+    },
+    {
+      "firstRelease": "2010-02-28T00:00:00Z",
+      "name@en": "Steven Meyer"
+    },
+    {
+      "firstRelease": "2003-07-29T00:00:00Z",
+      "name@en": "Steven Adams"
+    },
+    {
+      "firstRelease": "2006-02-19T00:00:00Z",
+      "name@en": "Steven Minor"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven Woloshen"
+    },
+    {
+      "firstRelease": "2014-11-23T00:00:00Z",
+      "name@en": "Steven Ilous"
+    },
+    {
+      "firstRelease": "2003-01-01T00:00:00Z",
+      "name@en": "Steven St. Croix"
+    },
+    {
+      "firstRelease": "2005-04-08T00:00:00Z",
+      "name@en": "Steven Wayne"
+    },
+    {
+      "firstRelease": "2009-03-31T00:00:00Z",
+      "name@en": "Steven Smith"
+    },
+    {
+      "firstRelease": "2008-08-22T00:00:00Z",
+      "name@en": "Steven Sheil"
+    },
+    {
+      "firstRelease": "2006-04-06T00:00:00Z",
+      "name@en": "Steven Williams"
+    },
+    {
+      "firstRelease": "2012-03-18T00:00:00Z",
+      "name@en": "Steven Byrne"
+    },
+    {
+      "firstRelease": "2002-01-01T00:00:00Z",
+      "name@en": "Steven Quale"
+    },
+    {
+      "firstRelease": "2003-01-01T00:00:00Z",
+      "name@en": "Steven Boe"
+    },
+    {
+      "firstRelease": "1997-01-01T00:00:00Z",
+      "name@en": "Steven Esteb"
+    },
+    {
+      "firstRelease": "1991-01-01T00:00:00Z",
+      "name@en": "Steven Stern"
+    },
+    {
+      "firstRelease": "2013-04-08T00:00:00Z",
+      "name@en": "Steven Pressman"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Cohen"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven Corfe"
+    },
+    {
+      "firstRelease": "2001-01-01T00:00:00Z",
+      "name@en": "Steven Sobel"
+    },
+    {
+      "firstRelease": "1991-01-01T00:00:00Z",
+      "name@en": "Steven Pearl"
+    },
+    {
+      "firstRelease": "2004-11-24T00:00:00Z",
+      "name@en": "Steven Burch"
+    },
+    {
+      "firstRelease": "1992-07-21T00:00:00Z",
+      "name@en": "Steven Schachter"
+    },
+    {
+      "firstRelease": "2013-09-24T00:00:00Z",
+      "name@en": "Steven Klein"
+    },
+    {
+      "firstRelease": "1995-02-17T00:00:00Z",
+      "name@en": "Steven Brill"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven O’Riordan"
+    },
+    {
+      "firstRelease": "2012-06-19T00:00:00Z",
+      "name@en": "Steven Hai"
+    },
+    {
+      "firstRelease": "2002-03-10T00:00:00Z",
+      "name@en": "Steven Clark"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Smith"
+    },
+    {
+      "firstRelease": "1998-09-11T00:00:00Z",
+      "name@en": "Mark Steven Johnson"
+    },
+    {
+      "firstRelease": "1995-01-01T00:00:00Z",
+      "name@en": "Steven George Hentges"
+    },
+    {
+      "firstRelease": "1988-08-26T00:00:00Z",
+      "name@en": "Steven Kampmann"
+    },
+    {
+      "firstRelease": "1999-03-01T00:00:00Z",
+      "name@en": "Steven Wright"
+    },
+    {
+      "firstRelease": "2002-01-01T00:00:00Z",
+      "name@en": "Steven Rosenbaum"
+    },
+    {
+      "firstRelease": "2005-01-01T00:00:00Z",
+      "name@en": "Steven Cheslik-DeMeyer"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Turley"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Wilsey"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Javitz"
+    },
+    {
+      "firstRelease": "2000-04-25T00:00:00Z",
+      "name@en": "Steven Nevius"
+    },
+    {
+      "firstRelease": "2001-01-01T00:00:00Z",
+      "name@en": "Steven Jacobs"
+    },
+    {
+      "firstRelease": "2010-04-03T00:00:00Z",
+      "name@en": "Steven Sander"
+    },
+    {
+      "firstRelease": "2012-01-01T00:00:00Z",
+      "name@en": "Steven Keller"
+    },
+    {
+      "firstRelease": "2012-01-01T00:00:00Z",
+      "name@en": "Steven Kiefer"
+    },
+    {
+      "firstRelease": "2002-01-01T00:00:00Z",
+      "name@en": "Steven Taylor"
+    },
+    {
+      "firstRelease": "2014-01-01T00:00:00Z",
+      "name@en": "Steven Bryant"
+    },
+    {
+      "firstRelease": "1976-10-01T00:00:00Z",
+      "name@en": "Steven Elkins"
+    },
+    {
+      "firstRelease": "2007-11-16T00:00:00Z",
+      "name@en": "Steven Kiefer"
+    },
+    {
+      "firstRelease": "1997-01-01T00:00:00Z",
+      "name@en": "Steven Vidler"
+    },
+    {
+      "firstRelease": "1997-01-01T00:00:00Z",
+      "name@en": "Steven Diller"
+    },
+    {
+      "firstRelease": "1996-09-01T00:00:00Z",
+      "name@en": "Steven Walker"
+    },
+    {
+      "firstRelease": "1996-01-15T00:00:00Z",
+      "name@en": "Steven Dupler"
+    },
+    {
+      "firstRelease": "2014-03-22T00:00:00Z",
+      "name@en": "Steven Lesser"
+    },
+    {
+      "firstRelease": "1994-01-01T00:00:00Z",
+      "name@en": "Steven Cantor"
+    },
+    {
+      "firstRelease": "1975-01-01T00:00:00Z",
+      "name@en": "Steven Kovacs"
+    },
+    {
+      "firstRelease": "2013-05-09T00:00:00Z",
+      "name@en": "Steven Knight"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Brandt"
+    },
+    {
+      "firstRelease": "2013-09-10T00:00:00Z",
+      "name@en": "Steven Dhoedt"
+    },
+    {
+      "firstRelease": "2005-01-01T00:00:00Z",
+      "name@en": "Steven Silver"
+    },
+    {
+      "firstRelease": "1995-01-01T00:00:00Z",
+      "name@en": "Steven Bognar"
+    },
+    {
+      "firstRelease": "1995-01-01T00:00:00Z",
+      "name@en": "Steven Ascher"
+    },
+    {
+      "firstRelease": "2006-01-01T00:00:00Z",
+      "name@en": "Steven R. Hurlburt"
+    },
+    {
+      "firstRelease": "1993-01-01T00:00:00Z",
+      "name@en": "Steven Shainberg"
+    },
+    {
+      "firstRelease": "2014-01-01T00:00:00Z",
+      "name@en": "Steven Loring"
+    },
+    {
+      "firstRelease": "1986-01-01T00:00:00Z",
+      "name@en": "Steven Soderbergh"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven M. Bumgardner"
+    },
+    {
+      "firstRelease": "1998-06-07T00:00:00Z",
+      "name@en": "Steven Manuel"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Briand"
+    },
+    {
+      "firstRelease": "2000-05-04T00:00:00Z",
+      "name@en": "Steven Clarke"
+    },
+    {
+      "firstRelease": "2008-07-24T00:00:00Z",
+      "name@en": "Steven Bartlo"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Hatton"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Lawson"
+    },
+    {
+      "firstRelease": "1968-01-01T00:00:00Z",
+      "name@en": "Steven Arnold"
+    },
+    {
+      "firstRelease": "2008-03-09T00:00:00Z",
+      "name@en": "Steven Conrad"
+    },
+    {
+      "firstRelease": "2013-03-15T00:00:00Z",
+      "name@en": "Steven Goldfried"
+    },
+    {
+      "firstRelease": "2008-04-14T00:00:00Z",
+      "name@en": "Steven Rodrigues"
+    },
+    {
+      "firstRelease": "1992-12-28T00:00:00Z",
+      "name@en": "Steven Austin"
+    },
+    {
+      "firstRelease": "2012-01-01T00:00:00Z",
+      "name@en": "Steven Wilson"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Swirko"
+    },
+    {
+      "firstRelease": "1994-02-18T00:00:00Z",
+      "name@en": "Steven Seagal"
+    },
+    {
+      "firstRelease": "2008-01-01T00:00:00Z",
+      "name@en": "Steven La Butch"
+    },
+    {
+      "firstRelease": "2007-01-01T00:00:00Z",
+      "name@en": "Steven Latham"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Jurich"
+    },
+    {
+      "firstRelease": "2012-06-23T00:00:00Z",
+      "name@en": "Steven Kochones"
+    },
+    {
+      "firstRelease": "1987-01-01T00:00:00Z",
+      "name@en": "Steven Siegel"
+    },
+    {
+      "firstRelease": "2005-05-01T00:00:00Z",
+      "name@en": "Steven Dungan"
+    },
+    {
+      "firstRelease": "2011-09-22T00:00:00Z",
+      "name@en": "Steven Kostanski"
+    },
+    {
+      "firstRelease": "2014-01-01T00:00:00Z",
+      "name@en": "Steven Nagano"
+    },
+    {
+      "firstRelease": "2012-04-26T00:00:00Z",
+      "name@en": "Steven Hanulik"
+    },
+    {
+      "firstRelease": "2014-06-01T00:00:00Z",
+      "name@en": "Steven De Beul"
+    },
+    {
+      "firstRelease": "2013-01-01T00:00:00Z",
+      "name@en": "Steven Vander Meer"
+    },
+    {
+      "firstRelease": "1996-09-13T00:00:00Z",
+      "name@en": "Steven Baigelman"
+    },
+    {
+      "firstRelease": "2008-01-20T00:00:00Z",
+      "name@en": "Steven Sebring"
+    },
+    {
+      "firstRelease": "2003-01-01T00:00:00Z",
+      "name@en": "Steven Levitan"
+    },
+    {
+      "firstRelease": "2002-01-01T00:00:00Z",
+      "name@en": "Steven Feldman"
+    },
+    {
+      "firstRelease": "2012-11-21T00:00:00Z",
+      "name@en": "Steven Nielson"
+    },
+    {
+      "firstRelease": "1987-09-13T00:00:00Z",
+      "name@en": "James Steven Sadwith"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Bereznai"
+    },
+    {
+      "firstRelease": "1986-01-01T00:00:00Z",
+      "name@en": "Steven Okazaki"
+    },
+    {
+      "firstRelease": "2010-10-01T00:00:00Z",
+      "name@en": "Steven Johnson"
+    },
+    {
+      "firstRelease": "2001-01-01T00:00:00Z",
+      "name@en": "Steven Lippman"
+    },
+    {
+      "firstRelease": "2001-01-01T00:00:00Z",
+      "name@en": "Steven Dworman"
+    },
+    {
+      "firstRelease": "2013-10-17T00:00:00Z",
+      "name@en": "Steven J. Kung"
+    },
+    {
+      "firstRelease": "1991-01-01T00:00:00Z",
+      "name@en": "Eric Steven Stahl"
+    },
+    {
+      "firstRelease": "2010-01-01T00:00:00Z",
+      "name@en": "Steven Calcote"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven Drayton"
+    },
+    {
+      "firstRelease": "2002-02-01T00:00:00Z",
+      "name@en": "Steven A. Love"
+    },
+    {
+      "firstRelease": "2000-02-05T00:00:00Z",
+      "name@en": "Steven Dunning"
+    },
+    {
+      "firstRelease": "2000-01-01T00:00:00Z",
+      "name@en": "Steven de Jong"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Pravong"
+    },
+    {
+      "firstRelease": "1994-01-28T00:00:00Z",
+      "name@en": "Steven Berkoff"
+    },
+    {
+      "firstRelease": "2002-01-01T00:00:00Z",
+      "name@en": "Steven Guevara"
+    },
+    {
+      "firstRelease": "2007-01-01T00:00:00Z",
+      "name@en": "Steven Hoggard"
+    },
+    {
+      "firstRelease": "1984-01-01T00:00:00Z",
+      "name@en": "Steven Chivers"
+    },
+    {
+      "firstRelease": "2013-12-14T00:00:00Z",
+      "name@en": "Steven Espinosa"
+    },
+    {
+      "firstRelease": "2014-04-04T00:00:00Z",
+      "name@en": "Steven Shankar"
+    },
+    {
+      "firstRelease": "2006-06-01T00:00:00Z",
+      "name@en": "Steven Kessler"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Schardt"
+    },
+    {
+      "firstRelease": "1997-01-01T00:00:00Z",
+      "name@en": "Steven Patterson"
+    },
+    {
+      "firstRelease": "2010-04-01T00:00:00Z",
+      "name@en": "Steven Eastwood"
+    },
+    {
+      "firstRelease": "2008-01-01T00:00:00Z",
+      "name@en": "Steven Vasquez"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Richter"
+    },
+    {
+      "firstRelease": "2011-01-01T00:00:00Z",
+      "name@en": "Steven Spencer"
+    },
+    {
+      "firstRelease": "2011-06-12T00:00:00Z",
+      "name@en": "Steven Fischer"
+    },
+    {
+      "firstRelease": "2006-03-01T00:00:00Z",
+      "name@en": "Steven Schuldt"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven Rumbelow"
+    },
+    {
+      "firstRelease": "2009-03-03T00:00:00Z",
+      "name@en": "Steven Wasserman"
+    },
+    {
+      "firstRelease": "2008-01-01T00:00:00Z",
+      "name@en": "Steven Tanenbaum"
+    },
+    {
+      "firstRelease": "2003-01-01T00:00:00Z",
+      "name@en": "Steven Ramirez"
+    },
+    {
+      "firstRelease": "2009-01-01T00:00:00Z",
+      "name@en": "Steven Bratter"
+    },
+    {
+      "firstRelease": "2013-10-24T00:00:00Z",
+      "name@en": "Steven Hendrix"
+    },
+    {
+      "firstRelease": "2006-06-14T00:00:00Z",
+      "name@en": "Steven Kastrissios"
+    },
+    {
+      "firstRelease": "2014-06-01T00:00:00Z",
+      "name@en": "Steven Saussey"
+    },
+    {
+      "firstRelease": "2004-09-09T00:00:00Z",
+      "name@en": "Steven Hensley"
+    },
+    {
+      "firstRelease": "1998-01-01T00:00:00Z",
+      "name@en": "Steven Kent Austin"
+    }
+  ]
+}
+

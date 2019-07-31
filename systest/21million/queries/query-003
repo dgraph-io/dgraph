@@ -1,0 +1,205 @@
+{
+  brCharacters(func: eq(name@en, "Blade Runner")) {
+    name@en
+    initial_release_date
+    starring {
+      performance.actor {
+        name@en  # actor name
+      }
+      performance.character {
+        name@en  # character name
+      }
+    }
+  }
+}
+---
+{
+  "brCharacters": [
+    {
+      "initial_release_date": "1982-06-25T00:00:00Z",
+      "name@en": "Blade Runner",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "William Sanderson"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "J.F. Sebastian"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Sean Young"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Rachael"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Morgan Paull"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Holden"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Kevin Thompson"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Bear"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Monty Pyke"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Taffey Lewis"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Joe Turkel"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Eldon Tyrell"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Daryl Hannah"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Pris"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Edward James Olmos"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Gaff"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Harrison Ford"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Rick Deckard"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Rutger Hauer"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Roy Batty"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "M. Emmet Walsh"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Bryant"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "John Edward Allen"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Kaiser"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "James Hong"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Hannibal Chew"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Brion James"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Leon Kowalski"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Joanna Cassidy"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Zhora"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

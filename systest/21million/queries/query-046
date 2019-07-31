@@ -1,0 +1,68 @@
+{
+  PJ as var(func:allofterms(name@en, "Peter Jackson")) {
+    director.film {
+      starring {  # starring an actor
+        performance.actor {
+          movies as count(actor.film)  
+          # number of roles for this actor
+        }
+        perf_total as sum(val(movies))       
+      }
+      movie_total as sum(val(perf_total))
+      # total roles for all actors in this movie
+    }
+    gt as sum(val(movie_total))
+  }
+
+  PJmovies(func: uid(PJ)) {
+    name@en
+  	director.film (orderdesc: val(movie_total), first: 5) {
+    	name@en
+    	totalRoles : val(movie_total)
+  	}
+    grandTotal : val(gt)
+  }
+}
+---
+{
+  "PJmovies": [
+    {
+      "director.film": [
+        {
+          "name@en": "The Lord of the Rings: The Two Towers",
+          "totalRoles": 1565
+        },
+        {
+          "name@en": "The Hobbit: The Desolation of Smaug",
+          "totalRoles": 1261
+        },
+        {
+          "name@en": "The Lord of the Rings: The Fellowship of the Ring",
+          "totalRoles": 1335
+        },
+        {
+          "name@en": "The Lord of the Rings: The Return of the King",
+          "totalRoles": 1518
+        },
+        {
+          "name@en": "The Hobbit: An Unexpected Journey",
+          "totalRoles": 1274
+        }
+      ],
+      "grandTotal": 10592,
+      "name@en": "Peter Jackson"
+    },
+    {
+      "name@en": "Sam Peter Jackson"
+    },
+    {
+      "name@en": "Peter Jackson"
+    },
+    {
+      "name@en": "Peter Jackson"
+    },
+    {
+      "name@en": "Peter Jackson"
+    }
+  ]
+}

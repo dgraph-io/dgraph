@@ -1,0 +1,43 @@
+# Docker compose file for use with test-21million.sh.
+#
+version: "3.5"
+services:
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    ports:
+      - 5180:5180
+      - 6180:6180
+    labels:
+      cluster: test
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command: /gobin/dgraph zero -o 100 --my=zero1:5180 --logtostderr --bindall
+
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: volume
+        source: data
+        target: /data/alpha1
+    ports:
+      - 8180:8180
+      - 9180:9180
+    labels:
+      cluster: test
+    command: >
+      /gobin/dgraph alpha --my=alpha1:7180 --zero=zero1:5180 -o 100 --logtostderr
+                          --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --lru_mb=1024
+
+volumes:
+  data:

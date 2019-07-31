@@ -1,0 +1,639 @@
+{
+  steve as var(func: allofterms(name@en, "Steven")) {
+    films as count(director.film)
+  }
+
+  stevens(func: uid(steve)) @filter(eq(val(films), [1,2,3])) {
+    name@en
+    numFilms : val(films)
+  }
+}
+---
+{
+  "stevens": [
+    {
+      "name@en": "Steven Deneault",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hahn",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Clarke",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Oritt",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Kiefer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dworman",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Saussey",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Miosku",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Ray Morris",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Nielson",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Wilsey",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Spencer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Ramirez",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Shea",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Kessler",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Conrad",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Seagal",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Bram",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Pravong",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Paul Contreras",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Siegel",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Williams",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven-Charles Jaffe",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Bratter",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Charles Castle",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Jacobs",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Danz",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven J. Niles",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven J. Kung",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Stern",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven M. Martin",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Kent Austin",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Feinberg",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Baigelman",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Gorelick",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Bryant",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven De Castro",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Rodrigues",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Patterson",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Eastwood",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Judd",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Wright",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Latham",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Maler",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Guevara",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Nevius",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Cheslik-DeMeyer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Lesser",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dupler",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Jon Steven Ward",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dunning",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dovas",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Fierberg",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Cerritos",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hanulik",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Sebring",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Taylor",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dieveney",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dungan",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Ford",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven McIntyre",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven R. Hurlburt",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Briand",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Adams",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Espinosa",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Huffaker",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Corfe",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Decraene",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hensley",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Michaels",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Turley",
+      "numFilms": 1
+    },
+    {
+      "name@en": "J. Steven Edwards",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven E. Mallorca",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Vidler",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Calcote",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hai",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven McGregor",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Sander",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Chow",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Goldfried",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Levitan",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Sawalich",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Christopher Young",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Minor",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Meyer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Matheson",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Drayton",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven John Ross",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven George Hentges",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Burch",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Ilous",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Elkins",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Williford",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Kastrissios",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hoggard",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Kiefer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Chivers",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven De Beul",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Jonathan Steven Green",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Ho",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Wasserman",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Richter",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hope",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Tylor O'Connor",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Ssemuju Steven Kintu",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Wilson",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Schuldt",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Pressman",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Byrne",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven F. Hayward",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Swirko",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Shankar",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Rumbelow",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Vander Meer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Bereznai",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hatton",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Holloway",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Klein",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Feder",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven La Butch",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Javitz",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Brandt",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Stockage",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Grandison",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Smith",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Morrison",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Bartlo",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Clark",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Daly",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Smith",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Loring",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Keller",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Gomez",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Manuel",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Johnson",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Jurich",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Fischer",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Cohen",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Wouterlood",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven McMillan",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven D. White",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Nagano",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Thomas Davies",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Greenberg",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven F. Zambo",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Diller",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Sobel",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Dhoedt",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven A. Love",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Gillilan",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Tsuchida",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Hendrix",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Caple Jr.",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven O’Riordan",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Wayne",
+      "numFilms": 1
+    },
+    {
+      "name@en": "Steven Lewis Simpson",
+      "numFilms": 1
+    }
+  ]
+}

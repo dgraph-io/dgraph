@@ -1,0 +1,36 @@
+{
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
+    name@en
+    director.film @filter(allofterms(name@en, "jones indiana") OR allofterms(name@en, "jurassic park"))  {
+      name@en
+    }
+  }
+}
+---
+{
+  "me": [
+    {
+      "name@en": "Steven Spielberg",
+      "director.film": [
+        {
+          "name@en": "Indiana Jones and the Temple of Doom"
+        },
+        {
+          "name@en": "Indiana Jones and the Last Crusade"
+        },
+        {
+          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
+        },
+        {
+          "name@en": "Jurassic Park"
+        },
+        {
+          "name@en": "The Lost World: Jurassic Park"
+        },
+        {
+          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
+        }
+      ]
+    }
+  ]
+}
