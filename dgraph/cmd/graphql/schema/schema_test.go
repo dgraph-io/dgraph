@@ -92,11 +92,8 @@ func TestInvalidSchemas(t *testing.T) {
 
 	for _, schemas := range tests {
 		for _, sch := range schemas {
-			doc, gqlerr := parser.ParseSchema(&ast.Source{Input: string(sch.Input)})
-			require.Nil(t, gqlerr)
-
 			t.Run(sch.Name, func(t *testing.T) {
-				gqlErrList := validateSchema(doc)
+				_, gqlErrList := GenerateCompleteSchema(sch.Input)
 				require.Equal(t, sch.Output, gqlErrList, fmt.Sprintf(sch.Name))
 			})
 		}

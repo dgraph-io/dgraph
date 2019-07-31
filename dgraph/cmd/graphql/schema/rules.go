@@ -115,7 +115,7 @@ func nameCheck(sch *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-// [Posts]! -> invalid, [Posts!]! -> valid
+// [Posts]! -> invalid; [Posts!]!, [Posts!] -> valid
 func listValidityCheck(sch *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
