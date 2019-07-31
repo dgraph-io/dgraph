@@ -108,14 +108,11 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 	}()
 
 	gzWriter := gzip.NewWriter(f)
-	defer func() {
-		x.Check(gzWriter.Flush())
-		x.Check(gzWriter.Close())
-	}()
-
 	w := bufio.NewWriter(gzWriter)
 	defer func() {
 		x.Check(w.Flush())
+		x.Check(gzWriter.Flush())
+		x.Check(gzWriter.Close())
 	}()
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
@@ -164,8 +161,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 					sh.mu.Lock() // One write at a time.
 					go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
 					// Clear the entries and encodedSize for the next batch.
-					// Proactively allocate 10 slots to bootstrap the entries slice.
-					sh.entries = make([]*pb.MapEntry, 0, 10)
+					// Proactively allocate 32 slots to bootstrap the entries slice.
+					sh.entries = make([]*pb.MapEntry, 0, 32)
 					sh.encodedSize = 0
 				}
 			}
@@ -197,7 +194,7 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 
 	var err error
 	sh.entries = append(sh.entries, me)
-	sh.encodedSize += binary.MaxVarintLen64 + uint64(me.Size())
+	sh.encodedSize += uint64(me.Size())
 	x.Check(err)
 }
 
