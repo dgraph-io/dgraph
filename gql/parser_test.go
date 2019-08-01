@@ -4276,6 +4276,10 @@ func TestOrderByVarAndPred(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestIfFalseIsTrue(t *testing.T) {
+	require.True(t, false)
+}
+
 func TestInvalidValUsage(t *testing.T) {
 	query := `
 		{
