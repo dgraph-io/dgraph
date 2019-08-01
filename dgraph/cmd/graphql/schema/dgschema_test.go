@@ -14,30 +14,18 @@
  * limitations under the License.
  */
 
-package dgraph
+package schema
 
 import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 	"gopkg.in/yaml.v2"
 )
 
-type Tests map[string][]TestCase
-
-type TestCase struct {
-	Name   string
-	Input  string
-	Output string
-}
-
 func TestDGSchemaGen(t *testing.T) {
-	fileName := "schemagen_test.yml"
+	fileName := "dgschema_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
 	require.Nil(t, err, "Unable to read file %s", fileName)
 
@@ -49,18 +37,11 @@ func TestDGSchemaGen(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				doc, gqlErr := parser.ParseSchema(&ast.Source{Input: sch.Input})
-				require.Nil(t, gqlErr, gqlErr.Error())
+				schHandler := SchemaHandler{Input: sch.Input}
+				dgSchema, errs := schHandler.DGSchema()
+				require.Nil(t, errs, errs.Error())
 
-				gqlErrList := schema.ValidateSchema(doc)
-				require.Nil(t, gqlErrList, gqlErrList.Error())
-
-				schema.AddScalars(doc)
-
-				dgsch, gqlErr := validator.ValidateSchemaDocument(doc)
-				require.Nil(t, gqlErr, gqlErr.Error())
-
-				require.Equal(t, sch.Output, GenDgSchema(dgsch), sch.Name)
+				require.Equal(t, sch.Output, dgSchema, sch.Name)
 			})
 		}
 	}

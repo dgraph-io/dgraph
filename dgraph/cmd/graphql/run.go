@@ -38,6 +38,8 @@ import (
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
+
+	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
 type options struct {
@@ -186,15 +188,15 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	schHandler := schemaHandler{input: inputSchema}
+	schHandler := gschema.SchemaHandler{Input: inputSchema}
 
-	completeSchema, errlist := schHandler.genGQLSchema()
+	completeSchema, errlist := schHandler.GQLSchema()
 	if errlist != nil {
 		return fmt.Errorf(errlist.Error())
 	}
 	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
 
-	dgSchema, errlist := schHandler.genDGSchema()
+	dgSchema, errlist := schHandler.DGSchema()
 	if errlist != nil {
 		return fmt.Errorf(errlist.Error())
 	}

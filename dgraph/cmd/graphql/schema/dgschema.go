@@ -14,18 +14,85 @@
  * limitations under the License.
  */
 
-package dgraph
+package schema
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/mohae/deepcopy"
 	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/validator"
 )
 
+type SchemaHandler struct {
+	Input          string
+	initSchema     *ast.Schema
+	completeSchema *ast.Schema
+	errs           gqlerror.List
+}
+
+func (s *SchemaHandler) GQLSchema() (string, gqlerror.List) {
+	s.bootStrap()
+
+	if s.errs != nil {
+		return "", s.errs
+	}
+
+	return Stringify(s.completeSchema), nil
+}
+
+func (s *SchemaHandler) DGSchema() (string, gqlerror.List) {
+	s.bootStrap()
+
+	if s.errs != nil {
+		return "", s.errs
+	}
+
+	return genDgSchema(s.initSchema), nil
+}
+
+func (s *SchemaHandler) bootStrap() {
+	if s.Input == "" {
+		s.errs = append(s.errs, gqlerror.Errorf("No schema specified"))
+		return
+	}
+
+	if s.completeSchema != nil {
+		return
+	}
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: s.Input})
+	if gqlErr != nil {
+		s.errs = append(s.errs, gqlErr)
+		return
+	}
+
+	gqlErrList := validateSchema(doc)
+	if gqlErrList != nil {
+		s.errs = append(s.errs, gqlErrList...)
+		return
+	}
+
+	addScalars(doc)
+
+	sch, gqlErr := validator.ValidateSchemaDocument(doc)
+	if gqlErr != nil {
+		s.errs = append(s.errs, gqlErr)
+		return
+	}
+
+	s.initSchema = deepcopy.Copy(sch).(*ast.Schema)
+
+	GenerateCompleteSchema(sch)
+	s.completeSchema = sch
+}
+
 // GenDgSchema generates Dgraph schema from a valid graphql schema.
-func GenDgSchema(gqlSch *ast.Schema) string {
+func genDgSchema(gqlSch *ast.Schema) string {
 	var typeStrings []string
 
 	var keys []string

@@ -22,12 +22,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/vektah/gqlparser/gqlerror"
-
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
 	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 )
@@ -43,29 +42,11 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		doc, gqlErr := parser.ParseSchema(&ast.Source{Input: string(str1)})
-		if gqlErr != nil {
-			t.Errorf(gqlErr.Error())
-			continue
-		}
+		schHandler := SchemaHandler{Input: string(str1)}
 
-		gqlErrList := ValidateSchema(doc)
-		if gqlErrList != nil {
-			t.Errorf(gqlErrList.Error())
-			continue
-		}
+		newSchemaStr, errlist := schHandler.GQLSchema()
+		require.Nil(t, errlist, errlist.Error())
 
-		AddScalars(doc)
-
-		sch, gqlErr := validator.ValidateSchemaDocument(doc)
-		if gqlErr != nil {
-			t.Errorf(gqlErr.Error())
-			continue
-		}
-
-		GenerateCompleteSchema(sch)
-
-		newSchemaStr := Stringify(sch)
 		fmt.Println(newSchemaStr)
 
 		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
@@ -87,19 +68,21 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		require.Equal(t, true, AreEqualSchema(sch, outputSch))
+		require.Equal(t, true, AreEqualSchema(schHandler.completeSchema, outputSch))
 	}
 }
 
 type Tests map[string][]TestCase
+
 type TestCase struct {
-	Name   string
-	Input  string
-	Output gqlerror.List
+	Name    string
+	Input   string
+	Errlist gqlerror.List
+	Output  string
 }
 
 func TestInvalidSchemas(t *testing.T) {
-	fileName := "schema_test.yml" // run from pwd
+	fileName := "gqlschema_test.yml" // run from pwd
 	byts, err := ioutil.ReadFile(fileName)
 	require.Nil(t, err, "Unable to read file %s", fileName)
 
@@ -111,12 +94,10 @@ func TestInvalidSchemas(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				doc, gqlErr := parser.ParseSchema(&ast.Source{Input: sch.Input})
-				require.Nil(t, gqlErr, gqlErr.Error())
+				schHandler := SchemaHandler{Input: sch.Input}
+				_, errlist := schHandler.GQLSchema()
 
-				gqlErrList := ValidateSchema(doc)
-
-				require.Equal(t, sch.Output, gqlErrList, sch.Name)
+				require.Equal(t, sch.Errlist, errlist, sch.Name)
 			})
 		}
 	}

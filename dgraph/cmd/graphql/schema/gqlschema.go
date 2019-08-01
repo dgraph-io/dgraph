@@ -49,7 +49,7 @@ var supportedScalars = map[string]scalar{
 }
 
 // addScalars adds all the supported scalars in the schema.
-func AddScalars(doc *ast.SchemaDocument) {
+func addScalars(doc *ast.SchemaDocument) {
 	for _, s := range supportedScalars {
 		doc.Definitions = append(
 			doc.Definitions,
@@ -67,8 +67,8 @@ func addRule(name string, f schRuleFunc) {
 	})
 }
 
-// ValidateSchema validates the schema against dgraph's rules of schema.
-func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
+// validateSchema validates the schema against dgraph's rules of schema.
+func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {
