@@ -18,8 +18,8 @@ package table
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
-	"math"
 	"sort"
 
 	"github.com/dgraph-io/badger/y"
@@ -27,16 +27,17 @@ import (
 )
 
 type blockIterator struct {
-	data    []byte
-	pos     uint32
-	err     error
-	baseKey []byte
+	data              []byte
+	pos               uint32
+	err               error
+	baseKey           []byte
+	numEntries        int
+	entriesIndexStart int
+	currentIdx        int
 
 	key  []byte
 	val  []byte
 	init bool
-
-	last header // The last header we saw.
 }
 
 func (itr *blockIterator) Reset() {
@@ -46,11 +47,13 @@ func (itr *blockIterator) Reset() {
 	itr.key = []byte{}
 	itr.val = []byte{}
 	itr.init = false
-	itr.last = header{}
+	itr.currentIdx = -1
 }
 
 func (itr *blockIterator) Init() {
 	if !itr.init {
+		itr.currentIdx = -1
+
 		itr.Next()
 	}
 }
@@ -70,28 +73,65 @@ var (
 	current = 1
 )
 
+func (itr *blockIterator) getOffset(idx int) uint32 {
+	y.AssertTrue(idx >= 0 && idx < itr.numEntries)
+	return binary.BigEndian.Uint32(itr.data[itr.entriesIndexStart+4*idx:])
+}
+
+func (itr *blockIterator) getKey(idx int) []byte {
+	y.AssertTrue(idx >= 0 && idx < itr.numEntries)
+
+	idxPos := itr.getOffset(idx)
+	var h header
+	idxPos += uint32(h.Decode(itr.data[idxPos:]))
+
+	// Convert to int before adding to avoid uint16 overflow.
+	idxKey := make([]byte, int(h.plen)+int(h.klen))
+	copy(idxKey, itr.baseKey[:h.plen])
+	copy(idxKey[h.plen:], itr.data[idxPos:idxPos+uint32(h.klen)])
+
+	return idxKey
+}
+
 // Seek brings us to the first block element that is >= input key.
 func (itr *blockIterator) Seek(key []byte, whence int) {
 	itr.err = nil
+	startIndex := 0 // This tells from which index we should start binary search.
 
 	switch whence {
 	case origin:
 		itr.Reset()
 	case current:
+		startIndex = itr.currentIdx
 	}
 
-	var done bool
-	for itr.Init(); itr.Valid(); itr.Next() {
-		k := itr.Key()
-		if y.CompareKeys(k, key) >= 0 {
-			// We are done as k is >= key.
-			done = true
-			break
+	itr.Init() // If iterator is not initialized or has been reset.
+
+	idx := sort.Search(itr.numEntries, func(idx int) bool {
+		// If idx is less than start index then just return false.
+		if idx < startIndex {
+			return false
 		}
-	}
-	if !done {
+
+		idxKey := itr.getKey(idx)
+		return y.CompareKeys(idxKey, key) >= 0
+	})
+
+	// All keys in the block are less than the key to be sought.
+	if idx >= itr.numEntries {
 		itr.err = io.EOF
+		// Update currentIdx to len of entryOffsets, so that if Prev() is
+		// called just after Seek, it will return correct result.
+		itr.currentIdx = itr.numEntries
+		return
 	}
+
+	// Found first idx for which key is >= key to be sought.
+	itr.currentIdx = idx
+	itr.pos = itr.getOffset(itr.currentIdx)
+	var h header
+	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
+	itr.parseKV(h)
 }
 
 func (itr *blockIterator) SeekToFirst() {
@@ -102,8 +142,9 @@ func (itr *blockIterator) SeekToFirst() {
 // SeekToLast brings us to the last element. Valid should return true.
 func (itr *blockIterator) SeekToLast() {
 	itr.err = nil
-	for itr.Init(); itr.Valid(); itr.Next() {
-	}
+
+	itr.Init()
+	itr.currentIdx = itr.numEntries
 	itr.Prev()
 }
 
@@ -130,20 +171,15 @@ func (itr *blockIterator) parseKV(h header) {
 func (itr *blockIterator) Next() {
 	itr.init = true
 	itr.err = nil
-	if itr.pos >= uint32(len(itr.data)) {
+
+	itr.currentIdx++
+	if itr.currentIdx >= itr.numEntries {
 		itr.err = io.EOF
 		return
 	}
 
 	var h header
 	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
-	itr.last = h // Store the last header.
-
-	if h.klen == 0 && h.plen == 0 {
-		// Last entry in the table.
-		itr.err = io.EOF
-		return
-	}
 
 	// Populate baseKey if it isn't set yet. This would only happen for the first Next.
 	if len(itr.baseKey) == 0 {
@@ -159,21 +195,20 @@ func (itr *blockIterator) Prev() {
 		return
 	}
 	itr.err = nil
-	if itr.last.prev == math.MaxUint32 {
-		// This is the first element of the block!
+
+	itr.currentIdx--
+	y.AssertTrue(itr.currentIdx < itr.numEntries)
+	if itr.currentIdx < 0 {
 		itr.err = io.EOF
-		itr.pos = 0
 		return
 	}
 
-	// Move back using current header's prev.
-	itr.pos = itr.last.prev
+	itr.pos = itr.getOffset(itr.currentIdx)
 
 	var h header
 	y.AssertTruef(itr.pos < uint32(len(itr.data)), "%d %d", itr.pos, len(itr.data))
 	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
 	itr.parseKV(h)
-	itr.last = h
 }
 
 func (itr *blockIterator) Key() []byte {
@@ -282,7 +317,7 @@ func (itr *Iterator) seekFrom(key []byte, whence int) {
 
 	idx := sort.Search(len(itr.t.blockIndex), func(idx int) bool {
 		ko := itr.t.blockIndex[idx]
-		return y.CompareKeys(ko.key, key) > 0
+		return y.CompareKeys(ko.Key, key) > 0
 	})
 	if idx == 0 {
 		// The smallest key in our table is already strictly > key. We can return that.
