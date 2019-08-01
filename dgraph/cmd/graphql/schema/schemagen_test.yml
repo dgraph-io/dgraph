@@ -59,3 +59,31 @@ schemas:
         X.p: [uid]
       }
       X.p: [uid] .
+
+  -
+    name: "Scalar types"
+    input: |
+      type X {
+        p: Int
+        q: Boolean
+        r: String
+        s: DateTime
+        t: Float
+        u: ID
+        v: [Int!]!
+      }
+    output: |
+      type X {
+        X.p: int
+        X.q: bool
+        X.r: string
+        X.s: dateTime
+        X.t: float
+        X.v: [int]
+      }
+      X.p: int .
+      X.q: bool .
+      X.r: string .
+      X.s: dateTime .
+      X.t: float .
+      X.v: [int] .

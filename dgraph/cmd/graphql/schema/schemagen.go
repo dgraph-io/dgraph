@@ -128,7 +128,7 @@ func genDgSchema(gqlSch *ast.Schema) string {
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", def.Name, f.Name, typStr)
 					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, typStr)
 				case ast.Scalar:
-					typStr = fmt.Sprintf("%s%s%s", prefix, strings.ToLower(f.Type.Name()), suffix)
+					typStr = fmt.Sprintf("%s%s%s", prefix, supportedScalars[f.Type.Name()].dgraphType, suffix)
 					// TODO: indexes needed here
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
 						def.Name, f.Name, typStr)

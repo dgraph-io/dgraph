@@ -25,7 +25,7 @@ import (
 )
 
 func TestDGSchemaGen(t *testing.T) {
-	fileName := "dgschema_test.yml"
+	fileName := "schemagen_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
 	require.Nil(t, err, "Unable to read file %s", fileName)
 
