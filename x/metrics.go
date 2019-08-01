@@ -26,9 +26,10 @@ import (
 	"go.opencensus.io/trace"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
-	"contrib.go.opencensus.io/exporter/prometheus"
+	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
 	"github.com/golang/glog"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -230,7 +231,8 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
-	pe, err := prometheus.NewExporter(prometheus.Options{
+	pe, err := oc_prom.NewExporter(oc_prom.Options{
+		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
