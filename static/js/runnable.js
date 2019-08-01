@@ -338,7 +338,7 @@ function eraseCookie(name) {
     var startTime;
     $.post({
       url: window.DGRAPH_ENDPOINT,
-      headers: { "X-Dgraph-Vars": vars },
+      headers: { "X-Dgraph-Vars": vars, "Content-Type": "application/graphql+-"},
       data: query,
       dataType: "json",
       beforeSend: function() {
