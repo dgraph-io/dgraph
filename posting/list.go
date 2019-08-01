@@ -23,6 +23,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"unsafe"
 
 	"github.com/dgryski/go-farm"
 
@@ -84,9 +85,21 @@ func (l *List) maxVersion() uint64 {
 
 func (l *List) cacheCost() int64 {
 	var cost int64
+	// Size of a pointer in bytes. This is using unsafe.Sizeof
+	ptrSize := int64(unsafe.Sizeof(int(0)))
+
+	//Cost of storing the key.
+	cost += int64(len(l.key))
+
+	// Cost of storing the plist (pointer + plist size)
+	cost += ptrSize
 	cost += int64(l.plist.Size())
+
+	// Cost of mutation map.
 	for _, pl := range l.mutationMap {
-		cost += int64(pl.Size())
+		// Each entry costs 8 bytes for the key, ptrSize for the pointer, and
+		// pl.Size() for the cost of the posting list itself.
+		cost += 8 + ptrSize + int64(pl.Size())
 	}
 	return cost
 }
