@@ -17,9 +17,9 @@
 package x
 
 import (
+	"log"
 	"reflect"
 	"strings"
-	"log"
 )
 
 func DeepSizeOf(v interface{}) uintptr {

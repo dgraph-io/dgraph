@@ -70,4 +70,3 @@ func TestPointerStruct(t *testing.T) {
 	val.B = &testString
 	require.Equal(t, uintptr(16), DeepSizeOf(val))
 }
-
