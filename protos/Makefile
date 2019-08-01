@@ -31,8 +31,8 @@ clean:
 check:
 	@./depcheck.sh && \
 		(echo "Upgrading proto libraries before regenerating." ; \
-		go get -u github.com/golang/protobuf/protoc-gen-go ; \
-		go get -u github.com/gogo/protobuf/protoc-gen-gofast)
+		go get github.com/golang/protobuf/protoc-gen-go@v1.3.1 ; \
+		go get github.com/gogo/protobuf/protoc-gen-gofast@v1.2.1)
 
 .PHONY: regenerate
 regenerate: check clean
