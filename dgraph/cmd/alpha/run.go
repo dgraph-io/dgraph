@@ -501,7 +501,7 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("edgraph.Config: %+v", edgraph.Config)
+	glog.Infof("edgraph.Config: %s", edgraph.Config)
 
 	edgraph.InitServerState()
 	defer func() {
