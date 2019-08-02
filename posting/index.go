@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -500,6 +501,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// global lcache (the LRU cache).
 	txn := NewTxn(r.startTs)
 
+	counterChan := make(chan struct{})
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s", r.attr)
 	stream.Prefix = r.prefix
@@ -526,16 +528,36 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, err
 		}
 
+		counterChan <- struct{}{}
 		return nil, nil
 	}
+
+	// Log re-indexing progress in a separate go routine.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		counter := 0
+		for range counterChan {
+			counter++
+			if counter%1000 == 0 {
+				glog.V(1).Infof("Done processing %d keys while rebuilding index for predicate %s",
+					counter, r.attr)
+			}
+		}
+		wg.Done()
+	}()
+
 	stream.Send = func(*bpb.KVList) error {
 		// The work of adding the index edges to the transaction is done by r.fn
 		// so this function doesn't have any work to do.
 		return nil
 	}
+
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
+	close(counterChan)
+	wg.Wait()
 	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
 	// Convert data into deltas.
