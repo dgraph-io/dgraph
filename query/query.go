@@ -111,37 +111,44 @@ type Latency struct {
 	Json       time.Duration `json:"json_conversion"`
 }
 
+// params contains the list of parameters required to execute a query.
 type params struct {
-	Alias      string
-	Type       string
-	Count      int
-	Offset     int
-	AfterUID   uint64
-	DoCount    bool
-	GetUid     bool
-	Order      []*pb.Order
-	Var        string
-	NeedsVar   []gql.VarContext
+	Alias    string
+	Count    int         // Value of first parameter.
+	Offset   int         // Value of offset parameter.
+	AfterUID uint64      // Value of after
+	DoCount  bool        // True if count of predicate is requested instead of the value of predicate.
+	GetUid   bool        // True if uid should be returned. Used for debug requests.
+	Order    []*pb.Order // List of predicates to sort by and the sort order.
+	// TODO - Is Var only populated when this subgraph defines a variable or even when it needs it?
+	Var        string           // The name of the variable required by this SubGraph.
+	NeedsVar   []gql.VarContext // The list of variables required by this SubGraph along with their type which can be uid or value.
 	ParentVars map[string]varValue
 	FacetVar   map[string]string
 	uidToVal   map[uint64]types.Val
 	Langs      []string
 
-	// directives.
-	Normalize        bool
-	Recurse          bool
-	RecurseArgs      gql.RecurseArgs
-	ShortestPathArgs gql.ShortestPathArgs
-	Cascade          bool
-	IgnoreReflex     bool
+	Normalize   bool // True if @normalize directive is specified
+	Recurse     bool // True if @recurse directive is specified
+	RecurseArgs gql.RecurseArgs
 
-	// From and To are uids of the nodes between which we run the shortest path query.
-	From           uint64
-	To             uint64
+	Cascade      bool // True if @cascade directive is specified
+	IgnoreReflex bool // True if ignorereflex directive is specified.
+
+	// ShortestPathArgs contains the from and to functions to execute a shortest path query.
+	// The function is evaluated and the value of the nodes between which to run the shortest path
+	// query is stored in From and To.
+	ShortestPathArgs gql.ShortestPathArgs
+	From             uint64
+	To               uint64
+	numPaths         int // used for k-shortest path query to specify number of paths to return.
+
+	// used by recurse and shortest path queries to specify the graph depth to explore.
+	ExploreDepth uint64
+
 	Facet          *pb.FacetParams
 	FacetOrder     string
 	FacetOrderDesc bool
-	ExploreDepth   uint64
 	MaxWeight      float64
 	MinWeight      float64
 	isInternal     bool   // Determines if processTask has to be called or not.
@@ -151,7 +158,6 @@ type params struct {
 	groupbyAttrs   []gql.GroupByAttr
 	uidCount       bool
 	uidCountAlias  string
-	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 	expandAll      bool     // expand all languages
@@ -174,14 +180,25 @@ type Function struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	ReadTs       uint64
-	Cache        int
-	Attr         string
-	UnknownAttr  bool
-	Params       params
-	counts       []uint32
-	valueMatrix  []*pb.ValueList
-	uidMatrix    []*pb.List
+	ReadTs      uint64
+	Cache       int
+	Attr        string
+	UnknownAttr bool
+	Params      params
+
+	// count stores the count of a predicate. There would be one value corresponding to each uid
+	// in SrcUIDs.
+	counts []uint32
+	// valueMatrix is a slice of ValueList. If this SubGraph is for a scalar predicate type, then
+	// there would be one list for each uid in SrcUIDs storing the value of the predicate.
+	// The individual elements of the slice are a ValueList because we support scalar predicates
+	// of list type. For non-list type scalar predicates, there would be only one value in every
+	// ValueList.
+	valueMatrix []*pb.ValueList
+	// uidMatrix is a slice of List. There would be one List corresponding to each uid in SrcUIDs.
+	// In graph terms, a list is a slice of outgoing edges from a node.
+	uidMatrix []*pb.List
+
 	facetsMatrix []*pb.FacetsList
 	ExpandPreds  []*pb.ValueList
 	GroupbyRes   []*groupResults // one result for each uid list.
@@ -1104,12 +1121,13 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	return out, nil
 }
 
+// varValue is a generic representation of a variable and holds multiple things.
+// TODO - Come back to this and document what do individual fields mean and when are they populated.
 type varValue struct {
-	Uids *pb.List
-	Vals map[uint64]types.Val
-	path []*SubGraph // This stores the subgraph path from root to var definition.
-	// TODO: Check if we can do without this field.
-	strList []*pb.ValueList
+	Uids    *pb.List
+	Vals    map[uint64]types.Val
+	path    []*SubGraph     // This stores the subgraph path from root to var definition.
+	strList []*pb.ValueList // stores the list of valueMatrix
 }
 
 func evalLevelAgg(
@@ -1496,7 +1514,12 @@ AssignStep:
 	return sg.updateVars(doneVars, sgPath)
 }
 
-// Updates the doneVars map by picking up uid/values from the current Subgraph
+// updateVars is used to update the doneVars map with the value of the variable from the SubGraph.
+// The variable could be a uid or a value variable.
+// It is called twice
+// 1. To populate sg.Params.ParentVars map with the value of a variable to pass down to children
+// subgraphs in a query.
+// 2. To populate req.Vars, which is used by other queries requiring variables..
 func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	// NOTE: although we initialize doneVars (req.Vars) in ProcessQuery, this nil check is for
 	// non-root lookups that happen to other nodes. Don't use len(doneVars) == 0 !
@@ -2192,13 +2215,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// We store any variable defined by this node in the map and pass it on
-	// to the children which might depend on it.
-	if err = sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
-		rch <- err
-		return
-	}
-
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -2236,6 +2252,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					Langs:        it.Langs,
 				},
 			})
+		}
+	}
+
+	if len(sg.Children) > 0 {
+		// We store any variable defined by this node in the map and pass it on
+		// to the children which might depend on it. We only need to do this if the SubGraph
+		// has children.
+		if err = sg.updateVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
+			rch <- err
+			return
 		}
 	}
 
@@ -2634,11 +2660,11 @@ func UidsToHex(m map[string]uint64) map[string]string {
 }
 
 // Request wraps the state that is used when executing query.
-// Initially Latency and GqlQuery needs to be set. Subgraphs, Vars and schemaUpdate
-// are filled when processing query.
+// Initially ReadTs, Cache and GqlQuery are set.
+// Subgraphs, Vars and Latency are filled when processing query.
 type Request struct {
 	ReadTs   uint64
-	Cache    int
+	Cache    int // TODO - What's this?
 	Latency  *Latency
 	GqlQuery *gql.Result
 
@@ -2649,7 +2675,7 @@ type Request struct {
 
 // ProcessQuery processes query part of the request (without mutations).
 // Fills Subgraphs and Vars.
-// It optionally also returns a map of the allocated uids in case of an upsert request.
+// It can process multiple query blocks that are part of the query..
 func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "query.ProcessQuery")
@@ -2659,6 +2685,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query
+	// first loop converts queries to SubGraph representation and populates ReadTs And Cache.
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
 
@@ -2687,10 +2714,11 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	// canExecute returns true if a query block is ready to execute with all the variables
 	// that it depends on are already populated or are defined in the same block.
 	canExecute := func(idx int) bool {
-		for _, v := range req.GqlQuery.QueryVars[idx].Needs {
+		queryVars := req.GqlQuery.QueryVars[idx]
+		for _, v := range queryVars.Needs {
 			// here we check if this block defines the variable v.
 			var selfDep bool
-			for _, vd := range req.GqlQuery.QueryVars[idx].Defines {
+			for _, vd := range queryVars.Defines {
 				if v == vd {
 					selfDep = true
 					break
