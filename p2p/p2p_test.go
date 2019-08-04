@@ -18,10 +18,12 @@ package p2p
 
 import (
 	"fmt"
-	"log"
 	"testing"
 
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	ps "github.com/libp2p/go-libp2p-core/peerstore"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 func TestBuildOpts(t *testing.T) {
@@ -84,63 +86,113 @@ func TestStart(t *testing.T) {
 }
 
 func TestService_PeerCount(t *testing.T) {
-	ipfsNode, err := StartIpfsNode()
-	if err != nil {
-		t.Fatalf("Could not start IPFS node: %s", err)
+	testServiceConfigA := &Config{
+		NoBootstrap: true,
+		Port:        7001,
 	}
 
-	defer ipfsNode.Close()
-
-	ipfsAddr := fmt.Sprintf("/ip4/127.0.0.1/tcp/4001/ipfs/%s", ipfsNode.Identity.String())
-
-	testServiceConfig := &Config{
-		BootstrapNodes: []string{
-			ipfsAddr,
-		},
-		Port: 7001,
-	}
-
-	s, err := NewService(testServiceConfig)
+	sa, err := NewService(testServiceConfigA)
 	if err != nil {
 		t.Fatalf("NewService error: %s", err)
 	}
 
-	e := s.Start()
+	e := sa.Start()
 	err = <-e
 	if err != nil {
 		t.Errorf("Start error: %s", err)
 	}
 
-	count := s.PeerCount()
-	if count != 1 {
-		t.Fatalf("incorrect peerCount expected %d got %d", 1, count)
+	testServiceConfigB := &Config{
+		NoBootstrap: true,
+		Port:        7007,
 	}
+
+	sb, err := NewService(testServiceConfigB)
+	if err != nil {
+		t.Fatalf("NewService error: %s", err)
+	}
+
+	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[2].String(), sa.Host().ID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sb.Host().Connect(sb.ctx, *addrInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := sb.PeerCount()
+	if count == 0 {
+		t.Fatalf("incorrect peerCount got %d", count)
+	}
+
+	sa.Stop()
+	sb.Stop()
 }
 
 func TestSend(t *testing.T) {
-	sim, err := NewSimulator(2)
+	testServiceConfigA := &Config{
+		NoBootstrap: true,
+		Port:        7001,
+	}
+
+	sa, err := NewService(testServiceConfigA)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("NewService error: %s", err)
 	}
 
-	defer sim.IpfsNode.Close()
-
-	for _, node := range sim.Nodes {
-		e := node.Start()
-		if <-e != nil {
-			log.Println("start err: ", err)
-		}
+	e := sa.Start()
+	err = <-e
+	if err != nil {
+		t.Errorf("Start error: %s", err)
 	}
 
-	sa := sim.Nodes[0]
-	sb := sim.Nodes[1]
-	peer, err := sa.dht.FindPeer(sa.ctx, sb.host.ID())
+	testServiceConfigB := &Config{
+		NoBootstrap: true,
+		Port:        7007,
+	}
+
+	sb, err := NewService(testServiceConfigB)
+	if err != nil {
+		t.Fatalf("NewService error: %s", err)
+	}
+
+	sb.Host().Peerstore().AddAddrs(sa.Host().ID(), sa.Host().Addrs(), ps.PermanentAddrTTL)
+	addr, err := ma.NewMultiaddr(fmt.Sprintf("%s/ipfs/%s", sa.Host().Addrs()[2].String(), sa.Host().ID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sb.Host().Connect(sb.ctx, *addrInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e = sb.Start()
+	err = <-e
+	if err != nil {
+		t.Errorf("Start error: %s", err)
+	}
+
+	p, err := sa.dht.FindPeer(sa.ctx, sb.host.ID())
 	if err != nil {
 		t.Fatalf("could not find peer: %s", err)
 	}
 
 	msg := []byte("hello there\n")
-	err = sa.Send(peer, msg)
+	err = sa.Send(p, msg)
 	if err != nil {
 		t.Errorf("Send error: %s", err)
 	}
@@ -163,28 +215,3 @@ func TestNoBootstrap(t *testing.T) {
 		t.Errorf("Start error: %s", err)
 	}
 }
-
-// PING is not implemented in the kad-dht.
-// see https://github.com/libp2p/specs/pull/108
-// func TestPing(t *testing.T) {
-// 	sim, err := NewSimulator(2)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-
-// 	defer sim.IpfsNode.Close()
-
-// 	for _, node := range sim.Nodes {
-// 		e := node.Start()
-// 		if <-e != nil {
-// 			log.Println("start err: ", err)
-// 		}
-// 	}
-
-// 	sa := sim.Nodes[0]
-// 	sb := sim.Nodes[1]
-// 	err = sa.Ping(sb.host.ID())
-// 	if err != nil {
-// 		t.Errorf("Ping error: %s", err)
-// 	}
-// }

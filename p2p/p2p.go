@@ -41,7 +41,9 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-const protocolPrefix = "/polkadot/0.0.0"
+const protocolPrefix2 = "/substrate/dot/2"
+const protocolPrefix3 = "/substrate/dot/3"
+const mdnsPeriod = time.Minute
 
 // Service describes a p2p service, including host and dht
 type Service struct {
@@ -49,6 +51,7 @@ type Service struct {
 	host           core.Host
 	hostAddr       ma.Multiaddr
 	dht            *kaddht.IpfsDHT
+	dhtConfig      kaddht.BootstrapConfig
 	bootstrapNodes []peer.AddrInfo
 	mdns           discovery.Service
 	noBootstrap    bool
@@ -60,6 +63,7 @@ type Config struct {
 	Port           int
 	RandSeed       int64
 	NoBootstrap    bool
+	NoMdns         bool
 }
 
 // NewService creates a new p2p.Service using the service config. It initializes the host and dht
@@ -74,7 +78,9 @@ func NewService(conf *Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	h.SetStreamHandler(protocolPrefix, handleStream)
+
+	h.SetStreamHandler(protocolPrefix2, handleStream)
+	h.SetStreamHandler(protocolPrefix3, handleStream)
 
 	dstore := dsync.MutexWrap(ds.NewMapDatastore())
 	dht := kaddht.NewDHT(ctx, h, dstore)
@@ -88,12 +94,20 @@ func NewService(conf *Config) (*Service, error) {
 		return nil, err
 	}
 
-	mdns, err := discovery.NewMdnsService(ctx, h, time.Second, "polkadot")
-	if err != nil {
-		return nil, err
+	var mdns discovery.Service
+	if !conf.NoMdns {
+		mdns, err = discovery.NewMdnsService(ctx, h, mdnsPeriod, protocolPrefix3)
+		if err != nil {
+			return nil, err
+		}
+
+		mdns.RegisterNotifee(Notifee{ctx: ctx, host: h})
 	}
 
-	mdns.RegisterNotifee(Notifee{ctx: ctx, host: h})
+	dhtConfig := kaddht.BootstrapConfig{
+		Queries: 1,
+		Period:  time.Second,
+	}
 
 	bootstrapNodes, err := stringsToPeerInfos(conf.BootstrapNodes)
 	s := &Service{
@@ -101,6 +115,7 @@ func NewService(conf *Config) (*Service, error) {
 		host:           h,
 		hostAddr:       hostAddr,
 		dht:            dht,
+		dhtConfig:      dhtConfig,
 		bootstrapNodes: bootstrapNodes,
 		noBootstrap:    conf.NoBootstrap,
 		mdns:           mdns,
@@ -121,18 +136,26 @@ func (s *Service) start(e chan error) {
 		e <- errors.New("no peers to bootstrap to")
 	}
 
-	err := s.dht.Bootstrap(s.ctx)
-	if err != nil {
-		e <- err
-	}
+	// this is in a go func that loops every minute due to the fact that we appear
+	// to get kicked off the network after a few minutes
+	// this will likely be resolved once we send messages back to the network
+	go func() {
+		for {
+			if !s.noBootstrap {
+				// connect to the bootstrap nodes
+				err := s.bootstrapConnect()
+				if err != nil {
+					e <- err
+				}
+			}
 
-	if !s.noBootstrap {
-		// connect to the bootstrap nodes
-		err := s.bootstrapConnect()
-		if err != nil {
-			e <- err
+			err := s.dht.Bootstrap(s.ctx)
+			if err != nil {
+				e <- err
+			}
+			time.Sleep(time.Minute)
 		}
-	}
+	}()
 
 	// Now we can build a full multiaddress to reach this host
 	// by encapsulating both addresses:
@@ -163,12 +186,6 @@ func (s *Service) Stop() <-chan error {
 	return e
 }
 
-// Broadcast sends a message to all peers
-func (s *Service) Broadcast(msg []byte) (err error) {
-	// TODO
-	return nil
-}
-
 // Send sends a message to a specific peer
 func (s *Service) Send(peer core.PeerAddrInfo, msg []byte) error {
 	err := s.host.Connect(s.ctx, peer)
@@ -176,7 +193,7 @@ func (s *Service) Send(peer core.PeerAddrInfo, msg []byte) error {
 		return err
 	}
 
-	stream, err := s.host.NewStream(s.ctx, peer.ID, protocolPrefix)
+	stream, err := s.host.NewStream(s.ctx, peer.ID, protocolPrefix3)
 	if err != nil {
 		return err
 	}
@@ -220,7 +237,6 @@ func (s *Service) Ctx() context.Context {
 }
 
 func (sc *Config) buildOpts() ([]libp2p.Option, error) {
-	// TODO: get external ip
 	ip := "0.0.0.0"
 
 	priv, err := generateKey(sc.RandSeed)
@@ -264,25 +280,39 @@ func generateKey(seed int64) (crypto.PrivKey, error) {
 	return priv, nil
 }
 
-// TODO: message handling
+// handles stream; reads message length, message type, and decodes message based on type
+// TODO: implement all message types; send message back to peer when we get a message; gossip for certain message types
 func handleStream(stream net.Stream) {
 	defer func() {
 		if err := stream.Close(); err != nil {
 			log.Error("error closing stream", "err", err)
 		}
 	}()
-	// Create a buffer stream for non blocking read and write.
+
 	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-	str, err := rw.ReadString('\n')
+	lengthByte, err := rw.Reader.ReadByte()
 	if err != nil {
-		return
+		log.Error("stream handler", "got stream from", stream.Conn().RemotePeer(), "err", err)
 	}
 
-	fmt.Printf("got stream from %s: %s", stream.Conn().RemotePeer(), str)
-	_, err = rw.WriteString("hello friend")
+	// decode message length using LEB128
+	length := LEB128ToUint64([]byte{lengthByte})
+	log.Info("stream handler", "got message with length", length)
+
+	// read entire message
+	rawMsg, err := rw.Reader.Peek(int(length))
 	if err != nil {
-		return
+		log.Error("stream handler", "err", err)
 	}
+
+	log.Info("stream handler", "got stream from", stream.Conn().RemotePeer(), "message", fmt.Sprintf("%x", rawMsg))
+
+	msg, err := DecodeMessage(rw, length)
+	if err != nil {
+		log.Error("stream handler", "err", err)
+	}
+
+	log.Info("stream handler", "got message from", stream.Conn().RemotePeer(), "message", msg.String())
 }
 
 // PeerCount returns the number of connected peers
