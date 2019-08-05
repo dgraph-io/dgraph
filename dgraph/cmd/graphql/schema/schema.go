@@ -23,12 +23,11 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/validator"
 )
 
-// SupportedScalars is the list of scalar types that we support.
-type SupportedScalars string
-
-type schRuleFunc func(schema *ast.SchemaDocument) *gqlerror.Error
+type schRuleFunc func(schema *ast.SchemaDocument) gqlerror.List
 
 type schRule struct {
 	name        string
@@ -37,49 +36,45 @@ type schRule struct {
 
 var schRules []schRule
 
-const (
-	INT      SupportedScalars = "Int"
-	FLOAT    SupportedScalars = "Float"
-	STRING   SupportedScalars = "String"
-	DATETIME SupportedScalars = "DateTime"
-	ID       SupportedScalars = "ID"
-	BOOLEAN  SupportedScalars = "Boolean"
-)
-
-// AddScalars adds all the supported scalars in the schema.
-func AddScalars(doc *ast.SchemaDocument) {
-	addScalarInSchema(INT, doc)
-	addScalarInSchema(FLOAT, doc)
-	addScalarInSchema(ID, doc)
-	addScalarInSchema(DATETIME, doc)
-	addScalarInSchema(STRING, doc)
-	addScalarInSchema(BOOLEAN, doc)
+type scalar struct {
+	name       string
+	dgraphType string
 }
 
-func addScalarInSchema(sType SupportedScalars, doc *ast.SchemaDocument) {
-	doc.Definitions = append(
-		doc.Definitions,
-		// Empty Position because it is being inserted by the engine.
-		&ast.Definition{Kind: ast.Scalar, Name: string(sType), Position: &ast.Position{}},
-	)
+var supportedScalars = map[string]scalar{
+	"ID":       scalar{name: "ID", dgraphType: "uid"},
+	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
+	"Int":      scalar{name: "Int", dgraphType: "int"},
+	"Float":    scalar{name: "Float", dgraphType: "float"},
+	"String":   scalar{name: "String", dgraphType: "string"},
+	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
 }
 
-// AddRule adds a new schema rule to the global array schRules.
-func AddRule(name string, f schRuleFunc) {
+// addScalars adds all the supported scalars in the schema.
+func addScalars(doc *ast.SchemaDocument) {
+	for _, s := range supportedScalars {
+		doc.Definitions = append(
+			doc.Definitions,
+			// Empty Position because it is being inserted by the engine.
+			&ast.Definition{Kind: ast.Scalar, Name: s.name, Position: &ast.Position{}},
+		)
+	}
+}
+
+// addRule adds a new schema rule to the global array schRules.
+func addRule(name string, f schRuleFunc) {
 	schRules = append(schRules, schRule{
 		name:        name,
 		schRuleFunc: f,
 	})
 }
 
-// ValidateSchema validates the schema against dgraph's rules of schema.
-func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
+// validateSchema validates the schema against dgraph's rules of schema.
+func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for i := range schRules {
-		if gqlErr := schRules[i].schRuleFunc(schema); gqlErr != nil {
-			errs = append(errs, gqlErr)
-		}
+		errs = append(errs, schRules[i].schRuleFunc(schema)...)
 	}
 
 	return errs
@@ -87,41 +82,60 @@ func ValidateSchema(schema *ast.SchemaDocument) gqlerror.List {
 
 // GenerateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func GenerateCompleteSchema(schema *ast.Schema) {
+func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
+	if gqlErr != nil {
+		return nil, []*gqlerror.Error{gqlErr}
+	}
+
+	if gqlErrList := validateSchema(doc); gqlErrList != nil {
+		return nil, gqlErrList
+	}
+
+	addScalars(doc)
+
+	sch, gqlErr := validator.ValidateSchemaDocument(doc)
+	if gqlErr != nil {
+		return nil, []*gqlerror.Error{gqlErr}
+	}
+
 	extenderMap := make(map[string]*ast.Definition)
 
-	schema.Query = &ast.Definition{
+	sch.Query = &ast.Definition{
 		Kind:        ast.Object,
 		Description: "Query object contains all the query functions",
 		Name:        "Query",
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
 
-	schema.Mutation = &ast.Definition{
+	sch.Mutation = &ast.Definition{
 		Kind:        ast.Object,
 		Description: "Mutation object contains all the mutation functions",
 		Name:        "Mutation",
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
 
-	for _, defn := range schema.Types {
+	for _, defn := range sch.Types {
 		if defn.Kind == ast.Object {
-			extenderMap[defn.Name+"Input"] = genInputType(schema, defn)
+			extenderMap[defn.Name+"Input"] = genInputType(sch, defn)
 			extenderMap[defn.Name+"Ref"] = genRefType(defn)
-			extenderMap[defn.Name+"Update"] = genUpdateType(schema, defn)
+			extenderMap[defn.Name+"Update"] = genUpdateType(sch, defn)
 			extenderMap[defn.Name+"Filter"] = genFilterType(defn)
 			extenderMap["Add"+defn.Name+"Payload"] = genAddResultType(defn)
 			extenderMap["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
 			extenderMap["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
 
-			schema.Query.Fields = append(schema.Query.Fields, addQueryType(defn)...)
-			schema.Mutation.Fields = append(schema.Mutation.Fields, addMutationType(defn)...)
+			sch.Query.Fields = append(sch.Query.Fields, addQueryType(defn)...)
+			sch.Mutation.Fields = append(sch.Mutation.Fields, addMutationType(defn)...)
 		}
 	}
 
 	for name, extType := range extenderMap {
-		schema.Types[name] = extType
+		sch.Types[name] = extType
 	}
+
+	return sch, nil
 }
 
 // AreEqualSchema checks if sch1 and sch2 are the same schema.
@@ -283,7 +297,7 @@ func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
 			&ast.ArgumentDefinition{
 				Name: "id",
 				Type: &ast.Type{
-					NamedType: string(ID),
+					NamedType: idTypeFor(defn),
 					NonNull:   true,
 				},
 			},
@@ -346,7 +360,7 @@ func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
 	updArg := &ast.ArgumentDefinition{
 		Name: "id",
 		Type: &ast.Type{
-			NamedType: string(ID),
+			NamedType: idTypeFor(defn),
 			NonNull:   true,
 		},
 	}
@@ -383,7 +397,7 @@ func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
 			&ast.ArgumentDefinition{
 				Name: "id",
 				Type: &ast.Type{
-					NamedType: string(ID),
+					NamedType: idTypeFor(defn),
 					NonNull:   true,
 				},
 			},
@@ -404,7 +418,7 @@ func getFilterField() ast.FieldList {
 		&ast.FieldDefinition{
 			Name: "dgraph",
 			Type: &ast.Type{
-				NamedType: string(STRING),
+				NamedType: "String",
 			},
 		},
 	}
@@ -413,7 +427,7 @@ func getFilterField() ast.FieldList {
 func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if isIDField(fld) {
+		if isIDField(defn, fld) {
 			continue
 		}
 		if schema.Types[fld.Type.Name()].Kind == ast.Object {
@@ -446,7 +460,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 func getIDField(defn *ast.Definition) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
-		if isIDField(fld) {
+		if isIDField(defn, fld) {
 			// Deepcopy is not required because we don't modify values other than nonull
 			newFld := *fld
 			fldList = append(fldList, &newFld)
@@ -571,6 +585,11 @@ func Stringify(schema *ast.Schema) string {
 	return sch.String()
 }
 
-func isIDField(fld *ast.FieldDefinition) bool {
-	return fld.Type.Name() == string(ID)
+func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
+	return fld.Type.Name() == idTypeFor(defn)
+}
+
+func idTypeFor(defn *ast.Definition) string {
+	// Placeholder till more ID types are introduced.
+	return "ID"
 }

@@ -1,8 +1,0 @@
-# Scalar in initial schema
-
-type Post {
-    id: ID!
-    name: String
-}
-
-scalar Int

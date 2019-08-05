@@ -1,0 +1,80 @@
+invalid_schemas:
+  -
+    name: "More than 1 id field"
+    input: |
+      type P {
+        id1: ID!
+        id2: ID!
+        id3: ID!
+      }
+    output: [
+      {"message":"Fields id1, id2 and id3 are listed as IDs for type P, but a type can have only one ID field. Pick a single field as the ID for type P.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
+    ]
+
+  -
+    name: "Query, Mutation in initial schema"
+    input: |
+      type Query {
+        getAuthro(id: ID): Author!
+      }
+      type Mutation {
+        getAuthro(id: ID): Author!
+      }
+    output: [
+      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":1, "column":6}]},
+      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":4, "column":6}]},
+    ]
+
+  -
+    name: "Invalid list type"
+    input: |
+      type A {
+        posts: [P]!
+      }
+    output: [
+      {"message":"[P]! lists are invalid. Valid options are [P!]! and [P!].", "locations":[{"line":2, "column":3}]},
+    ]
+
+  -
+    name: "Unsupported definitions in initial schema"
+    input: |
+      scalar Int
+      interface P {
+        t: T!
+      }
+      union Q = R | S | T
+      input U {
+        x: X!
+      }
+    output: [
+      {"message":"You can't add scalar definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
+      {"message":"You can't add interface definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":2, "column":11}]},
+      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
+      {"message":"You can't add input_object definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
+    ]
+
+  -
+    name: "Typename is reserved word"
+    input: |
+      type String {
+        id: ID!
+      }
+    output: [
+      {"message":"String is a reserved word, so you can't declare a type with this name. Pick a different name for the type.", "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "More 1 errors"
+    input: |
+      type X {
+        i1: ID!
+        i2: ID!
+        i3: ID!
+        l1: [P]!
+      }
+      union U = R | S | T
+    output: [
+      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":7, "column":7}]},
+      {"message":"Fields i1, i2 and i3 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
+      {"message":"[P]! lists are invalid. Valid options are [P!]! and [P!].", "locations":[{"line":5, "column":3}]},
+    ]
