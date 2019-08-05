@@ -18,7 +18,6 @@ package resolve
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/golang/glog"
 
@@ -58,12 +57,5 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		return nil, schema.GQLWrapf(err, "failed to resolve query")
 	}
 
-	var data map[string]interface{}
-	err = json.Unmarshal(res, &data)
-	if err != nil {
-		glog.Errorf("Failed to unmarshal query result : %v+", err)
-		return nil, schema.GQLWrapf(err, "internal error, couldn't unmarshal dgraph result")
-	}
-
-	return completeDgraphResult(qr.query, data[qr.query.ResponseName()])
+	return completeDgraphResult(qr.query, res)
 }

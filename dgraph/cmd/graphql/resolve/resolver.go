@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/pkg/errors"
 
 	"github.com/golang/glog"
 
@@ -220,7 +221,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 // and the spec requirements for response
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response.
 
-func completeDgraphResult(query schema.Query, val interface{}) ([]byte, gqlerror.List) {
+func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror.List) {
 	// We need an intial case in the alg because dgraph always returns a list
 	// result no mater what.
 	//
@@ -243,14 +244,21 @@ func completeDgraphResult(query schema.Query, val interface{}) ([]byte, gqlerror
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}
 	}
 
+	// Dgraph should only return {} or a JSON object.  Also,
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
-	valToComplete := make(map[string]interface{})
+	var valToComplete map[string]interface{}
+	err := json.Unmarshal(dgResult, &valToComplete)
+	if err != nil {
+		glog.Errorf("%v+", errors.Wrap(err, "Failed to unmarshal Dgraph query result"))
+		return nil, schema.AsGQLErrors(
+			schema.GQLWrapf(err, "internal error, couldn't unmarshal dgraph result"))
+	}
 
-	switch val := val.(type) {
+	switch val := valToComplete[field.ResponseName()].(type) {
 	case []interface{}:
-		if query.Type().ListType() == nil {
+		if field.Type().ListType() == nil {
 			var internalVal interface{}
 
 			if len(val) > 0 {
@@ -280,19 +288,19 @@ func completeDgraphResult(query schema.Query, val interface{}) ([]byte, gqlerror
 				// there's an error to have more no mater what the log level.
 			}
 
-			valToComplete[query.ResponseName()] = internalVal
+			valToComplete[field.ResponseName()] = internalVal
 		} else {
-			valToComplete[query.ResponseName()] = val
+			valToComplete[field.ResponseName()] = val
 		}
 	default:
 		if val != nil {
 			return dgraphError(val)
 		}
 
-		valToComplete[query.ResponseName()] = nil
+		valToComplete[field.ResponseName()] = nil
 	}
 
-	completed, gqlErrs := completeObject(query.Type(), []schema.Field{query}, valToComplete)
+	completed, gqlErrs := completeObject(field.Type(), []schema.Field{field}, valToComplete)
 	if len(completed) > 2 {
 		// chop leading '{' and trailing '}' from JSON object
 		completed = completed[1 : len(completed)-1]
