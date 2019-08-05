@@ -1154,7 +1154,8 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path [
 	return sg.valueVarAggregation(doneVars, path, parent)
 }
 
-// Filters might have updated the destuids. facetMatrix should also be updated.
+// Filters might have updated the destuids. facetMatrix should also be updated to exclude uids that
+// were removed..
 func (sg *SubGraph) updateFacetMatrix() {
 	if len(sg.facetsMatrix) != len(sg.uidMatrix) {
 		return
@@ -1172,6 +1173,13 @@ func (sg *SubGraph) updateFacetMatrix() {
 	}
 }
 
+// updateUidMatrix is used to filter out the uids in uidMatrix which are not part of DestUIDs
+// anymore. Some uids might have been removed from DestUids after application of filters,
+// we remove them from the uidMatrix as well.
+// If the query didn't specify sorting, we can just intersect the DestUids with lists in the
+// uidMatrix since they are both sorted otherwise we must maintain the order of uids within the
+// lists in uidMatrix while doing the filtering.
+// TODO - This function is called quite a few times in this file, see if we can just call it once.
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
@@ -1188,6 +1196,10 @@ func (sg *SubGraph) updateUidMatrix() {
 	}
 }
 
+// populateVarMap stores the value of the variable defined in this SubGraph into req.Vars so that it
+// is available to other queries as well. It is called after a query has been executed.
+// TODO - This function also transforms the DestUids and uidMatrix if the query is a cascade
+// query which should probably happen before.
 func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
@@ -1273,6 +1285,7 @@ func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph)
 	return sg.populateFacetVars(doneVars, sgPathCopy)
 }
 
+// populateUidValVar populates the value of the variable into doneVars.
 func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.Params.Var == "" {
 		return nil
@@ -1280,6 +1293,8 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 
 	var v varValue
 	var ok bool
+	// 1. When count of a predicate is assigned a variable, we store the mapping of uid =>
+	// count(predicate).
 	if len(sg.counts) > 0 {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = varValue{
@@ -1295,6 +1310,10 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			doneVars[sg.Params.Var].Vals[uid] = val
 		}
 	} else if sg.Params.uidCount {
+		// 2. This is the case where count(uid) is requested in the query and stored as variable.
+		// In this case there is just one value which is stored corresponding to the uid
+		// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
+		// value.
 		doneVars[sg.Params.Var] = varValue{
 			Vals:    make(map[uint64]types.Val),
 			path:    sgPath,
@@ -1307,13 +1326,25 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
 	} else if len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil) {
+		// 3. A uid variable. The variable could be defined in one of two places.
+		// a) Either on the actual predicate.
+		//    me(func: (...)) {
+		//      a as friend
+		//    }
+		//
+		// b) Or on the uid edge
+		//    me(func:(...)) {
+		//      friend {
+		//        a as uid
+		//      }
+		//    }
+
 		// Uid variable could be defined using uid or a predicate.
 		uids := sg.DestUIDs
 		if sg.Attr == "uid" {
 			uids = sg.SrcUIDs
 		}
 
-		// This implies it is a entity variable.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			doneVars[sg.Params.Var] = varValue{
 				Uids:    uids,
@@ -1329,8 +1360,9 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		lists := append([]*pb.List(nil), v.Uids, uids)
 		v.Uids = algo.MergeSorted(lists)
 		doneVars[sg.Params.Var] = v
-		// This implies it is a value variable.
 	} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
+		// 4. A value variable. We get the first value from every list thats part of ValueMatrix
+		// and store it corresponding to a uid in SrcUIDs.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			v.Vals = make(map[uint64]types.Val)
 			v.path = sgPath
@@ -1574,12 +1606,23 @@ func (sg *SubGraph) replaceVarInFunc() error {
 	return nil
 }
 
+// Used to evaluate an inequality function which uses a value variable instead of a predicate.
+// E.g.
+// 1. func: eq(val(x), 35) or @filter(eq(val(x), 35)
+// 2. func: ge(val(x), 40) or @filter(ge(val(x), 40)
+// ... other inequality functions
+// The function filters uids corresponding to the variable which satisfy the inequality and stores
+// the filtered uids in DestUIDs.
 func (sg *SubGraph) applyIneqFunc() error {
 	if len(sg.Params.uidToVal) == 0 {
 		// Expected a valid value map. But got empty.
 		// Don't return error, return empty - issue #2610
 		return nil
 	}
+
+	// A mapping of uid to their value should have already been stored in uidToVal.
+	// Find out the type of value using the first value in the map and try to convert the function
+	// argument to that type to make sure we can compare them. If we can't return an error.
 	var typ types.TypeID
 	for _, v := range sg.Params.uidToVal {
 		typ = v.Tid
@@ -1591,7 +1634,9 @@ func (sg *SubGraph) applyIneqFunc() error {
 	if err != nil {
 		return errors.Errorf("Invalid argment %v. Comparing with different type", val)
 	}
+
 	if sg.SrcUIDs != nil {
+		// This means its a filter.
 		for _, uid := range sg.SrcUIDs.Uids {
 			curVal, ok := sg.Params.uidToVal[uid]
 			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
@@ -1599,7 +1644,7 @@ func (sg *SubGraph) applyIneqFunc() error {
 			}
 		}
 	} else {
-		// This means its a root as SrcUIDs is nil
+		// This means its a function at root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.uidToVal {
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
 				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
@@ -2051,7 +2096,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	rch <- childErr
 }
 
-// applyWindow applies windowing to sg.sorted.
+// applyPagination applies count and offset to lists inside uidMatrix.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if sg.Params.Count == 0 && sg.Params.Offset == 0 { // No pagination.
 		return nil
