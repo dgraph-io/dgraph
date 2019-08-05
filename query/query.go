@@ -866,7 +866,7 @@ type varValue struct {
 	Uids    *pb.List // list of uids if this denotes a uid variable.
 	Vals    map[uint64]types.Val
 	path    []*SubGraph     // This stores the subgraph path from root to var definition.
-	strList []*pb.ValueList // stores the list of valueMatrix
+	strList []*pb.ValueList // stores the valueMatrix corresponding to _predicate_ query.
 }
 
 func evalLevelAgg(
@@ -1529,6 +1529,8 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 	return nil
 }
 
+// fillVars reads the value corresponding to a variable from the map mp and stores it inside
+// SubGraph. This value is then later used for execution of the SubGraph.
 func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if sg.Params.Alias == "shortest" {
 		if err := sg.fillShortestPathVars(mp); err != nil {
@@ -1537,36 +1539,42 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	}
 
 	var lists []*pb.List
+	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
+	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
-		if l, ok := mp[v.Name]; ok {
-			switch {
-			case (v.Typ == gql.AnyVar || v.Typ == gql.ListVar) && l.strList != nil:
-				// TODO: If we support value vars for list type then this needn't be true
-				sg.ExpandPreds = l.strList
+		if l, ok := mp[v.Name]; !ok {
+			continue
+		}
+		switch {
+		case (v.Typ == gql.AnyVar || v.Typ == gql.ListVar) && l.strList != nil:
+			// This is for the case when we use expand(val(x)) with a value variable.
+			// We populate the list of values into ExpandPreds and use that for the expand query
+			// later.
+			// TODO: If we support value vars for list type then this needn't be true
+			sg.ExpandPreds = l.strList
 
-			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
-				lists = append(lists, l.Uids)
+		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
+			lists = append(lists, l.Uids)
 
-			case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
-				// This should happen only once.
-				// TODO: This allows only one value var per subgraph, change it later
-				sg.Params.uidToVal = l.Vals
+		case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
+			// This should happen only once.
+			// TODO: This allows only one value var per subgraph, change it later
+			sg.Params.uidToVal = l.Vals
 
-			case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
-				// Derive the UID list from value var.
-				uids := make([]uint64, 0, len(l.Vals))
-				for k := range l.Vals {
-					uids = append(uids, k)
-				}
-				sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-				lists = append(lists, &pb.List{Uids: uids})
-
-			case len(l.Vals) != 0 || l.Uids != nil:
-				return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
-
-			default:
-				glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
+		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
+			// Derive the UID list from value var.
+			uids := make([]uint64, 0, len(l.Vals))
+			for k := range l.Vals {
+				uids = append(uids, k)
 			}
+			sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+			lists = append(lists, &pb.List{Uids: uids})
+
+		case len(l.Vals) != 0 || l.Uids != nil:
+			return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
+
+		default:
+			glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
 		}
 	}
 	if err := sg.replaceVarInFunc(); err != nil {
@@ -1577,8 +1585,10 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	return nil
 }
 
-// eq(score,val(myscore)), we disallow vars in facets filter so we don't need to worry about
-// that as of now.
+// replaceVarInFunc gets values stored inside uidToVal(coming from a value variable defined in some
+// other query) and adds them as arguments to the SrcFunc in SubGraph.
+// E.g. - func: eq(score, val(myscore))
+// NOTE - We disallow vars in facets filter so we don't need to worry about that as of now.
 func (sg *SubGraph) replaceVarInFunc() error {
 	if sg.SrcFunc == nil {
 		return nil
