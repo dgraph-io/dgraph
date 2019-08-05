@@ -48,6 +48,19 @@ var supportedScalars = map[string]scalar{
 	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
 }
 
+var supportedDirectives = map[string]*ast.DirectiveDefinition{
+	"hasInverse": &ast.DirectiveDefinition{
+		Name:      "hasInverse",
+		Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
+	},
+}
+
+func addDirectives(doc *ast.SchemaDocument) {
+	for _, d := range supportedDirectives {
+		doc.Directives = append(doc.Directives, d)
+	}
+}
+
 // addScalars adds all the supported scalars in the schema.
 func addScalars(doc *ast.SchemaDocument) {
 	for _, s := range supportedScalars {
@@ -397,7 +410,22 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	return fldList
 }
 
-func genArgumentsString(args ast.ArgumentDefinitionList) string {
+func genArgumentsDefnString(args ast.ArgumentDefinitionList) string {
+	if args == nil || len(args) == 0 {
+		return ""
+	}
+
+	var argsStrs []string
+
+	for _, arg := range args {
+		argsStrs = append(argsStrs, genArgumentDefnString(arg))
+	}
+
+	sort.Slice(argsStrs, func(i, j int) bool { return argsStrs[i] < argsStrs[j] })
+	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
+}
+
+func genArgumentsString(args ast.ArgumentList) string {
 	if args == nil || len(args) == 0 {
 		return ""
 	}
@@ -431,12 +459,39 @@ func genFieldsString(flds ast.FieldList) string {
 
 func genFieldString(fld *ast.FieldDefinition) string {
 	return fmt.Sprintf(
-		"\t%s%s: %s\n", fld.Name, genArgumentsString(fld.Arguments), fld.Type.String(),
+		"\t%s%s: %s %s\n",
+		fld.Name, genArgumentsDefnString(fld.Arguments),
+		fld.Type.String(), genDirectivesString(fld.Directives),
 	)
 }
 
-func genArgumentString(arg *ast.ArgumentDefinition) string {
+func genDirectivesString(direcs ast.DirectiveList) string {
+	var sch strings.Builder
+	if len(direcs) == 0 {
+		return ""
+	}
+
+	var direcArgs []string
+	for _, dir := range direcs {
+		direcArgs = append(
+			direcArgs,
+			fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments)),
+		)
+	}
+
+	sort.Slice(direcArgs, func(i, j int) bool { return direcArgs[i] < direcArgs[j] })
+	// Assuming multiple directives are space separated.
+	sch.WriteString(strings.Join(direcArgs, " "))
+
+	return sch.String()
+}
+
+func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
 	return fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
+}
+
+func genArgumentString(arg *ast.Argument) string {
+	return fmt.Sprintf("%s: %s", arg.Name, arg.Value.String())
 }
 
 func generateEnumString(typ *ast.Definition) string {

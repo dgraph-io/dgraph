@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"testing"
@@ -42,6 +43,8 @@ func TestSchemaString(t *testing.T) {
 
 		newSchemaStr, errlist := schHandler.GQLSchema()
 		require.Nil(t, errlist, errlist.Error())
+
+		fmt.Println(newSchemaStr)
 
 		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
 		str2, err := ioutil.ReadFile(outFile)

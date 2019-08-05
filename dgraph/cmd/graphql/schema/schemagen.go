@@ -78,6 +78,7 @@ func (s *SchemaHandler) bootStrap() {
 	}
 
 	addScalars(doc)
+	addDirectives(doc)
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
