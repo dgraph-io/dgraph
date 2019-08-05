@@ -14,6 +14,10 @@
 # limitations under the License.
 #
 
+PROTOC_VERSION = "3.6.1"
+GOLANG_PROTOBUF_VERSION := "v1.3.2"
+GOGO_PROTOBUF_VERSION = "v1.2.1"
+GOBIN := $(GOPATH)/bin
 PROTO_PATH := ${GOPATH}/src:.
 PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgraph
 PROTO_PATH := ${PROTO_PATH}:${GOPATH}/src/github.com/dgraph-io/dgo/protos
@@ -26,16 +30,31 @@ help:
 .PHONY: clean
 clean:
 	@mkdir -p pb && rm -f pb/pb.pb.go
+	@rm -f $(GOBIN)/protoc-gen-go
+	@rm -f $(GOBIN)/protoc-gen-gofast
 
 .PHONY: check
 check:
-	@./depcheck.sh && \
-		(echo "Upgrading proto libraries before regenerating." ; \
-		go get -u github.com/golang/protobuf/protoc-gen-go ; \
-		go get -u github.com/gogo/protobuf/protoc-gen-gofast)
+	@./depcheck.sh
+
+.PHONY: golang_protobuf
+golang_protobuf:
+	@echo "\033[0;31mRemoving $(GOPATH)/src/github.com/golang/protobuf\033[0m"
+	@rm -rf $(GOPATH)/src/github.com/golang/protobuf
+	@echo "\033[0;32mCloning  $(GOPATH)/src/github.com/golang/protobuf to $(GOLANG_PROTOBUF_VERSION)\033[0m"
+	@git clone --branch $(GOLANG_PROTOBUF_VERSION) --single-branch --depth 1 https://github.com/golang/protobuf $(GOPATH)/src/github.com/golang/protobuf
+	@go install $(GOPATH)/src/github.com/golang/protobuf/protoc-gen-go
+
+.PHONY: gogo_protobuf
+gogo_protobuf:
+	@echo "\033[0;31mRemoving $(GOPATH)/src/github.com/gogo/protobuf\033[0m"
+	@rm -rf $(GOPATH)/src/github.com/gogo/protobuf
+	@echo "\033[0;32mCloning  $(GOPATH)/src/github.com/gogo/protobuf to $(GOGO_PROTOBUF_VERSION)\033[0m"
+	@git clone --branch $(GOGO_PROTOBUF_VERSION) --single-branch --depth 1 https://github.com/gogo/protobuf $(GOPATH)/src/github.com/gogo/protobuf
+	@go install $(GOPATH)/src/github.com/gogo/protobuf/protoc-gen-gofast
 
 .PHONY: regenerate
-regenerate: check clean
+regenerate: check clean golang_protobuf gogo_protobuf
 	@protoc \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/protos/api:pb \
