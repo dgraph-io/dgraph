@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
 	"strconv"
 	"testing"
@@ -25,10 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
-	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 )
 
 func TestSchemaString(t *testing.T) {
@@ -47,8 +43,6 @@ func TestSchemaString(t *testing.T) {
 		newSchemaStr, errlist := schHandler.GQLSchema()
 		require.Nil(t, errlist, errlist.Error())
 
-		fmt.Println(newSchemaStr)
-
 		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
 		str2, err := ioutil.ReadFile(outFile)
 		if err != nil {
@@ -56,19 +50,7 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		doc, gqlerr := parser.ParseSchema(&ast.Source{Input: string(str2)})
-		if gqlerr != nil {
-			t.Errorf(gqlerr.Error())
-			continue
-		}
-
-		outputSch, errlist2 := validator.ValidateSchemaDocument(doc)
-		if errlist2 != nil {
-			t.Errorf(errlist2.Error())
-			continue
-		}
-
-		require.Equal(t, true, AreEqualSchema(schHandler.completeSchema, outputSch))
+		require.Equal(t, string(str2), newSchemaStr)
 	}
 }
 
