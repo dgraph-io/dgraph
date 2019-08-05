@@ -87,14 +87,15 @@ func (s *SchemaHandler) bootStrap() {
 
 	s.initSchema = deepcopy.Copy(sch).(*ast.Schema)
 
-	GenerateCompleteSchema(sch)
+	generateCompleteSchema(sch)
 	s.completeSchema = sch
 }
 
-// GenDgSchema generates Dgraph schema from a valid graphql schema.
+// genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema) string {
 	var typeStrings []string
 
+	// Sorting the keys so that the schema generated is always in the same order.
 	var keys []string
 	for k := range gqlSch.Types {
 		keys = append(keys, k)
@@ -121,14 +122,15 @@ func genDgSchema(gqlSch *ast.Schema) string {
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object:
-					// TODO: still need to reverse in here
-
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", def.Name, f.Name, typStr)
 					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, typStr)
 				case ast.Scalar:
-					typStr = fmt.Sprintf("%s%s%s", prefix, supportedScalars[f.Type.Name()].dgraphType, suffix)
+					typStr = fmt.Sprintf(
+						"%s%s%s",
+						prefix, supportedScalars[f.Type.Name()].dgraphType, suffix,
+					)
 					// TODO: indexes needed here
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
 						def.Name, f.Name, typStr)
@@ -141,7 +143,10 @@ func genDgSchema(gqlSch *ast.Schema) string {
 			}
 			fmt.Fprintf(&typeDef, "}\n")
 
-			typeStrings = append(typeStrings, fmt.Sprintf("%s%s", typeDef.String(), preds.String()))
+			typeStrings = append(
+				typeStrings,
+				fmt.Sprintf("%s%s", typeDef.String(), preds.String()),
+			)
 		}
 	}
 
