@@ -6,7 +6,7 @@ BadgerDB is an embeddable, persistent and fast key-value (KV) database
 written in pure Go. It's meant to be a performant alternative to non-Go-based
 key-value stores like [RocksDB](https://github.com/facebook/rocksdb).
 
-## Project Status [Oct 27, 2018]
+## Project Status [Jun 26, 2019]
 
 Badger is stable and is being used to serve data sets worth hundreds of
 terabytes. Badger supports concurrent ACID transactions with serializable
@@ -15,14 +15,20 @@ snapshot isolation (SSI) guarantees. A Jepsen-style bank test runs nightly for
 Badger has also been tested to work with filesystem level anomalies, to ensure
 persistence and consistency.
 
-Badger v1.0 was released in Nov 2017, with a Badger v2.0 release coming up in a
-few months. The [Changelog] is kept fairly up-to-date.
+Badger v1.0 was released in Nov 2017, and the latest version that is data-compatible
+with v1.0 is v1.6.0.
+
+Badger v2.0, a new release coming up very soon will use a new storage format which won't
+be compatible with all of the v1.x. The [Changelog] is kept fairly up-to-date.
+
+For more details on our version naming schema please read [Choosing a version](#choosing-a-version).
 
 [Changelog]:https://github.com/dgraph-io/badger/blob/master/CHANGELOG.md
 
 ## Table of Contents
  * [Getting Started](#getting-started)
     + [Installing](#installing)
+      - [Choosing a version](#choosing-a-version)
     + [Opening a database](#opening-a-database)
     + [Transactions](#transactions)
       - [Read-only transactions](#read-only-transactions)
@@ -61,6 +67,27 @@ $ go get github.com/dgraph-io/badger/...
 This will retrieve the library and install the `badger` command line
 utility into your `$GOBIN` path.
 
+#### Choosing a version
+
+BadgerDB is a pretty special package from the point of view that the most important change we can
+make to it is not on its API but rather on how data is stored on disk.
+
+This is why we follow a version naming schema that differs from Semantic Versioning.
+
+- New major versions are released when the data format on disk changes in an incompatible way.
+- New minor versions are released whenever the API changes but data compatibility is maintained.
+ Note that the changes on the API could be backward-incompatible - unlike Semantic Versioning.
+- New patch versions are released when there's no changes to the data format nor the API.
+
+Following these rules:
+
+- v1.5.0 and v1.6.0 can be used on top of the same files without any concerns, as their major
+ version is the same, therefore the data format on disk is compatible.
+- v1.6.0 and v2.0.0 are data incompatible as their major version implies, so files created with
+ v1.6.0 will need to be converted into the new format before they can be used by v2.0.0.
+
+For a longer explanation on the reasons behind using a new versioning naming schema, you can read
+[VERSIONING.md](VERSIONING.md).
 
 ### Opening a database
 The top-level object in Badger is a `DB`. It represents multiple files on disk
@@ -82,10 +109,7 @@ import (
 func main() {
   // Open the Badger database located in the /tmp/badger directory.
   // It will be created if it doesn't exist.
-  opts := badger.DefaultOptions
-  opts.Dir = "/tmp/badger"
-  opts.ValueDir = "/tmp/badger"
-  db, err := badger.Open(opts)
+  db, err := badger.Open(badger.DefaultOptions("tmp/badger"))
   if err != nil {
 	  log.Fatal(err)
   }

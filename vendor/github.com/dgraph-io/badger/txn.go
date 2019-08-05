@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/y"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/pkg/errors"
 )
 
@@ -332,7 +332,7 @@ func (txn *Txn) modify(e *Entry) error {
 	if err := txn.checkSize(e); err != nil {
 		return err
 	}
-	fp := farm.Fingerprint64(e.Key) // Avoid dealing with byte arrays.
+	fp := z.AESHash(e.Key) // Avoid dealing with byte arrays.
 	txn.writes = append(txn.writes, fp)
 	txn.pendingWrites[string(e.Key)] = e
 	return nil
@@ -428,7 +428,7 @@ func (txn *Txn) Get(key []byte) (item *Item, rerr error) {
 
 func (txn *Txn) addReadKey(key []byte) {
 	if txn.update {
-		fp := farm.Fingerprint64(key)
+		fp := z.AESHash(key)
 		txn.reads = append(txn.reads, fp)
 	}
 }

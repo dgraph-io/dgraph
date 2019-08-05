@@ -190,17 +190,35 @@ func (w *WaterMark) process(closer *Closer) {
 			until = min
 			loops++
 		}
-		for i := doneUntil + 1; i <= until; i++ {
-			toNotify := waiters[i]
-			for _, ch := range toNotify {
-				close(ch)
-			}
-			delete(waiters, i) // Release the memory back.
-		}
+
 		if until != doneUntil {
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
 			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
 		}
+
+		notifyAndRemove := func(idx uint64, toNotify []chan struct{}) {
+			for _, ch := range toNotify {
+				close(ch)
+			}
+			delete(waiters, idx) // Release the memory back.
+		}
+
+		if until-doneUntil <= uint64(len(waiters)) {
+			// Issue #908 showed that if doneUntil is close to 2^60, while until is zero, this loop
+			// can hog up CPU just iterating over integers creating a busy-wait loop. So, only do
+			// this path if until - doneUntil is less than the number of waiters.
+			for idx := doneUntil + 1; idx <= until; idx++ {
+				if toNotify, ok := waiters[idx]; ok {
+					notifyAndRemove(idx, toNotify)
+				}
+			}
+		} else {
+			for idx, toNotify := range waiters {
+				if idx <= until {
+					notifyAndRemove(idx, toNotify)
+				}
+			}
+		} // end of notifying waiters.
 	}
 
 	for {

@@ -252,7 +252,7 @@ func (item *Item) KeySize() int64 {
 	return int64(len(item.key))
 }
 
-// ValueSize returns the exact size of the value.
+// ValueSize returns the approximate size of the value.
 //
 // This can be called to quickly estimate the size of a value without fetching
 // it.
@@ -267,7 +267,9 @@ func (item *Item) ValueSize() int64 {
 	vp.Decode(item.vptr)
 
 	klen := int64(len(item.key) + 8) // 8 bytes for timestamp.
-	return int64(vp.Len) - klen - headerBufSize - crc32.Size
+	// 6 bytes are for the approximate length of the header. Since header is encoded in varint, we
+	// cannot find the exact length of header without fetching it.
+	return int64(vp.Len) - klen - 6 - crc32.Size
 }
 
 // UserMeta returns the userMeta set by the user. Typically, this byte, optionally set by the user
@@ -433,6 +435,7 @@ func (txn *Txn) NewKeyIterator(key []byte, opt IteratorOptions) *Iterator {
 	}
 	opt.Prefix = key // This key must be without the timestamp.
 	opt.prefixIsKey = true
+	opt.AllVersions = true
 	return txn.NewIterator(opt)
 }
 
@@ -456,6 +459,9 @@ func (it *Iterator) Item() *Item {
 func (it *Iterator) Valid() bool {
 	if it.item == nil {
 		return false
+	}
+	if it.opt.prefixIsKey {
+		return bytes.Equal(it.item.key, it.opt.Prefix)
 	}
 	return bytes.HasPrefix(it.item.key, it.opt.Prefix)
 }
