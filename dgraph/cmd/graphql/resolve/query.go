@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/golang/glog"
 
@@ -57,26 +58,12 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		return nil, schema.GQLWrapf(err, "failed to resolve query")
 	}
 
-	// TODO:
-	// queries come back from Dgraph like :
-	// {"mult":[{ ... }, { ... }]} - multiple results
-	// {"single":[{ ... }]}        - single result
-	//
-	// QueryResolver.Resolve() should return a fully resolved GraphQL answer.
-	// That means a bunch of things in GraphQL:
-	//
-	// - need to dig through that response and the expected types from the
-	//   schema and propagate missing ! fields and errors according to spec.
-	//
-	// - if schema result is a single node not a list, then need to transform
-	//   {"single":[{ ... }]} ---> "single":{ ... }
-
-	// atm we are just chopping off the {}
-	if len(res) > 2 {
-		// chop leading '{' and trailing '}'
-		res = res[1 : len(res)-1]
-	} else {
-		res = []byte{}
+	var data map[string]interface{}
+	err = json.Unmarshal(res, &data)
+	if err != nil {
+		glog.Errorf("Failed to unmarshal query result : %v+", err)
+		return nil, schema.GQLWrapf(err, "internal error, couldn't unmarshal dgraph result")
 	}
-	return res, nil
+
+	return completeDgraphResult(qr.query, data[qr.query.ResponseName()])
 }
