@@ -2,16 +2,18 @@
 
 set -e
 
-readonly PROTOCMINVER="3.6.1"
-readonly PROTOGOREQVER="v1.3.2"
-readonly PROTOGOGOREQVER="v1.2.1"
+# Required minimum version for protoc protocol compiler
+readonly PROTOC_MINVER="3.6.1"
+# Required version for golang/protobuf/protoc-gen-go
+readonly GOLANG_PROTOBUF_REQVER="v1.3.2"
+# Required version for gogo/protobuf/protoc-gen-gofast
+readonly GOGO_PROTOBUF_REQVER="v1.2.1"
 
 which protoc &>/dev/null || (echo "Error: protoc not found" ; exit 1)
 
-
-PROTOCVER=`protoc --version | awk '{printf $2}'`
-PROTOGOVER=`git -C $GOPATH/src/github.com/golang/protobuf describe --always --tags`
-PROTOGOGOVER=`git -C $GOPATH/src/github.com/gogo/protobuf describe --always --tags`
+PROTOC_VER=`protoc --version | awk '{printf $2}'`
+GOLANG_PROTOBUF_VER=`git -C $GOPATH/src/github.com/golang/protobuf describe --always --tags`
+GOGO_PROTOBUF_VER=`git -C $GOPATH/src/github.com/gogo/protobuf describe --always --tags`
 
 # CompareSemVer compares the minimum version minver against another version curver.
 # If the version is below our min it will exit with non-zero to trigger error in make.
@@ -46,9 +48,9 @@ function CompareVer() {
     fi
 }
 
-CompareSemVer $PROTOCMINVER $PROTOCVER "protoc"
-CompareVer $PROTOGOREQVER $PROTOGOVER "golang/protobuf"
-CompareVer $PROTOGOGOREQVER $PROTOGOGOVER "gogo/protobuf"
+CompareSemVer $PROTOC_MINVER $PROTOC_VER "protoc"
+CompareVer $GOLANG_PROTOBUF_REQVER $GOLANG_PROTOBUF_VER "golang/protobuf"
+GOGO_PROTOBUF_VER $GOGO_PROTOBUF_REQVER $GOGO_PROTOBUF_VER "gogo/protobuf"
 
 echo "OK"
 
