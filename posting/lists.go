@@ -159,16 +159,15 @@ func Init(ps *badger.DB) {
 	var err error
 	plCache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
-		MaxCost:     1e8,
+		MaxCost:     1e9,
 		BufferItems: 64,
-		Log:         true,
+		Metrics:     true,
 	})
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		for range ticker.C {
-			l := plCache.Log()
-			glog.Infof("Cache stats: ratio %f hits %d misses %d evictions %d", l.Ratio(),
-				l.GetHits(), l.GetMisses(), l.GetEvictions())
+			m := plCache.Metrics()
+			glog.Infof(m.String())
 		}
 	}()
 	x.Check(err)

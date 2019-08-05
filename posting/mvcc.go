@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
+	"github.com/creachadair/misctools/sizeof"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -213,7 +214,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 	cacheKey := y.KeyWithTs(l.key, l.maxTs)
 	if _, ok := plCache.Get(cacheKey); !ok {
-		plCache.Set(cacheKey, l, l.cacheCost())
+		plCache.Set(cacheKey, l, sizeof.DeepSize(l))
 	}
 
 	return l, nil
