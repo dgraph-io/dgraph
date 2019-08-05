@@ -219,8 +219,8 @@ type SubGraph struct {
 	// In graph terms, a list is a slice of outgoing edges from a node.
 	uidMatrix []*pb.List
 
-	// facetsMatrix contains the facet values. There would a list to corresponding to each uid in
-	// SrcUIDs.
+	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
+	// uidMatrix.
 	facetsMatrix []*pb.FacetsList
 	ExpandPreds  []*pb.ValueList
 	GroupbyRes   []*groupResults // one result for each uid list.
@@ -1400,62 +1400,69 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 	return nil
 }
 
+// populateFacetVars walks the facetsMatrix to compute the value of a facet variable.
+// It sums up the value for float/int type facets so that there is only variable corresponding
+// to each uid in the uidMatrix.
 func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if len(sg.Params.FacetVar) != 0 && sg.Params.Facet != nil {
-		sgPath = append(sgPath, sg)
+	if len(sg.Params.FacetVar) == 0 || sg.Params.Facet == nil {
+		return nil
+	}
 
-		for _, it := range sg.Params.Facet.Param {
-			fvar, ok := sg.Params.FacetVar[it.Key]
-			if !ok {
-				continue
-			}
-			doneVars[fvar] = varValue{
-				Vals: make(map[uint64]types.Val),
-				path: sgPath,
-			}
+	sgPath = append(sgPath, sg)
+	for _, it := range sg.Params.Facet.Param {
+		fvar, ok := sg.Params.FacetVar[it.Key]
+		if !ok {
+			continue
 		}
-
-		if len(sg.facetsMatrix) == 0 {
-			return nil
+		// Assign an empty value for every facet that was assigned to a variable and hence is part
+		// of FacetVar.
+		doneVars[fvar] = varValue{
+			Vals: make(map[uint64]types.Val),
+			path: sgPath,
 		}
+	}
 
-		// Note: We ignore the facets if its a value edge as we can't
-		// attach the value to any node.
-		for i, uids := range sg.uidMatrix {
-			for j, uid := range uids.Uids {
-				facet := sg.facetsMatrix[i].FacetsList[j]
-				for _, f := range facet.Facets {
-					fvar, ok := sg.Params.FacetVar[f.Key]
-					if ok {
-						if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
-							fVal, err := facets.ValFor(f)
-							if err != nil {
-								return err
-							}
+	if len(sg.facetsMatrix) == 0 {
+		return nil
+	}
 
-							doneVars[fvar].Vals[uid] = fVal
-						} else {
-							// If the value is int/float we add them up. Else we throw an error as
-							// many to one maps are not allowed for other types.
-							nVal, err := facets.ValFor(f)
-							if err != nil {
-								return err
-							}
-
-							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
-								return errors.Errorf("Repeated id with non int/float value for " +
-									"facet var encountered.")
-							}
-							ag := aggregator{name: "sum"}
-							ag.Apply(pVal)
-							ag.Apply(nVal)
-							fVal, err := ag.Value()
-							if err != nil {
-								continue
-							}
-							doneVars[fvar].Vals[uid] = fVal
-						}
+	// Note: We ignore the facets if its a value edge as we can't
+	// attach the value to any node.
+	for i, uids := range sg.uidMatrix {
+		for j, uid := range uids.Uids {
+			facet := sg.facetsMatrix[i].FacetsList[j]
+			for _, f := range facet.Facets {
+				fvar, ok := sg.Params.FacetVar[f.Key]
+				if !ok {
+					continue
+				}
+				if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
+					fVal, err := facets.ValFor(f)
+					if err != nil {
+						return err
 					}
+
+					doneVars[fvar].Vals[uid] = fVal
+				} else {
+					// If the value is int/float we add them up. Else we throw an error as
+					// many to one maps are not allowed for other types.
+					nVal, err := facets.ValFor(f)
+					if err != nil {
+						return err
+					}
+
+					if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
+						return errors.Errorf("Repeated id with non int/float value for " +
+							"facet var encountered.")
+					}
+					ag := aggregator{name: "sum"}
+					ag.Apply(pVal)
+					ag.Apply(nVal)
+					fVal, err := ag.Value()
+					if err != nil {
+						continue
+					}
+					doneVars[fvar].Vals[uid] = fVal
 				}
 			}
 		}
@@ -1485,6 +1492,8 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	return nil
 }
 
+// fillShortestPathVars reads value of the uid variable from mp map and fills it into From and To
+// parameters.
 func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 	// The uidVar.Uids can be nil if the variable didn't return any uids. This would mean
 	// sg.Params.From or sg.Params.To is 0 and the query would return an empty result.
