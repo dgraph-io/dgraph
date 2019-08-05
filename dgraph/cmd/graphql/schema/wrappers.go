@@ -76,7 +76,7 @@ type Field interface {
 	ResponseName() string
 	ArgValue(name string) interface{}
 	IDArgValue() (uint64, error)
-	TypeName() string
+	Type() Type
 	SelectionSet() []Field
 }
 
@@ -91,6 +91,32 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+}
+
+type Type interface {
+	Name() string
+	Nullable() bool
+	ListType() Type
+}
+
+type astType struct {
+	typ *ast.Type
+}
+
+// FIXME" move these around
+func (t *astType) Name() string {
+	return t.typ.NamedType
+}
+
+func (t *astType) Nullable() bool {
+	return !t.typ.NonNull
+}
+
+func (t *astType) ListType() Type {
+	if t.typ.Elem == nil {
+		return nil
+	}
+	return &astType{typ: t.typ.Elem}
 }
 
 type schema struct {
@@ -197,8 +223,8 @@ func (f *field) IDArgValue() (uint64, error) {
 	return uid, err
 }
 
-func (f *field) TypeName() string {
-	return f.field.Definition.Type.NamedType
+func (f *field) Type() Type {
+	return &astType{typ: f.field.Definition.Type}
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -227,8 +253,8 @@ func (q *query) IDArgValue() (uint64, error) {
 	return (*field)(q).IDArgValue()
 }
 
-func (q *query) TypeName() string {
-	return (*field)(q).TypeName()
+func (q *query) Type() Type {
+	return (*field)(q).Type()
 }
 
 func (q *query) SelectionSet() []Field {
@@ -260,8 +286,8 @@ func (m *mutation) ArgValue(name string) interface{} {
 	return (*field)(m).ArgValue(name)
 }
 
-func (m *mutation) TypeName() string {
-	return (*field)(m).TypeName()
+func (m *mutation) Type() Type {
+	return (*field)(m).Type()
 }
 
 func (m *mutation) IDArgValue() (uint64, error) {
@@ -286,7 +312,7 @@ func (m *mutation) ResponseName() string {
 // Currently, everything works by convention, so we know the underlying type
 // by stripping away the prefix and suffix.
 func (m *mutation) MutatedTypeName() string {
-	prefix := strings.TrimSuffix(m.TypeName(), "Payload")
+	prefix := strings.TrimSuffix(m.Type().Name(), "Payload")
 	switch {
 	case strings.HasPrefix(prefix, "Add"):
 		return strings.TrimPrefix(prefix, "Add")
@@ -295,7 +321,7 @@ func (m *mutation) MutatedTypeName() string {
 	case strings.HasPrefix(prefix, "Delete"):
 		return strings.TrimPrefix(prefix, "Delete")
 	}
-	return m.TypeName()
+	return m.Type().Name()
 }
 
 func (m *mutation) MutationType() MutationType {

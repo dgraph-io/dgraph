@@ -44,7 +44,7 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		qb = dgraph.NewQueryBuilder().
 			WithAttr(qr.query.ResponseName()).
 			WithIDArgRoot(qr.query).
-			WithTypeFilter(qr.query.TypeName()).
+			WithTypeFilter(qr.query.Type().Name()).
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	default:
