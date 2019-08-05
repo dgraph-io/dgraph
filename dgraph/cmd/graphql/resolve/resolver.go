@@ -19,6 +19,7 @@ package resolve
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 
@@ -144,6 +145,18 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			r.resp.AddData(resp)
+
+			// There's one more step of the completion algorithm not done yet.  If the
+			// result type of this query is T! and completeDgraphResult comes back nil.
+			// Then we really should crush the whole query: e.g. if multiple queries
+			// were asked in one operation, we should call off any other runnings
+			// resolvers for the operation and crush the whole result to an error.
+			//
+			// ATM we just squash this one query, return the error and the results
+			// of all other querie.
+			// TODO: ^^  should we even have ! return types in queries?  and/or
+			// should add that last step of error propagation with cancelation
+			// when we make queries concurrent.
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
@@ -178,4 +191,226 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	}
 
 	return r.resp
+}
+
+// Once a result has been returned from Dgraph, that result needs to be worked
+// through for two main reasons:
+//
+// 1) (null insertion)
+//    Where an edge was requested in a query, but isn't in the store, Dgraph just
+//    won't return an edge for that in the results.  But GraphQL wants those as
+//    "null" in the result.  And then we need to inspect those nulls via pt (2)
+//
+// 2) (error propagation)
+//    The schema is a contract with consumers.  So if there's an `f: T!` in the
+//    schema, that says: "this API never returns a null f".  If f turned out null
+//    in the results, then returning null would break the contract.  GraphQL specifies
+//    a set of rules about how to propagate and record those errors.
+//
+//    The basic intuition is that if we asked for something that's nullable and we
+//    got back a null/error, then that's fine, just set it to null.  But if we asked
+//    for something non-nullable and got a null/error, then the object we are building
+//    is in an error state, and we should propagate that up to it's parent, and so
+//    on, untill we reach a nullable field, or the top level.
+//
+// The completeXYZ() functions below essentially covers the value completion alg from
+// https://graphql.github.io/graphql-spec/June2018/#sec-Value-Completion.
+// see also: error propagation
+// https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
+// and the spec requirements for response
+// https://graphql.github.io/graphql-spec/June2018/#sec-Response.
+
+func completeDgraphResult(query schema.Query, val interface{}) ([]byte, gqlerror.List) {
+	// We need an intial case in the alg because dgraph always returns a list
+	// result no mater what.
+	//
+	// If the query was for a non-list type, that needs to be corrected:
+	//
+	//   "q":[{ ... }] ---> "q":{ ... }
+	//
+	// Also, if the query found nothing at all, that needs correcting too:
+	//
+	//    { } ---> "q": null
+
+	var errs gqlerror.List
+
+	dgraphError := func(v interface{}) ([]byte, gqlerror.List) {
+		json, _ := json.Marshal(v)
+		glog.Error("Dgraph return type was not an array of json objects : ",
+			string(json))
+		return nil, gqlerror.List{
+			gqlerror.Errorf("Result of Dgraph query was not of a recognisable form.  " +
+				"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}
+	}
+
+	// GQL type checking should ensure query results are only object types
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
+	// So we are only building object results.
+	valToComplete := make(map[string]interface{})
+
+	switch val := val.(type) {
+	case []interface{}:
+		if query.Type().ListType() == nil {
+			var internalVal interface{}
+
+			if len(val) > 0 {
+				var ok bool
+				if internalVal, ok = val[0].(map[string]interface{}); !ok {
+					// This really shouldn't happen. Dgraph only returns arrays
+					// of json objects.
+					return dgraphError(val)
+				}
+			}
+
+			if len(val) > 1 {
+				// If we get here, then we got a list result for a query that expected
+				// a single item.  That probably indicates a bug in GraphQL processing
+				// or maybe some data corruption.
+				//
+				// We'll continue and just try the first item to return some data.
+				json, _ := json.Marshal(val)
+				glog.Error("Got a list result from Dgraph when expecting a one-item list : ",
+					string(json))
+
+				errs = append(errs,
+					gqlerror.Errorf("Dgraph returned a list, but was expecting just one item."))
+
+				// FIXME: Would be great to be able to log more context in a case like this.
+				// If glog is set to 3+, we log they query, etc, but would be nice just when
+				// there's an error to have more no mater what the log level.
+			}
+
+			valToComplete[query.ResponseName()] = internalVal
+		} else {
+			valToComplete[query.ResponseName()] = val
+		}
+	default:
+		if val != nil {
+			return dgraphError(val)
+		}
+
+		valToComplete[query.ResponseName()] = nil
+	}
+
+	completed, gqlErrs := completeObject(query.Type(), []schema.Field{query}, valToComplete)
+	if len(completed) > 2 {
+		// chop leading '{' and trailing '}' from JSON object
+		completed = completed[1 : len(completed)-1]
+	}
+
+	return completed, append(errs, gqlErrs...)
+}
+
+func completeObject(typ schema.Type, fields []schema.Field, res map[string]interface{}) (
+	[]byte, gqlerror.List) {
+
+	var errs gqlerror.List
+	var buf bytes.Buffer
+	comma := ""
+
+	buf.WriteRune('{')
+	for _, f := range fields {
+		buf.WriteString(comma)
+		buf.WriteRune('"')
+		buf.WriteString(f.ResponseName())
+		buf.WriteString(`": `)
+
+		completed, err := completeValue(f, res[f.ResponseName()])
+		errs = append(errs, err...)
+		if completed == nil {
+			if f.Type().Nullable() {
+				completed = []byte(`null`)
+			} else {
+				return nil, append(errs, gqlerror.Errorf("Crushed an object because of null error"))
+			}
+		}
+		buf.Write(completed)
+		comma = ", "
+	}
+	buf.WriteRune('}')
+
+	return buf.Bytes(), errs
+}
+
+func completeValue(field schema.Field, val interface{}) ([]byte, gqlerror.List) {
+
+	switch val := val.(type) {
+	case map[string]interface{}:
+		return completeObject(field.Type(), field.SelectionSet(), val)
+	case []interface{}:
+		return completeList(field, val)
+	default:
+		if val == nil {
+			if field.Type().ListType() != nil {
+				// We could chose to set this to null.  This is our decisions, not
+				// anything required by the spec.
+				//
+				// However, if we query, for example, for an author's posts with
+				// some restrictions, and there aren't any, is that really a case to
+				// set this at null and error if the list is required?  What
+				// about if an author has just been added and doesn't have any posts?
+				// Doesn't seem right.
+				//
+				// Seems best if we pick [], rather than null, as the list value if
+				// there's nothing in the Dgraph result.
+				return []byte("[]"), nil
+			}
+
+			if field.Type().Nullable() {
+				return []byte("null"), nil
+			}
+
+			return nil, gqlerror.List{gqlerror.Errorf("Crushed a null value")}
+		}
+
+		// val is a scalar
+		json, err := json.Marshal(val)
+		if err != nil {
+			if field.Type().Nullable() {
+				return []byte("null"), nil
+			}
+
+			return nil, gqlerror.List{gqlerror.Errorf("json marshalling failed")}
+		}
+		return json, nil
+	}
+}
+
+func completeList(field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
+	var buf bytes.Buffer
+	var errs gqlerror.List
+	comma := ""
+
+	if field.Type().ListType() == nil {
+		// This means a bug on our part - in rewriting, schema generation,
+		// or Dgraph returned somthing unexpected.
+		//
+		// For now, just crush it - this'll change in next PR that smooths out error meesages.
+		return completeValue(field, nil)
+	}
+
+	buf.WriteRune('[')
+	for _, b := range values {
+		r, err := completeValue(field, b)
+		errs = append(errs, err...)
+		buf.WriteString(comma)
+		if r == nil {
+			if field.Type().ListType().Nullable() {
+				buf.WriteString("null")
+			} else {
+				// Unlike the choice in completeValue() above, where we turn missing
+				// lists into [], the spec explicitly calls out:
+				//  "If a List type wraps a Non-Null type, and one of the
+				//  elements of that list resolves to null, then the entire list
+				//  must resolve to null."
+				return nil, append(errs, gqlerror.Errorf("Crushed a list because of null error"))
+			}
+		} else {
+			buf.Write(r)
+		}
+		comma = ", "
+	}
+	buf.WriteRune(']')
+
+	return buf.Bytes(), errs
 }
