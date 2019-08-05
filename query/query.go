@@ -863,10 +863,12 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 // varValue is a generic representation of a variable and holds multiple things.
 // TODO - Come back to this and document what do individual fields mean and when are they populated.
 type varValue struct {
-	Uids    *pb.List // list of uids if this denotes a uid variable.
-	Vals    map[uint64]types.Val
-	path    []*SubGraph     // This stores the subgraph path from root to var definition.
-	strList []*pb.ValueList // stores the valueMatrix corresponding to _predicate_ query.
+	Uids *pb.List // list of uids if this denotes a uid variable.
+	Vals map[uint64]types.Val
+	path []*SubGraph // This stores the subgraph path from root to var definition.
+	// strList stores the valueMatrix corresponding to a predicate and is later used in
+	// expand(val(x)) query.
+	strList []*pb.ValueList
 }
 
 func evalLevelAgg(
@@ -1177,9 +1179,8 @@ func (sg *SubGraph) updateFacetMatrix() {
 // anymore. Some uids might have been removed from DestUids after application of filters,
 // we remove them from the uidMatrix as well.
 // If the query didn't specify sorting, we can just intersect the DestUids with lists in the
-// uidMatrix since they are both sorted otherwise we must maintain the order of uids within the
-// lists in uidMatrix while doing the filtering.
-// TODO - This function is called quite a few times in this file, see if we can just call it once.
+// uidMatrix since they are both sorted. Otherwise we must filter out the uids within the
+// lists in uidMatrix which are not in DestUIDs.
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
