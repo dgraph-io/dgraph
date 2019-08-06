@@ -39,11 +39,11 @@ func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 	item := it.Item()
 	switch item.Typ {
 	case itemUpsertBlock:
-		if mu, err = ParseUpsertBlock(it); err != nil {
+		if mu, err = parseUpsertBlock(it); err != nil {
 			return nil, err
 		}
 	case itemLeftCurl:
-		if mu, err = ParseMutationBlock(it); err != nil {
+		if mu, err = parseMutationBlock(it); err != nil {
 			return nil, err
 		}
 	default:
@@ -58,11 +58,11 @@ func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 	return mu, nil
 }
 
-// ParseUpsertBlock parses the upsert block
-func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
+// parseUpsertBlock parses the upsert block
+func parseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	var mu *api.Mutation
-	var queryText string
-	var queryFound bool
+	var queryText, condText string
+	var queryFound, condFound bool
 
 	// ===>upsert<=== {...}
 	if !it.Next() {
@@ -86,6 +86,7 @@ func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 				return nil, errors.Errorf("Query op not found in upsert block")
 			} else {
 				mu.Query = queryText
+				mu.Cond = condText
 				return mu, nil
 			}
 
@@ -109,8 +110,23 @@ func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 			if !it.Next() {
 				return nil, errors.Errorf("Unexpected end of upsert block")
 			}
+
+			// upsert { mutation ===>@if(...)<=== {....} query{...}}
+			item = it.Item()
+			if item.Typ == itemUpsertBlockOpContent {
+				if condFound {
+					return nil, errors.Errorf("Multiple @if directive inside upsert block")
+				}
+				condFound = true
+				condText = item.Val
+				if !it.Next() {
+					return nil, errors.Errorf("Unexpected end of upsert block")
+				}
+			}
+
+			// upsert @if(...) ===>{<=== ....}
 			var err error
-			if mu, err = ParseMutationBlock(it); err != nil {
+			if mu, err = parseMutationBlock(it); err != nil {
 				return nil, err
 			}
 
@@ -133,8 +149,8 @@ func ParseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	return nil, errors.Errorf("Invalid upsert block")
 }
 
-// ParseMutationBlock parses the mutation block
-func ParseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
+// parseMutationBlock parses the mutation block
+func parseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 	var mu api.Mutation
 
 	item := it.Item()

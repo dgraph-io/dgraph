@@ -21,9 +21,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -793,4 +792,69 @@ upsert {
 }`
 	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, true, 0)
 	require.NoError(t, err)
+}
+
+func TestConditionalUpsertExample0(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+
+	// Mutation with wrong name
+	m1 := `
+upsert {
+  mutation {
+    set {
+      uid(v) <name> "Wrong" .
+      uid(v) <email> "ashish@dgraph.io" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	require.True(t, contains(preds, "email"))
+	require.True(t, contains(preds, "name"))
+
+	// query should return the wrong name
+	q1 := `
+{
+  q(func: has(email)) {
+    uid
+    name
+    email
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Wrong")
+
+	// mutation with correct name
+	m2 := `
+upsert {
+  mutation @if(eq(len(v), 1)) {
+    set {
+      uid(v) <name> "Ashish" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	keys, preds, _, err = mutationWithTs(m2, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	require.True(t, contains(preds, "name"))
+
+	// query should return correct name
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Ashish")
 }
