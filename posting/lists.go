@@ -170,6 +170,12 @@ func Init(ps *badger.DB) {
 			glog.Infof(m.String())
 		}
 	}()
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for range ticker.C {
+			glog.Infof("Cache size: %d\n", plCache.Size())
+		}
+	}()
 	x.Check(err)
 	go updateMemoryMetrics(closer)
 }

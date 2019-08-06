@@ -25,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/y"
-	"github.com/creachadair/misctools/sizeof"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -166,7 +165,13 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		// the cached version with the list that's been computed so far.
 		cachedVal, ok := plCache.Get(y.KeyWithTs(key, item.Version()))
 		if ok {
-			base := cachedVal.(*List)
+			pl := &pb.PostingList{}
+			x.Check(pl.Unmarshal(cachedVal.([]byte)))
+			base := new(List)
+			base.key = key
+			base.plist = new(pb.PostingList)
+			base.mutationMap = make(map[uint64]*pb.PostingList)
+			base.minTs = item.Version()
 			l = mergePostingLists(base, l)
 			break
 		}
@@ -182,7 +187,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			l.minTs = item.Version()
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
-			return l, nil
+			break
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
@@ -214,7 +219,13 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 	cacheKey := y.KeyWithTs(l.key, l.maxTs)
 	if _, ok := plCache.Get(cacheKey); !ok {
-		plCache.Set(cacheKey, l, sizeof.DeepSize(l))
+		kvs, err := l.Rollup()
+		if err != nil {
+			return nil, err
+		}
+		if len(kvs) == 1 {
+			plCache.Set(cacheKey, kvs[0].Value, int64(cap(kvs[0].Value)))
+		}
 	}
 
 	return l, nil
