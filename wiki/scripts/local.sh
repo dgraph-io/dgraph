@@ -17,6 +17,7 @@ run() {
   export CURRENT_BRANCH="master"
   export CURRENT_VERSION=${VERSIONS_ARRAY[0]}
   export VERSIONS=${VERSION_STRING}
+  export DGRAPH_ENDPOINT="https://play.dgraph.io/query?latency=true"
 
 
   HUGO_TITLE="Dgraph Doc - local" \

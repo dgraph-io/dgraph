@@ -70,6 +70,7 @@ rebuild() {
 	export CURRENT_BRANCH=${1}
 	export CURRENT_VERSION=${2}
 	export VERSIONS=${VERSION_STRING}
+	export DGRAPH_ENDPOINT="https://play.dgraph.io/query?latency=true"
 
 	cmd=hugo_0.19
 	# Hugo broke backward compatibility, so files for version > 1.0.5 can use newer hugo (v0.38 onwards) but files in
