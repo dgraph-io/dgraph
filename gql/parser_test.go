@@ -22,10 +22,9 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/lex"
-
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
 )
 

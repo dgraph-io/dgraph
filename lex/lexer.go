@@ -187,6 +187,7 @@ func NewLexer(input string) *Lexer {
 	}
 }
 
+// Reset resets Lexer fields. It reuses already allocated buffers.
 func (l *Lexer) Reset(input string) {
 	item := l.items // Pick the slice so we can reuse it.
 	*l = Lexer{}
