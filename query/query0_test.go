@@ -1795,6 +1795,22 @@ func TestFilterUsingLenFunction(t *testing.T) {
 
 			`{"data": {"me":[{"count": 3}]}}`,
 		},
+		{
+			"Multiple length conditions",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    f2 as var(func: has(name), first: 5)
+
+			    me(func: uid(f2)) @filter(lt(len(f), 100) AND lt(len(f2), 10)) {
+			        count(uid)
+			    }
+			}`,
+
+			`{"data": {"me":[{"count": 5}]}}`,
+		},
 	}
 
 	for _, tc := range tests {
