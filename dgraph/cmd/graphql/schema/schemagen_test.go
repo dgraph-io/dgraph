@@ -43,10 +43,10 @@ func TestDGSchemaGen(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				schHandler := SchemaHandler{Input: sch.Input}
-				dgSchema, errs := schHandler.DGSchema()
+				schHandler, errs := NewSchemaHandler(sch.Input)
 				require.Nil(t, errs, errs.Error())
 
+				dgSchema := schHandler.DGSchema()
 				require.Equal(t, sch.Output, dgSchema, sch.Name)
 			})
 		}
@@ -64,10 +64,10 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		schHandler := SchemaHandler{Input: string(str1)}
+		schHandler, errs := NewSchemaHandler(string(str1))
+		require.Nil(t, errs, errs.Error())
 
-		newSchemaStr, errlist := schHandler.GQLSchema()
-		require.Nil(t, errlist, errlist.Error())
+		newSchemaStr := schHandler.GQLSchema()
 
 		fmt.Println(newSchemaStr)
 
@@ -90,7 +90,8 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		require.Equal(t, true, AreEqualSchema(schHandler.completeSchema, outputSch))
+		handlerObj := schHandler.(schemaHandler)
+		require.Equal(t, true, AreEqualSchema(handlerObj.completeSchema, outputSch))
 	}
 }
 
@@ -116,9 +117,7 @@ func TestInvalidSchemas(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				schHandler := SchemaHandler{Input: sch.Input}
-				_, errlist := schHandler.GQLSchema()
-
+				_, errlist := NewSchemaHandler(sch.Input)
 				require.Equal(t, sch.Errlist, errlist, sch.Name)
 			})
 		}
