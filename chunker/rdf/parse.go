@@ -52,8 +52,8 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the N-Quad representation for it.
-func Parse(line string) (api.NQuad, error) {
-	var rnq api.NQuad
+func Parse(line string) (*api.NQuad, error) {
+	rnq := &api.NQuad{}
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
 		return rnq, ErrEmpty
@@ -171,7 +171,7 @@ L:
 
 		case itemLeftRound:
 			it.Prev() // backup '('
-			if err := parseFacets(it, &rnq); err != nil {
+			if err := parseFacets(it, rnq); err != nil {
 				return rnq, errors.Wrap(err, "could not parse facet")
 			}
 		}

@@ -130,7 +130,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		} else if err != nil {
 			return nil, errors.Wrapf(err, "while parsing line %q", str)
 		}
-		nqs = append(nqs, &nq)
+		nqs = append(nqs, nq)
 	}
 
 	return nqs, nil

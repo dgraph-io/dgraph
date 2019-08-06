@@ -913,7 +913,7 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 		if err != nil {
 			return nil, err
 		}
-		nqs = append(nqs, &nq)
+		nqs = append(nqs, nq)
 	}
 	return nqs, nil
 }
