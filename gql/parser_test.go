@@ -4042,7 +4042,7 @@ func TestEqUidFunctionErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
+	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
 }
 
 func TestAggRoot1(t *testing.T) {
