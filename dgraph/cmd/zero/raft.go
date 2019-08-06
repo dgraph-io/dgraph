@@ -598,7 +598,7 @@ func (n *node) trySnapshot(skip uint64) {
 
 func (n *node) Run() {
 	var leader bool
-	ticker := time.NewTicker(20 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	// snapshot can cause select loop to block while deleting entries, so run
