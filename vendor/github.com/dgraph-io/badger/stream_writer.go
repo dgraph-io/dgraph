@@ -18,6 +18,7 @@ package badger
 
 import (
 	"math"
+	"sync"
 
 	"github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/badger/table"
@@ -40,6 +41,7 @@ const headStreamId uint32 = math.MaxUint32
 // StreamWriter should not be called on in-use DB instances. It is designed only to bootstrap new
 // DBs.
 type StreamWriter struct {
+	writeLock  sync.Mutex
 	db         *DB
 	done       func()
 	throttle   *y.Throttle
@@ -68,13 +70,17 @@ func (db *DB) NewStreamWriter() *StreamWriter {
 // calling Prepare, because it could result in permanent data loss. Not calling Prepare would result
 // in a corrupt Badger instance.
 func (sw *StreamWriter) Prepare() error {
+	sw.writeLock.Lock()
+	defer sw.writeLock.Unlock()
+
 	var err error
 	sw.done, err = sw.db.dropAll()
 	return err
 }
 
 // Write writes KVList to DB. Each KV within the list contains the stream id which StreamWriter
-// would use to demux the writes. Write is not thread safe and it should NOT be called concurrently.
+// would use to demux the writes. Write is thread safe and can be called concurrently by mulitple
+// goroutines.
 func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 	if len(kvs.GetKv()) == 0 {
 		return nil
@@ -112,6 +118,9 @@ func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 	for _, req := range streamReqs {
 		all = append(all, req)
 	}
+
+	sw.writeLock.Lock()
+	defer sw.writeLock.Unlock()
 	if err := sw.db.vlog.write(all); err != nil {
 		return err
 	}
@@ -130,6 +139,9 @@ func (sw *StreamWriter) Write(kvs *pb.KVList) error {
 // Flush is called once we are done writing all the entries. It syncs DB directories. It also
 // updates Oracle with maxVersion found in all entries (if DB is not managed).
 func (sw *StreamWriter) Flush() error {
+	sw.writeLock.Lock()
+	defer sw.writeLock.Unlock()
+
 	defer sw.done()
 
 	sw.closer.SignalAndWait()
@@ -196,11 +208,15 @@ type sortedWriter struct {
 }
 
 func (sw *StreamWriter) newWriter(streamId uint32) *sortedWriter {
+	bopts := table.Options{
+		BlockSize:         sw.db.opt.BlockSize,
+		BloomFalsePostive: sw.db.opt.BloomFalsePositive,
+	}
 	w := &sortedWriter{
 		db:       sw.db,
 		streamId: streamId,
 		throttle: sw.throttle,
-		builder:  table.NewTableBuilder(),
+		builder:  table.NewTableBuilder(bopts),
 		reqCh:    make(chan *request, 3),
 	}
 	sw.closer.AddRunning(1)
@@ -286,7 +302,12 @@ func (w *sortedWriter) send() error {
 		err := w.createTable(data)
 		w.throttle.Done(err)
 	}(w.builder)
-	w.builder = table.NewTableBuilder()
+
+	bopts := table.Options{
+		BlockSize:         w.db.opt.BlockSize,
+		BloomFalsePostive: w.db.opt.BloomFalsePositive,
+	}
+	w.builder = table.NewTableBuilder(bopts)
 	return nil
 }
 
@@ -311,7 +332,11 @@ func (w *sortedWriter) createTable(data []byte) error {
 	if _, err := fd.Write(data); err != nil {
 		return err
 	}
-	tbl, err := table.OpenTable(fd, w.db.opt.TableLoadingMode, nil)
+	opts := table.Options{
+		LoadingMode: w.db.opt.TableLoadingMode,
+		ChkMode:     w.db.opt.ChecksumVerificationMode,
+	}
+	tbl, err := table.OpenTable(fd, opts)
 	if err != nil {
 		return err
 	}
@@ -341,10 +366,9 @@ func (w *sortedWriter) createTable(data []byte) error {
 	}
 	// Now that table can be opened successfully, let's add this to the MANIFEST.
 	change := &pb.ManifestChange{
-		Id:       tbl.ID(),
-		Op:       pb.ManifestChange_CREATE,
-		Level:    uint32(lhandler.level),
-		Checksum: tbl.Checksum,
+		Id:    tbl.ID(),
+		Op:    pb.ManifestChange_CREATE,
+		Level: uint32(lhandler.level),
 	}
 	if err := w.db.manifest.addChanges([]*pb.ManifestChange{change}); err != nil {
 		return err

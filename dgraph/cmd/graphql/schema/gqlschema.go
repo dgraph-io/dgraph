@@ -119,9 +119,9 @@ func postGQLValidation(schema *ast.Schema) gqlerror.List {
 	return errs
 }
 
-// GenerateCompleteSchema generates all the required query/mutation/update functions
+// generateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func GenerateCompleteSchema(sch *ast.Schema) {
+func generateCompleteSchema(sch *ast.Schema) {
 
 	extenderMap := make(map[string]*ast.Definition)
 

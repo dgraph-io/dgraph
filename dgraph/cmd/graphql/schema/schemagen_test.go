@@ -17,10 +17,13 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/gqlerror"
 	"gopkg.in/yaml.v2"
 )
 
@@ -37,11 +40,70 @@ func TestDGSchemaGen(t *testing.T) {
 		for _, sch := range schemas {
 			t.Run(sch.Name, func(t *testing.T) {
 
-				schHandler := SchemaHandler{Input: sch.Input}
-				dgSchema, errs := schHandler.DGSchema()
-				require.Nil(t, errs, errs.Error())
+				schHandler, errs := NewSchemaHandler(sch.Input)
+				require.Nil(t, errs)
 
+				dgSchema := schHandler.DGSchema()
 				require.Equal(t, sch.Output, dgSchema, sch.Name)
+			})
+		}
+	}
+}
+
+func TestSchemaString(t *testing.T) {
+	numTests := 1
+
+	for i := 0; i < numTests; i++ {
+		fileName := "../testdata/schema" + strconv.Itoa(i+1) + ".txt" // run from pwd
+		str1, err := ioutil.ReadFile(fileName)
+		if err != nil {
+			t.Errorf("Unable to read schema file %s", fileName)
+			continue
+		}
+
+		schHandler, errs := NewSchemaHandler(string(str1))
+		require.Nil(t, errs)
+
+		newSchemaStr := schHandler.GQLSchema()
+
+		fmt.Println(newSchemaStr)
+
+		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
+		str2, err := ioutil.ReadFile(outFile)
+		if err != nil {
+			t.Errorf("Unable to read output file " + outFile)
+			continue
+		}
+
+		handlerObj := schHandler.(schemaHandler)
+		require.Equal(t, handlerObj.GQLSchema(), string(str2))
+	}
+}
+
+type Tests map[string][]TestCase
+
+type TestCase struct {
+	Name    string
+	Input   string
+	Errlist gqlerror.List
+	Output  string
+}
+
+func TestInvalidSchemas(t *testing.T) {
+	fileName := "gqlschema_test.yml" // run from pwd
+	byts, err := ioutil.ReadFile(fileName)
+	require.Nil(t, err, "Unable to read file %s", fileName)
+
+	var tests Tests
+	err = yaml.Unmarshal(byts, &tests)
+	require.Nil(t, err, "Error Unmarshalling to yaml!")
+
+	for _, schemas := range tests {
+		for _, sch := range schemas {
+			t.Run(sch.Name, func(t *testing.T) {
+
+				_, errlist := NewSchemaHandler(sch.Input)
+				require.Equal(t, sch.Errlist, errlist, sch.Name)
 			})
 		}
 	}

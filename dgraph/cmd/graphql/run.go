@@ -188,18 +188,15 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	schHandler := gschema.SchemaHandler{Input: inputSchema}
-
-	completeSchema, errlist := schHandler.GQLSchema()
-	if errlist != nil {
-		return fmt.Errorf(errlist.Error())
+	schHandler, err := gschema.NewSchemaHandler(inputSchema)
+	if err != nil {
+		return err
 	}
+
+	completeSchema := schHandler.GQLSchema()
 	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
 
-	dgSchema, errlist := schHandler.DGSchema()
-	if errlist != nil {
-		return fmt.Errorf(errlist.Error())
-	}
+	dgSchema := schHandler.DGSchema()
 
 	glog.V(2).Infof("Built Dgraph schema:\n\n%s\n", dgSchema)
 

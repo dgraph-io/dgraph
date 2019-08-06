@@ -21,86 +21,74 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mohae/deepcopy"
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
 	"github.com/vektah/gqlparser/parser"
 	"github.com/vektah/gqlparser/validator"
 )
 
-type SchemaHandler struct {
+type SchemaHandler interface {
+	DGSchema() string
+	GQLSchema() string
+}
+
+type schemaHandler struct {
 	Input          string
-	initSchema     *ast.Schema
 	completeSchema *ast.Schema
-	errs           gqlerror.List
+	dgraphSchema   string
 }
 
-func (s *SchemaHandler) GQLSchema() (string, gqlerror.List) {
-	s.bootStrap()
-
-	if s.errs != nil {
-		return "", s.errs
-	}
-
-	return Stringify(s.completeSchema), nil
+func (s schemaHandler) GQLSchema() string {
+	return Stringify(s.completeSchema)
 }
 
-func (s *SchemaHandler) DGSchema() (string, gqlerror.List) {
-	s.bootStrap()
-
-	if s.errs != nil {
-		return "", s.errs
-	}
-
-	return genDgSchema(s.initSchema), nil
+func (s schemaHandler) DGSchema() string {
+	return s.dgraphSchema
 }
 
-func (s *SchemaHandler) bootStrap() {
-	if s.Input == "" {
-		s.errs = append(s.errs, gqlerror.Errorf("No schema specified"))
-		return
+// NewSchemaHandler processes the input schema, returns errorlist if any
+// and the schemaHandler object.
+func NewSchemaHandler(input string) (SchemaHandler, error) {
+	if input == "" {
+		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	if s.completeSchema != nil {
-		return
-	}
+	handler := schemaHandler{Input: input}
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: s.Input})
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
 	if gqlErr != nil {
-		s.errs = append(s.errs, gqlErr)
-		return
+		return nil, gqlErr
 	}
 
 	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
-		s.errs = append(s.errs, gqlErrList...)
-		return
+		return nil, gqlErrList
 	}
 
 	addScalars(doc)
-	addDirectives(doc)
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		s.errs = append(s.errs, gqlErr)
-		return
+		return nil, gqlErr
 	}
 
 	gqlErrList = postGQLValidation(sch)
 	if gqlErrList != nil {
-		s.errs = append(s.errs, gqlErrList...)
+		return nil, gqlErrList
 	}
 
-	s.initSchema = deepcopy.Copy(sch).(*ast.Schema)
+	handler.dgraphSchema = genDgSchema(sch)
 
-	GenerateCompleteSchema(sch)
-	s.completeSchema = sch
+	generateCompleteSchema(sch)
+	handler.completeSchema = sch
+	return handler, nil
 }
 
-// GenDgSchema generates Dgraph schema from a valid graphql schema.
+// genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema) string {
 	var typeStrings []string
 
+	// Sorting the keys so that the schema generated is always in the same order.
 	var keys []string
 	for k := range gqlSch.Types {
 		keys = append(keys, k)
@@ -127,14 +115,15 @@ func genDgSchema(gqlSch *ast.Schema) string {
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
 				case ast.Object:
-					// TODO: still need to reverse in here
-
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n", def.Name, f.Name, typStr)
 					fmt.Fprintf(&preds, "%s.%s: %s .\n", def.Name, f.Name, typStr)
 				case ast.Scalar:
-					typStr = fmt.Sprintf("%s%s%s", prefix, supportedScalars[f.Type.Name()].dgraphType, suffix)
+					typStr = fmt.Sprintf(
+						"%s%s%s",
+						prefix, supportedScalars[f.Type.Name()].dgraphType, suffix,
+					)
 					// TODO: indexes needed here
 					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
 						def.Name, f.Name, typStr)
@@ -147,7 +136,10 @@ func genDgSchema(gqlSch *ast.Schema) string {
 			}
 			fmt.Fprintf(&typeDef, "}\n")
 
-			typeStrings = append(typeStrings, fmt.Sprintf("%s%s", typeDef.String(), preds.String()))
+			typeStrings = append(
+				typeStrings,
+				fmt.Sprintf("%s%s", typeDef.String(), preds.String()),
+			)
 		}
 	}
 
