@@ -9,17 +9,27 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 ### Running locally
 
 1. Download and install hugo from [here](https://github.com/spf13/hugo/releases).
+
 2. From within the `wiki` folder, run the command below to get the theme.
 
 ```
 cd themes && git clone https://github.com/dgraph-io/hugo-docs
 ```
 
-3. Run `./scripts/local.sh` from within the `wiki` folder and goto `http://localhost:1313` to see the Wiki.
+3. (Optional) Open `./scripts/local.sh` with your favorite IDE and set the `DGRAPH_ENDPOINT` as per your requirement.
+
+Example:
+
+```sh
+export DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true"
+```
+
+
+4. Run `./scripts/local.sh` from within the `wiki` folder and goto `http://localhost:1313` to see the Wiki.
 
 We use `./scripts/local.sh` script to set env variables that our documentation theme internally uses.
 
-Now you can make changes to the docs and see them being updated instantly thanks to Hugo.
+If this *README.md* file is located at `$GOPATH/src/.../dgraph/wiki` then any changes to the docs can be seen being updated instantly.
 
 * While running locally, the version selector does not work because you need to build the documentation and serve it behind a reverse proxy to have multiple versions.
 
