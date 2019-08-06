@@ -19,6 +19,7 @@ package rdf
 import (
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -51,6 +52,10 @@ func sane(s string) bool {
 	return false
 }
 
+var pool = &sync.Pool{
+	New: func() interface{} { return &lex.Lexer{} },
+}
+
 // Parse parses a mutation string and returns the N-Quad representation for it.
 func Parse(line string) (api.NQuad, error) {
 	var rnq api.NQuad
@@ -59,7 +64,11 @@ func Parse(line string) (api.NQuad, error) {
 		return rnq, ErrEmpty
 	}
 
-	l := lex.NewLexer(line)
+	l := pool.Get().(*lex.Lexer)
+	defer pool.Put(l)
+	l.Reset(line)
+
+	// l := lex.NewLexer(line)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
 		return rnq, err
