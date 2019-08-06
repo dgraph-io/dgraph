@@ -23,8 +23,6 @@ import (
 
 	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 )
 
 type schRuleFunc func(schema *ast.SchemaDocument) gqlerror.List
@@ -80,25 +78,9 @@ func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-// GenerateCompleteSchema generates all the required query/mutation/update functions
+// generateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
-
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
-	if gqlErr != nil {
-		return nil, []*gqlerror.Error{gqlErr}
-	}
-
-	if gqlErrList := validateSchema(doc); gqlErrList != nil {
-		return nil, gqlErrList
-	}
-
-	addScalars(doc)
-
-	sch, gqlErr := validator.ValidateSchemaDocument(doc)
-	if gqlErr != nil {
-		return nil, []*gqlerror.Error{gqlErr}
-	}
+func generateCompleteSchema(sch *ast.Schema) {
 
 	extenderMap := make(map[string]*ast.Definition)
 
@@ -134,8 +116,6 @@ func GenerateCompleteSchema(inputSchema string) (*ast.Schema, gqlerror.List) {
 	for name, extType := range extenderMap {
 		sch.Types[name] = extType
 	}
-
-	return sch, nil
 }
 
 // AreEqualSchema checks if sch1 and sch2 are the same schema.
