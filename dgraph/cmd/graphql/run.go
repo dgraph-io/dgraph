@@ -188,9 +188,9 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	schHandler, errlist := gschema.NewSchemaHandler(inputSchema)
-	if errlist != nil {
-		return fmt.Errorf(errlist.Error())
+	schHandler, err := gschema.NewSchemaHandler(inputSchema)
+	if err != nil {
+		return err
 	}
 
 	completeSchema := schHandler.GQLSchema()

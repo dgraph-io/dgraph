@@ -44,7 +44,7 @@ func TestDGSchemaGen(t *testing.T) {
 			t.Run(sch.Name, func(t *testing.T) {
 
 				schHandler, errs := NewSchemaHandler(sch.Input)
-				require.Nil(t, errs, errs.Error())
+				require.Nil(t, errs)
 
 				dgSchema := schHandler.DGSchema()
 				require.Equal(t, sch.Output, dgSchema, sch.Name)
@@ -65,7 +65,7 @@ func TestSchemaString(t *testing.T) {
 		}
 
 		schHandler, errs := NewSchemaHandler(string(str1))
-		require.Nil(t, errs, errs.Error())
+		require.Nil(t, errs)
 
 		newSchemaStr := schHandler.GQLSchema()
 

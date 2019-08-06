@@ -48,16 +48,16 @@ func (s schemaHandler) DGSchema() string {
 
 // NewSchemaHandler processes the input schema, returns errorlist if any
 // and the schemaHandler object.
-func NewSchemaHandler(input string) (SchemaHandler, gqlerror.List) {
+func NewSchemaHandler(input string) (SchemaHandler, error) {
 	if input == "" {
-		return nil, []*gqlerror.Error{gqlerror.Errorf("No schema specified")}
+		return nil, gqlerror.Errorf("No schema specified")
 	}
 
 	handler := schemaHandler{Input: input}
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
 	if gqlErr != nil {
-		return nil, []*gqlerror.Error{gqlErr}
+		return nil, gqlErr
 	}
 
 	gqlErrList := validateSchema(doc)
@@ -69,7 +69,7 @@ func NewSchemaHandler(input string) (SchemaHandler, gqlerror.List) {
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
-		return nil, []*gqlerror.Error{gqlErr}
+		return nil, gqlErr
 	}
 
 	handler.dgraphSchema = genDgSchema(sch)
