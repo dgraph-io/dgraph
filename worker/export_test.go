@@ -30,8 +30,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/lex"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
@@ -45,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 
 	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
