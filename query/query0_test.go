@@ -1738,20 +1738,70 @@ func TestCountUidToVar(t *testing.T) {
 
 // len(valueVar) // ??
 
-func TestCountOnVar(t *testing.T) {
-	query := `
-	       {
-	               var(func: has(school), first: 3) {
-	                       f as uid
-	               }
+func TestFilterUsingLenFunction(t *testing.T) {
+	tests := []struct {
+		name, in, out string
+	}{
+		{
+			"Eq length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
 
-	               me(func: uid(f)) @filter(eq(len(f), 3)) {
-	                       score: math(f)
-	               }
-	       }
-		`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
+			    me(func: uid(f)) @filter(eq(len(f), 3)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Eq length should return empty results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(eq(len(f), 0)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 0}]}}`,
+		},
+		{
+			"Ge length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(ge(len(f), 0)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Lt length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(lt(len(f), 100)) {
+			        count(uid)
+			    }
+			}`,
+
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Log("Running: ", tc.name)
+		js := processQueryNoErr(t, tc.in)
+		require.JSONEq(t, tc.out, js)
+	}
 }
 
 func TestCountOnVarAtRootErr(t *testing.T) {
@@ -2122,8 +2172,8 @@ func TestDateTimeQuery(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = testutil.DgraphClient(testutil.SockAddr)
+	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
 
-	// populateCluster()
+	populateCluster()
 	os.Exit(m.Run())
 }
