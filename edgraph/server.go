@@ -906,9 +906,9 @@ func isAlterAllowed(ctx context.Context) error {
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
-	l := lex.NewLexer("")
+	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line), l)
+		nq, err := rdf.Parse(string(line), &l)
 		if err == rdf.ErrEmpty {
 			continue
 		}

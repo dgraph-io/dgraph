@@ -178,21 +178,13 @@ type Lexer struct {
 	Column     int     // the current column number corresponding to Start
 }
 
-// NewLexer returns a new Lexer instance based on the given input.
-func NewLexer(input string) *Lexer {
-	return &Lexer{
-		Input:  input,
-		Line:   1,
-		Column: 0,
-	}
-}
-
 // Reset resets Lexer fields. It reuses already allocated buffers.
 func (l *Lexer) Reset(input string) {
 	item := l.items // Pick the slice so we can reuse it.
 	*l = Lexer{}
 	l.Input = input
 	l.items = item[:0]
+	l.Line = 1
 }
 
 // ValidateResult verifies whether the entire input can be lexed without errors.
