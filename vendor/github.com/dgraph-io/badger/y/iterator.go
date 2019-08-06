@@ -47,14 +47,14 @@ func sizeVarint(x uint64) (n int) {
 }
 
 // EncodedSize is the size of the ValueStruct when encoded
-func (v *ValueStruct) EncodedSize() uint16 {
+func (v *ValueStruct) EncodedSize() uint32 {
 	sz := len(v.Value) + 2 // meta, usermeta.
 	if v.ExpiresAt == 0 {
-		return uint16(sz + 1)
+		return uint32(sz + 1)
 	}
 
 	enc := sizeVarint(v.ExpiresAt)
-	return uint16(sz + enc)
+	return uint32(sz + enc)
 }
 
 // Decode uses the length of the slice to infer the length of the Value field.
