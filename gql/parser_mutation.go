@@ -19,7 +19,6 @@ package gql
 import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/pkg/errors"
 )
 
 // ParseMutation parses a block into a mutation. Returns an object with a mutation or
@@ -139,7 +138,7 @@ func ParseMutationBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 
 	item := it.Item()
 	if item.Typ != itemLeftCurl {
-		return nil, errors.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
+		return nil, it.Errorf("Expected { at the start of block. Got: [%s]", item.Val)
 	}
 
 	for it.Next() {
