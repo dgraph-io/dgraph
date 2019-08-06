@@ -187,6 +187,13 @@ func NewLexer(input string) *Lexer {
 	}
 }
 
+func (l *Lexer) Reset(input string) {
+	item := l.items // Pick the slice so we can reuse it.
+	*l = Lexer{}
+	l.Input = input
+	l.items = item[:0]
+}
+
 // ValidateResult verifies whether the entire input can be lexed without errors.
 func (l *Lexer) ValidateResult() error {
 	it := l.NewIterator()
@@ -227,12 +234,13 @@ func (l *Lexer) Emit(t ItemType) {
 		// Let ItemEOF go through.
 		return
 	}
-	l.items = append(l.items, Item{
+	item := Item{
 		Typ:    t,
 		Val:    l.Input[l.Start:l.Pos],
 		line:   l.Line,
 		column: l.Column,
-	})
+	}
+	l.items = append(l.items, item)
 	l.moveStartToPos()
 }
 
