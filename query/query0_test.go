@@ -1811,6 +1811,43 @@ func TestFilterUsingLenFunction(t *testing.T) {
 
 			`{"data": {"me":[{"count": 5}]}}`,
 		},
+		{
+			"Filter in child with true result",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) {
+					name
+					friend @filter(lt(len(f), 100)) {
+						name
+					}
+				}
+			}`,
+			`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},
+			 {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},
+			 {"name":"Rick Grimes","friend":[{"name":"Michonne"}]},
+			 {"name":"Glenn Rhee"}]}}`,
+		},
+		{
+			"Filter in child with false result",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) {
+					name
+					friend @filter(gt(len(f), 100)) {
+						name
+					}
+				}
+			}`,
+
+			`{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},
+			 {"name":"Glenn Rhee"}]}}`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1835,6 +1872,22 @@ func TestCountOnVarAtRootErr(t *testing.T) {
 	_, err := processQuery(context.Background(), t, query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Function name: len is not valid")
+}
+
+func TestFilterUsingLenFunctionWithMath(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as count(uid)
+		}
+
+		me(func: uid(f)) @filter(lt(len(f), 100)) {
+			score: math(f)
+		}
+	}
+    `
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
 }
 
 func TestCountUidToVarMultiple(t *testing.T) {
