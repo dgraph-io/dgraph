@@ -64,7 +64,7 @@ const (
 func NewChunker(inputFormat InputFormat) Chunker {
 	switch inputFormat {
 	case RdfFormat:
-		return &rdfChunker{lexer: lex.NewLexer("")}
+		return &rdfChunker{lexer: &lex.Lexer{}}
 	case JsonFormat:
 		return &jsonChunker{}
 	default:

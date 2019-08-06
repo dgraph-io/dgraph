@@ -500,7 +500,8 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 	query := r.Str
 	vmap := convertToVarMap(r.Variables)
 
-	lexer := lex.NewLexer(query)
+	var lexer lex.Lexer
+	lexer.Reset(query)
 	lexer.Run(lexTopLevel)
 	if err := lexer.ValidateResult(); err != nil {
 		return res, err
