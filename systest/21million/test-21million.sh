@@ -4,12 +4,12 @@ readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
 QUERY_DIR=$SRCDIR/queries
-BENCHMARKS_REPO="https://github.com/dgraph-io/benchmarks"
-SCHEMA_URL="$BENCHMARKS_REPO/blob/master/data/21million.schema?raw=true"
-DATA_URL="$BENCHMARKS_REPO/blob/master/data/21million.rdf.gz?raw=true"
+BENCHMARKS_REPO="$GOPATH/src/github.com/dgraph-io/benchmarks"
+SCHEMA_FILE="$BENCHMARKS_REPO/data/21million.schema"
+DATA_FILE="$BENCHMARKS_REPO/data/21million.rdf.gz"
 
 # this may be used to load a smaller data set when testing the test itself
-#DATA_URL="$BENCHMARKS_REPO/blob/master/data/goldendata.rdf.gz?raw=true"
+#DATA_FILE="$BENCHMARKS_REPO/data/goldendata.rdf.gz"
 
 function Info {
     echo -e "INFO: $*"
@@ -80,17 +80,6 @@ if [[ -n $SAVEDIR ]]; then
     QUIET=yes
 fi
 
-# check data version to help distinguish diffs due to a change in the data
-# rather than a change in the code
-if [[ $LOADER != none ]]; then
-    Info "checking data set version"
-    VERSION_FILE=$(mktemp --tmpdir)
-    trap "rm -f $VERSION_FILE" EXIT
-    curl -LSs --head $SCHEMA_URL | awk 'toupper($0)~/^ETAG:/ {print "Schema:"$2}' >> $VERSION_FILE
-    curl -LSs --head $DATA_URL | awk 'toupper($0)~/^ETAG:/ {print "Data:"$2}' >> $VERSION_FILE
-    diff -bi $VERSION_FILE $QUERY_DIR/data-version || true
-fi
-
 Info "entering directory $SRCDIR"
 cd $SRCDIR
 
@@ -109,9 +98,9 @@ DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 if [[ $LOADER == bulk ]]; then
     Info "bulk loading data set"
-    DockerCompose run --name bulk_load --rm alpha1 \
+    DockerCompose run -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load --rm alpha1 \
         bash -s <<EOF
-            /gobin/dgraph bulk --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
+            /gobin/dgraph bulk --schema=$SCHEMA_FILE --files=$DATA_FILE \
                                --format=rdf --zero=zero1:5180 --out=/data/alpha1/bulk
             mv /data/alpha1/bulk/0/p /data/alpha1
 EOF
@@ -128,7 +117,7 @@ sleep 10
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
-    dgraph live --schema=<(curl -LSs $SCHEMA_URL) --files=<(curl -LSs $DATA_URL) \
+    dgraph live --schema=$SCHEMA_FILE --files=$DATA_FILE \
                 --format=rdf --zero=:5180 --alpha=:9180 --logtostderr
 fi
 
