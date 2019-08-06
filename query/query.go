@@ -110,10 +110,10 @@ type Latency struct {
 	Json       time.Duration `json:"json_conversion"`
 }
 
-// params contains the list of parameters required to execute a query.
+// params contains the list of parameters required to execute a SubGraph.
 type params struct {
 	Alias    string
-	Count    int         // Value of first parameter.
+	Count    int         // Value of "first" parameter in the query.
 	Offset   int         // Value of offset parameter.
 	AfterUID uint64      // Value of after
 	DoCount  bool        // True if count of predicate is requested instead of the value of predicate.
@@ -127,7 +127,7 @@ type params struct {
 	FacetOrder     string
 	FacetOrderDesc bool
 
-	// The name of the defined by this SubGraph.
+	// The name of the variable defined in this SubGraph.
 	// for e.g. in x as name, this would be x
 	Var string
 	// map of predicate to the facet variable alias
@@ -138,8 +138,9 @@ type params struct {
 
 	// ParentVars is a map of variables passed down recursively to children of a SubGraph in a query
 	// block. These are used to filter uids defined in a parent using a variable.
-	// TODO - This can potentially be simplified to a map[string]*pb.List since we don't support
-	// reading from value variables defined in the parent and other fields that are part of varValue.
+	// TODO (pawan) - This can potentially be simplified to a map[string]*pb.List since we don't
+	// support reading from value variables defined in the parent and other fields that are part
+	// of varValue.
 	ParentVars map[string]varValue
 
 	// mapping of uid to values. This is populated into a SubGraph from a value variable that is
@@ -194,9 +195,8 @@ type Function struct {
 	IsValueVar bool      // eq(val(s), 10)
 }
 
-// SubGraph is the way to represent data pb.y. It contains both the
-// query and the response. Once generated, this can then be encoded to other
-// client convenient formats, like GraphQL / JSON.
+// SubGraph is the way to represent data. It contains both the request parameters and the response.
+// Once generated, this can then be encoded to other client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	ReadTs      uint64
 	Cache       int
@@ -206,8 +206,8 @@ type SubGraph struct {
 	// execute this query.
 	Params params
 
-	// count stores the count of a predicate. There would be one value corresponding to each uid
-	// in SrcUIDs.
+	// count stores the count of an edge (predicate). There would be one value corresponding to each
+	// uid in SrcUIDs.
 	counts []uint32
 	// valueMatrix is a slice of ValueList. If this SubGraph is for a scalar predicate type, then
 	// there would be one list for each uid in SrcUIDs storing the value of the predicate.
@@ -861,7 +861,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 }
 
 // varValue is a generic representation of a variable and holds multiple things.
-// TODO - Come back to this and document what do individual fields mean and when are they populated.
+// TODO(pawan) - Come back to this and document what do individual fields mean and when are they
+// populated.
 type varValue struct {
 	Uids *pb.List // list of uids if this denotes a uid variable.
 	Vals map[uint64]types.Val
@@ -1199,7 +1200,7 @@ func (sg *SubGraph) updateUidMatrix() {
 
 // populateVarMap stores the value of the variable defined in this SubGraph into req.Vars so that it
 // is available to other queries as well. It is called after a query has been executed.
-// TODO - This function also transforms the DestUids and uidMatrix if the query is a cascade
+// TODO (pawan) - This function also transforms the DestUids and uidMatrix if the query is a cascade
 // query which should probably happen before.
 func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
@@ -1665,7 +1666,7 @@ func (sg *SubGraph) applyIneqFunc() error {
 			}
 		}
 	} else {
-		// This means its a function at root as SrcUIDs is nil
+		// This means it's a function at root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.uidToVal {
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
 				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
