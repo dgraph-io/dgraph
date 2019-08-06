@@ -25,10 +25,11 @@ import (
 )
 
 func init() {
-	addRule("OnlyTypeEnumInInitialSchema", dataTypeCheck)
-	addRule("OneIDPerType", idCountCheck)
-	addRule("TypeNameCantBeReservedKeyWords", nameCheck)
-	addRule("ValidListType", listValidityCheck)
+	addPreRule("OnlyTypeEnumInInitialSchema", dataTypeCheck)
+	addPreRule("TypeNameCantBeReservedKeyWords", nameCheck)
+
+	addPostRule("OneIDPerType", idCountCheck)
+	addPostRule("ValidListType", listValidityCheck)
 }
 
 func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
@@ -47,10 +48,10 @@ func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-func idCountCheck(sch *ast.SchemaDocument) gqlerror.List {
+func idCountCheck(sch *ast.Schema) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, typeVal := range sch.Definitions {
+	for _, typeVal := range sch.Types {
 		var idFields []*ast.FieldDefinition
 		for _, field := range typeVal.Fields {
 			if isIDField(typeVal, field) {
@@ -116,10 +117,10 @@ func nameCheck(sch *ast.SchemaDocument) gqlerror.List {
 }
 
 // [Posts]! -> invalid; [Posts!]!, [Posts!] -> valid
-func listValidityCheck(sch *ast.SchemaDocument) gqlerror.List {
+func listValidityCheck(sch *ast.Schema) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, typ := range sch.Definitions {
+	for _, typ := range sch.Types {
 		for _, field := range typ.Fields {
 			if field.Type.Elem != nil && field.Type.NonNull && !field.Type.Elem.NonNull {
 				errs = append(errs, gqlerror.ErrorPosf(
