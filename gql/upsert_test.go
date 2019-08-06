@@ -312,3 +312,153 @@ func TestUpsertWithFilter(t *testing.T) {
 	_, err := ParseMutation(query)
 	require.Nil(t, err)
 }
+
+func TestConditionalUpsertWithNewlines(t *testing.T) {
+	query := `upsert {
+  mutation @if(eq(len(m), 1)
+               AND
+               gt(len(f), 0)) {
+    set {
+      uid(m) <age> "45" .
+      uid(f) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      m as uid
+      friend {
+        f as uid
+        age
+      }
+    }
+  }
+}
+`
+	_, err := ParseMutation(query)
+	require.Nil(t, err)
+}
+
+func TestConditionalUpsertFuncTree(t *testing.T) {
+	query := `upsert {
+  mutation @if( ( eq(len(m), 1)
+                  OR
+                  lt(90, len(h)))
+                AND
+                gt(len(f), 0)) {
+    set {
+      uid(m) <age> "45" .
+      uid(f) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      uid
+      friend {
+        uid
+        age
+      }
+    }
+  }
+}
+`
+	_, err := ParseMutation(query)
+	require.Nil(t, err)
+}
+
+func TestConditionalUpsertMultipleFuncArg(t *testing.T) {
+	query := `upsert {
+  mutation @if( ( eq(len(m), len(t))
+                  OR
+                  lt(90, len(h)))
+                AND
+                gt(len(f), 0)) {
+    set {
+      uid(m) <age> "45" .
+      uid(f) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      uid
+      friend {
+        uid
+        age
+      }
+    }
+  }
+}
+`
+	_, err := ParseMutation(query)
+	require.Nil(t, err)
+}
+
+func TestConditionalUpsertErrMissingRightRound(t *testing.T) {
+	query := `upsert {
+  mutation @if(eq(len(m, 1)
+               AND
+               gt(len(f), 0)) {
+    set {
+      uid(m) <age> "45" .
+      uid(f) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      uid
+      friend {
+        uid
+        age
+      }
+    }
+  }
+}
+`
+	_, err := ParseMutation(query)
+	require.Contains(t, err.Error(), "Matching brackets not found")
+}
+
+func TestConditionalUpsertErrUnclosed(t *testing.T) {
+	query := `upsert {
+  mutation @if(eq(len(m), 1) AND gt(len(f), 0))`
+	_, err := ParseMutation(query)
+	require.Contains(t, err.Error(), "Unclosed mutation action")
+}
+
+func TestConditionalUpsertErrInvalidIf(t *testing.T) {
+	query := `upsert {
+  mutation @if`
+	_, err := ParseMutation(query)
+	require.Contains(t, err.Error(), "Matching brackets not found")
+}
+
+func TestConditionalUpsertErrWrongIf(t *testing.T) {
+	query := `upsert {
+  mutation @fi( ( eq(len(m), 1)
+                  OR
+                  lt(len(h), 90))
+                AND
+                gt(len(f), 0)) {
+    set {
+      uid(m) <age> "45" .
+      uid(f) <age> "45" .
+    }
+  }
+
+  query {
+    me(func: eq(age, 34)) @filter(ge(name, "user")) {
+      uid
+      friend {
+        uid
+        age
+      }
+    }
+  }
+}
+`
+	_, err := ParseMutation(query)
+	require.Contains(t, err.Error(), "Expected @if, found [@fi]")
+}
