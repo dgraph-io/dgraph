@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package z
+package testutil
 
 import (
 	"encoding/json"
@@ -109,9 +109,9 @@ func sdiffJSON(wantBuf, gotBuf []byte, savepath string, quiet bool) string {
 		wantFile, _ = os.Create(savepath + ".expected.json")
 		gotFile, _ = os.Create(savepath + ".received.json")
 	} else {
-		wantFile, _ = ioutil.TempFile("", "z.expected.json.*")
+		wantFile, _ = ioutil.TempFile("", "testutil.expected.json.*")
 		defer os.RemoveAll(wantFile.Name())
-		gotFile, _ = ioutil.TempFile("", "z.expected.json.*")
+		gotFile, _ = ioutil.TempFile("", "testutil.expected.json.*")
 		defer os.RemoveAll(gotFile.Name())
 	}
 

@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 )
 
@@ -59,7 +59,7 @@ type suiteOpts struct {
 }
 
 func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	err := dg.Alter(context.Background(), &api.Operation{
 		DropAll: true,
 	})
@@ -155,8 +155,8 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 			"--files", rdfFile,
 			"--schema", schemaFile,
-			"--alpha", z.SockAddr,
-			"--zero", z.SockAddrZero,
+			"--alpha", testutil.SockAddr,
+			"--zero", testutil.SockAddrZero,
 		)
 		liveCmd.Dir = liveDir
 		if out, err := liveCmd.Output(); err != nil {
@@ -185,7 +185,7 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 	return func(t *testing.T) {
 		if !s.opts.skipLiveLoader {
 			// Check results of the live loader.
-			dg := z.DgraphClientWithGroot(z.SockAddr)
+			dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 
@@ -194,12 +194,12 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
-			z.CompareJSON(t, wantResult, string(resp.GetJson()))
+			testutil.CompareJSON(t, wantResult, string(resp.GetJson()))
 		}
 
 		if !s.opts.skipBulkLoader {
 			// Check results of the bulk loader.
-			dg := z.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
+			dg := testutil.DgraphClient("localhost:" + s.bulkCluster.alphaPort)
 			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel2()
 
@@ -208,7 +208,7 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
-			z.CompareJSON(t, wantResult, string(resp.GetJson()))
+			testutil.CompareJSON(t, wantResult, string(resp.GetJson()))
 		}
 	}
 }
