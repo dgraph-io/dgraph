@@ -91,20 +91,14 @@ func lexIdentifyBlock(l *lex.Lexer) lex.StateFn {
 
 // lexNameBlock lexes the blocks, for now, only upsert block
 func lexNameBlock(l *lex.Lexer) lex.StateFn {
-	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		switch word := l.Input[l.Start:l.Pos]; word {
-		case "upsert":
-			l.Emit(itemUpsertBlock)
-			return lexUpsertBlock
-		default:
-			return l.Errorf("Invalid block: [%s]", word)
-		}
+	// The caller already checked isNameBegin, and absorbed one rune.
+	l.AcceptRun(isNameSuffix)
+	switch word := l.Input[l.Start:l.Pos]; word {
+	case "upsert":
+		l.Emit(itemUpsertBlock)
+		return lexUpsertBlock
+	default:
+		return l.Errorf("Invalid block: [%s]", word)
 	}
 }
 
@@ -138,59 +132,76 @@ func lexUpsertBlock(l *lex.Lexer) lex.StateFn {
 
 // lexNameUpsertOp parses the operation names inside upsert block
 func lexNameUpsertOp(l *lex.Lexer) lex.StateFn {
-	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		word := l.Input[l.Start:l.Pos]
-		switch word {
-		case "query":
-			l.Emit(itemUpsertBlockOp)
-			return lexBlockContent
-		case "mutation":
-			l.Emit(itemUpsertBlockOp)
-			return lexInsideMutation
-		case "fragment":
-			l.Emit(itemUpsertBlockOp)
-			return lexBlockContent
-		default:
-			return l.Errorf("Invalid operation type: %s", word)
-		}
+	// The caller already checked isNameBegin, and absorbed one rune.
+	l.AcceptRun(isNameSuffix)
+	word := l.Input[l.Start:l.Pos]
+	switch word {
+	case "query":
+		l.Emit(itemUpsertBlockOp)
+		return lexBlockContent
+	case "mutation":
+		l.Emit(itemUpsertBlockOp)
+		return lexInsideMutation
+	case "fragment":
+		l.Emit(itemUpsertBlockOp)
+		return lexBlockContent
+	default:
+		return l.Errorf("Invalid operation type: %s", word)
 	}
 }
 
 // lexBlockContent lexes and absorbs the text inside a block (covered by braces).
 func lexBlockContent(l *lex.Lexer) lex.StateFn {
+	return lexContent(l, leftCurl, rightCurl, lexUpsertBlock)
+}
+
+// lexIfContent lexes the whole of @if directive in a mutation block (covered by small brackets)
+func lexIfContent(l *lex.Lexer) lex.StateFn {
+	if r := l.Next(); r != at {
+		return l.Errorf("Expected [@], found; [%#U]", r)
+	}
+
+	l.AcceptRun(isNameSuffix)
+	word := l.Input[l.Start:l.Pos]
+	if word != "@if" {
+		return l.Errorf("Expected @if, found [%v]", word)
+	}
+
+	return lexContent(l, '(', ')', lexInsideMutation)
+}
+
+func lexContent(l *lex.Lexer, leftRune, rightRune rune, returnTo lex.StateFn) lex.StateFn {
 	depth := 0
 	for {
 		switch l.Next() {
 		case lex.EOF:
-			return l.Errorf("Unclosed block (matching braces not found)")
+			return l.Errorf("Matching brackets not found")
 		case quote:
 			if err := l.LexQuotedString(); err != nil {
 				return l.Errorf(err.Error())
 			}
-		case leftCurl:
+		case leftRune:
 			depth++
-		case rightCurl:
+		case rightRune:
 			depth--
 			if depth < 0 {
-				return l.Errorf("Unopened } found")
+				return l.Errorf("Unopened %c found", rightRune)
 			} else if depth == 0 {
 				l.Emit(itemUpsertBlockOpContent)
-				return lexUpsertBlock
+				return returnTo
 			}
 		}
 	}
+
 }
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexInsideMutation
 	for {
 		switch r := l.Next(); {
+		case r == at:
+			l.Backup()
+			return lexIfContent
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
@@ -586,10 +597,8 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemOpType)
 		return lexInsideSchema
 	} else {
-		l.Errorf("Invalid operation type: %s", word)
+		return l.Errorf("Invalid operation type: %s", word)
 	}
-
-	return lexQuery
 }
 
 // lexArgName lexes and emits the name part of an argument.

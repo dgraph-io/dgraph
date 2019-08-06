@@ -326,6 +326,13 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if condText, ok := ms["cond"]; ok && condText != nil {
+			mu.Cond, err = strconv.Unquote(string(condText.bs))
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+		}
 
 	case "application/rdf":
 		// Parse N-Quads.
