@@ -562,7 +562,7 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 				return res, err
 			}
 
-			// Substitute all variables with corresponding values
+			// Substitute all graphql variables with corresponding values
 			if err := substituteVariables(qu, vmap); err != nil {
 				return res, err
 			}

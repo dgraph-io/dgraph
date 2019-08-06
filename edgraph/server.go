@@ -576,41 +576,60 @@ func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
 		return l, nil
 	}
 
+	queryWithIf := mu.Query
+	if strings.TrimSpace(mu.Cond) != "" {
+		cond := strings.Replace(mu.Cond, "@if", "@filter", 1)
+		queryWithIf = mu.Query + `\n var(func: uid(0x01)) ` + cond + ` {_uid_ as uid}`
+	}
+
 	needVars := findVars(gmu)
+	needVars = append(needVars, "_uid_")
 	startParsingTime := time.Now()
 	parsedReq, err := gql.ParseWithNeedVars(gql.Request{
-		Str:       mu.Query,
+		Str:       queryWithIf,
 		Variables: make(map[string]string),
 	}, needVars)
 	l.Parsing += time.Since(startParsingTime)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while parsing query: %q", mu.Query)
+		return nil, errors.Wrapf(err, "while parsing query: %q", queryWithIf)
 	}
 	if err := validateQuery(parsedReq.Query); err != nil {
-		return nil, errors.Wrapf(err, "while validating query: %q", mu.Query)
+		return nil, errors.Wrapf(err, "while validating query: %q", queryWithIf)
 	}
 
 	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: mu.StartTs}
 	if err := qr.ProcessQuery(ctx); err != nil {
-		return nil, errors.Wrapf(err, "while processing query: %q", mu.Query)
+		return nil, errors.Wrapf(err, "while processing query: %q", queryWithIf)
 	}
 
 	if len(qr.Vars) <= 0 {
 		return nil, errors.Errorf("upsert query block has no variables")
 	}
 
-	// TODO(Aman): allow multiple values for each variable.
 	// If a variable doesn't have any UID, we generate one ourselves later.
-	varToUID := make(map[string]string)
+	varToUID := make(map[string][]string)
 	for name, v := range qr.Vars {
 		if v.Uids == nil {
 			continue
 		}
-		if len(v.Uids.Uids) > 1 {
-			return nil, errors.Errorf("more than one values found for var (%s)", name)
-		} else if len(v.Uids.Uids) == 1 {
-			varToUID[name] = fmt.Sprintf("%d", v.Uids.Uids[0])
+
+		if len(v.Uids.Uids) > 0 {
+			uids := make([]string, len(v.Uids.Uids))
+			for i, u := range v.Uids.Uids {
+				uids[i] = fmt.Sprintf("%d", u)
+			}
+
+			varToUID[name] = uids
 		}
+	}
+
+	// Conditional mutation, we simply return in case condition is false
+	v, ok := qr.Vars["_uid_"]
+	isMut := ok && (len(v.Uids.Uids) == 1)
+	if !isMut {
+		gmu.Set = nil
+		gmu.Del = nil
+		return l, nil
 	}
 
 	updateMutations(gmu, varToUID)
@@ -649,39 +668,63 @@ func findVars(gmu *gql.Mutation) []string {
 // updateMutations does following transformations:
 //   * uid(v) -> 0x123     -- If v is defined in query block
 //   * uid(v) -> _:uid(v)  -- Otherwise
-func updateMutations(gmu *gql.Mutation, varToUID map[string]string) {
-	getNewVal := func(s string) string {
+func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+	getNewVal := func(s string) []string {
 		if strings.HasPrefix(s, "uid(") {
 			varName := s[4 : len(s)-1]
-			if uid, ok := varToUID[varName]; ok {
-				return uid
+			if uids, ok := varToUID[varName]; ok {
+				return uids
 			}
 
-			return "_:" + s
+			return []string{"_:" + s}
 		}
 
-		return s
+		return []string{s}
+	}
+
+	getNewNQuad := func(nq *api.NQuad, s, o string) *api.NQuad {
+		// The following copy is fine because we only modify Subject and ObjectId.
+		// The pointer values are not modified across different copies of NQuad.
+		n := *nq
+
+		n.Subject = s
+		n.ObjectId = o
+		return &n
 	}
 
 	// Remove the mutations from gmu.Del when no UID was found.
-	gmuDel := gmu.Del[:0]
+	gmuDel := make([]*api.NQuad, 0, len(gmu.Del))
 	for _, nq := range gmu.Del {
-		nq.Subject = getNewVal(nq.Subject)
-		nq.ObjectId = getNewVal(nq.ObjectId)
+		newSubs := getNewVal(nq.Subject)
+		newObs := getNewVal(nq.ObjectId)
 
-		if !strings.HasPrefix(nq.Subject, "_:uid(") &&
-			!strings.HasPrefix(nq.ObjectId, "_:uid(") {
+		for _, s := range newSubs {
+			for _, o := range newObs {
+				// Blank node has no meaning in case of deletion.
+				if strings.HasPrefix(s, "_:uid(") ||
+					strings.HasPrefix(o, "_:uid(") {
+					continue
+				}
 
-			gmuDel = append(gmuDel, nq)
+				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
+			}
 		}
 	}
 	gmu.Del = gmuDel
 
 	// Update the values in mutation block from the query block.
+	gmuSet := make([]*api.NQuad, 0, len(gmu.Set))
 	for _, nq := range gmu.Set {
-		nq.Subject = getNewVal(nq.Subject)
-		nq.ObjectId = getNewVal(nq.ObjectId)
+		newSubs := getNewVal(nq.Subject)
+		newObs := getNewVal(nq.ObjectId)
+
+		for _, s := range newSubs {
+			for _, o := range newObs {
+				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
+			}
+		}
 	}
+	gmu.Set = gmuSet
 }
 
 // Query handles queries and returns the data.
