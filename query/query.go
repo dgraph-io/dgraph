@@ -168,6 +168,7 @@ type Function struct {
 	Args       []gql.Arg // Contains the arguments of the function.
 	IsCount    bool      // gt(count(friends),0)
 	IsValueVar bool      // eq(val(s), 10)
+	IsLenVar   bool      // eq(len(s), 10)
 }
 
 // SubGraph is the way to represent data pb.y. It contains both the
@@ -235,6 +236,7 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 		Args:       append(gf.Args[:0:0], gf.Args...),
 		IsCount:    gf.IsCount,
 		IsValueVar: gf.IsValueVar,
+		IsLenVar:   gf.IsLenVar,
 	}
 
 	// type function is just an alias for eq(type, "dgraph.type").
@@ -243,6 +245,7 @@ func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
 		sg.SrcFunc.Name = "eq"
 		sg.SrcFunc.IsCount = false
 		sg.SrcFunc.IsValueVar = false
+		sg.SrcFunc.IsLenVar = false
 		return
 	}
 
@@ -2072,6 +2075,22 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			if parent != nil {
 				rch <- err
 				return
+			}
+		} else if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsLenVar {
+			val := sg.SrcFunc.Args[0].Value
+			src := types.Val{Tid: types.StringID, Value: []byte(val)}
+			dst, err := types.Convert(src, types.IntID)
+			if err != nil {
+				// TODO(Aman): needs to do parent check?
+				rch <- errors.Errorf("Invalid argment %v. Comparing with different type", val)
+				return
+			}
+
+			curVal := types.Val{Tid: types.IntID, Value: int64(len(sg.SrcUIDs.Uids))}
+			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
+				sg.DestUIDs.Uids = sg.SrcUIDs.Uids
+			} else {
+				sg.DestUIDs.Uids = nil
 			}
 		} else {
 			taskQuery, err := createTaskQuery(sg)

@@ -1732,6 +1732,45 @@ func TestCountUidToVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
 }
 
+// gt(pred, len(v)) // NOT OK
+// gt(len(v), 5)    // OK
+// gt(count(pred), len(v)) // NOT OK
+
+// len(valueVar) // ??
+
+func TestCountOnVar(t *testing.T) {
+	query := `
+	       {
+	               var(func: has(school), first: 3) {
+	                       f as uid
+	               }
+
+	               me(func: uid(f)) @filter(eq(len(f), 3)) {
+	                       score: math(f)
+	               }
+	       }
+		`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
+}
+
+func TestCountOnVarAtRootErr(t *testing.T) {
+	query := `
+	       {
+	               var(func: has(school), first: 3) {
+	                       f as count(uid)
+	               }
+
+	               me(func: len(f)) {
+	                       score: math(f)
+	               }
+	       }
+	    `
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: len is not valid")
+}
+
 func TestCountUidToVarMultiple(t *testing.T) {
 	query := `
 	{
@@ -2083,8 +2122,8 @@ func TestDateTimeQuery(t *testing.T) {
 var client *dgo.Dgraph
 
 func TestMain(m *testing.M) {
-	client = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	client = testutil.DgraphClient(testutil.SockAddr)
 
-	populateCluster()
+	// populateCluster()
 	os.Exit(m.Run())
 }
