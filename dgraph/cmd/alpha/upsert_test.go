@@ -17,13 +17,13 @@
 package alpha
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -793,4 +793,413 @@ upsert {
 }`
 	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, true, 0)
 	require.NoError(t, err)
+}
+
+func TestConditionalUpsertExample0(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+
+	// Mutation with wrong name
+	m1 := `
+upsert {
+  mutation @if(eq(len(v), 0)) {
+    set {
+      uid(v) <name> "Wrong" .
+      uid(v) <email> "ashish@dgraph.io" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	keys, preds, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	require.True(t, contains(preds, "email"))
+	require.True(t, contains(preds, "name"))
+
+	// query should return the wrong name
+	q1 := `
+{
+  q(func: has(email)) {
+    uid
+    name
+    email
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Wrong")
+
+	// mutation with correct name
+	m2 := `
+upsert {
+  mutation @if(eq(len(v), 1)) {
+    set {
+      uid(v) <name> "Ashish" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	keys, preds, _, err = mutationWithTs(m2, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	require.True(t, contains(preds, "name"))
+
+	// query should return correct name
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Ashish")
+}
+
+func TestConditionalUpsertExample0JSON(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`email: string @index(exact) .`))
+
+	// Mutation with wrong name
+	m1 := `
+{
+  "query": "{me(func: eq(email, \"ashish@dgraph.io\")) {v as uid}}",
+  "cond": " @if(eq(len(v), 0)) ",
+  "set": [
+    {
+      "uid": "uid(v)",
+      "name": "Wrong"
+    },
+    {
+      "uid": "uid(v)",
+      "email": "ashish@dgraph.io"
+    }
+  ]
+}`
+	keys, _, _, err := mutationWithTs(m1, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+
+	// query should return the wrong name
+	q1 := `
+{
+  q(func: has(email)) {
+    uid
+    name
+    email
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Wrong")
+
+	// mutation with correct name
+	m2 := `
+{
+  "query": "{me(func: eq(email, \"ashish@dgraph.io\")) {v as uid}}",
+  "cond": "@if(eq(len(v), 1))",
+  "set": [
+    {
+      "uid": "uid(v)",
+      "name": "Ashish"
+    }
+  ]
+}`
+	keys, preds, _, err := mutationWithTs(m2, "application/json", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	require.True(t, contains(preds, "name"))
+
+	// query should return correct name
+	res, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "Ashish")
+}
+
+func populateCompanyData(t *testing.T) {
+	require.NoError(t, alterSchema(`
+email: string @index(exact) .
+works_for: string @index(exact) .
+works_with: [uid] .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <email> "user1@company1.io" .
+    _:user1 <works_for> "company1" .
+
+    _:user2 <name> "user2" .
+    _:user2 <email> "user2@company1.io" .
+    _:user2 <works_for> "company1" .
+
+    _:user3 <name> "user3" .
+    _:user3 <email> "user3@company2.io" .
+    _:user3 <works_for> "company2" .
+
+    _:user4 <name> "user4" .
+    _:user4 <email> "user4@company2.io" .
+    _:user4 <works_for> "company2" .
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+}
+
+func TestUpsertMultiValue(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	// add color to all employees of company1
+	m2 := `
+upsert {
+  mutation {
+    set {
+      uid(u) <color> "red" .
+    }
+  }
+
+  query {
+    me(func: eq(works_for, "company1")) {
+      u as uid
+    }
+  }
+}`
+	keys, preds, _, err := mutationWithTs(m2, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(keys) == 0)
+	require.True(t, contains(preds, "color"))
+	require.False(t, contains(preds, "works_for"))
+
+	q2 := `
+{
+  q(func: eq(works_for, "%s")) {
+    name
+    works_for
+    color
+    works_with
+  }
+}`
+	res, _, err := queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_for":"company1","color":"red"},`+
+		`{"name":"user2","works_for":"company1","color":"red"}]}}`, res)
+
+	// delete color for employess of company1 and set color for employees of company2
+	m3 := `
+upsert {
+  mutation @if(le(len(c1), 100) AND lt(len(c2), 100)) {
+    delete {
+      uid(c1) <color> * .
+    }
+
+    set {
+      uid(c2) <color> "blue" .
+    }
+  }
+
+  query {
+    c1 as var(func: eq(works_for, "company1"))
+    c2 as var(func: eq(works_for, "company2"))
+  }
+}`
+	keys, preds, _, err = mutationWithTs(m3, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	// The following mutation should have no effect on the state of the database
+	m4 := `
+upsert {
+  mutation @if(gt(len(c1), 2) OR ge(len(c2), 3)) {
+    delete {
+      uid(c1) <color> * .
+    }
+
+    set {
+      uid(c2) <color> "blue" .
+    }
+  }
+
+  query {
+    c1 as var(func: eq(works_for, "company1"))
+    c2 as var(func: eq(works_for, "company2"))
+  }
+}`
+	keys, preds, _, err = mutationWithTs(m4, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_for":"company1"},`+
+		`{"name":"user2","works_for":"company1"}]}}`, res)
+
+	res, _, err = queryWithTs(fmt.Sprintf(q2, "company2"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user3","works_for":"company2","color":"blue"},`+
+		`{"name":"user4","works_for":"company2","color":"blue"}]}}`, res)
+}
+
+func TestUpsertMultiValueEdge(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	// All employees of company1 now works with all employees of company2
+	m1 := `
+upsert {
+  mutation @if(eq(len(c1), 2) AND eq(len(c2), 2)) {
+    set {
+      uid(c1) <works_with> uid(c2) .
+      uid(c2) <works_with> uid(c1) .
+    }
+  }
+
+  query {
+    c1 as var(func: eq(works_for, "company1"))
+    c2 as var(func: eq(works_for, "company2"))
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: eq(works_for, "%s")) {
+    name
+    works_with {
+      name
+    }
+  }
+}`
+	res, _, err := queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user2","works_with":[{"name":"user3"},{"name":"user4"}]},`+
+		`{"name":"user1","works_with":[{"name":"user3"},{"name":"user4"}]}]}}`, res)
+
+	res, _, err = queryWithTs(fmt.Sprintf(q1, "company2"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user3","works_with":[{"name":"user1"},{"name":"user2"}]},`+
+		`{"name":"user4","works_with":[{"name":"user1"},{"name":"user2"}]}]}}`, res)
+
+	// user1 and user3 do not work with each other anymore
+	m2 := `
+upsert {
+  mutation @if(eq(len(u1), 1) AND eq(len(u3), 1)) {
+    delete {
+      uid (u1) <works_with> uid (u3) .
+      uid (u3) <works_with> uid (u1) .
+    }
+  }
+
+  query {
+    u1 as var(func: eq(email, "user1@company1.io"))
+    u3 as var(func: eq(email, "user3@company2.io"))
+  }
+}`
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(fmt.Sprintf(q1, "company1"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user1","works_with":[{"name":"user4"}]},`+
+		`{"name":"user2","works_with":[{"name":"user4"},{"name":"user3"}]}]}}`, res)
+
+	res, _, err = queryWithTs(fmt.Sprintf(q1, "company2"), "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"data":{"q":[{"name":"user3","works_with":[{"name":"user2"}]},`+
+		`{"name":"user4","works_with":[{"name":"user1"},{"name":"user2"}]}]}}`, res)
+}
+
+func TestConditionalUpsertWithFilterErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	m1 := `
+upsert {
+  mutation @filter(eq(len(v), 0)) {
+    set {
+      uid(v) <name> "Wrong" .
+      uid(v) <email> "ashish@dgraph.io" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Expected @if, found [@filter]")
+}
+
+func TestConditionalUpsertMissingAtErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	m1 := `
+upsert {
+  mutation if(eq(len(v), 0)) {
+    set {
+      uid(v) <name> "Wrong" .
+      uid(v) <email> "ashish@dgraph.io" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), `Unrecognized character inside mutation: U+0028 '('`)
+}
+
+func TestConditionalUpsertDoubleIfErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	m1 := `
+upsert {
+  mutation @if(eq(len(v), 0)) @if(eq(len(v), 0)) {
+    set {
+      uid(v) <name> "Wrong" .
+      uid(v) <email> "ashish@dgraph.io" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Expected { at the start of block")
+}
+
+func TestConditionalUpsertMissingRightRoundErr(t *testing.T) {
+	require.NoError(t, dropAll())
+	populateCompanyData(t)
+
+	m1 := `
+upsert {
+  mutation @if(eq(len(v), 0) {
+    set {
+      uid(v) <name> "Wrong" .
+      uid(v) <email> "ashish@dgraph.io" .
+    }
+  }
+
+  query {
+    me(func: eq(email, "ashish@dgraph.io")) {
+      v as uid
+    }
+  }
+}`
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.Contains(t, err.Error(), "Matching brackets not found")
 }
