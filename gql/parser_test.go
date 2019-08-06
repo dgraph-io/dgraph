@@ -22,6 +22,8 @@ import (
 	"runtime/debug"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/lex"
+
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/stretchr/testify/require"
@@ -4438,9 +4440,10 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 }
 
 func parseNquads(b []byte) ([]*api.NQuad, error) {
+	l := lex.NewLexer("")
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line))
+		nq, err := rdf.Parse(string(line), l)
 		if err == rdf.ErrEmpty {
 			continue
 		}

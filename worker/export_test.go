@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/lex"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
@@ -94,8 +96,9 @@ func populateGraphExport(t *testing.T) {
 		"6": 6,
 	}
 
+	l := lex.NewLexer("")
 	for _, edge := range rdfEdges {
-		nq, err := rdf.Parse(edge)
+		nq, err := rdf.Parse(edge, l)
 		require.NoError(t, err)
 		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
@@ -215,8 +218,10 @@ func TestExportRdf(t *testing.T) {
 
 	scanner := bufio.NewScanner(r)
 	count := 0
+
+	l := lex.NewLexer("")
 	for scanner.Scan() {
-		nq, err := rdf.Parse(scanner.Text())
+		nq, err := rdf.Parse(scanner.Text(), l)
 		require.NoError(t, err)
 		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6"}, nq.Subject)
 		if nq.ObjectValue != nil {

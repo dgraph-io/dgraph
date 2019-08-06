@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/lex"
 
 	"github.com/pkg/errors"
 )
@@ -44,7 +45,7 @@ type Chunker interface {
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
 }
 
-type rdfChunker struct{}
+type rdfChunker struct{ lexer *lex.Lexer }
 type jsonChunker struct{}
 
 // InputFormat represents the multiple formats supported by Chunker.
@@ -63,7 +64,7 @@ const (
 func NewChunker(inputFormat InputFormat) Chunker {
 	switch inputFormat {
 	case RdfFormat:
-		return &rdfChunker{}
+		return &rdfChunker{lexer: lex.NewLexer("")}
 	case JsonFormat:
 		return &jsonChunker{}
 	default:
@@ -112,7 +113,7 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
-func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (r *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
@@ -124,7 +125,7 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 			x.Check(err)
 		}
 
-		nq, err := rdf.Parse(str)
+		nq, err := rdf.Parse(str, r.lexer)
 		if err == rdf.ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
