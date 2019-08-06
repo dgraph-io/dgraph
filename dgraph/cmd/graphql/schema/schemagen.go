@@ -71,7 +71,7 @@ func (s *SchemaHandler) bootStrap() {
 		return
 	}
 
-	gqlErrList := validateSchema(doc)
+	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
 		s.errs = append(s.errs, gqlErrList...)
 		return
@@ -84,6 +84,11 @@ func (s *SchemaHandler) bootStrap() {
 	if gqlErr != nil {
 		s.errs = append(s.errs, gqlErr)
 		return
+	}
+
+	gqlErrList = postGQLValidation(sch)
+	if gqlErrList != nil {
+		s.errs = append(s.errs, gqlErrList...)
 	}
 
 	s.initSchema = deepcopy.Copy(sch).(*ast.Schema)
