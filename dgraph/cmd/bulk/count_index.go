@@ -48,8 +48,8 @@ type countIndexer struct {
 // required by the schema. This method expects keys to be passed into it in
 // sorted order.
 func (c *countIndexer) addUid(rawKey []byte, count int) {
-	key := x.Parse(rawKey)
-	if key == nil || (!key.IsData() && !key.IsReverse()) {
+	key, err := x.Parse(rawKey)
+	if err != nil || (!key.IsData() && !key.IsReverse()) {
 		return
 	}
 	sameIndexKey := key.Attr == c.cur.pred && key.IsReverse() == c.cur.rev

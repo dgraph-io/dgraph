@@ -249,8 +249,8 @@ BUCKETS:
 		case <-ctx.Done():
 			return resultWithError(ctx.Err())
 		default:
-			k := x.Parse(key)
-			if k == nil {
+			k, err := x.Parse(key)
+			if err != nil {
 				continue
 			}
 
@@ -258,7 +258,7 @@ BUCKETS:
 			token := k.Term
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
-			err := intersectBucket(ctx, ts, token, out)
+			err = intersectBucket(ctx, ts, token, out)
 			switch err {
 			case errDone:
 				break BUCKETS

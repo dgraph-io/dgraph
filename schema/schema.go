@@ -357,13 +357,13 @@ func LoadSchemaFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		pk := x.Parse(key)
-		if pk == nil {
+		pk, err := x.Parse(key)
+		if err != nil {
 			continue
 		}
 		attr := pk.Attr
 		var s pb.SchemaUpdate
-		err := item.Value(func(val []byte) error {
+		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
 				s = pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_DEFAULT}
 			}
@@ -392,13 +392,13 @@ func LoadTypesFromDb() error {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		pk := x.Parse(key)
-		if pk == nil {
+		pk, err := x.Parse(key)
+		if err != nil {
 			continue
 		}
 		attr := pk.Attr
 		var t pb.TypeUpdate
-		err := item.Value(func(val []byte) error {
+		err = item.Value(func(val []byte) error {
 			if len(val) == 0 {
 				t = pb.TypeUpdate{TypeName: attr}
 			}
