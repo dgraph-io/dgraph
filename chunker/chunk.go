@@ -45,7 +45,10 @@ type Chunker interface {
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
 }
 
-type rdfChunker struct{ lexer *lex.Lexer }
+type rdfChunker struct {
+	lexer *lex.Lexer
+}
+
 type jsonChunker struct{}
 
 // InputFormat represents the multiple formats supported by Chunker.
@@ -73,7 +76,7 @@ func NewChunker(inputFormat InputFormat) Chunker {
 }
 
 // RDF files don't require any special processing at the beginning of the file.
-func (rdfChunker) Begin(r *bufio.Reader) error {
+func (c *rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
@@ -81,7 +84,7 @@ func (rdfChunker) Begin(r *bufio.Reader) error {
 // 1) the EOF is reached
 // 2) 1e5 lines have been read
 // 3) some unexpected error happened
-func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
@@ -126,7 +129,7 @@ func (r *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 			x.Check(err)
 		}
 
-		nq, err := rdf.Parse(str, r.lexer)
+		nq, err := rdf.Parse(str, c.lexer)
 		if err == rdf.ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
@@ -139,7 +142,7 @@ func (r *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 }
 
 // RDF files don't require any special processing at the end of the file.
-func (rdfChunker) End(r *bufio.Reader) error {
+func (c *rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
