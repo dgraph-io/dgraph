@@ -1768,7 +1768,7 @@ func TestFilterUsingLenFunction(t *testing.T) {
 			    f as var(func: eq(name, "random"))
 
 			    me(func: uid(0)) @filter(eq(len(f), 0)) {
-			    	uid
+					uid
 				}
 			}`,
 			`{"data": {"me":[{"uid": "0x0"}]}}`,
