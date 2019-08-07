@@ -18,6 +18,7 @@ package schema
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -359,6 +360,7 @@ func LoadSchemaFromDb() error {
 		}
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			continue
 		}
 		attr := pk.Attr
@@ -394,6 +396,7 @@ func LoadTypesFromDb() error {
 		}
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			continue
 		}
 		attr := pk.Attr

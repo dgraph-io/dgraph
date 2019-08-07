@@ -17,11 +17,13 @@
 package worker
 
 import (
+	"encoding/hex"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
@@ -251,6 +253,7 @@ BUCKETS:
 		default:
 			k, err := x.Parse(key)
 			if err != nil {
+				glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 				continue
 			}
 

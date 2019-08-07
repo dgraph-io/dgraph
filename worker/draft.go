@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -983,6 +984,7 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			return
 		}
 		val, ok := m.Load(pk.Attr)

@@ -17,6 +17,7 @@
 package bulk
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math"
@@ -130,6 +131,7 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(item.Key()), err)
 			continue
 		}
 		m[pk.Attr] = struct{}{}
