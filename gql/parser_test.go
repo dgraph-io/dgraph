@@ -4342,10 +4342,10 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 }
 
 func parseNquads(b []byte) ([]*api.NQuad, error) {
-	l := lex.NewLexer("")
+	var lexer lex.Lexer
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line), l)
+		nq, err := rdf.Parse(string(line), &lexer)
 		if err == rdf.ErrEmpty {
 			continue
 		}

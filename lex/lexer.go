@@ -180,10 +180,14 @@ type Lexer struct {
 
 // Reset resets Lexer fields. It reuses already allocated buffers.
 func (l *Lexer) Reset(input string) {
-	item := l.items // Pick the slice so we can reuse it.
+	// Pick the slices so we can reuse it.
+	item := l.items
+	widthStack := l.widthStack
+
 	*l = Lexer{}
 	l.Input = input
 	l.items = item[:0]
+	l.widthStack = widthStack[:0]
 	l.Line = 1
 }
 
