@@ -974,6 +974,103 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 	require.Contains(t, err.Error(), "Multiple variables not allowed in a function")
 }
 
+func TestLenFunctionWithMultipleVariableError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(gt(len(a, b), 10)) {
+		 name
+		}
+	}
+`
+	// Multiple vars not allowed.
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple variables not allowed in len function")
+}
+
+func TestLenFunctionInsideUidError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(uid(len(a), 10)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "len function only allowed inside inequality")
+}
+
+func TestLenFunctionWithNoVariable(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(len(), 10) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got empty attr for function")
+}
+
+func TestLenAsSecondArgumentError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(10, len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved. We should validate function names from a
+	// whitelist.
+	require.Error(t, err)
+}
+
+func TestCountWithLenFunctionError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(count(name), len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved.
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarInIneq(t *testing.T) {
 	query := `
 	{
@@ -4042,7 +4139,7 @@ func TestEqUidFunctionErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
+	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
 }
 
 func TestAggRoot1(t *testing.T) {
