@@ -1763,16 +1763,15 @@ func TestFilterUsingLenFunction(t *testing.T) {
 			`{"data": {"me":[]}}`,
 		},
 		{
-			"Eq length with uid(1) should return results",
+			"Eq length with uid(0) should return results",
 			`{
 			    f as var(func: eq(name, "random"))
 
-			    me(func: uid(1)) @filter(eq(len(f), 0)) {
+			    me(func: uid(0)) @filter(eq(len(f), 0)) {
 			    	uid
-					name
 				}
 			}`,
-			`{"data": {"me":[{"uid": "0x1", "name": "Michonne"}]}}`,
+			`{"data": {"me":[{"uid": "0x0"}]}}`,
 		},
 		{
 			"Ge length should return results",
