@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 )
 
-func TestNewLexer(t *testing.T) {
+func TestResetLexer(t *testing.T) {
 	input := `
 	query {
 		me(_xid_: rick, id:10 ) {
@@ -36,9 +36,8 @@ func TestNewLexer(t *testing.T) {
 			}
 		}
 	}`
-	l := lex.Lexer{
-		Input: input,
-	}
+	l := &lex.Lexer{}
+	l.Reset(input)
 	l.Run(lexQuery)
 
 	it := l.NewIterator()
@@ -49,7 +48,7 @@ func TestNewLexer(t *testing.T) {
 	}
 }
 
-func TestNewLexerMutation(t *testing.T) {
+func TestNewResetMutation(t *testing.T) {
 	input := `
 	mutation {
 		set {
@@ -66,9 +65,8 @@ func TestNewLexerMutation(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.Lexer{
-		Input: input,
-	}
+	l := &lex.Lexer{}
+	l.Reset(input)
 	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {

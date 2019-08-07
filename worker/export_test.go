@@ -95,7 +95,7 @@ func populateGraphExport(t *testing.T) {
 		"6": 6,
 	}
 
-	l := lex.NewLexer("")
+	l := &lex.Lexer{}
 	for _, edge := range rdfEdges {
 		nq, err := rdf.Parse(edge, l)
 		require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestExportRdf(t *testing.T) {
 	scanner := bufio.NewScanner(r)
 	count := 0
 
-	l := lex.NewLexer("")
+	l := &lex.Lexer{}
 	for scanner.Scan() {
 		nq, err := rdf.Parse(scanner.Text(), l)
 		require.NoError(t, err)
