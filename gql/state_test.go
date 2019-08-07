@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 )
 
-func TestResetLexer(t *testing.T) {
+func TestQueryLexing(t *testing.T) {
 	input := `
 	query {
 		me(_xid_: rick, id:10 ) {
@@ -48,7 +48,7 @@ func TestResetLexer(t *testing.T) {
 	}
 }
 
-func TestNewResetMutation(t *testing.T) {
+func TestMutationLexing(t *testing.T) {
 	input := `
 	mutation {
 		set {
