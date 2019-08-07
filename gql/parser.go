@@ -1573,7 +1573,8 @@ L:
 					}
 					if !isInequalityFn(function.Name) {
 						return nil,
-							itemInFunc.Errorf("len function only allowed inside inequality function")
+							itemInFunc.Errorf("len function only allowed inside inequality" +
+								" function")
 					}
 					function.Attr = nestedFunc.NeedsVar[0].Name
 					function.IsLenVar = true

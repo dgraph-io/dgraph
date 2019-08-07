@@ -2078,7 +2078,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 		} else if isInequalityFn && sg.SrcFunc.IsLenVar {
-			// Safe to access 0th element here because if no variable was given, parser should throw
+			// Safe to access 0th element here because if no variable was given, parser would throw
 			// an error.
 			val := sg.SrcFunc.Args[0].Value
 			src := types.Val{Tid: types.StringID, Value: []byte(val)}
