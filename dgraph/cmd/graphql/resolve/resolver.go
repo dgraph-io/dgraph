@@ -221,6 +221,36 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 // and the spec requirements for response
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response.
 
+// There's three basic types to consider here: GraphQL object types (equals json
+// objects in the result), list types (equals lists of objects or scalars), and
+// values (either scalar values, lists or objects).
+//
+// So the algorithm is a three way mutual recursion between those types.
+//
+// That works like this... if part of the json result from Dgraph
+// looked like:
+//
+// {
+//   "name": "A name"
+//   "friends": [
+//     { "name": "Friend 1"},
+//     { "name": "Friend 2", "friends": [...] }
+//   ]
+// }
+//
+// Then, schematically, the recursion tree would look like:
+//
+// completeObject ( {
+//   "name": completeValue("A name")
+//   "friends": completeValue( completeList([
+//     completeValue (completeObject ({ "name": completeValue ("Friend 1")} )),
+//     completeValue (completeObject ({
+//                           "name": completeValue("Friend 2"),
+//                           "friends": completeValue ( completeList([ completeObject(..), ..]) } )
+//
+
+// completeDgraphResult starts the recursion with field as the top level GraphQL
+// query and dgResult as the matching full Dgraph result.
 func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror.List) {
 	// We need an intial case in the alg because dgraph always returns a list
 	// result no mater what.
@@ -309,6 +339,38 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 	return completed, append(errs, gqlErrs...)
 }
 
+// completeObject builds a json GraphQL result object for the current query level.
+//
+// fields are all the fields from this bracketed level in the graphql query, e.g:
+// {
+//   name
+//   dob
+//   friends {...}
+// }
+// If it's the top level of a query then it'll be the top level query name.
+//
+// typ is the expected type matching those fields, e.g. above that'd be something
+// like the `Person` type that has fields name, dob and friends.
+//
+// res is the results map from Dgraph for this level of the query.  This map needn't
+// contain values for all the requested fields, e.g. if there's no corresponding
+// values in the store or if the query contained a filter that excluded a value.
+// So res might be the map : name->"A Name", friends -> []interface{}
+//
+// completeObject fills out this result putting in null for any missing values
+// (dob above) and applying GraphQL error propagation for any null fields that the
+// schema says can't be null.
+//
+// Example:
+//
+// if the map is name->"A Name", friends -> []interface{}
+//
+// and "dob" is nullable then the result should be json object
+// {"name": "A Name", "dob": null, "friends": ABC}
+// where ABC is the result of applying completeValue to res["friends"]
+//
+// if "dob" were non-nullable (maybe it's type is DateTime!), then the result is
+// nil and the error propagates to the enclosing level.
 func completeObject(typ schema.Type, fields []schema.Field, res map[string]interface{}) (
 	[]byte, gqlerror.List) {
 
@@ -340,6 +402,8 @@ func completeObject(typ schema.Type, fields []schema.Field, res map[string]inter
 	return buf.Bytes(), errs
 }
 
+// completeValue applies the value completion algorithm to a single value, which
+// could turn out to be a list or object or scalar value.
 func completeValue(field schema.Field, val interface{}) ([]byte, gqlerror.List) {
 
 	switch val := val.(type) {
@@ -350,14 +414,14 @@ func completeValue(field schema.Field, val interface{}) ([]byte, gqlerror.List) 
 	default:
 		if val == nil {
 			if field.Type().ListType() != nil {
-				// We could chose to set this to null.  This is our decisions, not
-				// anything required by the spec.
+				// We could chose to set this to null.  This is our decision, not
+				// anything required by the GraphQL spec.
 				//
-				// However, if we query, for example, for an author's posts with
+				// However, if we query, for example, for a persons's friends with
 				// some restrictions, and there aren't any, is that really a case to
 				// set this at null and error if the list is required?  What
-				// about if an author has just been added and doesn't have any posts?
-				// Doesn't seem right.
+				// about if an person has just been added and doesn't have any friends?
+				// Doesn't seem right to add null and cause error propagation.
 				//
 				// Seems best if we pick [], rather than null, as the list value if
 				// there's nothing in the Dgraph result.
@@ -384,6 +448,23 @@ func completeValue(field schema.Field, val interface{}) ([]byte, gqlerror.List) 
 	}
 }
 
+// completeList applies the completion algorithm to a list field and result.
+//
+// field is one field from the query - which should have a list type in the
+// GraphQL schema.
+//
+// values is the list of values found by the query for this field.
+//
+// completeValue() is applied to every list element, but
+// the type of field can only be a scalar list like [String], or an object
+// list like [Person], so schematically the final result is either
+// [ completValue("..."), completValue("..."), ... ]
+// or
+// [ completeObject({...}), completeObject({...}), ... ]
+// depending on the type of list.
+//
+// If the list has non-nullable elements (a type like [T!]) and any of those
+// elements resolve to null, then the whole list is crushed to null.
 func completeList(field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
 	var buf bytes.Buffer
 	var errs gqlerror.List
