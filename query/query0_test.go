@@ -1765,9 +1765,8 @@ func TestFilterUsingLenFunction(t *testing.T) {
 		{
 			"Eq length with uid(0) should return results",
 			`{
-			    f as var(func: eq(name, "random"))
-
-			    me(func: uid(0)) @filter(eq(len(f), 0)) {
+				f as var(func: eq(name, "random"))
+				me(func: uid(0)) @filter(eq(len(f), 0)) {
 					uid
 				}
 			}`,
