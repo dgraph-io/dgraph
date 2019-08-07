@@ -241,7 +241,7 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		pl = &List{
 			key:         key,
 			mutationMap: make(map[uint64]*pb.PostingList),
-			plist:       new(pb.PostingList),
+			plist:       postingListPool.Get().(*pb.PostingList),
 		}
 	}
 
