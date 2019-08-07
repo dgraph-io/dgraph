@@ -1753,18 +1753,17 @@ func TestFilterUsingLenFunction(t *testing.T) {
 			"Eq length should return empty results",
 			`{
 				var(func: has(school), first: 3) {
-                	f as uid
+					f as uid
 				}
-
-			    me(func: uid(f)) @filter(eq(len(f), 0)) {
-			    	uid
+				me(func: uid(f)) @filter(eq(len(f), 0)) {
+					uid
 					name
 				}
 			}`,
 			`{"data": {"me":[]}}`,
 		},
 		{
-			"Eq length with uid(1) should empty results",
+			"Eq length with uid(1) should return results",
 			`{
 			    f as var(func: eq(name, "random"))
 
