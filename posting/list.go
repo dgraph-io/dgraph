@@ -279,7 +279,6 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	// p := &pb.Posting{}
 	p := postingPool.Get().(*pb.Posting)
 	*p = pb.Posting{
 		Uid:         t.ValueId,
