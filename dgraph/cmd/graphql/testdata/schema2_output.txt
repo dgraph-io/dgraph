@@ -12,7 +12,7 @@ type AddPostPayload {
 type Author {
 	id: ID!
 	name: String!
-	posts: [Post!]!
+	posts: [Post!]! @hasInverse(type: "Post", field: "author")
 	friends: [Author!]!
 }
 
@@ -28,8 +28,7 @@ type Post {
 	id: ID!
 	title: String!
 	text: String
-	author: Author!
-	postType: PostType!
+	author: Author! @hasInverse(type: "Author", field: "posts")
 }
 
 type UpdateAuthorPayload {
@@ -52,12 +51,6 @@ scalar String
 #######################
 # Enum Definitions
 #######################
-enum PostType {
-	Statement
-	Question
-	Answer
-}
-
 #######################
 # Input Definitions
 #######################
@@ -89,7 +82,6 @@ input PostInput {
 	title: String!
 	text: String
 	author: AuthorRef!
-	postType: PostType!
 }
 
 input PostRef {
@@ -100,7 +92,6 @@ input PostUpdate {
 	title: String
 	text: String
 	author: AuthorRef
-	postType: PostType
 }
 
 #######################

@@ -84,3 +84,27 @@ invalid_schemas:
     errlist: [
       {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
+
+  -
+    name: "Non linking inverse directives"
+    input: |
+      type X {
+        f1: P @hasInverse(type: "P", field: "f1")
+      }
+      type P {
+        f1: X @hasInverse(type: "X", field: "f2")
+      }
+    errlist: [
+      {"message": "Inverse field doesn't point back to X.f1 .", "locations":[{"line":2, "column":10}]},
+      {"message": "Inverse field for P.f1 doesn't exist.", "locations":[{"line":5, "column":10}]},
+    ]
+
+  -
+    name: "Inverse Directive on non object field"
+    input: |
+      type X {
+        f1: String @hasInverse(type: "P", field: "f1")
+      }
+    errlist: [
+      {"message": "Type of field f1 is String, but Directives aren't allowed on non object type field.", "locations":[{"line":2, "column":15}]},
+    ]

@@ -30,6 +30,7 @@ func init() {
 
 	addPostRule("OneIDPerType", idCountCheck)
 	addPostRule("ValidListType", listValidityCheck)
+	addPostRule("DirectivesValidation", directivesValidation)
 }
 
 func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
@@ -137,6 +138,96 @@ func listValidityCheck(sch *ast.Schema) gqlerror.List {
 	return errs
 }
 
+func directivesValidation(sch *ast.Schema) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, dir := range supportedDirectives {
+		errs = append(errs, dir.validationFunc(sch)...)
+	}
+
+	return errs
+}
+
+func hasInverseValidation(sch *ast.Schema) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, typ := range sch.Types {
+		for _, field := range typ.Fields {
+			invDirective := field.Directives.ForName("hasInverse")
+
+			if invDirective == nil {
+				continue
+			}
+
+			if sch.Types[field.Type.Name()].Kind != ast.Object {
+				errs = append(errs,
+					gqlerror.ErrorPosf(
+						invDirective.Position,
+						"Type of field %s is %s, but Directives aren't allowed"+
+							" on non object type field.", field.Name, field.Type.Name(),
+					),
+				)
+				continue
+			}
+
+			typArg := invDirective.Arguments.ForName("type")
+			if typArg == nil {
+				errs = append(errs,
+					gqlerror.ErrorPosf(
+						// TODO: Have more informative error messages in errors PR.
+						invDirective.Position, "hasInverse doesn't have type argument",
+					),
+				)
+				continue
+			}
+
+			invType, ok := sch.Types[typArg.Value.Raw]
+			if !ok {
+				errs = append(errs,
+					gqlerror.ErrorPosf(
+						invDirective.Position, "Inverse type for %s.%s doesn't exist.",
+						typ.Name, field.Name,
+					),
+				)
+				continue
+			}
+
+			fieldArg := invDirective.Arguments.ForName("field")
+			if fieldArg == nil {
+				errs = append(errs,
+					gqlerror.ErrorPosf(
+						invDirective.Position, "hasInverse directive at %s.%s doesn't have field argument.",
+						typ.Name, field.Name,
+					),
+				)
+				continue
+			}
+
+			invField := invType.Fields.ForName(fieldArg.Value.Raw)
+			if invField == nil {
+				errs = append(errs,
+					gqlerror.ErrorPosf(
+						invDirective.Position, "Inverse field for %s.%s doesn't exist.",
+						typ.Name, field.Name,
+					),
+				)
+				continue
+			}
+
+			if !isInverse(typ.Name, field.Name, invField) {
+				errs = append(errs,
+					gqlerror.ErrorPosf(
+						invDirective.Position, "Inverse field doesn't point back to %s.%s .",
+						typ.Name, field.Name,
+					),
+				)
+			}
+		}
+	}
+
+	return errs
+}
+
 func isScalar(s string) bool {
 	_, ok := supportedScalars[s]
 	return ok
@@ -148,4 +239,24 @@ func isReservedKeyWord(name string) bool {
 	}
 
 	return false
+}
+
+func isInverse(expectedInvType, expectedInvField string, baseField *ast.FieldDefinition) bool {
+
+	invDirective := baseField.Directives.ForName("hasInverse")
+	if invDirective == nil {
+		return false
+	}
+
+	invTypeArg := invDirective.Arguments.ForName("type")
+	if invTypeArg == nil || invTypeArg.Value.Raw != expectedInvType {
+		return false
+	}
+
+	invFieldArg := invDirective.Arguments.ForName("field")
+	if invFieldArg == nil || invFieldArg.Value.Raw != expectedInvField {
+		return false
+	}
+
+	return true
 }

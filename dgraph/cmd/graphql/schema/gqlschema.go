@@ -49,6 +49,11 @@ type scalar struct {
 	dgraphType string
 }
 
+type directive struct {
+	directiveDefn  *ast.DirectiveDefinition
+	validationFunc postGQLCheck
+}
+
 var supportedScalars = map[string]scalar{
 	"ID":       scalar{name: "ID", dgraphType: "uid"},
 	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
@@ -56,6 +61,22 @@ var supportedScalars = map[string]scalar{
 	"Float":    scalar{name: "Float", dgraphType: "float"},
 	"String":   scalar{name: "String", dgraphType: "string"},
 	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
+}
+
+var supportedDirectives = map[string]directive{
+	"hasInverse": directive{
+		directiveDefn: &ast.DirectiveDefinition{
+			Name:      "hasInverse",
+			Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
+		},
+		validationFunc: hasInverseValidation,
+	},
+}
+
+func addDirectives(doc *ast.SchemaDocument) {
+	for _, d := range supportedDirectives {
+		doc.Directives = append(doc.Directives, d.directiveDefn)
+	}
 }
 
 // addScalars adds all the supported scalars in the schema.
@@ -419,7 +440,21 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	return fldList
 }
 
-func genArgumentsString(args ast.ArgumentDefinitionList) string {
+func genArgumentsDefnString(args ast.ArgumentDefinitionList) string {
+	if args == nil || len(args) == 0 {
+		return ""
+	}
+
+	var argsStrs []string
+
+	for _, arg := range args {
+		argsStrs = append(argsStrs, genArgumentDefnString(arg))
+	}
+
+	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ", "))
+}
+
+func genArgumentsString(args ast.ArgumentList) string {
 	if args == nil || len(args) == 0 {
 		return ""
 	}
@@ -430,7 +465,7 @@ func genArgumentsString(args ast.ArgumentDefinitionList) string {
 		argsStrs = append(argsStrs, genArgumentString(arg))
 	}
 
-	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
+	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ", "))
 }
 
 func genFieldsString(flds ast.FieldList) string {
@@ -456,7 +491,27 @@ func genFieldString(fld *ast.FieldDefinition) string {
 	)
 }
 
-func genArgumentString(arg *ast.ArgumentDefinition) string {
+func genDirectivesString(direcs ast.DirectiveList) string {
+	var sch strings.Builder
+	if len(direcs) == 0 {
+		return ""
+	}
+
+	var direcArgs []string
+	for _, dir := range direcs {
+		direcArgs = append(
+			direcArgs,
+			fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments)),
+		)
+	}
+
+	// Assuming multiple directives are space separated.
+	sch.WriteString(" " + strings.Join(direcArgs, " "))
+
+	return sch.String()
+}
+
+func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
 	return fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
 }
 
