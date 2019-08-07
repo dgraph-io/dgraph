@@ -23,6 +23,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/dgryski/go-farm"
 
@@ -279,7 +280,9 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	return &pb.Posting{
+	// p := &pb.Posting{}
+	p := postingPool.Get().(*pb.Posting)
+	*p = pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
 		ValType:     t.ValueType,
@@ -289,6 +292,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		Op:          op,
 		Facets:      t.Facets,
 	}
+	return p
 }
 
 func hasDeleteAll(mpost *pb.Posting) bool {
@@ -391,6 +395,26 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	l.Lock()
 	defer l.Unlock()
 	return l.addMutationInternal(ctx, txn, t)
+}
+
+var postingPool = &sync.Pool{
+	New: func() interface{} {
+		return &pb.Posting{}
+	},
+}
+
+func (l *List) Release() {
+	fromList := func(list *pb.PostingList) {
+		for _, p := range list.GetPostings() {
+			postingPool.Put(p)
+		}
+	}
+	fromList(l.plist)
+	for _, plist := range l.mutationMap {
+		fromList(plist)
+	}
+	l.plist = nil
+	l.mutationMap = nil
 }
 
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
