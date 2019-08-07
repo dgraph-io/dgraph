@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -424,8 +423,11 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return y.ErrConflict
 	}
 
-	getKey := func(key []byte, uid uint64) string {
-		return fmt.Sprintf("%s|%d", key, uid)
+	getKey := func(key []byte, uid uint64) uint64 {
+		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
+		// here to save memory allocations.
+		// Not entirely sure about effect on collision chances due to this simple XOR with uid.
+		return farm.Fingerprint64(key) ^ uid
 	}
 
 	mpost := NewPosting(t)
@@ -439,7 +441,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
-	var conflictKey string
+	var conflictKey uint64
 	pk := x.Parse(l.key)
 	switch {
 	case schema.State().HasUpsert(t.Attr):
