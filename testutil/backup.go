@@ -50,7 +50,8 @@ func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 
 	stream := db.NewStreamAt(math.MaxUint64)
 	stream.ChooseKey = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		switch {
 		case pk.Attr != attr:
 			return false
@@ -60,7 +61,8 @@ func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 		return pk.IsData()
 	}
 	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
-		pk := x.Parse(key)
+		pk, err := x.Parse(key)
+		x.Check(err)
 		pl, err := posting.ReadPostingList(key, it)
 		if err != nil {
 			return nil, err
