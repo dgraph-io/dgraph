@@ -98,7 +98,15 @@ func generateCompleteSchema(sch *ast.Schema) {
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
 
-	for _, defn := range sch.Types {
+	var keys []string
+	for k := range sch.Types {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	for _, key := range keys {
+		defn := sch.Types[key]
+
 		if defn.Kind == ast.Object {
 			extenderMap[defn.Name+"Input"] = genInputType(sch, defn)
 			extenderMap[defn.Name+"Ref"] = genRefType(defn)
@@ -116,67 +124,6 @@ func generateCompleteSchema(sch *ast.Schema) {
 	for name, extType := range extenderMap {
 		sch.Types[name] = extType
 	}
-}
-
-// AreEqualSchema checks if sch1 and sch2 are the same schema.
-func AreEqualSchema(sch1, sch2 *ast.Schema) bool {
-	return AreEqualQuery(sch1.Query, sch2.Query) &&
-		AreEqualMutation(sch1.Mutation, sch2.Mutation) &&
-		AreEqualTypes(sch1.Types, sch2.Types)
-}
-
-// AreEqualQuery checks if query blocks qry1, qry2 are same.
-func AreEqualQuery(qry1, qry2 *ast.Definition) bool {
-	return AreEqualFields(qry1.Fields, qry2.Fields)
-}
-
-// AreEqualMutation checks if mutation blocks mut1, mut2 are same.
-func AreEqualMutation(mut1, mut2 *ast.Definition) bool {
-	return AreEqualFields(mut1.Fields, mut2.Fields)
-}
-
-// AreEqualTypes checks if types typ1, typ2 are same.
-func AreEqualTypes(typ1, typ2 map[string]*ast.Definition) bool {
-	for name, def := range typ1 {
-		val, ok := typ2[name]
-
-		if !ok || def.Kind != val.Kind {
-			return false
-		}
-
-		if !AreEqualFields(def.Fields, val.Fields) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// AreEqualFields checks if fieldlist flds1, flds2 are same.
-func AreEqualFields(flds1, flds2 ast.FieldList) bool {
-	fldDict := make(map[string]*ast.FieldDefinition)
-
-	for _, fld := range flds1 {
-		fldDict[fld.Name] = fld
-	}
-
-	for _, fld := range flds2 {
-
-		if strings.HasPrefix(fld.Name, "__") {
-			continue
-		}
-		val, ok := fldDict[fld.Name]
-
-		if !ok {
-			return false
-		}
-
-		if genFieldString(fld) != genFieldString(val) {
-			return false
-		}
-	}
-
-	return true
 }
 
 func genInputType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
@@ -528,8 +475,15 @@ func Stringify(schema *ast.Schema) string {
 	if schema.Types == nil {
 		return ""
 	}
+	var keys []string
+	for k := range schema.Types {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
-	for _, typ := range schema.Types {
+	for _, key := range keys {
+		typ := schema.Types[key]
+
 		if typ.Kind == ast.Object {
 			object.WriteString(generateObjectString(typ) + "\n")
 		} else if typ.Kind == ast.Scalar {

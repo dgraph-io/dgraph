@@ -1,115 +1,125 @@
-type Post {
-  id: ID!
-  title: String!
-  text: String
-  author: Author!
-  postType: PostType!
-}
-
-type Author {
-  id: ID!
-  name: String!
-  posts: [Post!]!
-  friends: [Author!]!
-}
-
-enum PostType {
-  Statement
-  Question
-  Answer
-}
-
-# -------------------------------
-# Below here is added by DgraphQL
-# -------------------------------
-
-scalar ID
-scalar String
-scalar Int
-scalar Float
-scalar Boolean
-scalar DateTime
-
-input PostInput {
-  title: String!
-  text: String
-  author: AuthorRef!
-  postType: PostType!
-}
-
-input AuthorInput {
-  name: String!
-  posts: [PostRef!]!
-  friends: [AuthorRef!]!
-}
-
-input PostUpdate {
-  title: String
-  text: String
-  author: AuthorRef
-  postType: PostType
-}
-
-input AuthorUpdate {
-  name: String
-  posts: [PostRef!]
-  friends: [AuthorRef!]
-}
-
-input AuthorRef {
-    id: ID!
-}
-
-input PostRef {
-    id: ID!
+#######################
+# Generated Types
+#######################
+type AddAuthorPayload {
+	author: Author!
 }
 
 type AddPostPayload {
-    post: Post!
+	post: Post!
 }
 
-type UpdatePostPayload {
-    post: Post!
-}
-
-type DeletePostPayload {
-    msg: String!
-}
-
-type AddAuthorPayload {
-    author: Author!
-}
-
-type UpdateAuthorPayload {
-    author: Author!
+type Author {
+	id: ID!
+	name: String!
+	posts: [Post!]!
+	friends: [Author!]!
 }
 
 type DeleteAuthorPayload {
-    msg: String!
+	msg: String!
 }
 
+type DeletePostPayload {
+	msg: String!
+}
+
+type Post {
+	id: ID!
+	title: String!
+	text: String
+	author: Author!
+	postType: PostType!
+}
+
+type UpdateAuthorPayload {
+	author: Author!
+}
+
+type UpdatePostPayload {
+	post: Post!
+}
+
+#######################
+# Scalar Definitions
+#######################
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+#######################
+# Enum Definitions
+#######################
+enum PostType {
+	Statement
+	Question
+	Answer
+}
+
+#######################
+# Input Definitions
+#######################
 input AuthorFilter {
-    dgraph: String
+	dgraph: String
+}
+
+input AuthorInput {
+	name: String!
+	posts: [PostRef!]!
+	friends: [AuthorRef!]!
+}
+
+input AuthorRef {
+	id: ID!
+}
+
+input AuthorUpdate {
+	name: String
+	posts: [PostRef!]
+	friends: [AuthorRef!]
 }
 
 input PostFilter {
-    dgraph: String
+	dgraph: String
 }
 
+input PostInput {
+	title: String!
+	text: String
+	author: AuthorRef!
+	postType: PostType!
+}
+
+input PostRef {
+	id: ID!
+}
+
+input PostUpdate {
+	title: String
+	text: String
+	author: AuthorRef
+	postType: PostType
+}
+
+#######################
+# Generated Query
+#######################
 type Query {
-  getAuthor(id: ID!): Author!
-  getPost(id: ID!): Post!
-
-  queryAuthor(filter: AuthorFilter!): [Author!]!
-  queryPost(filter: PostFilter!): [Post!]!
+	getAuthor(id: ID!): Author!
+	queryAuthor(filter: AuthorFilter!): [Author!]!
+	getPost(id: ID!): Post!
+	queryPost(filter: PostFilter!): [Post!]!
 }
-
+#######################
+# Generated Mutations
+#######################
 type Mutation {
-  addAuthor(input: AuthorInput!): AddAuthorPayload!
-  updateAuthor(id: ID!,input: AuthorUpdate): UpdateAuthorPayload!
-  deleteAuthor(id: ID!): DeleteAuthorPayload!
-
-  addPost(input: PostInput!): AddPostPayload!
-  updatePost(id: ID!,input: PostUpdate): UpdatePostPayload!
-  deletePost(id: ID!): DeletePostPayload!
+	addAuthor(input: AuthorInput!): AddAuthorPayload!
+	updateAuthor(id: ID!,input: AuthorUpdate): UpdateAuthorPayload!
+	deleteAuthor(id: ID!): DeleteAuthorPayload!
+	addPost(input: PostInput!): AddPostPayload!
+	updatePost(id: ID!,input: PostUpdate): UpdatePostPayload!
+	deletePost(id: ID!): DeletePostPayload!
 }

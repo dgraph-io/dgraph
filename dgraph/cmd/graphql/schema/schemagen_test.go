@@ -23,10 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 	"gopkg.in/yaml.v2"
 )
 
@@ -78,20 +75,8 @@ func TestSchemaString(t *testing.T) {
 			continue
 		}
 
-		doc, gqlerr := parser.ParseSchema(&ast.Source{Input: string(str2)})
-		if gqlerr != nil {
-			t.Errorf(gqlerr.Error())
-			continue
-		}
-
-		outputSch, errlist2 := validator.ValidateSchemaDocument(doc)
-		if errlist2 != nil {
-			t.Errorf(errlist2.Error())
-			continue
-		}
-
 		handlerObj := schHandler.(schemaHandler)
-		require.Equal(t, true, AreEqualSchema(handlerObj.completeSchema, outputSch))
+		require.Equal(t, string(str2), handlerObj.GQLSchema())
 	}
 }
 
