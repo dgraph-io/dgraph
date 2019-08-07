@@ -24,12 +24,11 @@ Example:
 export DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true"
 ```
 
-
 4. Run `./scripts/local.sh` from within the `wiki` folder and goto `http://localhost:1313` to see the Wiki.
 
 We use `./scripts/local.sh` script to set env variables that our documentation theme internally uses.
 
-If this *README.md* file is located at `$GOPATH/src/.../dgraph/wiki` then any changes to the docs can be seen being updated instantly.
+Now you can make changes to the docs and see them being updated instantly thanks to Hugo.
 
 * While running locally, the version selector does not work because you need to build the documentation and serve it behind a reverse proxy to have multiple versions.
 

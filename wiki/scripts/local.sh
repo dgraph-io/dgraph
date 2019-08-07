@@ -23,9 +23,10 @@ run() {
   HUGO_TITLE="Dgraph Doc - local" \
   VERSIONS=${VERSION_STRING} \
   CURRENT_BRANCH="master" \
-  pushd $GOPATH/src/github.com/dgraph-io/dgraph/wiki > /dev/null
 
+  pushd $PWD > /dev/null
   pushd themes > /dev/null
+
   if [ ! -d "hugo-docs" ]; then
     git clone git@github.com:dgraph-io/hugo-docs.git
   else
