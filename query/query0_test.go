@@ -1782,11 +1782,11 @@ func TestFilterUsingLenFunction(t *testing.T) {
 			        f as uid
 			    }
 
-			    me(func: uid(1)) @filter(ge(len(f), 0)) {
+			    me(func: uid(f)) @filter(ge(len(f), 0)) {
 			        count(uid)
 			    }
 			}`,
-			`{"data": {"me":[{"count": 1}]}}`,
+			`{"data": {"me":[{"count": 3}]}}`,
 		},
 		{
 			"Lt length should return results",
