@@ -1438,7 +1438,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)
 	case aggregatorFn:
-		// confirm agrregator could apply on the attributes
+		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
 			return nil, errors.Errorf("Attribute %q is not scalar-type", attr)

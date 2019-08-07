@@ -190,8 +190,7 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	me := m.mePool.Get().(*pb.MapEntry)
-	*me = pb.MapEntry{}
-	me.Key = key
+	*me = pb.MapEntry{Key: key}
 
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
 		me.Posting = p
