@@ -1732,12 +1732,6 @@ func TestCountUidToVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
 }
 
-// gt(pred, len(v)) // NOT OK
-// gt(len(v), 5)    // OK
-// gt(count(pred), len(v)) // NOT OK
-
-// len(valueVar) // ??
-
 func TestFilterUsingLenFunction(t *testing.T) {
 	tests := []struct {
 		name, in, out string

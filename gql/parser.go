@@ -161,7 +161,7 @@ type FilterTree struct {
 // Arg stores an argument to a function.
 type Arg struct {
 	Value        string
-	IsValueVar   bool // If argument is val(a)
+	IsValueVar   bool // If argument is val(a), e.g. eq(name, val(a))
 	IsGraphQLVar bool
 }
 
@@ -1568,7 +1568,12 @@ L:
 					function.NeedsVar[0].Typ = ValueVar
 				} else if nestedFunc.Name == lenFunc {
 					if len(nestedFunc.NeedsVar) > 1 {
-						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
+						return nil,
+							itemInFunc.Errorf("Multiple variables not allowed in len function")
+					}
+					if !isInequalityFn(function.Name) {
+						return nil,
+							itemInFunc.Errorf("len function only allowed inside inequality function")
 					}
 					function.Attr = nestedFunc.NeedsVar[0].Name
 					function.IsLenVar = true

@@ -2069,20 +2069,23 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// when multiple filters replace their sg.DestUIDs
 		sg.DestUIDs = &pb.List{Uids: sg.SrcUIDs.Uids}
 	} else {
-		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsValueVar {
+		isInequalityFn := sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name)
+		if isInequalityFn && sg.SrcFunc.IsValueVar {
 			// This is a ineq function which uses a value variable.
 			err = sg.applyIneqFunc()
 			if parent != nil {
 				rch <- err
 				return
 			}
-		} else if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.SrcFunc.IsLenVar {
+		} else if isInequalityFn && sg.SrcFunc.IsLenVar {
+			// Safe to access 0th element here because if no variable was given, parser should throw
+			// an error.
 			val := sg.SrcFunc.Args[0].Value
 			src := types.Val{Tid: types.StringID, Value: []byte(val)}
 			dst, err := types.Convert(src, types.IntID)
 			if err != nil {
 				// TODO(Aman): needs to do parent check?
-				rch <- errors.Errorf("Invalid argment %v. Comparing with different type", val)
+				rch <- errors.Wrapf(err, "invalid argument %v. Comparing with different type", val)
 				return
 			}
 
