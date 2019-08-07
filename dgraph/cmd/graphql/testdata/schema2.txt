@@ -2,32 +2,12 @@ type Post {
   id: ID!
   title: String!
   text: String
-  author: Author!
-  postedAt: DateTime!
-  postType: PostType!
+  author: Author! @hasInverse(type: "Author", field: "posts")
 }
 
 type Author {
   id: ID!
   name: String!
-  posts(filter: PostFilter, page: Paginate): [Post!]!
-  friends: Author
-}
-
-enum PostType {
-  Statement
-  Question
-  Answer
-}
-
-enum PostFunctions {
-    alloftext
-    anyoftext
-    allofterms
-    anyofterms
-}
-
-enum PostPredicates {
-    title
-    text
+  posts: [Post!]! @hasInverse(type: "Post", field: "author")
+  friends: [Author!]!
 }

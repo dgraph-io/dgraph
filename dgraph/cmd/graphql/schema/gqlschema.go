@@ -49,6 +49,11 @@ type scalar struct {
 	dgraphType string
 }
 
+type directive struct {
+	directiveDefn  *ast.DirectiveDefinition
+	validationFunc postGQLCheck
+}
+
 var supportedScalars = map[string]scalar{
 	"ID":       scalar{name: "ID", dgraphType: "uid"},
 	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
@@ -58,16 +63,19 @@ var supportedScalars = map[string]scalar{
 	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
 }
 
-var supportedDirectives = map[string]*ast.DirectiveDefinition{
-	"hasInverse": &ast.DirectiveDefinition{
-		Name:      "hasInverse",
-		Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
+var supportedDirectives = map[string]directive{
+	"hasInverse": directive{
+		directiveDefn: &ast.DirectiveDefinition{
+			Name:      "hasInverse",
+			Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
+		},
+		validationFunc: hasInverseValidation,
 	},
 }
 
 func addDirectives(doc *ast.SchemaDocument) {
 	for _, d := range supportedDirectives {
-		doc.Directives = append(doc.Directives, d)
+		doc.Directives = append(doc.Directives, d.directiveDefn)
 	}
 }
 
@@ -449,8 +457,7 @@ func genArgumentsDefnString(args ast.ArgumentDefinitionList) string {
 		argsStrs = append(argsStrs, genArgumentDefnString(arg))
 	}
 
-	sort.Slice(argsStrs, func(i, j int) bool { return argsStrs[i] < argsStrs[j] })
-	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
+	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ", "))
 }
 
 func genArgumentsString(args ast.ArgumentList) string {
@@ -464,8 +471,7 @@ func genArgumentsString(args ast.ArgumentList) string {
 		argsStrs = append(argsStrs, genArgumentString(arg))
 	}
 
-	sort.Slice(argsStrs, func(i, j int) bool { return argsStrs[i] < argsStrs[j] })
-	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
+	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ", "))
 }
 
 func genFieldsString(flds ast.FieldList) string {
@@ -507,7 +513,6 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 		)
 	}
 
-	sort.Slice(direcArgs, func(i, j int) bool { return direcArgs[i] < direcArgs[j] })
 	// Assuming multiple directives are space separated.
 	sch.WriteString(" " + strings.Join(direcArgs, " "))
 

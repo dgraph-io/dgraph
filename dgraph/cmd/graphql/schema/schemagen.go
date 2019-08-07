@@ -66,6 +66,7 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 	}
 
 	addScalars(doc)
+	addDirectives(doc)
 
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {

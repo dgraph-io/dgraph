@@ -51,10 +51,10 @@ func TestDGSchemaGen(t *testing.T) {
 }
 
 func TestSchemaString(t *testing.T) {
-	numTests := 1
+	numTests := 2
 
-	for i := 0; i < numTests; i++ {
-		fileName := "../testdata/schema" + strconv.Itoa(i+1) + ".txt" // run from pwd
+	for i := 1; i <= numTests; i++ {
+		fileName := "../testdata/schema" + strconv.Itoa(i) + ".txt" // run from pwd
 		str1, err := ioutil.ReadFile(fileName)
 		if err != nil {
 			t.Errorf("Unable to read schema file %s", fileName)
@@ -68,7 +68,7 @@ func TestSchemaString(t *testing.T) {
 
 		fmt.Println(newSchemaStr)
 
-		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
+		outFile := "../testdata/schema" + strconv.Itoa(i) + "_output.txt"
 		str2, err := ioutil.ReadFile(outFile)
 		if err != nil {
 			t.Errorf("Unable to read output file " + outFile)
@@ -76,7 +76,7 @@ func TestSchemaString(t *testing.T) {
 		}
 
 		handlerObj := schHandler.(schemaHandler)
-		require.Equal(t, handlerObj.GQLSchema(), string(str2))
+		require.Equal(t, string(str2), handlerObj.GQLSchema())
 	}
 }
 
