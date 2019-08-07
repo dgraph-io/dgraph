@@ -1752,15 +1752,28 @@ func TestFilterUsingLenFunction(t *testing.T) {
 		{
 			"Eq length should return empty results",
 			`{
-			    var(func: has(school), first: 3) {
-			        f as uid
-			    }
+				var(func: has(school), first: 3) {
+                	f as uid
+				}
 
 			    me(func: uid(f)) @filter(eq(len(f), 0)) {
-			        count(uid)
-			    }
+			    	uid
+					name
+				}
 			}`,
-			`{"data": {"me":[{"count": 0}]}}`,
+			`{"data": {"me":[]}}`,
+		},
+		{
+			"Eq length with uid(1) should empty results",
+			`{
+			    f as var(func: eq(name, "random"))
+
+			    me(func: uid(1)) @filter(eq(len(f), 0)) {
+			    	uid
+					name
+				}
+			}`,
+			`{"data": {"me":[{"uid": "0x1", "name": "Michonne"}]}}`,
 		},
 		{
 			"Ge length should return results",
@@ -1769,11 +1782,11 @@ func TestFilterUsingLenFunction(t *testing.T) {
 			        f as uid
 			    }
 
-			    me(func: uid(f)) @filter(ge(len(f), 0)) {
+			    me(func: uid(1)) @filter(ge(len(f), 0)) {
 			        count(uid)
 			    }
 			}`,
-			`{"data": {"me":[{"count": 3}]}}`,
+			`{"data": {"me":[{"count": 1}]}}`,
 		},
 		{
 			"Lt length should return results",
