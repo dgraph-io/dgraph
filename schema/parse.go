@@ -427,7 +427,8 @@ func isTypeDeclaration(item lex.Item, it *lex.ItemIterator) bool {
 func Parse(s string) (*ParsedSchema, error) {
 	var result ParsedSchema
 
-	l := lex.NewLexer(s)
+	var l lex.Lexer
+	l.Reset(s)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
 		return nil, err

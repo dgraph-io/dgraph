@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -971,9 +972,11 @@ var testNQuads = []struct {
 }
 
 func TestLex(t *testing.T) {
+	l := &lex.Lexer{}
 	for _, test := range testNQuads {
 		t.Logf("Testing %v", test.input)
-		rnq, err := Parse(test.input)
+		l.Reset(test.input)
+		rnq, err := Parse(test.input, l)
 		if test.expectedErr && test.shouldIgnore {
 			require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
 				err.Error())
