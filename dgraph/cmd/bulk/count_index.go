@@ -18,6 +18,8 @@ package bulk
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -49,7 +51,10 @@ type countIndexer struct {
 // sorted order.
 func (c *countIndexer) addUid(rawKey []byte, count int) {
 	key, err := x.Parse(rawKey)
-	x.Check(err)
+	if err != nil {
+		fmt.Printf("Error while parsing key %s: %v\n", hex.Dump(rawKey), err)
+		return
+	}
 	if !key.IsData() && !key.IsReverse() {
 		return
 	}

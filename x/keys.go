@@ -416,8 +416,9 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 	}
 
 	if backupKey.StartUid > 0 {
-		// Safe to ignore error since the key was created right above and should be valid.
-		key, _ = GetSplitKey(key, backupKey.StartUid)
+		var err error
+		key, err = GetSplitKey(key, backupKey.StartUid)
+		Check(err)
 	}
 	return key
 }

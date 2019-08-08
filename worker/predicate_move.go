@@ -67,18 +67,16 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 	proposal := &pb.Proposal{}
 	size := 0
 	var pk x.ParsedKey
-	var parsedKey bool
 
 	for kvBatch := range kvs {
 		for _, kv := range kvBatch.Kv {
-			if !parsedKey {
+			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error
 				pk, err = x.Parse(kv.Key)
 				if err != nil {
 					return err
 				}
-				parsedKey = true
 
 				if !pk.IsSchema() {
 					return errors.Errorf("Expecting first key to be schema key: %+v", kv)
