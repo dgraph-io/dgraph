@@ -412,6 +412,7 @@ func (l *List) Release() {
 		for _, p := range list.GetPostings() {
 			postingPool.Put(p)
 		}
+		list.Reset()
 		postingListPool.Put(list)
 	}
 	fromList(l.plist)
