@@ -24,7 +24,8 @@ import (
 // ParseMutation parses a block into a mutation. Returns an object with a mutation or
 // an upsert block with mutation, otherwise returns nil with an error.
 func ParseMutation(mutation string) (mu *api.Mutation, err error) {
-	lexer := lex.NewLexer(mutation)
+	var lexer lex.Lexer
+	lexer.Reset(mutation)
 	lexer.Run(lexIdentifyBlock)
 	if err := lexer.ValidateResult(); err != nil {
 		return nil, err

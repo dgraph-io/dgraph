@@ -52,14 +52,14 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the N-Quad representation for it.
-func Parse(line string) (api.NQuad, error) {
+func Parse(line string, l *lex.Lexer) (api.NQuad, error) {
 	var rnq api.NQuad
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
 		return rnq, ErrEmpty
 	}
 
-	l := lex.NewLexer(line)
+	l.Reset(line)
 	l.Run(lexText)
 	if err := l.ValidateResult(); err != nil {
 		return rnq, err
