@@ -113,16 +113,21 @@ func buildMinimalTestQuery() *QueryBuilder {
 // Implement a schema.Field interface as required by QueryBuilder.WithSelectionSetFrom()
 
 var testField = &field{
-	typ: "T",
+	typ: &fieldType{"T"},
 	selSet: []schema.Field{
-		&field{name: "f", alias: "a"},
-		&field{typ: "R", name: "g", selSet: []schema.Field{&field{name: "e"}}}}}
+		&field{typ: &fieldType{"Str"}, name: "f", alias: "a"},
+		&field{typ: &fieldType{"R"}, name: "g",
+			selSet: []schema.Field{&field{typ: &fieldType{"Str"}, name: "e"}}}}}
 
 type field struct {
 	name   string
 	alias  string
-	typ    string
+	typ    *fieldType
 	selSet []schema.Field
+}
+
+type fieldType struct {
+	name string
 }
 
 func (f *field) Name() string {
@@ -133,8 +138,20 @@ func (f *field) Alias() string {
 	return f.alias
 }
 
-func (f *field) TypeName() string {
+func (f *field) Type() schema.Type {
 	return f.typ
+}
+
+func (ft *fieldType) Name() string {
+	return ft.name
+}
+
+func (ft *fieldType) Nullable() bool {
+	return true
+}
+
+func (ft *fieldType) ListType() schema.Type {
+	return nil
 }
 
 func (f *field) SelectionSet() []schema.Field {

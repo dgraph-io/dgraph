@@ -139,10 +139,10 @@ func (qb *QueryBuilder) WithSelectionSetFrom(fld schema.Field) *QueryBuilder {
 			qbld.WithAlias(f.Name())
 		}
 
-		if f.TypeName() == schema.IDType {
+		if f.Type().Name() == schema.IDType {
 			qbld.WithAttr("uid")
 		} else {
-			qbld.WithAttr(fld.TypeName() + "." + f.Name())
+			qbld.WithAttr(fld.Type().Name() + "." + f.Name())
 		}
 
 		// TODO: filters, pagination, etc in here
