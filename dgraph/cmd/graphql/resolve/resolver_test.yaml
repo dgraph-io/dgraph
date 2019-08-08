@@ -6,6 +6,8 @@
         name
       }
     }
+  explanation: "Dgraph always returns a query result as a list.  That needs to be
+    fixed for queries with non-list result types."
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -19,6 +21,8 @@
         name
       }
     }
+  explanation: "If Dgraph finds no results for a query, and the GraphQL
+    type is nullable, we should set the result to null."
   response: |
     { }
   expected: |
@@ -35,6 +39,8 @@
         name
       }
     }
+  explanation: "If Dgraph finds no results for a query, and the GraphQL
+    type is nullable, we should set the result to null."
   response: |
     { }
   expected: |
@@ -51,6 +57,8 @@
         name
       }
     }
+  explanation: "Even if some queries result in null, we should return all the
+    results we got."
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -65,6 +73,8 @@
         dob
       }
     }
+  explanation: "When a field that's nullable (like dob: DateTime) is missing 
+      in the Dgraph result, it should be added as null to the GraphQL result."
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -79,6 +89,8 @@
         birthday : dob
       }
     }
+  explanation: "When a field that's nullable (like dob: DateTime) is missing 
+      in the Dgraph result, it should be added as null to the GraphQL result."
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -96,6 +108,8 @@
         }
       }
     }
+  explanation: "When a field that's nullable (like text: String) is missing 
+      in the Dgraph result, it should be added as null to the GraphQL result."
   response: |
     { "getAuthor": [ { "name": "A.N. Author", "postsRequired": [ { "title": "A Title" } ] } ] }
   expected: |
@@ -112,6 +126,8 @@
         }
       }
     }
+  explanation: "When a field of any list type is missing in the result,
+    it should be added as an empty list [], not null"
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -128,6 +144,8 @@
         }
       }
     }
+  explanation: "When a field of any list type is missing in the result,
+    it should be added as an empty list [], not null"
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -144,6 +162,8 @@
         }
       }
     }
+  explanation: "When a field of any list type is missing in the result,
+    it should be added as an empty list [], not null"
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -163,6 +183,8 @@
         }
       }
     }
+  explanation: "When a field of any list type is missing in the result,
+    it should be added as an empty list [], not null"
   response: |
     { "getAuthor": [ { "name": "A.N. Author" } ] }
   expected: |
@@ -176,6 +198,8 @@
         name
       }
     }
+  explanation: "When a query result is of a non-list type, we really should only
+    get one item in the Dgraph result."
   response: |
     { "getAuthor": [ { "name": "A.N. Author" }, { "name": "A.N. Other Author" } ] }
   expected: |
@@ -192,6 +216,8 @@
         dob
       }
     }
+  explanation: "GraphQL error propagation causes an error on a non-nullable field
+    (like name: String!) to propagate to the parent object."
   response: |
     { "getAuthor": [ { "dob": "2000-01-01" } ] }
   expected: |
@@ -212,6 +238,9 @@
         }
       }
     }
+  explanation: "If a list has non-nullable elements and an element becomes null,
+    here because title (String!) is missing, GraphQL error propagation 
+    says the list becomes null."
   response: |
     { "getAuthor": [ { "name": "A.N. Author", "postsElmntRequired": [ { "title": "A Title", "text": "Some Text" }, { "text": "More Text" } ] } ] }
   expected: |
@@ -233,6 +262,9 @@
         }
       }
     }
+  explanation: "The schema asserts a Post's title as non nullable (title: String!), 
+    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
+    post in the result list that's missing a title gets squashed to null"
   response: |
     { "getAuthor": [ { "name": "A.N. Author", 
       "postsNullable": [ 
@@ -257,6 +289,9 @@
         }
       }
     }
+  explanation: "The schema asserts a Post's title as non nullable (title: String!), 
+    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
+    post in the result list that's missing a title gets squashed to null"
   response: |
     { "getAuthor": [ { "name": "A.N. Author", 
       "postsNullableListRequired": [ 

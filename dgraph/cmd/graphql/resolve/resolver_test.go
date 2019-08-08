@@ -45,11 +45,12 @@ type dgraphClient struct {
 }
 
 type QueryCase struct {
-	Name     string
-	GQLQuery string
-	Response string // Dgraph json response
-	Expected string // Expected data from Resolve()
-	Errors   gqlerror.List
+	Name        string
+	GQLQuery    string
+	Explanation string
+	Response    string // Dgraph json response
+	Expected    string // Expected data from Resolve()
+	Errors      gqlerror.List
 }
 
 var testGQLSchema = `
@@ -133,7 +134,7 @@ func TestResolver(t *testing.T) {
 			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
 
 			require.Equal(t, test.Errors, resp.Errors)
-			require.JSONEq(t, test.Expected, resp.Data.String())
+			require.JSONEq(t, test.Expected, resp.Data.String(), test.Explanation)
 		})
 	}
 }
