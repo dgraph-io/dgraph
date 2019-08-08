@@ -29,10 +29,10 @@ invalid_schemas:
     name: "Invalid list type"
     input: |
       type A {
-        posts: [P]!
+        posts: [A]!
       }
     errlist: [
-      {"message":"[P]! lists are invalid. Valid options are [P!]! and [P!].", "locations":[{"line":2, "column":3}]},
+      {"message":"[A]! lists are invalid. Valid options are [A!]! and [A!].", "locations":[{"line":2, "column":3}]},
     ]
 
   -
@@ -64,17 +64,23 @@ invalid_schemas:
     ]
 
   -
-    name: "More 1 errors"
+    name: "More than 1 errors"
     input: |
       type X {
         i1: ID!
         i2: ID!
         i3: ID!
-        l1: [P]!
+        l1: [X]!
       }
+    errlist: [
+      {"message":"Fields i1, i2 and i3 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
+      {"message":"[X]! lists are invalid. Valid options are [X!]! and [X!].", "locations":[{"line":5, "column":3}]},
+    ]
+
+  -
+    name: "Union type in schema"
+    input: |
       union U = R | S | T
     errlist: [
-      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":7, "column":7}]},
-      {"message":"Fields i1, i2 and i3 are listed as IDs for type X, but a type can have only one ID field. Pick a single field as the ID for type X.", "locations":[{"line":2, "column":3}, {"line":3, "column":3}, {"line":4, "column":3}]},
-      {"message":"[P]! lists are invalid. Valid options are [P!]! and [P!].", "locations":[{"line":5, "column":3}]},
+      {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]

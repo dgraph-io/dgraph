@@ -35,6 +35,7 @@ import (
 	nqjson "github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -905,8 +906,9 @@ func isAlterAllowed(ctx context.Context) error {
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
+	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line))
+		nq, err := rdf.Parse(string(line), &l)
 		if err == rdf.ErrEmpty {
 			continue
 		}
