@@ -295,7 +295,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.Uids) != 0 {
+		if child.DestUIDs != nil && len(child.DestUIDs.Uids) != 0 {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
