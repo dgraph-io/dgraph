@@ -107,6 +107,7 @@ pushd $basedir/ratel
   source ~/.nvm/nvm.sh
   nvm install --lts
   ./scripts/build.prod.sh
+  ./scripts/test.sh
 popd
 
 # Build Windows.
