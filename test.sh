@@ -107,7 +107,7 @@ function Run {
     set -o pipefail
     echo -en "...\r"
     if IsCi; then
-        go test -v ${GO_TEST_OPTS[*]} $@ | go-test-teamcity
+        go test -json -v ${GO_TEST_OPTS[*]} $@
         return
     fi
     go test ${GO_TEST_OPTS[*]} $@ \
