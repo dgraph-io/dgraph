@@ -60,7 +60,7 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 		return nil, gqlErr
 	}
 
-	gqlErrList := validateSchema(doc)
+	gqlErrList := preGQLValidation(doc)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
@@ -70,6 +70,11 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return nil, gqlErr
+	}
+
+	gqlErrList = postGQLValidation(sch)
+	if gqlErrList != nil {
+		return nil, gqlErrList
 	}
 
 	handler.dgraphSchema = genDgSchema(sch)

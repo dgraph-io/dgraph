@@ -25,14 +25,24 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-type schRuleFunc func(schema *ast.SchemaDocument) gqlerror.List
+// Validation functions which will run before gql validation.
+type preGQLCheck func(schema *ast.SchemaDocument) gqlerror.List
 
-type schRule struct {
+// Validation functions which will run after gql validation.
+type postGQLCheck func(schema *ast.Schema) gqlerror.List
+
+type preGQLRule struct {
 	name        string
-	schRuleFunc schRuleFunc
+	schRuleFunc preGQLCheck
 }
 
-var schRules []schRule
+type postGQLRule struct {
+	name        string
+	schRuleFunc postGQLCheck
+}
+
+var preGQLRules []preGQLRule
+var postGQLRules []postGQLRule
 
 type scalar struct {
 	name       string
@@ -60,19 +70,37 @@ func addScalars(doc *ast.SchemaDocument) {
 }
 
 // addRule adds a new schema rule to the global array schRules.
-func addRule(name string, f schRuleFunc) {
-	schRules = append(schRules, schRule{
+func addPreRule(name string, f preGQLCheck) {
+	preGQLRules = append(preGQLRules, preGQLRule{
 		name:        name,
 		schRuleFunc: f,
 	})
 }
 
-// validateSchema validates the schema against dgraph's rules of schema.
-func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
+func addPostRule(name string, f postGQLCheck) {
+	postGQLRules = append(postGQLRules, postGQLRule{
+		name:        name,
+		schRuleFunc: f,
+	})
+}
+
+// preGQLValidation validates schema before gql validation
+func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for i := range schRules {
-		errs = append(errs, schRules[i].schRuleFunc(schema)...)
+	for _, rule := range preGQLRules {
+		errs = append(errs, rule.schRuleFunc(schema)...)
+	}
+
+	return errs
+}
+
+// postGQLValidation validates schema after gql validation.
+func postGQLValidation(schema *ast.Schema) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range postGQLRules {
+		errs = append(errs, rule.schRuleFunc(schema)...)
 	}
 
 	return errs
