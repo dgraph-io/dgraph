@@ -31,6 +31,27 @@ func bufioReader(str string) *bufio.Reader {
 	return bufio.NewReader(strings.NewReader(str))
 }
 
+// {"key": "val"}
+// {"key": ["val1", "val2"]}
+// {"key": {"ikey1": "val1"}}
+
+func TestJsonChunker(t *testing.T) {
+	data := []string{`{"key": "val"}`, `{"key": ["val1", "val2"]}`, `{"key": {"ikey1": "val1"}}`}
+
+	var chunker jsonChunker
+	for _, str := range data {
+		r := bufioReader(str)
+		chunk, err := chunker.Chunk(r)
+		if err != io.EOF {
+			require.NoError(t, err)
+		}
+
+		require.True(t, chunk != nil, "the chunk should not be empty")
+		require.Equal(t, str, string(chunk.Bytes()))
+	}
+
+}
+
 // Test that problems at the start of the JSON document are caught.
 func TestJSONLoadStart(t *testing.T) {
 	var tests = []struct {

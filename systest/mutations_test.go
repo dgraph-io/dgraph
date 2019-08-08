@@ -79,6 +79,46 @@ func TestSystem(t *testing.T) {
 	t.Run("drop data and drop all", wrap(DropDataAndDropAll))
 	t.Run("drop type", wrap(DropType))
 	t.Run("drop type without specified type", wrap(DropTypeNoValue))
+	t.Run("geo test", wrap(GeoTest))
+}
+
+func GeoTest(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	check(t, c.Alter(ctx, &api.Operation{
+		Schema: `
+			name: string  .
+			loc: [geo] @index(geo) .
+		`,
+	}))
+
+	txn := c.NewTxn()
+	defer txn.Discard(ctx)
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:a <name> "read"  .
+			_:a <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+		`),
+	})
+	check(t, err)
+
+	resp, err := c.NewTxn().Query(context.Background(), `{
+		q(func: near(loc, [-122.4220186,37.772318], 1000)) {
+			name
+		}
+	}`)
+	check(t, err)
+	testutil.CompareJSON(t, `
+	{
+		"q": [
+			{
+				"name": "read"
+			}
+		]
+	}
+	`, string(resp.GetJson()))
+
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {

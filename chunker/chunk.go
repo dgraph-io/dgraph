@@ -141,21 +141,7 @@ func (rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Begin(r *bufio.Reader) error {
-	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
-	// This function must be called before calling readJSONChunk for the first time to advance
-	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
-	// one array element at a time instead of having to read the entire array into memory.
-	if err := slurpSpace(r); err != nil {
-		return err
-	}
-	ch, _, err := r.ReadRune()
-	if err != nil {
-		return err
-	}
-	if ch != '[' {
-		return errors.Errorf("JSON file must contain array. Found: %v", ch)
-	}
+func (j jsonChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
@@ -169,32 +155,36 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	if err := slurpSpace(r); err != nil {
 		return out, err
 	}
-	ch, _, err := r.ReadRune()
+	beginCh, _, err := r.ReadRune()
 	if err != nil {
-		return out, err
+		return nil, err
 	}
-	if ch == ']' {
-		// Handle loading an empty JSON array ("[]") without error.
-		return nil, io.EOF
-	} else if ch != '{' {
-		return nil, errors.Errorf("Expected JSON map start. Found: %v", string(ch))
+	x.Check2(out.WriteRune(beginCh))
+
+	var enclosingCh rune
+	switch beginCh {
+	case '{':
+		enclosingCh = '}'
+	case '[':
+		enclosingCh = ']'
+	default:
+		return nil, errors.Errorf("The JSON file must begin with { or [")
 	}
-	x.Check2(out.WriteRune(ch))
 
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
 	depth := 1 // We already consumed one `{`, so our depth starts at one.
 	for depth > 0 {
-		ch, _, err = r.ReadRune()
+		ch, _, err := r.ReadRune()
 		if err != nil {
 			return nil, errors.New("Malformed JSON")
 		}
 		x.Check2(out.WriteRune(ch))
 
 		switch ch {
-		case '{':
+		case beginCh:
 			depth++
-		case '}':
+		case enclosingCh:
 			depth--
 		case '"':
 			if err := slurpQuoted(r, out); err != nil {
@@ -205,24 +195,6 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		}
 	}
 
-	// The map should be followed by either the ',' between array elements, or the ']'
-	// at the end of the array.
-	if err := slurpSpace(r); err != nil {
-		return nil, err
-	}
-	ch, _, err = r.ReadRune()
-	if err != nil {
-		return nil, err
-	}
-	switch ch {
-	case ']':
-		return out, io.EOF
-	case ',':
-		// pass
-	default:
-		// Let next call to this function report the error.
-		x.Check(r.UnreadRune())
-	}
 	return out, nil
 }
 
