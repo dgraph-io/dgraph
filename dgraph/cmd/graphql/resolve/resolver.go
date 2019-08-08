@@ -154,7 +154,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			// resolvers for the operation and crush the whole result to an error.
 			//
 			// ATM we just squash this one query, return the error and the results
-			// of all other querie.
+			// of all other queries.
 			// TODO: ^^  should we even have ! return types in queries?  and/or
 			// should add that last step of error propagation with cancelation
 			// when we make queries concurrent.
@@ -252,8 +252,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 // completeDgraphResult starts the recursion with field as the top level GraphQL
 // query and dgResult as the matching full Dgraph result.
 func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror.List) {
-	// We need an intial case in the alg because dgraph always returns a list
-	// result no mater what.
+	// We need an initial case in the alg because dgraph always returns a list
+	// result no matter what.
 	//
 	// If the query was for a non-list type, that needs to be corrected:
 	//
@@ -265,10 +265,8 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 
 	var errs gqlerror.List
 
-	dgraphError := func(v interface{}) ([]byte, gqlerror.List) {
-		json, _ := json.Marshal(v)
-		glog.Error("Dgraph return type was not an array of json objects : ",
-			string(json))
+	dgraphError := func() ([]byte, gqlerror.List) {
+		glog.Error("Could not process Dgraph result : ", string(dgResult))
 		return nil, gqlerror.List{
 			gqlerror.Errorf("Result of Dgraph query was not of a recognisable form.  " +
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}
@@ -281,7 +279,7 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 	var valToComplete map[string]interface{}
 	err := json.Unmarshal(dgResult, &valToComplete)
 	if err != nil {
-		glog.Errorf("%v+", errors.Wrap(err, "Failed to unmarshal Dgraph query result"))
+		glog.Errorf("%+v", errors.Wrap(err, "Failed to unmarshal Dgraph query result"))
 		return nil, schema.AsGQLErrors(
 			schema.GQLWrapf(err, "internal error, couldn't unmarshal dgraph result"))
 	}
@@ -289,6 +287,9 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 	switch val := valToComplete[field.ResponseName()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
+			// Turn Dgraph list result to single object
+			// "q":[{ ... }] ---> "q":{ ... }
+
 			var internalVal interface{}
 
 			if len(val) > 0 {
@@ -296,7 +297,7 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 				if internalVal, ok = val[0].(map[string]interface{}); !ok {
 					// This really shouldn't happen. Dgraph only returns arrays
 					// of json objects.
-					return dgraphError(val)
+					return dgraphError()
 				}
 			}
 
@@ -306,9 +307,8 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 				// or maybe some data corruption.
 				//
 				// We'll continue and just try the first item to return some data.
-				json, _ := json.Marshal(val)
 				glog.Error("Got a list result from Dgraph when expecting a one-item list : ",
-					string(json))
+					string(dgResult))
 
 				errs = append(errs,
 					gqlerror.Errorf("Dgraph returned a list, but was expecting just one item."))
@@ -319,20 +319,31 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 			}
 
 			valToComplete[field.ResponseName()] = internalVal
-		} else {
-			valToComplete[field.ResponseName()] = val
 		}
 	default:
 		if val != nil {
-			return dgraphError(val)
+			return dgraphError()
 		}
 
-		valToComplete[field.ResponseName()] = nil
+		// valToComplete[field.ResponseName()] is nil, so resolving for the
+		// { } ---> "q": null
+		// case
 	}
 
 	completed, gqlErrs := completeObject(field.Type(), []schema.Field{field}, valToComplete)
 	if len(completed) > 2 {
 		// chop leading '{' and trailing '}' from JSON object
+		//
+		// The final GraphQL result gets built like
+		// { data:
+		//    {
+		//      q1: {...},
+		//      q2: [ {...}, {...} ],
+		//      ...
+		//    }
+		// }
+		// Here we are building a single one of the q's, so the fully resolved
+		// result should be q1: {...}, rather than {q1: {...}} as returned by completeObject.
 		completed = completed[1 : len(completed)-1]
 	}
 
@@ -340,8 +351,9 @@ func completeDgraphResult(field schema.Field, dgResult []byte) ([]byte, gqlerror
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
+// It returns a bracketed json object like { f1:..., f2:..., ... }.
 //
-// fields are all the fields from this bracketed level in the graphql query, e.g:
+// fields are all the fields from this bracketed level in the GraphQL  query, e.g:
 // {
 //   name
 //   dob
@@ -388,11 +400,10 @@ func completeObject(typ schema.Type, fields []schema.Field, res map[string]inter
 		completed, err := completeValue(f, res[f.ResponseName()])
 		errs = append(errs, err...)
 		if completed == nil {
-			if f.Type().Nullable() {
-				completed = []byte(`null`)
-			} else {
+			if !f.Type().Nullable() {
 				return nil, append(errs, gqlerror.Errorf("Crushed an object because of null error"))
 			}
+			completed = []byte(`null`)
 		}
 		buf.Write(completed)
 		comma = ", "
@@ -414,7 +425,7 @@ func completeValue(field schema.Field, val interface{}) ([]byte, gqlerror.List) 
 	default:
 		if val == nil {
 			if field.Type().ListType() != nil {
-				// We could chose to set this to null.  This is our decision, not
+				// We could choose to set this to null.  This is our decision, not
 				// anything required by the GraphQL spec.
 				//
 				// However, if we query, for example, for a persons's friends with
@@ -484,9 +495,7 @@ func completeList(field schema.Field, values []interface{}) ([]byte, gqlerror.Li
 		errs = append(errs, err...)
 		buf.WriteString(comma)
 		if r == nil {
-			if field.Type().ListType().Nullable() {
-				buf.WriteString("null")
-			} else {
+			if !field.Type().ListType().Nullable() {
 				// Unlike the choice in completeValue() above, where we turn missing
 				// lists into [], the spec explicitly calls out:
 				//  "If a List type wraps a Non-Null type, and one of the
@@ -494,6 +503,7 @@ func completeList(field schema.Field, values []interface{}) ([]byte, gqlerror.Li
 				//  must resolve to null."
 				return nil, append(errs, gqlerror.Errorf("Crushed a list because of null error"))
 			}
+			buf.WriteString("null")
 		} else {
 			buf.Write(r)
 		}

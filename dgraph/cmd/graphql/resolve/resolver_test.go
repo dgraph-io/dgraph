@@ -31,7 +31,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Tests that result completetion and GraphQL error propagation are working properly.
+// Tests that result completion and GraphQL error propagation are working properly.
 
 // All the tests work on a mocked json response, rather than a running Dgraph.
 // It's better to mock the Dgraph client interface in these tests and have cases
