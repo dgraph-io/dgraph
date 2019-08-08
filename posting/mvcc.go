@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 	"github.com/pkg/errors"
 )
 
@@ -44,13 +43,13 @@ func (txn *Txn) ShouldAbort() bool {
 	return atomic.LoadUint32(&txn.shouldAbort) > 0
 }
 
-func (txn *Txn) addConflictKey(conflictKey string) {
+func (txn *Txn) addConflictKey(conflictKey uint64) {
 	txn.Lock()
 	defer txn.Unlock()
 	if txn.conflicts == nil {
-		txn.conflicts = make(map[string]struct{})
+		txn.conflicts = make(map[uint64]struct{})
 	}
-	if len(conflictKey) > 0 {
+	if conflictKey > 0 {
 		txn.conflicts[conflictKey] = struct{}{}
 	}
 }
@@ -63,7 +62,7 @@ func (txn *Txn) FillContext(ctx *api.TxnContext, gid uint32) {
 		// We don'txn need to send the whole conflict key to Zero. Solving #2338
 		// should be done by sending a list of mutating predicates to Zero,
 		// along with the keys to be used for conflict detection.
-		fps := strconv.FormatUint(farm.Fingerprint64([]byte(key)), 36)
+		fps := strconv.FormatUint(key, 36)
 		if !x.HasString(ctx.Keys, fps) {
 			ctx.Keys = append(ctx.Keys, fps)
 		}

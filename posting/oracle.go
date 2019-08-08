@@ -54,7 +54,7 @@ type Txn struct {
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
-	conflicts map[string]struct{}
+	conflicts map[uint64]struct{}
 
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.
