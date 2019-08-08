@@ -82,8 +82,6 @@ func validateSchema(schema *ast.SchemaDocument) gqlerror.List {
 // for all the types mentioned the the schema.
 func generateCompleteSchema(sch *ast.Schema) {
 
-	extenderMap := make(map[string]*ast.Definition)
-
 	sch.Query = &ast.Definition{
 		Kind:        ast.Object,
 		Description: "Query object contains all the query functions",
@@ -98,31 +96,27 @@ func generateCompleteSchema(sch *ast.Schema) {
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
 
-	var keys []string
+	keys := make([]string, 0, len(sch.Types))
 	for k := range sch.Types {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	sort.Strings(keys)
 
 	for _, key := range keys {
 		defn := sch.Types[key]
 
 		if defn.Kind == ast.Object {
-			extenderMap[defn.Name+"Input"] = genInputType(sch, defn)
-			extenderMap[defn.Name+"Ref"] = genRefType(defn)
-			extenderMap[defn.Name+"Update"] = genUpdateType(sch, defn)
-			extenderMap[defn.Name+"Filter"] = genFilterType(defn)
-			extenderMap["Add"+defn.Name+"Payload"] = genAddResultType(defn)
-			extenderMap["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
-			extenderMap["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
+			sch.Types[defn.Name+"Input"] = genInputType(sch, defn)
+			sch.Types[defn.Name+"Ref"] = genRefType(defn)
+			sch.Types[defn.Name+"Update"] = genUpdateType(sch, defn)
+			sch.Types[defn.Name+"Filter"] = genFilterType(defn)
+			sch.Types["Add"+defn.Name+"Payload"] = genAddResultType(defn)
+			sch.Types["Update"+defn.Name+"Payload"] = genUpdResultType(defn)
+			sch.Types["Delete"+defn.Name+"Payload"] = genDelResultType(defn)
 
 			sch.Query.Fields = append(sch.Query.Fields, addQueryType(defn)...)
 			sch.Mutation.Fields = append(sch.Mutation.Fields, addMutationType(defn)...)
 		}
-	}
-
-	for name, extType := range extenderMap {
-		sch.Types[name] = extType
 	}
 }
 
@@ -408,7 +402,6 @@ func genArgumentsString(args ast.ArgumentDefinitionList) string {
 		argsStrs = append(argsStrs, genArgumentString(arg))
 	}
 
-	sort.Slice(argsStrs, func(i, j int) bool { return argsStrs[i] < argsStrs[j] })
 	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
 }
 
@@ -475,11 +468,12 @@ func Stringify(schema *ast.Schema) string {
 	if schema.Types == nil {
 		return ""
 	}
-	var keys []string
+
+	keys := make([]string, 0, len(schema.Types))
 	for k := range schema.Types {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	sort.Strings(keys)
 
 	for _, key := range keys {
 		typ := schema.Types[key]
