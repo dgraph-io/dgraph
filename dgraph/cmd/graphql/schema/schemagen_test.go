@@ -17,83 +17,13 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
 	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
 	"gopkg.in/yaml.v2"
 )
-
-func TestDGSchemaGen(t *testing.T) {
-	fileName := "schemagen_test.yml"
-	byts, err := ioutil.ReadFile(fileName)
-	require.Nil(t, err, "Unable to read file %s", fileName)
-
-	var tests Tests
-	err = yaml.Unmarshal(byts, &tests)
-	require.Nil(t, err, "Unable to unmarshal to yaml!")
-
-	for _, schemas := range tests {
-		for _, sch := range schemas {
-			t.Run(sch.Name, func(t *testing.T) {
-
-				schHandler, errs := NewSchemaHandler(sch.Input)
-				require.Nil(t, errs)
-
-				dgSchema := schHandler.DGSchema()
-				require.Equal(t, sch.Output, dgSchema, sch.Name)
-			})
-		}
-	}
-}
-
-func TestSchemaString(t *testing.T) {
-	numTests := 1
-
-	for i := 0; i < numTests; i++ {
-		fileName := "../testdata/schema" + strconv.Itoa(i+1) + ".txt" // run from pwd
-		str1, err := ioutil.ReadFile(fileName)
-		if err != nil {
-			t.Errorf("Unable to read schema file %s", fileName)
-			continue
-		}
-
-		schHandler, errs := NewSchemaHandler(string(str1))
-		require.Nil(t, errs)
-
-		newSchemaStr := schHandler.GQLSchema()
-
-		fmt.Println(newSchemaStr)
-
-		outFile := "../testdata/schema" + strconv.Itoa(i+1) + "_output.txt"
-		str2, err := ioutil.ReadFile(outFile)
-		if err != nil {
-			t.Errorf("Unable to read output file " + outFile)
-			continue
-		}
-
-		doc, gqlerr := parser.ParseSchema(&ast.Source{Input: string(str2)})
-		if gqlerr != nil {
-			t.Errorf(gqlerr.Error())
-			continue
-		}
-
-		outputSch, errlist2 := validator.ValidateSchemaDocument(doc)
-		if errlist2 != nil {
-			t.Errorf(errlist2.Error())
-			continue
-		}
-
-		handlerObj := schHandler.(schemaHandler)
-		require.Equal(t, true, AreEqualSchema(handlerObj.completeSchema, outputSch))
-	}
-}
 
 type Tests map[string][]TestCase
 
@@ -104,14 +34,64 @@ type TestCase struct {
 	Output  string
 }
 
-func TestInvalidSchemas(t *testing.T) {
-	fileName := "gqlschema_test.yml" // run from pwd
+func TestDGSchemaGen(t *testing.T) {
+	fileName := "schemagen_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
-	require.Nil(t, err, "Unable to read file %s", fileName)
+	require.NoError(t, err, "Unable to read file %s", fileName)
 
 	var tests Tests
 	err = yaml.Unmarshal(byts, &tests)
-	require.Nil(t, err, "Error Unmarshalling to yaml!")
+	require.NoError(t, err, "Unable to unmarshal to yaml!")
+
+	for _, schemas := range tests {
+		for _, sch := range schemas {
+			t.Run(sch.Name, func(t *testing.T) {
+
+				schHandler, errs := NewSchemaHandler(sch.Input)
+				require.NoError(t, errs)
+
+				dgSchema := schHandler.DGSchema()
+				require.Equal(t, sch.Output, dgSchema, sch.Name)
+			})
+		}
+	}
+}
+
+func TestSchemaString(t *testing.T) {
+	inputDir := "testdata/input/"
+	outputDir := "testdata/output/"
+
+	files, err := ioutil.ReadDir(inputDir)
+	require.NoError(t, err)
+
+	for _, testFile := range files {
+		t.Run(testFile.Name(), func(t *testing.T) {
+			inputFileName := inputDir + testFile.Name()
+			str1, err := ioutil.ReadFile(inputFileName)
+			require.NoError(t, err)
+
+			schHandler, errs := NewSchemaHandler(string(str1))
+			require.NoError(t, errs)
+
+			newSchemaStr := schHandler.GQLSchema()
+
+			outputFileName := outputDir + testFile.Name()
+			str2, err := ioutil.ReadFile(outputFileName)
+			require.NoError(t, err)
+
+			require.Equal(t, string(str2), newSchemaStr)
+		})
+	}
+}
+
+func TestInvalidSchemas(t *testing.T) {
+	fileName := "gqlschema_test.yml"
+	byts, err := ioutil.ReadFile(fileName)
+	require.NoError(t, err, "Unable to read file %s", fileName)
+
+	var tests Tests
+	err = yaml.Unmarshal(byts, &tests)
+	require.NoError(t, err, "Error Unmarshalling to yaml!")
 
 	for _, schemas := range tests {
 		for _, sch := range schemas {

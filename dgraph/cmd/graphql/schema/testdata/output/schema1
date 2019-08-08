@@ -1,0 +1,125 @@
+#######################
+# Generated Types
+#######################
+type AddAuthorPayload {
+	author: Author!
+}
+
+type AddPostPayload {
+	post: Post!
+}
+
+type Author {
+	id: ID!
+	name: String!
+	posts: [Post!]!
+	friends: [Author!]!
+}
+
+type DeleteAuthorPayload {
+	msg: String!
+}
+
+type DeletePostPayload {
+	msg: String!
+}
+
+type Post {
+	id: ID!
+	title: String!
+	text: String
+	author: Author!
+	postType: PostType!
+}
+
+type UpdateAuthorPayload {
+	author: Author!
+}
+
+type UpdatePostPayload {
+	post: Post!
+}
+
+#######################
+# Scalar Definitions
+#######################
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+#######################
+# Enum Definitions
+#######################
+enum PostType {
+	Statement
+	Question
+	Answer
+}
+
+#######################
+# Input Definitions
+#######################
+input AuthorFilter {
+	dgraph: String
+}
+
+input AuthorInput {
+	name: String!
+	posts: [PostRef!]!
+	friends: [AuthorRef!]!
+}
+
+input AuthorRef {
+	id: ID!
+}
+
+input AuthorUpdate {
+	name: String
+	posts: [PostRef!]
+	friends: [AuthorRef!]
+}
+
+input PostFilter {
+	dgraph: String
+}
+
+input PostInput {
+	title: String!
+	text: String
+	author: AuthorRef!
+	postType: PostType!
+}
+
+input PostRef {
+	id: ID!
+}
+
+input PostUpdate {
+	title: String
+	text: String
+	author: AuthorRef
+	postType: PostType
+}
+
+#######################
+# Generated Query
+#######################
+type Query {
+	getAuthor(id: ID!): Author!
+	queryAuthor(filter: AuthorFilter!): [Author!]!
+	getPost(id: ID!): Post!
+	queryPost(filter: PostFilter!): [Post!]!
+}
+#######################
+# Generated Mutations
+#######################
+type Mutation {
+	addAuthor(input: AuthorInput!): AddAuthorPayload!
+	updateAuthor(id: ID!,input: AuthorUpdate): UpdateAuthorPayload!
+	deleteAuthor(id: ID!): DeleteAuthorPayload!
+	addPost(input: PostInput!): AddPostPayload!
+	updatePost(id: ID!,input: PostUpdate): UpdatePostPayload!
+	deletePost(id: ID!): DeletePostPayload!
+}
