@@ -1732,6 +1732,168 @@ func TestCountUidToVar(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
 }
 
+func TestFilterUsingLenFunction(t *testing.T) {
+	tests := []struct {
+		name, in, out string
+	}{
+		{
+			"Eq length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(eq(len(f), 3)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Eq length should return empty results",
+			`{
+				var(func: has(school), first: 3) {
+					f as uid
+				}
+				me(func: uid(f)) @filter(eq(len(f), 0)) {
+					uid
+					name
+				}
+			}`,
+			`{"data": {"me":[]}}`,
+		},
+		{
+			"Eq length with uid(0) should return results",
+			`{
+				f as var(func: eq(name, "random"))
+				me(func: uid(0)) @filter(eq(len(f), 0)) {
+					uid
+				}
+			}`,
+			`{"data": {"me":[{"uid": "0x0"}]}}`,
+		},
+		{
+			"Ge length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(ge(len(f), 0)) {
+			        count(uid)
+			    }
+			}`,
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Lt length should return results",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) @filter(lt(len(f), 100)) {
+			        count(uid)
+			    }
+			}`,
+
+			`{"data": {"me":[{"count": 3}]}}`,
+		},
+		{
+			"Multiple length conditions",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    f2 as var(func: has(name), first: 5)
+
+			    me(func: uid(f2)) @filter(lt(len(f), 100) AND lt(len(f2), 10)) {
+			        count(uid)
+			    }
+			}`,
+
+			`{"data": {"me":[{"count": 5}]}}`,
+		},
+		{
+			"Filter in child with true result",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) {
+					name
+					friend @filter(lt(len(f), 100)) {
+						name
+					}
+				}
+			}`,
+			`{"data":{"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"},
+			 {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},
+			 {"name":"Rick Grimes","friend":[{"name":"Michonne"}]},
+			 {"name":"Glenn Rhee"}]}}`,
+		},
+		{
+			"Filter in child with false result",
+			`{
+			    var(func: has(school), first: 3) {
+			        f as uid
+			    }
+
+			    me(func: uid(f)) {
+					name
+					friend @filter(gt(len(f), 100)) {
+						name
+					}
+				}
+			}`,
+
+			`{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},
+			 {"name":"Glenn Rhee"}]}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Log("Running: ", tc.name)
+		js := processQueryNoErr(t, tc.in)
+		require.JSONEq(t, tc.out, js)
+	}
+}
+
+func TestCountOnVarAtRootErr(t *testing.T) {
+	query := `
+	       {
+	               var(func: has(school), first: 3) {
+	                       f as count(uid)
+	               }
+
+	               me(func: len(f)) {
+	                       score: math(f)
+	               }
+	       }
+	    `
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: len is not valid")
+}
+
+func TestFilterUsingLenFunctionWithMath(t *testing.T) {
+	query := `
+	{
+		var(func: has(school), first: 3) {
+			f as count(uid)
+		}
+
+		me(func: uid(f)) @filter(lt(len(f), 100)) {
+			score: math(f)
+		}
+	}
+    `
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"score": 3}]}}`, js)
+}
+
 func TestCountUidToVarMultiple(t *testing.T) {
 	query := `
 	{

@@ -48,6 +48,7 @@ import (
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
+	mePool *sync.Pool
 }
 
 type shardState struct {
@@ -62,6 +63,11 @@ func newMapper(st *state) *mapper {
 	return &mapper{
 		state:  st,
 		shards: make([]shardState, st.opt.MapShards),
+		mePool: &sync.Pool{
+			New: func() interface{} {
+				return &pb.MapEntry{}
+			},
+		},
 	}
 }
 
@@ -125,6 +131,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		x.Check(err)
 		_, err = w.Write(meBuf)
 		x.Check(err)
+		m.mePool.Put(me)
 	}
 }
 
@@ -182,9 +189,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	me := &pb.MapEntry{
-		Key: key,
-	}
+	me := m.mePool.Get().(*pb.MapEntry)
+	*me = pb.MapEntry{Key: key}
+
 	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
 		me.Posting = p
 	} else {
