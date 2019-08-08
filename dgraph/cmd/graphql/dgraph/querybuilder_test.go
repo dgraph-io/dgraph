@@ -46,41 +46,46 @@ func TestQueryBuilderWithErrorKeepsError(t *testing.T) {
 		{func(qb *QueryBuilder) *QueryBuilder { return qb.WithField("f") }},
 		{func(qb *QueryBuilder) *QueryBuilder { return qb.WithSelectionSetFrom(testField) }},
 	}
-	for _, tt := range tests {
-		qb := &QueryBuilder{err: fmt.Errorf("An Error")}
+	for i, test := range tests {
+		t.Run("should remain error "+string(i), func(t *testing.T) {
 
-		require.True(t, qb.HasErrors())
-		beforeErr := qb.err
+			qb := &QueryBuilder{err: fmt.Errorf("An Error")}
 
-		qb = tt.builder(qb)
+			require.True(t, qb.HasErrors())
+			beforeErr := qb.err
 
-		require.True(t, qb.HasErrors())
-		require.Equal(t, beforeErr, qb.err)
+			qb = test.builder(qb)
+
+			require.True(t, qb.HasErrors())
+			require.Equal(t, beforeErr, qb.err)
+		})
 	}
 
 }
 
 func TestQueryBuilder(t *testing.T) {
-	tests := []struct {
+	tests := map[string]struct {
 		builder  *QueryBuilder
 		expected string
 	}{
-		{buildMinimalTestQuery(),
+		"minimal": {buildMinimalTestQuery(),
 			"query {\n  q(func: uid(0x7b))\n}"},
-		{buildMinimalTestQuery().WithAlias("p"),
+		"with alias": {buildMinimalTestQuery().WithAlias("p"),
 			"query {\n  p : q(func: uid(0x7b))\n}"},
-		{buildMinimalTestQuery().WithTypeFilter("T"),
+		"filter": {buildMinimalTestQuery().WithTypeFilter("T"),
 			"query {\n  q(func: uid(0x7b)) @filter(type(T))\n}"},
-		{buildMinimalTestQuery().WithField("f"),
+		"with field": {buildMinimalTestQuery().WithField("f"),
 			"query {\n  q(func: uid(0x7b)) {\n    f\n  }\n}"},
-		{buildMinimalTestQuery().WithField("f").WithField("g"),
+		"with two fields": {buildMinimalTestQuery().WithField("f").WithField("g"),
 			"query {\n  q(func: uid(0x7b)) {\n    f\n    g\n  }\n}"},
 	}
 
-	for _, tt := range tests {
-		qs, err := tt.builder.AsQueryString()
-		require.NoError(t, err)
-		require.Equal(t, tt.expected, qs)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			qs, err := test.builder.AsQueryString()
+			require.NoError(t, err)
+			require.Equal(t, test.expected, qs)
+		})
 	}
 }
 
