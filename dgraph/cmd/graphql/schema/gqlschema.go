@@ -449,7 +449,7 @@ func genArgumentsDefnString(args ast.ArgumentDefinitionList) string {
 		return ""
 	}
 
-	var argsStrs []string
+	argsStrs := make([]string, 0, len(args))
 
 	for _, arg := range args {
 		argsStrs = append(argsStrs, genArgumentDefnString(arg))
@@ -463,7 +463,7 @@ func genArgumentsString(args ast.ArgumentList) string {
 		return ""
 	}
 
-	var argsStrs []string
+	argsStrs := make([]string, 0, len(args))
 
 	for _, arg := range args {
 		argsStrs = append(argsStrs, genArgumentString(arg))
@@ -501,7 +501,8 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 		return ""
 	}
 
-	var direcArgs []string
+	direcArgs := make([]string, 0, len(direcs))
+
 	for _, dir := range direcs {
 		direcArgs = append(
 			direcArgs,
