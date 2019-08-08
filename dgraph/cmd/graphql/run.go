@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -39,6 +39,7 @@ import (
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
@@ -166,7 +167,7 @@ func run() error {
 		schema:       schema,
 	}
 
-	http.Handle("/graphql", handler)
+	http.Handle("/graphql", api.WithRequestID(handler))
 
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
@@ -213,7 +214,7 @@ func initDgraph() error {
 	// - e.g. moving no ! to !, or redefining a type, or changing a relation's type
 	// ... need to allow for schema migrations, but probably should have some checks
 
-	op := &api.Operation{}
+	op := &dgoapi.Operation{}
 	op.Schema = dgSchema
 
 	ctx := context.Background()
@@ -229,7 +230,7 @@ func initDgraph() error {
 		Date:   time.Now(),
 	}
 
-	mu := &api.Mutation{
+	mu := &dgoapi.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(s)
@@ -248,7 +249,7 @@ func initDgraph() error {
 }
 
 func connect() (*dgo.Dgraph, func(), error) {
-	var clients []api.DgraphClient
+	var clients []dgoapi.DgraphClient
 	disconnect := func() {}
 
 	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
@@ -267,7 +268,7 @@ func connect() (*dgo.Dgraph, func(), error) {
 			return func() { dis(); conn.Close() }
 		}(disconnect)
 
-		clients = append(clients, api.NewDgraphClient(conn))
+		clients = append(clients, dgoapi.NewDgraphClient(conn))
 	}
 
 	return dgo.NewDgraphClient(clients...), disconnect, nil

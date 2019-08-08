@@ -21,6 +21,7 @@ import (
 
 	"github.com/golang/glog"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -48,13 +49,13 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	default:
-		return nil, gqlerror.Errorf("Only get queries are implemented")
+		return nil, gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
 	}
 
 	res, err := qr.dgraph.Query(ctx, qb)
 	if err != nil {
-		glog.Infof("Dgraph query failed : %s", err)
-		return nil, schema.GQLWrapf(err, "failed to resolve query")
+		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
+		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
 	}
 
 	// TODO:

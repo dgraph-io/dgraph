@@ -65,6 +65,8 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 	switch r.Method {
 	case http.MethodGet:
 		// TODO: fill gqlReq in from parameters
+		rr.WithError(gqlerror.Errorf("GraphQL on HTTP GET not yet implemented"))
+		return
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {

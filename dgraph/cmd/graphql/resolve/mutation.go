@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/gqlerror"
@@ -124,7 +125,8 @@ func (mr *MutationResolver) Resolve(ctx context.Context) ([]byte, error) {
 		return mr.resolveUpdateMutation(ctx)
 	}
 
-	return nil, gqlerror.Errorf("Only only add, delete and update mutations are implemented")
+	return nil, gqlerror.Errorf(
+		"[%s] Only add, delete and update mutations are implemented", api.RequestID(ctx))
 }
 
 func (mr *MutationResolver) resolveAddMutation(ctx context.Context) ([]byte, error) {
@@ -133,13 +135,16 @@ func (mr *MutationResolver) resolveAddMutation(ctx context.Context) ([]byte, err
 
 	assigned, err := mr.dgraph.Mutate(ctx, buildMutationJSON(mr.mutation, val))
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "mutation %s failed", mr.mutation.Name())
+		return nil, schema.GQLWrapf(err,
+			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())
 	}
 
 	uid, err := strconv.ParseUint(assigned[createdNode], 0, 64)
 	if err != nil {
 		return nil,
-			schema.GQLWrapf(err, "recieved assigned from Dgraph, but couldn't parse as uint64")
+			schema.GQLWrapf(err,
+				"[%s] recieved assigned from Dgraph, but couldn't parse as uint64",
+				api.RequestID(ctx))
 	}
 
 	// All our mutations currently have exactly 1 field
@@ -152,8 +157,8 @@ func (mr *MutationResolver) resolveAddMutation(ctx context.Context) ([]byte, err
 	res, err := mr.dgraph.Query(ctx, qb)
 	if err != nil {
 		return nil,
-			schema.GQLWrapf(err, "mutation %s created node 0x%x but query failed",
-				mr.mutation.Name(), uid)
+			schema.GQLWrapf(err, "[%s] mutation %s created node 0x%x but query failed",
+				api.RequestID(ctx), mr.mutation.Name(), uid)
 	}
 
 	// TODO: As with query case, we need to do error propagation etc
@@ -165,17 +170,20 @@ func (mr *MutationResolver) resolveDeleteMutation(ctx context.Context) ([]byte, 
 	uid, err := mr.mutation.IDArgValue()
 	if err != nil {
 		return nil,
-			schema.GQLWrapf(err, "couldn't read ID argument in mutation %s", mr.mutation.Name())
+			schema.GQLWrapf(err, "[%s] couldn't read ID argument in mutation %s",
+				api.RequestID(ctx), mr.mutation.Name())
 	}
 
 	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
+		return nil, schema.GQLWrapf(err, "[%s] couldn't complete %s",
+			api.RequestID(ctx), mr.mutation.Name())
 	}
 
 	err = mr.dgraph.DeleteNode(ctx, uid)
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't complete %s", mr.mutation.Name())
+		return nil, schema.GQLWrapf(err, "[%s] couldn't complete %s",
+			api.RequestID(ctx), mr.mutation.Name())
 		// FIXME: ^^ also add the GraphQL path etc to link properly to the operation
 	}
 
@@ -188,7 +196,8 @@ func (mr *MutationResolver) resolveUpdateMutation(ctx context.Context) ([]byte, 
 
 	uid, err := mr.mutation.IDArgValue()
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't read id argument in mutation")
+		return nil, schema.GQLWrapf(err,
+			"[%s] couldn't read id argument in mutation", api.RequestID(ctx))
 	}
 
 	// We'll need to do better than this once there's deepper mutations
@@ -196,7 +205,8 @@ func (mr *MutationResolver) resolveUpdateMutation(ctx context.Context) ([]byte, 
 	mut["uid"] = fmt.Sprintf("0x%x", uid)
 	_, err = mr.dgraph.Mutate(ctx, mut)
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't run mutation mutation")
+		return nil, schema.GQLWrapf(err,
+			"[%s] couldn't run mutation mutation", api.RequestID(ctx))
 	}
 
 	// All our mutations currently have exactly 1 field
@@ -209,8 +219,9 @@ func (mr *MutationResolver) resolveUpdateMutation(ctx context.Context) ([]byte, 
 	res, err := mr.dgraph.Query(ctx, qb)
 	if err != nil {
 		return nil,
-			schema.GQLWrapf(err, "mutation %s updated node 0x%x but query failed",
-				mr.mutation.Name(), uid)
+			schema.GQLWrapf(err,
+				"[%s] mutation %s updated node 0x%x but query failed",
+				api.RequestID(ctx), mr.mutation.Name(), uid)
 	}
 
 	// TODO: As with query case, we need to do error propagation etc
