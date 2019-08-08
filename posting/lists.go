@@ -281,7 +281,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 			lc.deltas[key] = data
 		}
 		lc.maxVersions[key] = pl.maxVersion()
-		pl.Release()
+		pl.release()
 	}
 	lc.plists = make(map[string]*List)
 }

@@ -401,7 +401,7 @@ var postingPool = &sync.Pool{
 	},
 }
 
-func (l *List) Release() {
+func (l *List) release() {
 	fromList := func(list *pb.PostingList) {
 		for _, p := range list.GetPostings() {
 			postingPool.Put(p)
