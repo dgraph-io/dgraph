@@ -89,22 +89,32 @@ invalid_schemas:
     name: "Non linking inverse directives"
     input: |
       type X {
-        f1: P @hasInverse(type: "P", field: "f1")
+        f1: P @hasInverse(field: "f1")
       }
       type P {
-        f1: X @hasInverse(type: "X", field: "f2")
+        f1: X @hasInverse(field: "f2")
       }
     errlist: [
-      {"message": "Inverse field doesn't point back to X.f1 .", "locations":[{"line":2, "column":10}]},
-      {"message": "Inverse field for P.f1 doesn't exist.", "locations":[{"line":5, "column":10}]},
+      {"message":"Inverse field for P.f1 doesn't exist.", "locations":[{"line":5, "column":10}]},
+      {"message":"X.f1 have @hasInverse directive to P.f1, which doesn't point back to it.", "locations":[{"line":2, "column":10}]},
     ]
 
   -
     name: "Inverse Directive on non object field"
     input: |
       type X {
-        f1: String @hasInverse(type: "P", field: "f1")
+        f1: String @hasInverse(field: "f1")
       }
     errlist: [
-      {"message": "Type of field f1 is String, but Directives aren't allowed on non object type field.", "locations":[{"line":2, "column":15}]},
+      {"message":"X.f1 is of type String, but @hasInverse directive isn't allowed on non object type field.", "locations":[{"line":2, "column":15}]},
+    ]
+
+  -
+    name: "Inverse Directive doesn't have field argument"
+    input: |
+      type X {
+        f1: X @hasInverse
+      }
+    errlist: [
+      {"message":"hasInverse directive at X.f1 doesn't have field argument.", "locations":[{"line":2, "column":10}]},
     ]

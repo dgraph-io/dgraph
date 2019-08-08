@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -49,10 +50,42 @@ func dataTypeCheck(sch *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
+func nameCheck(sch *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, defn := range sch.Definitions {
+		if (defn.Kind == ast.Object || defn.Kind == ast.Enum) && isReservedKeyWord(defn.Name) {
+			var errMesg string
+
+			if defn.Name == "Query" || defn.Name == "Mutation" {
+				errMesg = "You don't need to define the GraphQL Query or Mutation types." +
+					" Those are built automatically for you."
+			} else {
+				errMesg = fmt.Sprintf(
+					"%s is a reserved word, so you can't declare a type with this name. "+
+						"Pick a different name for the type.", defn.Name,
+				)
+			}
+
+			errs = append(errs, gqlerror.ErrorPosf(defn.Position, errMesg))
+		}
+	}
+
+	return errs
+}
+
 func idCountCheck(sch *ast.Schema) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, typeVal := range sch.Types {
+	keys := make([]string, 0, len(sch.Types))
+	for k := range sch.Types {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		typeVal := sch.Types[key]
+
 		var idFields []*ast.FieldDefinition
 		for _, field := range typeVal.Fields {
 			if isIDField(typeVal, field) {
@@ -93,35 +126,19 @@ func idCountCheck(sch *ast.Schema) gqlerror.List {
 	return errs
 }
 
-func nameCheck(sch *ast.SchemaDocument) gqlerror.List {
-	var errs []*gqlerror.Error
-
-	for _, defn := range sch.Definitions {
-		if (defn.Kind == ast.Object || defn.Kind == ast.Enum) && isReservedKeyWord(defn.Name) {
-			var errMesg string
-
-			if defn.Name == "Query" || defn.Name == "Mutation" {
-				errMesg = "You don't need to define the GraphQL Query or Mutation types." +
-					" Those are built automatically for you."
-			} else {
-				errMesg = fmt.Sprintf(
-					"%s is a reserved word, so you can't declare a type with this name. "+
-						"Pick a different name for the type.", defn.Name,
-				)
-			}
-
-			errs = append(errs, gqlerror.ErrorPosf(defn.Position, errMesg))
-		}
-	}
-
-	return errs
-}
-
 // [Posts]! -> invalid; [Posts!]!, [Posts!] -> valid
 func listValidityCheck(sch *ast.Schema) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, typ := range sch.Types {
+	keys := make([]string, 0, len(sch.Types))
+	for k := range sch.Types {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		typ := sch.Types[key]
+
 		for _, field := range typ.Fields {
 			if field.Type.Elem != nil && field.Type.NonNull && !field.Type.Elem.NonNull {
 				errs = append(errs, gqlerror.ErrorPosf(
@@ -151,7 +168,15 @@ func directivesValidation(sch *ast.Schema) gqlerror.List {
 func hasInverseValidation(sch *ast.Schema) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, typ := range sch.Types {
+	keys := make([]string, 0, len(sch.Types))
+	for k := range sch.Types {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		typ := sch.Types[key]
+
 		for _, field := range typ.Fields {
 			invDirective := field.Directives.ForName("hasInverse")
 
@@ -163,30 +188,8 @@ func hasInverseValidation(sch *ast.Schema) gqlerror.List {
 				errs = append(errs,
 					gqlerror.ErrorPosf(
 						invDirective.Position,
-						"Type of field %s is %s, but Directives aren't allowed"+
-							" on non object type field.", field.Name, field.Type.Name(),
-					),
-				)
-				continue
-			}
-
-			typArg := invDirective.Arguments.ForName("type")
-			if typArg == nil {
-				errs = append(errs,
-					gqlerror.ErrorPosf(
-						// TODO: Have more informative error messages in errors PR.
-						invDirective.Position, "hasInverse doesn't have type argument",
-					),
-				)
-				continue
-			}
-
-			invType, ok := sch.Types[typArg.Value.Raw]
-			if !ok {
-				errs = append(errs,
-					gqlerror.ErrorPosf(
-						invDirective.Position, "Inverse type for %s.%s doesn't exist.",
-						typ.Name, field.Name,
+						"%s.%s is of type %s, but @hasInverse directive isn't allowed"+
+							" on non object type field.", typ.Name, field.Name, field.Type.Name(),
 					),
 				)
 				continue
@@ -196,12 +199,15 @@ func hasInverseValidation(sch *ast.Schema) gqlerror.List {
 			if fieldArg == nil {
 				errs = append(errs,
 					gqlerror.ErrorPosf(
-						invDirective.Position, "hasInverse directive at %s.%s doesn't have field argument.",
+						invDirective.Position,
+						"hasInverse directive at %s.%s doesn't have field argument.",
 						typ.Name, field.Name,
 					),
 				)
 				continue
 			}
+
+			invType := sch.Types[field.Type.Name()]
 
 			invField := invType.Fields.ForName(fieldArg.Value.Raw)
 			if invField == nil {
@@ -217,8 +223,10 @@ func hasInverseValidation(sch *ast.Schema) gqlerror.List {
 			if !isInverse(typ.Name, field.Name, invField) {
 				errs = append(errs,
 					gqlerror.ErrorPosf(
-						invDirective.Position, "Inverse field doesn't point back to %s.%s .",
-						typ.Name, field.Name,
+						invDirective.Position,
+						"%s.%s have @hasInverse directive to %s.%s, "+
+							"which doesn't point back to it.", typ.Name, field.Name,
+						invType.Name, invField.Name,
 					),
 				)
 			}

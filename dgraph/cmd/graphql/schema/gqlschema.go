@@ -68,6 +68,10 @@ var supportedDirectives = map[string]directive{
 		directiveDefn: &ast.DirectiveDefinition{
 			Name:      "hasInverse",
 			Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
+			Arguments: []*ast.ArgumentDefinition{&ast.ArgumentDefinition{
+				Name: "field",
+				Type: &ast.Type{NamedType: "String", NonNull: true},
+			}},
 		},
 		validationFunc: hasInverseValidation,
 	},
@@ -487,7 +491,7 @@ func genFieldsString(flds ast.FieldList) string {
 
 func genFieldString(fld *ast.FieldDefinition) string {
 	return fmt.Sprintf(
-		"\t%s%s: %s\n", fld.Name, genArgumentsString(fld.Arguments), fld.Type.String(),
+		"\t%s%s: %s\n", fld.Name, genArgumentsDefnString(fld.Arguments), fld.Type.String(),
 	)
 }
 
@@ -513,6 +517,10 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 
 func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
 	return fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
+}
+
+func genArgumentString(arg *ast.Argument) string {
+	return fmt.Sprintf("%s: %s", arg.Name, arg.Value.String())
 }
 
 func generateInputString(typ *ast.Definition) string {
