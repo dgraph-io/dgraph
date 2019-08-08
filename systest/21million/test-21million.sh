@@ -131,6 +131,11 @@ SAVEDIR=${SAVEDIR:+-savedir=$SAVEDIR}
 QUIET=${QUIET:+-quiet}
 
 Info "running benchmarks/regression queries"
+
+if [[ ! -z "$TEAMCITY_VERSION" ]]; then
+    # Make TeamCity aware of Go tests
+    export GOFLAGS="-json"
+fi
 go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
 if [[ $CLEANUP == all ]]; then
