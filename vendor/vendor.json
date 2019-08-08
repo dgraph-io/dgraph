@@ -531,6 +531,12 @@
 			"revisionTime": "2019-08-01T00:43:48Z"
 		},
 		{
+			"checksumSHA1": "vXF9AIdgl4GPyn8/zU6L22dVNHo=",
+			"path": "github.com/dgraph-io/ristretto/z",
+			"revision": "1146b50c9e72b13c85a96ed4429384321d3f7382",
+			"revisionTime": "2019-08-02T09:02:28Z"
+		},
+		{
 			"checksumSHA1": "blOHP3HPYU+IeV6yWCalQuuM+zE=",
 			"path": "github.com/dgrijalva/jwt-go",
 			"revision": "3af4c746e1c248ee8491a3e0c6f7a9cd831e95f8",
