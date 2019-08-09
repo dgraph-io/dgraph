@@ -16,17 +16,12 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 cd themes && git clone https://github.com/dgraph-io/hugo-docs
 ```
 
-3. (Optional) Open `./scripts/local.sh` with your favorite IDE and set the `DGRAPH_ENDPOINT` as per your requirement.
+3. Run `./scripts/local.sh` from within the `wiki` folder and go to `http://localhost:1313` to see the docs.
 
-Example:
-
-```sh
-export DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true"
+(Optional) To run the runnable queries within docs with a different Dgraph instance, set the `DGRAPH_ENDPOINT` environment variable before starting the local web server:
 ```
-
-4. Run `./scripts/local.sh` from within the `wiki` folder and goto `http://localhost:1313` to see the Wiki.
-
-We use `./scripts/local.sh` script to set env variables that our documentation theme internally uses.
+DGRAPH_ENDPOINT="http://localhost:8080/query?latency=true" ./local.sh
+```
 
 Now you can make changes to the docs and see them being updated instantly thanks to Hugo.
 
