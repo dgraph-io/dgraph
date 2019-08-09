@@ -1,4 +1,4 @@
-version: "3.5"
+vlersion: "3.5"
 services:
   zero1:
     image: dgraph/dgraph:latest
@@ -189,7 +189,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha5:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
 
   minio1:
     image: minio/minio:latest
