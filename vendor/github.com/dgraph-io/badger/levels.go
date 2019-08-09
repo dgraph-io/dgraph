@@ -564,7 +564,7 @@ func (s *levelsController) compactBuildTables(
 				}
 			}
 			numKeys++
-			y.Check(builder.Add(it.Key(), it.Value()))
+			builder.Add(it.Key(), it.Value())
 		}
 		// It was true that it.Valid() at least once in the loop above, which means we
 		// called Add() at least once, and builder is not Empty().
