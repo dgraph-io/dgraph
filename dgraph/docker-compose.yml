@@ -189,7 +189,7 @@ services:
     labels:
       cluster: test
       service: alpha
-    command: /gobin/dgraph alpha --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
+    command: /gobin/dgraph alpha --my=alpha5:7186 --lru_mb=1024 --zero=zero1:5180 -o 106 --expose_trace --trace 1.0 --profile_mode block --block_rate 10 --logtostderr -v=2 --whitelist 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 --acl_secret_file /dgraph-acl/hmac-secret --enterprise_features --acl_access_ttl 3s --acl_cache_ttl 5s
 
   minio1:
     image: minio/minio:latest
@@ -202,3 +202,43 @@ services:
     labels:
       cluster: test
     command: minio server /data/minio --address :9001
+
+  graphql-init:
+    image: dgraph/dgraph:latest
+    container_name: graphql-init
+    working_dir: /data/graphql
+    volumes:
+      - type: bind
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql/testdata
+        target: /schema
+        read_only: true
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    depends_on:
+      - alpha1
+    restart: on-failure
+    labels:
+      cluster: test
+    command: /gobin/dgraph graphql init --schema /schema/schema-simple.txt --alpha alpha1:9180 
+ 
+  graphql:
+    image: dgraph/dgraph:latest
+    container_name: graphql 
+    working_dir: /data/graphql
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    ports:
+      - 9000:9000
+    depends_on:
+      - graphql-init 
+    restart: always
+    labels:
+      cluster: test
+      service: graphql 
+    command: /gobin/dgraph graphql --alpha alpha1:9180 
+
