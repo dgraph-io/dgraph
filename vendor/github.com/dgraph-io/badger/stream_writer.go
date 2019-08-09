@@ -156,8 +156,7 @@ func (sw *StreamWriter) Flush() error {
 	}
 
 	// Encode and write the value log head into a new table.
-	data := make([]byte, vptrSize)
-	maxHead.Encode(data)
+	data := maxHead.Encode()
 	headWriter := sw.newWriter(headStreamId)
 	if err := headWriter.Add(
 		y.KeyWithTs(head, sw.maxVersion),
@@ -247,9 +246,8 @@ func (w *sortedWriter) handleRequests(closer *y.Closer) {
 					ExpiresAt: e.ExpiresAt,
 				}
 			} else {
-				vbuf := make([]byte, vptrSize)
 				vs = y.ValueStruct{
-					Value:     vptr.Encode(vbuf),
+					Value:     vptr.Encode(),
 					Meta:      e.meta | bitValuePointer,
 					UserMeta:  e.UserMeta,
 					ExpiresAt: e.ExpiresAt,
@@ -290,7 +288,8 @@ func (w *sortedWriter) Add(key []byte, vs y.ValueStruct) error {
 	}
 
 	w.lastKey = y.SafeCopy(w.lastKey, key)
-	return w.builder.Add(key, vs)
+	w.builder.Add(key, vs)
+	return nil
 }
 
 func (w *sortedWriter) send() error {
