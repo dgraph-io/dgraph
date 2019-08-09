@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	encjson "encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -42,14 +43,16 @@ type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer) ([]api.NQuad, error)
 }
 
 type rdfChunker struct {
 	lexer *lex.Lexer
 }
 
-type jsonChunker struct{}
+type jsonChunker struct {
+	nquadCh chan api.NQuad
+}
 
 // InputFormat represents the multiple formats supported by Chunker.
 type InputFormat byte
@@ -117,12 +120,12 @@ func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 }
 
 // Parse is not thread-safe. Only call it serially, because it reuses lexer object.
-func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
 
-	nqs := make([]*api.NQuad, 0)
+	nqs := make([]api.NQuad, 0)
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
 		if err != nil && err != io.EOF {
@@ -135,7 +138,7 @@ func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		} else if err != nil {
 			return nil, errors.Wrapf(err, "while parsing line %q", str)
 		}
-		nqs = append(nqs, &nq)
+		nqs = append(nqs, nq)
 	}
 
 	return nqs, nil
@@ -231,7 +234,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
@@ -241,6 +244,12 @@ func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		x.Check(err)
 	}
 	chunkBuf.Reset()
+	if len(nqs) > 1000000 {
+		fmt.Printf("Number of nquads generated: %d\n", len(nqs))
+		fmt.Printf("Top 10 NQuad: %+v\n", nqs[0:10])
+		end := len(nqs)
+		fmt.Printf("Bottom 10 NQuad: %+v\n", nqs[end-10:end])
+	}
 
 	return nqs, err
 }

@@ -223,7 +223,7 @@ func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
 			nq.ObjectId = l.uid(nq.ObjectId)
 		}
 
-		batch = append(batch, nq)
+		batch = append(batch, &nq)
 
 		if len(batch) >= opt.batchSize {
 			mu := api.Mutation{Set: batch}

@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
-	nqjson "github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/lex"
@@ -999,36 +998,36 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
 	if len(mu.SetJson) > 0 {
-		nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
-		if err != nil {
-			return nil, err
-		}
-		res.Set = append(res.Set, nqs...)
+		// nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
-		if err != nil {
-			return nil, err
-		}
-		res.Del = append(res.Del, nqs...)
+		// nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, err := parseNQuads(mu.SetNquads)
-		if err != nil {
-			return nil, err
-		}
-		res.Set = append(res.Set, nqs...)
+		// nqs, err := parseNQuads(mu.SetNquads)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, err := parseNQuads(mu.DelNquads)
-		if err != nil {
-			return nil, err
-		}
-		res.Del = append(res.Del, nqs...)
+		// nqs, err := parseNQuads(mu.DelNquads)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// res.Del = append(res.Del, nqs...)
 	}
 
-	res.Set = append(res.Set, mu.Set...)
-	res.Del = append(res.Del, mu.Del...)
+	// res.Set = append(res.Set, mu.Set...)
+	// res.Del = append(res.Del, mu.Del...)
 	// parse facets and convert to the binary format so that
 	// a field of type datetime like "2017-01-01" can be correctly encoded in the
 	// marshaled binary format as done in the time.Marshal method

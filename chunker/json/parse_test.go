@@ -248,7 +248,7 @@ func TestNquadsDeleteEdges(t *testing.T) {
 	require.Equal(t, 3, len(nq))
 }
 
-func checkCount(t *testing.T, nq []*api.NQuad, pred string, count int) {
+func checkCount(t *testing.T, nq []api.NQuad, pred string, count int) {
 	for _, n := range nq {
 		if n.Predicate == pred {
 			require.Equal(t, count, len(n.Facets))
@@ -265,7 +265,7 @@ func getMapOfFacets(facets []*api.Facet) map[string]*api.Facet {
 	return res
 }
 
-func checkFacets(t *testing.T, nq []*api.NQuad, pred string, facets []*api.Facet) {
+func checkFacets(t *testing.T, nq []api.NQuad, pred string, facets []*api.Facet) {
 	for _, n := range nq {
 		if n.Predicate == pred {
 			require.Equal(t, len(facets), len(n.Facets),

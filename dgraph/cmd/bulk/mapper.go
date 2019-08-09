@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	"github.com/dustin/go-humanize"
 )
 
 type mapper struct {
@@ -138,6 +139,7 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunker := chunker.NewChunker(inputFormat)
 	for chunkBuf := range m.readerChunkCh {
+		fmt.Printf("Chunk buf length: %s %p\n", humanize.Bytes(uint64(chunkBuf.Len())), chunkBuf)
 		done := false
 		for !done {
 			nqs, err := chunker.Parse(chunkBuf)
@@ -158,7 +160,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 					}
 				}
 
-				m.processNQuad(gql.NQuad{NQuad: nq})
+				m.processNQuad(gql.NQuad{NQuad: &nq})
 				atomic.AddInt64(&m.prog.nquadCount, 1)
 			}
 

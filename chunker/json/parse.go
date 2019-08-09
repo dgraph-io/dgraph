@@ -116,7 +116,7 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
-	nquads []*api.NQuad // nquads at this level including the children.
+	nquads []api.NQuad  // nquads at this level including the children.
 	uid    string       // uid retrieved or allocated for the node.
 	fcts   []*api.Facet // facets on the edge connecting this node to the source if any.
 }
@@ -181,7 +181,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
 	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
-		mr.nquads = append(mr.nquads, &api.NQuad{
+		mr.nquads = append(mr.nquads, api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
@@ -281,7 +281,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 		if v == nil {
 			if op == DeleteNquads {
 				// This corresponds to edge deletion.
-				nq := &api.NQuad{
+				nq := api.NQuad{
 					Subject:     mr.uid,
 					Predicate:   pred,
 					ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
@@ -321,7 +321,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
-			mr.nquads = append(mr.nquads, &nq)
+			mr.nquads = append(mr.nquads, nq)
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -332,7 +332,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				return mr, err
 			}
 			if ok {
-				mr.nquads = append(mr.nquads, &nq)
+				mr.nquads = append(mr.nquads, nq)
 				continue
 			}
 
@@ -344,7 +344,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			// Add the connecting edge beteween the entities.
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
-			mr.nquads = append(mr.nquads, &nq)
+			mr.nquads = append(mr.nquads, nq)
 			// Add the nquads that we got for the connecting entity.
 			mr.nquads = append(mr.nquads, cr.nquads...)
 		case []interface{}:
@@ -359,7 +359,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
-					mr.nquads = append(mr.nquads, &nq)
+					mr.nquads = append(mr.nquads, nq)
 				case map[string]interface{}:
 					// map[string]interface{} can mean geojson or a connecting entity.
 					ok, err := handleGeoType(item.(map[string]interface{}), &nq)
@@ -367,7 +367,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 						return mr, err
 					}
 					if ok {
-						mr.nquads = append(mr.nquads, &nq)
+						mr.nquads = append(mr.nquads, nq)
 						continue
 					}
 
@@ -377,7 +377,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					}
 					nq.ObjectId = cr.uid
 					nq.Facets = cr.fcts
-					mr.nquads = append(mr.nquads, &nq)
+					mr.nquads = append(mr.nquads, nq)
 					// Add the nquads that we got for the connecting entity.
 					mr.nquads = append(mr.nquads, cr.nquads...)
 				default:
@@ -404,7 +404,7 @@ const (
 )
 
 // Parse converts the given byte slice into a slice of NQuads.
-func Parse(b []byte, op int) ([]*api.NQuad, error) {
+func Parse(b []byte, op int) ([]api.NQuad, error) {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()
@@ -425,7 +425,7 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 	}
 
 	var idx int
-	var nquads []*api.NQuad
+	var nquads []api.NQuad
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
