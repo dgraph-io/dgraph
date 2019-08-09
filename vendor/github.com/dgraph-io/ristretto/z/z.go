@@ -16,17 +16,26 @@
 
 package z
 
-import (
-	"github.com/minio/minio-go"
-)
-
-var (
-	accessKey     = "accesskey"
-	secretKey     = "secretkey"
-	minioEndpoint = "localhost:9001"
-)
-
-// NewMinioClient returns a minio client.
-func NewMinioClient() (*minio.Client, error) {
-	return minio.New(minioEndpoint, accessKey, secretKey, false)
+// KeyToHash interprets the type of key and converts it to a uint64 hash.
+func KeyToHash(key interface{}) uint64 {
+	switch key.(type) {
+	case uint64:
+		return key.(uint64)
+	case string:
+		return AESHashString(key.(string))
+	case []byte:
+		return AESHash(key.([]byte))
+	case byte:
+		return AESHash([]byte{key.(byte)})
+	case int:
+		return uint64(key.(int))
+	case int32:
+		return uint64(key.(int32))
+	case uint32:
+		return uint64(key.(uint32))
+	case int64:
+		return uint64(key.(int64))
+	default:
+		panic("Key type not supported")
+	}
 }

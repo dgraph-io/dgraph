@@ -19,6 +19,7 @@ package bulk
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"container/heap"
 	"encoding/binary"
 	"fmt"
@@ -131,8 +132,10 @@ func (mi *mapIterator) Next() *pb.MapEntry {
 func newMapIterator(filename string) *mapIterator {
 	fd, err := os.Open(filename)
 	x.Check(err)
+	gzReader, err := gzip.NewReader(fd)
+	x.Check(err)
 
-	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(fd, 16<<10)}
+	return &mapIterator{fd: fd, reader: bufio.NewReaderSize(gzReader, 16<<10)}
 }
 
 func (r *reducer) encodeAndWrite(

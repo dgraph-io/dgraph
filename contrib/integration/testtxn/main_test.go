@@ -26,8 +26,8 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -38,12 +38,12 @@ type state struct {
 }
 
 var s state
-var addr string = z.SockAddr
+var addr string = testutil.SockAddr
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	z.AssignUids(200)
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	testutil.AssignUids(200)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	s.dg = dg
 
 	r := m.Run()
@@ -708,8 +708,8 @@ query countAnswers($num: int) {
 )
 
 func TestCountIndexConcurrentTxns(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected edge count of 0x100: 1
@@ -764,8 +764,8 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 }
 
 func TestCountIndexSerialTxns(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
@@ -813,8 +813,8 @@ func TestCountIndexSerialTxns(t *testing.T) {
 }
 
 func TestCountIndexSameTxn(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1

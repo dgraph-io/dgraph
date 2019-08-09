@@ -54,7 +54,7 @@ type Txn struct {
 
 	// Keeps track of conflict keys that should be used to determine if this
 	// transaction conflicts with another.
-	conflicts map[string]struct{}
+	conflicts map[uint64]struct{}
 
 	// Keeps track of last update wall clock. We use this fact later to
 	// determine unhealthy, stale txns.
@@ -75,6 +75,11 @@ func NewTxn(startTs uint64) *Txn {
 // Get retrieves the posting list for the given list from the local cache.
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)
+}
+
+// GetFromDelta retrieves the posting list from delta cache, not from Badger.
+func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
+	return txn.cache.GetFromDelta(key)
 }
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.

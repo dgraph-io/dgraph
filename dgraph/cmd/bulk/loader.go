@@ -50,7 +50,7 @@ type options struct {
 	ReplaceOutDir    bool
 	TmpDir           string
 	NumGoroutines    int
-	MapBufSize       int64
+	MapBufSize       uint64
 	SkipMapPhase     bool
 	CleanupTmp       bool
 	NumReducers      int

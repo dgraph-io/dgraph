@@ -34,19 +34,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 )
-
-type respError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
 
 type res struct {
 	Data       json.RawMessage   `json:"data"`
 	Extensions *query.Extensions `json:"extensions,omitempty"`
-	Errors     []respError       `json:"errors,omitempty"`
+	Errors     []x.GqlError      `json:"errors,omitempty"`
 }
 
 type params struct {
@@ -212,7 +207,7 @@ func runWithRetries(method, contentType, url string, body string) (
 
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
-		grootAccessJwt, grootRefreshJwt, err = z.HttpLogin(&z.LoginParams{
+		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
 			Endpoint:   addr + "/login",
 			RefreshJwt: grootRefreshJwt,
 		})
@@ -466,7 +461,7 @@ func TestAlterAllFieldsShouldBeSet(t *testing.T) {
 	var qr x.QueryResWithData
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &qr))
 	require.Len(t, qr.Errors, 1)
-	require.Equal(t, qr.Errors[0].Code, "Error")
+	require.Equal(t, qr.Errors[0].Extensions["code"], "Error")
 }
 
 func TestHttpCompressionSupport(t *testing.T) {
