@@ -18,7 +18,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION="1.12.5"
+GOVERSION="1.12.7"
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
@@ -107,6 +107,7 @@ pushd $basedir/ratel
   source ~/.nvm/nvm.sh
   nvm install --lts
   ./scripts/build.prod.sh
+  ./scripts/test.sh
 popd
 
 # Build Windows.
