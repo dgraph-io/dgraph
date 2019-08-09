@@ -1325,7 +1325,8 @@ func TestGroupByFriendsMultipleParentsVar(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"uid":"0x18","name":"Glenn Rhee","val(f)":2},{"uid":"0x1","name":"Michonne","val(f)":1},{"uid":"0x17","name":"Rick Grimes","val(f)":1},{"uid":"0x19","name":"Daryl Dixon","val(f)":1},{"uid":"0x1f","name":"Andrea","val(f)":1},{"uid":"0x65","val(f)":1}]}}`, js)
 }
 
-func TestGroupBy_Fix3768(t *testing.T) {
+func TestGroupBy_FixPanicForNilDestUIDs(t *testing.T) {
+	// This a fix for GitHub issue #3768.
 	query := `
 		{
 			var(func: eq(name, "abcdef")) @ignorereflex {
