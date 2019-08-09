@@ -153,7 +153,8 @@ func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 	ld.xids = xidmap.New(ld.zero, nil)
 
-	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
+	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz",
+		".geojson"})
 	if len(files) == 0 {
 		fmt.Printf("No data files found in %s.\n", ld.opt.DataFiles)
 		os.Exit(1)
