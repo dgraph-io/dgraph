@@ -223,7 +223,7 @@ func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 var magicText = [4]byte{'B', 'd', 'g', 'r'}
 
 // The magic version number.
-const magicVersion = 6
+const magicVersion = 7
 
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, manifestRewriteFilename)
@@ -340,7 +340,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 	if !bytes.Equal(magicBuf[0:4], magicText[:]) {
 		return Manifest{}, 0, errBadMagic
 	}
-	version := binary.BigEndian.Uint32(magicBuf[4:8])
+	version := y.BytesToU32(magicBuf[4:8])
 	if version != magicVersion {
 		return Manifest{}, 0,
 			fmt.Errorf("manifest has unsupported version: %d (we support %d)", version, magicVersion)
@@ -358,7 +358,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			}
 			return Manifest{}, 0, err
 		}
-		length := binary.BigEndian.Uint32(lenCrcBuf[0:4])
+		length := y.BytesToU32(lenCrcBuf[0:4])
 		var buf = make([]byte, length)
 		if _, err := io.ReadFull(&r, buf); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -366,7 +366,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			}
 			return Manifest{}, 0, err
 		}
-		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
+		if crc32.Checksum(buf, y.CastagnoliCrcTable) != y.BytesToU32(lenCrcBuf[4:8]) {
 			return Manifest{}, 0, errBadChecksum
 		}
 
