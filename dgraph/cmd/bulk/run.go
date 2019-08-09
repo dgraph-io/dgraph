@@ -27,9 +27,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 )
 
@@ -170,6 +172,18 @@ func run() {
 
 	go func() {
 		log.Fatal(http.ListenAndServe(opt.HttpAddr, nil))
+	}()
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		for range ticker.C {
+			runtime.GC()
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			fmt.Printf("NumGC: %d. Inuse: Heap: %s Stack: %s. Allocated Heap: %s\n",
+				ms.NumGC, humanize.Bytes(ms.HeapInuse), humanize.Bytes(ms.StackInuse),
+				humanize.Bytes(ms.HeapAlloc))
+		}
 	}()
 
 	// Make sure it's OK to create or replace the directory specified with the --out option.
