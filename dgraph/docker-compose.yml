@@ -1,4 +1,4 @@
-vlersion: "3.5"
+version: "3.5"
 services:
   zero1:
     image: dgraph/dgraph:latest
