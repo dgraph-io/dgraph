@@ -213,7 +213,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Handling of empty string to datetime conversion. ([#2891][])
 - Export schema with special chars. Fixes [#2925][]. ([#2929][])
 
-<!-- TODO: These sanity checks are fixed? -->
+<!-- TODO: Check if these issues are already fixed in release/v1.0 -->
 - Default value should not be nil. ([#2995][])
 - Sanity check for empty variables. ([#3021][])
 - Panic due to nil maps. ([#3042][])
@@ -241,9 +241,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix bug with pagination using `after`. ([#3149][])
 - Fix tablet error handling. ([#3323][])
 
-- Reserved predicates:
-- Ensure reserved predicates cannot be moved. ([#3137][])
-- Allow schema updates to reserved preds if the update is the same. ([#3143][])
+- Reserved predicates
+  - Ensure reserved predicates cannot be moved. ([#3137][])
+  - Allow schema updates to reserved preds if the update is the same. ([#3143][])
 
 [#2511]: https://github.com/dgraph-io/dgraph/issue/2511
 [#2862]: https://github.com/dgraph-io/dgraph/issue/2862
