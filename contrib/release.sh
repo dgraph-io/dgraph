@@ -11,6 +11,7 @@ RED='\033[91;1m'
 RESET='\033[0m'
 
 # Don't use standard GOPATH. Create a new one.
+unset GOBIN
 GOPATH="/tmp/go"
 rm -Rf $GOPATH
 mkdir $GOPATH
