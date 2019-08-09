@@ -17,14 +17,16 @@ run() {
   export CURRENT_BRANCH="master"
   export CURRENT_VERSION=${VERSIONS_ARRAY[0]}
   export VERSIONS=${VERSION_STRING}
+  export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
 
 
   HUGO_TITLE="Dgraph Doc - local" \
   VERSIONS=${VERSION_STRING} \
   CURRENT_BRANCH="master" \
-  pushd $GOPATH/src/github.com/dgraph-io/dgraph/wiki > /dev/null
 
+  pushd $(dirname "$0")/.. > /dev/null
   pushd themes > /dev/null
+
   if [ ! -d "hugo-docs" ]; then
     git clone git@github.com:dgraph-io/hugo-docs.git
   else

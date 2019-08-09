@@ -70,6 +70,7 @@ rebuild() {
 	export CURRENT_BRANCH=${1}
 	export CURRENT_VERSION=${2}
 	export VERSIONS=${VERSION_STRING}
+	export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
 
 	cmd=hugo_0.19
 	# Hugo broke backward compatibility, so files for version > 1.0.5 can use newer hugo (v0.38 onwards) but files in
@@ -138,7 +139,7 @@ checkAndUpdate()
 firstRun=1
 while true; do
 	# Lets move to the docs directory.
-	pushd /home/ubuntu/dgraph/wiki > /dev/null
+	pushd $(dirname "$0")/.. > /dev/null
 
 	currentBranch=$(git rev-parse --abbrev-ref HEAD)
 
