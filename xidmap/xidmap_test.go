@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,10 +22,7 @@ func withDB(t *testing.T, test func(db *badger.DB)) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	opt := badger.LSMOnlyOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-
+	opt := badger.LSMOnlyOptions(dir)
 	db, err := badger.Open(opt)
 	require.NoError(t, err)
 	defer db.Close()
@@ -34,7 +31,7 @@ func withDB(t *testing.T, test func(db *badger.DB)) {
 }
 
 func TestXidmap(t *testing.T) {
-	conn, err := x.SetupConnection(z.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
@@ -90,7 +87,7 @@ func TestXidmapMemory(t *testing.T) {
 		}
 	}()
 
-	conn, err := x.SetupConnection(z.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
@@ -116,7 +113,7 @@ func TestXidmapMemory(t *testing.T) {
 }
 
 func BenchmarkXidmap(b *testing.B) {
-	conn, err := x.SetupConnection(z.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
 	x.Check(err)
 	x.AssertTrue(conn != nil)
 

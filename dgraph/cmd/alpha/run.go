@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"go.opencensus.io/plugin/ocgrpc"
@@ -219,7 +220,7 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 				} else {
 					ipAddrs, err := net.LookupIP(s)
 					if err != nil {
-						return nil, fmt.Errorf("invalid IP address or hostname: %s", s)
+						return nil, errors.Errorf("invalid IP address or hostname: %s", s)
 					}
 
 					for _, addr := range ipAddrs {
@@ -230,7 +231,7 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 				// string is CIDR block like 192.168.0.0/16 or fd03:b188:0f3c:9ec4::/64
 				rangeLo, network, err := net.ParseCIDR(s)
 				if err != nil {
-					return nil, fmt.Errorf("invalid CIDR block: %s", s)
+					return nil, errors.Errorf("invalid CIDR block: %s", s)
 				}
 
 				addrLen, maskLen := len(rangeLo), len(network.Mask)
@@ -247,15 +248,15 @@ func getIPsFromString(str string) ([]x.IPRange, error) {
 			rangeLo := net.ParseIP(tuple[0])
 			rangeHi := net.ParseIP(tuple[1])
 			if rangeLo == nil {
-				return nil, fmt.Errorf("invalid IP address: %s", tuple[0])
+				return nil, errors.Errorf("invalid IP address: %s", tuple[0])
 			} else if rangeHi == nil {
-				return nil, fmt.Errorf("invalid IP address: %s", tuple[1])
+				return nil, errors.Errorf("invalid IP address: %s", tuple[1])
 			} else if bytes.Compare(rangeLo, rangeHi) > 0 {
-				return nil, fmt.Errorf("inverted IP address range: %s", s)
+				return nil, errors.Errorf("inverted IP address range: %s", s)
 			}
 			ipRanges = append(ipRanges, x.IPRange{Lower: rangeLo, Upper: rangeHi})
 		default:
-			return nil, fmt.Errorf("invalid IP address range: %s", s)
+			return nil, errors.Errorf("invalid IP address range: %s", s)
 		}
 	}
 
@@ -297,9 +298,9 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte("<pre>"))
-	w.Write([]byte(worker.StoreStats()))
-	w.Write([]byte("</pre>"))
+	x.Check2(w.Write([]byte("<pre>")))
+	x.Check2(w.Write([]byte(worker.StoreStats())))
+	x.Check2(w.Write([]byte("</pre>")))
 }
 
 func setupListener(addr string, port int) (net.Listener, error) {
@@ -382,7 +383,6 @@ func setupServer() {
 	http.HandleFunc("/commit", commitHandler)
 	http.HandleFunc("/alter", alterHandler)
 	http.HandleFunc("/health", healthCheck)
-	http.HandleFunc("/share", shareHandler)
 
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
@@ -501,7 +501,7 @@ func run() {
 
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
-	glog.Infof("edgraph.Config: %+v", edgraph.Config)
+	glog.Infof("edgraph.Config: %s", edgraph.Config)
 
 	edgraph.InitServerState()
 	defer func() {
@@ -517,7 +517,7 @@ func run() {
 	}
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Tracing),
-		MaxAnnotationEventsPerSpan: 64,
+		MaxAnnotationEventsPerSpan: 256,
 	})
 
 	// Posting will initialize index which requires schema. Hence, initialize

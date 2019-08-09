@@ -13,16 +13,25 @@
 package backup
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"sync"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Processor handles the different stages of the backup process.
@@ -45,8 +54,8 @@ type Manifest struct {
 	// because it will become the timestamp from which to backup in the next
 	// incremental backup.
 	Since uint64 `json:"since"`
-	// Groups is the list of valid groups at the time the backup was created.
-	Groups []uint32 `json:"groups"`
+	// Groups is the map of valid groups to predicates at the time the backup was created.
+	Groups map[uint32][]string `json:"groups"`
 	// BackupId is a unique ID assigned to all the backups in the same series
 	// (from the first full backup to the last incremental backup).
 	BackupId string `json:"backup_id"`
@@ -60,12 +69,25 @@ type Manifest struct {
 	Path string `json:"-"`
 }
 
+func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
+	preds, ok := m.Groups[gid]
+	if !ok {
+		return nil
+	}
+
+	predSet := make(predicateSet)
+	for _, pred := range preds {
+		predSet[pred] = struct{}{}
+	}
+	return predSet
+}
+
 // WriteBackup uses the request values to create a stream writer then hand off the data
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (pr *Processor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error) {
-	var emptyRes pb.BackupResponse
+func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
+	var emptyRes pb.Status
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -87,19 +109,38 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.BackupResponse, error
 
 	glog.V(3).Infof("Backup manifest version: %d", pr.Request.SinceTs)
 
+	predMap := make(map[string]struct{})
+	for _, pred := range pr.Request.Predicates {
+		predMap[pred] = struct{}{}
+	}
+
+	var maxVersion uint64
+	gzWriter := gzip.NewWriter(handler)
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	gzWriter := gzip.NewWriter(handler)
-	newSince, err := stream.Backup(gzWriter, pr.Request.SinceTs)
+	stream.KeyToList = pr.toBackupList
+	stream.ChooseKey = func(item *badger.Item) bool {
+		parsedKey := x.Parse(item.Key())
+		_, ok := predMap[parsedKey.Attr]
+		return ok
+	}
+	stream.Send = func(list *bpb.KVList) error {
+		for _, kv := range list.Kv {
+			if maxVersion < kv.Version {
+				maxVersion = kv.Version
+			}
+		}
+		return writeKVList(list, gzWriter)
+	}
 
-	if err != nil {
+	if err := stream.Orchestrate(context.Background()); err != nil {
 		glog.Errorf("While taking backup: %v", err)
 		return &emptyRes, err
 	}
 
-	if newSince > pr.Request.ReadTs {
+	if maxVersion > pr.Request.ReadTs {
 		glog.Errorf("Max timestamp seen during backup (%d) is greater than readTs (%d)",
-			newSince, pr.Request.ReadTs)
+			maxVersion, pr.Request.ReadTs)
 	}
 
 	glog.V(2).Infof("Backup group %d version: %d", pr.Request.GroupId, pr.Request.ReadTs)
@@ -149,4 +190,125 @@ func (pr *Processor) CompleteBackup(ctx context.Context, manifest *Manifest) err
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
 	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v}`, m.Since, m.Groups)
+}
+
+func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+	list := &bpb.KVList{}
+
+	for itr.Valid() {
+		item := itr.Item()
+		if !bytes.Equal(item.Key(), key) {
+			return list, nil
+		}
+		if item.Version() < pr.Request.SinceTs {
+			// Ignore versions less than given timestamp, or skip older versions of
+			// the given key.
+			return list, nil
+		}
+
+		switch item.UserMeta() {
+		case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
+			l, err := posting.ReadPostingList(key, itr)
+			if err != nil {
+				return nil, errors.Wrapf(err, "while reading posting list")
+			}
+			kvs, err := l.Rollup()
+			if err != nil {
+				return nil, errors.Wrapf(err, "while rolling up list")
+			}
+
+			for _, kv := range kvs {
+				backupKey, err := toBackupKey(kv.Key)
+				if err != nil {
+					return nil, err
+				}
+				kv.Key = backupKey
+
+				backupPl, err := toBackupPostingList(kv.Value)
+				if err != nil {
+					return nil, err
+				}
+				kv.Value = backupPl
+			}
+			list.Kv = append(list.Kv, kvs...)
+
+		case posting.BitSchemaPosting:
+			var valCopy []byte
+			if !item.IsDeletedOrExpired() {
+				// No need to copy value if item is deleted or expired.
+				var err error
+				valCopy, err = item.ValueCopy(nil)
+				if err != nil {
+					return nil, errors.Wrapf(err, "while copying value")
+				}
+			}
+
+			backupKey, err := toBackupKey(key)
+			if err != nil {
+				return nil, err
+			}
+
+			kv := &bpb.KV{
+				Key:       backupKey,
+				Value:     valCopy,
+				UserMeta:  []byte{item.UserMeta()},
+				Version:   item.Version(),
+				ExpiresAt: item.ExpiresAt(),
+			}
+			list.Kv = append(list.Kv, kv)
+
+			if item.DiscardEarlierVersions() || item.IsDeletedOrExpired() {
+				return list, nil
+			}
+
+			// Manually advance the iterator. This cannot be done in the for
+			// statement because ReadPostingList advances the iterator so this
+			// only needs to be done for BitSchemaPosting entries.
+			itr.Next()
+
+		default:
+			return nil, errors.Errorf(
+				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+		}
+	}
+
+	// This shouldn't be reached but it's being added here because the golang
+	// compiler complains about the missing return statement.
+	return list, nil
+}
+
+func toBackupKey(key []byte) ([]byte, error) {
+	parsedKey := x.Parse(key)
+	if parsedKey == nil {
+		return nil, errors.Errorf("could not parse key %s", hex.Dump(key))
+	}
+	backupKey, err := parsedKey.ToBackupKey().Marshal()
+	if err != nil {
+		return nil, errors.Wrapf(err, "while converting key for backup")
+	}
+	return backupKey, nil
+}
+
+func toBackupPostingList(val []byte) ([]byte, error) {
+	pl := &pb.PostingList{}
+	if err := pl.Unmarshal(val); err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list")
+	}
+	backupVal, err := posting.ToBackupPostingList(pl).Marshal()
+	if err != nil {
+		return nil, errors.Wrapf(err, "while converting posting list for backup")
+	}
+	return backupVal, nil
+}
+
+func writeKVList(list *bpb.KVList, w io.Writer) error {
+	if err := binary.Write(w, binary.LittleEndian, uint64(list.Size())); err != nil {
+		return err
+	}
+	buf, err := list.Marshal()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(buf)
+	return err
 }

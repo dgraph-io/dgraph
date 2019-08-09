@@ -170,7 +170,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				if servesTablet, err := groups().ServesTablet(s.Predicate); err != nil {
 					return err
 				} else if !servesTablet {
-					return fmt.Errorf("group 1 should always serve reserved predicate %s",
+					return errors.Errorf("group 1 should always serve reserved predicate %s",
 						s.Predicate)
 				}
 			}
@@ -539,9 +539,9 @@ func (n *node) leaderBlocking() (*conn.Pool, error) {
 		// leader election for a group might not have happened when it is called. If we can't
 		// find a leader, get latest state from Zero.
 		if err := UpdateMembershipState(context.Background()); err != nil {
-			return nil, fmt.Errorf("Error while trying to update membership state: %+v", err)
+			return nil, errors.Errorf("Error while trying to update membership state: %+v", err)
 		}
-		return nil, fmt.Errorf("Unable to reach leader in group %d", n.gid)
+		return nil, errors.Errorf("Unable to reach leader in group %d", n.gid)
 	}
 	return pool, nil
 }
@@ -596,12 +596,12 @@ func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// keep all the pre-writes for a pending transaction, so they will come back to memory, as Raft
 	// logs are replayed.
 	if _, err := n.populateSnapshot(snap, pool); err != nil {
-		return fmt.Errorf("Cannot retrieve snapshot from peer, error: %v", err)
+		return errors.Wrapf(err, "cannot retrieve snapshot from peer")
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	if err := schema.LoadFromDb(); err != nil {
-		return fmt.Errorf("Error while initilizating schema: %+v", err)
+		return errors.Wrapf(err, "while initializing schema")
 	}
 	groups().triggerMembershipSync()
 	return nil
@@ -727,7 +727,11 @@ func (n *node) Run() {
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
-	ticker := time.NewTicker(20 * time.Millisecond)
+	// Before we used to have 20ms ticks, but they would overload the Raft tick channel, causing
+	// "tick missed to fire" logs. Etcd uses 100ms and they haven't seen those issues.
+	// Additionally, using 100ms for ticks does not cause proposals to slow down, because they get
+	// sent out asap and don't rely on ticks. So, setting this to 100ms instead of 20ms is a NOOP.
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	done := make(chan struct{})
@@ -802,7 +806,9 @@ func (n *node) Run() {
 					maxIndex := n.Applied.LastIndex()
 					glog.Infof("Waiting for applyCh to become empty by reaching %d before"+
 						" retrieving snapshot\n", maxIndex)
-					n.Applied.WaitForMark(context.Background(), maxIndex)
+					if err := n.Applied.WaitForMark(context.Background(), maxIndex); err != nil {
+						glog.Errorf("Error waiting for mark for index %d: %+v", maxIndex, err)
+					}
 
 					if currSnap, err := n.Snapshot(); err != nil {
 						// Retrieve entire snapshot from leader if node does not have
@@ -841,7 +847,7 @@ func (n *node) Run() {
 			timer.Record("disk")
 			if rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %v", err)
+					glog.Errorf("Error while calling Store.Sync: %+v", err)
 				}
 				timer.Record("sync")
 			}
@@ -928,15 +934,21 @@ func (n *node) Run() {
 			timer.Record("advance")
 
 			if firstRun && n.canCampaign {
-				go n.Raft().Campaign(n.ctx)
+				go func() {
+					if err := n.Raft().Campaign(n.ctx); err != nil {
+						glog.Errorf("Error starting campaign for node %v: %+v", n.gid, err)
+					}
+				}()
 				firstRun = false
 			}
 			if span != nil {
 				span.Annotate(nil, "Advanced Raft. Done.")
 				span.End()
-				ostats.RecordWithTags(context.Background(),
+				if err := ostats.RecordWithTags(context.Background(),
 					[]tag.Mutator{tag.Upsert(x.KeyMethod, "alpha.RunLoop")},
-					x.LatencyMs.M(float64(timer.Total())/1e6))
+					x.LatencyMs.M(float64(timer.Total())/1e6)); err != nil {
+					glog.Errorf("Error recording stats: %+v", err)
+				}
 			}
 			if timer.Total() > 100*time.Millisecond {
 				glog.Warningf(

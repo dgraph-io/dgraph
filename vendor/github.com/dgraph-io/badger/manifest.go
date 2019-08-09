@@ -99,7 +99,7 @@ const (
 func (m *Manifest) asChanges() []*pb.ManifestChange {
 	changes := make([]*pb.ManifestChange, 0, len(m.Tables))
 	for id, tm := range m.Tables {
-		changes = append(changes, newCreateChange(id, int(tm.Level), tm.Checksum))
+		changes = append(changes, newCreateChange(id, int(tm.Level)))
 	}
 	return changes
 }
@@ -216,14 +216,14 @@ func (mf *manifestFile) addChanges(changesParam []*pb.ManifestChange) error {
 	}
 
 	mf.appendLock.Unlock()
-	return mf.fp.Sync()
+	return y.FileSync(mf.fp)
 }
 
 // Has to be 4 bytes.  The value can never change, ever, anyway.
 var magicText = [4]byte{'B', 'd', 'g', 'r'}
 
 // The magic version number.
-const magicVersion = 4
+const magicVersion = 6
 
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, manifestRewriteFilename)
@@ -255,7 +255,7 @@ func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 		fp.Close()
 		return nil, 0, err
 	}
-	if err := fp.Sync(); err != nil {
+	if err := y.FileSync(fp); err != nil {
 		fp.Close()
 		return nil, 0, err
 	}
@@ -321,7 +321,8 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 }
 
 var (
-	errBadMagic = errors.New("manifest has bad magic")
+	errBadMagic    = errors.New("manifest has bad magic")
+	errBadChecksum = errors.New("manifest has checksum mismatch")
 )
 
 // ReplayManifestFile reads the manifest file and constructs two manifest objects.  (We need one
@@ -366,7 +367,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 			return Manifest{}, 0, err
 		}
 		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
-			break
+			return Manifest{}, 0, errBadChecksum
 		}
 
 		var changeSet pb.ManifestChangeSet
@@ -389,8 +390,7 @@ func applyManifestChange(build *Manifest, tc *pb.ManifestChange) error {
 			return fmt.Errorf("MANIFEST invalid, table %d exists", tc.Id)
 		}
 		build.Tables[tc.Id] = TableManifest{
-			Level:    uint8(tc.Level),
-			Checksum: append([]byte{}, tc.Checksum...),
+			Level: uint8(tc.Level),
 		}
 		for len(build.Levels) <= int(tc.Level) {
 			build.Levels = append(build.Levels, levelManifest{make(map[uint64]struct{})})
@@ -422,12 +422,11 @@ func applyChangeSet(build *Manifest, changeSet *pb.ManifestChangeSet) error {
 	return nil
 }
 
-func newCreateChange(id uint64, level int, checksum []byte) *pb.ManifestChange {
+func newCreateChange(id uint64, level int) *pb.ManifestChange {
 	return &pb.ManifestChange{
-		Id:       id,
-		Op:       pb.ManifestChange_CREATE,
-		Level:    uint32(level),
-		Checksum: checksum,
+		Id:    id,
+		Op:    pb.ManifestChange_CREATE,
+		Level: uint32(level),
 	}
 }
 

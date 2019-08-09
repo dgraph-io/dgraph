@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -106,7 +105,7 @@ func parseUint64(r *http.Request, name string) (uint64, error) {
 
 	uintVal, err := strconv.ParseUint(value, 0, 64)
 	if err != nil {
-		return 0, fmt.Errorf("Error: %+v while parsing %s as uint64", err, name)
+		return 0, errors.Wrapf(err, "while parsing %s as uint64", name)
 	}
 
 	return uintVal, nil
@@ -122,7 +121,7 @@ func parseBool(r *http.Request, name string) (bool, error) {
 
 	boolval, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("Error: %+v while parsing %s as bool", err, name)
+		return false, errors.Wrapf(err, "while parsing %s as bool", name)
 	}
 
 	return boolval, nil
@@ -138,7 +137,7 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 
 	durationValue, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("Error: %+v while parsing %s as time.Duration", err, name)
+		return 0, errors.Wrapf(err, "while parsing %s as time.Duration", name)
 	}
 
 	return durationValue, nil
@@ -322,6 +321,13 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if queryText, ok := ms["query"]; ok && queryText != nil {
 			mu.Query, err = strconv.Unquote(string(queryText.bs))
+			if err != nil {
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+		}
+		if condText, ok := ms["cond"]; ok && condText != nil {
+			mu.Cond, err = strconv.Unquote(string(condText.bs))
 			if err != nil {
 				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 				return

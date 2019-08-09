@@ -29,6 +29,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger"
+	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -113,7 +114,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
-	plist, err := txn.Get(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
@@ -168,7 +169,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	plist, err := txn.Get(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
@@ -255,7 +256,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
 	reverse bool) error {
 	key := x.CountKey(t.Attr, count, reverse)
-	plist, err := txn.Get(key)
+	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
 	}
@@ -265,8 +266,6 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	if err = plist.addMutation(ctx, txn, t); err != nil {
 		return err
 	}
-
-	txn.addConflictKey(fmt.Sprintf("cntIdx|%s|%d", t.Attr, t.ValueId))
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 
@@ -429,7 +428,7 @@ func deleteTokensFor(attr, tokenizerName string) error {
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
-		return fmt.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
 	}
 	prefix = append(prefix, tokenizer.Identifier())
 	if err := pstore.DropPrefix(prefix); err != nil {
@@ -481,8 +480,9 @@ func deleteCountIndex(attr string) error {
 	return pstore.DropPrefix(prefix)
 }
 
-// Index rebuilding logic here.
-type rebuild struct {
+// rebuilder handles the process of rebuilding an index.
+type rebuilder struct {
+	attr    string
 	prefix  []byte
 	startTs uint64
 
@@ -491,57 +491,55 @@ type rebuild struct {
 	fn func(uid uint64, pl *List, txn *Txn) error
 }
 
-func (r *rebuild) Run(ctx context.Context) error {
-	t := pstore.NewTransactionAt(r.startTs, false)
-	defer t.Discard()
-
+func (r *rebuilder) Run(ctx context.Context) error {
 	glog.V(1).Infof("Rebuild: Starting process. StartTs=%d. Prefix=\n%s\n",
 		r.startTs, hex.Dump(r.prefix))
-	opts := badger.DefaultIteratorOptions
-	opts.AllVersions = true
-	opts.Prefix = r.prefix
-	it := t.NewIterator(opts)
-	defer it.Close()
 
 	// We create one txn for all the mutations to be housed in. We also create a
 	// localized posting list cache, to avoid stressing or mixing up with the
 	// global lcache (the LRU cache).
 	txn := NewTxn(r.startTs)
 
-	var prevKey []byte
-	for it.Rewind(); it.Valid(); {
-		item := it.Item()
-		if bytes.Equal(item.Key(), prevKey) {
-			it.Next()
-			continue
-		}
-		key := item.KeyCopy(nil)
-		prevKey = key
-
-		pk := x.Parse(key)
-		if pk == nil {
-			it.Next()
-			continue
-		}
-
+	stream := pstore.NewStreamAt(r.startTs)
+	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s", r.attr)
+	stream.Prefix = r.prefix
+	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
-		l, err := ReadPostingList(key, it)
+		pk := x.Parse(key)
+		if pk == nil {
+			return nil, errors.Errorf("could not parse key %s", hex.Dump(key))
+		}
+
+		item := itr.Item()
+		keyCopy := item.KeyCopy(nil)
+		l, err := ReadPostingList(keyCopy, itr)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := r.fn(pk.Uid, l, txn); err != nil {
-			return err
+			return nil, err
 		}
+
+		return nil, nil
+	}
+	stream.Send = func(*bpb.KVList) error {
+		// The work of adding the index edges to the transaction is done by r.fn
+		// so this function doesn't have any work to do.
+		return nil
+	}
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
 	}
 	glog.V(1).Infof("Rebuild: Iteration done. Now committing at ts=%d\n", r.startTs)
 
-	txn.Update() // Convert data into deltas.
+	// Convert data into deltas.
+	txn.Update()
 
 	// Now we write all the created posting lists to disk.
 	writer := NewTxnWriter(pstore)
@@ -584,10 +582,10 @@ func (rb *IndexRebuild) Run(ctx context.Context) error {
 	if err := rebuildIndex(ctx, rb); err != nil {
 		return err
 	}
-	if err := rebuildCountIndex(ctx, rb); err != nil {
+	if err := rebuildReverseEdges(ctx, rb); err != nil {
 		return err
 	}
-	return rebuildReverseEdges(ctx, rb)
+	return rebuildCountIndex(ctx, rb)
 }
 
 type indexRebuildInfo struct {
@@ -682,7 +680,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		}
 	}
 
-	// Exit early if the index only need to be deleted and not rebuild.
+	// Exit early if the index only need to be deleted and not rebuilt.
 	if rebuildInfo.op == indexDelete {
 		return nil
 	}
@@ -707,7 +705,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -803,15 +801,18 @@ func rebuildCountIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	// Create the forward index.
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	if err := builder.Run(ctx); err != nil {
 		return err
 	}
 
-	// Create the reverse index.
+	// Create the reverse index. The count reverse index is created if this
+	// predicate has both a count and reverse directive in the schema. It's safe
+	// to call builder.Run even if that's not the case as the reverse prefix
+	// will be empty.
 	reverse = true
-	builder = rebuild{prefix: pk.ReversePrefix(), startTs: rb.StartTs}
+	builder = rebuilder{attr: rb.Attr, prefix: pk.ReversePrefix(), startTs: rb.StartTs}
 	builder.fn = fn
 	return builder.Run(ctx)
 }
@@ -834,7 +835,7 @@ func (rb *IndexRebuild) needsReverseEdgesRebuild() indexOp {
 		return indexNoop
 	}
 
-	// If the current schema requires an index, index should be rebuild.
+	// If the current schema requires an index, index should be rebuilt.
 	if currIndex {
 		return indexRebuild
 	}
@@ -861,7 +862,7 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 
 	glog.Infof("Rebuilding reverse index for %s", rb.Attr)
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		return pl.Iterate(txn.StartTs, 0, func(pp *pb.Posting) error {
@@ -898,7 +899,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 		return true, nil
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
-		return false, fmt.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
+		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
 			" without dropping it first.", rb.CurrentSchema.Predicate)
 	}
 
@@ -913,7 +914,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
-	builder := rebuild{prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) error {
 		var mpost *pb.Posting
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -939,7 +940,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
-		txn.cache.Set(string(pl.key), pl)
+		pl = txn.cache.SetIfAbsent(string(pl.key), pl)
 		if err := pl.addMutation(ctx, txn, t); err != nil {
 			return err
 		}

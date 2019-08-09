@@ -1,3 +1,5 @@
+// +build !darwin go1.12
+
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
@@ -14,19 +16,13 @@
  * limitations under the License.
  */
 
-package z
+package y
 
-import (
-	"github.com/minio/minio-go"
-)
+import "os"
 
-var (
-	accessKey     = "accesskey"
-	secretKey     = "secretkey"
-	minioEndpoint = "localhost:9001"
-)
-
-// NewMinioClient returns a minio client.
-func NewMinioClient() (*minio.Client, error) {
-	return minio.New(minioEndpoint, accessKey, secretKey, false)
-}
+// FileSync calls os.File.Sync with the right parameters.
+// This function can be removed once we stop supporting Go 1.11
+// on MacOS.
+//
+// More info: https://golang.org/issue/26650.
+func FileSync(f *os.File) error { return f.Sync() }

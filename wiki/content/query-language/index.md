@@ -740,7 +740,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 ### Geolocation
 
-{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
+{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types). However, Dgraph can store other types of gelocation data. {{% /notice %}}
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
@@ -2490,6 +2490,16 @@ schema(pred: [name, friend]) {
 }
 ```
 
+Types can also be queried. Below are some example queries.
+
+```
+schema(type: Movie) {}
+schema(type: [Person, Animal]) {}
+```
+
+Note that type queries do not contain anything between the curly braces. The
+output will be the entire definition of the requested types.
+
 ## Facets : Edge attributes
 
 Dgraph supports facets --- **key value pairs on edges** --- as an extension to RDF triples. That is, facets add properties to edges, rather than to nodes.
@@ -2869,7 +2879,7 @@ Calculating the average ratings of users requires a variable that maps users to 
 
 ## K-Shortest Path Queries
 
-The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block returns the shortest path under `_path_` in the query response. The path can also be stored in a variable which is used in other query blocks.
 
 By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
 
@@ -3026,7 +3036,7 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-The k-shortest path algorithm (used when numPaths > 1)also accepts the arguments ```minweight``` and ```maxweight```, which take a float as their value. When they are passed, only paths within the weight range ```[minweight, maxweight]``` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
+The k-shortest path algorithm (used when `numpaths` > 1) also accepts the arguments `minweight` and `maxweight`, which take a float as their value. When they are passed, only paths within the weight range `[minweight, maxweight]` will be considered as valid paths. This can be used, for example, to query the shortest paths that traverse between 2 and 4 nodes.
 
 ```sh
 curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
@@ -3038,6 +3048,13 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'{
  }
 }' | python -m json.tool | less
 ```
+
+Some points to keep in mind for shortest path queries:
+
+- Weights must be non-negative. Dijkstra's algorithm is used to calculate the shortest paths.
+- Only one facet per predicate in the shortest query block is allowed.
+- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result.
+- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path. All k paths are returned in `_path_`.
 
 ## Recurse Query
 
@@ -3062,6 +3079,7 @@ Some points to keep in mind while using recurse queries are:
 - The `loop` parameter can be set to false, in which case paths which lead to a loop would be ignored
   while traversing.
 - If not specified, the value of the `loop` parameter defaults to false.
+- If the value of the `loop` parameter is false and depth is not specified, `depth` will default to `math.MaxUint64`, which means that the entire graph might be traversed until all the leaf nodes are reached.
 
 
 ## Fragments

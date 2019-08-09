@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
 )
 
@@ -974,6 +975,103 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 	require.Contains(t, err.Error(), "Multiple variables not allowed in a function")
 }
 
+func TestLenFunctionWithMultipleVariableError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(gt(len(a, b), 10)) {
+		 name
+		}
+	}
+`
+	// Multiple vars not allowed.
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple variables not allowed in len function")
+}
+
+func TestLenFunctionInsideUidError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(uid(len(a), 10)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "len function only allowed inside inequality")
+}
+
+func TestLenFunctionWithNoVariable(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(len(), 10) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got empty attr for function")
+}
+
+func TestLenAsSecondArgumentError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(10, len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved. We should validate function names from a
+	// whitelist.
+	require.Error(t, err)
+}
+
+func TestCountWithLenFunctionError(t *testing.T) {
+	query := `
+	{
+		var(func: uid(0x0a)) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(func: uid(fr)) @filter(count(name), len(fr)) {
+			name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	// TODO(pawan) - Error message can be improved.
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarInIneq(t *testing.T) {
 	query := `
 	{
@@ -1071,11 +1169,45 @@ func TestParseShortestPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "0x0a", res.Query[0].Args["from"])
-	require.Equal(t, "0x0b", res.Query[0].Args["to"])
+	require.Equal(t, uint64(0xa), res.Query[0].ShortestPathArgs.From.UID[0])
+	require.Equal(t, uint64(0xb), res.Query[0].ShortestPathArgs.To.UID[0])
 	require.Equal(t, "3", res.Query[0].Args["numpaths"])
 	require.Equal(t, "3", res.Query[0].Args["minweight"])
 	require.Equal(t, "6", res.Query[0].Args["maxweight"])
+}
+
+func TestParseShortestPathWithUidVars(t *testing.T) {
+	query := `{
+		a as var(func: uid(0x01))
+		b as var(func: uid(0x02))
+
+		shortest(from: uid(a), to: uid(b)) {
+			password
+			friend
+		}
+
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	q := res.Query[2]
+	require.NotNil(t, q.ShortestPathArgs.From)
+	require.Equal(t, 1, len(q.ShortestPathArgs.From.NeedsVar))
+	require.Equal(t, "a", q.ShortestPathArgs.From.NeedsVar[0].Name)
+	require.Equal(t, "uid", q.ShortestPathArgs.From.Name)
+	require.NotNil(t, q.ShortestPathArgs.To)
+	require.Equal(t, 1, len(q.ShortestPathArgs.To.NeedsVar))
+}
+
+func TestParseShortestPathInvalidFnError(t *testing.T) {
+	query := `{
+		shortest(from: eq(a), to: uid(b)) {
+			password
+			friend
+		}
+
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
 }
 
 func TestParseMultipleQueries(t *testing.T) {
@@ -4008,7 +4140,7 @@ func TestEqUidFunctionErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
+	require.Contains(t, err.Error(), "Only val/count/len allowed as function within another. Got: uid")
 }
 
 func TestAggRoot1(t *testing.T) {
@@ -4307,9 +4439,10 @@ func TestParseLangTagAfterStringInFilter(t *testing.T) {
 }
 
 func parseNquads(b []byte) ([]*api.NQuad, error) {
+	var lexer lex.Lexer
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line))
+		nq, err := rdf.Parse(string(line), &lexer)
 		if err == rdf.ErrEmpty {
 			continue
 		}

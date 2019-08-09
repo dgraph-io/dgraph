@@ -163,12 +163,11 @@ Query Example: Robin Wright by external ID.
 
 {{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary. Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
-## External IDs and Upsert Transaction
+## External IDs and Upsert Block
 
-The upsert transaction makes managing external IDs easy.
+The Upsert Block makes managing external IDs easy.
 
 Set the schema.
-
 ```
 xid: string @index(exact) .
 <http://schema.org/name>: string @index(exact) .
@@ -183,7 +182,8 @@ Set the type first of all.
   }
 }
 ```
-Now you can create a new person and attach its type using an upsert transaction.
+
+Now you can create a new person and attach its type using the Upsert Block.
 ```
    upsert {
       query {
@@ -204,7 +204,7 @@ Now you can create a new person and attach its type using an upsert transaction.
     }
 ```
 
-You can also delete a person and deattach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
+You can also delete a person and detach the relation between Type and Person Node. It's the same as above, but you use the keyword "delete" instead of "set". "`http://schema.org/Person`" will remain but "`Robin Wright`" will be deleted.
 
 ```
    upsert {
@@ -291,7 +291,7 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 ```
 dgraph live --help
 ```
-See also [Bulk Data Loading](/deploy#bulk-data-loading).
+See also [Fast Data Loading](/deploy#fast-data-loading).
 
 ## Delete
 
@@ -472,6 +472,23 @@ _:blank-0 <rating> "c'est bon"@fr .
 _:blank-0 <rating> "è buono"@it .
 ```
 
+### Geolocation support
+
+Support for geolocation data is available in JSON. Geo-location data is entered
+as a JSON object with keys "type" and "coordinates". Keep in mind we only
+support indexing on the Point, Polygon, and MultiPolygon types, but we can store
+other types of geolocation data. Below is an example:
+
+```
+{
+  "food": "taco",
+  location: {
+    "type": "Point",
+    "coordinates": [1.0, 2.0]
+  }
+}
+```
+
 ### Referencing existing nodes
 
 If a JSON object contains a field named `"uid"`, then that field is interpreted
@@ -599,11 +616,12 @@ All edges for a predicate emanating from a single node can be deleted at once
 }
 ```
 
-If no predicates specified, then all of the node's known outbound edges are
-deleted (corresponding to deleting `S * *`). The predicates to delete are
-derived using the type system. Refer to the [RDF format]({{< relref "#delete" >}})
-documentation and the section on the [type system]({{< relref "query-language/index.md#type-system" >}})
-for more information:
+If no predicates are specified, then all of the node's known outbound edges (to
+other nodes and to literal values) are deleted (corresponding to deleting `S *
+*`). The predicates to delete are derived using the type system. Refer to the
+[RDF format]({{< relref "#delete" >}}) documentation and the section on the
+[type system]({{< relref "query-language/index.md#type-system" >}}) for more
+information:
 
 ```json
 {
@@ -779,6 +797,58 @@ Mutation with a JSON file:
 curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow=true -d @data.json
 ```
 
+where the contents of data.json looks like the following:
+
+```json
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
+The JSON file must follow the same format for mutations over HTTP: a single JSON
+object with the `"set"` or `"delete"` key and an array of JSON objects for the
+mutation. If you already have a file with an array of data, you can use `jq` to
+transform your data to the proper format. For example, if your data.json file
+looks like this:
+
+```json
+[
+  {
+    "name": "Alice"
+  },
+  {
+    "name": "Bob"
+  }
+]
+```
+
+then you can transform your data to the proper format with the following `jq`
+command, where the `.` in the `jq` string represents the contents of data.json:
+
+```sh
+cat data.json | jq '{set: .}'
+```
+
+```
+{
+  "set": [
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Bob"
+    }
+  ]
+}
+```
+
 ## Upsert Block
 
 The Upsert block allows performing queries and mutations in a single request. The Upsert
@@ -799,14 +869,9 @@ The Mutation block currently only allows the `uid` function, which allows extrac
 from variables defined in the query block. There are 3 possible outcomes based on the
 results of executing the query block:
 
-  * If the variable is empty i.e. no node matched the query, the `uid` function returns
-  a new UID in case of a `set` operation and is thus treated similar to a blank node.
-  On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes
-  a no-op and is silently ignored.
-  * If the variable stores exactly one UID, the `uid` function returns the uid stored in
-  the variable.
-  * If the variable stores more than one UID, the mutation fails. We plan to support
-  this use case in the future.
+* If the variable is empty i.e. no node matched the query, the `uid` function returns a new UID in case of a `set` operation and is thus treated similar to a blank node. On the other hand, for `delete/del`, it returns no UID, and thus the operation becomes a no-op and is silently ignored.
+* If the variable stores exactly one UID, the `uid` function returns the uid stored in the variable.
+* If the variable stores more than one UID, the mutation fails. We plan to support this use case in the future.
 
 ### Example
 

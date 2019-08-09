@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -35,6 +37,7 @@ import (
 	nqjson "github.com/dgraph-io/dgraph/chunker/json"
 	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -119,12 +122,8 @@ func (s *ServerState) runVlogGC(store *badger.DB) {
 	}
 }
 
-func setBadgerOptions(opt badger.Options, dir string) badger.Options {
-	opt.SyncWrites = false
-	opt.Truncate = true
-	opt.Dir = dir
-	opt.ValueDir = dir
-	opt.Logger = &x.ToGlog{}
+func setBadgerOptions(opt badger.Options) badger.Options {
+	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{})
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -155,8 +154,8 @@ func (s *ServerState) initStorage() {
 	{
 		// Write Ahead Log directory
 		x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
-		opt := badger.LSMOnlyOptions
-		opt = setBadgerOptions(opt, Config.WALDir)
+		opt := badger.LSMOnlyOptions(Config.WALDir)
+		opt = setBadgerOptions(opt)
 		opt.ValueLogMaxEntries = 10000 // Allow for easy space reclamation.
 
 		// We should always force load LSM tables to memory, disregarding user settings, because
@@ -175,10 +174,9 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions
-		opt.ValueThreshold = 1 << 10 // 1KB
-		opt.NumVersionsToKeep = math.MaxInt32
-		opt = setBadgerOptions(opt, Config.PostingDir)
+		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
+			WithNumVersionsToKeep(math.MaxInt32)
+		opt = setBadgerOptions(opt)
 
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
 		s.Pstore, err = badger.OpenManaged(opt)
@@ -323,7 +321,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m := &pb.Mutations{StartTs: State.getTimestamp(false)}
 	if isDropAll(op) {
 		if len(op.DropValue) > 0 {
-			return empty, fmt.Errorf("If DropOp is set to ALL, DropValue must be empty")
+			return empty, errors.Errorf("If DropOp is set to ALL, DropValue must be empty")
 		}
 
 		m.DropOp = pb.Mutations_ALL
@@ -336,7 +334,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if op.DropOp == api.Operation_DATA {
 		if len(op.DropValue) > 0 {
-			return empty, fmt.Errorf("If DropOp is set to DATA, DropValue must be empty")
+			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
 		m.DropOp = pb.Mutations_DATA
@@ -349,7 +347,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if len(op.DropAttr) > 0 || op.DropOp == api.Operation_ATTR {
 		if op.DropOp == api.Operation_ATTR && len(op.DropValue) == 0 {
-			return empty, fmt.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
+			return empty, errors.Errorf("If DropOp is set to ATTR, DropValue must not be empty")
 		}
 
 		var attr string
@@ -361,7 +359,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// Reserved predicates cannot be dropped.
 		if x.IsReservedPredicate(attr) {
-			err := fmt.Errorf("predicate %s is reserved and is not allowed to be dropped",
+			err := errors.Errorf("predicate %s is reserved and is not allowed to be dropped",
 				attr)
 			return empty, err
 		}
@@ -384,7 +382,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if op.DropOp == api.Operation_TYPE {
 		if len(op.DropValue) == 0 {
-			return empty, fmt.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
+			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
 		m.DropOp = pb.Mutations_TYPE
@@ -402,7 +400,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsReservedPredicateChanged(update.Predicate, update) {
-			err := fmt.Errorf("predicate %s is reserved and is not allowed to be modified",
+			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err
 		}
@@ -432,25 +430,26 @@ func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, e
 func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool) (
 	resp *api.Assigned, rerr error) {
 
-	var l query.Latency
-	l.Start = time.Now()
-	gmu, err := parseMutationObject(mu)
-	if err != nil {
-		return resp, err
-	}
-	parseEnd := time.Now()
-	l.Parsing = parseEnd.Sub(l.Start)
-
-	if authorize {
-		if err := authorizeMutation(ctx, gmu); err != nil {
-			return nil, err
-		}
-	}
-
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	startTime := time.Now()
+
+	if !isMutationAllowed(ctx) {
+		return resp, errors.Errorf("No mutations allowed.")
+	}
+
+	var parsingTime time.Duration
+	resp = &api.Assigned{}
+
+	start := time.Now()
+	defer func() {
+		totalTime := time.Since(start)
+		processingTime := totalTime - parsingTime
+		resp.Latency = &api.Latency{
+			ParsingNs:    uint64(parsingTime.Nanoseconds()),
+			ProcessingNs: uint64(processingTime.Nanoseconds()),
+		}
+	}()
 
 	ctx, span := otrace.StartSpan(ctx, methodMutate)
 	ctx = x.WithMethod(ctx, methodMutate)
@@ -461,89 +460,52 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceMs(startTime)
+		timeSpentMs := x.SinceMs(start)
 		ostats.Record(ctx, x.LatencyMs.M(timeSpentMs))
 	}()
 
-	resp = &api.Assigned{}
-	if err := x.HealthCheck(); err != nil {
-		return resp, err
+	if rerr = x.HealthCheck(); rerr != nil {
+		return
 	}
-	ostats.Record(ctx, x.NumMutations.M(1))
 
+	ostats.Record(ctx, x.NumMutations.M(1))
+	if mu.Query != "" {
+		span.Annotatef(nil, "Got Mutation with Upsert Block: %s", mu)
+	}
 	if len(mu.SetJson) > 0 {
 		span.Annotatef(nil, "Got JSON Mutation: %s", mu.SetJson)
 	} else if len(mu.SetNquads) > 0 {
 		span.Annotatef(nil, "Got NQuad Mutation: %s", mu.SetNquads)
 	}
 
-	if !isMutationAllowed(ctx) {
-		return nil, errors.Errorf("No mutations allowed.")
+	startParsingTime := time.Now()
+	gmu, err := parseMutationObject(mu)
+	if err != nil {
+		return resp, err
 	}
+	parsingTime += time.Since(startParsingTime)
+
+	if authorize {
+		if err := authorizeMutation(ctx, gmu); err != nil {
+			return resp, err
+		}
+	}
+
+	if len(gmu.Set) == 0 && len(gmu.Del) == 0 {
+		span.Annotate(nil, "Empty mutation")
+		return resp, errors.Errorf("Empty mutation")
+	}
+
 	if mu.StartTs == 0 {
 		mu.StartTs = State.getTimestamp(false)
 	}
 	annotateStartTs(span, mu.StartTs)
-	emptyMutation :=
-		len(mu.GetSetJson()) == 0 && len(mu.GetDeleteJson()) == 0 &&
-			len(mu.Set) == 0 && len(mu.Del) == 0 &&
-			len(mu.SetNquads) == 0 && len(mu.DelNquads) == 0
-	if emptyMutation {
-		span.Annotate(nil, "Empty mutation")
-		return resp, fmt.Errorf("Empty mutation")
-	}
 
-	defer func() {
-		l.Processing = time.Since(parseEnd)
-		resp.Latency = &api.Latency{
-			ParsingNs:    uint64(l.Parsing.Nanoseconds()),
-			ProcessingNs: uint64(l.Processing.Nanoseconds()),
-		}
-	}()
-
-	needVars := findVars(gmu)
-	varToUID, err := doQueryInUpsert(ctx, &l, mu.Query, needVars, mu.StartTs)
+	l, err := doQueryInUpsert(ctx, mu, gmu)
 	if err != nil {
 		return resp, err
 	}
-
-	if mu.Query != "" {
-		// does following transformations:
-		//   * uid(v) -> 0x123     -- If v is defined in query block
-		//   * uid(v) -> _:uid(v)  -- Otherwise
-		getNewVal := func(s string) string {
-			if strings.HasPrefix(s, "uid(") {
-				varName := s[4 : len(s)-1]
-				if uid, ok := varToUID[varName]; ok {
-					return uid
-				}
-
-				return "_:" + s
-			}
-
-			return s
-		}
-
-		// Remove the mutations from gmu.Del when no UID was found
-		gmuDel := make([]*api.NQuad, 0, len(gmu.Del))
-		for _, nq := range gmu.Del {
-			nq.Subject = getNewVal(nq.Subject)
-			nq.ObjectId = getNewVal(nq.ObjectId)
-
-			if !strings.HasPrefix(nq.Subject, "_:uid(") &&
-				!strings.HasPrefix(nq.ObjectId, "_:uid(") {
-
-				gmuDel = append(gmuDel, nq)
-			}
-		}
-		gmu.Del = gmuDel
-
-		// update the values in mutation block from the query block.
-		for _, nq := range gmu.Set {
-			nq.Subject = getNewVal(nq.Subject)
-			nq.ObjectId = getNewVal(nq.ObjectId)
-		}
-	}
+	parsingTime += l.Parsing
 
 	newUids, err := query.AssignUids(ctx, gmu.Set)
 	if err != nil {
@@ -555,10 +517,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		return resp, err
 	}
 
-	m := &pb.Mutations{
-		Edges:   edges,
-		StartTs: mu.StartTs,
-	}
+	m := &pb.Mutations{Edges: edges, StartTs: mu.StartTs}
 	span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Context, err = query.ApplyMutations(ctx, m)
 	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Context, err)
@@ -566,6 +525,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		if err == y.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
+
 		return resp, err
 	}
 
@@ -577,6 +537,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		if resp.Context == nil {
 			resp.Context = &api.TxnContext{StartTs: mu.StartTs}
 		}
+
 		resp.Context.Aborted = true
 		_, _ = worker.CommitOverNetwork(ctx, resp.Context)
 
@@ -584,8 +545,10 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 			// We have already aborted the transaction, so the error message should reflect that.
 			return resp, y.ErrAborted
 		}
+
 		return resp, err
 	}
+
 	span.Annotatef(nil, "Prewrites err: %v. Attempting to commit/abort immediately.", err)
 	ctxn := resp.Context
 	// zero would assign the CommitTs
@@ -596,12 +559,104 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 			err = status.Errorf(codes.Aborted, err.Error())
 			resp.Context.Aborted = true
 		}
+
 		return resp, err
 	}
+
 	// CommitNow was true, no need to send keys.
 	resp.Context.Keys = resp.Context.Keys[:0]
 	resp.Context.CommitTs = cts
+
 	return resp, nil
+}
+
+// doQueryInUpsert processes the query in upsert block.
+func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
+	*query.Latency, error) {
+
+	l := &query.Latency{}
+	if mu.Query == "" {
+		return l, nil
+	}
+
+	upsertQuery := mu.Query
+	needVars := findVars(gmu)
+	isCondUpsert := strings.TrimSpace(mu.Cond) != ""
+	varName := fmt.Sprintf("__dgraph%d__", rand.Int())
+	if isCondUpsert {
+		// @if in upsert is same as @filter in the query
+		cond := strings.Replace(mu.Cond, "@if", "@filter", 1)
+
+		// Add dummy query to evaluate the @if directive, ok to use uid(0) because
+		// dgraph doesn't check for existence of UIDs until we query for other predicates.
+		// Here, we are only querying for uid predicate in the dummy query.
+		//
+		// For example if - mu.Query = {
+		//      me(...) {...}
+		//   }
+		//
+		// Then, upsertQuery = {
+		//      me(...) {...}
+		//      __dgraph0__ as var(func: uid(0)) @if(...)
+		//   }
+		//
+		// The variable __dgraph0__ will -
+		//      * be empty if the condition is true
+		//      * have 1 UID (the 0 UID) if the condition is false
+		upsertQuery = strings.TrimSuffix(strings.TrimSpace(mu.Query), "}")
+		upsertQuery += varName + ` as var(func: uid(0)) ` + cond + `}`
+		needVars = append(needVars, varName)
+	}
+
+	startParsingTime := time.Now()
+	parsedReq, err := gql.ParseWithNeedVars(gql.Request{
+		Str:       upsertQuery,
+		Variables: make(map[string]string),
+	}, needVars)
+	l.Parsing += time.Since(startParsingTime)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while parsing query: %q", upsertQuery)
+	}
+	if err := validateQuery(parsedReq.Query); err != nil {
+		return nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
+	}
+
+	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: mu.StartTs}
+	if err := qr.ProcessQuery(ctx); err != nil {
+		return nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
+	}
+
+	if len(qr.Vars) <= 0 {
+		return nil, errors.Errorf("upsert query block has no variables")
+	}
+
+	// If a variable doesn't have any UID, we generate one ourselves later.
+	varToUID := make(map[string][]string)
+	for name, v := range qr.Vars {
+		if v.Uids == nil || len(v.Uids.Uids) <= 0 {
+			continue
+		}
+
+		uids := make([]string, len(v.Uids.Uids))
+		for i, u := range v.Uids.Uids {
+			uids[i] = strconv.FormatUint(u, 10)
+		}
+		varToUID[name] = uids
+	}
+
+	// If @if condition is false, no need to process the mutations
+	if isCondUpsert {
+		v, ok := qr.Vars[varName]
+		isMut := ok && v.Uids != nil && len(v.Uids.Uids) == 1
+		if !isMut {
+			gmu.Set = nil
+			gmu.Del = nil
+			return l, nil
+		}
+	}
+
+	updateMutations(gmu, varToUID)
+	return l, nil
 }
 
 // findVars finds all the variables used in mutation block
@@ -633,58 +688,68 @@ func findVars(gmu *gql.Mutation) []string {
 	return varsList
 }
 
-// doQueryInUpsert processes a query in the upsert block.
-// TODO(Aman): refactor this function along with doMutate
-func doQueryInUpsert(ctx context.Context, l *query.Latency, queryText string,
-	needVars []string, startTs uint64) (map[string]string, error) {
+// updateMutations does following transformations:
+//   * uid(v) -> 0x123     -- If v is defined in query block
+//   * uid(v) -> _:uid(v)  -- Otherwise
+func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
+	getNewVals := func(s string) []string {
+		if strings.HasPrefix(s, "uid(") {
+			varName := s[4 : len(s)-1]
+			if uids, ok := varToUID[varName]; ok {
+				return uids
+			}
 
-	varToUID := make(map[string]string)
-	if queryText == "" {
-		return varToUID, nil
-	}
-
-	if startTs == 0 {
-		return nil, errors.Errorf("Transaction timestamp is zero")
-	}
-
-	parsedReq, err := gql.ParseWithNeedVars(gql.Request{
-		Str:       queryText,
-		Variables: make(map[string]string),
-	}, needVars)
-	if err != nil {
-		return nil, err
-	}
-	if err = validateQuery(parsedReq.Query); err != nil {
-		return nil, err
-	}
-
-	qr := query.Request{
-		Latency:  l,
-		GqlQuery: &parsedReq,
-		ReadTs:   startTs,
-	}
-	if err := qr.ProcessQuery(ctx); err != nil {
-		return nil, errors.Wrapf(err, "while processing query: %q", queryText)
-	}
-
-	if len(qr.Vars) <= 0 {
-		return nil, fmt.Errorf("upsert query op has no variables")
-	}
-
-	// TODO(Aman): allow multiple values for each variable.
-	// If a variable doesn't have any UID, we generate one ourselves later.
-	for name, v := range qr.Vars {
-		if v.Uids == nil {
-			continue
+			return []string{"_:" + s}
 		}
-		if len(v.Uids.Uids) > 1 {
-			return nil, fmt.Errorf("more than one values found for var (%s)", name)
-		} else if len(v.Uids.Uids) == 1 {
-			varToUID[name] = fmt.Sprintf("%d", v.Uids.Uids[0])
+
+		return []string{s}
+	}
+
+	getNewNQuad := func(nq *api.NQuad, s, o string) *api.NQuad {
+		// The following copy is fine because we only modify Subject and ObjectId.
+		// The pointer values are not modified across different copies of NQuad.
+		n := *nq
+
+		n.Subject = s
+		n.ObjectId = o
+		return &n
+	}
+
+	// Remove the mutations from gmu.Del when no UID was found.
+	gmuDel := make([]*api.NQuad, 0, len(gmu.Del))
+	for _, nq := range gmu.Del {
+		// if Subject or/and Object are variables, each NQuad can result
+		// in multiple NQuads if any variable stores more than one UIDs.
+		newSubs := getNewVals(nq.Subject)
+		newObs := getNewVals(nq.ObjectId)
+
+		for _, s := range newSubs {
+			for _, o := range newObs {
+				// Blank node has no meaning in case of deletion.
+				if strings.HasPrefix(s, "_:uid(") ||
+					strings.HasPrefix(o, "_:uid(") {
+					continue
+				}
+
+				gmuDel = append(gmuDel, getNewNQuad(nq, s, o))
+			}
 		}
 	}
+	gmu.Del = gmuDel
 
-	return varToUID, nil
+	// Update the values in mutation block from the query block.
+	gmuSet := make([]*api.NQuad, 0, len(gmu.Set))
+	for _, nq := range gmu.Set {
+		newSubs := getNewVals(nq.Subject)
+		newObs := getNewVals(nq.ObjectId)
+
+		for _, s := range newSubs {
+			for _, o := range newObs {
+				gmuSet = append(gmuSet, getNewNQuad(nq, s, o))
+			}
+		}
+	}
+	gmu.Set = gmuSet
 }
 
 // Query handles queries and returns the data.
@@ -734,7 +799,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	resp = &api.Response{}
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
-		return resp, fmt.Errorf("Empty query")
+		return resp, errors.Errorf("Empty query")
 	}
 
 	var l query.Latency
@@ -790,6 +855,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, errors.Wrap(err, "")
 	}
+	l.Transport = time.Since(l.Start) - l.Parsing - l.Processing
+
 	var js []byte
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
@@ -816,6 +883,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	resp.Json = js
 	span.Annotatef(nil, "Response = %s", js)
 
+	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
+	// since it involves modifying the API protos.
 	gl := &api.Latency{
 		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
 		ProcessingNs: uint64(l.Processing.Nanoseconds()),
@@ -837,7 +906,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 
 	tctx := &api.TxnContext{}
 	if tc.StartTs == 0 {
-		return &api.TxnContext{}, fmt.Errorf(
+		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
 	annotateStartTs(span, tc.StartTs)
@@ -904,8 +973,9 @@ func isAlterAllowed(ctx context.Context) error {
 
 func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
+	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line))
+		nq, err := rdf.Parse(string(line), &l)
 		if err == rdf.ErrEmpty {
 			continue
 		}
@@ -1068,7 +1138,7 @@ func validateQuery(queries []*gql.GraphQuery) error {
 
 func validatePredName(name string) error {
 	if len(name) > math.MaxUint16 {
-		return fmt.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
+		return errors.Errorf("Predicate name length cannot be bigger than 2^16. Predicate: %v",
 			name[:80])
 	}
 	return nil

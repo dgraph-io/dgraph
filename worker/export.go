@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -68,11 +67,10 @@ var exportFormats = map[string]exportFormat{
 }
 
 type exporter struct {
-	pl      *posting.List
-	uid     uint64
-	attr    string
-	readTs  uint64
-	counter int
+	pl     *posting.List
+	uid    uint64
+	attr   string
+	readTs uint64
 }
 
 // Map from our types to RDF type. Useful when writing storage types
@@ -89,20 +87,6 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.PasswordID: "xs:password",
 }
 
-// Having '<' and '>' around all predicates makes the exported schema harder
-// for humans to look at, so only put them on predicates containing "exotic"
-// characters (i.e. ones not in this list).
-var predNonSpecialChars = unicode.RangeTable{
-	R16: []unicode.Range16{
-		// Ranges must be in order.
-		{'.', '.', 1},
-		{'0', '9', 1},
-		{'A', 'Z', 1},
-		{'_', '_', 1},
-		{'a', 'z', 1},
-	},
-}
-
 // UIDs like 0x1 look weird but 64-bit ones like 0x0000000000000001 are too long.
 var uidFmtStrRdf = "<0x%x>"
 var uidFmtStrJson = "\"0x%x\""
@@ -111,7 +95,7 @@ var uidFmtStrJson = "\"0x%x\""
 func valToStr(v types.Val) (string, error) {
 	v2, err := types.Convert(v, types.StringID)
 	if err != nil {
-		return "", fmt.Errorf("converting %v to string: %v\n", v2.Value, err)
+		return "", errors.Wrapf(err, "while converting %v to string", v2.Value)
 	}
 
 	// Strip terminating null, if any.
@@ -122,12 +106,12 @@ func valToStr(v types.Val) (string, error) {
 func facetToString(fct *api.Facet) (string, error) {
 	v1, err := facets.ValFor(fct)
 	if err != nil {
-		return "", fmt.Errorf("getting value from facet %#v: %v", fct, err)
+		return "", errors.Wrapf(err, "getting value from facet %#v", fct)
 	}
 
 	v2 := &types.Val{Tid: types.StringID}
 	if err = types.Marshal(v1, v2); err != nil {
-		return "", fmt.Errorf("marshaling facet value %v to string: %v", v1, err)
+		return "", errors.Wrapf(err, "marshaling facet value %v to string", v1)
 	}
 
 	return v2.Value.(string), nil
@@ -149,11 +133,6 @@ func escapedString(str string) string {
 
 func (e *exporter) toJSON() (*bpb.KVList, error) {
 	bp := new(bytes.Buffer)
-
-	if e.counter != 1 {
-		fmt.Fprint(bp, ",\n")
-	}
-
 	// We could output more compact JSON at the cost of code complexity.
 	// Leaving it simple for now.
 
@@ -299,16 +278,9 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 func toSchema(attr string, update pb.SchemaUpdate) (*bpb.KVList, error) {
 	// bytes.Buffer never returns error for any of the writes. So, we don't need to check them.
 	var buf bytes.Buffer
-	isSpecial := func(r rune) bool {
-		return !(unicode.In(r, &predNonSpecialChars))
-	}
-	if strings.IndexFunc(attr, isSpecial) >= 0 {
-		buf.WriteRune('<')
-		buf.WriteString(attr)
-		buf.WriteRune('>')
-	} else {
-		buf.WriteString(attr)
-	}
+	buf.WriteRune('<')
+	buf.WriteString(attr)
+	buf.WriteRune('>')
 	buf.WriteByte(':')
 	if update.List {
 		buf.WriteRune('[')
@@ -427,7 +399,7 @@ func (writer *fileWriter) Close() error {
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) error {
 	if in.GroupId != groups().groupId() {
-		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d\n",
+		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
 	glog.Infof("Export requested at %d.", in.ReadTs)
@@ -474,11 +446,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
-	e := &exporter{
-		readTs:  in.ReadTs,
-		counter: 0,
-	}
-
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -503,8 +470,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
 		pk := x.Parse(item.Key())
-
-		e.counter += 1
+		e := &exporter{
+			readTs: in.ReadTs,
+		}
 		e.uid = pk.Uid
 		e.attr = pk.Attr
 
@@ -540,7 +508,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			if err != nil {
 				return nil, err
 			}
-
 			switch in.Format {
 			case "json":
 				return e.toJSON()
@@ -556,6 +523,18 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return nil, nil
 	}
 
+	hasDataBefore := false
+	var separator []byte
+	switch in.Format {
+	case "json":
+		separator = []byte(",\n")
+	case "rdf":
+		// The separator for RDF should be empty since the toRDF function already
+		// adds newline to each RDF entry.
+	default:
+		glog.Fatalf("Invalid export format found: %s", in.Format)
+	}
+
 	stream.Send = func(list *bpb.KVList) error {
 		for _, kv := range list.Kv {
 			var writer *fileWriter
@@ -568,6 +547,16 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
 
+			if kv.Version == 1 { // only insert separator for data
+				if hasDataBefore {
+					if _, err := writer.gw.Write(separator); err != nil {
+						return err
+					}
+				}
+				// change the hasDataBefore flag so that the next data entry will have a separator
+				// prepended
+				hasDataBefore = true
+			}
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
@@ -670,7 +659,7 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 	for i := 0; i < len(gids); i++ {
 		err := <-ch
 		if err != nil {
-			rerr := fmt.Errorf("Export failed at readTs %d. Err=%v", readTs, err)
+			rerr := errors.Wrapf(err, "Export failed at readTs %d", readTs)
 			glog.Errorln(rerr)
 			return rerr
 		}

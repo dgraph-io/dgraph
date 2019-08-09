@@ -19,13 +19,12 @@ package posting
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/dgryski/go-farm"
-	"github.com/golang/glog"
 
 	bpb "github.com/dgraph-io/badger/pb"
 	"github.com/dgraph-io/dgo/protos/api"
@@ -43,9 +42,9 @@ import (
 var (
 	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
 	// In such a case, retry.
-	ErrRetry = fmt.Errorf("Temporary error. Please retry")
+	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = fmt.Errorf("No value found")
+	ErrNoValue       = errors.New("No value found")
 	errStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
@@ -103,7 +102,7 @@ type pIterator struct {
 
 func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 	if deleteBelowTs > 0 && deleteBelowTs <= l.minTs {
-		return fmt.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
+		return errors.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
 			deleteBelowTs, l.minTs)
 	}
 
@@ -280,7 +279,8 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	return &pb.Posting{
+	p := postingPool.Get().(*pb.Posting)
+	*p = pb.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
 		ValType:     t.ValueType,
@@ -290,6 +290,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		Op:          op,
 		Facets:      t.Facets,
 	}
+	return p
 }
 
 func hasDeleteAll(mpost *pb.Posting) bool {
@@ -378,7 +379,7 @@ func (l *List) canMutateUid(txn *Txn, edge *pb.DirectedEdge) error {
 
 	return l.iterate(txn.StartTs, 0, func(obj *pb.Posting) error {
 		if obj.Uid != edge.GetValueId() {
-			return fmt.Errorf(
+			return errors.Errorf(
 				"cannot add value with uid %x to predicate %s because one of the existing "+
 					"values does not match this uid, either delete the existing values first or "+
 					"modify the schema to '%s: [uid]'",
@@ -394,6 +395,26 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
+var postingPool = &sync.Pool{
+	New: func() interface{} {
+		return &pb.Posting{}
+	},
+}
+
+func (l *List) release() {
+	fromList := func(list *pb.PostingList) {
+		for _, p := range list.GetPostings() {
+			postingPool.Put(p)
+		}
+	}
+	fromList(l.plist)
+	for _, plist := range l.mutationMap {
+		fromList(plist)
+	}
+	l.plist = nil
+	l.mutationMap = nil
+}
+
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
 
@@ -401,15 +422,28 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return y.ErrConflict
 	}
 
-	getKey := func(key []byte, uid uint64) string {
-		return fmt.Sprintf("%s|%d", key, uid)
+	getKey := func(key []byte, uid uint64) uint64 {
+		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
+		// here to save memory allocations.
+		// Not entirely sure about effect on collision chances due to this simple XOR with uid.
+		return farm.Fingerprint64(key) ^ uid
 	}
+
+	mpost := NewPosting(t)
+	mpost.StartTs = txn.StartTs
+	if mpost.PostingType != pb.Posting_REF {
+		t.ValueId = fingerprintEdge(t)
+		mpost.Uid = t.ValueId
+	}
+	l.updateMutationLayer(mpost)
 
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
-	var conflictKey string
-	if schema.State().HasUpsert(t.Attr) {
+	var conflictKey uint64
+	pk := x.Parse(l.key)
+	switch {
+	case schema.State().HasUpsert(t.Attr):
 		// Consider checking to see if a email id is unique. A user adds:
 		// <uid> <email> "email@email.org", and there's a string equal tokenizer
 		// and upsert directive on the schema.
@@ -419,30 +453,34 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		// that two users don't set the same email id.
 		conflictKey = getKey(l.key, 0)
 
-	} else if x.Parse(l.key).IsData() {
-		// Unless upsert is specified, we don't check for index conflicts, only
-		// data conflicts.
-		// If the data is of type UID, then we use SPO for conflict detection.
-		// Otherwise, we use SP (for string, date, int, etc.).
-		typ, err := schema.State().TypeOf(t.Attr)
-		if err != nil {
-			glog.V(2).Infof("Unable to find type of attr: %s. Err: %v", t.Attr, err)
-			// Don't check for conflict.
-		} else if typ == types.UidID {
-			conflictKey = getKey(l.key, t.ValueId)
-		} else {
-			conflictKey = getKey(l.key, 0)
-		}
-	}
+	case pk.IsData() && schema.State().IsList(t.Attr):
+		// Data keys, irrespective of whether they are UID or values, should be judged based on
+		// whether they are lists or not. For UID, t.ValueId = UID. For value, t.ValueId =
+		// fingerprint(value) or could be fingerprint(lang) or something else.
+		//
+		// For singular uid predicate, like partner: uid // no list.
+		// a -> b
+		// a -> c
+		// Run concurrently, only one of them should succeed.
+		// But for friend: [uid], both should succeed.
+		//
+		// Similarly, name: string
+		// a -> "x"
+		// a -> "y"
+		// This should definitely have a conflict.
+		// But, if name: [string], then they can both succeed.
+		conflictKey = getKey(l.key, t.ValueId)
 
-	mpost := NewPosting(t)
-	mpost.StartTs = txn.StartTs
-	if mpost.PostingType != pb.Posting_REF {
-		t.ValueId = fingerprintEdge(t)
-		mpost.Uid = t.ValueId
-	}
+	case pk.IsData(): // NOT a list. This case must happen after the above case.
+		conflictKey = getKey(l.key, 0)
 
-	l.updateMutationLayer(mpost)
+	case pk.IsIndex() || pk.IsCount():
+		// Index keys are by default of type [uid].
+		conflictKey = getKey(l.key, t.ValueId)
+
+	default:
+		// Don't assign a conflictKey.
+	}
 	txn.addConflictKey(conflictKey)
 	return nil
 }

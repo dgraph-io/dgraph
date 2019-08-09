@@ -183,6 +183,12 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 
 				// Send the destuids in res chan.
 				for mIdx, fromUID := range subgraph.SrcUIDs.Uids {
+					// This can happen when trying to go traverse a predicate of type password
+					// for example.
+					if mIdx >= len(subgraph.uidMatrix) {
+						continue
+					}
+
 					for lIdx, toUID := range subgraph.uidMatrix[mIdx].Uids {
 						if adjacencyMap[fromUID] == nil {
 							adjacencyMap[fromUID] = make(map[uint64]mapItem)
@@ -423,6 +429,9 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
+	}
+	if sg.Params.From == 0 || sg.Params.To == 0 {
+		return nil, nil
 	}
 	numPaths := sg.Params.numPaths
 	if numPaths == 0 {

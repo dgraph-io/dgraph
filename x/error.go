@@ -29,7 +29,6 @@ package x
 // (3) You want to generate a new error with stack trace info. Use errors.Errorf.
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -92,7 +91,7 @@ func AssertTruef(b bool, format string, args ...interface{}) {
 // AssertTruefNoTrace is AssertTruef without a stack trace.
 func AssertTruefNoTrace(b bool, format string, args ...interface{}) {
 	if !b {
-		log.Fatalf("%+v", fmt.Errorf(format, args...))
+		log.Fatalf("%+v", errors.Errorf(format, args...))
 	}
 }
 

@@ -26,9 +26,10 @@ import (
 	"go.opencensus.io/trace"
 
 	"contrib.go.opencensus.io/exporter/jaeger"
-	"contrib.go.opencensus.io/exporter/prometheus"
+	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	datadog "github.com/DataDog/opencensus-go-exporter-datadog"
 	"github.com/golang/glog"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/viper"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -37,34 +38,48 @@ import (
 
 var (
 	// Cumulative metrics.
+
+	// NumQueries is the total number of queries processed so far.
 	NumQueries = stats.Int64("num_queries_total",
 		"Total number of queries", stats.UnitDimensionless)
+	// NumMutations is the total number of mutations processed so far.
 	NumMutations = stats.Int64("num_mutations_total",
 		"Total number of mutations", stats.UnitDimensionless)
+	// NumEdges is the total number of edges created so far.
 	NumEdges = stats.Int64("num_edges_total",
 		"Total number of edges created", stats.UnitDimensionless)
+	// LatencyMs is the latency of the various Dgraph operations.
 	LatencyMs = stats.Float64("latency",
 		"Latency of the various methods", stats.UnitMilliseconds)
 
 	// Point-in-time metrics.
+
+	// PendingQueries records the current number of pending queries.
 	PendingQueries = stats.Int64("pending_queries_total",
 		"Number of pending queries", stats.UnitDimensionless)
+	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
-	NumGoRoutines = stats.Int64("goroutines_total",
-		"Number of goroutines", stats.UnitDimensionless)
+	// NumGoRoutines records the current number of goroutines being executed by Dgraph.
+	// MemoryInUse records the current amount of used memory by Dgraph.
 	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
+	// MemoryIdle records the amount of memory held by the runtime but not in-use by Dgraph.
 	MemoryIdle = stats.Int64("memory_idle_bytes",
 		"Amount of memory in idle spans", stats.UnitBytes)
+	// MemoryProc records the amount of memory used in processes.
 	MemoryProc = stats.Int64("memory_proc_bytes",
 		"Amount of memory used in processes", stats.UnitBytes)
+	// ActiveMutations is the current number of active mutations.
 	ActiveMutations = stats.Int64("active_mutations_total",
 		"Number of active mutations", stats.UnitDimensionless)
+	// AlphaHealth status records the current health of the alphas.
 	AlphaHealth = stats.Int64("alpha_health_status",
 		"Status of the alphas", stats.UnitDimensionless)
+	// RaftAppliedIndex records the latest applied RAFT index.
 	RaftAppliedIndex = stats.Int64("raft_applied_index",
 		"Latest applied Raft index", stats.UnitDimensionless)
+	// MaxAssignedTs records the latest max assigned timestamp.
 	MaxAssignedTs = stats.Int64("max_assigned_ts",
 		"Latest max assigned timestamp", stats.UnitDimensionless)
 
@@ -72,13 +87,18 @@ var (
 	// TODO: Request statistics, latencies, 500, timeouts
 	Conf *expvar.Map
 
-	// Tag keys here
+	// Tag keys.
+
+	// KeyStatus is the tag key used to record the status of the server.
 	KeyStatus, _ = tag.NewKey("status")
-	KeyError, _  = tag.NewKey("error")
+	// KeyMethod is the tag key used to record the method (e.g read or mutate).
 	KeyMethod, _ = tag.NewKey("method")
 
-	// Tag values here
-	TagValueStatusOK    = "ok"
+	// Tag values.
+
+	// TagValueStatusOK is the tag value used to signal a successful operation.
+	TagValueStatusOK = "ok"
+	// TagValueStatusError is the tag value used to signal an unsuccessful operation.
 	TagValueStatusError = "error"
 
 	defaultLatencyMsDistribution = view.Distribution(
@@ -87,7 +107,7 @@ var (
 		650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
 
 	allTagKeys = []tag.Key{
-		KeyStatus, KeyError, KeyMethod,
+		KeyStatus, KeyMethod,
 	}
 
 	allViews = []*view.View{
@@ -139,13 +159,6 @@ var (
 			Name:        PendingProposals.Name(),
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
-		},
-		{
-			Name:        NumGoRoutines.Name(),
-			Measure:     NumGoRoutines,
-			Description: NumGoRoutines.Description(),
 			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
@@ -209,7 +222,8 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
-	pe, err := prometheus.NewExporter(prometheus.Options{
+	pe, err := oc_prom.NewExporter(oc_prom.Options{
+		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
@@ -241,6 +255,7 @@ func SinceMs(startTime time.Time) float64 {
 	return float64(time.Since(startTime)) / 1e6
 }
 
+// RegisterExporters sets up the services to which metrics will be exported.
 func RegisterExporters(conf *viper.Viper, service string) {
 	if collector := conf.GetString("jaeger.collector"); len(collector) > 0 {
 		// Port details: https://www.jaegertracing.io/docs/getting-started/

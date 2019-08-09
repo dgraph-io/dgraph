@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -78,7 +78,7 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := z.DgraphClientWithGroot(*alpha)
+	c := testutil.DgraphClientWithGroot(*alpha)
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
@@ -181,7 +181,12 @@ func setup(c *dgo.Dgraph, sentences []string) []string {
 		rdfs += fmt.Sprintf("_:s%d <sentence> %q .\n", i, s)
 	}
 	txn := c.NewTxn()
-	defer txn.Discard(ctx)
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(rdfs),
 	})
@@ -200,7 +205,12 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 	defer cancel()
 
 	txn := c.NewTxn()
-	defer func() { _ = txn.Discard(ctx) }()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			fmt.Printf("Discarding transaction failed: %+v\n", err)
+		}
+	}()
+
 	resp, err := txn.Query(ctx, fmt.Sprintf(`
 	{
 		node1(func: uid(%s)) {
@@ -221,7 +231,8 @@ func swapSentences(c *dgo.Dgraph, node1, node2 string) {
 			Sentence *string
 		}
 	}{}
-	json.Unmarshal(resp.GetJson(), &decode)
+	err = json.Unmarshal(resp.GetJson(), &decode)
+	x.Check(err)
 	x.AssertTrue(len(decode.Node1) == 1)
 	x.AssertTrue(len(decode.Node2) == 1)
 	x.AssertTrue(decode.Node1[0].Sentence != nil)

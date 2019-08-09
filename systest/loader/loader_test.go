@@ -23,85 +23,57 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
-// TODO: Convert this to Docker based test.
 func TestLoaderXidmap(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	check(t, err)
+	tmpDir, err := ioutil.TempDir("", "loader_test")
+	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
-
-	cluster := NewDgraphCluster(tmpDir)
-	check(t, cluster.Start())
-	defer cluster.Close()
 
 	data := os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/first.rdf.gz")
 	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
-		"--alpha", ":"+cluster.alphaPort,
-		"--zero", ":"+cluster.zeroPort,
+		"--alpha", testutil.SockAddr,
+		"--zero", testutil.SockAddrZero,
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
-	if err := liveCmd.Run(); err != nil {
-		cluster.Close()
-		t.Fatalf("Live Loader didn't run: %v\n", err)
-	}
+	require.NoError(t, liveCmd.Run())
 
 	// Load another file, live should reuse the xidmap.
 	data = os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/second.rdf.gz")
 	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
 		"--files", data,
-		"--alpha", ":"+cluster.alphaPort,
-		"--zero", ":"+cluster.zeroPort,
+		"--alpha", testutil.SockAddr,
+		"--zero", testutil.SockAddrZero,
 		"-x", "x",
 	)
 	liveCmd.Dir = tmpDir
 	liveCmd.Stdout = os.Stdout
 	liveCmd.Stderr = os.Stdout
-	if err := liveCmd.Run(); err != nil {
-		cluster.Close()
-		t.Fatalf("Live Loader didn't run: %v\n", err)
-	}
+	require.NoError(t, liveCmd.Run())
 
-	// Restart Dgraph before taking an export.
-	// cluster.dgraph.Process.Signal(syscall.SIGINT)
-	// if _, err = cluster.dgraph.Process.Wait(); err != nil {
-	// 	cluster.Close()
-	// 	t.Fatalf("Error while waiting for Dgraph process to be killed: %v", err)
-	// }
-
-	// cluster.dgraph.Process = nil
-	// if err := cluster.dgraph.Start(); err != nil {
-	// 	cluster.Close()
-	// 	t.Fatalf("Couldn't start Dgraph alpha again: %v\n", err)
-	// }
-	// time.Sleep(5 * time.Second)
-
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/admin/export", cluster.alphaPortOffset+8080))
-	if err != nil {
-		cluster.Close()
-		t.Fatalf("Error while calling export: %v", err)
-	}
+	resp, err := http.Get(fmt.Sprintf("http://%s/admin/export", testutil.SockAddrHttp))
+	require.NoError(t, err)
 
 	b, _ := ioutil.ReadAll(resp.Body)
 	expected := `{"code": "Success", "message": "Export completed."}`
-	if string(b) != expected {
-		t.Fatalf("Unexpected message while exporting: %v", string(b))
-	}
+	require.Equal(t, expected, string(b))
+
+	require.NoError(t, copyExportFiles(tmpDir))
 
 	dataFile, err := findFile(filepath.Join(tmpDir, "export"), ".rdf.gz")
-	if err != nil {
-		cluster.Close()
-		t.Fatalf("While trying to find exported file: %v", err)
-	}
+	require.NoError(t, err)
+
 	cmd := fmt.Sprintf("gunzip -c %s | sort", dataFile)
 	out, err := exec.Command("sh", "-c", cmd).Output()
-	if err != nil {
-		cluster.Close()
-		t.Fatalf("While trying to sort exported file: %v", err)
-	}
+	require.NoError(t, err)
 
 	expected = `<0x1> <age> "13" .
 <0x1> <friend> <0x2711> .
@@ -109,9 +81,31 @@ func TestLoaderXidmap(t *testing.T) {
 <0x1> <name> "Alice" .
 <0x2711> <name> "Bob" .
 `
+	require.Equal(t, expected, string(out))
+}
 
-	if string(out) != expected {
-		cluster.Close()
-		t.Fatalf("Export is not as expected. Want:%v\nGot:%v\n", expected, string(out))
+func copyExportFiles(tmpDir string) error {
+	exportPath := filepath.Join(tmpDir, "export")
+	if err := os.MkdirAll(exportPath, 0755); err != nil {
+		return err
 	}
+
+	srcPath := "alpha1:/data/alpha1/export"
+	dstPath := filepath.Join(tmpDir, "export")
+	return testutil.DockerCp(srcPath, dstPath)
+}
+
+func findFile(dir string, ext string) (string, error) {
+	var fp string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, ext) {
+			fp = path
+			return nil
+		}
+		return nil
+	})
+	return fp, err
 }

@@ -5,24 +5,33 @@ title = "Enterprise Features"
 
 Dgraph enterprise features are proprietary licensed under the [Dgraph Community
 License][dcl]. These features are available with an enterprise contract from
-Dgraph. If you wish to use enterprise features, please reach out via [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss forum](https://discuss.dgraph.io).
+Dgraph. If you wish to use enterprise features, please reach out via
+[contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss
+forum](https://discuss.dgraph.io).
 
-Regular releases contain proprietary code for these features, and the
-features can enabled via the `--enterprise_features` flag.
+Regular releases contain proprietary code for these features, and the features
+can enabled via the `--enterprise_features` flag.
 
 [dcl]: https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
 
 ## Binary Backups
 
-Binary backups are full backups of Dgraph that are backed up directly to cloud storage such as Amazon S3 or any Minio storage backend. Backups can also be saved to a local or NFS-mounted path. These backups can be used to restore a new Dgraph cluster to the previous state from the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}), binary backups are Dgraph-specific and can be used to restore a cluster quickly.
+Binary backups are full backups of Dgraph that are backed up directly to cloud
+storage such as Amazon S3 or any Minio storage backend. Backups can also be
+saved to an on-premise network file system shared by all alpha instances. These
+backups can be used to restore a new Dgraph cluster to the previous state from
+the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}),
+binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure backup
 
-To enable the backup feature, each Dgraph Alpha must run with the `--enterprise_features` flag enabled.
+To enable the backup feature, each Dgraph Alpha must run with the
+`--enterprise_features` flag enabled.
 
 #### Configure Amazon S3 credentials
 
-To backup to Amazon S3, the Alpha must have the following AWS credentials set via environment variables:
+To backup to Amazon S3, the Alpha must have the following AWS credentials set
+via environment variables:
 
  Environment Variable                        | Description
  --------------------                        | -----------
@@ -32,7 +41,8 @@ To backup to Amazon S3, the Alpha must have the following AWS credentials set vi
 
 #### Configure Minio credentials
 
-To backup to Minio, the Alpha must have the following Minio credentials set via environment variables:
+To backup to Minio, the Alpha must have the following Minio credentials set via
+environment variables:
 
  Environment Variable                        | Description
  --------------------                        | -----------
@@ -41,7 +51,10 @@ To backup to Minio, the Alpha must have the following Minio credentials set via 
 
 ### Create a backup
 
-To create a backup, make an HTTP POST request to `/admin/backup` to a Dgraph Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin` endpoints, this is only accessible on the same machine as the Alpha unless [whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
+To create a backup, make an HTTP POST request to `/admin/backup` to a Dgraph
+Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
+endpoints, this is only accessible on the same machine as the Alpha unless
+[whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
 
 #### Backup to Amazon S3
 
@@ -54,27 +67,65 @@ $ curl -XPOST localhost:8080/admin/backup -d "destination=s3://s3.us-west-2.amaz
 $ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>"
 ```
 
-#### Backup to local directory or NFS
+#### Overriding credentials
+
+The `access_key`, `secret_key`, and `session_token` parameters can be used to
+override the default credentials. Please note that unless HTTPS is used, the
+credentials will be transmitted in plain text so use these parameters with
+discretion. The environment variables should be used by default but these
+options are there to allow for greater flexibility.
+
+The `anonymous` parameter can be set to "true" to a allow backing up to S3 or
+Minio bucket that requires no credentials (i.e a public bucket).
+
+#### Backup to NFS
 ```
 # localhost:8080 is the default Alpha HTTP port
 $ curl -XPOST localhost:8080/admin/backup -d "destination=/path/to/local/directory"
 ```
 
+A local filesystem will work only if all the Alphas have access to it (e.g all
+the Alphas are running on the same filesystems as a normal process, not a Docker
+container). However, a NFS is recommended so that backups work seamlessly across
+multiple machines and/or containers.
+
+#### Forcing a full backup
+
+By default, an incremental backup will be created if there's another full backup
+in the specified location. An user can force a full backup to be created, they
+can set the `force_full` parameter to "true". Each series of backups can be
+identified by a unique ID and each backup in the series is assigned a
+monotonically increasing number. The following section contains more details on
+how to restore a backup series.
+
 ### Restore from backup
 
-The `dgraph restore` command restores the postings directory from a previously created backup. Restore is intended to restore a backup to a new Dgraph cluster. During a restore, a new Dgraph Zero may be running to fully restore the backup state.
+The `dgraph restore` command restores the postings directory from a previously
+created backup. Restore is intended to restore a backup to a new Dgraph cluster.
+During a restore, a new Dgraph Zero may be running to fully restore the backup
+state.
 
-The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects. This URI supports all
-the schemes used for backup.
+The `--location` (`-l`) flag specifies a source URI with Dgraph backup objects.
+This URI supports all the schemes used for backup.
 
-The `--posting` (`-p`) flag sets the posting list parent directory to store the loaded backup files.
+The `--posting` (`-p`) flag sets the posting list parent directory to store the
+loaded backup files.
 
-The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the start timestamp using
-the restored version. Otherwise, the timestamp must be manually updated through Zero's HTTP
-'assign' endpoint.
+The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
+start timestamp using the restored version. Otherwise, the timestamp must be
+manually updated through Zero's HTTP 'assign' endpoint.
 
-Dgraph backup creates a unique backup object for each Alpha group. Restoring create
-a posting directory `p<N>` corresponding to the backup group ID. For example, a backup for Alpha group 2 would have the name ".../r32-g**2**.backup" and would be loaded to posting directory "p**2**".
+The `--backup_id` optional flag specifies the ID of the backup series to
+restore. A backup series consists of a full backup and all the incremental
+backups built on top of it. Each time a new full backup is created, a new backup
+series with a different ID is started. The backup series ID is stored in each
+`manifest.json` file stored in every backup folder.
+
+The restore feature will create a cluster with as many groups as the original
+cluster had at the time of the last backup. Restoring create a posting directory
+`p<N>` corresponding to the backup group ID. For example, a backup for Alpha
+group 2 would have the name ".../r32-g**2**.backup" and would be loaded to
+posting directory "p**2**".
 
 #### Restore from Amazon S3
 ```sh
@@ -90,7 +141,6 @@ $ dgraph restore -p /var/db/dgraph -l minio://127.0.0.1:9000/<bucketname>
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph
 ```
-
 
 #### Restore and update timestamp
 

@@ -105,7 +105,7 @@ func run() {
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
+		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
 		NumReducers:      Bulk.Conf.GetInt("reducers"),
@@ -134,10 +134,16 @@ func run() {
 	if opt.DataFiles == "" {
 		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
 		os.Exit(1)
-	} else if _, err := os.Stat(opt.DataFiles); err != nil && os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", opt.DataFiles)
-		os.Exit(1)
+	} else {
+		fileList := strings.Split(opt.DataFiles, ",")
+		for _, file := range fileList {
+			if _, err := os.Stat(file); err != nil && os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
+				os.Exit(1)
+			}
+		}
 	}
+
 	if opt.ReduceShards > opt.MapShards {
 		fmt.Fprintf(os.Stderr, "Invalid flags: reduce_shards(%d) should be <= map_shards(%d)\n",
 			opt.ReduceShards, opt.MapShards)

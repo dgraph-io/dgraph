@@ -1,3 +1,5 @@
+// +build darwin,!go1.12
+
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
@@ -14,23 +16,22 @@
  * limitations under the License.
  */
 
-package z
+package y
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
+	"os"
+	"syscall"
 )
 
-var (
-	bucketName = "dgraph-test"
-)
-
-func TestCreateBucket(t *testing.T) {
-	client, err := NewMinioClient()
-	require.NoError(t, err)
-	if found, _ := client.BucketExists(bucketName); found {
-		require.NoError(t, client.RemoveBucket(bucketName))
+// FileSync calls os.File.Sync with the right parameters.
+// This function can be removed once we stop supporting Go 1.11
+// on MacOS.
+//
+// More info: https://golang.org/issue/26650.
+func FileSync(f *os.File) error {
+	_, _, err := syscall.Syscall(syscall.SYS_FCNTL, f.Fd(), syscall.F_FULLFSYNC, 0)
+	if err == 0 {
+		return nil
 	}
-	require.NoError(t, client.MakeBucket(bucketName, ""))
+	return err
 }

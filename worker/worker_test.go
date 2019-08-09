@@ -34,8 +34,8 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 )
 
 var raftIndex uint64
@@ -57,13 +57,13 @@ func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 
 func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	mu := &api.Mutation{SetNquads: []byte(rdf), CommitNow: true}
-	err := z.RetryMutation(dg, mu)
+	err := testutil.RetryMutation(dg, mu)
 	require.NoError(t, err)
 }
 
 func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	mu := &api.Mutation{DelNquads: []byte(rdf), CommitNow: true}
-	err := z.RetryMutation(dg, mu)
+	err := testutil.RetryMutation(dg, mu)
 	require.NoError(t, err)
 }
 func getOrCreate(key []byte) *posting.List {
@@ -133,8 +133,8 @@ func initTest(t *testing.T, schemaStr string) {
 }
 
 func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
-	dg := z.DgraphClient(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClient(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 
 	err := dg.Alter(context.Background(), &api.Operation{Schema: schemaStr})
 	require.NoError(t, err)
@@ -233,7 +233,7 @@ func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*ap
 			}`, srcFunc[0], attr, langs, args)
 	}
 
-	resp, err := z.RetryQuery(dg, query)
+	resp, err := testutil.RetryQuery(dg, query)
 
 	return resp, err
 }
@@ -379,9 +379,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
+	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps

@@ -32,8 +32,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -43,7 +51,7 @@ import (
 // Error constants representing different types of errors.
 var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
-	ErrNotSupported = fmt.Errorf("Feature available only in Dgraph Enterprise Edition")
+	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 )
 
 const (
@@ -119,22 +127,47 @@ func ShouldCrash(err error) bool {
 // WhiteSpace Replacer removes spaces and tabs from a string.
 var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")
 
-type errRes struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+// GqlError is a GraphQL spec compliant error structure.  See GraphQL spec on
+// errors here: https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+//
+// Note: "Every error must contain an entry with the key message with a string
+// description of the error intended for the developer as a guide to understand
+// and correct the error."
+//
+// "If an error can be associated to a particular point in the request [the error]
+// should contain an entry with the key locations with a list of locations"
+//
+// Path is about GraphQL results and Errors for GraphQL layer.
+//
+// Extensions is for everything else.
+type GqlError struct {
+	Message    string                 `json:"message"`
+	Locations  []Location             `json:"locations,omitempty"`
+	Path       []interface{}          `json:"path,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+// A Location is the Line+Column index of an error in a request.
+type Location struct {
+	Line   int `json:"line,omitempty"`
+	Column int `json:"column,omitempty"`
 }
 
 type queryRes struct {
-	Errors []errRes `json:"errors"`
+	Errors []GqlError `json:"errors"`
 }
 
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
 	var qr queryRes
-	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
@@ -151,17 +184,17 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, "+
-			"Cache-Control, X-Requested-With, X-Dgraph-IgnoreIndexConflict")
+	w.Header().Set("Access-Control-Allow-Headers", "X-Dgraph-AccessToken, "+
+		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, "+
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
 
 // QueryResWithData represents a response that holds errors as well as data.
 type QueryResWithData struct {
-	Errors []errRes `json:"errors"`
-	Data   *string  `json:"data"`
+	Errors []GqlError `json:"errors"`
+	Data   *string    `json:"data"`
 }
 
 // SetStatusWithData sets the errors in the response and ensures that the data key
@@ -170,10 +203,14 @@ type QueryResWithData struct {
 // key with null value according to GraphQL spec.
 func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	var qr QueryResWithData
-	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	ext := make(map[string]interface{})
+	ext["code"] = code
+	qr.Errors = append(qr.Errors, GqlError{Message: msg, Extensions: ext})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
-		w.Write(js)
+		if _, err := w.Write(js); err != nil {
+			glog.Errorf("Error while writing: %+v", err)
+		}
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
@@ -327,7 +364,7 @@ func ValidateAddress(addr string) bool {
 }
 
 // RemoveDuplicates sorts the slice of strings and removes duplicates. changes the input slice.
-// This function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+// This function should be called like: someSlice = RemoveDuplicates(someSlice)
 func RemoveDuplicates(s []string) (out []string) {
 	sort.Strings(s)
 	out = s[:0]
@@ -538,4 +575,128 @@ func SpanTimer(span *trace.Span, name string) func() {
 		span.Annotatef(attrs, "End. Took %s", time.Since(start))
 		// TODO: We can look into doing a latency record here.
 	}
+}
+
+// CloseFunc needs to be called to close all the client connections.
+type CloseFunc func()
+
+// CredOpt stores the options for logging in, including the password and user.
+type CredOpt struct {
+	Conf        *viper.Viper
+	UserID      string
+	PasswordOpt string
+}
+
+// GetDgraphClient creates a Dgraph client based on the following options in the configuration:
+// --alpha specifies a comma separated list of endpoints to connect to
+// --tls_cacert, --tls_cert, --tls_key etc specify the TLS configuration of the connection
+// --retries specifies how many times we should retry the connection to each endpoint upon failures
+// --user and --password specify the credentials we should use to login with the server
+func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
+	alphas := conf.GetString("alpha")
+	if len(alphas) == 0 {
+		glog.Fatalf("The --alpha option must be set in order to connect to Dgraph")
+	}
+
+	fmt.Printf("\nRunning transaction with dgraph endpoint: %v\n", alphas)
+	tlsCfg, err := LoadClientTLSConfig(conf)
+	Checkf(err, "While loading TLS configuration")
+
+	ds := strings.Split(alphas, ",")
+	var conns []*grpc.ClientConn
+	var clients []api.DgraphClient
+
+	retries := 1
+	if conf.IsSet("retries") {
+		retries = conf.GetInt("retries")
+		if retries < 1 {
+			retries = 1
+		}
+	}
+
+	for _, d := range ds {
+		var conn *grpc.ClientConn
+		for i := 0; i < retries; retries++ {
+			conn, err = SetupConnection(d, tlsCfg, false)
+			if err == nil {
+				break
+			}
+			fmt.Printf("While trying to setup connection: %v. Retrying...\n", err)
+			time.Sleep(time.Second)
+		}
+		if conn == nil {
+			Fatalf("Could not setup connection after %d retries", retries)
+		}
+
+		conns = append(conns, conn)
+		dc := api.NewDgraphClient(conn)
+		clients = append(clients, dc)
+	}
+
+	dg := dgo.NewDgraphClient(clients...)
+	user := conf.GetString("user")
+	if login && len(user) > 0 {
+		err = GetPassAndLogin(dg, &CredOpt{
+			Conf:        conf,
+			UserID:      user,
+			PasswordOpt: "password",
+		})
+		Checkf(err, "While retrieving password and logging in")
+	}
+
+	closeFunc := func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	}
+	return dg, closeFunc
+}
+
+// AskUserPassword prompts the user to enter the password for the given user ID.
+func AskUserPassword(userid string, pwdType string, times int) (string, error) {
+	AssertTrue(times == 1 || times == 2)
+	AssertTrue(pwdType == "Current" || pwdType == "New")
+	// ask for the user's password
+	fmt.Printf("%s password for %v:", pwdType, userid)
+	pd, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", errors.Wrapf(err, "while reading password")
+	}
+	fmt.Println()
+	password := string(pd)
+
+	if times == 2 {
+		fmt.Printf("Retype %s password for %v:", strings.ToLower(pwdType), userid)
+		pd2, err := terminal.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", errors.Wrapf(err, "while reading password")
+		}
+		fmt.Println()
+
+		password2 := string(pd2)
+		if password2 != password {
+			return "", errors.Errorf("the two typed passwords do not match")
+		}
+	}
+	return password, nil
+}
+
+// GetPassAndLogin uses the given credentials and client to perform the login operation.
+func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
+	password := opt.Conf.GetString(opt.PasswordOpt)
+	if len(password) == 0 {
+		var err error
+		password, err = AskUserPassword(opt.UserID, "Current", 1)
+		if err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := dg.Login(ctx, opt.UserID, password); err != nil {
+		return errors.Wrapf(err, "unable to login to the %v account", opt.UserID)
+	}
+	fmt.Println("Login successful.")
+	// update the context so that it has the admin jwt token
+	return nil
 }

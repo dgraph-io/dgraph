@@ -26,8 +26,8 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -38,12 +38,12 @@ type state struct {
 }
 
 var s state
-var addr string = z.SockAddr
+var addr string = testutil.SockAddr
 
 func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	z.AssignUids(200)
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	testutil.AssignUids(200)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	s.dg = dg
 
 	r := m.Run()
@@ -708,8 +708,8 @@ query countAnswers($num: int) {
 )
 
 func TestCountIndexConcurrentTxns(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected edge count of 0x100: 1
@@ -764,17 +764,17 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 }
 
 func TestCountIndexSerialTxns(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1
 	txn0 := dg.NewTxn()
 	mu := api.Mutation{SetNquads: []byte("<0x100> <answer> <0x200> .")}
 	_, err := txn0.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	err = txn0.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
 
 	// Expected edge count of 0x1: 2
 	// This should NOT appear in the query result
@@ -782,22 +782,22 @@ func TestCountIndexSerialTxns(t *testing.T) {
 	txn1 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x2> .")}
 	_, err = txn1.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	err = txn1.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
 
 	txn2 := dg.NewTxn()
 	mu = api.Mutation{SetNquads: []byte("<0x1> <answer> <0x3> .")}
 	_, err = txn2.Mutate(ctxb, &mu)
-	x.Check(err)
+	require.NoError(t, err)
 	err = txn2.Commit(ctxb)
-	x.Check(err)
+	require.NoError(t, err)
 
 	// Verify query
 	txn := dg.NewReadOnlyTxn()
 	vars := map[string]string{"$num": "1"}
 	resp, err := txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js := string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 1, "uid": "0x100"}]}`,
@@ -805,7 +805,7 @@ func TestCountIndexSerialTxns(t *testing.T) {
 	txn = dg.NewReadOnlyTxn()
 	vars = map[string]string{"$num": "2"}
 	resp, err = txn.QueryWithVars(ctxb, countQuery, vars)
-	x.Check(err)
+	require.NoError(t, err)
 	js = string(resp.GetJson())
 	require.JSONEq(t,
 		`{"me": [{"count(answer)": 2, "uid": "0x1"}]}`,
@@ -813,8 +813,8 @@ func TestCountIndexSerialTxns(t *testing.T) {
 }
 
 func TestCountIndexSameTxn(t *testing.T) {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
-	z.DropAll(t, dg)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	testutil.DropAll(t, dg)
 	alterSchema(dg, "answer: [uid] @count .")
 
 	// Expected Edge count of 0x100: 1

@@ -213,7 +213,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 		if attr == "" {
 			attr = child.Attr
 		}
-		if child.DestUIDs != nil && len(child.DestUIDs.Uids) != 0 {
+		if len(child.DestUIDs.GetUids()) > 0 {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
@@ -221,8 +221,9 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 				if algo.IndexOf(ul, srcUid) < 0 {
 					continue
 				}
+
 				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
+				for _, uid := range ul.GetUids() {
 					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
@@ -294,7 +295,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		if attr == "" {
 			attr = child.Attr
 		}
-		if len(child.DestUIDs.Uids) != 0 {
+		if len(child.DestUIDs.GetUids()) > 0 {
 			// It's a UID node.
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
