@@ -81,6 +81,7 @@ type options struct {
 	LocalBin      bool
 	Tag           string
 	WhiteList     bool
+	Ratel         bool
 }
 
 var opts options
@@ -248,6 +249,17 @@ func getJaeger() service {
 	return svc
 }
 
+func getRatel() service {
+	svc := service{
+		Image:         "dgraph/dgraph:" + opts.Tag,
+		ContainerName: "ratel",
+		Ports: []string{
+			toExposedPort(8000),
+		},
+	}
+	return svc
+}
+
 func addMetrics(cfg *composeConfig) {
 	cfg.Volumes["prometheus-volume"] = stringMap{}
 	cfg.Volumes["grafana-volume"] = stringMap{}
@@ -363,6 +375,8 @@ func main() {
 		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
+	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
+		"include ratel service")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -421,6 +435,10 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
+	}
+
+	if opts.Ratel {
+		services["ratel"] = getRatel()
 	}
 
 	if opts.Metrics {
