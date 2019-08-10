@@ -137,41 +137,46 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunker := chunker.NewChunker(inputFormat)
-	for chunkBuf := range m.readerChunkCh {
-		done := false
-		for !done {
-			nqs, err := chunker.Parse(chunkBuf)
-			if err == io.EOF {
-				done = true
-			} else if err != nil {
+	nquads := chunker.NQuads()
+	go func() {
+		for chunkBuf := range m.readerChunkCh {
+			for {
+				_, err := chunker.Parse(chunkBuf)
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					atomic.AddInt64(&m.prog.errCount, 1)
+					if !m.opt.IgnoreErrors {
+						x.Check(err)
+					}
+				}
+			}
+		}
+		nquads.Flush()
+	}()
+
+	for nqs := range nquads.Ch() {
+		for _, nq := range nqs {
+			if err := facets.SortAndValidate(nq.Facets); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
 			}
 
-			for _, nq := range nqs {
-				if err := facets.SortAndValidate(nq.Facets); err != nil {
-					atomic.AddInt64(&m.prog.errCount, 1)
-					if !m.opt.IgnoreErrors {
-						x.Check(err)
-					}
-				}
+			m.processNQuad(gql.NQuad{NQuad: nq})
+			atomic.AddInt64(&m.prog.nquadCount, 1)
+		}
 
-				m.processNQuad(gql.NQuad{NQuad: nq})
-				atomic.AddInt64(&m.prog.nquadCount, 1)
-			}
-
-			for i := range m.shards {
-				sh := &m.shards[i]
-				if sh.encodedSize >= m.opt.MapBufSize {
-					sh.mu.Lock() // One write at a time.
-					go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
-					// Clear the entries and encodedSize for the next batch.
-					// Proactively allocate 32 slots to bootstrap the entries slice.
-					sh.entries = make([]*pb.MapEntry, 0, 32)
-					sh.encodedSize = 0
-				}
+		for i := range m.shards {
+			sh := &m.shards[i]
+			if sh.encodedSize >= m.opt.MapBufSize {
+				sh.mu.Lock() // One write at a time.
+				go m.writeMapEntriesToFile(sh.entries, sh.encodedSize, i)
+				// Clear the entries and encodedSize for the next batch.
+				// Proactively allocate 32 slots to bootstrap the entries slice.
+				sh.entries = make([]*pb.MapEntry, 0, 32)
+				sh.encodedSize = 0
 			}
 		}
 	}

@@ -43,14 +43,24 @@ type Chunker interface {
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
+	NQuads() *json.NQuads
 }
 
 type rdfChunker struct {
 	lexer *lex.Lexer
 }
 
+func (rdfChunker) NQuads() *json.NQuads {
+	// TODO: Build this.
+	return nil
+}
+
 type jsonChunker struct {
-	nqs *json.NQuads
+	Nqs *json.NQuads
+}
+
+func (jc *jsonChunker) NQuads() *json.NQuads {
+	return jc.Nqs
 }
 
 // InputFormat represents the multiple formats supported by Chunker.
@@ -71,7 +81,9 @@ func NewChunker(inputFormat InputFormat) Chunker {
 	case RdfFormat:
 		return &rdfChunker{lexer: &lex.Lexer{}}
 	case JsonFormat:
-		return &jsonChunker{}
+		return &jsonChunker{
+			Nqs: json.NewNQuads(),
+		}
 	default:
 		panic("unknown input format")
 	}
@@ -233,18 +245,19 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
 
-	nqs, err := json.Parse(chunkBuf.Bytes(), json.SetNquads)
+	err := jc.Nqs.Parse(chunkBuf.Bytes(), json.SetNquads)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}
 	chunkBuf.Reset()
 
-	return nqs, err
+	// TODO: We should probably move RDF to use the NQuads struct as well.
+	return nil, err
 }
 
 func (jsonChunker) End(r *bufio.Reader) error {

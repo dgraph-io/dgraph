@@ -235,6 +235,10 @@ func NewNQuads() *NQuads {
 	}
 }
 
+func (buf *NQuads) Ch() <-chan []*api.NQuad {
+	return buf.nqCh
+}
+
 func (buf *NQuads) Push(nqs ...*api.NQuad) {
 	for _, nq := range nqs {
 		buf.nquads = append(buf.nquads, nq)
