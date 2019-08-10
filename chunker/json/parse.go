@@ -116,9 +116,8 @@ func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) 
 
 // This is the response for a map[string]interface{} i.e. a struct.
 type mapResponse struct {
-	nquads []*api.NQuad // nquads at this level including the children.
-	uid    string       // uid retrieved or allocated for the node.
-	fcts   []*api.Facet // facets on the edge connecting this node to the source if any.
+	uid  string       // uid retrieved or allocated for the node.
+	fcts []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
 func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
@@ -178,10 +177,10 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 }
 
-func checkForDeletion(mr *mapResponse, m map[string]interface{}, op int) {
+func (nqs *NQuads) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
 	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
-		mr.nquads = append(mr.nquads, &api.NQuad{
+		nqs.Push(&api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
@@ -254,7 +253,7 @@ func (buf *NQuads) Flush() {
 }
 
 // TODO - Abstract these parameters to a struct.
-func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
+func (nqs *NQuads) mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
@@ -318,8 +317,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
 				// mutations that's the only way to send language for a value.
 				nq.Predicate, nq.Lang = x.PredicateLang(nq.Predicate)
-
-				mr.nquads = append(mr.nquads, nq)
+				nqs.Push(nq)
 				continue
 			}
 
@@ -350,7 +348,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
-			mr.nquads = append(mr.nquads, &nq)
+			nqs.Push(&nq)
 		case map[string]interface{}:
 			if len(v) == 0 {
 				continue
@@ -361,11 +359,11 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 				return mr, err
 			}
 			if ok {
-				mr.nquads = append(mr.nquads, &nq)
+				nqs.Push(&nq)
 				continue
 			}
 
-			cr, err := mapToNquads(v, idx, op, pred)
+			cr, err := nqs.mapToNquads(v, idx, op, pred)
 			if err != nil {
 				return mr, err
 			}
@@ -373,9 +371,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 			// Add the connecting edge beteween the entities.
 			nq.ObjectId = cr.uid
 			nq.Facets = cr.fcts
-			mr.nquads = append(mr.nquads, &nq)
-			// Add the nquads that we got for the connecting entity.
-			mr.nquads = append(mr.nquads, cr.nquads...)
+			nqs.Push(&nq)
 		case []interface{}:
 			for _, item := range v {
 				nq := api.NQuad{
@@ -388,7 +384,7 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
-					mr.nquads = append(mr.nquads, &nq)
+					nqs.Push(&nq)
 				case map[string]interface{}:
 					// map[string]interface{} can mean geojson or a connecting entity.
 					ok, err := handleGeoType(item.(map[string]interface{}), &nq)
@@ -396,19 +392,17 @@ func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) 
 						return mr, err
 					}
 					if ok {
-						mr.nquads = append(mr.nquads, &nq)
+						nqs.Push(&nq)
 						continue
 					}
 
-					cr, err := mapToNquads(iv, idx, op, pred)
+					cr, err := nqs.mapToNquads(iv, idx, op, pred)
 					if err != nil {
 						return mr, err
 					}
 					nq.ObjectId = cr.uid
 					nq.Facets = cr.fcts
-					mr.nquads = append(mr.nquads, &nq)
-					// Add the nquads that we got for the connecting entity.
-					mr.nquads = append(mr.nquads, cr.nquads...)
+					nqs.Push(&nq)
 				default:
 					return mr,
 						errors.Errorf("Got unsupported type for list: %s", pred)
@@ -459,18 +453,16 @@ func (nqs *NQuads) Parse(b []byte, op int) error {
 			if _, ok := obj.(map[string]interface{}); !ok {
 				return errors.Errorf("Only array of map allowed at root.")
 			}
-			mr, err := mapToNquads(obj.(map[string]interface{}), &idx, op, "")
+			mr, err := nqs.mapToNquads(obj.(map[string]interface{}), &idx, op, "")
 			if err != nil {
 				return err
 			}
-			checkForDeletion(&mr, obj.(map[string]interface{}), op)
-			nqs.Push(mr.nquads...)
+			nqs.checkForDeletion(mr, obj.(map[string]interface{}), op)
 		}
 		return nil
 	}
 
-	mr, err := mapToNquads(ms, &idx, op, "")
-	checkForDeletion(&mr, ms, op)
-	nqs.Push(mr.nquads...)
+	mr, err := nqs.mapToNquads(ms, &idx, op, "")
+	nqs.checkForDeletion(mr, ms, op)
 	return err
 }
