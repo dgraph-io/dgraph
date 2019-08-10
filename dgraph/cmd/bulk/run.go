@@ -67,7 +67,7 @@ func init() {
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
-		"Number of worker threads to use. More threads lead to higher RAM usage.")
+		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
 	flag.Int64("mapoutput_mb", 64,
 		"The estimated size of each map file output. Increasing this increases memory usage.")
 	flag.Bool("skip_map_phase", false,
@@ -204,15 +204,23 @@ func run() {
 		defer os.RemoveAll(opt.TmpDir)
 	}
 
+	// Bulk loader can take up a lot of RAM. So, run GC often.
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 
+		var lastNum uint32
+		var ms runtime.MemStats
 		for range ticker.C {
-			runtime.GC()
-			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
-			fmt.Printf("GC: %d. InUse: %s\n", ms.NumGC, humanize.Bytes(ms.HeapInuse))
+			fmt.Printf("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC, humanize.Bytes(ms.HeapInuse),
+				humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
+			if ms.NumGC > lastNum {
+				lastNum = ms.NumGC
+			} else {
+				runtime.GC()
+				lastNum = ms.NumGC + 1
+			}
 		}
 	}()
 
