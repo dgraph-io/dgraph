@@ -69,6 +69,12 @@ type Person struct {
 	School  *School    `json:"school,omitempty"`
 }
 
+func Parse(b []byte, op int) ([]*api.NQuad, error) {
+	nqs := NewNQuads()
+	err := nqs.Parse(b, op)
+	return nqs.nquads, err
+}
+
 func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now().UTC()
 	geoVal := `{"Type":"Point", "Coordinates":[1.1,2.0]}`
