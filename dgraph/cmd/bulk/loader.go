@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -217,7 +216,6 @@ func (ld *loader) mapStage() {
 	}
 	x.Check(ld.xids.Flush())
 	ld.xids = nil
-	runtime.GC()
 }
 
 func (ld *loader) reduceStage() {
