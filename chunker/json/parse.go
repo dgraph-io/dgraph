@@ -224,6 +224,35 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	return true, nil
 }
 
+type NQuads struct {
+	nquads []*api.NQuad
+	nqCh   chan []*api.NQuad
+}
+
+func NewNQuads() *NQuads {
+	return &NQuads{
+		nquads: make([]*api.NQuad, 0, 1000),
+		nqCh:   make(chan []*api.NQuad, 10),
+	}
+}
+
+func (buf *NQuads) Push(nqs ...*api.NQuad) {
+	for _, nq := range nqs {
+		buf.nquads = append(buf.nquads, nq)
+		if len(buf.nquads) >= 1000 {
+			buf.nqCh <- buf.nquads
+			buf.nquads = make([]*api.NQuad, 0, 1000)
+		}
+	}
+}
+
+func (buf *NQuads) Flush() {
+	if len(buf.nquads) > 0 {
+		buf.nqCh <- buf.nquads
+	}
+	close(buf.nqCh)
+}
+
 // TODO - Abstract these parameters to a struct.
 func mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
 	mapResponse, error) {
@@ -404,7 +433,7 @@ const (
 )
 
 // Parse converts the given byte slice into a slice of NQuads.
-func Parse(b []byte, op int) ([]*api.NQuad, error) {
+func (nqs *NQuads) Parse(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()
@@ -416,32 +445,32 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 		buffer.Reset()  // The previous contents are used. Reset here.
 		buffer.Write(b) // Rewrite b into buffer, so it can be consumed.
 		if err = dec.Decode(&list); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	if len(list) == 0 && len(ms) == 0 {
-		return nil, errors.Errorf("Couldn't parse json as a map or an array")
+		return errors.Errorf("Couldn't parse json as a map or an array")
 	}
 
 	var idx int
-	var nquads []*api.NQuad
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
-				return nil, errors.Errorf("Only array of map allowed at root.")
+				return errors.Errorf("Only array of map allowed at root.")
 			}
 			mr, err := mapToNquads(obj.(map[string]interface{}), &idx, op, "")
 			if err != nil {
-				return mr.nquads, err
+				return err
 			}
 			checkForDeletion(&mr, obj.(map[string]interface{}), op)
-			nquads = append(nquads, mr.nquads...)
+			nqs.Push(mr.nquads...)
 		}
-		return nquads, nil
+		return nil
 	}
 
 	mr, err := mapToNquads(ms, &idx, op, "")
 	checkForDeletion(&mr, ms, op)
-	return mr.nquads, err
+	nqs.Push(mr.nquads...)
+	return err
 }

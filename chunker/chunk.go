@@ -49,7 +49,9 @@ type rdfChunker struct {
 	lexer *lex.Lexer
 }
 
-type jsonChunker struct{}
+type jsonChunker struct {
+	nqs *json.NQuads
+}
 
 // InputFormat represents the multiple formats supported by Chunker.
 type InputFormat byte
