@@ -17,35 +17,37 @@
 package chunker
 
 import (
-	"bufio"
-	"bytes"
-	"compress/gzip"
-	encjson "encoding/json"
 	"io"
-	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode"
 
+	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/chunker/json"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
 
 	"github.com/pkg/errors"
 )
 
-// Chunker describes the interface to parse and process the input to the live and bulk loaders.
-type Chunker interface {
-	Begin(r *bufio.Reader) error
-	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
-	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
+type chunk struct {
+	Offset int
+	End    int
 }
 
-type rdfChunker struct{}
-type jsonChunker struct{}
+// Chunker describes the interface to parse and process the input to the live and bulk loaders.
+type Chunker interface {
+	Begin(buf []byte) error
+	Chunk(buf []byte) (*chunk, error)
+	End(buf []byte) error
+	Parse(chunkBuf []byte) ([]*api.NQuad, error)
+}
+
+//type rdfChunker struct{}
+type jsonChunker struct {
+	offset int
+	limit  int
+}
 
 // InputFormat represents the multiple formats supported by Chunker.
 type InputFormat byte
@@ -62,8 +64,9 @@ const (
 // NewChunker returns a new chunker for the specified format.
 func NewChunker(inputFormat InputFormat) Chunker {
 	switch inputFormat {
-	case RdfFormat:
+	/*	case RdfFormat:
 		return &rdfChunker{}
+	*/
 	case JsonFormat:
 		return &jsonChunker{}
 	default:
@@ -71,6 +74,7 @@ func NewChunker(inputFormat InputFormat) Chunker {
 	}
 }
 
+/*
 // RDF files don't require any special processing at the beginning of the file.
 func (rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
@@ -136,50 +140,60 @@ func (rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	return nqs, nil
 }
 
-// RDF files don't require any special processing at the end of the file.
+// RDF files don't require any special processing at the End of the file.
 func (rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
-func (j jsonChunker) Begin(r *bufio.Reader) error {
+*/
+func (j *jsonChunker) Begin(buf []byte) error {
+	j.limit = len(buf)
 	return nil
 }
 
-func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
-	out := new(bytes.Buffer)
+func (j *jsonChunker) nextRune(buf []byte) (byte, error) {
+	if j.offset >= j.limit {
+		return 0, io.EOF
+	}
+	b := buf[j.offset]
+	j.offset++
+	return b, nil
+}
+
+func (j *jsonChunker) Chunk(buf []byte) (*chunk, error) {
+	//out := new(bytes.Buffer)
 	//out.Grow(1 << 20)
 
 	// For RDF, the loader just reads the input and the mapper parses it into nquads,
 	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
 	// more complicated to ensure a complete JSON structure is read.
-	if err := slurpSpace(r); err != nil {
-		return out, err
-	}
-	beginCh, _, err := r.ReadRune()
+	j.slurpSpace(buf)
+
+	beginOffset := j.offset
+	beginCh, err := j.nextRune(buf)
 	if err != nil {
 		return nil, err
 	}
-	x.Check2(out.WriteRune(beginCh))
 
-	var enclosingCh rune
+	var enclosingCh byte
 	switch beginCh {
 	case '{':
 		enclosingCh = '}'
 	case '[':
 		enclosingCh = ']'
 	default:
-		return nil, errors.Errorf("The JSON file must begin with { or [")
+		return nil, errors.Errorf("The JSON file must begin with { or [, found %v: chunker: %+v",
+			rune(beginCh), j)
 	}
 
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
 	depth := 1 // We already consumed one `{`, so our depth starts at one.
 	for depth > 0 {
-		ch, _, err := r.ReadRune()
+		ch, err := j.nextRune(buf)
 		if err != nil {
 			return nil, errors.New("Malformed JSON")
 		}
-		x.Check2(out.WriteRune(ch))
 
 		switch ch {
 		case beginCh:
@@ -187,7 +201,7 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		case enclosingCh:
 			depth--
 		case '"':
-			if err := slurpQuoted(r, out); err != nil {
+			if err := j.slurpQuoted(buf); err != nil {
 				return nil, err
 			}
 		default:
@@ -195,58 +209,55 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		}
 	}
 
-	return out, nil
+	return &chunk{
+		Offset: beginOffset,
+		End:    j.offset,
+	}, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
-	if chunkBuf.Len() == 0 {
+func (jsonChunker) Parse(chunkBuf []byte) ([]*api.NQuad, error) {
+	if len(chunkBuf) == 0 {
 		return nil, io.EOF
 	}
 
-	nqs, err := json.Parse(chunkBuf.Bytes(), json.SetNquads)
+	nqs, err := json.Parse(chunkBuf, json.SetNquads)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}
-	chunkBuf.Reset()
 
 	return nqs, err
 }
 
-func (jsonChunker) End(r *bufio.Reader) error {
-	if slurpSpace(r) == io.EOF {
+func (j *jsonChunker) End(buf []byte) error {
+	if j.slurpSpace(buf) == io.EOF {
 		return nil
 	}
 	return errors.New("Not all of JSON file consumed")
 }
 
-func slurpSpace(r *bufio.Reader) error {
-	for {
-		ch, _, err := r.ReadRune()
-		if err != nil {
-			return err
-		}
-		if !unicode.IsSpace(ch) {
-			x.Check(r.UnreadRune())
+func (j *jsonChunker) slurpSpace(buf []byte) error {
+	for ; j.offset < j.limit; j.offset++ {
+		ch := buf[j.offset]
+		if !unicode.IsSpace(rune(ch)) {
 			return nil
 		}
 	}
+	return io.EOF
 }
 
-func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
+func (j *jsonChunker) slurpQuoted(buf []byte) error {
 	for {
-		ch, _, err := r.ReadRune()
+		ch, err := j.nextRune(buf)
 		if err != nil {
 			return err
 		}
-		x.Check2(out.WriteRune(ch))
 
 		if ch == '\\' {
 			// Pick one more rune.
-			esc, _, err := r.ReadRune()
+			_, err := j.nextRune(buf)
 			if err != nil {
 				return err
 			}
-			x.Check2(out.WriteRune(esc))
 			continue
 		}
 		if ch == '"' {
@@ -258,7 +269,7 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 // FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
 // and decompressed automatically even without the gz extension. The caller is responsible for
 // calling the returned cleanup function when done with the reader.
-func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
+func FileReader(file string) (buf []byte, cleanup func()) {
 	var f *os.File
 	var err error
 	if file == "-" {
@@ -271,30 +282,38 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 
 	cleanup = func() { f.Close() }
 
-	if filepath.Ext(file) == ".gz" {
-		gzr, err := gzip.NewReader(f)
-		x.Check(err)
-		rd = bufio.NewReader(gzr)
-		cleanup = func() { f.Close(); gzr.Close() }
-	} else {
-		rd = bufio.NewReader(f)
-		buf, _ := rd.Peek(512)
-
-		typ := http.DetectContentType(buf)
-		if typ == "application/x-gzip" {
-			gzr, err := gzip.NewReader(rd)
+	/*
+		if filepath.Ext(file) == ".gz" {
+			gzr, err := gzip.NewReader(f)
 			x.Check(err)
 			rd = bufio.NewReader(gzr)
 			cleanup = func() { f.Close(); gzr.Close() }
-		}
-	}
+		} else {
+			rd = bufio.NewReader(f)
+			buf, _ := rd.Peek(512)
 
-	return rd, cleanup
+			typ := http.DetectContentType(buf)
+			if typ == "application/x-gzip" {
+				gzr, err := gzip.NewReader(rd)
+				x.Check(err)
+				rd = bufio.NewReader(gzr)
+				cleanup = func() { f.Close(); gzr.Close() }
+			}
+		}
+	*/
+
+	//return rd, cleanup
+	fileInfo, err := f.Stat()
+	x.Check(err)
+	bytes, err := y.Mmap(f, false, fileInfo.Size())
+	x.Check(err)
+	return bytes, cleanup
 }
 
+/*
 // IsJSONData returns true if the reader, which should be at the start of the stream, is reading
 // a JSON stream, false otherwise.
-func IsJSONData(r *bufio.Reader) (bool, error) {
+func IsJSONData(buf []byte) (bool, error) {
 	buf, err := r.Peek(512)
 	if err != nil && err != io.EOF {
 		return false, err
@@ -305,6 +324,7 @@ func IsJSONData(r *bufio.Reader) (bool, error) {
 
 	return err == nil, nil
 }
+*/
 
 // DataFormat returns a file's data format (RDF, JSON, or unknown) based on the filename
 // or the user-provided format option. The file extension has precedence.

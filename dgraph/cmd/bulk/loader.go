@@ -17,7 +17,6 @@
 package bulk
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -74,7 +73,7 @@ type state struct {
 	xids          *xidmap.XidMap
 	schema        *schemaStore
 	shards        *shardMap
-	readerChunkCh chan *bytes.Buffer
+	readerChunkCh chan []byte
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
 	writeTs       uint64 // All badger writes use this timestamp
@@ -101,7 +100,7 @@ func newLoader(opt options) *loader {
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
-		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		readerChunkCh: make(chan []byte, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
 	}
 	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
@@ -188,23 +187,24 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done(nil)
 
-			r, cleanup := chunker.FileReader(file)
+			buf, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
 			chunker := chunker.NewChunker(loadType)
-			x.Check(chunker.Begin(r))
+			x.Check(chunker.Begin(buf))
 			for {
-				chunkBuf, err := chunker.Chunk(r)
-				if chunkBuf != nil && chunkBuf.Len() > 0 {
-					ld.readerChunkCh <- chunkBuf
-				}
+				chunk, err := chunker.Chunk(buf)
 				if err == io.EOF {
 					break
 				} else if err != nil {
 					x.Check(err)
 				}
+
+				if chunk.End-chunk.Offset > 0 {
+					ld.readerChunkCh <- buf[chunk.Offset:chunk.End]
+				}
 			}
-			x.Check(chunker.End(r))
+			x.Check(chunker.End(buf))
 		}(file)
 	}
 	x.Check(thr.Finish())

@@ -17,8 +17,6 @@
 package live
 
 import (
-	"bufio"
-	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/tls"
@@ -170,20 +168,21 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
 	if loadType == chunker.UnknownFormat {
-		if isJson, err := chunker.IsJSONData(rd); err == nil {
-			if isJson {
-				loadType = chunker.JsonFormat
-			} else {
-				return errors.Errorf("need --format=rdf or --format=json to load %s", filename)
-			}
-		}
+		/*if isJson, err := chunker.IsJSONData(rd); err == nil {
+		if isJson {
+			loadType = chunker.JsonFormat
+		} else {
+		*/
+		return errors.Errorf("need --format=rdf or --format=json to load %s", filename)
+		//		}
+		//}
 	}
 
 	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
 }
 
-func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
-	x.CheckfNoTrace(ck.Begin(rd))
+func (l *loader) processLoadFile(ctx context.Context, buf []byte, ck chunker.Chunker) error {
+	x.CheckfNoTrace(ck.Begin(buf))
 
 	for {
 		select {
@@ -192,15 +191,15 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		default:
 		}
 
-		chunkBuf, err := ck.Chunk(rd)
-		l.processChunk(chunkBuf, ck)
+		chunk, err := ck.Chunk(buf)
+		l.processChunk(buf[chunk.Offset:chunk.End], ck)
 		if err == io.EOF {
 			break
 		} else {
 			x.Check(err)
 		}
 	}
-	x.CheckfNoTrace(ck.End(rd))
+	x.CheckfNoTrace(ck.End(buf))
 
 	return nil
 }
@@ -208,8 +207,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 // processChunk parses the rdf entries from the chunk, and group them into
 // batches (each one containing opt.batchSize entries) and sends the batches
 // to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil || chunkBuf.Len() == 0 {
+func (l *loader) processChunk(chunkBuf []byte, ck chunker.Chunker) {
+	if len(chunkBuf) == 0 {
 		return
 	}
 
