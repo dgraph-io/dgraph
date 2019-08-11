@@ -224,14 +224,16 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 }
 
 type NQuadBuffer struct {
-	nquads []*api.NQuad
-	nqCh   chan []*api.NQuad
+	batchSize int
+	nquads    []*api.NQuad
+	nqCh      chan []*api.NQuad
 }
 
-func NewNQuadBuffer() *NQuadBuffer {
+func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	return &NQuadBuffer{
-		nquads: make([]*api.NQuad, 0, 1000),
-		nqCh:   make(chan []*api.NQuad, 10),
+		batchSize: batchSize,
+		nquads:    make([]*api.NQuad, 0, batchSize),
+		nqCh:      make(chan []*api.NQuad, 10),
 	}
 }
 

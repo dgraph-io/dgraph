@@ -189,7 +189,7 @@ func (ld *loader) mapStage() {
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType)
+			chunker := chunker.NewChunker(loadType, 1000)
 			x.Check(chunker.Begin(r))
 			for {
 				chunkBuf, err := chunker.Chunk(r)

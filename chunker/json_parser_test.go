@@ -70,7 +70,7 @@ type Person struct {
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
-	nqs := NewNQuadBuffer()
+	nqs := NewNQuadBuffer(1000)
 	err := nqs.Parse(b, op)
 	return nqs.nquads, err
 }

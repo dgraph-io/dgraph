@@ -28,7 +28,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
 	"github.com/dgraph-io/dgraph/lex"
 
@@ -40,12 +39,13 @@ type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer) error
 	NQuads() *NQuadBuffer
 }
 
 type rdfChunker struct {
 	lexer *lex.Lexer
+	nqs   *NQuadBuffer
 }
 
 func (rdfChunker) NQuads() *NQuadBuffer {
@@ -74,13 +74,16 @@ const (
 )
 
 // NewChunker returns a new chunker for the specified format.
-func NewChunker(inputFormat InputFormat) Chunker {
+func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 	switch inputFormat {
 	case RdfFormat:
-		return &rdfChunker{lexer: &lex.Lexer{}}
+		return &rdfChunker{
+			nqs:   NewNQuadBuffer(batchSize),
+			lexer: &lex.Lexer{},
+		}
 	case JsonFormat:
 		return &jsonChunker{
-			Nqs: NewNQuadBuffer(),
+			Nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
 		panic("unknown input format")
@@ -129,12 +132,11 @@ func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 }
 
 // Parse is not thread-safe. Only call it serially, because it reuses lexer object.
-func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
+		return io.EOF
 	}
 
-	nqs := make([]*api.NQuad, 0)
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
 		if err != nil && err != io.EOF {
@@ -145,12 +147,11 @@ func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		if err == ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
-			return nil, errors.Wrapf(err, "while parsing line %q", str)
+			return errors.Wrapf(err, "while parsing line %q", str)
 		}
-		nqs = append(nqs, &nq)
+		c.nqs.Push(&nq)
 	}
-
-	return nqs, nil
+	return nil
 }
 
 // RDF files don't require any special processing at the end of the file.
@@ -243,9 +244,9 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
+		return io.EOF
 	}
 
 	err := jc.Nqs.Parse(chunkBuf.Bytes(), SetNquads)
@@ -253,9 +254,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		x.Check(err)
 	}
 	chunkBuf.Reset()
-
-	// TODO: We should probably move RDF to use the NQuads struct as well.
-	return nil, err
+	return err
 }
 
 func (jsonChunker) End(r *bufio.Reader) error {

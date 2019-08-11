@@ -136,13 +136,12 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 }
 
 func (m *mapper) run(inputFormat chunker.InputFormat) {
-	chunker := chunker.NewChunker(inputFormat)
+	chunker := chunker.NewChunker(inputFormat, 1000)
 	nquads := chunker.NQuads()
 	go func() {
 		for chunkBuf := range m.readerChunkCh {
 			for {
-				_, err := chunker.Parse(chunkBuf)
-				if err == io.EOF {
+				if err := chunker.Parse(chunkBuf); err == io.EOF {
 					break
 				} else if err != nil {
 					atomic.AddInt64(&m.prog.errCount, 1)
