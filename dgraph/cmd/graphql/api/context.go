@@ -26,13 +26,13 @@ import (
 // Various functions for getting and setting context, etc. used
 // throughout the GraphQL API.
 
-type apiKeys string
+type apiKey string
 
 const (
-	requestID    = apiKeys("requestID")
-	nilRequestID = "0-1-2-3-4"
+	requestID    = apiKey("requestID")
+	nilRequestID = "a1111111-b222-c333-d444-e55555555555"
 
-	gqlQuery    = apiKeys("gqlQuery")
+	gqlQuery    = apiKey("gqlQuery")
 	nilGQLQuery = "aGraphQLQuery {}"
 )
 
@@ -54,21 +54,20 @@ func WithQueryString(ctx context.Context, query string) context.Context {
 // RequestID gets the request ID from a context.  If no request ID is set,
 // it returns "0-1-2-3-4".
 func RequestID(ctx context.Context) string {
-	if val := ctx.Value(requestID); val != nil {
-		if reqID, ok := val.(string); ok {
-			return reqID
-		}
-	}
-	return nilRequestID
+	return stringFromContext(ctx, requestID, nilRequestID)
 }
 
 // QueryString gets the GraphQL query from a context.  If no query is set,
 // it returns "aGraphQLQuery {}"
 func QueryString(ctx context.Context) string {
-	if val := ctx.Value(gqlQuery); val != nil {
-		if query, ok := val.(string); ok {
-			return query
+	return stringFromContext(ctx, requestID, nilRequestID)
+}
+
+func stringFromContext(ctx context.Context, key apiKey, def string) string {
+	if val := ctx.Value(key); val != nil {
+		if str, ok := val.(string); ok {
+			return str
 		}
 	}
-	return nilGQLQuery
+	return def
 }
