@@ -30,8 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	"github.com/dgraph-io/dgraph/chunker/json"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/lex"
 
 	"github.com/pkg/errors"
@@ -43,23 +41,23 @@ type Chunker interface {
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
 	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
-	NQuads() *json.NQuads
+	NQuads() *NQuadBuffer
 }
 
 type rdfChunker struct {
 	lexer *lex.Lexer
 }
 
-func (rdfChunker) NQuads() *json.NQuads {
+func (rdfChunker) NQuads() *NQuadBuffer {
 	// TODO: Build this.
 	return nil
 }
 
 type jsonChunker struct {
-	Nqs *json.NQuads
+	Nqs *NQuadBuffer
 }
 
-func (jc *jsonChunker) NQuads() *json.NQuads {
+func (jc *jsonChunker) NQuads() *NQuadBuffer {
 	return jc.Nqs
 }
 
@@ -82,7 +80,7 @@ func NewChunker(inputFormat InputFormat) Chunker {
 		return &rdfChunker{lexer: &lex.Lexer{}}
 	case JsonFormat:
 		return &jsonChunker{
-			Nqs: json.NewNQuads(),
+			Nqs: NewNQuadBuffer(),
 		}
 	default:
 		panic("unknown input format")
@@ -143,8 +141,8 @@ func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 			x.Check(err)
 		}
 
-		nq, err := rdf.Parse(str, c.lexer)
-		if err == rdf.ErrEmpty {
+		nq, err := ParseRDF(str, c.lexer)
+		if err == ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
 			return nil, errors.Wrapf(err, "while parsing line %q", str)
@@ -250,7 +248,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 		return nil, io.EOF
 	}
 
-	err := jc.Nqs.Parse(chunkBuf.Bytes(), json.SetNquads)
+	err := jc.Nqs.Parse(chunkBuf.Bytes(), SetNquads)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}

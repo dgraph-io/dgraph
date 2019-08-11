@@ -16,7 +16,7 @@
 
 // Package rdf package parses N-Quad statements based on
 // http://www.w3.org/TR/n-quads/
-package rdf
+package chunker
 
 import (
 	"strconv"

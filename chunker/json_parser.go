@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package json
+package chunker
 
 import (
 	"bytes"
@@ -44,7 +44,7 @@ func stripSpaces(str string) string {
 	}, str)
 }
 
-func parseFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
+func parseFacetsJSON(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
 	if prefix == "" {
 		return nil, nil
@@ -177,7 +177,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 }
 
-func (nqs *NQuads) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
+func (nqs *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
 	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
 		nqs.Push(&api.NQuad{
@@ -223,23 +223,23 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	return true, nil
 }
 
-type NQuads struct {
+type NQuadBuffer struct {
 	nquads []*api.NQuad
 	nqCh   chan []*api.NQuad
 }
 
-func NewNQuads() *NQuads {
-	return &NQuads{
+func NewNQuadBuffer() *NQuadBuffer {
+	return &NQuadBuffer{
 		nquads: make([]*api.NQuad, 0, 1000),
 		nqCh:   make(chan []*api.NQuad, 10),
 	}
 }
 
-func (buf *NQuads) Ch() <-chan []*api.NQuad {
+func (buf *NQuadBuffer) Ch() <-chan []*api.NQuad {
 	return buf.nqCh
 }
 
-func (buf *NQuads) Push(nqs ...*api.NQuad) {
+func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	for _, nq := range nqs {
 		buf.nquads = append(buf.nquads, nq)
 		if len(buf.nquads) >= 1000 {
@@ -249,7 +249,7 @@ func (buf *NQuads) Push(nqs ...*api.NQuad) {
 	}
 }
 
-func (buf *NQuads) Flush() {
+func (buf *NQuadBuffer) Flush() {
 	if len(buf.nquads) > 0 {
 		buf.nqCh <- buf.nquads
 	}
@@ -257,7 +257,7 @@ func (buf *NQuads) Flush() {
 }
 
 // TODO - Abstract these parameters to a struct.
-func (nqs *NQuads) mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
+func (nqs *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
@@ -332,7 +332,7 @@ func (nqs *NQuads) mapToNquads(m map[string]interface{}, idx *int, op int, paren
 		prefix := pred + query.FacetDelimeter
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
-		fts, err := parseFacets(m, prefix)
+		fts, err := parseFacetsJSON(m, prefix)
 		if err != nil {
 			return mr, err
 		}
@@ -417,7 +417,7 @@ func (nqs *NQuads) mapToNquads(m map[string]interface{}, idx *int, op int, paren
 		}
 	}
 
-	fts, err := parseFacets(m, parentPred+query.FacetDelimeter)
+	fts, err := parseFacetsJSON(m, parentPred+query.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
 }
@@ -431,7 +431,7 @@ const (
 )
 
 // Parse converts the given byte slice into a slice of NQuads.
-func (nqs *NQuads) Parse(b []byte, op int) error {
+func (nqs *NQuadBuffer) Parse(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package json
+package chunker
 
 import (
 	"encoding/binary"
@@ -70,7 +70,7 @@ type Person struct {
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
-	nqs := NewNQuads()
+	nqs := NewNQuadBuffer()
 	err := nqs.Parse(b, op)
 	return nqs.nquads, err
 }

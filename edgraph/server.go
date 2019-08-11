@@ -34,7 +34,7 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
@@ -978,8 +978,8 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 	var nqs []*api.NQuad
 	var l lex.Lexer
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line), &l)
-		if err == rdf.ErrEmpty {
+		nq, err := chunker.ParseRDF(string(line), &l)
+		if err == chunker.ErrEmpty {
 			continue
 		}
 		if err != nil {
@@ -997,6 +997,8 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
+	// TODO: Need to bring this back.
+
 	// if len(mu.SetJson) > 0 {
 	// 	nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
 	// 	if err != nil {
