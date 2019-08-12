@@ -257,7 +257,8 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	}
 }
 
-// Flush must be called at the end to push out all the buffered NQuads to the channel.
+// Flush must be called at the end to push out all the buffered NQuads to the channel. Once Flush is
+// called, this instance of NQuadBuffer should no longer be used.
 func (buf *NQuadBuffer) Flush() {
 	if len(buf.nquads) > 0 {
 		buf.nqCh <- buf.nquads
