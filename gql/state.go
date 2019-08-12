@@ -81,7 +81,7 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 			if l.Depth >= 2 {
 				return lexTextMutation
 			}
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
 		case isNameBegin(r):
 			return lexNameMutation
@@ -116,7 +116,7 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftSquare)
 		case r == rightSquare:
 			l.Emit(itemRightSquare)
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
 		case isNameBegin(r):
 			return lexArgName
@@ -188,7 +188,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			}
 		case r == lex.EOF:
 			return l.Errorf("Unclosed Brackets")
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
 		case r == comma:
 			if empty {
@@ -224,7 +224,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case r == '.':
 			l.Emit(itemPeriod)
 		default:
-			return l.Errorf("Unrecognized character in inside a func: %#U", r)
+			return l.Errorf("Unrecognized character inside a func: %#U", r)
 		}
 	}
 }
@@ -251,7 +251,7 @@ Loop:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++
 			return lexQuery
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
 		case isNameBegin(r):
 			l.Backup()
@@ -283,7 +283,7 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed action")
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
 		case r == comma:
 			l.Emit(itemComma)
@@ -315,21 +315,6 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 func lexIRIRef(l *lex.Lexer) lex.StateFn {
 	if err := lex.IRIRef(l, itemName); err != nil {
 		return l.Errorf(err.Error())
-	}
-	return l.Mode
-}
-
-// lexFilterFuncName expects input to look like equal("...", "...").
-func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
-	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-		break
 	}
 	return l.Mode
 }
@@ -377,7 +362,7 @@ func lexName(l *lex.Lexer) lex.StateFn {
 func lexComment(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
-		if isEndOfLine(r) {
+		if lex.IsEndOfLine(r) {
 			l.Ignore()
 			return l.Mode
 		}
@@ -516,11 +501,6 @@ func isDollar(r rune) bool {
 // isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
-}
-
-// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
-func isEndOfLine(r rune) bool {
-	return r == '\u000A' || r == '\u000D'
 }
 
 // isEndLiteral returns true if rune is quotation mark.

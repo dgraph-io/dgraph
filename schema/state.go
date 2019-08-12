@@ -48,7 +48,7 @@ Loop:
 			return lexWord
 		case isSpace(r):
 			l.Ignore()
-		case isEndOfLine(r):
+		case lex.IsEndOfLine(r):
 			l.Emit(itemNewLine)
 		case r == '.':
 			l.Emit(itemDot)
@@ -130,9 +130,4 @@ func isNameSuffix(r rune) bool {
 // isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
-}
-
-// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
-func isEndOfLine(r rune) bool {
-	return r == '\n' || r == '\u000D'
 }
