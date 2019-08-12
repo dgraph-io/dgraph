@@ -25,7 +25,6 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -314,7 +313,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 		// v can be nil if user didn't set a value and if omitEmpty was not supplied as JSON
 		// option.
 		// We also skip facets here because we parse them with the corresponding predicate.
-		if pred == "uid" || strings.Index(pred, query.FacetDelimeter) > 0 {
+		if pred == "uid" || strings.Index(pred, x.FacetDelimeter) > 0 {
 			continue
 		}
 
@@ -337,7 +336,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 			continue
 		}
 
-		prefix := pred + query.FacetDelimeter
+		prefix := pred + x.FacetDelimeter
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
 		fts, err := parseFacetsJSON(m, prefix)
@@ -425,7 +424,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 		}
 	}
 
-	fts, err := parseFacetsJSON(m, parentPred+query.FacetDelimeter)
+	fts, err := parseFacetsJSON(m, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
 }
