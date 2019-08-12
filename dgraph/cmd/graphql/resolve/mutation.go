@@ -161,8 +161,7 @@ func (mr *MutationResolver) resolveAddMutation(ctx context.Context) ([]byte, err
 				api.RequestID(ctx), mr.mutation.Name(), uid)
 	}
 
-	// TODO: As with query case, we need to do error propagation etc
-	return res, nil
+	return completeDgraphResult(f, res)
 }
 
 func (mr *MutationResolver) resolveDeleteMutation(ctx context.Context) ([]byte, error) {
@@ -224,8 +223,7 @@ func (mr *MutationResolver) resolveUpdateMutation(ctx context.Context) ([]byte, 
 				api.RequestID(ctx), mr.mutation.Name(), uid)
 	}
 
-	// TODO: As with query case, we need to do error propagation etc
-	return res, nil
+	return completeDgraphResult(f, res)
 }
 
 func buildMutationJSON(m schema.Mutation, v interface{}) map[string]interface{} {

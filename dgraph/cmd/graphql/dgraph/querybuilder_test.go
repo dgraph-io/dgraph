@@ -46,41 +46,46 @@ func TestQueryBuilderWithErrorKeepsError(t *testing.T) {
 		{func(qb *QueryBuilder) *QueryBuilder { return qb.WithField("f") }},
 		{func(qb *QueryBuilder) *QueryBuilder { return qb.WithSelectionSetFrom(testField) }},
 	}
-	for _, tt := range tests {
-		qb := &QueryBuilder{err: fmt.Errorf("An Error")}
+	for i, test := range tests {
+		t.Run("should remain error "+string(i), func(t *testing.T) {
 
-		require.True(t, qb.HasErrors())
-		beforeErr := qb.err
+			qb := &QueryBuilder{err: fmt.Errorf("An Error")}
 
-		qb = tt.builder(qb)
+			require.True(t, qb.HasErrors())
+			beforeErr := qb.err
 
-		require.True(t, qb.HasErrors())
-		require.Equal(t, beforeErr, qb.err)
+			qb = test.builder(qb)
+
+			require.True(t, qb.HasErrors())
+			require.Equal(t, beforeErr, qb.err)
+		})
 	}
 
 }
 
 func TestQueryBuilder(t *testing.T) {
-	tests := []struct {
+	tests := map[string]struct {
 		builder  *QueryBuilder
 		expected string
 	}{
-		{buildMinimalTestQuery(),
+		"minimal": {buildMinimalTestQuery(),
 			"query {\n  q(func: uid(0x7b))\n}"},
-		{buildMinimalTestQuery().WithAlias("p"),
+		"with alias": {buildMinimalTestQuery().WithAlias("p"),
 			"query {\n  p : q(func: uid(0x7b))\n}"},
-		{buildMinimalTestQuery().WithTypeFilter("T"),
+		"filter": {buildMinimalTestQuery().WithTypeFilter("T"),
 			"query {\n  q(func: uid(0x7b)) @filter(type(T))\n}"},
-		{buildMinimalTestQuery().WithField("f"),
+		"with field": {buildMinimalTestQuery().WithField("f"),
 			"query {\n  q(func: uid(0x7b)) {\n    f\n  }\n}"},
-		{buildMinimalTestQuery().WithField("f").WithField("g"),
+		"with two fields": {buildMinimalTestQuery().WithField("f").WithField("g"),
 			"query {\n  q(func: uid(0x7b)) {\n    f\n    g\n  }\n}"},
 	}
 
-	for _, tt := range tests {
-		qs, err := tt.builder.AsQueryString()
-		require.NoError(t, err)
-		require.Equal(t, tt.expected, qs)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			qs, err := test.builder.AsQueryString()
+			require.NoError(t, err)
+			require.Equal(t, test.expected, qs)
+		})
 	}
 }
 
@@ -113,16 +118,21 @@ func buildMinimalTestQuery() *QueryBuilder {
 // Implement a schema.Field interface as required by QueryBuilder.WithSelectionSetFrom()
 
 var testField = &field{
-	typ: "T",
+	typ: &fieldType{"T"},
 	selSet: []schema.Field{
-		&field{name: "f", alias: "a"},
-		&field{typ: "R", name: "g", selSet: []schema.Field{&field{name: "e"}}}}}
+		&field{typ: &fieldType{"Str"}, name: "f", alias: "a"},
+		&field{typ: &fieldType{"R"}, name: "g",
+			selSet: []schema.Field{&field{typ: &fieldType{"Str"}, name: "e"}}}}}
 
 type field struct {
 	name   string
 	alias  string
-	typ    string
+	typ    *fieldType
 	selSet []schema.Field
+}
+
+type fieldType struct {
+	name string
 }
 
 func (f *field) Name() string {
@@ -133,8 +143,20 @@ func (f *field) Alias() string {
 	return f.alias
 }
 
-func (f *field) TypeName() string {
+func (f *field) Type() schema.Type {
 	return f.typ
+}
+
+func (ft *fieldType) Name() string {
+	return ft.name
+}
+
+func (ft *fieldType) Nullable() bool {
+	return true
+}
+
+func (ft *fieldType) ListType() schema.Type {
+	return nil
 }
 
 func (f *field) SelectionSet() []schema.Field {

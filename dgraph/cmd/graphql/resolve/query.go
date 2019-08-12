@@ -45,7 +45,7 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		qb = dgraph.NewQueryBuilder().
 			WithAttr(qr.query.ResponseName()).
 			WithIDArgRoot(qr.query).
-			WithTypeFilter(qr.query.TypeName()).
+			WithTypeFilter(qr.query.Type().Name()).
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	default:
@@ -58,26 +58,5 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
 	}
 
-	// TODO:
-	// queries come back from Dgraph like :
-	// {"mult":[{ ... }, { ... }]} - multiple results
-	// {"single":[{ ... }]}        - single result
-	//
-	// QueryResolver.Resolve() should return a fully resolved GraphQL answer.
-	// That means a bunch of things in GraphQL:
-	//
-	// - need to dig through that response and the expected types from the
-	//   schema and propagate missing ! fields and errors according to spec.
-	//
-	// - if schema result is a single node not a list, then need to transform
-	//   {"single":[{ ... }]} ---> "single":{ ... }
-
-	// atm we are just chopping off the {}
-	if len(res) > 2 {
-		// chop leading '{' and trailing '}'
-		res = res[1 : len(res)-1]
-	} else {
-		res = []byte{}
-	}
-	return res, nil
+	return completeDgraphResult(qr.query, res)
 }
