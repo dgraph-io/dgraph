@@ -140,14 +140,12 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 	nquads := chunker.NQuads()
 	go func() {
 		for chunkBuf := range m.readerChunkCh {
-			for {
-				if err := chunker.Parse(chunkBuf); err == io.EOF {
-					break
-				} else if err != nil {
-					atomic.AddInt64(&m.prog.errCount, 1)
-					if !m.opt.IgnoreErrors {
-						x.Check(err)
-					}
+			if err := chunker.Parse(chunkBuf); err == io.EOF {
+				continue
+			} else if err != nil {
+				atomic.AddInt64(&m.prog.errCount, 1)
+				if !m.opt.IgnoreErrors {
+					x.Check(err)
 				}
 			}
 		}
