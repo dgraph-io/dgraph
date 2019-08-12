@@ -99,7 +99,7 @@ func populateGraphExport(t *testing.T) {
 	for _, edge := range rdfEdges {
 		nq, err := rdf.Parse(edge, l)
 		require.NoError(t, err)
-		rnq := gql.NQuad{NQuad: &nq}
+		rnq := gql.NQuad{NQuad: nq}
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
