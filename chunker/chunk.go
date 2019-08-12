@@ -49,7 +49,9 @@ type rdfChunker struct {
 	lexer *lex.Lexer
 }
 
-type jsonChunker struct{}
+type jsonChunker struct {
+	idx int
+}
 
 // InputFormat represents the multiple formats supported by Chunker.
 type InputFormat byte
@@ -231,12 +233,12 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
+func (j *jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
 	if chunkBuf.Len() == 0 {
 		return nil, io.EOF
 	}
 
-	nqs, err := json.Parse(chunkBuf.Bytes(), json.SetNquads)
+	nqs, err := json.Parse(chunkBuf.Bytes(), json.SetNquads, &j.idx)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}

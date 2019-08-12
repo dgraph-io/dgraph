@@ -404,7 +404,7 @@ const (
 )
 
 // Parse converts the given byte slice into a slice of NQuads.
-func Parse(b []byte, op int) ([]*api.NQuad, error) {
+func Parse(b []byte, op int, idx *int) ([]*api.NQuad, error) {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()
@@ -424,14 +424,13 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 		return nil, errors.Errorf("Couldn't parse json as a map or an array")
 	}
 
-	var idx int
 	var nquads []*api.NQuad
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
 				return nil, errors.Errorf("Only array of map allowed at root.")
 			}
-			mr, err := mapToNquads(obj.(map[string]interface{}), &idx, op, "")
+			mr, err := mapToNquads(obj.(map[string]interface{}), idx, op, "")
 			if err != nil {
 				return mr.nquads, err
 			}
@@ -441,7 +440,7 @@ func Parse(b []byte, op int) ([]*api.NQuad, error) {
 		return nquads, nil
 	}
 
-	mr, err := mapToNquads(ms, &idx, op, "")
+	mr, err := mapToNquads(ms, idx, op, "")
 	checkForDeletion(&mr, ms, op)
 	return mr.nquads, err
 }

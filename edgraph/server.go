@@ -998,15 +998,16 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
+	var idx int
 	if len(mu.SetJson) > 0 {
-		nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
+		nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads, &idx)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
+		nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads, &idx)
 		if err != nil {
 			return nil, err
 		}

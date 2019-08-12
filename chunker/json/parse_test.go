@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
@@ -86,8 +86,8 @@ func TestNquadsFromJson1(t *testing.T) {
 
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
-
-	nq, err := Parse(b, SetNquads)
+	var idx int
+	nq, err := Parse(b, SetNquads, &idx)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -130,7 +130,8 @@ func TestNquadsFromJson2(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := Parse(b, SetNquads)
+	var idx int
+	nq, err := Parse(b, SetNquads, &idx)
 	require.NoError(t, err)
 
 	require.Equal(t, 6, len(nq))
@@ -158,7 +159,8 @@ func TestNquadsFromJson3(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	nq, err := Parse(b, SetNquads)
+	var idx int
+	nq, err := Parse(b, SetNquads, &idx)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(nq))
@@ -171,7 +173,8 @@ func TestNquadsFromJson3(t *testing.T) {
 func TestNquadsFromJson4(t *testing.T) {
 	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123", "age": 21, "weight": 58.7}]`
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
 	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
@@ -196,7 +199,8 @@ func TestJsonNumberParsing(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		nqs, err := Parse([]byte(test.in), SetNquads)
+		var idx int
+		nqs, err := Parse([]byte(test.in), SetNquads, &idx)
 		if test.out != nil {
 			require.NoError(t, err, "%T", err)
 			require.Equal(t, makeNquad("1", "key", test.out), nqs[0])
@@ -209,21 +213,24 @@ func TestJsonNumberParsing(t *testing.T) {
 func TestNquadsFromJson_UidOutofRangeError(t *testing.T) {
 	json := `{"uid":"0xa14222b693e4ba34123","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
-	_, err := Parse([]byte(json), SetNquads)
+	var idx int
+	_, err := Parse([]byte(json), SetNquads, &idx)
 	require.Error(t, err)
 }
 
 func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 	json := `{"uid":"-100","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name@en":"Crown Public School"}]}`
 
-	_, err := Parse([]byte(json), SetNquads)
+	var idx int
+	_, err := Parse([]byte(json), SetNquads, &idx)
 	require.Error(t, err)
 }
 
 func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	json := `{"uid":"","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name":"Crown Public School"}]}`
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -234,7 +241,8 @@ func TestNquadsFromJson_EmptyUid(t *testing.T) {
 func TestNquadsFromJson_BlankNodes(t *testing.T) {
 	json := `{"uid":"_:alice","name":"Alice","following":[{"name":"Bob"}],"school":[{"uid":"_:school","name":"Crown Public School"}]}`
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
@@ -243,7 +251,8 @@ func TestNquadsFromJson_BlankNodes(t *testing.T) {
 
 func TestNquadsDeleteEdges(t *testing.T) {
 	json := `[{"uid": "0x1","name":null,"mobile":null,"car":null}]`
-	nq, err := Parse([]byte(json), DeleteNquads)
+	var idx int
+	nq, err := Parse([]byte(json), DeleteNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 }
@@ -317,7 +326,8 @@ func TestNquadsFromJsonFacets1(t *testing.T) {
          "car|since": "%s"
 }]`, operation, carAge, carPrice, timeStr)
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 
@@ -363,7 +373,8 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	// Dave has uid facets which should go on the edge between Alice and Dave
 	json := `[{"name":"Alice","friend":[{"name":"Dave","friend|close":"true"}]}]`
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 	checkCount(t, nq, "friend", 1)
@@ -380,7 +391,8 @@ func TestNquadsFromJsonError1(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
-	_, err = Parse(b, DeleteNquads)
+	var idx int
+	_, err = Parse(b, DeleteNquads, &idx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "UID must be present and non-zero while deleting edges.")
 }
@@ -388,7 +400,8 @@ func TestNquadsFromJsonError1(t *testing.T) {
 func TestNquadsFromJsonList(t *testing.T) {
 	json := `{"address":["Riley Street","Redfern"],"phone_number":[123,9876],"points":[{"type":"Point", "coordinates":[1.1,2.0]},{"type":"Point", "coordinates":[2.0,1.1]}]}`
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, 6, len(nq))
 }
@@ -396,7 +409,8 @@ func TestNquadsFromJsonList(t *testing.T) {
 func TestNquadsFromJsonDelete(t *testing.T) {
 	json := `{"uid":1000,"friend":[{"uid":1001}]}`
 
-	nq, err := Parse([]byte(json), DeleteNquads)
+	var idx int
+	nq, err := Parse([]byte(json), DeleteNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, nq[0], makeNquadEdge("1000", "friend", "1001"))
 }
@@ -404,7 +418,8 @@ func TestNquadsFromJsonDelete(t *testing.T) {
 func TestNquadsFromJsonDeleteStar(t *testing.T) {
 	json := `{"uid":1000,"name": null}`
 
-	nq, err := Parse([]byte(json), DeleteNquads)
+	var idx int
+	nq, err := Parse([]byte(json), DeleteNquads, &idx)
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
@@ -421,7 +436,8 @@ func TestNquadsFromJsonDeleteStar(t *testing.T) {
 func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 	json := `{"uid":1000,"name@es": null}`
 
-	nq, err := Parse([]byte(json), DeleteNquads)
+	var idx int
+	nq, err := Parse([]byte(json), DeleteNquads, &idx)
 	require.NoError(t, err)
 	expected := &api.NQuad{
 		Subject:   "1000",
@@ -439,7 +455,8 @@ func TestNquadsFromJsonDeleteStarLang(t *testing.T) {
 func TestSetNquadNilValue(t *testing.T) {
 	json := `{"uid":1000,"name": null}`
 
-	nq, err := Parse([]byte(json), SetNquads)
+	var idx int
+	nq, err := Parse([]byte(json), SetNquads, &idx)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(nq))
 }
