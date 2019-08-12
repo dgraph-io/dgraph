@@ -102,7 +102,11 @@ func (s *schemaStore) validateType(de *pb.DirectedEdge, objectIsUID bool) {
 		sch, ok = s.schemaMap[de.Attr]
 		if !ok {
 			sch = &pb.SchemaUpdate{ValueType: de.ValueType}
-			if objectIsUID {
+			// For type uid or default, set List to true. This is done for UIDs because previously
+			// all predicates of type uid were implicitly considered lists. It's done for the
+			// default type to prevent data loss when users insert data before setting the schema to
+			// their desired type.
+			if objectIsUID || de.ValueType == pb.Posting_DEFAULT {
 				sch.List = true
 			}
 			s.schemaMap[de.Attr] = sch

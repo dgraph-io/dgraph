@@ -198,9 +198,11 @@ func createSchema(attr string, typ types.TypeID) {
 		s.ValueType = typ.Enum()
 	} else {
 		s = pb.SchemaUpdate{ValueType: typ.Enum(), Predicate: attr}
-		// For type UidID, set List to true. This is done because previously
-		// all predicates of type UidID were implicitly considered lists.
-		if typ == types.UidID {
+		// For type uid or default, set List to true. This is done for UIDs because previously
+		// all predicates of type uid were implicitly considered lists. It's done for the
+		// default type to prevent data loss when users insert data before setting the schema to
+		// their desired type.
+		if typ == types.UidID || typ == types.DefaultID {
 			s.List = true
 		}
 	}
