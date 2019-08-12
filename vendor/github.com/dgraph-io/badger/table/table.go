@@ -17,7 +17,6 @@
 package table
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -125,10 +124,11 @@ type block struct {
 	data              []byte
 	numEntries        int // number of entries present in the block
 	entriesIndexStart int // start index of entryOffsets list
+	entryOffsets      []uint32
 	chkLen            int // checksum length
 }
 
-func (b block) verifyCheckSum() error {
+func (b *block) verifyCheckSum() error {
 	readPos := len(b.data) - 4 - b.chkLen
 	if readPos < 0 {
 		// This should be rare, hence can create a error instead of having global error.
@@ -143,14 +143,13 @@ func (b block) verifyCheckSum() error {
 	return y.VerifyChecksum(b.data[:readPos], cs)
 }
 
-func (b block) NewIterator() *blockIterator {
-	bi := &blockIterator{
-		data:              b.data,
-		numEntries:        b.numEntries,
-		entriesIndexStart: b.entriesIndexStart,
-	}
+func (b *block) resetIterator(bi *blockIterator) {
+	bi.Reset()
 
-	return bi
+	bi.data = b.data
+	bi.numEntries = b.numEntries
+	bi.entryOffsets = b.entryOffsets
+	bi.entriesIndexStart = b.entriesIndexStart
 }
 
 // OpenTable assumes file has only one table and opens it. Takes ownership of fd upon function
@@ -275,7 +274,7 @@ func (t *Table) readIndex() error {
 	// Read checksum len from the last 4 bytes.
 	readPos -= 4
 	buf := t.readNoFail(readPos, 4)
-	checksumLen := int(binary.BigEndian.Uint32(buf))
+	checksumLen := int(y.BytesToU32(buf))
 
 	// Read checksum.
 	expectedChk := &pb.Checksum{}
@@ -288,7 +287,7 @@ func (t *Table) readIndex() error {
 	// Read index size from the footer.
 	readPos -= 4
 	buf = t.readNoFail(readPos, 4)
-	indexLen := int(binary.BigEndian.Uint32(buf))
+	indexLen := int(y.BytesToU32(buf))
 	// Read index.
 	readPos -= indexLen
 	data := t.readNoFail(readPos, indexLen)
@@ -321,13 +320,17 @@ func (t *Table) block(idx int) (*block, error) {
 
 	// Read meta data related to block.
 	readPos := len(blk.data) - 4 // First read checksum length.
-	blk.chkLen = int(binary.BigEndian.Uint32(blk.data[readPos : readPos+4]))
+	blk.chkLen = int(y.BytesToU32(blk.data[readPos : readPos+4]))
 
 	// Skip reading checksum, and move position to read numEntries in block.
 	readPos -= (blk.chkLen + 4)
-	blk.numEntries = int(binary.BigEndian.Uint32(blk.data[readPos : readPos+4]))
-	blk.entriesIndexStart = readPos - (blk.numEntries * 4)
+	blk.numEntries = int(y.BytesToU32(blk.data[readPos : readPos+4]))
+	entriesIndexStart := readPos - (blk.numEntries * 4)
+	entriesIndexEnd := entriesIndexStart + blk.numEntries*4
 
+	blk.entryOffsets = y.BytesToU32Slice(blk.data[entriesIndexStart:entriesIndexEnd])
+
+	blk.entriesIndexStart = entriesIndexStart
 	// Verify checksum on if checksum verification mode is OnRead on OnStartAndRead.
 	if t.opt.ChkMode == options.OnBlockRead || t.opt.ChkMode == options.OnTableAndBlockRead {
 		if err = blk.verifyCheckSum(); err != nil {

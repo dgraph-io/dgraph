@@ -19,7 +19,6 @@ package badger
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash"
@@ -244,7 +243,7 @@ func (r *safeRead) Entry(reader io.Reader) (*Entry, error) {
 		}
 		return nil, err
 	}
-	crc := binary.BigEndian.Uint32(crcBuf[:])
+	crc := y.BytesToU32(crcBuf[:])
 	if crc != tee.Sum32() {
 		return nil, errTruncate
 	}
@@ -1384,11 +1383,12 @@ func (vlog *valueLog) runGC(discardRatio float64, head valuePointer) error {
 
 func (vlog *valueLog) updateDiscardStats(stats map[uint32]int64) error {
 	vlog.lfDiscardStats.Lock()
+	defer vlog.lfDiscardStats.Unlock()
+
 	for fid, sz := range stats {
 		vlog.lfDiscardStats.m[fid] += sz
 		vlog.lfDiscardStats.updatesSinceFlush++
 	}
-	vlog.lfDiscardStats.Unlock()
 	if vlog.lfDiscardStats.updatesSinceFlush > discardStatsFlushThreshold {
 		if err := vlog.flushDiscardStats(); err != nil {
 			return err
