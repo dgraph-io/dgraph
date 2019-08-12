@@ -78,6 +78,14 @@ type Field interface {
 	IDArgValue() (uint64, error)
 	Type() Type
 	SelectionSet() []Field
+	Location() *Location
+}
+
+// TODO: Location will be swapped with the the one the x soon when errors
+// are swapped from gqlparser errors to x.
+type Location struct {
+	Line   int
+	Column int
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -93,30 +101,17 @@ type Query interface {
 	QueryType() QueryType
 }
 
+// A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list,
+// ListType is nil.
 type Type interface {
 	Name() string
 	Nullable() bool
 	ListType() Type
+	String() string
 }
 
 type astType struct {
 	typ *ast.Type
-}
-
-// FIXME" move these around
-func (t *astType) Name() string {
-	return t.typ.NamedType
-}
-
-func (t *astType) Nullable() bool {
-	return !t.typ.NonNull
-}
-
-func (t *astType) ListType() Type {
-	if t.typ.Elem == nil {
-		return nil
-	}
-	return &astType{typ: t.typ.Elem}
 }
 
 type schema struct {
@@ -237,6 +232,12 @@ func (f *field) SelectionSet() (flds []Field) {
 	return
 }
 
+func (f *field) Location() *Location {
+	return &Location{
+		Line:   f.field.Position.Line,
+		Column: f.field.Position.Column}
+}
+
 func (q *query) Name() string {
 	return (*field)(q).Name()
 }
@@ -259,6 +260,10 @@ func (q *query) Type() Type {
 
 func (q *query) SelectionSet() []Field {
 	return (*field)(q).SelectionSet()
+}
+
+func (q *query) Location() *Location {
+	return (*field)(q).Location()
 }
 
 func (q *query) ResponseName() string {
@@ -298,6 +303,10 @@ func (m *mutation) SelectionSet() []Field {
 	return (*field)(m).SelectionSet()
 }
 
+func (m *mutation) Location() *Location {
+	return (*field)(m).Location()
+}
+
 func (m *mutation) ResponseName() string {
 	return (*field)(m).ResponseName()
 }
@@ -335,4 +344,47 @@ func (m *mutation) MutationType() MutationType {
 	default:
 		return NotSupportedMutation
 	}
+}
+
+func (t *astType) Name() string {
+	return t.typ.NamedType
+}
+
+func (t *astType) Nullable() bool {
+	return !t.typ.NonNull
+}
+
+func (t *astType) ListType() Type {
+	if t.typ.Elem == nil {
+		return nil
+	}
+	return &astType{typ: t.typ.Elem}
+}
+
+func (t *astType) String() string {
+	if t == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	// give it enough space in case it happens to be `[t.Name()!]!`
+	sb.Grow(len(t.Name()) + 4)
+
+	if t.ListType() == nil {
+		sb.WriteString(t.Name())
+	} else {
+		// There's no lists of lists, so this needn't be recursive
+		sb.WriteRune('[')
+		sb.WriteString(t.Name())
+		if !t.ListType().Nullable() {
+			sb.WriteRune('!')
+		}
+		sb.WriteRune(']')
+	}
+
+	if !t.Nullable() {
+		sb.WriteRune('!')
+	}
+
+	return sb.String()
 }
