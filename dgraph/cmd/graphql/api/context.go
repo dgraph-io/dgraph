@@ -60,7 +60,7 @@ func RequestID(ctx context.Context) string {
 // QueryString gets the GraphQL query from a context.  If no query is set,
 // it returns "aGraphQLQuery {}"
 func QueryString(ctx context.Context) string {
-	return stringFromContext(ctx, requestID, nilRequestID)
+	return stringFromContext(ctx, gqlQuery, nilGQLQuery)
 }
 
 func stringFromContext(ctx context.Context, key apiKey, def string) string {
