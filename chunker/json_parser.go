@@ -176,10 +176,10 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 
 }
 
-func (nqs *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
+func (buf *NQuadBuffer) checkForDeletion(mr mapResponse, m map[string]interface{}, op int) {
 	// Since uid is the only key, this must be S * * deletion.
 	if op == DeleteNquads && len(mr.uid) > 0 && len(m) == 1 {
-		nqs.Push(&api.NQuad{
+		buf.Push(&api.NQuad{
 			Subject:     mr.uid,
 			Predicate:   x.Star,
 			ObjectValue: &api.Value{Val: &api.Value_DefaultVal{DefaultVal: x.Star}},
@@ -229,7 +229,7 @@ type NQuadBuffer struct {
 }
 
 // NewNQuadBuffer would return a new buffer. It would batch up batchSize NQuads per push to channel,
-// accessible via Ch(). If batchSize is set to -1, it would only do one push to Ch() during Flush.
+// accessible via Ch(). If batchSize is negative, it would only do one push to Ch() during Flush.
 func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	buf := &NQuadBuffer{
 		batchSize: batchSize,
@@ -241,10 +241,12 @@ func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	return buf
 }
 
+// Ch returns a channel containing slices of NQuads which can be consumed by the caller.
 func (buf *NQuadBuffer) Ch() <-chan []*api.NQuad {
 	return buf.nqCh
 }
 
+// Push can be passed one or more NQuad pointers, which get pushed to the buffer.
 func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	for _, nq := range nqs {
 		buf.nquads = append(buf.nquads, nq)
@@ -255,6 +257,7 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	}
 }
 
+// Flush must be called at the end to push out all the buffered NQuads to the channel.
 func (buf *NQuadBuffer) Flush() {
 	if len(buf.nquads) > 0 {
 		buf.nqCh <- buf.nquads
@@ -437,7 +440,7 @@ const (
 	DeleteNquads
 )
 
-// ParseJSON converts the given byte slice into a slice of NQuads.
+// ParseJSON parses the given byte slice and pushes the parsed NQuads into the buffer.
 func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)

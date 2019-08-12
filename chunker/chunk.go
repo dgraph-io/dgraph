@@ -133,7 +133,7 @@ func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 // Parse is not thread-safe. Only call it serially, because it reuses lexer object.
 func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 	if chunkBuf == nil || chunkBuf.Len() == 0 {
-		return io.EOF
+		return nil
 	}
 
 	for chunkBuf.Len() > 0 {
@@ -245,14 +245,13 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 
 func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 	if chunkBuf == nil || chunkBuf.Len() == 0 {
-		return io.EOF
+		return nil
 	}
 
 	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
-	if err != nil && err != io.EOF {
+	if err != nil {
 		x.Check(err)
 	}
-	chunkBuf.Reset()
 	return err
 }
 

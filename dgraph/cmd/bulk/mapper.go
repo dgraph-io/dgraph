@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -140,9 +139,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 	nquads := chunker.NQuads()
 	go func() {
 		for chunkBuf := range m.readerChunkCh {
-			if err := chunker.Parse(chunkBuf); err == io.EOF {
-				continue
-			} else if err != nil {
+			if err := chunker.Parse(chunkBuf); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
 				if !m.opt.IgnoreErrors {
 					x.Check(err)

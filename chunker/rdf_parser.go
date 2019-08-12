@@ -71,6 +71,7 @@ func ParseRDFs(b []byte) ([]*api.NQuad, error) {
 }
 
 // ParseRDF parses a mutation string and returns the N-Quad representation for it.
+// It parses N-Quad statements based on http://www.w3.org/TR/n-quads/.
 func ParseRDF(line string, l *lex.Lexer) (api.NQuad, error) {
 	var rnq api.NQuad
 	line = strings.TrimSpace(line)

@@ -215,7 +215,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		}
 
 		chunkBuf, err := ck.Chunk(rd)
-		// process parses the rdf entries from the chunk, and group them into batches (each one
+		// Parses the rdf entries from the chunk, groups them into batches (each one
 		// containing opt.batchSize entries) and sends the batches to the loader.reqs channel (see
 		// above).
 		if oerr := ck.Parse(chunkBuf); oerr != nil && oerr != io.EOF {

@@ -216,6 +216,7 @@ func run() {
 			fmt.Printf("GC: %d. InUse: %s. Idle: %s\n", ms.NumGC, humanize.Bytes(ms.HeapInuse),
 				humanize.Bytes(ms.HeapIdle-ms.HeapReleased))
 			if ms.NumGC > lastNum {
+				// GC was already run by the Go runtime. No need to run it again.
 				lastNum = ms.NumGC
 			} else {
 				runtime.GC()
