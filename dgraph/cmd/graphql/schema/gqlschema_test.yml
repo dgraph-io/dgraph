@@ -84,3 +84,51 @@ invalid_schemas:
     errlist: [
       {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
+
+  -
+    name: "Non linking inverse directives"
+    input: |
+      type X {
+        f1: P @hasInverse(field: "f1")
+        f2: String
+      }
+      type P {
+        f1: X @hasInverse(field: "f2")
+      }
+    errlist: [
+      {"message":"X.f1 have @hasInverse directive to P.f1, which doesn't point back to it.", "locations":[{"line":2, "column":10}]},
+      {"message":"P.f1 have @hasInverse directive to X.f2, which doesn't point back to it.", "locations":[{"line":6, "column":10}]},
+    ]
+
+  -
+    name: "Inverse Directive on non object field"
+    input: |
+      type X {
+        f1: String @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message":"X.f1 is of type String, but @hasInverse directive isn't allowed on non object type field.", "locations":[{"line":2, "column":3}]},
+    ]
+
+  -
+    name: "Inverse Directive doesn't have field argument"
+    input: |
+      type X {
+        f1: X @hasInverse
+      }
+    errlist: [
+      {"message":"hasInverse directive at X.f1 doesn't have field argument.", "locations":[{"line":2, "column":10}]},
+    ]
+
+  -
+    name: "hasInverse on non existing field"
+    input: |
+      type X {
+        f1: [P!]! @hasInverse(field: "f2")
+      }
+      type P  {
+        f1: String
+      }
+    errlist: [
+      {"message":"Unknown field P.f2, inverse field of X.f1(P.f2) doesn't exist.", "locations":[{"line":2, "column":14}]},
+    ]

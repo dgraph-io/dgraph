@@ -33,6 +33,12 @@ type scalar struct {
 	dgraphType string
 }
 
+type directive struct {
+	directiveDefn  *ast.DirectiveDefinition
+	validationFunc func(typ *ast.Definition,
+		field *ast.FieldDefinition, dir *ast.Directive, sch *ast.Schema) *gqlerror.Error
+}
+
 var supportedScalars = map[string]scalar{
 	"ID":       scalar{name: "ID", dgraphType: "uid"},
 	"Boolean":  scalar{name: "Boolean", dgraphType: "bool"},
@@ -40,6 +46,20 @@ var supportedScalars = map[string]scalar{
 	"Float":    scalar{name: "Float", dgraphType: "float"},
 	"String":   scalar{name: "String", dgraphType: "string"},
 	"DateTime": scalar{name: "DateTime", dgraphType: "dateTime"},
+}
+
+var supportedDirectives = map[string]directive{
+	"hasInverse": directive{
+		directiveDefn: &ast.DirectiveDefinition{
+			Name:      "hasInverse",
+			Locations: []ast.DirectiveLocation{ast.LocationFieldDefinition},
+			Arguments: []*ast.ArgumentDefinition{&ast.ArgumentDefinition{
+				Name: "field",
+				Type: &ast.Type{NamedType: "String", NonNull: true},
+			}},
+		},
+		validationFunc: hasInverseValidation,
+	},
 }
 
 // addScalars adds all the supported scalars in the schema.
@@ -50,6 +70,12 @@ func addScalars(doc *ast.SchemaDocument) {
 			// Empty Position because it is being inserted by the engine.
 			&ast.Definition{Kind: ast.Scalar, Name: s.name, Position: &ast.Position{}},
 		)
+	}
+}
+
+func addDirectives(doc *ast.SchemaDocument) {
+	for _, d := range supportedDirectives {
+		doc.Directives = append(doc.Directives, d.directiveDefn)
 	}
 }
 
@@ -75,6 +101,11 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 
 		for _, field := range typ.Fields {
 			errs = append(errs, applyFieldValidations(field)...)
+
+			for _, dir := range field.Directives {
+				errs = appendIfNotNull(errs,
+					supportedDirectives[dir.Name].validationFunc(typ, field, dir, schema))
+			}
 		}
 	}
 
@@ -409,18 +440,47 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 	return fldList
 }
 
-func genArgumentsString(args ast.ArgumentDefinitionList) string {
-	if args == nil || len(args) == 0 {
+func genArgumentsDefnString(args ast.ArgumentDefinitionList) string {
+	if len(args) == 0 {
 		return ""
 	}
 
-	var argsStrs []string
-
-	for _, arg := range args {
-		argsStrs = append(argsStrs, genArgumentString(arg))
+	argStrs := make([]string, len(args))
+	for i, arg := range args {
+		argStrs[i] = genArgumentDefnString(arg)
 	}
 
-	return fmt.Sprintf("(%s)", strings.Join(argsStrs, ","))
+	return fmt.Sprintf("(%s)", strings.Join(argStrs, ", "))
+}
+
+func genArgumentsString(args ast.ArgumentList) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	argStrs := make([]string, len(args))
+	for i, arg := range args {
+		argStrs[i] = genArgumentString(arg)
+	}
+
+	return fmt.Sprintf("(%s)", strings.Join(argStrs, ", "))
+}
+
+func genDirectivesString(direcs ast.DirectiveList) string {
+	if len(direcs) == 0 {
+		return ""
+	}
+
+	direcArgs := make([]string, 0, len(direcs))
+
+	for _, dir := range direcs {
+		direcArgs = append(
+			direcArgs,
+			fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments)),
+		)
+	}
+
+	return " " + strings.Join(direcArgs, " ")
 }
 
 func genFieldsString(flds ast.FieldList) string {
@@ -442,12 +502,17 @@ func genFieldsString(flds ast.FieldList) string {
 
 func genFieldString(fld *ast.FieldDefinition) string {
 	return fmt.Sprintf(
-		"\t%s%s: %s\n", fld.Name, genArgumentsString(fld.Arguments), fld.Type.String(),
+		"\t%s%s: %s%s\n", fld.Name, genArgumentsDefnString(fld.Arguments),
+		fld.Type.String(), genDirectivesString(fld.Directives),
 	)
 }
 
-func genArgumentString(arg *ast.ArgumentDefinition) string {
+func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
 	return fmt.Sprintf("%s: %s", arg.Name, arg.Type.String())
+}
+
+func genArgumentString(arg *ast.Argument) string {
+	return fmt.Sprintf("%s: %s", arg.Name, arg.Value.String())
 }
 
 func generateInputString(typ *ast.Definition) string {

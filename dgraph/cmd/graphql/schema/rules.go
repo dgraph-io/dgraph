@@ -120,6 +120,72 @@ func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
 	return nil
 }
 
+func hasInverseValidation(typ *ast.Definition, field *ast.FieldDefinition,
+	dir *ast.Directive, sch *ast.Schema) *gqlerror.Error {
+
+	invTypeName := field.Type.Name()
+	if sch.Types[invTypeName].Kind != ast.Object {
+		return gqlerror.ErrorPosf(
+			field.Position,
+			"%s.%s is of type %s, but @hasInverse directive isn't allowed"+
+				" on non object type field.", typ.Name, field.Name, invTypeName,
+		)
+	}
+
+	invFieldArg := dir.Arguments.ForName("field")
+	if invFieldArg == nil {
+		// This check can be removed once gqlparser bug
+		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"hasInverse directive at %s.%s doesn't have field argument.",
+			typ.Name, field.Name,
+		)
+	}
+
+	invFieldName := invFieldArg.Value.Raw
+	invType := sch.Types[invTypeName]
+	invField := invType.Fields.ForName(invFieldName)
+	if invField == nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Unknown field %s.%s, inverse field of %s.%s(%[1]s.%[2]s) doesn't exist.",
+			invTypeName, invFieldName, typ.Name, field.Name,
+		)
+	}
+
+	if !isInverse(typ.Name, field.Name, invField) {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			// @TODO: Error message should be more informative.
+			"%s.%s have @hasInverse directive to %s.%s, which doesn't point back to it.",
+			typ.Name, field.Name, invTypeName, invFieldName,
+		)
+	}
+
+	return nil
+}
+
+func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinition) bool {
+
+	invType := field.Type.Name()
+	if invType != expectedInvType {
+		return false
+	}
+
+	invDirective := field.Directives.ForName("hasInverse")
+	if invDirective == nil {
+		return false
+	}
+
+	invFieldArg := invDirective.Arguments.ForName("field")
+	if invFieldArg == nil || invFieldArg.Value.Raw != expectedInvField {
+		return false
+	}
+
+	return true
+}
+
 func isScalar(s string) bool {
 	_, ok := supportedScalars[s]
 	return ok
