@@ -17,7 +17,6 @@
 package edgraph
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -36,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -974,22 +972,6 @@ func isAlterAllowed(ctx context.Context) error {
 	return nil
 }
 
-func parseNQuads(b []byte) ([]*api.NQuad, error) {
-	var nqs []*api.NQuad
-	var l lex.Lexer
-	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := chunker.ParseRDF(string(line), &l)
-		if err == chunker.ErrEmpty {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		nqs = append(nqs, &nq)
-	}
-	return nqs, nil
-}
-
 // parseMutationObject tries to consolidate fields of the api.Mutation into the
 // corresponding field of the returned gql.Mutation. For example, the 3 fields,
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
@@ -997,49 +979,48 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
-	// TODO: Need to bring this back.
 
-	// if len(mu.SetJson) > 0 {
-	// 	nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	res.Set = append(res.Set, nqs...)
-	// }
-	// if len(mu.DeleteJson) > 0 {
-	// 	nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	res.Del = append(res.Del, nqs...)
-	// }
-	// if len(mu.SetNquads) > 0 {
-	// 	nqs, err := parseNQuads(mu.SetNquads)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	res.Set = append(res.Set, nqs...)
-	// }
-	// if len(mu.DelNquads) > 0 {
-	// 	nqs, err := parseNQuads(mu.DelNquads)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	res.Del = append(res.Del, nqs...)
-	// }
+	if len(mu.SetJson) > 0 {
+		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
+		if err != nil {
+			return nil, err
+		}
+		res.Set = append(res.Set, nqs...)
+	}
+	if len(mu.DeleteJson) > 0 {
+		nqs, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
+		if err != nil {
+			return nil, err
+		}
+		res.Del = append(res.Del, nqs...)
+	}
+	if len(mu.SetNquads) > 0 {
+		nqs, err := chunker.ParseRDFs(mu.SetNquads)
+		if err != nil {
+			return nil, err
+		}
+		res.Set = append(res.Set, nqs...)
+	}
+	if len(mu.DelNquads) > 0 {
+		nqs, err := chunker.ParseRDFs(mu.DelNquads)
+		if err != nil {
+			return nil, err
+		}
+		res.Del = append(res.Del, nqs...)
+	}
 
-	// res.Set = append(res.Set, mu.Set...)
-	// res.Del = append(res.Del, mu.Del...)
-	// // parse facets and convert to the binary format so that
-	// // a field of type datetime like "2017-01-01" can be correctly encoded in the
-	// // marshaled binary format as done in the time.Marshal method
-	// if err := validateAndConvertFacets(res.Set); err != nil {
-	// 	return nil, err
-	// }
+	res.Set = append(res.Set, mu.Set...)
+	res.Del = append(res.Del, mu.Del...)
+	// parse facets and convert to the binary format so that
+	// a field of type datetime like "2017-01-01" can be correctly encoded in the
+	// marshaled binary format as done in the time.Marshal method
+	if err := validateAndConvertFacets(res.Set); err != nil {
+		return nil, err
+	}
 
-	// if err := validateNQuads(res.Set, res.Del); err != nil {
-	// 	return nil, err
-	// }
+	if err := validateNQuads(res.Set, res.Del); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 

@@ -229,12 +229,17 @@ type NQuadBuffer struct {
 	nqCh      chan []*api.NQuad
 }
 
+// NewNQuadBuffer would return a new buffer. It would batch up batchSize NQuads per push to channel,
+// accessible via Ch(). If batchSize is set to -1, it would only do one push to Ch() during Flush.
 func NewNQuadBuffer(batchSize int) *NQuadBuffer {
-	return &NQuadBuffer{
+	buf := &NQuadBuffer{
 		batchSize: batchSize,
-		nquads:    make([]*api.NQuad, 0, batchSize),
 		nqCh:      make(chan []*api.NQuad, 10),
 	}
+	if buf.batchSize > 0 {
+		buf.nquads = make([]*api.NQuad, 0, batchSize)
+	}
+	return buf
 }
 
 func (buf *NQuadBuffer) Ch() <-chan []*api.NQuad {
@@ -244,7 +249,7 @@ func (buf *NQuadBuffer) Ch() <-chan []*api.NQuad {
 func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 	for _, nq := range nqs {
 		buf.nquads = append(buf.nquads, nq)
-		if len(buf.nquads) >= 1000 {
+		if buf.batchSize > 0 && len(buf.nquads) >= buf.batchSize {
 			buf.nqCh <- buf.nquads
 			buf.nquads = make([]*api.NQuad, 0, 1000)
 		}
@@ -432,8 +437,8 @@ const (
 	DeleteNquads
 )
 
-// Parse converts the given byte slice into a slice of NQuads.
-func (nqs *NQuadBuffer) Parse(b []byte, op int) error {
+// ParseJSON converts the given byte slice into a slice of NQuads.
+func (nqs *NQuadBuffer) ParseJSON(b []byte, op int) error {
 	buffer := bytes.NewBuffer(b)
 	dec := json.NewDecoder(buffer)
 	dec.UseNumber()
@@ -471,4 +476,16 @@ func (nqs *NQuadBuffer) Parse(b []byte, op int) error {
 	mr, err := nqs.mapToNquads(ms, &idx, op, "")
 	nqs.checkForDeletion(mr, ms, op)
 	return err
+}
+
+// ParseJSON is a convenience wrapper function to get all NQuads in one call. This can however, lead
+// to high memory usage. So be careful using this.
+func ParseJSON(b []byte, op int) ([]*api.NQuad, error) {
+	buf := NewNQuadBuffer(-1)
+	if err := buf.ParseJSON(b, op); err != nil {
+		return nil, err
+	}
+	buf.Flush()
+	nqs := <-buf.Ch()
+	return nqs, nil
 }

@@ -249,7 +249,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 		return io.EOF
 	}
 
-	err := jc.Nqs.Parse(chunkBuf.Bytes(), SetNquads)
+	err := jc.Nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}

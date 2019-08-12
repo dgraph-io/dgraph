@@ -17,6 +17,7 @@
 package chunker
 
 import (
+	"bytes"
 	"strconv"
 	"strings"
 	"unicode"
@@ -49,6 +50,24 @@ func sane(s string) bool {
 		}
 	}
 	return false
+}
+
+// ParseRDFs is a convenience wrapper function to get all NQuads in one call. This can however, lead
+// to high memory usage. So, be careful using this.
+func ParseRDFs(b []byte) ([]*api.NQuad, error) {
+	var nqs []*api.NQuad
+	var l lex.Lexer
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		nq, err := ParseRDF(string(line), &l)
+		if err == ErrEmpty {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		nqs = append(nqs, &nq)
+	}
+	return nqs, nil
 }
 
 // ParseRDF parses a mutation string and returns the N-Quad representation for it.
