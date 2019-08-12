@@ -1,0 +1,7 @@
+type Post {
+  author: Author! @hasInverse(field: "posts")
+}
+
+type Author {
+  posts: [Post!]! @hasInverse(field: "author")
+}

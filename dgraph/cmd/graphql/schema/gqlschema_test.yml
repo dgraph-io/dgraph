@@ -132,3 +132,64 @@ invalid_schemas:
     errlist: [
       {"message":"Unknown field P.f2, inverse field of X.f1(P.f2) doesn't exist.", "locations":[{"line":2, "column":14}]},
     ]
+
+valid_schemas:
+  -
+    name: "hasInverse directive on singleton"
+    input: |
+      type X {
+        f1: Y @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 1"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 2"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 3"
+    input: |
+      type X {
+        f1: [Y!] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 4"
+    input: |
+      type X {
+        f1: [Y!] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 5"
+    input: |
+      type X {
+        f1: [Y!]! @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X!]! @hasInverse(field: "f1")
+      }

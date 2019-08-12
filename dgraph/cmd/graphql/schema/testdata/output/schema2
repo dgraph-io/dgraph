@@ -1,0 +1,100 @@
+#######################
+# Generated Types
+#######################
+type AddAuthorPayload {
+	author: Author!
+}
+
+type AddPostPayload {
+	post: Post!
+}
+
+type Author {
+	posts: [Post!]! @hasInverse(field: "author")
+}
+
+type DeleteAuthorPayload {
+	msg: String!
+}
+
+type DeletePostPayload {
+	msg: String!
+}
+
+type Post {
+	author: Author! @hasInverse(field: "posts")
+}
+
+type UpdateAuthorPayload {
+	author: Author!
+}
+
+type UpdatePostPayload {
+	post: Post!
+}
+
+#######################
+# Scalar Definitions
+#######################
+scalar Boolean
+scalar DateTime
+scalar Float
+scalar ID
+scalar Int
+scalar String
+#######################
+# Enum Definitions
+#######################
+#######################
+# Input Definitions
+#######################
+input AuthorFilter {
+	dgraph: String
+}
+
+input AuthorInput {
+	posts: [PostRef!]!
+}
+
+input AuthorRef {
+}
+
+input AuthorUpdate {
+	posts: [PostRef!]
+}
+
+input PostFilter {
+	dgraph: String
+}
+
+input PostInput {
+	author: AuthorRef!
+}
+
+input PostRef {
+}
+
+input PostUpdate {
+	author: AuthorRef
+}
+
+#######################
+# Generated Query
+#######################
+type Query {
+	getPost(id: ID!): Post!
+	queryPost(filter: PostFilter!): [Post!]!
+	getAuthor(id: ID!): Author!
+	queryAuthor(filter: AuthorFilter!): [Author!]!
+}
+#######################
+# Generated Mutations
+#######################
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload!
+	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload!
+	deletePost(id: ID!): DeletePostPayload!
+	addAuthor(input: AuthorInput!): AddAuthorPayload!
+	updateAuthor(id: ID!, input: AuthorUpdate): UpdateAuthorPayload!
+	deleteAuthor(id: ID!): DeleteAuthorPayload!
+}
