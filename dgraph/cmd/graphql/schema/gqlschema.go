@@ -25,24 +25,8 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// Validation functions which will run before gql validation.
-type preGQLCheck func(schema *ast.SchemaDocument) gqlerror.List
-
-// Validation functions which will run after gql validation.
-type postGQLCheck func(schema *ast.Schema) gqlerror.List
-
-type preGQLRule struct {
-	name        string
-	schRuleFunc preGQLCheck
-}
-
-type postGQLRule struct {
-	name        string
-	schRuleFunc postGQLCheck
-}
-
-var preGQLRules []preGQLRule
-var postGQLRules []postGQLRule
+var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
+var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
 
 type scalar struct {
 	name       string
@@ -69,27 +53,12 @@ func addScalars(doc *ast.SchemaDocument) {
 	}
 }
 
-// addRule adds a new schema rule to the global array schRules.
-func addPreRule(name string, f preGQLCheck) {
-	preGQLRules = append(preGQLRules, preGQLRule{
-		name:        name,
-		schRuleFunc: f,
-	})
-}
-
-func addPostRule(name string, f postGQLCheck) {
-	postGQLRules = append(postGQLRules, postGQLRule{
-		name:        name,
-		schRuleFunc: f,
-	})
-}
-
 // preGQLValidation validates schema before gql validation
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, rule := range preGQLRules {
-		errs = append(errs, rule.schRuleFunc(schema)...)
+	for _, defn := range schema.Definitions {
+		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 	}
 
 	return errs
@@ -99,8 +68,35 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 func postGQLValidation(schema *ast.Schema) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, rule := range postGQLRules {
-		errs = append(errs, rule.schRuleFunc(schema)...)
+	for _, typ := range schema.Types {
+		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
+
+		for _, field := range typ.Fields {
+			errs = append(errs, applyFieldValidations(field)...)
+		}
+	}
+
+	return errs
+}
+
+func applyDefnValidations(defn *ast.Definition,
+	rules []func(defn *ast.Definition) *gqlerror.Error) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range rules {
+		err := rule(defn)
+		errs = appendIfNotNull(errs, err)
+	}
+
+	return errs
+}
+
+func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range fieldValidations {
+		err := rule(field)
+		errs = appendIfNotNull(errs, err)
 	}
 
 	return errs
@@ -548,4 +544,12 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 func idTypeFor(defn *ast.Definition) string {
 	// Placeholder till more ID types are introduced.
 	return "ID"
+}
+
+func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) []*gqlerror.Error {
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return errs
 }
