@@ -4,7 +4,7 @@ readonly ME=${0##*/}
 readonly SRCDIR=$(dirname $0)
 
 QUERY_DIR=$SRCDIR/queries
-BENCHMARKS_REPO="$GOPATH/src/github.com/dgraph-io/benchmarks"
+BENCHMARKS_REPO=${BENCHMARKS_REPO:-"$GOPATH/src/github.com/dgraph-io/benchmarks"}
 SCHEMA_FILE="$BENCHMARKS_REPO/data/21million.schema"
 DATA_FILE="$BENCHMARKS_REPO/data/21million.rdf.gz"
 
@@ -84,6 +84,16 @@ Info "entering directory $SRCDIR"
 cd $SRCDIR
 
 if [[ $LOADER != none ]]; then
+    if [ ! -f "$DATA_FILE" ]; then
+        echo "File does not exist: $DATA_FILE"
+        echo "Is BENCHMARKS_REPO set to correct path? BENCHMARKS_REPO: $BENCHMARKS_REPO"
+        exit 1
+    fi
+    if [ ! -f "$SCHEMA_FILE" ]; then
+        echo "File does not exist: $SCHEMA_FILE"
+        echo "Is BENCHMARKS_REPO set to correct path? BENCHMARKS_REPO: $BENCHMARKS_REPO"
+        exit 1
+    fi
     Info "removing old data (if any)"
     DockerCompose down -v --remove-orphans
 else
