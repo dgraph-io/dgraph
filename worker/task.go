@@ -44,18 +44,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-var (
-	emptyUIDList    pb.List
-	emptyFacetsList pb.FacetsList
-	emptyResult     pb.Result
-	emptyValueList  = pb.ValueList{Values: []*pb.TaskValue{}}
-)
-
 func invokeNetworkRequest(ctx context.Context, addr string,
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.GetPools().Get(addr)
 	if err != nil {
-		return &emptyResult, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
+		return &pb.Result{}, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
 
 	conn := pl.Get()
@@ -138,9 +131,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	attr := q.Attr
 	gid, err := groups().BelongsToReadOnly(attr)
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	} else if gid == 0 {
-		return &emptyResult, errNonExistentTablet
+		return &pb.Result{}, errNonExistentTablet
 	}
 
 	span := otrace.FromContext(ctx)
@@ -159,7 +152,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 
 	reply := result.(*pb.Result)
@@ -390,12 +383,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			}
 
 			if err == posting.ErrNoValue || len(vals) == 0 {
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				if q.DoCount {
 					out.Counts = append(out.Counts, 0)
 				} else {
-					out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
+					out.ValueMatrix = append(out.ValueMatrix, &pb.ValueList{Values: []*pb.TaskValue{}})
 					if q.ExpandAll {
 						// To keep the cardinality same as that of ValueMatrix.
 						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
@@ -453,7 +446,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.FacetMatrix = append(out.FacetMatrix,
 					&pb.FacetsList{FacetsList: []*pb.Facets{{Facets: fs}}})
 			} else {
-				out.FacetMatrix = append(out.FacetMatrix, &emptyFacetsList)
+				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 			}
 
 			switch {
@@ -464,10 +457,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				}
 				out.Counts = append(out.Counts, uint32(len))
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == aggregatorFn:
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == passwordFn:
 				lastPos := len(out.ValueMatrix) - 1
 				if len(out.ValueMatrix[lastPos].Values) == 0 {
@@ -485,7 +478,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
 				}
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			default:
 				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
@@ -595,7 +588,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				out.Counts = append(out.Counts, uint32(len))
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
@@ -720,7 +713,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	span.Annotatef(nil, "Waiting for startTs: %d", q.ReadTs)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
@@ -728,7 +721,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 	span.Annotatef(nil, "Done waiting for checksum match")
 
@@ -739,11 +732,11 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	// BelongsToReadOnly is called instead of BelongsTo to prevent this alpha
 	// from requesting to serve this tablet.
 	if gid, err := groups().BelongsToReadOnly(q.Attr); err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	} else if gid == 0 {
-		return &emptyResult, errNonExistentTablet
+		return &pb.Result{}, errNonExistentTablet
 	} else if gid != groups().groupId() {
-		return &emptyResult, errUnservedTablet
+		return &pb.Result{}, errUnservedTablet
 	}
 
 	var qs queryState
@@ -756,7 +749,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	}
 	return out, nil
 }
@@ -1445,7 +1438,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)
 	case aggregatorFn:
-		// confirm agrregator could apply on the attributes
+		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
 			return nil, errors.Errorf("Attribute %q is not scalar-type", attr)
@@ -1633,16 +1626,16 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	defer span.End()
 
 	if ctx.Err() != nil {
-		return &emptyResult, ctx.Err()
+		return &pb.Result{}, ctx.Err()
 	}
 
 	gid, err := groups().BelongsToReadOnly(q.Attr)
 	if err != nil {
-		return &emptyResult, err
+		return &pb.Result{}, err
 	} else if gid == 0 {
-		return &emptyResult, errNonExistentTablet
+		return &pb.Result{}, errNonExistentTablet
 	} else if gid != groups().groupId() {
-		return &emptyResult, errUnservedTablet
+		return &pb.Result{}, errUnservedTablet
 	}
 
 	var numUids int
@@ -1652,7 +1645,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return &emptyResult, errors.Errorf(
+		return &pb.Result{}, errors.Errorf(
 			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 
@@ -1668,7 +1661,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	select {
 	case <-ctx.Done():
-		return &emptyResult, ctx.Err()
+		return &pb.Result{}, ctx.Err()
 	case reply := <-c:
 		return reply.result, reply.err
 	}

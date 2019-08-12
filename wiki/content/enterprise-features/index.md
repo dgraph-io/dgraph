@@ -89,6 +89,15 @@ the Alphas are running on the same filesystems as a normal process, not a Docker
 container). However, a NFS is recommended so that backups work seamlessly across
 multiple machines and/or containers.
 
+#### Forcing a full backup
+
+By default, an incremental backup will be created if there's another full backup
+in the specified location. An user can force a full backup to be created, they
+can set the `force_full` parameter to "true". Each series of backups can be
+identified by a unique ID and each backup in the series is assigned a
+monotonically increasing number. The following section contains more details on
+how to restore a backup series.
+
 ### Restore from backup
 
 The `dgraph restore` command restores the postings directory from a previously
@@ -106,10 +115,17 @@ The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
 start timestamp using the restored version. Otherwise, the timestamp must be
 manually updated through Zero's HTTP 'assign' endpoint.
 
-Dgraph backup creates a unique backup object for each Alpha group. Restoring
-create a posting directory `p<N>` corresponding to the backup group ID. For
-example, a backup for Alpha group 2 would have the name ".../r32-g**2**.backup"
-and would be loaded to posting directory "p**2**".
+The `--backup_id` optional flag specifies the ID of the backup series to
+restore. A backup series consists of a full backup and all the incremental
+backups built on top of it. Each time a new full backup is created, a new backup
+series with a different ID is started. The backup series ID is stored in each
+`manifest.json` file stored in every backup folder.
+
+The restore feature will create a cluster with as many groups as the original
+cluster had at the time of the last backup. Restoring create a posting directory
+`p<N>` corresponding to the backup group ID. For example, a backup for Alpha
+group 2 would have the name ".../r32-g**2**.backup" and would be loaded to
+posting directory "p**2**".
 
 #### Restore from Amazon S3
 ```sh

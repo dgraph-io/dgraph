@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
@@ -39,6 +39,7 @@ import (
 	"github.com/vektah/gqlparser/validator"
 	_ "github.com/vektah/gqlparser/validator/rules" // make gql validator init() all rules
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	gschema "github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
@@ -166,7 +167,7 @@ func run() error {
 		schema:       schema,
 	}
 
-	http.Handle("/graphql", handler)
+	http.Handle("/graphql", api.WithRequestID(handler))
 
 	// TODO:
 	// the ports and urls etc that the endpoint serves should be input options
@@ -188,87 +189,17 @@ func initDgraph() error {
 	}
 	inputSchema := string(b)
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: inputSchema})
-	if gqlErr != nil {
-		return fmt.Errorf("cannot parse schema %s", gqlErr)
+	schHandler, err := gschema.NewSchemaHandler(inputSchema)
+	if err != nil {
+		return err
 	}
 
-	if gqlErrList := gschema.ValidateSchema(doc); gqlErrList != nil {
-		return gqlErrList
-	}
+	completeSchema := schHandler.GQLSchema()
+	glog.V(2).Infof("Built GraphQL schema:\n\n%s\n", completeSchema)
 
-	gschema.AddScalars(doc)
+	dgSchema := schHandler.DGSchema()
 
-	schema, gqlErr := validator.ValidateSchemaDocument(doc)
-	if gqlErr != nil {
-		return fmt.Errorf("GraphQL schema is invalid %s", gqlErr)
-	}
-
-	gschema.GenerateCompleteSchema(schema)
-	completeSchema := gschema.Stringify(schema)
-	if glog.V(2) {
-		fmt.Printf("Built GraphQL schema:\n\n%s\n", completeSchema)
-	}
-
-	// TODO: extract out as todo's below are done
-	var schemaB strings.Builder
-	for _, def := range schema.Types {
-		switch def.Kind {
-		case ast.Object:
-			if def.Name == "Query" ||
-				def.Name == "Mutation" ||
-				((strings.HasPrefix(def.Name, "Add") ||
-					strings.HasPrefix(def.Name, "Delete") ||
-					strings.HasPrefix(def.Name, "Mutate")) &&
-					strings.HasSuffix(def.Name, "Payload")) {
-				continue
-			}
-
-			var typeDef, preds strings.Builder
-			fmt.Fprintf(&typeDef, "type %s {\n", def.Name)
-			for _, f := range def.Fields {
-				if f.Type.Name() == "ID" {
-					continue
-				}
-
-				switch schema.Types[f.Type.Name()].Kind {
-				case ast.Object:
-					// TODO: still need to write [] ! and reverse in here
-					fmt.Fprintf(&typeDef, "  %s.%s: uid\n", def.Name, f.Name)
-					fmt.Fprintf(&preds, "%s.%s: uid .\n", def.Name, f.Name)
-				case ast.Scalar:
-					// TODO: indexes needed here
-					fmt.Fprintf(&typeDef, "  %s.%s: %s\n",
-						def.Name, f.Name, strings.ToLower(f.Type.Name()))
-					fmt.Fprintf(&preds, "%s.%s: %s .\n",
-						def.Name, f.Name, strings.ToLower(f.Type.Name()))
-				case ast.Enum:
-					fmt.Fprintf(&typeDef, "  %s.%s: string\n", def.Name, f.Name)
-					fmt.Fprintf(&preds, "%s.%s: string @index(exact) .\n", def.Name, f.Name)
-				}
-			}
-			fmt.Fprintf(&typeDef, "}\n")
-
-			fmt.Fprintf(&schemaB, "%s%s\n", typeDef.String(), preds.String())
-
-		case ast.Scalar:
-			// nothing to do here?  There should only be known scalars, and that
-			// should have been checked by the validation.
-			// fmt.Printf("Got a scalar: %v %v\n", name, def)
-		case ast.Enum:
-			// ignore this? it's handled by the edges
-			// fmt.Printf("Got an enum: %v %v\n", name, def)
-		default:
-			// ignore anything else?
-			// fmt.Printf("Got something else: %v %v\n", name, def)
-		}
-	}
-
-	dgSchema := schemaB.String()
-
-	if glog.V(2) {
-		fmt.Printf("Built Dgraph schema:\n\n%s\n", dgSchema)
-	}
+	glog.V(2).Infof("Built Dgraph schema:\n\n%s\n", dgSchema)
 
 	fmt.Printf("Loading schema into Dgraph at %q\n", opt.alpha)
 	dgraphClient, disconnect, err := connect()
@@ -283,7 +214,7 @@ func initDgraph() error {
 	// - e.g. moving no ! to !, or redefining a type, or changing a relation's type
 	// ... need to allow for schema migrations, but probably should have some checks
 
-	op := &api.Operation{}
+	op := &dgoapi.Operation{}
 	op.Schema = dgSchema
 
 	ctx := context.Background()
@@ -299,7 +230,7 @@ func initDgraph() error {
 		Date:   time.Now(),
 	}
 
-	mu := &api.Mutation{
+	mu := &dgoapi.Mutation{
 		CommitNow: true,
 	}
 	pb, err := json.Marshal(s)
@@ -318,7 +249,7 @@ func initDgraph() error {
 }
 
 func connect() (*dgo.Dgraph, func(), error) {
-	var clients []api.DgraphClient
+	var clients []dgoapi.DgraphClient
 	disconnect := func() {}
 
 	tlsCfg, err := x.LoadClientTLSConfig(GraphQL.Conf)
@@ -337,7 +268,7 @@ func connect() (*dgo.Dgraph, func(), error) {
 			return func() { dis(); conn.Close() }
 		}(disconnect)
 
-		clients = append(clients, api.NewDgraphClient(conn))
+		clients = append(clients, dgoapi.NewDgraphClient(conn))
 	}
 
 	return dgo.NewDgraphClient(clients...), disconnect, nil

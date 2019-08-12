@@ -32,11 +32,6 @@ var (
 	// range.
 	ErrValueLogSize = errors.New("Invalid ValueLogFileSize, must be between 1MB and 2GB")
 
-	// ErrValueThreshold is returned when ValueThreshold is set to a value close to or greater than
-	// uint16.
-	ErrValueThreshold = errors.Errorf(
-		"Invalid ValueThreshold, must be less than %d", ValueThresholdLimit)
-
 	// ErrKeyNotFound is returned when key isn't found on a txn.Get.
 	ErrKeyNotFound = errors.New("Key not found")
 
@@ -114,4 +109,7 @@ var (
 
 	// ErrNilCallback is returned when subscriber's callback is nil.
 	ErrNilCallback = errors.New("Callback cannot be nil")
+
+	// ErrNoPrefixes is returned when subscriber doesn't provide any prefix.
+	ErrNoPrefixes = errors.New("At least one key prefix is required")
 )

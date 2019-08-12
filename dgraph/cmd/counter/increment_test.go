@@ -28,8 +28,8 @@ import (
 
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/z"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -134,7 +134,7 @@ func readBestEffort(t *testing.T, dg *dgo.Dgraph, pred string, M int) {
 }
 
 func setup(t *testing.T) *dgo.Dgraph {
-	dg := z.DgraphClientWithGroot(z.SockAddr)
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	ctx := context.Background()
 	op := api.Operation{DropAll: true}
 

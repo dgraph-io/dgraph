@@ -89,8 +89,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage) *Node {
 		Store:  store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
-			ElectionTick:             100, // 2s if we call Tick() every 20 ms.
-			HeartbeatTick:            1,   // 20ms if we call Tick() every 20 ms.
+			ElectionTick:             20, // 2s if we call Tick() every 100 ms.
+			HeartbeatTick:            1,  // 100ms if we call Tick() every 100 ms.
 			Storage:                  store,
 			MaxInflightMsgs:          256,
 			MaxSizePerMsg:            256 << 10, // 256 KB should allow more batching.

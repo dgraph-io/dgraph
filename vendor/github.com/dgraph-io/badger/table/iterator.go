@@ -19,7 +19,6 @@ package table
 import (
 	"bytes"
 	"io"
-	"math"
 	"sort"
 
 	"github.com/dgraph-io/badger/y"
@@ -27,30 +26,46 @@ import (
 )
 
 type blockIterator struct {
-	data    []byte
-	pos     uint32
-	err     error
-	baseKey []byte
+	data              []byte
+	pos               uint32
+	err               error
+	baseKey           []byte
+	numEntries        int
+	entryOffsets      []uint32
+	entriesIndexStart int
+	currentIdx        int
 
 	key  []byte
 	val  []byte
 	init bool
-
-	last header // The last header we saw.
 }
 
 func (itr *blockIterator) Reset() {
 	itr.pos = 0
 	itr.err = nil
-	itr.baseKey = []byte{}
-	itr.key = []byte{}
-	itr.val = []byte{}
+	itr.baseKey = itr.baseKey[:0]
+	itr.key = itr.key[:0]
+	itr.val = itr.val[:0]
 	itr.init = false
-	itr.last = header{}
+	itr.currentIdx = -1
+}
+
+// invalidatePointer detaches block iterator from current block.
+func (itr *blockIterator) invalidatePointer() {
+	itr.data = nil
+	itr.numEntries = -1
+	itr.entriesIndexStart = -1
+}
+
+// isInvalidPointer returns if block iterator is attachted with any block or not.
+func (itr *blockIterator) isInvalidPointer() bool {
+	return itr.data == nil && itr.numEntries == -1 && itr.entriesIndexStart == -1
 }
 
 func (itr *blockIterator) Init() {
 	if !itr.init {
+		itr.currentIdx = -1
+
 		itr.Next()
 	}
 }
@@ -70,28 +85,60 @@ var (
 	current = 1
 )
 
+func (itr *blockIterator) getKey(idx int) []byte {
+	y.AssertTrue(idx >= 0 && idx < itr.numEntries)
+
+	idxPos := itr.entryOffsets[idx]
+	var h header
+	idxPos += uint32(h.Decode(itr.data[idxPos:]))
+
+	// Convert to int before adding to avoid uint16 overflow.
+	idxKey := make([]byte, int(h.plen)+int(h.klen))
+	copy(idxKey, itr.baseKey[:h.plen])
+	copy(idxKey[h.plen:], itr.data[idxPos:idxPos+uint32(h.klen)])
+
+	return idxKey
+}
+
 // Seek brings us to the first block element that is >= input key.
 func (itr *blockIterator) Seek(key []byte, whence int) {
 	itr.err = nil
+	startIndex := 0 // This tells from which index we should start binary search.
 
 	switch whence {
 	case origin:
 		itr.Reset()
 	case current:
+		startIndex = itr.currentIdx
 	}
 
-	var done bool
-	for itr.Init(); itr.Valid(); itr.Next() {
-		k := itr.Key()
-		if y.CompareKeys(k, key) >= 0 {
-			// We are done as k is >= key.
-			done = true
-			break
+	itr.Init() // If iterator is not initialized or has been reset.
+
+	idx := sort.Search(itr.numEntries, func(idx int) bool {
+		// If idx is less than start index then just return false.
+		if idx < startIndex {
+			return false
 		}
-	}
-	if !done {
+
+		idxKey := itr.getKey(idx)
+		return y.CompareKeys(idxKey, key) >= 0
+	})
+
+	// All keys in the block are less than the key to be sought.
+	if idx >= itr.numEntries {
 		itr.err = io.EOF
+		// Update currentIdx to len of entryOffsets, so that if Prev() is
+		// called just after Seek, it will return correct result.
+		itr.currentIdx = itr.numEntries
+		return
 	}
+
+	// Found first idx for which key is >= key to be sought.
+	itr.currentIdx = idx
+	itr.pos = itr.entryOffsets[itr.currentIdx]
+	var h header
+	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
+	itr.parseKV(h)
 }
 
 func (itr *blockIterator) SeekToFirst() {
@@ -102,8 +149,9 @@ func (itr *blockIterator) SeekToFirst() {
 // SeekToLast brings us to the last element. Valid should return true.
 func (itr *blockIterator) SeekToLast() {
 	itr.err = nil
-	for itr.Init(); itr.Valid(); itr.Next() {
-	}
+
+	itr.Init()
+	itr.currentIdx = itr.numEntries
 	itr.Prev()
 }
 
@@ -118,32 +166,38 @@ func (itr *blockIterator) parseKV(h header) {
 	copy(itr.key[h.plen:], itr.data[itr.pos:itr.pos+uint32(h.klen)])
 	itr.pos += uint32(h.klen)
 
-	if itr.pos+uint32(h.vlen) > uint32(len(itr.data)) {
-		itr.err = errors.Errorf("Value exceeded size of block: %d %d %d %d %v",
-			itr.pos, h.klen, h.vlen, len(itr.data), h)
+	var valEndOffset uint32
+	// We're at the last entry in the block.
+	if itr.currentIdx == itr.numEntries-1 {
+		valEndOffset = uint32(itr.entriesIndexStart)
+	} else {
+		// Get starting offset of the next entry which is the end of the current entry.
+		valEndOffset = itr.entryOffsets[itr.currentIdx+1]
+	}
+
+	if valEndOffset > uint32(len(itr.data)) {
+		itr.err = errors.Errorf("Value endoffset exceeded size of block. "+
+			"Pos:%d Len:%d EndOffset:%d Header:%v", itr.pos, len(itr.data), valEndOffset, h)
 		return
 	}
-	itr.val = y.SafeCopy(itr.val, itr.data[itr.pos:itr.pos+uint32(h.vlen)])
-	itr.pos += uint32(h.vlen)
+	// TODO (ibrahim): Can we avoid this copy?
+	itr.val = y.SafeCopy(itr.val, itr.data[itr.pos:valEndOffset])
+	// Set pos to the end of current entry.
+	itr.pos = valEndOffset
 }
 
 func (itr *blockIterator) Next() {
 	itr.init = true
 	itr.err = nil
-	if itr.pos >= uint32(len(itr.data)) {
+
+	itr.currentIdx++
+	if itr.currentIdx >= itr.numEntries {
 		itr.err = io.EOF
 		return
 	}
 
 	var h header
 	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
-	itr.last = h // Store the last header.
-
-	if h.klen == 0 && h.plen == 0 {
-		// Last entry in the table.
-		itr.err = io.EOF
-		return
-	}
 
 	// Populate baseKey if it isn't set yet. This would only happen for the first Next.
 	if len(itr.baseKey) == 0 {
@@ -159,21 +213,20 @@ func (itr *blockIterator) Prev() {
 		return
 	}
 	itr.err = nil
-	if itr.last.prev == math.MaxUint32 {
-		// This is the first element of the block!
+
+	itr.currentIdx--
+	y.AssertTrue(itr.currentIdx < itr.numEntries)
+	if itr.currentIdx < 0 {
 		itr.err = io.EOF
-		itr.pos = 0
 		return
 	}
 
-	// Move back using current header's prev.
-	itr.pos = itr.last.prev
+	itr.pos = itr.entryOffsets[itr.currentIdx]
 
 	var h header
 	y.AssertTruef(itr.pos < uint32(len(itr.data)), "%d %d", itr.pos, len(itr.data))
 	itr.pos += uint32(h.Decode(itr.data[itr.pos:]))
 	itr.parseKV(h)
-	itr.last = h
 }
 
 func (itr *blockIterator) Key() []byte {
@@ -205,7 +258,9 @@ type Iterator struct {
 // NewIterator returns a new iterator of the Table
 func (t *Table) NewIterator(reversed bool) *Iterator {
 	t.IncrRef() // Important.
-	ti := &Iterator{t: t, reversed: reversed}
+	bi := &blockIterator{}
+	bi.invalidatePointer()
+	ti := &Iterator{t: t, reversed: reversed, bi: bi}
 	ti.next()
 	return ti
 }
@@ -217,6 +272,7 @@ func (itr *Iterator) Close() error {
 
 func (itr *Iterator) reset() {
 	itr.bpos = 0
+	itr.bi.invalidatePointer()
 	itr.err = nil
 }
 
@@ -237,7 +293,8 @@ func (itr *Iterator) seekToFirst() {
 		itr.err = err
 		return
 	}
-	itr.bi = block.NewIterator()
+
+	block.resetIterator(itr.bi)
 	itr.bi.SeekToFirst()
 	itr.err = itr.bi.Error()
 }
@@ -254,7 +311,8 @@ func (itr *Iterator) seekToLast() {
 		itr.err = err
 		return
 	}
-	itr.bi = block.NewIterator()
+
+	block.resetIterator(itr.bi)
 	itr.bi.SeekToLast()
 	itr.err = itr.bi.Error()
 }
@@ -266,7 +324,8 @@ func (itr *Iterator) seekHelper(blockIdx int, key []byte) {
 		itr.err = err
 		return
 	}
-	itr.bi = block.NewIterator()
+
+	block.resetIterator(itr.bi)
 	itr.bi.Seek(key, origin)
 	itr.err = itr.bi.Error()
 }
@@ -282,7 +341,7 @@ func (itr *Iterator) seekFrom(key []byte, whence int) {
 
 	idx := sort.Search(len(itr.t.blockIndex), func(idx int) bool {
 		ko := itr.t.blockIndex[idx]
-		return y.CompareKeys(ko.key, key) > 0
+		return y.CompareKeys(ko.Key, key) > 0
 	})
 	if idx == 0 {
 		// The smallest key in our table is already strictly > key. We can return that.
@@ -333,13 +392,14 @@ func (itr *Iterator) next() {
 		return
 	}
 
-	if itr.bi == nil {
+	if itr.bi.isInvalidPointer() {
 		block, err := itr.t.block(itr.bpos)
 		if err != nil {
 			itr.err = err
 			return
 		}
-		itr.bi = block.NewIterator()
+
+		block.resetIterator(itr.bi)
 		itr.bi.SeekToFirst()
 		itr.err = itr.bi.Error()
 		return
@@ -347,8 +407,8 @@ func (itr *Iterator) next() {
 
 	itr.bi.Next()
 	if !itr.bi.Valid() {
+		itr.bi.invalidatePointer()
 		itr.bpos++
-		itr.bi = nil
 		itr.next()
 		return
 	}
@@ -361,13 +421,14 @@ func (itr *Iterator) prev() {
 		return
 	}
 
-	if itr.bi == nil {
+	if itr.bi.isInvalidPointer() {
 		block, err := itr.t.block(itr.bpos)
 		if err != nil {
 			itr.err = err
 			return
 		}
-		itr.bi = block.NewIterator()
+
+		block.resetIterator(itr.bi)
 		itr.bi.SeekToLast()
 		itr.err = itr.bi.Error()
 		return
@@ -375,8 +436,8 @@ func (itr *Iterator) prev() {
 
 	itr.bi.Prev()
 	if !itr.bi.Valid() {
+		itr.bi.invalidatePointer()
 		itr.bpos--
-		itr.bi = nil
 		itr.prev()
 		return
 	}

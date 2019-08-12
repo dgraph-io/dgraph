@@ -24,6 +24,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/resolve"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/vektah/gqlparser/ast"
@@ -59,22 +60,24 @@ func (gh *graphqlHandler) isValid() bool {
 }
 
 func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.RequestResolver) {
-	rr = resolve.New(schema.AsSchema(gh.schema), gh.dgraphClient)
+	rr = resolve.New(schema.AsSchema(gh.schema), dgraph.AsDgraph(gh.dgraphClient))
 
 	switch r.Method {
 	case http.MethodGet:
 		// TODO: fill gqlReq in from parameters
+		rr.WithError(gqlerror.Errorf("GraphQL on HTTP GET not yet implemented"))
+		return
 	case http.MethodPost:
 		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			rr.WithErrors(gqlerror.Errorf("Unable to parse media type: %s", err))
+			rr.WithError(gqlerror.Errorf("Unable to parse media type: %s", err))
 			return
 		}
 
 		switch mediaType {
 		case "application/json":
 			if err = json.NewDecoder(r.Body).Decode(&rr.GqlReq); err != nil {
-				rr.WithErrors(
+				rr.WithError(
 					gqlerror.Errorf("Not a valid GraphQL request body: %s", err))
 				return
 			}
@@ -82,12 +85,12 @@ func (gh *graphqlHandler) resolverForRequest(r *http.Request) (rr *resolve.Reque
 			// https://graphql.org/learn/serving-over-http/#post-request says:
 			// "A standard GraphQL POST request should use the application/json
 			// content type ..."
-			rr.WithErrors(gqlerror.Errorf(
+			rr.WithError(gqlerror.Errorf(
 				"Unrecognised Content-Type.  Please use application/json for GraphQL requests"))
 			return
 		}
 	default:
-		rr.WithErrors(gqlerror.Errorf(
+		rr.WithError(gqlerror.Errorf(
 			"Unrecognised request method.  Please use GET or POST for GraphQL requests"))
 		return
 	}

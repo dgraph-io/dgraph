@@ -18,200 +18,45 @@ package resolve
 
 import (
 	"context"
-	"errors"
-	"strconv"
 
 	"github.com/golang/glog"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-type queryBuilder struct {
-	graphQuery *gql.GraphQuery
-	err        error
+// QueryResolver can resolve a single GraphQL query field
+type QueryResolver struct {
+	query  schema.Query
+	schema schema.Schema
+	dgraph dgraph.Client
 }
 
-func (r *RequestResolver) resolveQuery(ctx context.Context, q schema.Query) {
-	// All queries in an operation should run (in parallel) regardless of
-	// errors in other queries
+// Resolve a single query.
+func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 
-	var gq *gql.GraphQuery
+	var qb *dgraph.QueryBuilder
 
 	// currently only handles getT(id: "0x123") queries
-	switch q.QueryType() {
+	switch qr.query.QueryType() {
 	case schema.GetQuery:
-		qb := newQueryBuilder()
-		qb.withAttr(q.ResponseName())
-		qb.withIDArgRoot(q)
-		qb.withTypeFilter(q)
-		qb.withSelectionSetFrom(q)
+		qb = dgraph.NewQueryBuilder().
+			WithAttr(qr.query.ResponseName()).
+			WithIDArgRoot(qr.query).
+			WithTypeFilter(qr.query.Type().Name()).
+			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
-
-		var err error
-		gq, err = qb.query()
-		if err != nil {
-			// FIXME: could be a bug like error here or a gql error
-			// proably need to return gqlerrors and errors?
-
-			// TODO: errors that probably mean bugs, should return a simple GraphQL error
-			// AND log with a guid linking the GraphQL error and the server log
-			// errID := uuid.New().String() ... etc
-		}
-
 	default:
-		r.WithErrors(gqlerror.Errorf("Only get queries are implemented"))
-		return
+		return nil, gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
 	}
 
-	res, err := executeQuery(ctx, gq, r.dgraphClient)
+	res, err := qr.dgraph.Query(ctx, qb)
 	if err != nil {
-		r.WithErrors(gqlerror.Errorf("Failed to query dgraph with error : %s", err))
-		glog.Infof("Dgraph query failed : %s", err) // maybe log more info if it could be a bug?
-		return
+		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
+		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
 	}
 
-	// TODO:
-	// More is needed here if we are to be totally GraphQL compliant.
-	// e.g. need to dig through that response and the expected types from the
-	// schema and propagate missing ! fields and errors according to spec.
-	//
-	// TODO:
-	// Also below will return "qname : [ { ... } ]", even if the schema said the
-	// query returned a single item rather than a list.  In those cases it
-	// should be "qname : { ... }"
-
-	if r.resp.Data.Len() > 0 {
-		r.resp.Data.WriteRune(',')
-	}
-
-	// I think a Dgraph query always returns at least "{}" ??
-	// TODO: In any case, we need to inspect the response and the expected
-	// result type and maybe this should also cause GraphQL error propagation:
-	// e.g. if result is a `!` type
-	if len(res) < 2 {
-		return
-	}
-
-	// need to chop leading '{' and trailing '}' from response
-	// is this the safe way?
-	r.resp.Data.Write(res[1 : len(res)-1])
-}
-
-func newQueryBuilder() *queryBuilder {
-	return &queryBuilder{
-		graphQuery: &gql.GraphQuery{},
-	}
-}
-
-func (qb *queryBuilder) hasErrors() bool {
-	return qb == nil || qb.graphQuery == nil || qb.err != nil
-}
-
-func (qb *queryBuilder) withAttr(attr string) {
-	if qb.hasErrors() {
-		return
-	}
-
-	qb.graphQuery.Attr = attr
-}
-
-func (qb *queryBuilder) withAlias(alias string) {
-	if qb.hasErrors() {
-		return
-	}
-
-	qb.graphQuery.Alias = alias
-}
-
-func (qb *queryBuilder) withIDArgRoot(q schema.Query) {
-	if qb.hasErrors() {
-		return
-	}
-
-	idArg, err := q.ArgValue(idArgName)
-	if err != nil || idArg == nil {
-		qb.err = errors.New("ID arg not found (should be impossible in a valid schema)")
-		return
-	}
-
-	id, ok := idArg.(string)
-	if !ok {
-		qb.err = errors.New("ID arg not a string (should be impossible in a valid schema)")
-		return
-	}
-
-	uid, err := strconv.ParseUint(id, 0, 64)
-	if err != nil {
-		// FIXME: actually this should surface as a GraphQL error
-		qb.err = errors.New("ID argument wasn't a valid ID")
-		return
-	}
-
-	qb.withUIDRoot(uid)
-}
-
-func (qb *queryBuilder) withUIDRoot(uid uint64) {
-	if qb.hasErrors() {
-		return
-	}
-
-	qb.graphQuery.Func = &gql.Function{
-		Name: "uid",
-		UID:  []uint64{uid},
-	}
-}
-
-func (qb *queryBuilder) withTypeFilter(f schema.Field) {
-	if qb.hasErrors() {
-		return
-	}
-
-	qb.graphQuery.Filter = &gql.FilterTree{
-		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: f.TypeName()}},
-		},
-	}
-}
-
-func (qb *queryBuilder) withSelectionSetFrom(fld schema.Field) {
-	if qb.hasErrors() {
-		return
-	}
-
-	for _, f := range fld.SelectionSet() {
-		qbld := newQueryBuilder()
-		if f.Alias() != "" {
-			qbld.withAlias(f.Alias())
-		} else {
-			qbld.withAlias(f.Name())
-		}
-
-		if f.TypeName() == schema.IDType {
-			qbld.withAttr("uid")
-		} else {
-			qbld.withAttr(fld.TypeName() + "." + f.Name())
-		}
-
-		// TODO: filters, pagination, etc in here
-		qbld.withSelectionSetFrom(f)
-
-		q, err := qbld.query()
-		if err != nil {
-			qb.err = err
-			return
-		}
-
-		qb.graphQuery.Children = append(qb.graphQuery.Children, q)
-	}
-}
-
-func (qb *queryBuilder) query() (*gql.GraphQuery, error) {
-	if qb == nil {
-		return nil, errors.New("nil query builder")
-	}
-
-	return qb.graphQuery, qb.err
+	return completeDgraphResult(qr.query, res)
 }

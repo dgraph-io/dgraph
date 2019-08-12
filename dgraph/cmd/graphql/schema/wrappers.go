@@ -17,9 +17,11 @@
 package schema
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/gqlerror"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -33,21 +35,32 @@ import (
 // TODO: *Note* not vendoring github.com/vektah/gqlparser at this stage.  You need to go get it.
 // Will make decision on if it's exactly what we need as we move along.
 
-// QueryType is current queries supported
+// QueryType is currently supported queries
 type QueryType string
 
+// MutationType is currently supported mutations
+type MutationType string
+
 const (
-	GetQuery    QueryType = "get"
-	FilterQuery QueryType = "query"
-	IDType      string    = "ID"
+	GetQuery             QueryType    = "get"
+	FilterQuery          QueryType    = "query"
+	NotSupportedQuery    QueryType    = "notsupported"
+	AddMutation          MutationType = "add"
+	UpdateMutation       MutationType = "update"
+	DeleteMutation       MutationType = "delete"
+	NotSupportedMutation MutationType = "notsupported"
+	IDType                            = "ID"
+	IDArgName                         = "id"
+	InputArgName                      = "input"
 )
 
-// Schema is a GraphQL schema
+// Schema represents a valid GraphQL schema
 type Schema interface {
-	Operation(r *Request) (Operation, *Response)
+	Operation(r *Request) (Operation, error)
 }
 
-// An Operation is a single valid GraphQL operation.  It contains either Queries or Mutations.
+// An Operation is a single valid GraphQL operation.  It contains either
+// Queries or Mutations, but not both.  Subscriptions are not yet supported.
 type Operation interface {
 	Queries() []Query
 	Mutations() []Mutation
@@ -61,14 +74,16 @@ type Field interface {
 	Name() string
 	Alias() string
 	ResponseName() string
-	ArgValue(name string) (interface{}, error)
-	TypeName() string
+	ArgValue(name string) interface{}
+	IDArgValue() (uint64, error)
+	Type() Type
 	SelectionSet() []Field
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
 type Mutation interface {
 	Field
+	MutationType() MutationType
 	MutatedTypeName() string
 }
 
@@ -76,6 +91,32 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+}
+
+type Type interface {
+	Name() string
+	Nullable() bool
+	ListType() Type
+}
+
+type astType struct {
+	typ *ast.Type
+}
+
+// FIXME" move these around
+func (t *astType) Name() string {
+	return t.typ.NamedType
+}
+
+func (t *astType) Nullable() bool {
+	return !t.typ.NonNull
+}
+
+func (t *astType) ListType() Type {
+	if t.typ.Elem == nil {
+		return nil
+	}
+	return &astType{typ: t.typ.Elem}
 }
 
 type schema struct {
@@ -158,13 +199,32 @@ func (f *field) ResponseName() string {
 	return responseName(f.field)
 }
 
-func (f *field) ArgValue(name string) (interface{}, error) {
+func (f *field) ArgValue(name string) interface{} {
 	// FIXME: cache ArgumentMap ?
-	return f.field.ArgumentMap(f.op.vars)[name], nil
+	return f.field.ArgumentMap(f.op.vars)[name]
 }
 
-func (f *field) TypeName() string {
-	return f.field.Definition.Type.NamedType
+func (f *field) IDArgValue() (uint64, error) {
+	idArg := f.ArgValue(IDArgName)
+	if idArg == nil {
+		return 0,
+			gqlerror.ErrorPosf(f.field.GetPosition(),
+				"ID argument not available on field %s", f.Name())
+	}
+
+	id, ok := idArg.(string)
+	uid, err := strconv.ParseUint(id, 0, 64)
+
+	if !ok || err != nil {
+		err = gqlerror.ErrorPosf(f.field.GetPosition(),
+			"ID argument (%s) of %s was not able to be parsed", id, f.Name())
+	}
+
+	return uid, err
+}
+
+func (f *field) Type() Type {
+	return &astType{typ: f.field.Definition.Type}
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -185,12 +245,16 @@ func (q *query) Alias() string {
 	return (*field)(q).Alias()
 }
 
-func (q *query) ArgValue(name string) (interface{}, error) {
+func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
 }
 
-func (q *query) TypeName() string {
-	return (*field)(q).TypeName()
+func (q *query) IDArgValue() (uint64, error) {
+	return (*field)(q).IDArgValue()
+}
+
+func (q *query) Type() Type {
+	return (*field)(q).Type()
 }
 
 func (q *query) SelectionSet() []Field {
@@ -202,10 +266,12 @@ func (q *query) ResponseName() string {
 }
 
 func (q *query) QueryType() QueryType {
-	if strings.HasPrefix(q.Name(), "get") {
+	switch {
+	case strings.HasPrefix(q.Name(), "get"):
 		return GetQuery
+	default:
+		return NotSupportedQuery
 	}
-	return FilterQuery
 }
 
 func (m *mutation) Name() string {
@@ -216,12 +282,16 @@ func (m *mutation) Alias() string {
 	return (*field)(m).Alias()
 }
 
-func (m *mutation) ArgValue(name string) (interface{}, error) {
+func (m *mutation) ArgValue(name string) interface{} {
 	return (*field)(m).ArgValue(name)
 }
 
-func (m *mutation) TypeName() string {
-	return (*field)(m).TypeName()
+func (m *mutation) Type() Type {
+	return (*field)(m).Type()
+}
+
+func (m *mutation) IDArgValue() (uint64, error) {
+	return (*field)(m).IDArgValue()
 }
 
 func (m *mutation) SelectionSet() []Field {
@@ -232,8 +302,37 @@ func (m *mutation) ResponseName() string {
 	return (*field)(m).ResponseName()
 }
 
+// MutatedTypeName returns the actual name of the underlying type that gets
+// mutated by m.
+//
+// It's not the same as the response type of m because mutations don't directly
+// return what they mutate.  Mutations return a payload package that includes
+// the actual node mutated as a field.
+//
+// Currently, everything works by convention, so we know the underlying type
+// by stripping away the prefix and suffix.
 func (m *mutation) MutatedTypeName() string {
-	// Currently only supporting addT(...) mutations.
-	// This'll change.
-	return strings.TrimSuffix(strings.TrimPrefix(m.TypeName(), "Add"), "Payload")
+	prefix := strings.TrimSuffix(m.Type().Name(), "Payload")
+	switch {
+	case strings.HasPrefix(prefix, "Add"):
+		return strings.TrimPrefix(prefix, "Add")
+	case strings.HasPrefix(prefix, "Update"):
+		return strings.TrimPrefix(prefix, "Update")
+	case strings.HasPrefix(prefix, "Delete"):
+		return strings.TrimPrefix(prefix, "Delete")
+	}
+	return m.Type().Name()
+}
+
+func (m *mutation) MutationType() MutationType {
+	switch {
+	case strings.HasPrefix(m.Name(), "add"):
+		return AddMutation
+	case strings.HasPrefix(m.Name(), "update"):
+		return UpdateMutation
+	case strings.HasPrefix(m.Name(), "delete"):
+		return DeleteMutation
+	default:
+		return NotSupportedMutation
+	}
 }

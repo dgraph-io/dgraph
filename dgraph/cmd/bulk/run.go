@@ -105,7 +105,7 @@ func run() {
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
 		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       int64(Bulk.Conf.GetInt("mapoutput_mb")),
+		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
 		NumReducers:      Bulk.Conf.GetInt("reducers"),

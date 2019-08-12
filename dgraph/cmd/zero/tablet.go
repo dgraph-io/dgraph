@@ -64,7 +64,7 @@ func (s *Server) rebalanceTablets() {
 	for range ticker.C {
 		predicate, srcGroup, dstGroup := s.chooseTablet()
 		if len(predicate) == 0 {
-			break
+			continue
 		}
 		if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
 			glog.Errorln(err)

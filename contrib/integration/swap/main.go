@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgo"
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	"github.com/dgraph-io/dgraph/z"
+	"github.com/dgraph-io/dgraph/testutil"
 )
 
 var (
@@ -78,7 +78,7 @@ func main() {
 		fmt.Printf("%15s: %3d\n", w.word, w.count)
 	}
 
-	c := z.DgraphClientWithGroot(*alpha)
+	c := testutil.DgraphClientWithGroot(*alpha)
 	uids := setup(c, sents)
 
 	// Check invariants before doing any mutations as a sanity check.
