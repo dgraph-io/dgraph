@@ -1612,7 +1612,7 @@ func TestParseMutationError(t *testing.T) {
 	`
 	_, err := ParseMutation(query)
 	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [mutation]`, err.Error())
+	require.Contains(t, err.Error(), `Expected { at the start of block. Got: [mutation]`)
 }
 
 func TestParseMutationError2(t *testing.T) {
@@ -1627,7 +1627,7 @@ func TestParseMutationError2(t *testing.T) {
 	`
 	_, err := ParseMutation(query)
 	require.Error(t, err)
-	require.Equal(t, `Expected { at the start of block. Got: [set]`, err.Error())
+	require.Contains(t, err.Error(), `Expected { at the start of block. Got: [set]`)
 }
 
 func TestParseMutationAndQueryWithComments(t *testing.T) {
