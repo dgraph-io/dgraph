@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"time"
+	"unsafe"
 
 	"github.com/dgraph-io/badger/y"
 )
@@ -33,18 +34,16 @@ func (p valuePointer) IsZero() bool {
 const vptrSize = 12
 
 // Encode encodes Pointer into byte buffer.
-func (p valuePointer) Encode(b []byte) []byte {
-	binary.BigEndian.PutUint32(b[:4], p.Fid)
-	binary.BigEndian.PutUint32(b[4:8], p.Len)
-	binary.BigEndian.PutUint32(b[8:12], p.Offset)
-	return b[:vptrSize]
+func (p valuePointer) Encode() []byte {
+	b := make([]byte, vptrSize)
+	// Copy over the content from p to b.
+	*(*valuePointer)(unsafe.Pointer(&b[0])) = p
+	return b
 }
 
 // Decode decodes the value pointer into the provided byte buffer.
 func (p *valuePointer) Decode(b []byte) {
-	p.Fid = binary.BigEndian.Uint32(b[:4])
-	p.Len = binary.BigEndian.Uint32(b[4:8])
-	p.Offset = binary.BigEndian.Uint32(b[8:12])
+	*p = *(*valuePointer)(unsafe.Pointer(&b[0]))
 }
 
 // header is used in value log as a header before Entry.
