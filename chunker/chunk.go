@@ -90,7 +90,7 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 }
 
 // RDF files don't require any special processing at the beginning of the file.
-func (c *rdfChunker) Begin(r *bufio.Reader) error {
+func (rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (c *rdfChunker) Begin(r *bufio.Reader) error {
 // 1) the EOF is reached
 // 2) 1e5 lines have been read
 // 3) some unexpected error happened
-func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
@@ -131,7 +131,7 @@ func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 }
 
 // Parse is not thread-safe. Only call it serially, because it reuses lexer object.
-func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
+func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 	if chunkBuf.Len() == 0 {
 		return io.EOF
 	}
@@ -142,19 +142,19 @@ func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 			x.Check(err)
 		}
 
-		nq, err := ParseRDF(str, c.lexer)
+		nq, err := ParseRDF(str, rc.lexer)
 		if err == ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
 			return errors.Wrapf(err, "while parsing line %q", str)
 		}
-		c.nqs.Push(&nq)
+		rc.nqs.Push(&nq)
 	}
 	return nil
 }
 
 // RDF files don't require any special processing at the end of the file.
-func (c *rdfChunker) End(r *bufio.Reader) error {
+func (rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
