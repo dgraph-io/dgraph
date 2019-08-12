@@ -251,7 +251,7 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 		buf.nquads = append(buf.nquads, nq)
 		if buf.batchSize > 0 && len(buf.nquads) >= buf.batchSize {
 			buf.nqCh <- buf.nquads
-			buf.nquads = make([]*api.NQuad, 0, 1000)
+			buf.nquads = make([]*api.NQuad, 0, buf.batchSize)
 		}
 	}
 }
@@ -259,6 +259,7 @@ func (buf *NQuadBuffer) Push(nqs ...*api.NQuad) {
 func (buf *NQuadBuffer) Flush() {
 	if len(buf.nquads) > 0 {
 		buf.nqCh <- buf.nquads
+		buf.nquads = nil
 	}
 	close(buf.nqCh)
 }
