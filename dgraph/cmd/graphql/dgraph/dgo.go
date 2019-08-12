@@ -25,7 +25,8 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 
 	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 )
 
@@ -62,7 +63,7 @@ func (dg *dgraph) Query(ctx context.Context, query *QueryBuilder) ([]byte, error
 	}
 
 	if glog.V(3) {
-		glog.Infof("Executing Dgraph query: \n%s\n", q)
+		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), q)
 	}
 
 	resp, err := dg.client.NewTxn().Query(ctx, q)
@@ -77,10 +78,10 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 	}
 
 	if glog.V(3) {
-		glog.Infof("Executing Dgraph mutation: \n%s\n", jsonMu)
+		glog.Infof("[%s] Executing Dgraph mutation: \n%s\n", api.RequestID(ctx), jsonMu)
 	}
 
-	mu := &api.Mutation{
+	mu := &dgoapi.Mutation{
 		CommitNow: true,
 		SetJson:   jsonMu,
 	}
@@ -100,7 +101,7 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 	// we'd remove the node and if that caused any errors in the graph, that
 	// would be picked up and handled as GraphQL errors in future queries, etc.
 
-	mu := &api.Mutation{
+	mu := &dgoapi.Mutation{
 		CommitNow: true,
 		DelNquads: []byte(fmt.Sprintf("<0x%x> * * .", uid)),
 	}
@@ -130,7 +131,7 @@ func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error 
 		}
 	}
 	if err := json.Unmarshal(resp, &decode); err != nil {
-		glog.Errorf("Failed to unmarshal typecheck query : %v+", err)
+		glog.Errorf("[%s] Failed to unmarshal typecheck query : %+v", api.RequestID(ctx), err)
 		return schema.GQLWrapf(err, "unable to type check id")
 	}
 

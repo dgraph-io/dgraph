@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
 	"github.com/pkg/errors"
 
@@ -104,13 +105,13 @@ func (r *RequestResolver) WithError(err error) {
 // Resolve records any errors in the response's error field.
 func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	if r == nil {
-		glog.Error("Call to Resolve with nil RequestResolver")
-		return schema.ErrorResponsef("Internal error")
+		glog.Errorf("[%s] Call to Resolve with nil RequestResolver", api.RequestID(ctx))
+		return schema.ErrorResponsef("[%s] Internal error", api.RequestID(ctx))
 	}
 
 	if r.Schema == nil {
-		glog.Error("Call to Resolve with no schema")
-		return schema.ErrorResponsef("Internal error")
+		glog.Errorf("[%s] Call to Resolve with no schema", api.RequestID(ctx))
+		return schema.ErrorResponsef("[%s] Internal error", api.RequestID(ctx))
 	}
 
 	if r.resp.Errors != nil {
@@ -121,6 +122,11 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	op, err := r.Schema.Operation(r.GqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
+	}
+
+	if glog.V(3) {
+		glog.Infof("[%s] Resolving GQL request: \n%s\n",
+			api.RequestID(ctx), r.GqlReq.Query)
 	}
 
 	// A single request can contain either queries or mutations - not both.
@@ -166,7 +172,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		for _, m := range op.Mutations() {
 			if r.resp.Errors != nil {
 				r.WithError(
-					gqlerror.Errorf("mutation %s not executed because of previous error", m.Name()))
+					gqlerror.Errorf("[%s] mutation %s not executed because of previous error",
+						api.RequestID(ctx), m.ResponseName()))
 				continue
 			}
 
@@ -188,7 +195,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			}
 		}
 	case op.IsSubscription():
-		schema.ErrorResponsef("Subscriptions not yet supported")
+		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
 	}
 
 	return r.resp
