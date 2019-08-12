@@ -48,17 +48,16 @@ type rdfChunker struct {
 	nqs   *NQuadBuffer
 }
 
-func (rdfChunker) NQuads() *NQuadBuffer {
-	// TODO: Build this.
-	return nil
+func (rc *rdfChunker) NQuads() *NQuadBuffer {
+	return rc.nqs
 }
 
 type jsonChunker struct {
-	Nqs *NQuadBuffer
+	nqs *NQuadBuffer
 }
 
 func (jc *jsonChunker) NQuads() *NQuadBuffer {
-	return jc.Nqs
+	return jc.nqs
 }
 
 // InputFormat represents the multiple formats supported by Chunker.
@@ -83,7 +82,7 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 		}
 	case JsonFormat:
 		return &jsonChunker{
-			Nqs: NewNQuadBuffer(batchSize),
+			nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
 		panic("unknown input format")
@@ -249,7 +248,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 		return io.EOF
 	}
 
-	err := jc.Nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
+	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
 	if err != nil && err != io.EOF {
 		x.Check(err)
 	}
