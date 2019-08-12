@@ -52,7 +52,7 @@ func WithQueryString(ctx context.Context, query string) context.Context {
 }
 
 // RequestID gets the request ID from a context.  If no request ID is set,
-// it returns "0-1-2-3-4".
+// it returns "a1111111-b222-c333-d444-e55555555555".
 func RequestID(ctx context.Context) string {
 	return stringFromContext(ctx, requestID, nilRequestID)
 }
