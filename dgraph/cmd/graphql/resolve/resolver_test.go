@@ -57,7 +57,6 @@ var testGQLSchema = `
 scalar ID
 scalar String
 scalar DateTime
-scalar Int
 
 type Author {
 	id: ID!
@@ -73,17 +72,10 @@ type Post {
 	id: ID!
 	title: String!
 	text: String
-	numViews: Int!
-	authorRequired: Author!
-	authorNullable: Author
 }
 
 type Query {
 	getAuthor(id: ID!): Author
-	getAuthorRequired(id: ID!): Author!
-
-	queryPosts: [Post]
-	queryPostsRequired: [Post!]!
 }
 `
 
