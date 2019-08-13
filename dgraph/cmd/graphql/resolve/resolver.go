@@ -85,6 +85,21 @@ type RequestResolver struct {
 	resp   *schema.Response
 }
 
+// A pathBuilder wraps access to the GraphQL error path used for error propagation.
+// It allows adding and removing path elements as the value completion algorithm
+// moves around the result, and outputting the current path for error messages.
+//
+// The definition of a path in a GraphQL error is here:
+// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+// For a query like (assuming field f is of a list type and g is a scalar type):
+// - q { f { g } }
+// a path to the 2nd item in the f list would look like:
+// - [ "q", "f", 2, "g" ]
+type pathBuilder struct {
+	buf   []interface{}
+	depth int
+}
+
 // New creates a new RequestResolver
 func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
 	return &RequestResolver{
@@ -507,4 +522,48 @@ func completeList(field schema.Field, values []interface{}) ([]byte, gqlerror.Li
 	buf.WriteRune(']')
 
 	return buf.Bytes(), errs
+}
+
+
+func newPathBuilder(f schema.Field) pathBuilder {
+	return pathBuilder{
+		buf: make([]interface{}, pathLength(f)),
+	}
+}
+
+func (pb pathBuilder) add(val interface{}) pathBuilder {
+	pb.buf[pb.depth] = val
+	pb.depth++
+	return pb
+}
+
+func (pb pathBuilder) drop() pathBuilder {
+	if pb.depth > 0 {
+		pb.depth--
+	}
+	return pb
+}
+
+func (pb pathBuilder) path() []interface{} {
+	result := make([]interface{}, pb.depth)
+	copy(result, pb.buf[:pb.depth])
+	return result
+}
+
+// pathDepth finds the max length (including list indexes) of any path in the 'query' f.
+func pathLength(f schema.Field) int {
+	childMax := 0
+	for _, chld := range f.SelectionSet() {
+		d := pathLength(chld)
+		if d > childMax {
+			childMax = d
+		}
+	}
+	if f.Type().ListType() != nil {
+		// It's f: [...], so add a space for field name and
+		// a space for the index into the list
+		return 2 + childMax
+	}
+
+	return 1 + childMax
 }
