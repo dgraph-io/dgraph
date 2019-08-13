@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -267,8 +268,18 @@ func (buf *NQuadBuffer) Flush() {
 	close(buf.nqCh)
 }
 
+// nextIdx is the index that is used to generate blank node ids for a json map object
+// when the map object does not have a "uid" field
+// it should only be access through the atomic APIs
+var nextIdx uint64
+
+// GetNextIdx is only used for testing
+func getNextIdx() uint64 {
+	return atomic.LoadUint64(&nextIdx)
+}
+
 // TODO - Abstract these parameters to a struct.
-func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
+func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
@@ -288,6 +299,9 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 			if len(uidVal) == 0 {
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
+				if collission := strings.HasPrefix(uidVal, "_:blank-"); collission {
+					return mr, errors.Errorf("User specified uids should not start with _:blank-")
+				}
 				mr.uid = uidVal
 			} else if ok := strings.HasPrefix(s, "uid("); ok {
 				mr.uid = s
@@ -308,8 +322,10 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
 		}
 
-		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
-		*idx++
+		idx := atomic.LoadUint64(&nextIdx)
+		atomic.AddUint64(&nextIdx, 1)
+
+		mr.uid = fmt.Sprintf("_:blank-%d", idx)
 	}
 
 	for pred, v := range m {
@@ -378,7 +394,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 				continue
 			}
 
-			cr, err := buf.mapToNquads(v, idx, op, pred)
+			cr, err := buf.mapToNquads(v, op, pred)
 			if err != nil {
 				return mr, err
 			}
@@ -411,7 +427,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 						continue
 					}
 
-					cr, err := buf.mapToNquads(iv, idx, op, pred)
+					cr, err := buf.mapToNquads(iv, op, pred)
 					if err != nil {
 						return mr, err
 					}
@@ -462,13 +478,12 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		return errors.Errorf("Couldn't parse json as a map or an array")
 	}
 
-	var idx int
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
 				return errors.Errorf("Only array of map allowed at root.")
 			}
-			mr, err := buf.mapToNquads(obj.(map[string]interface{}), &idx, op, "")
+			mr, err := buf.mapToNquads(obj.(map[string]interface{}), op, "")
 			if err != nil {
 				return err
 			}
@@ -477,7 +492,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		return nil
 	}
 
-	mr, err := buf.mapToNquads(ms, &idx, op, "")
+	mr, err := buf.mapToNquads(ms, op, "")
 	buf.checkForDeletion(mr, ms, op)
 	return err
 }

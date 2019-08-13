@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgo"
@@ -66,11 +69,7 @@ func TestTxnRead1(t *testing.T) {
 	if len(assigned.Uids) != 1 {
 		log.Fatalf("Error. Nothing assigned. %+v\n", assigned)
 	}
-	var uid string
-	for _, u := range assigned.Uids {
-		uid = u
-	}
-
+	uid := retrieveUids(assigned.Uids)[0]
 	q := fmt.Sprintf(`{ me(func: uid(%s)) { name }}`, uid)
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
@@ -562,6 +561,26 @@ func TestNameSet(t *testing.T) {
 	require.NotNil(t, txn2.Commit(context.Background()))
 }
 
+// retrieve the uids in the uidMap in the order of ascending keys
+func retrieveUids(uidMap map[string]string) []string {
+	keys := make([]string, 0, len(uidMap))
+	for key, _ := range uidMap {
+		keys = append(keys, key)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		idI, _ := strconv.Atoi(strings.TrimPrefix(keys[i], "blank-"))
+		idJ, _ := strconv.Atoi(strings.TrimPrefix(keys[j], "blank-"))
+		return idI < idJ
+	})
+
+	uids := make([]string, 0, len(uidMap))
+	for _, k := range keys {
+		uids = append(uids, uidMap[k])
+	}
+	return uids
+}
+
 func TestSPStar(t *testing.T) {
 	op := &api.Operation{}
 	op.DropAll = true
@@ -575,7 +594,8 @@ func TestSPStar(t *testing.T) {
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish", "friend": [{"name": "Jan"}]}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
-	uid1 := assigned.Uids["blank-0"]
+	require.Equal(t, 2, len(assigned.Uids))
+	uid1 := retrieveUids(assigned.Uids)[0]
 	require.NoError(t, err)
 	require.Equal(t, 2, len(assigned.Uids))
 	require.NoError(t, txn.Commit(context.Background()))
@@ -592,7 +612,7 @@ func TestSPStar(t *testing.T) {
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(assigned.Uids))
-	uid2 := assigned.Uids["blank-0"]
+	uid2 := retrieveUids(assigned.Uids)[0]
 
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
@@ -624,11 +644,13 @@ func TestSPStar2(t *testing.T) {
 	mu := &api.Mutation{}
 	mu.SetJson = []byte(`{"name": "Manish", "friend": [{"name": "Jan"}]}`)
 	assigned, err := txn.Mutate(context.Background(), mu)
-	uid1 := assigned.Uids["blank-0"]
-	uid2 := assigned.Uids["blank-1"]
+
 	require.NoError(t, err)
 	require.Equal(t, 2, len(assigned.Uids))
 
+	uids := retrieveUids(assigned.Uids)
+	uid1 := uids[0]
+	uid2 := uids[1]
 	q := fmt.Sprintf(`{
 		me(func: uid(%s)) {
 			uid
@@ -662,11 +684,11 @@ func TestSPStar2(t *testing.T) {
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(assigned.Uids))
-	uid2 = assigned.Uids["blank-0"]
-
+	uid3 := retrieveUids(assigned.Uids)[0]
 	resp, err = txn.Query(context.Background(), q)
 	require.NoError(t, err)
-	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan2", "uid":"%s"}]}]}`, uid1, uid2)
+	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan2", "uid":"%s"}]}]}`,
+		uid1, uid3)
 	require.JSONEq(t, expectedResp, string(resp.Json))
 
 	// Delete S P *
@@ -687,11 +709,11 @@ func TestSPStar2(t *testing.T) {
 	assigned, err = txn.Mutate(context.Background(), mu)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(assigned.Uids))
-	uid2 = assigned.Uids["blank-0"]
 
+	uid4 := retrieveUids(assigned.Uids)[0]
 	resp, err = txn.Query(context.Background(), q)
 	require.NoError(t, err)
-	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan3", "uid":"%s"}]}]}`, uid1, uid2)
+	expectedResp = fmt.Sprintf(`{"me":[{"uid":"%s", "friend": [{"name": "Jan3", "uid":"%s"}]}]}`, uid1, uid4)
 	require.JSONEq(t, expectedResp, string(resp.Json))
 }
 

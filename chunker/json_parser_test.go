@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
@@ -136,18 +136,22 @@ func TestNquadsFromJson2(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 
+	baseIdx := getNextIdx()
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
 
 	require.Equal(t, 6, len(nq))
-	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "_:blank-1"))
-	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
+
+	aliceId := fmt.Sprintf("_:blank-%d", baseIdx)
+	charlieId := fmt.Sprintf("_:blank-%d", baseIdx+1)
+	require.Contains(t, nq, makeNquadEdge(aliceId, "friend", charlieId))
+	require.Contains(t, nq, makeNquadEdge(aliceId, "friend", "1000"))
 
 	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Charlie"}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval))
+	require.Contains(t, nq, makeNquad(charlieId, "name", oval))
 
 	oval = &api.Value{Val: &api.Value_BoolVal{BoolVal: false}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval))
+	require.Contains(t, nq, makeNquad(charlieId, "married", oval))
 
 	oval = &api.Value{Val: &api.Value_StrVal{StrVal: "Bob"}}
 	require.Contains(t, nq, makeNquad("1000", "name", oval))
@@ -163,27 +167,32 @@ func TestNquadsFromJson3(t *testing.T) {
 
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
-
+	baseIdx := getNextIdx()
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(nq))
-	require.Contains(t, nq, makeNquadEdge("_:blank-0", "school", "_:blank-1"))
+	aliceId := fmt.Sprintf("_:blank-%d", baseIdx)
+	schoolId := fmt.Sprintf("_:blank-%d", baseIdx+1)
+	require.Contains(t, nq, makeNquadEdge(aliceId, "school", schoolId))
 
 	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Wellington Public School"}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval))
+	require.Contains(t, nq, makeNquad(schoolId, "Name", oval))
 }
 
 func TestNquadsFromJson4(t *testing.T) {
 	json := `[{"name":"Alice","mobile":"040123456","car":"MA0123", "age": 21, "weight": 58.7}]`
 
+	baseIdx := getNextIdx()
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(nq))
 	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
-	require.Contains(t, nq, makeNquad("_:blank-0", "age", &api.Value{Val: &api.Value_IntVal{IntVal: 21}}))
-	require.Contains(t, nq, makeNquad("_:blank-0", "weight",
+
+	aliceId := fmt.Sprintf("_:blank-%d", baseIdx)
+	require.Contains(t, nq, makeNquad(aliceId, "name", oval))
+	require.Contains(t, nq, makeNquad(aliceId, "age", &api.Value{Val: &api.Value_IntVal{IntVal: 21}}))
+	require.Contains(t, nq, makeNquad(aliceId, "weight",
 		&api.Value{Val: &api.Value_DoubleVal{DoubleVal: 58.7}}))
 }
 
@@ -228,13 +237,14 @@ func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 
 func TestNquadsFromJson_EmptyUid(t *testing.T) {
 	json := `{"uid":"","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name":"Crown Public School"}]}`
-
+	baseIdx := getNextIdx()
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
 	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Name"}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
+	objectId := fmt.Sprintf("_:blank-%d", baseIdx)
+	require.Contains(t, nq, makeNquad(objectId, "name", oval))
 }
 
 func TestNquadsFromJson_BlankNodes(t *testing.T) {
