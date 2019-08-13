@@ -261,7 +261,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		mutResponse   map[string]string
 		queryResponse string
 		expected      string
-		errors        string
+		errors        gqlerror.List
 	}{
 		"Add mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
@@ -275,7 +275,6 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				`{ "title": "A Post", ` +
 				`"text": "Some text", ` +
 				`"author": { "name": "A.N. Author", "dob": null } } } }`,
-			errors: `null`,
 		},
 		"Add mutation triggers GraphQL error propagation": {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
@@ -287,10 +286,11 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				`"text": "Some text", ` +
 				`"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "addPost": { "post" : null } }`,
-			errors: `[ { "message": "Non-nullable field 'name' (type String!) ` +
-				`was not present in result from Dgraph.  GraphQL error propagation triggered.", ` +
-				`"locations": [ { "column":6, "line":7 } ], ` +
-				`"path": [ "post", "author", "name" ] } ]`,
+			errors: gqlerror.List{&gqlerror.Error{
+				Message: `Non-nullable field 'name' (type String!) ` +
+					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
+				Locations: []gqlerror.Location{{Column: 6, Line: 7}},
+				Path:      []interface{}{"post", "author", "name"}}},
 		},
 	}
 
@@ -305,10 +305,13 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation,
 				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
 
+			jsonExpected, err := json.Marshal(test.errors)
+			require.NoError(t, err)
+
 			jsonGot, err := json.Marshal(resp.Errors)
 			require.NoError(t, err)
 
-			require.JSONEq(t, test.errors, string(jsonGot))
+			require.JSONEq(t, string(jsonExpected), string(jsonGot))
 			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
 		})
 	}
@@ -333,7 +336,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 		mutResponse   map[string]string
 		queryResponse string
 		expected      string
-		errors        string
+		errors        gqlerror.List
 	}{
 		"Update Mutation adds missing nullable fields": {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
@@ -347,7 +350,6 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				`{ "title": "A Post", ` +
 				`"text": "Some text", ` +
 				`"author": { "name": "A.N. Author", "dob": null } } } }`,
-			errors: `null`,
 		},
 		"Update Mutation triggers GraphQL error propagation": {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
@@ -359,10 +361,11 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				`"text": "Some text", ` +
 				`"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "updatePost": { "post" : null } }`,
-			errors: `[ { "message": "Non-nullable field 'name' (type String!) ` +
-				`was not present in result from Dgraph.  GraphQL error propagation triggered.", ` +
-				`"locations": [ { "column":6, "line":7 } ], ` +
-				`"path": [ "post", "author", "name" ] } ]`,
+			errors: gqlerror.List{&gqlerror.Error{
+				Message: `Non-nullable field 'name' (type String!) ` +
+					`was not present in result from Dgraph.  GraphQL error propagation triggered.`,
+				Locations: []gqlerror.Location{{Column: 6, Line: 7}},
+				Path:      []interface{}{"post", "author", "name"}}},
 		},
 	}
 
@@ -377,10 +380,13 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation,
 				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
 
+			jsonExpected, err := json.Marshal(test.errors)
+			require.NoError(t, err)
+
 			jsonGot, err := json.Marshal(resp.Errors)
 			require.NoError(t, err)
 
-			require.JSONEq(t, test.errors, string(jsonGot))
+			require.JSONEq(t, string(jsonExpected), string(jsonGot))
 			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
 		})
 	}
