@@ -152,18 +152,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			r.resp.AddData(resp)
-
-			// There's one more step of the completion algorithm not done yet.  If the
-			// result type of this query is T! and completeDgraphResult comes back nil.
-			// Then we really should crush the whole query: e.g. if multiple queries
-			// were asked in one operation, we should call off any other runnings
-			// resolvers for the operation and crush the whole result to an error.
-			//
-			// ATM we just squash this one query, return the error and the results
-			// of all other queries.
-			// TODO: ^^  should we even have ! return types in queries?  and/or
-			// should add that last step of error propagation with cancelation
-			// when we make queries concurrent.
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
