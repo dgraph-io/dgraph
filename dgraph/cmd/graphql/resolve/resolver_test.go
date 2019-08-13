@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 
@@ -133,7 +134,15 @@ func TestResolver(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
 
-			require.Equal(t, test.Errors, resp.Errors)
+			// It's easier to understand the diff with json than require.Equal
+			// on the errors
+			jsonExpected, err := json.Marshal(test.Errors)
+			require.NoError(t, err)
+
+			jsonGot, err := json.Marshal(resp.Errors)
+			require.NoError(t, err)
+
+			require.JSONEq(t, string(jsonExpected), string(jsonGot))
 			require.JSONEq(t, test.Expected, resp.Data.String(), test.Explanation)
 		})
 	}
