@@ -878,7 +878,7 @@ func (qs *queryState) helpProcessTask(
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		if err := qs.filterGeoFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.filterGeoFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -1247,14 +1247,16 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	return nil
 }
 
-func (qs *queryState) filterGeoFunction(arg funcArgs) error {
+func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "filterGeoFunction")
+	defer stop()
+
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
-	glog.V(2).Infof("Number of uids: %d\n", len(uids.Uids))
-	start := time.Now()
-	defer func() {
-		glog.V(2).Infof("Time took for filterGeo: %s\n", time.Since(start).Round(time.Millisecond))
-	}()
+	if span != nil {
+		span.Annotatef(nil, "Number of uids: %d\n", len(uids.Uids))
+	}
 
 	numGo, width := x.DivideAndRule(len(uids.Uids))
 	glog.V(2).Infof("numGo: %d. Width: %d\n", numGo, width)
@@ -1270,7 +1272,7 @@ func (qs *queryState) filterGeoFunction(arg funcArgs) error {
 			// list type
 			var tv pb.TaskValue
 			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
-				tv.ValType = types.TypeID(p.ValType).Enum()
+				tv.ValType = p.ValType
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
 					out.Uids = append(out.Uids, uid)
@@ -1305,8 +1307,9 @@ func (qs *queryState) filterGeoFunction(arg funcArgs) error {
 	for _, out := range filtered {
 		final.Uids = append(final.Uids, out.Uids...)
 	}
-	glog.V(2).Infof("Total uids after filtering geo: %d\n", len(final.Uids))
-
+	if span != nil {
+		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
+	}
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
 		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
 	}
