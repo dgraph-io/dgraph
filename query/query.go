@@ -41,11 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
-	FacetDelimeter = "|"
-)
-
 /*
  * QUERY:
  * Let's take this query from GraphQL as example:
