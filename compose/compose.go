@@ -256,6 +256,7 @@ func getRatel() service {
 		Ports: []string{
 			toExposedPort(8000),
 		},
+		Command: "dgraph-ratel",
 	}
 	return svc
 }
