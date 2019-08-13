@@ -632,7 +632,7 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			case facetsTree != nil:
+			case q.FacetParam != nil || facetsTree != nil:
 				if i == 0 {
 					span.Annotate(nil, "default with facets")
 				}
