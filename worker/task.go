@@ -720,7 +720,9 @@ const (
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
-	span := otrace.FromContext(ctx)
+	ctx, span := otrace.StartSpan(ctx, "processTask."+q.Attr)
+	defer span.End()
+
 	stop := x.SpanTimer(span, "processTask"+q.Attr)
 	defer stop()
 
