@@ -569,9 +569,14 @@ func retrieveUids(uidMap map[string]string) []string {
 	}
 
 	sort.Slice(keys, func(i, j int) bool {
-		idI, _ := strconv.Atoi(strings.TrimPrefix(keys[i], "blank-"))
-		idJ, _ := strconv.Atoi(strings.TrimPrefix(keys[j], "blank-"))
-		return idI < idJ
+		num1 := strings.Split(keys[i], ".")[2]
+
+		num2 := strings.Split(keys[j], ".")[2]
+		n1, err := strconv.Atoi(num1)
+		x.Check(err)
+		n2, err := strconv.Atoi(num2)
+		x.Check(err)
+		return n1 < n2
 	})
 
 	uids := make([]string, 0, len(uidMap))

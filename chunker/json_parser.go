@@ -308,9 +308,6 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			if len(uidVal) == 0 {
 				uid = 0
 			} else if ok := strings.HasPrefix(uidVal, "_:"); ok {
-				if collission := strings.HasPrefix(uidVal, "_:blank-"); collission {
-					return mr, errors.Errorf("User specified uids should not start with _:blank-")
-				}
 				mr.uid = uidVal
 			} else if ok := strings.HasPrefix(s, "uid("); ok {
 				mr.uid = s
