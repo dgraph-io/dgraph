@@ -756,7 +756,8 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
-	// For now, remove the query level cache. It is causing contention for queries with high fan-out.
+	// For now, remove the query level cache. It is causing contention for queries with high
+	// fan-out.
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
@@ -1256,7 +1257,8 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	numGo, width := x.DivideAndRule(len(uids.Uids))
 	if span != nil && numGo > 1 {
-		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n", len(uids.Uids), numGo, width)
+		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
+			len(uids.Uids), numGo, width)
 	}
 
 	filtered := make([]*pb.List, numGo)
