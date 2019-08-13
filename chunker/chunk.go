@@ -90,7 +90,7 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 }
 
 // RDF files don't require any special processing at the beginning of the file.
-func (rdfChunker) Begin(r *bufio.Reader) error {
+func (*rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (rdfChunker) Begin(r *bufio.Reader) error {
 // 1) the EOF is reached
 // 2) 1e5 lines have been read
 // 3) some unexpected error happened
-func (rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (*rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
@@ -154,11 +154,11 @@ func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
 }
 
 // RDF files don't require any special processing at the end of the file.
-func (rdfChunker) End(r *bufio.Reader) error {
+func (*rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Begin(r *bufio.Reader) error {
+func (*jsonChunker) Begin(r *bufio.Reader) error {
 	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
@@ -176,7 +176,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.Grow(1 << 20)
 
@@ -255,7 +255,7 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 	return err
 }
 
-func (jsonChunker) End(r *bufio.Reader) error {
+func (*jsonChunker) End(r *bufio.Reader) error {
 	if slurpSpace(r) == io.EOF {
 		return nil
 	}
