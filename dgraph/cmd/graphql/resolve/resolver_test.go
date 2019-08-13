@@ -42,7 +42,8 @@ import (
 // to see what the test is actually doing.
 
 type dgraphClient struct {
-	resp string
+	resp     string
+	assigned map[string]string
 }
 
 type QueryCase struct {
@@ -77,6 +78,7 @@ type Post {
 	numViews: Int!
 	authorRequired: Author!
 	authorNullable: Author
+	author: Author!
 }
 
 type Query {
@@ -86,6 +88,34 @@ type Query {
 	queryPosts: [Post]
 	queryPostsRequired: [Post!]!
 }
+
+input AuthorRef {
+    id: ID!
+}
+
+input PostInput {
+	title: String!
+	text: String
+	author: AuthorRef!
+}
+
+input PostUpdate {
+	title: String
+	text: String
+}
+
+type AddPostPayload {
+    post: Post
+}
+
+type UpdatePostPayload {
+    post: Post
+}
+
+type Mutation {
+	addPost(input: PostInput!): AddPostPayload
+	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload
+}
 `
 
 func (dg *dgraphClient) Query(ctx context.Context, query *dgraph.QueryBuilder) ([]byte, error) {
@@ -93,8 +123,7 @@ func (dg *dgraphClient) Query(ctx context.Context, query *dgraph.QueryBuilder) (
 }
 
 func (dg *dgraphClient) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
-	// To be filled in for mutate tests
-	return nil, nil
+	return dg.assigned, nil
 }
 
 func (dg *dgraphClient) DeleteNode(ctx context.Context, uid uint64) error {
@@ -103,7 +132,6 @@ func (dg *dgraphClient) DeleteNode(ctx context.Context, uid uint64) error {
 }
 
 func (dg *dgraphClient) AssertType(ctx context.Context, uid uint64, typ string) error {
-	// To be filled in for mutate tests
 	return nil
 }
 
@@ -211,8 +239,161 @@ func TestResponseOrder(t *testing.T) {
 	}
 }
 
+// For add and update mutations, we don't need to re-test all the cases from the
+// query tests.  So just test enough to demonstrate that we'll catch it if we were
+// to delete the call to completeDgraphResult before adding to the response.
+func TestAddMutationUsesErrorPropagation(t *testing.T) {
+	mutation := `mutation {
+		addPost(input: {title: "A Post", text: "Some text", author: {id: "0x1"}}) {
+			post {
+				title
+				text
+				author {
+					name
+					dob
+				}
+			}
+		}
+	}`
+
+	tests := map[string]struct {
+		explanation   string
+		mutResponse   map[string]string
+		queryResponse string
+		expected      string
+		errors        string
+	}{
+		"Add mutation adds missing nullable fields": {
+			explanation: "Field 'dob' is nullable, so null should be inserted " +
+				"if the mutation's query doesn't return a value.",
+			mutResponse: map[string]string{"newnode": "0x1"},
+			queryResponse: `{ "post" : [ ` +
+				`{ "title": "A Post", ` +
+				`"text": "Some text", ` +
+				`"author": { "name": "A.N. Author" } } ] }`,
+			expected: `{ "addPost": { "post" : ` +
+				`{ "title": "A Post", ` +
+				`"text": "Some text", ` +
+				`"author": { "name": "A.N. Author", "dob": null } } } }`,
+			errors: `null`,
+		},
+		"Add mutation triggers GraphQL error propagation": {
+			explanation: "An Author's name is non-nullable, so if that's missing, " +
+				"the author is squashed to null, but that's also non-nullable, so the " +
+				"propagates to the query root.",
+			mutResponse: map[string]string{"newnode": "0x1"},
+			queryResponse: `{ "post" : [ ` +
+				`{ "title": "A Post", ` +
+				`"text": "Some text", ` +
+				`"author": { "dob": "2000-01-01" } } ] }`,
+			expected: `{ "addPost": { "post" : null } }`,
+			errors: `[ { "message": "Non-nullable field 'name' (type String!) ` +
+				`was not present in result from Dgraph.  GraphQL error propagation triggered.", ` +
+				`"locations": [ { "column":6, "line":7 } ], ` +
+				`"path": [ "post", "author", "name" ] } ]`,
+		},
+	}
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
+	require.Nil(t, gqlErr)
+
+	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
+	require.Nil(t, gqlErr)
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			resp := resolveWithClient(gqlSchema, mutation,
+				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
+
+			jsonGot, err := json.Marshal(resp.Errors)
+			require.NoError(t, err)
+
+			require.JSONEq(t, test.errors, string(jsonGot))
+			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
+		})
+	}
+}
+
+func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
+	mutation := `mutation {
+		updatePost(id: "0x1", input: {text: "Some more text"}) {
+			post {
+				title
+				text
+				author {
+					name
+					dob
+				}
+			}
+		}
+	}`
+
+	tests := map[string]struct {
+		explanation   string
+		mutResponse   map[string]string
+		queryResponse string
+		expected      string
+		errors        string
+	}{
+		"Update Mutation adds missing nullable fields": {
+			explanation: "Field 'dob' is nullable, so null should be inserted " +
+				"if the mutation's query doesn't return a value.",
+			mutResponse: map[string]string{"newnode": "0x1"},
+			queryResponse: `{ "post" : [ ` +
+				`{ "title": "A Post", ` +
+				`"text": "Some text", ` +
+				`"author": { "name": "A.N. Author" } } ] }`,
+			expected: `{ "updatePost": { "post" : ` +
+				`{ "title": "A Post", ` +
+				`"text": "Some text", ` +
+				`"author": { "name": "A.N. Author", "dob": null } } } }`,
+			errors: `null`,
+		},
+		"Update Mutation triggers GraphQL error propagation": {
+			explanation: "An Author's name is non-nullable, so if that's missing, " +
+				"the author is squashed to null, but that's also non-nullable, so the " +
+				"propagates to the query root.",
+			mutResponse: map[string]string{"newnode": "0x1"},
+			queryResponse: `{ "post" : [ ` +
+				`{ "title": "A Post", ` +
+				`"text": "Some text", ` +
+				`"author": { "dob": "2000-01-01" } } ] }`,
+			expected: `{ "updatePost": { "post" : null } }`,
+			errors: `[ { "message": "Non-nullable field 'name' (type String!) ` +
+				`was not present in result from Dgraph.  GraphQL error propagation triggered.", ` +
+				`"locations": [ { "column":6, "line":7 } ], ` +
+				`"path": [ "post", "author", "name" ] } ]`,
+		},
+	}
+
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
+	require.Nil(t, gqlErr)
+
+	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
+	require.Nil(t, gqlErr)
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			resp := resolveWithClient(gqlSchema, mutation,
+				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
+
+			jsonGot, err := json.Marshal(resp.Errors)
+			require.NoError(t, err)
+
+			require.JSONEq(t, test.errors, string(jsonGot))
+			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
+		})
+	}
+}
+
 func resolve(gqlSchema *ast.Schema, gqlQuery string, dgResponse string) *schema.Response {
-	client := &dgraphClient{resp: dgResponse}
+	return resolveWithClient(gqlSchema, gqlQuery, &dgraphClient{resp: dgResponse})
+}
+
+func resolveWithClient(
+	gqlSchema *ast.Schema,
+	gqlQuery string,
+	client *dgraphClient) *schema.Response {
 	resolver := New(schema.AsSchema(gqlSchema), client)
 	resolver.GqlReq = &schema.Request{Query: gqlQuery}
 	return resolver.Resolve(context.Background())
