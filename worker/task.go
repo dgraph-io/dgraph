@@ -669,7 +669,7 @@ func (qs *queryState) handleUidPostings(
 				}
 			default:
 				if i == 0 {
-					span.Annotate(nil, "default")
+					span.Annotate(nil, "default no facets")
 				}
 				uidList, err := pl.Uids(opts)
 				if err != nil {
@@ -1272,10 +1272,9 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			if err != nil {
 				return err
 			}
-			// list type
 			var tv pb.TaskValue
 			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
-				tv.ValType = types.TypeID(p.ValType).Enum()
+				tv.ValType = p.ValType
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
 					out.Uids = append(out.Uids, uid)
