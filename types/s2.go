@@ -131,35 +131,34 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	return intersects(l1, l2)
 }
 
-func closed(coords []geom.Coord) bool {
-	l := len(coords)
-	return coords[0][0] == coords[l-1][0] && coords[0][1] == coords[l-1][1]
-}
-
 func convertToGeom(str string) (geom.T, error) {
 	// validate would ensure that we have a closed loop for all the polygons. We don't support open
 	// loop polygons.
+	closed := func(p *geom.Polygon) error {
+		coords := p.Coords()
+		if len(coords) == 0 {
+			return errors.Errorf("Got empty polygon.")
+		}
+		// Check that first ring is closed.
+		c := coords[0]
+		l := len(c)
+		if c[0][0] == c[l-1][0] && c[0][1] == c[l-1][1] {
+			return nil
+		}
+		return errors.Errorf("Last coord not same as first")
+	}
+
 	validate := func(g geom.T) (geom.T, error) {
 		switch v := g.(type) {
 		case *geom.MultiPolygon:
 			for i := 0; i < v.NumPolygons(); i++ {
-				coords := v.Polygon(i).Coords()
-				if len(coords) == 0 {
-					return nil, errors.Errorf("Got empty polygon inside multi-polygon.")
-				}
-				// Check that first ring is closed.
-				if !closed(v.Polygon(i).Coords()[0]) {
-					return nil, errors.Errorf("Last coord not same as first")
+				if err := closed(v.Polygon(i)); err != nil {
+					return nil, err
 				}
 			}
 		case *geom.Polygon:
-			coords := v.Coords()
-			if len(coords) == 0 {
-				return nil, errors.Errorf("Got empty polygon.")
-			}
-			// Check that first ring is closed.
-			if !closed(coords[0]) {
-				return nil, errors.Errorf("Last coord not same as first")
+			if err := closed(v); err != nil {
+				return nil, err
 			}
 		}
 		return g, nil
