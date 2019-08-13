@@ -17,11 +17,8 @@
 package testutil
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"math"
 
 	"github.com/dgraph-io/badger"
@@ -31,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // GetPValues reads the specified p directory and returns the values for the given
