@@ -520,10 +520,10 @@ func (qs *queryState) handleUidPostings(
 	srcFn := args.srcFn
 	q := args.q
 
-	// facetsTree, err := preprocessFilter(q.FacetsFilter)
-	// if err != nil {
-	// 	return err
-	// }
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return err
+	}
 
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleUidPostings")
@@ -632,48 +632,50 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			default:
+			case facetsTree != nil:
 				if i == 0 {
-					span.Annotate(nil, "default")
+					span.Annotate(nil, "default with facets")
+				}
+				uidList := &pb.List{
+					Uids: make([]uint64, 0, pl.ApproxLen()),
 				}
 
-				// uidList := &pb.List{
-				// 	Uids: make([]uint64, 0, pl.ApproxLen()),
-				// }
-
-				uidList, err := pl.Uids(opts)
+				var fcsList []*pb.Facets
+				err = pl.Postings(opts, func(p *pb.Posting) error {
+					pick, err := applyFacetsTree(p.Facets, facetsTree)
+					if err != nil {
+						return err
+					}
+					if pick {
+						// TODO: This way of picking Uids differs from how
+						// pl.Uids works. So, have a look to see if we're
+						// catching all the edge cases here.
+						uidList.Uids = append(uidList.Uids, p.Uid)
+						if q.FacetParam != nil {
+							fcsList = append(fcsList, &pb.Facets{
+								Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+							})
+						}
+					}
+					return nil // continue iteration.
+				})
 				if err != nil {
 					return err
 				}
-				var fcsList []*pb.Facets
-				// err = pl.Postings(opts, func(p *pb.Posting) error {
-				// 	pick, err := applyFacetsTree(p.Facets, facetsTree)
-				// 	if err != nil {
-				// 		return err
-				// 	}
-				// 	if pick {
-				// 		// TODO: This way of picking Uids differs from how
-				// 		// pl.Uids works. So, have a look to see if we're
-				// 		// catching all the edge cases here.
-				// 		uidList.Uids = append(uidList.Uids, p.Uid)
-				// 		if q.FacetParam != nil {
-				// 			fcsList = append(fcsList, &pb.Facets{
-				// 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-				// 			})
-				// 		}
-				// 	}
-				// 	// HACK HACK HACK. For now, let's just stop after one.
-				// 	return posting.ErrStopIteration
-				// 	// return nil // continue iteration.
-				// })
-				// if err != nil {
-				// 	return err
-				// }
 
 				out.UidMatrix = append(out.UidMatrix, uidList)
 				if q.FacetParam != nil {
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
+			default:
+				if i == 0 {
+					span.Annotate(nil, "default")
+				}
+				uidList, err := pl.Uids(opts)
+				if err != nil {
+					return err
+				}
+				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
 		}
 		return nil
@@ -705,15 +707,15 @@ func (qs *queryState) handleUidPostings(
 	for _, list := range out.UidMatrix {
 		total += len(list.Uids)
 	}
-	glog.V(2).Infof("Number of elements in the matrix: %d\n", total)
+	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
 }
 
 const (
 	// UseTxnCache indicates the transaction cache should be used.
 	UseTxnCache = iota
-	// NoTxnCache indicates no transaction caches should be used.
-	NoTxnCache
+	// NoCache indicates no caches should be used.
+	NoCache
 )
 
 // processTask processes the query, accumulates and returns the result.
@@ -754,10 +756,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
-	// Remove the query level cache. It is causing contention.
-	// if qs.cache == nil {
-	// 	qs.cache = posting.NewLocalCache(q.ReadTs)
-	// }
+	// For now, remove the query level cache. It is causing contention for queries with high fan-out.
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
