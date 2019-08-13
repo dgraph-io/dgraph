@@ -137,11 +137,47 @@ func closed(coords []geom.Coord) bool {
 }
 
 func convertToGeom(str string) (geom.T, error) {
+	// validate would ensure that we have a closed loop for all the polygons. We don't support open
+	// loop polygons.
+	validate := func(g geom.T) (geom.T, error) {
+		switch v := g.(type) {
+		case *geom.MultiPolygon:
+			for i := 0; i < v.NumPolygons(); i++ {
+				coords := v.Polygon(i).Coords()
+				if len(coords) == 0 {
+					return nil, errors.Errorf("Got empty polygon inside multi-polygon.")
+				}
+				// Check that first ring is closed.
+				if !closed(v.Polygon(i).Coords()[0]) {
+					return nil, errors.Errorf("Last coord not same as first")
+				}
+			}
+		case *geom.Polygon:
+			coords := v.Coords()
+			if len(coords) == 0 {
+				return nil, errors.Errorf("Got empty polygon.")
+			}
+			// Check that first ring is closed.
+			if !closed(coords[0]) {
+				return nil, errors.Errorf("Last coord not same as first")
+			}
+		}
+		return g, nil
+	}
+
+	var g geojson.Geometry
+	if err := json.Unmarshal([]byte(str), &g); err == nil {
+		t, err := g.Decode()
+		if err != nil {
+			return nil, err
+		}
+		return validate(t)
+	}
+
 	s := x.WhiteSpace.Replace(str)
 	if len(s) < 5 { // [1,2]
 		return nil, errors.Errorf("Invalid coordinates")
 	}
-	var g geojson.Geometry
 	var m json.RawMessage
 	var err error
 
@@ -156,18 +192,7 @@ func convertToGeom(str string) (geom.T, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
-		mp := g1.(*geom.MultiPolygon)
-		for i := 0; i < mp.NumPolygons(); i++ {
-			coords := mp.Polygon(i).Coords()
-			if len(coords) == 0 {
-				return nil, errors.Errorf("Got empty polygon inside multi-polygon.")
-			}
-			// Check that first ring is closed.
-			if !closed(mp.Polygon(i).Coords()[0]) {
-				return nil, errors.Errorf("Last coord not same as first")
-			}
-		}
-		return g1, nil
+		return validate(g1)
 	}
 
 	if s[0:3] == "[[[" {
@@ -181,15 +206,7 @@ func convertToGeom(str string) (geom.T, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "Invalid coordinates")
 		}
-		coords := g1.(*geom.Polygon).Coords()
-		if len(coords) == 0 {
-			return nil, errors.Errorf("Got empty polygon.")
-		}
-		// Check that first ring is closed.
-		if !closed(coords[0]) {
-			return nil, errors.Errorf("Last coord not same as first")
-		}
-		return g1, nil
+		return validate(g1)
 	}
 
 	if s[0] == '[' {

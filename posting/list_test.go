@@ -155,7 +155,7 @@ func TestAddMutation(t *testing.T) {
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
 	l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		res = *p
-		return errStopIteration
+		return ErrStopIteration
 	})
 	return res
 }

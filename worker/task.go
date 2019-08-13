@@ -520,10 +520,10 @@ func (qs *queryState) handleUidPostings(
 	srcFn := args.srcFn
 	q := args.q
 
-	facetsTree, err := preprocessFilter(q.FacetsFilter)
-	if err != nil {
-		return err
-	}
+	// facetsTree, err := preprocessFilter(q.FacetsFilter)
+	// if err != nil {
+	// 	return err
+	// }
 
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "handleUidPostings")
@@ -637,32 +637,38 @@ func (qs *queryState) handleUidPostings(
 					span.Annotate(nil, "default")
 				}
 
-				uidList := &pb.List{
-					Uids: make([]uint64, 0, pl.ApproxLen()),
-				}
+				// uidList := &pb.List{
+				// 	Uids: make([]uint64, 0, pl.ApproxLen()),
+				// }
 
-				var fcsList []*pb.Facets
-				err = pl.Postings(opts, func(p *pb.Posting) error {
-					pick, err := applyFacetsTree(p.Facets, facetsTree)
-					if err != nil {
-						return err
-					}
-					if pick {
-						// TODO: This way of picking Uids differs from how
-						// pl.Uids works. So, have a look to see if we're
-						// catching all the edge cases here.
-						uidList.Uids = append(uidList.Uids, p.Uid)
-						if q.FacetParam != nil {
-							fcsList = append(fcsList, &pb.Facets{
-								Facets: facets.CopyFacets(p.Facets, q.FacetParam),
-							})
-						}
-					}
-					return nil // continue iteration.
-				})
+				uidList, err := pl.Uids(opts)
 				if err != nil {
 					return err
 				}
+				var fcsList []*pb.Facets
+				// err = pl.Postings(opts, func(p *pb.Posting) error {
+				// 	pick, err := applyFacetsTree(p.Facets, facetsTree)
+				// 	if err != nil {
+				// 		return err
+				// 	}
+				// 	if pick {
+				// 		// TODO: This way of picking Uids differs from how
+				// 		// pl.Uids works. So, have a look to see if we're
+				// 		// catching all the edge cases here.
+				// 		uidList.Uids = append(uidList.Uids, p.Uid)
+				// 		if q.FacetParam != nil {
+				// 			fcsList = append(fcsList, &pb.Facets{
+				// 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
+				// 			})
+				// 		}
+				// 	}
+				// 	// HACK HACK HACK. For now, let's just stop after one.
+				// 	return posting.ErrStopIteration
+				// 	// return nil // continue iteration.
+				// })
+				// if err != nil {
+				// 	return err
+				// }
 
 				out.UidMatrix = append(out.UidMatrix, uidList)
 				if q.FacetParam != nil {
@@ -695,6 +701,11 @@ func (qs *queryState) handleUidPostings(
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
+	var total int
+	for _, list := range out.UidMatrix {
+		total += len(list.Uids)
+	}
+	glog.V(2).Infof("Number of elements in the matrix: %d\n", total)
 	return nil
 }
 
@@ -743,9 +754,10 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
-	if qs.cache == nil {
-		qs.cache = posting.NewLocalCache(q.ReadTs)
-	}
+	// Remove the query level cache. It is causing contention.
+	// if qs.cache == nil {
+	// 	qs.cache = posting.NewLocalCache(q.ReadTs)
+	// }
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
@@ -1239,46 +1251,65 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 func (qs *queryState) filterGeoFunction(arg funcArgs) error {
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
-	isList := schema.State().IsList(attr)
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
-		if !isList {
-			val, err := pl.Value(arg.q.ReadTs)
-			if err == posting.ErrNoValue {
-				continue
-			} else if err != nil {
+	glog.V(2).Infof("Number of uids: %d\n", len(uids.Uids))
+	start := time.Now()
+	defer func() {
+		glog.V(2).Infof("Time took for filterGeo: %s\n", time.Since(start).Round(time.Millisecond))
+	}()
+
+	numGo, width := x.DivideAndRule(len(uids.Uids))
+	glog.V(2).Infof("numGo: %d. Width: %d\n", numGo, width)
+	filtered := make([]*pb.List, numGo)
+	filter := func(idx, start, end int) error {
+		filtered[idx] = &pb.List{}
+		out := filtered[idx]
+		for _, uid := range uids.Uids[start:end] {
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
 				return err
 			}
-			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
-			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-				filtered.Uids = append(filtered.Uids, uid)
-			}
-
-			continue
-		}
-
-		// list type
-		vals, err := pl.AllValues(arg.q.ReadTs)
-		if err == posting.ErrNoValue {
-			continue
-		} else if err != nil {
-			return err
-		}
-		for _, val := range vals {
-			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
-			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-				filtered.Uids = append(filtered.Uids, uid)
-				break
+			// list type
+			var tv pb.TaskValue
+			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+				tv.ValType = types.TypeID(p.ValType).Enum()
+				tv.Val = p.Value
+				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
+					out.Uids = append(out.Uids, uid)
+					return posting.ErrStopIteration
+				}
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 		}
+		return nil
 	}
 
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(uids.Uids) {
+			end = len(uids.Uids)
+		}
+		go func(idx, start, end int) {
+			errCh <- filter(idx, start, end)
+		}(i, start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
+	}
+	final := &pb.List{}
+	for _, out := range filtered {
+		final.Uids = append(final.Uids, out.Uids...)
+	}
+	glog.V(2).Infof("Total uids after filtering geo: %d\n", len(final.Uids))
+
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
 	}
 	return nil
 }
