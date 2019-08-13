@@ -65,10 +65,12 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 }
 
 // postGQLValidation validates schema after gql validation.
-func postGQLValidation(schema *ast.Schema) gqlerror.List {
+func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, typ := range schema.Types {
+	for _, defn := range definitions {
+		typ := schema.Types[defn]
+
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {

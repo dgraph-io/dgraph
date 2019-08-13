@@ -30,12 +30,14 @@ import (
 type SchemaHandler interface {
 	DGSchema() string
 	GQLSchema() string
+	Definitions() []string
 }
 
 type schemaHandler struct {
 	Input          string
 	completeSchema *ast.Schema
 	dgraphSchema   string
+	definitions    []string
 }
 
 func (s schemaHandler) GQLSchema() string {
@@ -44,6 +46,10 @@ func (s schemaHandler) GQLSchema() string {
 
 func (s schemaHandler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+func (s schemaHandler) Definitions() []string {
+	return s.definitions
 }
 
 // NewSchemaHandler processes the input schema, returns errorlist if any
@@ -67,12 +73,20 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 
 	addScalars(doc)
 
+	defns := make([]string, len(doc.Definitions))
+
+	for i, defn := range doc.Definitions {
+		defns[i] = defn.Name
+	}
+
+	handler.definitions = defns
+
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
 
-	gqlErrList = postGQLValidation(sch)
+	gqlErrList = postGQLValidation(sch, handler.definitions)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
