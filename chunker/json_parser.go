@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -273,9 +274,17 @@ func (buf *NQuadBuffer) Flush() {
 // it should only be accessed through the atomic APIs
 var nextIdx uint64
 
-// GetNextIdx is only used for testing
-func getNextIdx() uint64 {
-	return atomic.LoadUint64(&nextIdx)
+// randomId will be used to generate blank node ids
+// we use a random number to avoid collision with user specified uids
+var randomId uint32
+
+func init() {
+	randomId = rand.Uint32()
+}
+
+func getNextBlank() string {
+	id := atomic.AddUint64(&nextIdx, 1)
+	return fmt.Sprintf("_:dg.%d.%d", randomId, id)
 }
 
 // TODO - Abstract these parameters to a struct.
@@ -322,10 +331,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
 		}
 
-		idx := atomic.LoadUint64(&nextIdx)
-		atomic.AddUint64(&nextIdx, 1)
-
-		mr.uid = fmt.Sprintf("_:blank-%d", idx)
+		mr.uid = getNextBlank()
 	}
 
 	for pred, v := range m {
