@@ -270,7 +270,7 @@ func (buf *NQuadBuffer) Flush() {
 
 // nextIdx is the index that is used to generate blank node ids for a json map object
 // when the map object does not have a "uid" field
-// it should only be access through the atomic APIs
+// it should only be accessed through the atomic APIs
 var nextIdx uint64
 
 // GetNextIdx is only used for testing
