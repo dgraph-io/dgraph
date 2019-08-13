@@ -1254,12 +1254,11 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
-	if span != nil {
-		span.Annotatef(nil, "Number of uids: %d\n", len(uids.Uids))
+	numGo, width := x.DivideAndRule(len(uids.Uids))
+	if span != nil && numGo > 1 {
+		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n", len(uids.Uids), numGo, width)
 	}
 
-	numGo, width := x.DivideAndRule(len(uids.Uids))
-	glog.V(2).Infof("numGo: %d. Width: %d\n", numGo, width)
 	filtered := make([]*pb.List, numGo)
 	filter := func(idx, start, end int) error {
 		filtered[idx] = &pb.List{}
@@ -1272,7 +1271,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			// list type
 			var tv pb.TaskValue
 			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
-				tv.ValType = p.ValType
+				tv.ValType = types.TypeID(p.ValType).Enum()
 				tv.Val = p.Value
 				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
 					out.Uids = append(out.Uids, uid)
@@ -1307,7 +1306,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	for _, out := range filtered {
 		final.Uids = append(final.Uids, out.Uids...)
 	}
-	if span != nil {
+	if span != nil && numGo > 1 {
 		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
 	}
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
