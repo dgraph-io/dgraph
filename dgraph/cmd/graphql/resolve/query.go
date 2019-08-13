@@ -58,5 +58,5 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
 	}
 
-	return completeDgraphResult(qr.query, res)
+	return completeDgraphResult(ctx, qr.query, res)
 }
