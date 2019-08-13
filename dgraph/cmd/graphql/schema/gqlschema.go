@@ -84,8 +84,7 @@ func applyDefnValidations(defn *ast.Definition,
 	var errs []*gqlerror.Error
 
 	for _, rule := range rules {
-		err := rule(defn)
-		errs = appendIfNotNull(errs, err)
+		errs = appendIfNotNull(errs, rule(defn))
 	}
 
 	return errs
@@ -95,8 +94,7 @@ func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		err := rule(field)
-		errs = appendIfNotNull(errs, err)
+		errs = appendIfNotNull(errs, rule(field))
 	}
 
 	return errs
@@ -546,7 +544,7 @@ func idTypeFor(defn *ast.Definition) string {
 	return "ID"
 }
 
-func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) []*gqlerror.Error {
+func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
 	if err != nil {
 		errs = append(errs, err)
 	}
