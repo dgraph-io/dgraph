@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package json
+package chunker
 
 import (
 	"encoding/binary"
@@ -67,6 +67,12 @@ type Person struct {
 	Address address    `json:"address,omitempty"` // geo value
 	Friends []Person   `json:"friend,omitempty"`
 	School  *School    `json:"school,omitempty"`
+}
+
+func Parse(b []byte, op int) ([]*api.NQuad, error) {
+	nqs := NewNQuadBuffer(1000)
+	err := nqs.ParseJSON(b, op)
+	return nqs.nquads, err
 }
 
 func TestNquadsFromJson1(t *testing.T) {

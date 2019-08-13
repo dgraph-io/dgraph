@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgo/protos/api"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
 )
@@ -4442,8 +4442,8 @@ func parseNquads(b []byte) ([]*api.NQuad, error) {
 	var lexer lex.Lexer
 	var nqs []*api.NQuad
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line), &lexer)
-		if err == rdf.ErrEmpty {
+		nq, err := chunker.ParseRDF(string(line), &lexer)
+		if err == chunker.ErrEmpty {
 			continue
 		}
 		if err != nil {

@@ -46,7 +46,7 @@ func TestJSONLoadStart(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat)
+		chunker := NewChunker(JsonFormat, 1000)
 		require.Error(t, chunker.Begin(bufioReader(test.json)), test.desc)
 	}
 }
@@ -64,7 +64,7 @@ func TestJSONLoadReadNext(t *testing.T) {
 		{"[{}", "malformed array"},
 	}
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat)
+		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
 		require.NoError(t, chunker.Begin(reader), test.desc)
 
@@ -113,7 +113,7 @@ func TestJSONLoadSuccessFirst(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		chunker := NewChunker(JsonFormat)
+		chunker := NewChunker(JsonFormat, 1000)
 		reader := bufioReader(test.json)
 		require.NoError(t, chunker.Begin(reader), test.desc)
 
@@ -176,7 +176,7 @@ func TestJSONLoadSuccessAll(t *testing.T) {
 	}`,
 	}
 
-	chunker := NewChunker(JsonFormat)
+	chunker := NewChunker(JsonFormat, 1000)
 	reader := bufioReader(testDoc)
 
 	var json *bytes.Buffer
