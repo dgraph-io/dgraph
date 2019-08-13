@@ -40,15 +40,15 @@ type schemaHandler struct {
 	definitions    []string
 }
 
-func (s schemaHandler) GQLSchema() string {
+func (s *schemaHandler) GQLSchema() string {
 	return Stringify(s.completeSchema)
 }
 
-func (s schemaHandler) DGSchema() string {
+func (s *schemaHandler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-func (s schemaHandler) Definitions() []string {
+func (s *schemaHandler) Definitions() []string {
 	return s.definitions
 }
 
@@ -59,7 +59,7 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	handler := schemaHandler{Input: input}
+	handler := &schemaHandler{Input: input}
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
 	if gqlErr != nil {
