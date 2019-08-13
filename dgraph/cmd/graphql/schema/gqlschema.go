@@ -104,7 +104,7 @@ func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
 
 // generateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func generateCompleteSchema(sch *ast.Schema) {
+func generateCompleteSchema(sch *ast.Schema, definitions []string) {
 
 	sch.Query = &ast.Definition{
 		Kind:        ast.Object,
@@ -120,13 +120,7 @@ func generateCompleteSchema(sch *ast.Schema) {
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
 
-	keys := make([]string, 0, len(sch.Types))
-	for k := range sch.Types {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
+	for _, key := range definitions {
 		defn := sch.Types[key]
 
 		if defn.Kind == ast.Object {

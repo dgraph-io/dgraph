@@ -18,7 +18,6 @@ package schema
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -91,25 +90,18 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 		return nil, gqlErrList
 	}
 
-	handler.dgraphSchema = genDgSchema(sch)
+	handler.dgraphSchema = genDgSchema(sch, handler.definitions)
 
-	generateCompleteSchema(sch)
+	generateCompleteSchema(sch, handler.definitions)
 	handler.completeSchema = sch
 	return handler, nil
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
-func genDgSchema(gqlSch *ast.Schema) string {
+func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
-	// Sorting the keys so that the schema generated is always in the same order.
-	var keys []string
-	for k := range gqlSch.Types {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-
-	for _, key := range keys {
+	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object:
