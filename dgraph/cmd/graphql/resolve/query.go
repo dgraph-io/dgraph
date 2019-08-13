@@ -58,5 +58,20 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
 	}
 
-	return completeDgraphResult(ctx, qr.query, res)
+	completed, gqlErrs := completeDgraphResult(ctx, qr.query, res)
+
+	// chop leading '{' and trailing '}' from JSON object
+	//
+	// The final GraphQL result gets built like
+	// { data:
+	//    {
+	//      q1: {...},
+	//      q2: [ {...}, {...} ],
+	//      ...
+	//    }
+	// }
+	// Here we are building a single one of the q's, so the fully resolved
+	// result should be q1: {...}, rather than {q1: {...}} as returned
+	// by completeDgraphResult().
+	return completed[1 : len(completed)-1], gqlErrs
 }

@@ -261,7 +261,12 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 //
 
 // completeDgraphResult starts the recursion with field as the top level GraphQL
-// query and dgResult as the matching full Dgraph result.
+// query and dgResult as the matching full Dgraph result.  Always returns a valid
+// JSON []byte of the form
+//   { "query-name": null }
+// if there's no result, or
+//   { "query-name": ... }
+// if there is a result.
 func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte) (
 	[]byte, gqlerror.List) {
 	// We need an initial case in the alg because Dgraph always returns a list
@@ -269,21 +274,21 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	//
 	// If the query was for a non-list type, that needs to be corrected:
 	//
-	//   "q":[{ ... }] ---> "q":{ ... }
+	//   { "q":[{ ... }] }  --->  { "q":{ ... } }
 	//
 	// Also, if the query found nothing at all, that needs correcting too:
 	//
-	//    { } ---> "q": null
+	//    { }  --->  { "q": null }
 
 	var errs gqlerror.List
 	errLoc := field.Location()
 
 	nullResponse := func() []byte {
 		var buf bytes.Buffer
-		buf.WriteRune('"')
+		buf.WriteString(`{ "`)
 		buf.WriteString(field.ResponseName())
 		buf.WriteString(`": `)
-		buf.WriteString(`null`)
+		buf.WriteString(`null }`)
 		return buf.Bytes()
 	}
 
@@ -385,19 +390,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		return nullResponse(), errs
 	}
 
-	// chop leading '{' and trailing '}' from JSON object
-	//
-	// The final GraphQL result gets built like
-	// { data:
-	//    {
-	//      q1: {...},
-	//      q2: [ {...}, {...} ],
-	//      ...
-	//    }
-	// }
-	// Here we are building a single one of the q's, so the fully resolved
-	// result should be q1: {...}, rather than {q1: {...}} as returned by completeObject.
-	return completed[1 : len(completed)-1], append(errs, gqlErrs...)
+	return completed, append(errs, gqlErrs...)
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
