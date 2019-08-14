@@ -107,19 +107,19 @@ input PostUpdate {
 # Generated Query
 #######################
 type Query {
-	getAuthor(id: ID!): Author!
-	queryAuthor(filter: AuthorFilter!): [Author!]!
 	getPost(id: ID!): Post!
 	queryPost(filter: PostFilter!): [Post!]!
+	getAuthor(id: ID!): Author!
+	queryAuthor(filter: AuthorFilter!): [Author!]!
 }
 #######################
 # Generated Mutations
 #######################
 type Mutation {
-	addAuthor(input: AuthorInput!): AddAuthorPayload!
-	updateAuthor(id: ID!,input: AuthorUpdate): UpdateAuthorPayload!
-	deleteAuthor(id: ID!): DeleteAuthorPayload!
 	addPost(input: PostInput!): AddPostPayload!
 	updatePost(id: ID!,input: PostUpdate): UpdatePostPayload!
 	deletePost(id: ID!): DeletePostPayload!
+	addAuthor(input: AuthorInput!): AddAuthorPayload!
+	updateAuthor(id: ID!,input: AuthorUpdate): UpdateAuthorPayload!
+	deleteAuthor(id: ID!): DeleteAuthorPayload!
 }

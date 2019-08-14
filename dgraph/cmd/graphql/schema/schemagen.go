@@ -18,7 +18,6 @@ package schema
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/vektah/gqlparser/ast"
@@ -38,11 +37,11 @@ type schemaHandler struct {
 	dgraphSchema   string
 }
 
-func (s schemaHandler) GQLSchema() string {
+func (s *schemaHandler) GQLSchema() string {
 	return Stringify(s.completeSchema)
 }
 
-func (s schemaHandler) DGSchema() string {
+func (s *schemaHandler) DGSchema() string {
 	return s.dgraphSchema
 }
 
@@ -53,7 +52,7 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	handler := schemaHandler{Input: input}
+	handler := &schemaHandler{Input: input}
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: input})
 	if gqlErr != nil {
@@ -67,35 +66,34 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 
 	addScalars(doc)
 
+	defns := make([]string, len(doc.Definitions))
+
+	for i, defn := range doc.Definitions {
+		defns[i] = defn.Name
+	}
+
 	sch, gqlErr := validator.ValidateSchemaDocument(doc)
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
 
-	gqlErrList = postGQLValidation(sch)
+	gqlErrList = postGQLValidation(sch, defns)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
 
-	handler.dgraphSchema = genDgSchema(sch)
+	handler.dgraphSchema = genDgSchema(sch, defns)
 
-	generateCompleteSchema(sch)
+	generateCompleteSchema(sch, defns)
 	handler.completeSchema = sch
 	return handler, nil
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
-func genDgSchema(gqlSch *ast.Schema) string {
+func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
-	// Sorting the keys so that the schema generated is always in the same order.
-	var keys []string
-	for k := range gqlSch.Types {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-
-	for _, key := range keys {
+	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object:
