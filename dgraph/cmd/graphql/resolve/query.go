@@ -71,7 +71,10 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 	//    }
 	// }
 	// Here we are building a single one of the q's, so the fully resolved
-	// result should be q1: {...}, rather than {q1: {...}} as returned
-	// by completeDgraphResult().
+	// result should be q1: {...}, rather than {q1: {...}}.
+	//
+	// completeDgraphResult() always returns a valid JSON object.  At least
+	// { q: null }
+	// even in error cases, so this is safe.
 	return completed[1 : len(completed)-1], gqlErrs
 }
