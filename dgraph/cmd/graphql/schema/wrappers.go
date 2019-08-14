@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -107,7 +108,7 @@ type Type interface {
 	Name() string
 	Nullable() bool
 	ListType() Type
-	String() string
+	fmt.Stringer
 }
 
 type astType struct {

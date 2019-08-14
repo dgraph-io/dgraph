@@ -287,8 +287,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		var buf bytes.Buffer
 		buf.WriteString(`{ "`)
 		buf.WriteString(field.ResponseName())
-		buf.WriteString(`": `)
-		buf.WriteString(`null }`)
+		buf.WriteString(`": null }`)
 		return buf.Bytes()
 	}
 
@@ -534,7 +533,7 @@ func completeList(pBld pathBuilder, field schema.Field, values []interface{}) ([
 		//
 		// Let's crush it to null so we still get something from the rest of the
 		// query and log the error.
-		return missmatchedList(pBld, field, values)
+		return mismatched(pBld, field, values)
 	}
 
 	buf.WriteRune('[')
@@ -571,7 +570,7 @@ func completeList(pBld pathBuilder, field schema.Field, values []interface{}) ([
 	return buf.Bytes(), errs
 }
 
-func missmatchedList(pBld pathBuilder, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
+func mismatched(pBld pathBuilder, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
 	errPath := pBld.path()
 	errLoc := field.Location()
 
