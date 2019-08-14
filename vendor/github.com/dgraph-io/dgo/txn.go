@@ -27,22 +27,21 @@ import (
 )
 
 var (
+	// ErrFinished is returned when an operation is performed on
+	// already committed or discarded transaction
 	ErrFinished = errors.New("Transaction has already been committed or discarded")
+	// ErrReadOnly is returned when a write/update is performed on a readonly transaction
 	ErrReadOnly = errors.New("Readonly transaction cannot run mutations or be committed")
 )
 
 // Txn is a single atomic transaction.
-//
 // A transaction lifecycle is as follows:
-//
-// 1. Created using NewTxn.
-//
-// 2. Various Query and Mutate calls made.
-//
-// 3. Commit or Discard used. If any mutations have been made, It's important
-// that at least one of these methods is called to clean up resources. Discard
-// is a no-op if Commit has already been called, so it's safe to defer a call
-// to Discard immediately after NewTxn.
+//   1. Created using NewTxn.
+//   2. Various Query and Mutate calls made.
+//   3. Commit or Discard used. If any mutations have been made, It's important
+//      that at least one of these methods is called to clean up resources. Discard
+//      is a no-op if Commit has already been called, so it's safe to defer a call
+//      to Discard immediately after NewTxn.
 type Txn struct {
 	context *api.TxnContext
 
@@ -55,24 +54,6 @@ type Txn struct {
 	dc api.DgraphClient
 }
 
-func (txn *Txn) Sequencing(sequencing api.LinRead_Sequencing) {
-	// Sequencing is no longer used.
-}
-
-// BestEffort enables best effort in read-only queries. Using this flag will ask the
-// Dgraph Alpha to try to get timestamps from memory in a best effort to reduce the number of
-// outbound requests to Zero. This may yield improved latencies in read-bound datasets.
-//
-// This method will panic if the transaction is not read-only.
-// Returns the transaction itself.
-func (txn *Txn) BestEffort() *Txn {
-	if !txn.readOnly {
-		panic("Best effort only works for read-only queries.")
-	}
-	txn.bestEffort = true
-	return txn
-}
-
 // NewTxn creates a new transaction.
 func (d *Dgraph) NewTxn() *Txn {
 	return &Txn{
@@ -82,23 +63,40 @@ func (d *Dgraph) NewTxn() *Txn {
 	}
 }
 
+// NewReadOnlyTxn sets the txn to readonly transaction.
 func (d *Dgraph) NewReadOnlyTxn() *Txn {
 	txn := d.NewTxn()
 	txn.readOnly = true
 	return txn
 }
 
-// Query sends a query to one of the connected dgraph instances. If no
-// mutations need to be made in the same transaction, it's convenient to chain
-// the method, e.g. NewTxn().Query(ctx, "...").
+// BestEffort enables best effort in read-only queries. This will ask the Dgraph Alpha to
+// try to get timestamps from memory in a best effort to reduce the number of outbound
+// requests to Zero. This may yield improved latencies in read-bound datasets.
+//
+// This method will panic if the transaction is not read-only.
+// Returns the transaction itself.
+func (txn *Txn) BestEffort() *Txn {
+	if !txn.readOnly {
+		panic("Best effort only works for read-only queries.")
+	}
+
+	txn.bestEffort = true
+	return txn
+}
+
+// Query sends a query to one of the connected Dgraph instances. If no
+// mutations need to be made in the same transaction, it's convenient to
+// chain the method, e.g. NewTxn().Query(ctx, "...").
 func (txn *Txn) Query(ctx context.Context, q string) (*api.Response, error) {
 	return txn.QueryWithVars(ctx, q, nil)
 }
 
-// QueryWithVars is like Query, but allows a variable map to be used. This can
-// provide safety against injection attacks.
+// QueryWithVars is like Query, but allows a variable map to be used.
+// This can provide safety against injection attacks.
 func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 	vars map[string]string) (*api.Response, error) {
+
 	if txn.finished {
 		return nil, ErrFinished
 	}
@@ -109,23 +107,8 @@ func (txn *Txn) QueryWithVars(ctx context.Context, q string,
 		ReadOnly:   txn.readOnly,
 		BestEffort: txn.bestEffort,
 	}
-	ctx = txn.dg.getContext(ctx)
-	resp, err := txn.dc.Query(ctx, req)
-	if isJwtExpired(err) {
-		err = txn.dg.retryLogin(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ctx = txn.dg.getContext(ctx)
-		resp, err = txn.dc.Query(ctx, req)
-	}
 
-	if err == nil {
-		if err := txn.mergeContext(resp.GetTxn()); err != nil {
-			return nil, err
-		}
-	}
-	return resp, err
+	return txn.queryOrMutate(ctx, req)
 }
 
 func (txn *Txn) mergeContext(src *api.TxnContext) error {
@@ -144,61 +127,94 @@ func (txn *Txn) mergeContext(src *api.TxnContext) error {
 	return nil
 }
 
-// Mutate allows data stored on dgraph instances to be modified. The fields in
-// api.Mutation come in pairs, set and delete. Mutations can either be
-// encoded as JSON or as RDFs.
+// Mutate allows data stored on Dgraph instances to be modified.
+// The fields in api.Mutation come in pairs, set and delete.
+// Mutations can either be encoded as JSON or as RDFs.
 //
 // If CommitNow is set, then this call will result in the transaction
-// being committed. In this case, an explicit call to Commit doesn't need to
-// subsequently be made.
+// being committed. In this case, an explicit call to Commit doesn't
+// need to be made subsequently.
 //
-// If the mutation fails, then the transaction is discarded and all future
-// operations on it will fail.
-func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
+// If the mutation fails, then the transaction is discarded and all
+// future operations on it will fail.
+func (txn *Txn) Mutate(ctx context.Context, mu *api.Mutation) (*api.Response, error) {
 	switch {
 	case txn.readOnly:
 		return nil, ErrReadOnly
 	case txn.finished:
 		return nil, ErrFinished
 	}
-
 	txn.mutated = true
-	mu.StartTs = txn.context.StartTs
+
+	req := &api.Request{
+		StartTs:   txn.context.StartTs,
+		Mutations: []*api.Mutation{mu},
+		CommitNow: mu.CommitNow,
+	}
+
+	return txn.queryOrMutate(ctx, req)
+}
+
+// Upsert executes a query followed by one or more than mutations.
+func (txn *Txn) Upsert(ctx context.Context, req *api.Request) (
+	*api.Response, error) {
+
+	switch {
+	case txn.readOnly:
+		return nil, ErrReadOnly
+	case txn.finished:
+		return nil, ErrFinished
+	}
+	txn.mutated = true
+
+	req.StartTs = txn.context.StartTs
+	return txn.queryOrMutate(ctx, req)
+}
+
+// queryOrMutate performs a query or a mutation or both.
+func (txn *Txn) queryOrMutate(ctx context.Context, req *api.Request) (
+	*api.Response, error) {
+
 	ctx = txn.dg.getContext(ctx)
-	ag, err := txn.dc.Mutate(ctx, mu)
+	resp, err := txn.dc.Query(ctx, req)
+
 	if isJwtExpired(err) {
 		err = txn.dg.retryLogin(ctx)
 		if err != nil {
 			return nil, err
 		}
 		ctx = txn.dg.getContext(ctx)
-		ag, err = txn.dc.Mutate(ctx, mu)
+		resp, err = txn.dc.Query(ctx, req)
 	}
 
 	if err != nil {
-		_ = txn.Discard(ctx) // Ignore error - user should see the original error.
+		// Ignore error, user should see the original error.
+		_ = txn.Discard(ctx)
 
-		// If the transaction was aborted, return the right error so the caller can handle it.
+		// If the transaction was aborted, return the right error
+		// so the caller can handle it.
 		if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
 			err = y.ErrAborted
 		}
+
 		return nil, err
 	}
 
-	if mu.CommitNow {
+	if req.CommitNow {
 		txn.finished = true
 	}
-	err = txn.mergeContext(ag.Context)
-	return ag, err
+
+	err = txn.mergeContext(resp.GetTxn())
+	return resp, err
 }
 
-// Commit commits any mutations that have been made in the transaction. Once
-// Commit has been called, the lifespan of the transaction is complete.
+// Commit commits any mutations that have been made in the transaction.
+// Once Commit has been called, the lifespan of the transaction is complete.
 //
 // Errors could be returned for various reasons. Notably, ErrAborted could be
-// returned if transactions that modify the same data are being run
-// concurrently. It's up to the user to decide if they wish to retry. In this
-// case, the user should create a new transaction.
+// returned if transactions that modify the same data are being run concurrently.
+// It's up to the user to decide if they wish to retry.
+// In this case, the user should create a new transaction.
 func (txn *Txn) Commit(ctx context.Context) error {
 	switch {
 	case txn.readOnly:
@@ -211,18 +227,18 @@ func (txn *Txn) Commit(ctx context.Context) error {
 	if s, ok := status.FromError(err); ok && s.Code() == codes.Aborted {
 		err = y.ErrAborted
 	}
+
 	return err
 }
 
 // Discard cleans up the resources associated with an uncommitted transaction
 // that contains mutations. It is a no-op on transactions that have already
-// been committed or don't contain mutations. Therefore it is safe (and
-// recommended) to call as a deferred function immediately after a new
-// transaction is created.
+// been committed or don't contain mutations. Therefore, it is safe (and recommended)
+// to call as a deferred function immediately after a new transaction is created.
 //
 // In some cases, the transaction can't be discarded, e.g. the grpc connection
 // is unavailable. In these cases, the server will eventually do the
-// transaction clean up.
+// transaction clean up itself without any intervention from the client.
 func (txn *Txn) Discard(ctx context.Context) error {
 	txn.context.Aborted = true
 	return txn.commitOrAbort(ctx)
@@ -233,18 +249,19 @@ func (txn *Txn) commitOrAbort(ctx context.Context) error {
 		return nil
 	}
 	txn.finished = true
-
 	if !txn.mutated {
 		return nil
 	}
 
 	ctx = txn.dg.getContext(ctx)
 	_, err := txn.dc.CommitOrAbort(ctx, txn.context)
+
 	if isJwtExpired(err) {
 		err = txn.dg.retryLogin(ctx)
 		if err != nil {
 			return err
 		}
+
 		ctx = txn.dg.getContext(ctx)
 		_, err = txn.dc.CommitOrAbort(ctx, txn.context)
 	}
