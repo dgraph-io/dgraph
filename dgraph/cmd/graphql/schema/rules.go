@@ -31,7 +31,6 @@ func init() {
 	fieldValidations = append(fieldValidations, listValidityCheck)
 }
 
-// Rearrange functions so that pre and post gql validations functions are together in file.
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
 
 	if defn.Kind != ast.Object && defn.Kind != ast.Enum {
@@ -41,6 +40,27 @@ func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
 			strings.ToLower(string(defn.Kind)),
 		)
 	}
+	return nil
+}
+
+func nameCheck(defn *ast.Definition) *gqlerror.Error {
+
+	if (defn.Kind == ast.Object || defn.Kind == ast.Enum) && isReservedKeyWord(defn.Name) {
+		var errMesg string
+
+		if defn.Name == "Query" || defn.Name == "Mutation" {
+			errMesg = "You don't need to define the GraphQL Query or Mutation types." +
+				" Those are built automatically for you."
+		} else {
+			errMesg = fmt.Sprintf(
+				"%s is a reserved word, so you can't declare a type with this name. "+
+					"Pick a different name for the type.", defn.Name,
+			)
+		}
+
+		return gqlerror.ErrorPosf(defn.Position, errMesg)
+	}
+
 	return nil
 }
 
@@ -79,27 +99,6 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 			Message:   errMessage,
 			Locations: errLocations,
 		}
-	}
-
-	return nil
-}
-
-func nameCheck(defn *ast.Definition) *gqlerror.Error {
-
-	if (defn.Kind == ast.Object || defn.Kind == ast.Enum) && isReservedKeyWord(defn.Name) {
-		var errMesg string
-
-		if defn.Name == "Query" || defn.Name == "Mutation" {
-			errMesg = "You don't need to define the GraphQL Query or Mutation types." +
-				" Those are built automatically for you."
-		} else {
-			errMesg = fmt.Sprintf(
-				"%s is a reserved word, so you can't declare a type with this name. "+
-					"Pick a different name for the type.", defn.Name,
-			)
-		}
-
-		return gqlerror.ErrorPosf(defn.Position, errMesg)
 	}
 
 	return nil
