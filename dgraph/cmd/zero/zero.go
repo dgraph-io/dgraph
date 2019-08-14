@@ -41,10 +41,9 @@ var (
 	errServerShutDown    = errors.New("Server is being shut down")
 )
 
-// TODO - This might belong somewhere else instead for e.g. the state.
-// TODO - Add other fields as well.
 type enterprise struct {
 	enabled  bool
+	Entity   string    `json:"entity"`
 	MaxNodes uint64    `json:"max_nodes"`
 	Expiry   time.Time `json:"expiry"`
 }
@@ -298,8 +297,6 @@ func (s *Server) enterpriseEnabled() bool {
 func (s *Server) updateEnterpriseState() {
 	s.Lock()
 	defer s.Unlock()
-	// TODO - Check timezones won't mess up things here.
-	// Also check how to get total number of nodes and have logic for that.
 	if time.Now().Before(s.enterprise.Expiry) {
 		s.state.EnterpriseEnabled = true
 	} else {

@@ -517,7 +517,7 @@ func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
 		return
 	}
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	n.server.updateEnterpriseState()
