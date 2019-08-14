@@ -440,7 +440,7 @@ func (s *Server) removeNode(ctx context.Context, nodeId uint64, groupId uint32) 
 	return s.Node.proposeAndWait(ctx, zp)
 }
 
-// Connect is used to connect the very first time with group zero.
+// Connect is used by Alpha nodes to connect the very first time with group zero.
 func (s *Server) Connect(ctx context.Context,
 	m *pb.Member) (resp *pb.ConnectionState, err error) {
 	// Ensures that connect requests are always serialized
@@ -478,10 +478,13 @@ func (s *Server) Connect(ctx context.Context,
 		}
 	}
 
+	numberOfNodes := len(ms.Zeros)
 	for _, group := range ms.Groups {
 		for _, member := range group.Members {
 			switch {
-			case member.Addr == m.Addr && m.Id == 0:
+			// TODO - Verify if we need the m.Id == 0 condition here and why.
+			// If we have this member, then we should just connect to it and return.
+			case member.Addr == m.Addr:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
 				conn.GetPools().Connect(m.Addr)
 				return &pb.ConnectionState{
@@ -503,7 +506,15 @@ func (s *Server) Connect(ctx context.Context,
 						" with same ID: %+v", member)
 				}
 			}
+			numberOfNodes++
 		}
+	}
+
+	// TODO - Zero MaxNodes should probably be an error.
+	if s.enterprise.enabled && s.enterprise.MaxNodes != 0 &&
+		uint64(numberOfNodes) >= s.enterprise.MaxNodes {
+		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
+			"number of nodes: [%v] permitted for your enterprise license.", s.enterprise.MaxNodes)
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.
