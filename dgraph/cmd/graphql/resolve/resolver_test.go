@@ -267,24 +267,24 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ ` +
-				`{ "title": "A Post", ` +
-				`"text": "Some text", ` +
-				`"author": { "name": "A.N. Author" } } ] }`,
-			expected: `{ "addPost": { "post" : ` +
-				`{ "title": "A Post", ` +
-				`"text": "Some text", ` +
-				`"author": { "name": "A.N. Author", "dob": null } } } }`,
+			queryResponse: `{ "post" : [ 
+				{ "title": "A Post", 
+				"text": "Some text", 
+				"author": { "name": "A.N. Author" } } ] }`,
+			expected: `{ "addPost": { "post" : 
+				{ "title": "A Post", 
+				"text": "Some text", 
+				"author": { "name": "A.N. Author", "dob": null } } } }`,
 		},
 		"Add mutation triggers GraphQL error propagation": {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
 				"the author is squashed to null, but that's also non-nullable, so the " +
 				"propagates to the query root.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ ` +
-				`{ "title": "A Post", ` +
-				`"text": "Some text", ` +
-				`"author": { "dob": "2000-01-01" } } ] }`,
+			queryResponse: `{ "post" : [ 
+				{ "title": "A Post", 
+				"text": "Some text", 
+				"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "addPost": { "post" : null } }`,
 			errors: gqlerror.List{&gqlerror.Error{
 				Message: `Non-nullable field 'name' (type String!) ` +
@@ -342,24 +342,24 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 			explanation: "Field 'dob' is nullable, so null should be inserted " +
 				"if the mutation's query doesn't return a value.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ ` +
-				`{ "title": "A Post", ` +
-				`"text": "Some text", ` +
-				`"author": { "name": "A.N. Author" } } ] }`,
-			expected: `{ "updatePost": { "post" : ` +
-				`{ "title": "A Post", ` +
-				`"text": "Some text", ` +
-				`"author": { "name": "A.N. Author", "dob": null } } } }`,
+			queryResponse: `{ "post" : [ 
+				{ "title": "A Post", 
+				"text": "Some text", 
+				"author": { "name": "A.N. Author" } } ] }`,
+			expected: `{ "updatePost": { "post" : 
+				{ "title": "A Post", 
+				"text": "Some text", 
+				"author": { "name": "A.N. Author", "dob": null } } } }`,
 		},
 		"Update Mutation triggers GraphQL error propagation": {
 			explanation: "An Author's name is non-nullable, so if that's missing, " +
 				"the author is squashed to null, but that's also non-nullable, so the " +
 				"propagates to the query root.",
 			mutResponse: map[string]string{"newnode": "0x1"},
-			queryResponse: `{ "post" : [ ` +
-				`{ "title": "A Post", ` +
-				`"text": "Some text", ` +
-				`"author": { "dob": "2000-01-01" } } ] }`,
+			queryResponse: `{ "post" : [ { 
+				"title": "A Post", 
+				"text": "Some text", 
+				"author": { "dob": "2000-01-01" } } ] }`,
 			expected: `{ "updatePost": { "post" : null } }`,
 			errors: gqlerror.List{&gqlerror.Error{
 				Message: `Non-nullable field 'name' (type String!) ` +
