@@ -25,24 +25,8 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// Validation functions which will run before gql validation.
-type preGQLCheck func(schema *ast.SchemaDocument) gqlerror.List
-
-// Validation functions which will run after gql validation.
-type postGQLCheck func(schema *ast.Schema) gqlerror.List
-
-type preGQLRule struct {
-	name        string
-	schRuleFunc preGQLCheck
-}
-
-type postGQLRule struct {
-	name        string
-	schRuleFunc postGQLCheck
-}
-
-var preGQLRules []preGQLRule
-var postGQLRules []postGQLRule
+var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
+var fieldValidations []func(field *ast.FieldDefinition) *gqlerror.Error
 
 type scalar struct {
 	name       string
@@ -69,38 +53,50 @@ func addScalars(doc *ast.SchemaDocument) {
 	}
 }
 
-// addRule adds a new schema rule to the global array schRules.
-func addPreRule(name string, f preGQLCheck) {
-	preGQLRules = append(preGQLRules, preGQLRule{
-		name:        name,
-		schRuleFunc: f,
-	})
-}
-
-func addPostRule(name string, f postGQLCheck) {
-	postGQLRules = append(postGQLRules, postGQLRule{
-		name:        name,
-		schRuleFunc: f,
-	})
-}
-
 // preGQLValidation validates schema before gql validation
 func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, rule := range preGQLRules {
-		errs = append(errs, rule.schRuleFunc(schema)...)
+	for _, defn := range schema.Definitions {
+		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 	}
 
 	return errs
 }
 
 // postGQLValidation validates schema after gql validation.
-func postGQLValidation(schema *ast.Schema) gqlerror.List {
+func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
 
-	for _, rule := range postGQLRules {
-		errs = append(errs, rule.schRuleFunc(schema)...)
+	for _, defn := range definitions {
+		typ := schema.Types[defn]
+
+		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
+
+		for _, field := range typ.Fields {
+			errs = append(errs, applyFieldValidations(field)...)
+		}
+	}
+
+	return errs
+}
+
+func applyDefnValidations(defn *ast.Definition,
+	rules []func(defn *ast.Definition) *gqlerror.Error) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range rules {
+		errs = appendIfNotNull(errs, rule(defn))
+	}
+
+	return errs
+}
+
+func applyFieldValidations(field *ast.FieldDefinition) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range fieldValidations {
+		errs = appendIfNotNull(errs, rule(field))
 	}
 
 	return errs
@@ -108,7 +104,7 @@ func postGQLValidation(schema *ast.Schema) gqlerror.List {
 
 // generateCompleteSchema generates all the required query/mutation/update functions
 // for all the types mentioned the the schema.
-func generateCompleteSchema(sch *ast.Schema) {
+func generateCompleteSchema(sch *ast.Schema, definitions []string) {
 
 	sch.Query = &ast.Definition{
 		Kind:        ast.Object,
@@ -124,13 +120,7 @@ func generateCompleteSchema(sch *ast.Schema) {
 		Fields:      make([]*ast.FieldDefinition, 0),
 	}
 
-	keys := make([]string, 0, len(sch.Types))
-	for k := range sch.Types {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
+	for _, key := range definitions {
 		defn := sch.Types[key]
 
 		if defn.Kind == ast.Object {
@@ -548,4 +538,12 @@ func isIDField(defn *ast.Definition, fld *ast.FieldDefinition) bool {
 func idTypeFor(defn *ast.Definition) string {
 	// Placeholder till more ID types are introduced.
 	return "ID"
+}
+
+func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List {
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return errs
 }
