@@ -1,6 +1,6 @@
 {
   me(func: allofterms(name@en, "Steven Spielberg")) {
-    director.film (first: -2) {
+    director.film (orderasc: name@en) (first: 2) {
       name@en
       initial_release_date
       genre (orderasc: name@en) (first: 3) {
@@ -15,25 +15,32 @@
     {
       "director.film": [
         {
-          "name@en": "Firelight",
-          "initial_release_date": "1964-03-24T00:00:00Z",
+          "name@en": "1941",
+          "initial_release_date": "1979-12-13T00:00:00Z",
           "genre": [
             {
-              "name@en": "Science Fiction"
+              "name@en": "Action Comedy"
             },
             {
-              "name@en": "Thriller"
+              "name@en": "Action Film"
+            },
+            {
+              "name@en": "Action/Adventure"
             }
           ]
         },
         {
-          "name@en": "Amazing Stories: Book One",
+          "name@en": "A.I. Artificial Intelligence",
+          "initial_release_date": "2001-06-26T00:00:00Z",
           "genre": [
             {
-              "name@en": "Comedy"
+              "name@en": "Adventure Film"
             },
             {
               "name@en": "Drama"
+            },
+            {
+              "name@en": "Future noir"
             }
           ]
         }

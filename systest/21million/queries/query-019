@@ -1,5 +1,5 @@
 {
-  me(func: has(director.film), first: 5) {
+  me(func: has(director.film), first: 5, orderasc: name@en) {
     name@en
     director.film @filter(has(initial_release_date))  {
       initial_release_date
@@ -11,162 +11,147 @@
 {
   "me": [
     {
-      "name@en": "Martin Clunes",
+      "name@en": "\t Tofan Abubaker",
       "director.film": [
         {
-          "initial_release_date": "1994-07-08T00:00:00Z",
-          "name@en": "Staggered"
+          "initial_release_date": "2013-04-01T00:00:00Z",
+          "name@en": "Real Vs. Barcelona"
         }
       ]
     },
     {
-      "name@en": "Mitsuo Toyama",
+      "name@en": "\tRajendra Singh Babu",
       "director.film": [
         {
-          "initial_release_date": "2012-03-10T00:00:00Z"
-        }
-      ]
-    },
-    {
-      "name@en": "Ben Rivers",
-      "director.film": [
-        {
-          "initial_release_date": "2006-01-01T00:00:00Z",
-          "name@en": "Astika"
+          "initial_release_date": "1990-03-23T00:00:00Z",
+          "name@en": "Prema Yuddham"
         },
         {
-          "initial_release_date": "2008-01-01T00:00:00Z",
-          "name@en": "A World Rattled of Habit"
+          "initial_release_date": "1975-08-07T00:00:00Z",
+          "name@en": "Nagakanye"
         },
         {
-          "initial_release_date": "2011-09-09T00:00:00Z",
-          "name@en": "Two Years at Sea"
+          "initial_release_date": "1990-01-01T00:00:00Z",
+          "name@en": "Bannada Gejje"
         },
         {
-          "initial_release_date": "2011-01-01T00:00:00Z",
-          "name@en": "Sack Barrow"
+          "initial_release_date": "2003-03-28T00:00:00Z",
+          "name@en": "Katthegalu Saar Katthegalu"
         },
         {
-          "initial_release_date": "2012-01-01T00:00:00Z",
-          "name@en": "Phantoms of a Libertine"
+          "initial_release_date": "1985-05-17T00:00:00Z",
+          "name@en": "Ek Se Bhale Do"
         },
         {
-          "initial_release_date": "2004-01-01T00:00:00Z",
-          "name@en": "We the People"
-        },
-        {
-          "initial_release_date": "2011-01-28T00:00:00Z",
-          "name@en": "Slow Action"
-        },
-        {
-          "initial_release_date": "2009-01-01T00:00:00Z",
-          "name@en": "I Know Where I'm Going"
-        },
-        {
-          "initial_release_date": "2005-01-01T00:00:00Z",
-          "name@en": "The Hyrcynium Wood"
-        },
-        {
-          "initial_release_date": "2013-08-08T00:00:00Z",
-          "name@en": "A Spell to Ward Off the Darkness"
-        },
-        {
-          "initial_release_date": "2012-08-07T00:00:00Z",
-          "name@en": "The Creation As We Saw It"
-        },
-        {
-          "initial_release_date": "2006-01-01T00:00:00Z",
-          "name@en": "The Coming Race"
-        },
-        {
-          "initial_release_date": "2005-01-01T00:00:00Z",
-          "name@en": "The Bomb with a Man in His Shoe"
-        },
-        {
-          "initial_release_date": "2008-01-01T00:00:00Z",
-          "name@en": "Ah, Liberty!"
-        },
-        {
-          "initial_release_date": "1993-01-01T00:00:00Z",
-          "name@en": "The Big Sink"
-        },
-        {
-          "initial_release_date": "2014-01-01T00:00:00Z",
-          "name@en": "Things"
-        },
-        {
-          "initial_release_date": "2006-01-01T00:00:00Z",
-          "name@en": "This Is My Land"
-        },
-        {
-          "initial_release_date": "2008-10-01T00:00:00Z",
-          "name@en": "Origin of the Species"
-        },
-        {
-          "initial_release_date": "2003-01-01T00:00:00Z",
-          "name@en": "Old Dark House"
-        },
-        {
-          "initial_release_date": "2005-01-01T00:00:00Z",
-          "name@en": "House"
-        },
-        {
-          "initial_release_date": "2007-01-01T00:00:00Z",
-          "name@en": "Terror!"
-        },
-        {
-          "initial_release_date": "2007-01-01T00:00:00Z",
-          "name@en": "Sørdal"
-        }
-      ]
-    },
-    {
-      "name@en": "J. Mahendran",
-      "director.film": [
-        {
-          "initial_release_date": "1986-01-01T00:00:00Z",
-          "name@en": "Kannukku Mai Ezhuthu"
-        },
-        {
-          "initial_release_date": "1980-08-15T00:00:00Z",
-          "name@en": "Johnny"
-        },
-        {
-          "initial_release_date": "2006-07-28T00:00:00Z",
-          "name@en": "Sasanam"
-        },
-        {
-          "initial_release_date": "1979-10-19T00:00:00Z",
-          "name@en": "Uthiri Pookkal"
+          "initial_release_date": "1984-01-01T00:00:00Z",
+          "name@en": "Bandhana"
         },
         {
           "initial_release_date": "1981-01-01T00:00:00Z",
-          "name@en": "Nenjathai Killathe"
+          "name@en": "Antha"
         },
         {
-          "initial_release_date": "1984-06-15T00:00:00Z",
-          "name@en": "Kai Kodukkum Kai"
+          "initial_release_date": "1984-01-01T00:00:00Z",
+          "name@en": "Gandu Bherunda"
         },
         {
-          "initial_release_date": "1981-04-17T00:00:00Z",
-          "name@en": "Nandu"
+          "initial_release_date": "1994-01-01T00:00:00Z",
+          "name@en": "Mahakshathriya"
         },
         {
-          "initial_release_date": "1982-01-01T00:00:00Z",
-          "name@en": "Metti"
+          "initial_release_date": "1984-02-24T00:00:00Z",
+          "name@en": "Sharara"
         },
         {
-          "initial_release_date": "1978-08-15T00:00:00Z",
-          "name@en": "Mullum Malarum"
+          "initial_release_date": "1981-01-01T00:00:00Z",
+          "name@en": "Simhada Mari Sainya"
+        },
+        {
+          "initial_release_date": "1993-01-01T00:00:00Z",
+          "name@en": "Hoovu Hannu"
+        },
+        {
+          "initial_release_date": "1985-01-01T00:00:00Z",
+          "name@en": "Aaj Ke Sholey"
+        },
+        {
+          "initial_release_date": "1997-01-01T00:00:00Z",
+          "name@en": "Mungarina Minchu"
+        },
+        {
+          "initial_release_date": "2006-08-11T00:00:00Z",
+          "name@en": "Mohini 9886788888"
+        },
+        {
+          "initial_release_date": "1998-01-01T00:00:00Z",
+          "name@en": "Bhoomi Thayiya Chochchala Maga"
+        },
+        {
+          "initial_release_date": "1981-12-18T00:00:00Z",
+          "name@en": "Meri Aawaz Suno"
+        },
+        {
+          "initial_release_date": "1978-01-01T00:00:00Z",
+          "name@en": "Kiladi Jodi"
+        },
+        {
+          "initial_release_date": "1981-01-01T00:00:00Z",
+          "name@en": "Bhaari Bharjari Bete"
+        },
+        {
+          "initial_release_date": "1977-03-18T00:00:00Z",
+          "name@en": "Nagara Hole"
+        },
+        {
+          "initial_release_date": "1990-01-01T00:00:00Z",
+          "name@en": "Muthina Haara"
+        },
+        {
+          "initial_release_date": "1984-04-06T00:00:00Z",
+          "name@en": "Mera Faisla"
+        },
+        {
+          "initial_release_date": "2004-12-24T00:00:00Z",
+          "name@en": "Kanchana Ganga"
+        },
+        {
+          "initial_release_date": "2004-07-09T00:00:00Z",
+          "name@en": "Love"
+        },
+        {
+          "initial_release_date": "1990-01-01T00:00:00Z",
+          "name@en": "Aag Ka Dariya"
+        },
+        {
+          "initial_release_date": "1998-01-01T00:00:00Z",
+          "name@en": "Doni Sagali"
         }
       ]
     },
     {
-      "name@en": "Jayke Lewis",
+      "name@en": "   Carsten Fehse",
       "director.film": [
         {
-          "initial_release_date": "2008-06-07T00:00:00Z",
-          "name@en": "30 Minute Guarantee"
+          "initial_release_date": "2013-08-20T00:00:00Z",
+          "name@en": "The Power Of Soul"
+        }
+      ]
+    },
+    {
+      "name@en": " Adrian Callender",
+      "director.film": [
+        {
+          "initial_release_date": "2005-01-01T00:00:00Z",
+          "name@en": "Rocked: Sum 41 in Congo"
+        }
+      ]
+    },
+    {
+      "name@en": " Amelia Kirby",
+      "director.film": [
+        {
+          "initial_release_date": "2006-01-01T00:00:00Z",
+          "name@en": "Up the Ridge"
         }
       ]
     }
