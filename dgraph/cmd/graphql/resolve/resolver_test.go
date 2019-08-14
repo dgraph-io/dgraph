@@ -151,7 +151,7 @@ func TestResolver(t *testing.T) {
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
 	require.Nil(t, gqlErr)
-	// ^^ We can't use no error here because gqlErr is of type *gqlerror.Error,
+	// ^^ We can't use NoError here because gqlErr is of type *gqlerror.Error,
 	// so passing into something that just expects an error, will always be a
 	// non-nil interface.
 
@@ -225,6 +225,7 @@ func TestResponseOrder(t *testing.T) {
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
 	require.Nil(t, gqlErr)
+	// see note above about NoError
 
 	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
 	require.Nil(t, gqlErr)
@@ -296,6 +297,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
 	require.Nil(t, gqlErr)
+	// see note above about NoError
 
 	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
 	require.Nil(t, gqlErr)
@@ -371,6 +373,7 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 
 	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
 	require.Nil(t, gqlErr)
+	// see note above about NoError
 
 	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
 	require.Nil(t, gqlErr)
