@@ -18,7 +18,6 @@ package zero
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math"
 	"sync"
@@ -95,7 +94,6 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
-		fmt.Println("fpath: ", fpath)
 		// TODO - Change this
 		// 1. To read a file, break it into data and signed parts.
 		// 2. Verify signature using public key.
@@ -300,7 +298,6 @@ func (s *Server) enterpriseEnabled() bool {
 func (s *Server) updateEnterpriseState() {
 	s.Lock()
 	defer s.Unlock()
-	fmt.Println("max raft id: ", s.state.MaxRaftId)
 	// TODO - Check timezones won't mess up things here.
 	// Also check how to get total number of nodes and have logic for that.
 	if time.Now().Before(s.enterprise.Expiry) {

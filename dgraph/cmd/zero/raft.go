@@ -326,7 +326,6 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		if p.MaxRaftId <= state.MaxRaftId {
 			return p.Key, errInvalidProposal
 		}
-		glog.Infof("maxRaftId: %+v\n", state.MaxRaftId)
 		state.MaxRaftId = p.MaxRaftId
 	}
 	if p.SnapshotTs != nil {
@@ -518,7 +517,6 @@ func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
 		return
 	}
 
-	fmt.Println("not here are we?")
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
