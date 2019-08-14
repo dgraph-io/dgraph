@@ -262,6 +262,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// TODO - When is this called, check.
 	g.applyState(state.GetState())
 	return nil
 }
@@ -952,4 +953,15 @@ func (g *groupi) processOracleDeltaStream() {
 			}
 		}
 	}
+}
+
+// EnterpriseEnabled returns whether enterprise features can be used or not.
+func EnterpriseEnabled() bool {
+	g := groups()
+	g.RLock()
+	defer g.RUnlock()
+	if g.state == nil {
+		return false
+	}
+	return g.state.EnterpriseEnabled
 }

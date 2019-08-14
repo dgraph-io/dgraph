@@ -507,6 +507,30 @@ func (n *node) initAndStartNode() error {
 	return nil
 }
 
+// periodically checks the validity of the enterprise license and updates the membership state.
+func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
+	defer closer.Done()
+
+	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
+	// license file.
+	if !n.server.enterpriseEnabled() {
+		return
+	}
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	n.server.updateEnterpriseState()
+	for {
+		select {
+		case <-ticker.C:
+			n.server.updateEnterpriseState()
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
 func (n *node) updateZeroMembershipPeriodically(closer *y.Closer) {
 	defer closer.Done()
 	ticker := time.NewTicker(10 * time.Second)
@@ -604,7 +628,7 @@ func (n *node) Run() {
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := y.NewCloser(4)
+	closer := y.NewCloser(5)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
@@ -612,6 +636,7 @@ func (n *node) Run() {
 	}()
 
 	go n.snapshotPeriodically(closer)
+	go n.updateEnterpriseStatePeriodically(closer)
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)

@@ -161,6 +161,7 @@ message MembershipState {
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
+	bool enterpriseEnabled = 9;
 }
 
 message ConnectionState {

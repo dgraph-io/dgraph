@@ -98,6 +98,7 @@ func (s *Server) Init() {
 		x.CheckfNoTrace(err)
 		err = json.Unmarshal(b, &s.enterprise)
 		x.Checkf(err, "while unmarshalling license file")
+		s.enterprise.enabled = true
 	}
 	go s.rebalanceTablets()
 }
@@ -279,6 +280,26 @@ func (s *Server) updateZeroLeader() {
 	leader := s.Node.Raft().Status().Lead
 	for _, m := range s.state.Zeros {
 		m.Leader = m.Id == leader
+	}
+}
+
+func (s *Server) enterpriseEnabled() bool {
+	s.RLock()
+	defer s.RUnlock()
+	return s.enterprise.enabled
+}
+
+// updateEnterpriseState periodically checks the validity of the enterprise license
+// based on its expiry.
+func (s *Server) updateEnterpriseState() {
+	s.Lock()
+	defer s.Unlock()
+	// TODO - Check timezones won't mess up things here.
+	// Also check how to get total number of nodes and have logic for that.
+	if time.Now().Before(s.enterprise.Expiry) {
+		s.state.EnterpriseEnabled = true
+	} else {
+		s.state.EnterpriseEnabled = false
 	}
 }
 
