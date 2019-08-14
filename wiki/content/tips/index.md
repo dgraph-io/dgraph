@@ -55,3 +55,37 @@ Use the `has` function among the value variables to search on non-indexed predic
   }
 }
 {{< /runnable >}}
+
+## Sort edge by value of a nested node
+
+Make use of variables to bring nested values up to the level of the edge to be sorted.
+
+{{< runnable >}}
+{
+  movies as var(func: gt(count(~genre), 30000), orderasc: name@en) {
+    name@en
+    ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      starring {
+        performance.actor {
+          ActorName as name@en
+        }
+        # Stars is a uid-to-value map mapping
+        # starring edges to performance.actor names
+        Stars as min(val(ActorName))
+      }
+    }
+  }
+
+  movies(func: uid(movies)) {
+    name@en
+    director.film: ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      name@en
+      starring (orderasc: val(Stars), first: 2) {
+        performance.actor {
+          name@en
+        }
+      }
+    }
+  }
+}
+{{< /runnable >}}
