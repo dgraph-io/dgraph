@@ -209,7 +209,7 @@ services:
     working_dir: /data/graphql
     volumes:
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql/testdata
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema/testdata/input
         target: /schema
         read_only: true
       - type: bind
