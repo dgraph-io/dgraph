@@ -270,21 +270,21 @@ func (buf *NQuadBuffer) Flush() {
 }
 
 // nextIdx is the index that is used to generate blank node ids for a json map object
-// when the map object does not have a "uid" field
-// it should only be accessed through the atomic APIs
+// when the map object does not have a "uid" field.
+// It should only be accessed through the atomic APIs.
 var nextIdx uint64
 
-// randomId will be used to generate blank node ids
-// we use a random number to avoid collision with user specified uids
-var randomId uint32
+// randomID will be used to generate blank node ids.
+// We use a random number to avoid collision with user specified uids.
+var randomID uint32
 
 func init() {
-	randomId = rand.Uint32()
+	randomID = rand.Uint32()
 }
 
 func getNextBlank() string {
 	id := atomic.AddUint64(&nextIdx, 1)
-	return fmt.Sprintf("_:dg.%d.%d", randomId, id)
+	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
 }
 
 // TODO - Abstract these parameters to a struct.
