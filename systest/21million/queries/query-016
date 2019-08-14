@@ -1,7 +1,7 @@
 {
-  genre(func: gt(count(~genre), 30000)){
+  genre(func: gt(count(~genre), 30000)) {
     name@en
-    ~genre (first:1) {
+    ~genre (first:1, orderasc: name@en) {
       name@en
     }
   }
@@ -13,23 +13,7 @@
       "name@en": "Documentary film",
       "~genre": [
         {
-          "name@en": "Thaumazein"
-        }
-      ]
-    },
-    {
-      "name@en": "Drama",
-      "~genre": [
-        {
-          "name@en": "L'ennemi naturel"
-        }
-      ]
-    },
-    {
-      "name@en": "Comedy",
-      "~genre": [
-        {
-          "name@en": "La Bouillabaisse"
+          "name@en": "!Women Art Revolution"
         }
       ]
     },
@@ -37,7 +21,23 @@
       "name@en": "Short Film",
       "~genre": [
         {
-          "name@en": "Checkmate, Keep Your Enemies Closer"
+          "name@en": "\"Crossover \"- NYU Student Film"
+        }
+      ]
+    },
+    {
+      "name@en": "Drama",
+      "~genre": [
+        {
+          "name@en": "#Stuck"
+        }
+      ]
+    },
+    {
+      "name@en": "Comedy",
+      "~genre": [
+        {
+          "name@en": "\"FF.SS.\" – Cioè: \"...che mi hai portato a fare sopra a Posillipo se non mi vuoi più bene?\""
         }
       ]
     }

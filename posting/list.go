@@ -45,7 +45,7 @@ var (
 	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue       = errors.New("No value found")
-	errStopIteration = errors.New("Stop iteration")
+	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
 )
@@ -660,7 +660,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
 	}
-	if err == errStopIteration {
+	if err == ErrStopIteration {
 		return nil
 	}
 	return err
@@ -673,7 +673,7 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	var count int
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		count++
-		return errStopIteration
+		return ErrStopIteration
 	})
 	if err != nil {
 		return false, err
@@ -1065,7 +1065,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				pos = p
 				found = true
-				return errStopIteration
+				return ErrStopIteration
 			}
 			return nil
 		})
@@ -1112,7 +1112,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 			pos = p
 			found = true
 		}
-		return errStopIteration
+		return ErrStopIteration
 	})
 
 	return found, pos, err

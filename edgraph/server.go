@@ -838,7 +838,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		if req.StartTs == 0 {
 			req.StartTs = posting.Oracle().MaxAssigned()
 		}
-		queryRequest.Cache = worker.NoTxnCache
+		queryRequest.Cache = worker.NoCache
 	}
 
 	if req.StartTs == 0 {
