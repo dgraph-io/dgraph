@@ -40,12 +40,12 @@ schemas:
         id: ID!
       }
     output: |
-      type P {
-      }
       type X {
         X.p: [uid]
       }
       X.p: [uid] .
+      type P {
+      }
 
   -
     name: "Scalar types"
