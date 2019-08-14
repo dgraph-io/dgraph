@@ -347,8 +347,20 @@ message SchemaRequest {
   repeated string types = 4;
 }
 
+message SchemaNode {
+	string predicate = 1;
+	string type = 2;
+	bool index = 3;
+	repeated string tokenizer = 4;
+	bool reverse = 5;
+	bool count = 6;
+	bool list = 7;
+	bool upsert = 8;
+	bool lang = 9;
+}
+
 message SchemaResult {
-	repeated api.SchemaNode schema = 1 [deprecated=true];
+	repeated SchemaNode schema = 1 [deprecated=true];
 }
 
 message SchemaUpdate {
