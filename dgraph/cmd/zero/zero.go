@@ -17,6 +17,8 @@
 package zero
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"math"
 	"sync"
 	"time"
@@ -38,6 +40,14 @@ var (
 	emptyConnectionState pb.ConnectionState
 	errServerShutDown    = errors.New("Server is being shut down")
 )
+
+// TODO - This might belong somewhere else instead for e.g. the state.
+// TODO - Add other fields as well.
+type enterprise struct {
+	enabled  bool
+	MaxNodes uint64    `json:"max_nodes"`
+	Expiry   time.Time `json:"expiry"`
+}
 
 // Server implements the zero server.
 type Server struct {
@@ -61,6 +71,8 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+
+	enterprise enterprise
 }
 
 // Init initializes the zero server.
@@ -81,6 +93,12 @@ func (s *Server) Init() {
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
+		b, err := ioutil.ReadFile(fpath)
+		x.CheckfNoTrace(err)
+		err = json.Unmarshal(b, &s.enterprise)
+		x.Checkf(err, "while unmarshalling license file")
+	}
 	go s.rebalanceTablets()
 }
 

@@ -95,6 +95,7 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
+	flag.String("enterprise_license", "license.json", "Path to the enterprise license file")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -222,6 +223,7 @@ func run() {
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
+	// TODO - Propose the enterprise state to the quorum?
 	x.Check(st.node.initAndStartNode())
 
 	if Zero.Conf.GetBool("telemetry") {
