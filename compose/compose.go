@@ -99,9 +99,9 @@ func name(prefix string, idx int) string {
 
 func toPort(i int) string {
 	if opts.ExposePorts {
-		return fmt.Sprintf("%d", i)
+		return fmt.Sprintf("%d:%d", i, i)
 	}
-	return fmt.Sprintf("%d:%d", i, i)
+	return fmt.Sprintf("%d", i)
 }
 
 func getOffset(idx int) int {
