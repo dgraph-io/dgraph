@@ -497,10 +497,28 @@ func completeValue(pBld pathBuilder, field schema.Field, val interface{}) ([]byt
 		}
 
 		// val is a scalar
-		//
+
 		// Can this ever error?  We can't have an unsupported type or value because
 		// we just unmarshaled this val.
-		json, _ := json.Marshal(val)
+		json, err := json.Marshal(val)
+		if err != nil {
+			errLoc := field.Location()
+			gqlErr := &gqlerror.Error{
+				Message: fmt.Sprintf(
+					"Error marshalling value for field '%s' (type %s).  "+
+						"Resolved as null (which may trigger GraphQL error propagation) ",
+					field.Name(), field.Type()),
+				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
+				Path:      pBld.path(),
+			}
+
+			if field.Type().Nullable() {
+				return []byte("null"), gqlerror.List{gqlErr}
+			}
+
+			return nil, gqlerror.List{gqlErr}
+		}
+
 		return json, nil
 	}
 }
