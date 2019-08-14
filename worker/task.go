@@ -2015,7 +2015,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return err
+		}
 
 		// The following optimization speeds up this iteration considerably, because it avoids
 		// the need to run ReadPostingList.

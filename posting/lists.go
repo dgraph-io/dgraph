@@ -290,7 +290,8 @@ func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 	lc.RLock()
 	defer lc.RUnlock()
 	for key := range lc.deltas {
-		pk := x.Parse([]byte(key))
+		pk, err := x.Parse([]byte(key))
+		x.Check(err)
 		if len(pk.Attr) == 0 {
 			continue
 		}
