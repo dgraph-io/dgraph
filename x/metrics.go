@@ -60,7 +60,6 @@ var (
 	// PendingProposals records the current number of pending RAFT proposals.
 	PendingProposals = stats.Int64("pending_proposals_total",
 		"Number of pending proposals", stats.UnitDimensionless)
-	// NumGoRoutines records the current number of goroutines being executed by Dgraph.
 	// MemoryInUse records the current amount of used memory by Dgraph.
 	MemoryInUse = stats.Int64("memory_inuse_bytes",
 		"Amount of memory in use", stats.UnitBytes)
