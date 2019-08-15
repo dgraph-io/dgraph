@@ -74,6 +74,7 @@ type Post {
 	id: ID!
 	title: String!
 	text: String
+	author: Author!
 }
 
 type Query {
