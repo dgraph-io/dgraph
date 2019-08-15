@@ -86,21 +86,6 @@ type RequestResolver struct {
 	resp   *schema.Response
 }
 
-// A pathBuilder wraps access to the GraphQL error path used for error propagation.
-// It allows adding and removing path elements as the value completion algorithm
-// moves around the result, and outputting the current path for error messages.
-//
-// The definition of a path in a GraphQL error is here:
-// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
-// For a query like (assuming field f is of a list type and g is a scalar type):
-// - q { f { g } }
-// a path to the 2nd item in the f list would look like:
-// - [ "q", "f", 2, "g" ]
-type pathBuilder struct {
-	buf   []interface{}
-	depth int
-}
-
 // New creates a new RequestResolver
 func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
 	return &RequestResolver{
@@ -370,8 +355,18 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
+	// Errors should report the "path" into the result where the error was found.
+	//
+	// The definition of a path in a GraphQL error is here:
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+	// For a query like (assuming field f is of a list type and g is a scalar type):
+	// - q { f { g } }
+	// a path to the 2nd item in the f list would look like:
+	// - [ "q", "f", 2, "g" ]
+	path := make([]interface{}, 0, maxPathLength(field))
+
 	completed, gqlErrs := completeObject(
-		newPathBuilder(field), field.Type(), []schema.Field{field}, valToComplete)
+		path, field.Type(), []schema.Field{field}, valToComplete)
 
 	if len(completed) < 2 {
 		// This could only occur completeObject crushed the whole query, but
@@ -425,7 +420,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 //
 // if "dob" were non-nullable (maybe it's type is DateTime!), then the result is
 // nil and the error propagates to the enclosing level.
-func completeObject(pBld pathBuilder, typ schema.Type, fields []schema.Field, res map[string]interface{}) (
+func completeObject(path []interface{}, typ schema.Type, fields []schema.Field, res map[string]interface{}) (
 	[]byte, gqlerror.List) {
 
 	var errs gqlerror.List
@@ -439,7 +434,7 @@ func completeObject(pBld pathBuilder, typ schema.Type, fields []schema.Field, re
 		buf.WriteString(f.ResponseName())
 		buf.WriteString(`": `)
 
-		completed, err := completeValue(pBld.add(f.ResponseName()), f, res[f.ResponseName()])
+		completed, err := completeValue(append(path, f.ResponseName()), f, res[f.ResponseName()])
 		errs = append(errs, err...)
 		if completed == nil {
 			if !f.Type().Nullable() {
@@ -457,13 +452,13 @@ func completeObject(pBld pathBuilder, typ schema.Type, fields []schema.Field, re
 
 // completeValue applies the value completion algorithm to a single value, which
 // could turn out to be a list or object or scalar value.
-func completeValue(pBld pathBuilder, field schema.Field, val interface{}) ([]byte, gqlerror.List) {
+func completeValue(path []interface{}, field schema.Field, val interface{}) ([]byte, gqlerror.List) {
 
 	switch val := val.(type) {
 	case map[string]interface{}:
-		return completeObject(pBld, field.Type(), field.SelectionSet(), val)
+		return completeObject(path, field.Type(), field.SelectionSet(), val)
 	case []interface{}:
-		return completeList(pBld, field, val)
+		return completeList(path, field, val)
 	default:
 		if val == nil {
 			if field.Type().ListType() != nil {
@@ -491,7 +486,7 @@ func completeValue(pBld pathBuilder, field schema.Field, val interface{}) ([]byt
 					"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
 						"GraphQL error propagation triggered.", field.Name(), field.Type()),
 				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-				Path:      pBld.path(),
+				Path:      append([]interface{}(nil), path...),
 			}
 			return nil, gqlerror.List{gqlErr}
 		}
@@ -509,7 +504,7 @@ func completeValue(pBld pathBuilder, field schema.Field, val interface{}) ([]byt
 						"Resolved as null (which may trigger GraphQL error propagation) ",
 					field.Name(), field.Type()),
 				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-				Path:      pBld.path(),
+				Path:      append([]interface{}(nil), path...),
 			}
 
 			if field.Type().Nullable() {
@@ -540,7 +535,7 @@ func completeValue(pBld pathBuilder, field schema.Field, val interface{}) ([]byt
 //
 // If the list has non-nullable elements (a type like [T!]) and any of those
 // elements resolve to null, then the whole list is crushed to null.
-func completeList(pBld pathBuilder, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
+func completeList(path []interface{}, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
 	var buf bytes.Buffer
 	var errs gqlerror.List
 	comma := ""
@@ -551,12 +546,12 @@ func completeList(pBld pathBuilder, field schema.Field, values []interface{}) ([
 		//
 		// Let's crush it to null so we still get something from the rest of the
 		// query and log the error.
-		return mismatched(pBld, field, values)
+		return mismatched(path, field, values)
 	}
 
 	buf.WriteRune('[')
 	for i, b := range values {
-		r, err := completeValue(pBld.add(i), field, b)
+		r, err := completeValue(append(path, i), field, b)
 		errs = append(errs, err...)
 		buf.WriteString(comma)
 		if r == nil {
@@ -588,8 +583,7 @@ func completeList(pBld pathBuilder, field schema.Field, values []interface{}) ([
 	return buf.Bytes(), errs
 }
 
-func mismatched(pBld pathBuilder, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
-	errPath := pBld.path()
+func mismatched(path []interface{}, field schema.Field, values []interface{}) ([]byte, gqlerror.List) {
 	errLoc := field.Location()
 
 	glog.Error("completeList() called in resolving %s (Line: %v, Column: %v), but its type is %s.\n"+
@@ -603,42 +597,17 @@ func mismatched(pBld pathBuilder, field schema.Field, values []interface{}) ([]b
 			"The value was resolved as null (which may trigger GraphQL error propagation) " +
 			"and as much other data as possible returned.",
 		Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-		Path:      errPath,
+		Path:      append([]interface{}(nil), path...),
 	}
 
-	val, errs := completeValue(pBld, field, nil)
+	val, errs := completeValue(path, field, nil)
 	return val, append(errs, gqlErr)
-}
-
-func newPathBuilder(f schema.Field) pathBuilder {
-	return pathBuilder{
-		buf: make([]interface{}, maxPathLength(f)),
-	}
-}
-
-func (pb pathBuilder) add(val interface{}) pathBuilder {
-	pb.buf[pb.depth] = val
-	pb.depth++
-	return pb
-}
-
-func (pb pathBuilder) drop() pathBuilder {
-	if pb.depth > 0 {
-		pb.depth--
-	}
-	return pb
-}
-
-func (pb pathBuilder) path() []interface{} {
-	result := make([]interface{}, pb.depth)
-	copy(result, pb.buf[:pb.depth])
-	return result
 }
 
 // maxPathLength finds the max length (including list indexes) of any path in the 'query' f.
 // Used to pre-allocate a path buffer of the correct size before running completeObject on
-// the top level query - means that we can abstract away path handling to the pathBuilder,
-// so the complete* functions don't have to worry much about path handling.
+// the top level query - means that we aren't reallocating slices multiple times
+// during the complete* functions.
 func maxPathLength(f schema.Field) int {
 	childMax := 0
 	for _, chld := range f.SelectionSet() {
