@@ -151,6 +151,14 @@ func (ft *fieldType) Name() string {
 	return ft.name
 }
 
+func (ft *fieldType) String() string {
+	return ft.Name()
+}
+
+func (f *field) Location() *schema.Location {
+	return &schema.Location{}
+}
+
 func (ft *fieldType) Nullable() bool {
 	return true
 }
