@@ -181,7 +181,7 @@ func (*jsonChunker) Begin(r *bufio.Reader) error {
 	case '{':
 		// do not consume so that the next Chunk call consumes the top level map
 	default:
-		return errors.Errorf("JSON file must begin with [ or {. Found: %v", chs[0])
+		return errors.Errorf("JSON file must begin with [ or {. Found: %v(%c)", chs[0], chs[0])
 	}
 
 	return nil
@@ -246,7 +246,7 @@ func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	case ',':
 		// pass
 	default:
-		return nil, errors.Errorf("JSON map is followed by illegal rune %v", ch)
+		return nil, errors.Errorf("JSON map is followed by illegal rune %v(%c)", ch, ch)
 	}
 	return out, nil
 }
