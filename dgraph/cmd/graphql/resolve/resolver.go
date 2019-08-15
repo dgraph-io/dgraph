@@ -486,7 +486,7 @@ func completeValue(path []interface{}, field schema.Field, val interface{}) ([]b
 					"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
 						"GraphQL error propagation triggered.", field.Name(), field.Type()),
 				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-				Path:      append([]interface{}(nil), path...),
+				Path:      copyPath(path),
 			}
 			return nil, gqlerror.List{gqlErr}
 		}
@@ -504,7 +504,7 @@ func completeValue(path []interface{}, field schema.Field, val interface{}) ([]b
 						"Resolved as null (which may trigger GraphQL error propagation) ",
 					field.Name(), field.Type()),
 				Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-				Path:      append([]interface{}(nil), path...),
+				Path:      copyPath(path),
 			}
 
 			if field.Type().Nullable() {
@@ -597,11 +597,17 @@ func mismatched(path []interface{}, field schema.Field, values []interface{}) ([
 			"The value was resolved as null (which may trigger GraphQL error propagation) " +
 			"and as much other data as possible returned.",
 		Locations: []gqlerror.Location{{Line: errLoc.Line, Column: errLoc.Column}},
-		Path:      append([]interface{}(nil), path...),
+		Path:      copyPath(path),
 	}
 
 	val, errs := completeValue(path, field, nil)
 	return val, append(errs, gqlErr)
+}
+
+func copyPath(path []interface{}) []interface{} {
+	result := make([]interface{}, len(path))
+	copy(result, path)
+	return result
 }
 
 // maxPathLength finds the max length (including list indexes) of any path in the 'query' f.
