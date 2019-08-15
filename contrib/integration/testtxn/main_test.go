@@ -564,7 +564,7 @@ func TestNameSet(t *testing.T) {
 // retrieve the uids in the uidMap in the order of ascending keys
 func retrieveUids(uidMap map[string]string) []string {
 	keys := make([]string, 0, len(uidMap))
-	for key, _ := range uidMap {
+	for key := range uidMap {
 		keys = append(keys, key)
 	}
 
