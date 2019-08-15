@@ -149,28 +149,13 @@ func TestResolver(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
-	require.Nil(t, gqlErr)
-	// ^^ We can't use NoError here because gqlErr is of type *gqlerror.Error,
-	// so passing into something that just expects an error, will always be a
-	// non-nil interface.
-
-	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
-	require.Nil(t, gqlErr)
+	gqlSchema := loadSchema(t, testGQLSchema)
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
 
-			// It's easier to understand the diff with json than require.Equal
-			// on the errors
-			jsonExpected, err := json.Marshal(test.Errors)
-			require.NoError(t, err)
-
-			jsonGot, err := json.Marshal(resp.Errors)
-			require.NoError(t, err)
-
-			require.JSONEq(t, string(jsonExpected), string(jsonGot))
+			requireJSONEq(t, test.Errors, resp.Errors)
 			require.JSONEq(t, test.Expected, resp.Data.String(), test.Explanation)
 		})
 	}
@@ -223,12 +208,7 @@ func TestResponseOrder(t *testing.T) {
 				`{"title": "Another Title", "text": "More Text"}]}}`},
 	}
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
-	require.Nil(t, gqlErr)
-	// see note above about NoError
-
-	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
-	require.Nil(t, gqlErr)
+	gqlSchema := loadSchema(t, testGQLSchema)
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -295,25 +275,14 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 		},
 	}
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
-	require.Nil(t, gqlErr)
-	// see note above about NoError
-
-	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
-	require.Nil(t, gqlErr)
+	gqlSchema := loadSchema(t, testGQLSchema)
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation,
 				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
 
-			jsonExpected, err := json.Marshal(test.errors)
-			require.NoError(t, err)
-
-			jsonGot, err := json.Marshal(resp.Errors)
-			require.NoError(t, err)
-
-			require.JSONEq(t, string(jsonExpected), string(jsonGot))
+			requireJSONEq(t, test.errors, resp.Errors)
 			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
 		})
 	}
@@ -371,28 +340,42 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 		},
 	}
 
-	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: testGQLSchema})
-	require.Nil(t, gqlErr)
-	// see note above about NoError
-
-	gqlSchema, gqlErr := validator.ValidateSchemaDocument(doc)
-	require.Nil(t, gqlErr)
+	gqlSchema := loadSchema(t, testGQLSchema)
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation,
 				&dgraphClient{resp: test.queryResponse, assigned: test.mutResponse})
 
-			jsonExpected, err := json.Marshal(test.errors)
-			require.NoError(t, err)
-
-			jsonGot, err := json.Marshal(resp.Errors)
-			require.NoError(t, err)
-
-			require.JSONEq(t, string(jsonExpected), string(jsonGot))
+			requireJSONEq(t, test.errors, resp.Errors)
 			require.JSONEq(t, test.expected, resp.Data.String(), test.explanation)
 		})
 	}
+}
+
+func loadSchema(t *testing.T, gqlSchema string) *ast.Schema {
+	doc, gqlErr := parser.ParseSchema(&ast.Source{Input: gqlSchema})
+	require.Nil(t, gqlErr)
+	// ^^ We can't use NoError here because gqlErr is of type *gqlerror.Error,
+	// so passing into something that just expects an error, will always be a
+	// non-nil interface.
+
+	gql, gqlErr := validator.ValidateSchemaDocument(doc)
+	require.Nil(t, gqlErr)
+
+	return gql
+}
+
+func requireJSONEq(t *testing.T, expected, got gqlerror.List) {
+	// It's easier to understand the diff, when a test fails, with json than
+	// require.Equal on the errors
+	jsonExpected, err := json.Marshal(expected)
+	require.NoError(t, err)
+
+	jsonGot, err := json.Marshal(got)
+	require.NoError(t, err)
+
+	require.JSONEq(t, string(jsonExpected), string(jsonGot))
 }
 
 func resolve(gqlSchema *ast.Schema, gqlQuery string, dgResponse string) *schema.Response {

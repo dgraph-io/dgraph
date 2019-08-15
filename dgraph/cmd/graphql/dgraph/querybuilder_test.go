@@ -156,9 +156,7 @@ func (ft *fieldType) String() string {
 }
 
 func (f *field) Location() *schema.Location {
-	return &schema.Location{
-		Line:   1,
-		Column: 1}
+	return &schema.Location{}
 }
 
 func (ft *fieldType) Nullable() bool {

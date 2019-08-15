@@ -612,7 +612,7 @@ func mismatched(pBld pathBuilder, field schema.Field, values []interface{}) ([]b
 
 func newPathBuilder(f schema.Field) pathBuilder {
 	return pathBuilder{
-		buf: make([]interface{}, pathLength(f)),
+		buf: make([]interface{}, maxPathLength(f)),
 	}
 }
 
@@ -635,11 +635,14 @@ func (pb pathBuilder) path() []interface{} {
 	return result
 }
 
-// pathDepth finds the max length (including list indexes) of any path in the 'query' f.
-func pathLength(f schema.Field) int {
+// maxPathLength finds the max length (including list indexes) of any path in the 'query' f.
+// Used to pre-allocate a path buffer of the correct size before running completeObject on
+// the top level query - means that we can abstract away path handling to the pathBuilder,
+// so the complete* functions don't have to worry much about path handling.
+func maxPathLength(f schema.Field) int {
 	childMax := 0
 	for _, chld := range f.SelectionSet() {
-		d := pathLength(chld)
+		d := maxPathLength(chld)
 		if d > childMax {
 			childMax = d
 		}
