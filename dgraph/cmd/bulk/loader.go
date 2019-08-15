@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -190,7 +189,7 @@ func (ld *loader) mapStage() {
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
 
-			chunker := chunker.NewChunker(loadType)
+			chunker := chunker.NewChunker(loadType, 1000)
 			x.Check(chunker.Begin(r))
 			for {
 				chunkBuf, err := chunker.Chunk(r)
@@ -217,7 +216,6 @@ func (ld *loader) mapStage() {
 	}
 	x.Check(ld.xids.Flush())
 	ld.xids = nil
-	runtime.GC()
 }
 
 func (ld *loader) reduceStage() {

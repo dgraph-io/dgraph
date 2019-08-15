@@ -18,7 +18,6 @@ package live
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/tls"
@@ -32,6 +31,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/metadata"
@@ -179,11 +179,33 @@ func (l *loader) processFile(ctx context.Context, filename string) error {
 		}
 	}
 
-	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType))
+	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType, opt.batchSize))
 }
 
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	x.CheckfNoTrace(ck.Begin(rd))
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	nqbuf := ck.NQuads()
+	// Spin a goroutine to push NQuads to mutation channel.
+	go func() {
+		defer wg.Done()
+		for nqs := range nqbuf.Ch() {
+			if len(nqs) == 0 {
+				continue
+			}
+			for _, nq := range nqs {
+				nq.Subject = l.uid(nq.Subject)
+				if len(nq.ObjectId) > 0 {
+					nq.ObjectId = l.uid(nq.ObjectId)
+				}
+			}
+
+			mu := api.Mutation{Set: nqs}
+			l.reqs <- mu
+		}
+	}()
 
 	for {
 		select {
@@ -193,7 +215,12 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		}
 
 		chunkBuf, err := ck.Chunk(rd)
-		l.processChunk(chunkBuf, ck)
+		// Parses the rdf entries from the chunk, groups them into batches (each one
+		// containing opt.batchSize entries) and sends the batches to the loader.reqs channel (see
+		// above).
+		if oerr := ck.Parse(chunkBuf); oerr != nil {
+			return errors.Wrap(oerr, "During parsing chunk in processLoadFile")
+		}
 		if err == io.EOF {
 			break
 		} else {
@@ -201,45 +228,10 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 		}
 	}
 	x.CheckfNoTrace(ck.End(rd))
+	nqbuf.Flush()
+	wg.Wait()
 
 	return nil
-}
-
-// processChunk parses the rdf entries from the chunk, and group them into
-// batches (each one containing opt.batchSize entries) and sends the batches
-// to the loader.reqs channel
-func (l *loader) processChunk(chunkBuf *bytes.Buffer, ck chunker.Chunker) {
-	if chunkBuf == nil || chunkBuf.Len() == 0 {
-		return
-	}
-
-	nqs, err := ck.Parse(chunkBuf)
-	x.CheckfNoTrace(err)
-
-	batch := make([]*api.NQuad, 0, opt.batchSize)
-	for _, nq := range nqs {
-		nq.Subject = l.uid(nq.Subject)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = l.uid(nq.ObjectId)
-		}
-
-		batch = append(batch, nq)
-
-		if len(batch) >= opt.batchSize {
-			mu := api.Mutation{Set: batch}
-			l.reqs <- mu
-
-			// The following would create a new batch slice. We should not use batch =
-			// batch[:0], because it would end up modifying the batch array passed
-			// to l.reqs above.
-			batch = make([]*api.NQuad, 0, opt.batchSize)
-		}
-	}
-
-	// sends the left over nqs
-	if len(batch) > 0 {
-		l.reqs <- api.Mutation{Set: batch}
-	}
 }
 
 func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
