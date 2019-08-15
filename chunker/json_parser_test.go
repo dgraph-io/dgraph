@@ -199,6 +199,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 	nq, err := Parse(b, SetNquads)
+	require.NoError(t, err)
 	outputNq(nq)
 	exp := &Experiment{
 		t:      t,
