@@ -17,11 +17,8 @@
 package testutil
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"math"
 
 	"github.com/dgraph-io/badger"
@@ -31,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 // GetPValues reads the specified p directory and returns the values for the given
@@ -96,17 +92,4 @@ func GetPValues(pdir, attr string, readTs uint64) (map[string]string, error) {
 		return nil, err
 	}
 	return values, err
-}
-
-// GetError reads the response from a backup request and returns an error if it indicates
-// that the request failed.
-func GetError(rc io.ReadCloser) error {
-	b, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return errors.Wrapf(err, "while reading")
-	}
-	if bytes.Contains(b, []byte("Error")) {
-		return errors.Errorf("%s", string(b))
-	}
-	return nil
 }
