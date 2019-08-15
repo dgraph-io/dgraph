@@ -205,7 +205,28 @@
   expected: |
     { "getAuthor": { "name": "A.N. Author" } }
   errors:
-    [ { "message": "Dgraph returned a list, but was expecting just one item." } ]
+    [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one item. 
+          The first item in the list was used to produce the result. 
+          Logged as a potential bug; see the API log for more details.",
+        "locations": [ { "column":3, "line":2 } ] } ]
+
+-
+  name: "Sensible error when un-processable Dgraph result"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+      }
+    }
+  explanation: "Shouldn't happen"
+  response: |
+    { something is wrong }
+  expected: |
+    { "getAuthor": null }
+  errors:
+    [ { "message": "input:2: Internal error (couldn't unmarshal Dgraph result) 
+          because invalid character 's' looking for beginning of object key string" ,
+        "locations": [ { "column":3, "line":2 } ] } ]
 
 -
   name: "Error gets propagated to nullable parent if missing non-nullable field"
@@ -223,8 +244,11 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { "message": "Crushed a null value" }, 
-    { "message": "Crushed an object because of null error" } ]
+    [ { 
+      "message": "Non-nullable field 'name' (type String!) was not present in 
+                result from Dgraph.  GraphQL error propagation triggered." ,
+      "path": [ "getAuthor", "name" ], 
+      "locations": [ { "line": 3, "column": 5 } ] } ]
 
 -
   name: "Error in [T!] list propagated as null list"
@@ -242,13 +266,18 @@
     here because title (String!) is missing, GraphQL error propagation 
     says the list becomes null."
   response: |
-    { "getAuthor": [ { "name": "A.N. Author", "postsElmntRequired": [ { "title": "A Title", "text": "Some Text" }, { "text": "More Text" } ] } ] }
+    { "getAuthor": [ 
+      { "name": "A.N. Author", 
+      "postsElmntRequired": [ 
+        { "title": "A Title", "text": "Some Text" }, 
+        { "text": "More Text" } ] } ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author", "postsElmntRequired": null } }
   errors:
-    [ { "message": "Crushed a null value" }, 
-    { "message": "Crushed an object because of null error" },
-    { "message": "Crushed a list because of null error" } ]
+    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+                    in result from Dgraph.  GraphQL error propagation triggered.",
+      "path": [ "getAuthor", "postsElmntRequired", 1, "title" ], 
+      "locations": [ { "line": 5, "column": 7 } ] } ]
 
 -
   name: "Error in [T] list propagated as null element in list"
@@ -266,16 +295,20 @@
     but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
     post in the result list that's missing a title gets squashed to null"
   response: |
-    { "getAuthor": [ { "name": "A.N. Author", 
+    { "getAuthor": [ 
+      { "name": "A.N. Author", 
       "postsNullable": [ 
-        { "title": "A Title", "text": "Some Text" }, { "text": "More Text" } ] } ] }
+        { "title": "A Title", "text": "Some Text" }, 
+        { "text": "More Text" } ] } ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author", 
       "postsNullable": [ 
         { "title": "A Title", "text": "Some Text" }, null ] } }
   errors:
-    [ { "message": "Crushed a null value" }, 
-    { "message": "Crushed an object because of null error" }]
+    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+                    in result from Dgraph.  GraphQL error propagation triggered.",
+      "path": [ "getAuthor", "postsNullable", 1, "title" ], 
+      "locations": [ { "line": 5, "column": 7 } ] } ]
 
 -
   name: "Error in [T]! list propagated as null element in list"
@@ -293,13 +326,17 @@
     but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
     post in the result list that's missing a title gets squashed to null"
   response: |
-    { "getAuthor": [ { "name": "A.N. Author", 
+    { "getAuthor": [ 
+      { "name": "A.N. Author", 
       "postsNullableListRequired": [ 
-        { "title": "A Title", "text": "Some Text" }, { "text": "More Text" } ] } ] }
+        { "text": "More Text" },
+        { "title": "A Title", "text": "Some Text" } ] } ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author", 
       "postsNullableListRequired": [ 
-        { "title": "A Title", "text": "Some Text" }, null ] } }
+        null, { "title": "A Title", "text": "Some Text" } ] } }
   errors:
-    [ { "message": "Crushed a null value" }, 
-    { "message": "Crushed an object because of null error" }]
+    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+                    in result from Dgraph.  GraphQL error propagation triggered.",
+      "path": [ "getAuthor", "postsNullableListRequired", 0, "title" ], 
+      "locations": [ { "line": 5, "column": 7 } ] } ]
