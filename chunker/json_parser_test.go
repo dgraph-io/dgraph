@@ -199,7 +199,7 @@ func TestNquadsFromJson3(t *testing.T) {
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
 	nq, err := Parse(b, SetNquads)
-	outputNq(nq)
+	//outputNq(nq)
 	exp := &Experiment{
 		t:      t,
 		nqs:    nq,
@@ -237,8 +237,12 @@ weight
 	exp.verify()
 }
 
-func TestNquadsFromMultipleJsonObjects(t *testing.T) {
-	json := `[{"name":"Alice", "age": 25}, {"name": "Bob", "age": 26}]`
+func TestNquadsFromJsonMap(t *testing.T) {
+	json := `{"name":"Alice",
+"age": 25,
+"friends": [{
+"name": "Bob"
+}]}`
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
@@ -246,9 +250,88 @@ func TestNquadsFromMultipleJsonObjects(t *testing.T) {
 		t:      t,
 		nqs:    nq,
 		schema: "name: string @index(exact) .",
-		query: `{people(func: has(name)) {
+		query: `{people(func: eq(name, "Alice")) {
+age
+name
+friends {name}
+}}`,
+		expected: fmt.Sprintf(`{"people":[%s]}`, json),
+	}
+	exp.verify()
+}
+
+func TestNquadsFromMultipleJsonObjects(t *testing.T) {
+	json := `
+[
+  {
+    "name": "A",
+    "age": 25,
+    "friends": [
+      {
+        "name": "A1",
+        "friends": [
+          {
+            "name": "A11"
+          },
+          {
+            "name": "A12"
+          }
+        ]
+      },
+     {
+        "name": "A2",
+        "friends": [
+          {
+            "name": "A21"
+          },
+          {
+            "name": "A22"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "B",
+    "age": 26,
+    "friends": [
+      {
+        "name": "B1",
+        "friends": [
+          {
+            "name": "B11"
+          },
+          {
+            "name": "B12"
+          }
+        ]
+      },
+     {
+        "name": "B2",
+        "friends": [
+          {
+            "name": "B21"
+          },
+          {
+            "name": "B22"
+          }
+        ]
+      }
+    ]
+  }
+]
+`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{people(func: has(age), orderasc: name) @recurse {
 name
 age
+friends
 }}`,
 		expected: fmt.Sprintf(`{"people":%s}`, json),
 	}

@@ -40,8 +40,6 @@ func TestJSONLoadStart(t *testing.T) {
 		{"", "file is empty"},
 		{"  \t   ", "file is white space"},
 		{"These are words.", "file is not JSON"},
-		{`{"company":"dgraph"}`, "file is not JSON array 1"},
-		{`    { "company" : "dgraph" }    `, "file is not JSON array 2"},
 		{"\x1f\x8b\x08\x08\x3e\xc7\x0a\x5c\x00\x03\x65\x6d\x70\x74\x79\x00", "file is binary"},
 	}
 
@@ -51,13 +49,49 @@ func TestJSONLoadStart(t *testing.T) {
 	}
 }
 
+func TestChunkJSONMapAndArray(t *testing.T) {
+	tests := []struct {
+		json   string
+		chunks []string
+	}{
+		{`[]`, []string{"<nil>"}},
+		{`[{}]`, []string{"{}"}},
+		{`[{"user": "alice"}]`, []string{`{"user": "alice"}`}},
+		{`[{"user": "alice", "age", 26}]`, []string{`{"user": "alice", "age", 26}`}},
+		{`[{"user": "alice", "age", 26}, {"name": "bob"}]`, []string{`{"user": "alice", "age", 26}`,
+			`{"name": "bob"}`}},
+	}
+
+	for _, test := range tests {
+		chunker := NewChunker(JsonFormat, 1000)
+		r := bufioReader(test.json)
+		require.NoError(t, chunker.Begin(r))
+
+		var chunks []string
+		for {
+			chunkBuf, err := chunker.Chunk(r)
+			if err != nil && err != io.EOF {
+				t.FailNow()
+			}
+
+			chunks = append(chunks, chunkBuf.String())
+
+			if err == io.EOF {
+				require.NoError(t, chunker.End(r), "Got an error while validating end of reader")
+				break
+			}
+		}
+
+		require.Equal(t, test.chunks, chunks, "Got different chunks")
+	}
+}
+
 // Test that problems at the start of the next chunk are caught.
 func TestJSONLoadReadNext(t *testing.T) {
 	var tests = []struct {
 		json string
 		desc string
 	}{
-		{"[]", "array is empty"},
 		{"[,]", "no start of JSON map 1"},
 		{"[ this is not really a json array ]", "no start of JSON map 2"},
 		{"[{]", "malformed map"},
@@ -68,10 +102,13 @@ func TestJSONLoadReadNext(t *testing.T) {
 		reader := bufioReader(test.json)
 		require.NoError(t, chunker.Begin(reader), test.desc)
 
-		json, err := chunker.Chunk(reader)
-		//fmt.Fprintf(os.Stderr, "err = %v, json = %v\n", err, json)
-		require.Nil(t, json, test.desc)
-		require.Error(t, err, test.desc)
+		chunkBuf, err := chunker.Chunk(reader)
+		if err == nil {
+			err = chunker.Parse(chunkBuf)
+			require.Error(t, err, test.desc)
+		} else {
+			require.Error(t, err, test.desc)
+		}
 	}
 }
 

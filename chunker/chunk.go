@@ -166,43 +166,42 @@ func (*jsonChunker) Begin(r *bufio.Reader) error {
 	if err := slurpSpace(r); err != nil {
 		return err
 	}
-	ch, _, err := r.ReadRune()
+	chs, err := r.Peek(1)
+
 	if err != nil {
 		return err
 	}
-	if ch != '[' {
-		return errors.Errorf("JSON file must contain array. Found: %v", ch)
+	switch chs[0] {
+	case '[':
+		// consume the [ so that each Chunk call consumes a map
+		_, _, err := r.ReadRune()
+		if err != nil {
+			return err
+		}
+	case '{':
+		// do not consume so that the next Chunk call consumes the top level map
+	default:
+		return errors.Errorf("JSON file must begin with [ or {. Found: %v", chs[0])
 	}
+
 	return nil
 }
 
+// Chunk consumes a JSON map from the reader, and it also assumes that the reader's content
+// must begin with a map.
 func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.Grow(1 << 20)
 
-	// For RDF, the loader just reads the input and the mapper parses it into nquads,
-	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
-	// more complicated to ensure a complete JSON structure is read.
 	if err := slurpSpace(r); err != nil {
-		return out, err
+		return nil, err
 	}
-	ch, _, err := r.ReadRune()
-	if err != nil {
-		return out, err
-	}
-	if ch == ']' {
-		// Handle loading an empty JSON array ("[]") without error.
-		return nil, io.EOF
-	} else if ch != '{' {
-		return nil, errors.Errorf("Expected JSON map start. Found: %v", string(ch))
-	}
-	x.Check2(out.WriteRune(ch))
 
 	// Just find the matching closing brace. Let the JSON-to-nquad parser in the mapper worry
 	// about whether everything in between is valid JSON or not.
-	depth := 1 // We already consumed one `{`, so our depth starts at one.
-	for depth > 0 {
-		ch, _, err = r.ReadRune()
+	depth := 0
+	for {
+		ch, _, err := r.ReadRune()
 		if err != nil {
 			return nil, errors.New("Malformed JSON")
 		}
@@ -220,25 +219,34 @@ func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		default:
 			// We just write the rune to out, and let the Go JSON parser do its job.
 		}
+
+		if depth <= 0 {
+			break
+		}
 	}
 
 	// The map should be followed by either the ',' between array elements, or the ']'
-	// at the end of the array.
+	// at the end of the array, or EOF if the map is at the root level.
 	if err := slurpSpace(r); err != nil {
 		return nil, err
 	}
-	ch, _, err = r.ReadRune()
-	if err != nil {
+
+	ch, _, err := r.ReadRune()
+
+	if err == io.EOF {
+		// handles the EOF case, return out which represents the top level map
+		return out, err
+	} else if err != nil {
 		return nil, err
 	}
+
 	switch ch {
 	case ']':
 		return out, io.EOF
 	case ',':
 		// pass
 	default:
-		// Let next call to this function report the error.
-		x.Check(r.UnreadRune())
+		return nil, errors.Errorf("JSON map is followed by illegal rune %v", ch)
 	}
 	return out, nil
 }
@@ -249,9 +257,6 @@ func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
 	}
 
 	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
-	if err != nil {
-		x.Check(err)
-	}
 	return err
 }
 
