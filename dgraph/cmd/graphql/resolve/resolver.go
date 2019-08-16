@@ -86,6 +86,15 @@ type RequestResolver struct {
 	resp   *schema.Response
 }
 
+// A resolved is the result of resolving a single query or mutation.
+// A schema.Request may contain any number of queries or mutations (never both).
+// RequestResolver.Resolve() resolves all of them by finding the resolved answers
+// of the component queries/mutations and joining into a single schema.Response.
+type resolved struct {
+	data []byte
+	err  error
+}
+
 // New creates a new RequestResolver
 func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
 	return &RequestResolver{
