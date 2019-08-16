@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/vektah/gqlparser/gqlerror"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgo"
 	dgoapi "github.com/dgraph-io/dgo/protos/api"
@@ -55,9 +56,9 @@ func AsDgraph(dgo *dgo.Dgraph) Client {
 	return &dgraph{client: dgo}
 }
 
-func (dg *dgraph) Query(ctx context.Context, query *QueryBuilder) ([]byte, error) {
+func (dg *dgraph) Query(ctx context.Context, qb *QueryBuilder) ([]byte, error) {
 
-	q, err := query.AsQueryString()
+	q, err := qb.AsQueryString()
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't build Dgraph query")
 	}
@@ -66,7 +67,19 @@ func (dg *dgraph) Query(ctx context.Context, query *QueryBuilder) ([]byte, error
 		glog.Infof("[%s] Executing Dgraph query: \n%s\n", api.RequestID(ctx), q)
 	}
 
-	resp, err := dg.client.NewTxn().Query(ctx, q)
+	// Always use debug mode so that UID is inserted for every node that we touch
+	// Otherwise we can't tell the difference in a query result between a node that's
+	// missing and a node that's missing a single value.  E.g. if we are asking
+	// for an Author and only the 'text' of all their posts
+	// e.g. getAuthor(id: 0x123) { posts { text } }
+	// If the author has 10 posts but three of them have a title, but no text,
+	// then Dgraph would just return 7 posts.  And we'd have no way of knowing if
+	// there's only 7 posts, or if there's more that are missing 'text'.
+	// But, for GraphQL, we want to know about those missing values.
+	md := metadata.Pairs("debug", "true")
+	resp, err := dg.client.NewTxn().
+		Query(metadata.NewOutgoingContext(ctx, md), q)
+
 	return resp.Json, schema.GQLWrapf(err, "Dgraph query failed")
 }
 
