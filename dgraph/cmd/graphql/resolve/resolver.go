@@ -175,22 +175,14 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				continue
 			}
 
-			mr := &MutationResolver{
+			mr := &mutationResolver{
 				mutation: m,
 				schema:   r.Schema,
 				dgraph:   r.dgraph,
 			}
-			resp, err := mr.Resolve(ctx)
-			r.WithError(err)
-			if len(resp) > 0 {
-				var b bytes.Buffer
-				b.WriteRune('"')
-				b.WriteString(m.ResponseName())
-				b.WriteString(`":`)
-				b.Write(resp)
-
-				r.resp.AddData(b.Bytes())
-			}
+			res := mr.resolve(ctx)
+			r.WithError(res.err)
+			r.resp.AddData(res.data)
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
