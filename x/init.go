@@ -17,7 +17,10 @@
 package x
 
 import (
+	"crypto/sha256"
+	"io"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -72,6 +75,7 @@ func BuildDetails() string {
 	}
 	return fmt.Sprintf(`
 Dgraph version   : %v
+Dgraph SHA-256   : %x
 Commit SHA-1     : %v
 Commit timestamp : %v
 Branch           : %v
@@ -85,7 +89,8 @@ To say hi to the community       , visit https://dgraph.slack.com.
 Copyright 2015-2018 Dgraph Labs, Inc.
 
 `,
-		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch, runtime.Version(), licenseInfo)
+		dgraphVersion, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
+		runtime.Version(), licenseInfo)
 }
 
 // PrintVersion prints version and other helpful information if --version.
@@ -96,4 +101,25 @@ func PrintVersion() {
 // Version returns a string containing the dgraphVersion.
 func Version() string {
 	return dgraphVersion
+}
+
+// ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.
+// It returns a nil slice if there's an error trying to calculate the checksum.
+func ExecutableChecksum() []byte {
+	execPath, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	execFile, err := os.Open(execPath)
+	if err != nil {
+		return nil
+	}
+	defer execFile.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, execFile); err != nil {
+		return nil
+	}
+
+	return h.Sum(nil)
 }
