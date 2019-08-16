@@ -1,32 +1,48 @@
 {
-  recurse(func: gt(count(~genre), 30000), depth: 2) @recurse {
+  movies as var(func: gt(count(~genre), 30000), orderasc: name@en) {
     name@en
-    film: ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2))
-    starring (orderasc: name@en, first: 2)
-    performance.actor
+    ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      starring {
+        performance.actor {
+          ActorName as name@en
+        }
+        Stars as min(val(ActorName))
+      }
+    }
+  }
+
+  movies(func: uid(movies)) {
+    name@en
+    director.film: ~genre (orderasc: name@en, first: 2) @filter(gt(count(starring), 2)) {
+      name@en
+      starring (orderasc: val(Stars), first: 2) {
+        performance.actor {
+          name@en
+        }
+      }
+    }
   }
 }
-
 ---
 {
-  "recurse": [
+  "movies": [
     {
       "name@en": "Documentary film",
-      "film": [
+      "director.film": [
         {
           "name@en": "!Women Art Revolution",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name@en": "Marina Abramović"
+                  "name@en": "B. Ruby Rich"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Judy Chicago"
+                  "name@en": "Barbara Kruger"
                 }
               ]
             }
@@ -38,14 +54,14 @@
             {
               "performance.actor": [
                 {
-                  "name@en": "Donna Cossy"
+                  "name@en": "Calvin Johnson"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Calvin Johnson"
+                  "name@en": "Donna Cossy"
                 }
               ]
             }
@@ -55,21 +71,21 @@
     },
     {
       "name@en": "Short Film",
-      "film": [
+      "director.film": [
         {
           "name@en": "#PostModem",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name@en": "Jillian Mayer"
+                  "name@en": "Amy Seimetz"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Amy Seimetz"
+                  "name@en": "Arly Montes"
                 }
               ]
             }
@@ -81,7 +97,7 @@
             {
               "performance.actor": [
                 {
-                  "name@en": "Seth Bailey"
+                  "name@en": "Amanda Hendy"
                 }
               ]
             },
@@ -98,21 +114,21 @@
     },
     {
       "name@en": "Drama",
-      "film": [
+      "director.film": [
         {
           "name@en": "$100,000 for Ringo",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name@en": "Massimo Serato"
+                  "name@en": "Eleonora Bianchi"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Michel Montfort"
+                  "name@en": "Fernando Sancho"
                 }
               ]
             }
@@ -124,14 +140,14 @@
             {
               "performance.actor": [
                 {
-                  "name@en": "Barry Otto"
+                  "name@en": "Anthony LaPaglia"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Leon Ford"
+                  "name@en": "Barry Otto"
                 }
               ]
             }
@@ -141,21 +157,21 @@
     },
     {
       "name@en": "Comedy",
-      "film": [
+      "director.film": [
         {
           "name@en": "\"FF.SS.\" – Cioè: \"...che mi hai portato a fare sopra a Posillipo se non mi vuoi più bene?\"",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name@en": "Bobby Solo"
+                  "name@en": "Alfredo Cerruti"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Maurizio Costanzo"
+                  "name@en": "Bobby Solo"
                 }
               ]
             }
@@ -167,14 +183,14 @@
             {
               "performance.actor": [
                 {
-                  "name@en": "Sonja O'Hara"
+                  "name@en": "Adam Wright"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name@en": "Brooklyn Chase"
+                  "name@en": "Alex Kozitsky"
                 }
               ]
             }

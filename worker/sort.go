@@ -17,11 +17,13 @@
 package worker
 
 import (
+	"encoding/hex"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
@@ -249,8 +251,9 @@ BUCKETS:
 		case <-ctx.Done():
 			return resultWithError(ctx.Err())
 		default:
-			k := x.Parse(key)
-			if k == nil {
+			k, err := x.Parse(key)
+			if err != nil {
+				glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 				continue
 			}
 
@@ -258,7 +261,7 @@ BUCKETS:
 			token := k.Term
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
-			err := intersectBucket(ctx, ts, token, out)
+			err = intersectBucket(ctx, ts, token, out)
 			switch err {
 			case errDone:
 				break BUCKETS

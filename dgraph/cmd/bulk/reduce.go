@@ -147,7 +147,8 @@ func (r *reducer) encodeAndWrite(
 
 	preds := make(map[string]uint32)
 	setStreamId := func(kv *bpb.KV) {
-		pk := x.Parse(kv.Key)
+		pk, err := x.Parse(kv.Key)
+		x.Check(err)
 		x.AssertTrue(len(pk.Attr) > 0)
 
 		// We don't need to consider the data prefix, count prefix, etc. because each predicate
@@ -291,8 +292,8 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		// list, we cannot enforce the constraint without losing data. Inform the user and
 		// force the schema to be a list so that all the data can be found when Dgraph is started.
 		// The user should fix their data once Dgraph is up.
-		parsedKey := x.Parse(currentKey)
-		x.AssertTrue(parsedKey != nil)
+		parsedKey, err := x.Parse(currentKey)
+		x.Check(err)
 		if parsedKey.IsData() {
 			schema := r.state.schema.getSchema(parsedKey.Attr)
 			if schema.GetValueType() == pb.Posting_UID && !schema.GetList() && len(uids) > 1 {

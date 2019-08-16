@@ -128,7 +128,8 @@ func (s *schemaStore) getPredicates(db *badger.DB) []string {
 	m := make(map[string]struct{})
 	for itr.Rewind(); itr.Valid(); {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		x.Check(err)
 		m[pk.Attr] = struct{}{}
 		itr.Seek(pk.SkipPredicate())
 		continue

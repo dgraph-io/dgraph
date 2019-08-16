@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unicode"
 
 	"github.com/dgraph-io/dgo/protos/api"
@@ -222,14 +224,15 @@ func tryParseAsGeo(b []byte, nq *api.NQuad) (bool, error) {
 	return true, nil
 }
 
+// NQuadBuffer batches up batchSize NQuads per push to channel, accessible via Ch(). If batchSize is
+// negative, it only does one push to Ch() during Flush.
 type NQuadBuffer struct {
 	batchSize int
 	nquads    []*api.NQuad
 	nqCh      chan []*api.NQuad
 }
 
-// NewNQuadBuffer would return a new buffer. It would batch up batchSize NQuads per push to channel,
-// accessible via Ch(). If batchSize is negative, it would only do one push to Ch() during Flush.
+// NewNQuadBuffer returns a new NQuadBuffer instance with the specified batch size.
 func NewNQuadBuffer(batchSize int) *NQuadBuffer {
 	buf := &NQuadBuffer{
 		batchSize: batchSize,
@@ -267,8 +270,26 @@ func (buf *NQuadBuffer) Flush() {
 	close(buf.nqCh)
 }
 
+// nextIdx is the index that is used to generate blank node ids for a json map object
+// when the map object does not have a "uid" field.
+// It should only be accessed through the atomic APIs.
+var nextIdx uint64
+
+// randomID will be used to generate blank node ids.
+// We use a random number to avoid collision with user specified uids.
+var randomID uint32
+
+func init() {
+	randomID = rand.Uint32()
+}
+
+func getNextBlank() string {
+	id := atomic.AddUint64(&nextIdx, 1)
+	return fmt.Sprintf("_:dg.%d.%d", randomID, id)
+}
+
 // TODO - Abstract these parameters to a struct.
-func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, parentPred string) (
+func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (
 	mapResponse, error) {
 	var mr mapResponse
 	// Check field in map.
@@ -308,8 +329,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 			return mr, errors.Errorf("UID must be present and non-zero while deleting edges.")
 		}
 
-		mr.uid = fmt.Sprintf("_:blank-%d", *idx)
-		*idx++
+		mr.uid = getNextBlank()
 	}
 
 	for pred, v := range m {
@@ -378,7 +398,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 				continue
 			}
 
-			cr, err := buf.mapToNquads(v, idx, op, pred)
+			cr, err := buf.mapToNquads(v, op, pred)
 			if err != nil {
 				return mr, err
 			}
@@ -411,7 +431,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, idx *int, op int, 
 						continue
 					}
 
-					cr, err := buf.mapToNquads(iv, idx, op, pred)
+					cr, err := buf.mapToNquads(iv, op, pred)
 					if err != nil {
 						return mr, err
 					}
@@ -462,13 +482,12 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		return errors.Errorf("Couldn't parse json as a map or an array")
 	}
 
-	var idx int
 	if len(list) > 0 {
 		for _, obj := range list {
 			if _, ok := obj.(map[string]interface{}); !ok {
 				return errors.Errorf("Only array of map allowed at root.")
 			}
-			mr, err := buf.mapToNquads(obj.(map[string]interface{}), &idx, op, "")
+			mr, err := buf.mapToNquads(obj.(map[string]interface{}), op, "")
 			if err != nil {
 				return err
 			}
@@ -477,7 +496,7 @@ func (buf *NQuadBuffer) ParseJSON(b []byte, op int) error {
 		return nil
 	}
 
-	mr, err := buf.mapToNquads(ms, &idx, op, "")
+	mr, err := buf.mapToNquads(ms, op, "")
 	buf.checkForDeletion(mr, ms, op)
 	return err
 }

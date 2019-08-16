@@ -511,9 +511,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		default:
 		}
 
-		pk := x.Parse(key)
-		if pk == nil {
-			return nil, errors.Errorf("could not parse key %s", hex.Dump(key))
+		pk, err := x.Parse(key)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 		}
 
 		item := itr.Item()

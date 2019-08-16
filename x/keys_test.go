@@ -32,7 +32,8 @@ func TestDataKey(t *testing.T) {
 		// can verify that multiple sizes of attr work correctly.
 		sattr := fmt.Sprintf("attr:%d", uid)
 		key := DataKey(sattr, uid)
-		pk := Parse(key)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsData())
 		require.Equal(t, sattr, pk.Attr)
@@ -60,8 +61,10 @@ func TestParseDataKeysWithStartUid(t *testing.T) {
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		key := DataKey(sattr, uid)
-		key = GetSplitKey(key, startUid)
-		pk := Parse(key)
+		key, err := GetSplitKey(key, startUid)
+		require.NoError(t, err)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsData())
 		require.Equal(t, sattr, pk.Attr)
@@ -78,7 +81,8 @@ func TestIndexKey(t *testing.T) {
 		sterm := fmt.Sprintf("term:%d", uid)
 
 		key := IndexKey(sattr, sterm)
-		pk := Parse(key)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsIndex())
 		require.Equal(t, sattr, pk.Attr)
@@ -94,8 +98,10 @@ func TestIndexKeyWithStartUid(t *testing.T) {
 		sterm := fmt.Sprintf("term:%d", uid)
 
 		key := IndexKey(sattr, sterm)
-		key = GetSplitKey(key, startUid)
-		pk := Parse(key)
+		key, err := GetSplitKey(key, startUid)
+		require.NoError(t, err)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsIndex())
 		require.Equal(t, sattr, pk.Attr)
@@ -111,7 +117,8 @@ func TestReverseKey(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := ReverseKey(sattr, uid)
-		pk := Parse(key)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsReverse())
 		require.Equal(t, sattr, pk.Attr)
@@ -126,8 +133,10 @@ func TestReverseKeyWithStartUid(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := ReverseKey(sattr, uid)
-		key = GetSplitKey(key, startUid)
-		pk := Parse(key)
+		key, err := GetSplitKey(key, startUid)
+		require.NoError(t, err)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsReverse())
 		require.Equal(t, sattr, pk.Attr)
@@ -143,7 +152,8 @@ func TestCountKey(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", count)
 
 		key := CountKey(sattr, count, true)
-		pk := Parse(key)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsCountOrCountRev())
 		require.Equal(t, sattr, pk.Attr)
@@ -158,8 +168,10 @@ func TestCountKeyWithStartUid(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", count)
 
 		key := CountKey(sattr, count, true)
-		key = GetSplitKey(key, startUid)
-		pk := Parse(key)
+		key, err := GetSplitKey(key, startUid)
+		require.NoError(t, err)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsCountOrCountRev())
 		require.Equal(t, sattr, pk.Attr)
@@ -175,7 +187,8 @@ func TestSchemaKey(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := SchemaKey(sattr)
-		pk := Parse(key)
+		pk, err := Parse(key)
+		require.NoError(t, err)
 
 		require.True(t, pk.IsSchema())
 		require.Equal(t, sattr, pk.Attr)

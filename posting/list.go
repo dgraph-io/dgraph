@@ -44,7 +44,8 @@ var (
 	// In such a case, retry.
 	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = errors.New("No value found")
+	ErrNoValue = errors.New("No value found")
+	// ErrStopIteration is returned when an iteration is terminated early.
 	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
@@ -441,7 +442,10 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	var conflictKey uint64
-	pk := x.Parse(l.key)
+	pk, err := x.Parse(l.key)
+	if err != nil {
+		return err
+	}
 	switch {
 	case schema.State().HasUpsert(t.Attr):
 		// Consider checking to see if a email id is unique. A user adds:
@@ -754,7 +758,9 @@ func (out *rollupOutput) marshalPostingListPart(
 	baseKey []byte, startUid uint64, plist *pb.PostingList) *bpb.KV {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
-	kv.Key = x.GetSplitKey(baseKey, startUid)
+	key, err := x.GetSplitKey(baseKey, startUid)
+	x.Check(err)
+	kv.Key = key
 	val, meta := marshalPostingList(plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
@@ -1131,7 +1137,10 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	key := x.GetSplitKey(l.key, startUid)
+	key, err := x.GetSplitKey(l.key, startUid)
+	if err != nil {
+		return nil, err
+	}
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
