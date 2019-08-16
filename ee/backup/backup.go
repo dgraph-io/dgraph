@@ -264,15 +264,12 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 				return list, nil
 			}
 
-			// Manually advance the iterator. This cannot be done in the for
-			// statement because ReadPostingList advances the iterator so this
-			// only needs to be done for BitSchemaPosting entries.
-			itr.Next()
-
 		default:
 			return nil, errors.Errorf(
 				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
+
+		itr.Next()
 	}
 
 	// This shouldn't be reached but it's being added here because the golang
