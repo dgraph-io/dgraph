@@ -511,7 +511,6 @@ func (n *node) initAndStartNode() error {
 			x.CheckfNoTrace(err)
 		}
 
-		n.server.RLock()
 		proposal := &pb.ZeroProposal{
 			Enterprise: &pb.Enterprise{
 				Entity:   e.Entity,
@@ -519,7 +518,6 @@ func (n *node) initAndStartNode() error {
 				ExpiryTs: e.Expiry.Unix(),
 			},
 		}
-		n.server.RUnlock()
 
 		go func() {
 			for {
