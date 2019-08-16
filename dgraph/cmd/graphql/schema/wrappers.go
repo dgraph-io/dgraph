@@ -348,6 +348,9 @@ func (m *mutation) MutationType() MutationType {
 }
 
 func (t *astType) Name() string {
+	if t.typ.NamedType == "" {
+		return t.typ.Elem.NamedType
+	}
 	return t.typ.NamedType
 }
 

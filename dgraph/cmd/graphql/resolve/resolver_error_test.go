@@ -134,7 +134,7 @@ func (dg *dgraphClient) AssertType(ctx context.Context, uid uint64, typ string) 
 // The []bytes built by Resolve() have some other properties, such as ordering of
 // fields, which are tested by TestResponseOrder().
 func TestResolver(t *testing.T) {
-	b, err := ioutil.ReadFile("resolver_test.yaml")
+	b, err := ioutil.ReadFile("resolver_error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []QueryCase
@@ -157,15 +157,15 @@ func TestResolver(t *testing.T) {
 // https://graphql.github.io/graphql-spec/June2018/#sec-Serialized-Map-Ordering
 func TestResponseOrder(t *testing.T) {
 	query := `query {
-		getAuthor(id: "0x1") {
-			name
-			dob
-			postsNullable {
-				title
-				text
-			}
-		}
-	}`
+		 getAuthor(id: "0x1") {
+			 name
+			 dob
+			 postsNullable {
+				 title
+				 text
+			 }
+		 }
+	 }`
 
 	tests := []QueryCase{
 		{Name: "Response is in same order as GQL query",
@@ -377,7 +377,7 @@ func resolve(gqlSchema *ast.Schema, gqlQuery string, dgResponse string) *schema.
 func resolveWithClient(
 	gqlSchema *ast.Schema,
 	gqlQuery string,
-	client *dgraphClient) *schema.Response {
+	client dgraph.Client) *schema.Response {
 	resolver := New(schema.AsSchema(gqlSchema), client)
 	resolver.GqlReq = &schema.Request{Query: gqlQuery}
 	return resolver.Resolve(context.Background())

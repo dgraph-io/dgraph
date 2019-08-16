@@ -1,0 +1,108 @@
+-
+  name: "single level"
+  gqlquery: |
+    mutation {
+      ADD_UPDATE_MUTATION {
+        post {
+          id
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) {
+        id : uid
+        title : Post.title
+      }
+    }
+
+-
+  name: "with alias"
+  gqlquery: |
+    mutation {
+      ADD_UPDATE_MUTATION {
+        result : post {
+          id
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      result(func: uid(0x4)) {
+        id : uid
+        title : Post.title
+      }
+    }
+
+-
+  name: "with field alias"
+  gqlquery: |
+    mutation {
+      ADD_UPDATE_MUTATION {
+        post {
+          postID : id
+          postTitle : title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) {
+        postID : uid
+        postTitle : Post.title
+      }
+    }
+
+-
+  name: "deep"
+  gqlquery: |
+    mutation {
+      ADD_UPDATE_MUTATION {
+        post {
+          id
+          title
+          author {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) {
+        id : uid
+        title : Post.title
+        author : Post.author {
+          name : Author.name
+        }
+      }
+    }
+
+-
+  name: "deep with alias"
+  gqlquery: |
+    mutation {
+      ADD_UPDATE_MUTATION {
+        post {
+          id
+          title
+          postAuthor: author {
+            authorID: id
+            authorName: name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      post(func: uid(0x4)) {
+        id : uid
+        title : Post.title
+        postAuthor : Post.author {
+          authorID : uid
+          authorName : Author.name
+        }
+      }
+    }

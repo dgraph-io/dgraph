@@ -1,0 +1,138 @@
+-
+  name: "ID query"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+
+-
+  name: "ID query with query alias"
+  gqlquery: |
+    query {
+      author : getAuthor(id: "0x1") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      author(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+      }
+    }
+    
+-
+  name: "ID query with field alias"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        authName : name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        authName : Author.name
+      }
+    }
+
+-
+  name: "ID field gets transformed to uid"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        id
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        id : uid
+        name : Author.name
+      }
+    }
+
+-
+  name: "ID query with depth"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+        postsRequired {
+          title
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        postsRequired : Author.postsRequired {
+          title : Post.title
+          text : Post.text
+        }
+      }
+    }
+
+-
+  name: "ID query with depth and alias"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+        posts : postsRequired {
+          postTitle : title
+          postText : text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        posts : Author.postsRequired {
+          postTitle : Post.title
+          postText : Post.text
+        }
+      }
+    }
+
+-
+  name: "ID query deep"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") {
+        name
+        posts : postsRequired {
+          title
+          text
+          author {
+            authorID : id
+            name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) {
+        name : Author.name
+        posts : Author.postsRequired {
+          title : Post.title
+          text : Post.text
+          author : Post.author {
+            authorID : uid
+            name : Author.name
+          }
+        }
+      }
+    }
