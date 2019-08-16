@@ -144,7 +144,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.mutationMap = make(map[uint64]*pb.PostingList)
-	l.plist = new(pb.PostingList)
+	l.plist = postingListPool.Get().(*pb.PostingList)
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -172,7 +172,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
-				pl := &pb.PostingList{}
+				pl := postingListPool.Get().(*pb.PostingList)
 				x.Check(pl.Unmarshal(val))
 				pl.CommitTs = item.Version()
 				for _, mpost := range pl.Postings {
