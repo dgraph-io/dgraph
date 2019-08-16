@@ -449,7 +449,11 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return false
+		}
+
 		// _predicate_ is deprecated but leaving this here so that users with a
 		// binary with version >= 1.1 can export data from a version < 1.1 without
 		// this internal data showing up.
@@ -469,7 +473,10 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		item := itr.Item()
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return nil, err
+		}
 		e := &exporter{
 			readTs: in.ReadTs,
 		}

@@ -165,11 +165,12 @@ func getInequalityTokens(readTs uint64, attr, f string,
 	for itr.Seek(seekKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
 		key := item.Key()
-		k := x.Parse(key)
+		k, err := x.Parse(key)
+		if err != nil {
+			return nil, "", err
+		}
 
 		switch {
-		case k == nil:
-
 		// if its lossy then we handle inequality comparison later
 		// in handleCompareFunction
 		case tokenizer.IsLossy():

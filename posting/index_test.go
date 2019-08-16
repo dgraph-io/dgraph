@@ -217,7 +217,8 @@ func tokensForTest(attr string) []string {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		k := x.Parse(key)
+		k, err := x.Parse(key)
+		x.Check(err)
 		x.AssertTrue(k.IsIndex())
 		out = append(out, k.Term)
 	}

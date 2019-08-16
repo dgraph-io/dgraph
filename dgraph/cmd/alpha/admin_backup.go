@@ -85,7 +85,7 @@ func processHttpBackupRequest(ctx context.Context, r *http.Request) error {
 	req := pb.BackupRequest{
 		ReadTs:       ts.ReadOnly,
 		Destination:  destination,
-		UnixTs:       time.Now().UTC().Format("20060102.150405"),
+		UnixTs:       time.Now().UTC().Format("20060102.150405.000"),
 		AccessKey:    accessKey,
 		SecretKey:    secretKey,
 		SessionToken: sessionToken,
