@@ -178,7 +178,6 @@ func (*jsonChunker) Begin(r *bufio.Reader) error {
 
 func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
-	out.Grow(1 << 20)
 
 	// For RDF, the loader just reads the input and the mapper parses it into nquads,
 	// so do the same for JSON. But since JSON is not line-oriented like RDF, it's a little
