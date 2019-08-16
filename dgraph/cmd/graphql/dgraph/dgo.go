@@ -39,11 +39,26 @@ import (
 // GraphQuery to alpha, so we don't have to stringify -> reparse etc.  Also
 // allows exercising some of the particulars around GraphQL error processing
 // without needing a Dgraph instance the reproduces the exact error conditions.
+//
+// Implementations should use dgTimer to track the total Dgraph time.
 type Client interface {
-	Query(ctx context.Context, query *QueryBuilder) ([]byte, error)
-	Mutate(ctx context.Context, val interface{}) (map[string]string, error)
-	DeleteNode(ctx context.Context, uid uint64) error
-	AssertType(ctx context.Context, uid uint64, typ string) error
+	Query(
+		ctx context.Context,
+		query *QueryBuilder,
+		dgTimer schema.OffsetTimer) ([]byte, error)
+	Mutate(
+		ctx context.Context,
+		val interface{},
+		dgTimer schema.OffsetTimer) (map[string]string, error)
+	DeleteNode(
+		ctx context.Context,
+		uid uint64,
+		dgTimer schema.OffsetTimer) error
+	AssertType(
+		ctx context.Context,
+		uid uint64,
+		typ string,
+		dgTimer schema.OffsetTimer) error
 }
 
 type dgraph struct {
@@ -56,7 +71,10 @@ func AsDgraph(dgo *dgo.Dgraph) Client {
 	return &dgraph{client: dgo}
 }
 
-func (dg *dgraph) Query(ctx context.Context, qb *QueryBuilder) ([]byte, error) {
+func (dg *dgraph) Query(
+	ctx context.Context,
+	qb *QueryBuilder,
+	dgTimer schema.OffsetTimer) ([]byte, error) {
 
 	q, err := qb.AsQueryString()
 	if err != nil {
@@ -77,13 +95,19 @@ func (dg *dgraph) Query(ctx context.Context, qb *QueryBuilder) ([]byte, error) {
 	// there's only 7 posts, or if there's more that are missing 'text'.
 	// But, for GraphQL, we want to know about those missing values.
 	md := metadata.Pairs("debug", "true")
+
+	dgTimer.Start()
 	resp, err := dg.client.NewTxn().
 		Query(metadata.NewOutgoingContext(ctx, md), q)
+	dgTimer.Stop()
 
 	return resp.Json, schema.GQLWrapf(err, "Dgraph query failed")
 }
 
-func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
+func (dg *dgraph) Mutate(
+	ctx context.Context,
+	val interface{},
+	dgTimer schema.OffsetTimer) (map[string]string, error) {
 
 	jsonMu, err := json.Marshal(val)
 	if err != nil {
@@ -99,12 +123,18 @@ func (dg *dgraph) Mutate(ctx context.Context, val interface{}) (map[string]strin
 		SetJson:   jsonMu,
 	}
 
+	dgTimer.Start()
 	assigned, err := dg.client.NewTxn().Mutate(ctx, mu)
+	dgTimer.Stop()
+
 	return assigned.Uids, schema.GQLWrapf(err, "couldn't execute mutation")
 }
 
 // DeleteNode deletes a single node from the graph.
-func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
+func (dg *dgraph) DeleteNode(
+	ctx context.Context,
+	uid uint64,
+	dgTimer schema.OffsetTimer) error {
 	// TODO: Note this simple cut that just removes it's outgoing edges.
 	// If we are to do referential integrity or ensuring the type constraints
 	// on the nodes, or cascading deletes, then a whole bunch more needs to be
@@ -119,13 +149,20 @@ func (dg *dgraph) DeleteNode(ctx context.Context, uid uint64) error {
 		DelNquads: []byte(fmt.Sprintf("<0x%x> * * .", uid)),
 	}
 
+	dgTimer.Start()
 	_, err := dg.client.NewTxn().Mutate(ctx, mu)
+	dgTimer.Stop()
+
 	return err
 }
 
 // AssertType checks if uid is of type typ.  It returns nil if the type assertion
 // holds, and an error if something goes wrong.
-func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error {
+func (dg *dgraph) AssertType(
+	ctx context.Context,
+	uid uint64,
+	typ string,
+	dgTimer schema.OffsetTimer) error {
 
 	qb := NewQueryBuilder().
 		WithAttr("checkID").
@@ -133,7 +170,7 @@ func (dg *dgraph) AssertType(ctx context.Context, uid uint64, typ string) error 
 		WithTypeFilter(typ).
 		WithField("uid")
 
-	resp, err := dg.Query(ctx, qb)
+	resp, err := dg.Query(ctx, qb, dgTimer)
 	if err != nil {
 		return schema.GQLWrapf(err, "unable to type check id")
 	}
