@@ -56,6 +56,7 @@ func enterpriseDetails(signedFile string, e *enterprise) error {
 	}
 
 	// We need to read the body for the signature verification check to happen.
+	// md.Signature would be non-nil after reading the body if the verification is successfull.
 	buf, err := ioutil.ReadAll(md.UnverifiedBody)
 	if err != nil {
 		return errors.Wrapf(err, "while reading body from signed license file")
