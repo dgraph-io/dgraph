@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -129,7 +130,10 @@ var errHasPendingTxns = errors.New("Pending transactions found. Please retry ope
 // operation is not an option.
 func detectPendingTxns(attr string) error {
 	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
-		pk := x.Parse(key)
+		pk, err := x.Parse(key)
+		if err != nil {
+			return false
+		}
 		return pk.Attr == attr
 	})
 	if len(tctxs) == 0 {
@@ -978,8 +982,9 @@ func (n *node) rollupLists(readTs uint64) error {
 			// Only leader needs to calculate the tablet sizes.
 			return
 		}
-		pk := x.Parse(key)
-		if pk == nil {
+		pk, err := x.Parse(key)
+		if err != nil {
+			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
 			return
 		}
 		val, ok := m.Load(pk.Attr)

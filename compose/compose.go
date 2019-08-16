@@ -81,6 +81,8 @@ type options struct {
 	LocalBin      bool
 	Tag           string
 	WhiteList     bool
+	Ratel         bool
+	RatelPort     int
 }
 
 var opts options
@@ -248,6 +250,22 @@ func getJaeger() service {
 	return svc
 }
 
+func getRatel() service {
+	portFlag := ""
+	if opts.RatelPort != 8000 {
+		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
+	}
+	svc := service{
+		Image:         "dgraph/dgraph:" + opts.Tag,
+		ContainerName: "ratel",
+		Ports: []string{
+			toExposedPort(opts.RatelPort),
+		},
+		Command: "dgraph-ratel" + portFlag,
+	}
+	return svc
+}
+
 func addMetrics(cfg *composeConfig) {
 	cfg.Volumes["prometheus-volume"] = stringMap{}
 	cfg.Volumes["grafana-volume"] = stringMap{}
@@ -363,6 +381,10 @@ func main() {
 		"Docker tag for dgraph/dgraph image. Requires -l=false to use binary from docker container.")
 	cmd.PersistentFlags().BoolVarP(&opts.WhiteList, "whitelist", "w", false,
 		"include a whitelist if true")
+	cmd.PersistentFlags().BoolVar(&opts.Ratel, "ratel", false,
+		"include ratel service")
+	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
+		"Port to expose Ratel service")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -396,6 +418,9 @@ func main() {
 	if opts.UserOwnership && opts.DataDir == "" {
 		fatal(errors.Errorf("--user option requires --data_dir=<path>"))
 	}
+	if cmd.Flags().Changed("ratel_port") && !opts.Ratel {
+		fatal(errors.Errorf("--ratel_port option requires --ratel"))
+	}
 
 	services := make(map[string]service)
 
@@ -421,6 +446,10 @@ func main() {
 
 	if opts.Jaeger {
 		services["jaeger"] = getJaeger()
+	}
+
+	if opts.Ratel {
+		services["ratel"] = getRatel()
 	}
 
 	if opts.Metrics {

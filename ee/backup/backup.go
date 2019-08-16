@@ -120,7 +120,10 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.KeyToList = pr.toBackupList
 	stream.ChooseKey = func(item *badger.Item) bool {
-		parsedKey := x.Parse(item.Key())
+		parsedKey, err := x.Parse(item.Key())
+		if err != nil {
+			return false
+		}
 		_, ok := predMap[parsedKey.Attr]
 		return ok
 	}
@@ -278,9 +281,9 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 }
 
 func toBackupKey(key []byte) ([]byte, error) {
-	parsedKey := x.Parse(key)
-	if parsedKey == nil {
-		return nil, errors.Errorf("could not parse key %s", hex.Dump(key))
+	parsedKey, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
 	}
 	backupKey, err := parsedKey.ToBackupKey().Marshal()
 	if err != nil {

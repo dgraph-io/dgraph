@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package json
+package chunker
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -24,13 +25,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/golang/glog"
+
+	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
-	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {
@@ -69,9 +70,39 @@ type Person struct {
 	School  *School    `json:"school,omitempty"`
 }
 
+func Parse(b []byte, op int) ([]*api.NQuad, error) {
+	nqs := NewNQuadBuffer(1000)
+	err := nqs.ParseJSON(b, op)
+	return nqs.nquads, err
+}
+
+func (exp *Experiment) verify() {
+	// insert the data into dgraph
+	dg := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	ctx := context.Background()
+	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
+	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
+		"schema change failed")
+
+	_, err := dg.NewTxn().Mutate(ctx,
+		&api.Mutation{Set: exp.nqs, CommitNow: true})
+	require.NoError(exp.t, err, "mutation failed")
+
+	response, err := dg.NewReadOnlyTxn().Query(ctx, exp.query)
+	require.NoError(exp.t, err, "qeury failed")
+	testutil.CompareJSON(exp.t, exp.expected, string(response.GetJson()))
+}
+
+type Experiment struct {
+	t        *testing.T
+	nqs      []*api.NQuad
+	schema   string
+	query    string
+	expected string
+}
+
 func TestNquadsFromJson1(t *testing.T) {
 	tn := time.Now().UTC()
-	geoVal := `{"Type":"Point", "Coordinates":[1.1,2.0]}`
 	m := true
 	p := Person{
 		Name:    "Alice",
@@ -91,26 +122,24 @@ func TestNquadsFromJson1(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 5, len(nq))
-
-	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
-
-	oval = &api.Value{Val: &api.Value_IntVal{IntVal: 26}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "age", oval))
-
-	oval = &api.Value{Val: &api.Value_BoolVal{BoolVal: true}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "married", oval))
-
-	oval = &api.Value{Val: &api.Value_StrVal{StrVal: tn.Format(time.RFC3339Nano)}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "now", oval))
-
-	var g geom.T
-	err = geojson.Unmarshal([]byte(geoVal), &g)
-	require.NoError(t, err)
-	geo, err := types.ObjectValue(types.GeoID, g)
-	require.NoError(t, err)
-
-	require.Contains(t, nq, makeNquad("_:blank-0", "address", geo))
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{alice(func: eq(name, "Alice")) {
+name
+age
+married
+address 
+}}`,
+		expected: `{"alice": [
+{"name": "Alice",
+"age": 26,
+"married": true,
+"address": {"coordinates": [2,1.1], "type": "Point"}}
+]}								
+`}
+	exp.verify()
 }
 
 func TestNquadsFromJson2(t *testing.T) {
@@ -132,21 +161,33 @@ func TestNquadsFromJson2(t *testing.T) {
 
 	nq, err := Parse(b, SetNquads)
 	require.NoError(t, err)
-
 	require.Equal(t, 6, len(nq))
-	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "_:blank-1"))
-	require.Contains(t, nq, makeNquadEdge("_:blank-0", "friend", "1000"))
-
-	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Charlie"}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "name", oval))
-
-	oval = &api.Value{Val: &api.Value_BoolVal{BoolVal: false}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "married", oval))
-
-	oval = &api.Value{Val: &api.Value_StrVal{StrVal: "Bob"}}
-	require.Contains(t, nq, makeNquad("1000", "name", oval))
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{alice(func: eq(name, "Alice")) {
+name
+friend {
+  name
+  married
+}}}`,
+		expected: `{"alice":[{
+"name":"Alice",
+"friend": [
+{"name":"Charlie", "married":false},
+{"name":"Bob"}
+]
+}]}`,
+	}
+	exp.verify()
 }
 
+func outputNq(nqs []*api.NQuad) {
+	for _, nq := range nqs {
+		fmt.Printf("%v\n", nq)
+	}
+}
 func TestNquadsFromJson3(t *testing.T) {
 	p := Person{
 		Name: "Alice",
@@ -157,15 +198,22 @@ func TestNquadsFromJson3(t *testing.T) {
 
 	b, err := json.Marshal(p)
 	require.NoError(t, err)
-
 	nq, err := Parse(b, SetNquads)
-	require.NoError(t, err)
-
-	require.Equal(t, 3, len(nq))
-	require.Contains(t, nq, makeNquadEdge("_:blank-0", "school", "_:blank-1"))
-
-	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Wellington Public School"}}
-	require.Contains(t, nq, makeNquad("_:blank-1", "Name", oval))
+	outputNq(nq)
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{alice(func: eq(name, "Alice")) {
+name
+school {Name}
+}}`,
+		expected: `{"alice":[{
+"name":"Alice",
+"school": [{"Name":"Wellington Public School"}]
+}]}`,
+	}
+	exp.verify()
 }
 
 func TestNquadsFromJson4(t *testing.T) {
@@ -173,12 +221,38 @@ func TestNquadsFromJson4(t *testing.T) {
 
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
-	require.Equal(t, 5, len(nq))
-	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Alice"}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
-	require.Contains(t, nq, makeNquad("_:blank-0", "age", &api.Value{Val: &api.Value_IntVal{IntVal: 21}}))
-	require.Contains(t, nq, makeNquad("_:blank-0", "weight",
-		&api.Value{Val: &api.Value_DoubleVal{DoubleVal: 58.7}}))
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{alice(func: eq(name, "Alice")) {
+name
+mobile
+car
+age
+weight
+}}`,
+		expected: fmt.Sprintf(`{"alice":%s}`, json),
+	}
+	exp.verify()
+}
+
+func TestNquadsFromMultipleJsonObjects(t *testing.T) {
+	json := `[{"name":"Alice", "age": 25}, {"name": "Bob", "age": 26}]`
+
+	nq, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{people(func: has(name)) {
+name
+age
+}}`,
+		expected: fmt.Sprintf(`{"people":%s}`, json),
+	}
+	exp.verify()
 }
 
 func TestJsonNumberParsing(t *testing.T) {
@@ -221,14 +295,24 @@ func TestNquadsFromJson_NegativeUidError(t *testing.T) {
 }
 
 func TestNquadsFromJson_EmptyUid(t *testing.T) {
-	json := `{"uid":"","name":"Name","following":[{"name":"Bob"}],"school":[{"uid":"","name":"Crown Public School"}]}`
-
+	json := `{"uid":"","name":"Alice","following":[{"name":"Bob"}],"school":[{"uid":"",
+"name":"Crown Public School"}]}`
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 
-	require.Equal(t, 5, len(nq))
-	oval := &api.Value{Val: &api.Value_StrVal{StrVal: "Name"}}
-	require.Contains(t, nq, makeNquad("_:blank-0", "name", oval))
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{alice(func: eq(name, "Alice")) {
+name
+following { name}
+school { name}
+}}`,
+		expected: `{"alice":[{"name":"Alice","following":[{"name":"Bob"}],"school":[{
+"name":"Crown Public School"}]}]}`,
+	}
+	exp.verify()
 }
 
 func TestNquadsFromJson_BlankNodes(t *testing.T) {
@@ -237,8 +321,19 @@ func TestNquadsFromJson_BlankNodes(t *testing.T) {
 	nq, err := Parse([]byte(json), SetNquads)
 	require.NoError(t, err)
 
-	require.Equal(t, 5, len(nq))
-	require.Contains(t, nq, makeNquadEdge("_:alice", "school", "_:school"))
+	exp := &Experiment{
+		t:      t,
+		nqs:    nq,
+		schema: "name: string @index(exact) .",
+		query: `{alice(func: eq(name, "Alice")) {
+name
+following { name}
+school { name}
+}}`,
+		expected: `{"alice":[{"name":"Alice","following":[{"name":"Bob"}],"school":[{
+"name":"Crown Public School"}]}]}`,
+	}
+	exp.verify()
 }
 
 func TestNquadsDeleteEdges(t *testing.T) {

@@ -93,7 +93,7 @@ type RecurseArgs struct {
 	AllowLoop bool
 }
 
-// SHortestPathArgs stores the arguments needed to process the shortest path query.
+// ShortestPathArgs stores the arguments needed to process the shortest path query.
 type ShortestPathArgs struct {
 	// From, To can have a uid or a uid function as the argument.
 	// 1. from: 0x01

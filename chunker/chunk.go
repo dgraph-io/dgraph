@@ -28,10 +28,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/x"
-	"github.com/dgraph-io/dgraph/chunker/json"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/lex"
 
 	"github.com/pkg/errors"
@@ -42,14 +39,26 @@ type Chunker interface {
 	Begin(r *bufio.Reader) error
 	Chunk(r *bufio.Reader) (*bytes.Buffer, error)
 	End(r *bufio.Reader) error
-	Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error)
+	Parse(chunkBuf *bytes.Buffer) error
+	NQuads() *NQuadBuffer
 }
 
 type rdfChunker struct {
 	lexer *lex.Lexer
+	nqs   *NQuadBuffer
 }
 
-type jsonChunker struct{}
+func (rc *rdfChunker) NQuads() *NQuadBuffer {
+	return rc.nqs
+}
+
+type jsonChunker struct {
+	nqs *NQuadBuffer
+}
+
+func (jc *jsonChunker) NQuads() *NQuadBuffer {
+	return jc.nqs
+}
 
 // InputFormat represents the multiple formats supported by Chunker.
 type InputFormat byte
@@ -64,19 +73,24 @@ const (
 )
 
 // NewChunker returns a new chunker for the specified format.
-func NewChunker(inputFormat InputFormat) Chunker {
+func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 	switch inputFormat {
 	case RdfFormat:
-		return &rdfChunker{lexer: &lex.Lexer{}}
+		return &rdfChunker{
+			nqs:   NewNQuadBuffer(batchSize),
+			lexer: &lex.Lexer{},
+		}
 	case JsonFormat:
-		return &jsonChunker{}
+		return &jsonChunker{
+			nqs: NewNQuadBuffer(batchSize),
+		}
 	default:
 		panic("unknown input format")
 	}
 }
 
 // RDF files don't require any special processing at the beginning of the file.
-func (c *rdfChunker) Begin(r *bufio.Reader) error {
+func (*rdfChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
@@ -84,7 +98,7 @@ func (c *rdfChunker) Begin(r *bufio.Reader) error {
 // 1) the EOF is reached
 // 2) 1e5 lines have been read
 // 3) some unexpected error happened
-func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (*rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
@@ -117,36 +131,34 @@ func (c *rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 }
 
 // Parse is not thread-safe. Only call it serially, because it reuses lexer object.
-func (c *rdfChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
-	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
+func (rc *rdfChunker) Parse(chunkBuf *bytes.Buffer) error {
+	if chunkBuf == nil || chunkBuf.Len() == 0 {
+		return nil
 	}
 
-	nqs := make([]*api.NQuad, 0)
 	for chunkBuf.Len() > 0 {
 		str, err := chunkBuf.ReadString('\n')
 		if err != nil && err != io.EOF {
 			x.Check(err)
 		}
 
-		nq, err := rdf.Parse(str, c.lexer)
-		if err == rdf.ErrEmpty {
+		nq, err := ParseRDF(str, rc.lexer)
+		if err == ErrEmpty {
 			continue // blank line or comment
 		} else if err != nil {
-			return nil, errors.Wrapf(err, "while parsing line %q", str)
+			return errors.Wrapf(err, "while parsing line %q", str)
 		}
-		nqs = append(nqs, &nq)
+		rc.nqs.Push(&nq)
 	}
-
-	return nqs, nil
-}
-
-// RDF files don't require any special processing at the end of the file.
-func (c *rdfChunker) End(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Begin(r *bufio.Reader) error {
+// RDF files don't require any special processing at the end of the file.
+func (*rdfChunker) End(r *bufio.Reader) error {
+	return nil
+}
+
+func (*jsonChunker) Begin(r *bufio.Reader) error {
 	// The JSON file to load must be an array of maps (that is, '[ { ... }, { ... }, ... ]').
 	// This function must be called before calling readJSONChunk for the first time to advance
 	// the Reader past the array start token ('[') so that calls to readJSONChunk can read
@@ -164,7 +176,7 @@ func (jsonChunker) Begin(r *bufio.Reader) error {
 	return nil
 }
 
-func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
+func (*jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	out := new(bytes.Buffer)
 	out.Grow(1 << 20)
 
@@ -231,21 +243,19 @@ func (jsonChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return out, nil
 }
 
-func (jsonChunker) Parse(chunkBuf *bytes.Buffer) ([]*api.NQuad, error) {
-	if chunkBuf.Len() == 0 {
-		return nil, io.EOF
+func (jc *jsonChunker) Parse(chunkBuf *bytes.Buffer) error {
+	if chunkBuf == nil || chunkBuf.Len() == 0 {
+		return nil
 	}
 
-	nqs, err := json.Parse(chunkBuf.Bytes(), json.SetNquads)
-	if err != nil && err != io.EOF {
+	err := jc.nqs.ParseJSON(chunkBuf.Bytes(), SetNquads)
+	if err != nil {
 		x.Check(err)
 	}
-	chunkBuf.Reset()
-
-	return nqs, err
+	return err
 }
 
-func (jsonChunker) End(r *bufio.Reader) error {
+func (*jsonChunker) End(r *bufio.Reader) error {
 	if slurpSpace(r) == io.EOF {
 		return nil
 	}

@@ -44,8 +44,9 @@ var (
 	// In such a case, retry.
 	ErrRetry = errors.New("Temporary error. Please retry")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = errors.New("No value found")
-	errStopIteration = errors.New("Stop iteration")
+	ErrNoValue = errors.New("No value found")
+	// ErrStopIteration is returned when an iteration is terminated early.
+	ErrStopIteration = errors.New("Stop iteration")
 	emptyPosting     = &pb.Posting{}
 	maxListSize      = mb / 2
 )
@@ -441,7 +442,10 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	var conflictKey uint64
-	pk := x.Parse(l.key)
+	pk, err := x.Parse(l.key)
+	if err != nil {
+		return err
+	}
 	switch {
 	case schema.State().HasUpsert(t.Attr):
 		// Consider checking to see if a email id is unique. A user adds:
@@ -660,7 +664,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
 	}
-	if err == errStopIteration {
+	if err == ErrStopIteration {
 		return nil
 	}
 	return err
@@ -673,7 +677,7 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	var count int
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		count++
-		return errStopIteration
+		return ErrStopIteration
 	})
 	if err != nil {
 		return false, err
@@ -754,7 +758,9 @@ func (out *rollupOutput) marshalPostingListPart(
 	baseKey []byte, startUid uint64, plist *pb.PostingList) *bpb.KV {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
-	kv.Key = x.GetSplitKey(baseKey, startUid)
+	key, err := x.GetSplitKey(baseKey, startUid)
+	x.Check(err)
+	kv.Key = key
 	val, meta := marshalPostingList(plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
@@ -1065,7 +1071,7 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (pos *pb.Posting, 
 			if p.PostingType == pb.Posting_VALUE_LANG {
 				pos = p
 				found = true
-				return errStopIteration
+				return ErrStopIteration
 			}
 			return nil
 		})
@@ -1112,7 +1118,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 			pos = p
 			found = true
 		}
-		return errStopIteration
+		return ErrStopIteration
 	})
 
 	return found, pos, err
@@ -1131,7 +1137,10 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs 
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	key := x.GetSplitKey(l.key, startUid)
+	key, err := x.GetSplitKey(l.key, startUid)
+	if err != nil {
+		return nil, err
+	}
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
 	if err != nil {

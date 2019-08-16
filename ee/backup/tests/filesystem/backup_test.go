@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -214,8 +215,9 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	require.NoError(t, testutil.GetError(resp.Body))
-	time.Sleep(time.Second)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(buf), "Backup completed.")
 
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs()
