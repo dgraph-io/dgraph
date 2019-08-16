@@ -290,6 +290,13 @@ func (s *Server) enterpriseEnabled() bool {
 func (s *Server) updateEnterpriseState() {
 	s.Lock()
 	defer s.Unlock()
+
+	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
+	// license file.
+	if !s.enterprise.enabled {
+		return
+	}
+
 	if time.Now().Before(s.enterprise.Expiry) {
 		s.state.EnterpriseEnabled = true
 	} else {

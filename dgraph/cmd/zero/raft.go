@@ -356,6 +356,9 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, err
 		}
 	}
+	if p.Enterprise != nil {
+		state.Enterprise = p.Enterprise
+	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {
 		state.MaxLeaseId = p.MaxLeaseId
@@ -502,6 +505,33 @@ func (n *node) initAndStartNode() error {
 		}()
 	}
 
+	if n.server.enterpriseEnabled() {
+		n.server.RLock()
+		e := n.server.enterprise
+		proposal := &pb.ZeroProposal{
+			Enterprise: &pb.Enterprise{
+				Entity:   e.Entity,
+				MaxNodes: e.MaxNodes,
+				ExpiryTs: e.Expiry.Unix(),
+			},
+		}
+		n.server.RUnlock()
+		go func() {
+			for {
+				err := n.proposeAndWait(context.Background(), proposal)
+				if err == nil {
+					glog.Infof("Enterprise state proposed to the cluster")
+					break
+				}
+				if err == errInvalidProposal {
+					break
+				}
+				glog.Errorf("While proposing enterprise state: %v. Retrying...", err)
+				time.Sleep(3 * time.Second)
+			}
+		}()
+	}
+
 	go n.Run()
 	go n.BatchAndSendMessages()
 	return nil
@@ -510,12 +540,6 @@ func (n *node) initAndStartNode() error {
 // periodically checks the validity of the enterprise license and updates the membership state.
 func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
 	defer closer.Done()
-
-	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
-	// license file.
-	if !n.server.enterpriseEnabled() {
-		return
-	}
 
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
