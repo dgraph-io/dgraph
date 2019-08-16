@@ -293,11 +293,12 @@ func (s *Server) updateEnterpriseState() {
 
 	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
 	// license file.
-	if !s.enterprise.enabled {
+	if !s.enterprise.enabled || s.state == nil || s.state.Enterprise == nil {
 		return
 	}
 
-	if time.Now().Before(s.enterprise.Expiry) {
+	expiry := time.Unix(s.state.Enterprise.ExpiryTs, 0)
+	if time.Now().Before(expiry) {
 		s.state.EnterpriseEnabled = true
 	} else {
 		s.state.EnterpriseEnabled = false
