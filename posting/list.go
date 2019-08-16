@@ -402,11 +402,19 @@ var postingPool = &sync.Pool{
 	},
 }
 
+var postingListPool = &sync.Pool{
+	New: func() interface{} {
+		return &pb.PostingList{}
+	},
+}
+
 func (l *List) release() {
 	fromList := func(list *pb.PostingList) {
 		for _, p := range list.GetPostings() {
 			postingPool.Put(p)
 		}
+		list.Reset()
+		postingListPool.Put(list)
 	}
 	fromList(l.plist)
 	for _, plist := range l.mutationMap {
