@@ -277,7 +277,7 @@ func (s *Server) updateEnterpriseState() {
 	defer s.Unlock()
 
 	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
-	// license file.
+	// license file yet.
 	if s.state.GetEnterprise() == nil {
 		return
 	}

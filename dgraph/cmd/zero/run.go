@@ -95,7 +95,6 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
-	// TODO - Remove this flag and instead have an HTTP endpoint which accepts the signed license.
 	flag.String("enterprise_license", "", "Path to the enterprise license file")
 	// TODO - Only for testing, remove before shipping.
 	flag.String("public_key", "", "Path to public key.")
@@ -226,7 +225,6 @@ func run() {
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
-	// TODO - Propose the enterprise state to the quorum?
 	x.Check(st.node.initAndStartNode())
 
 	if Zero.Conf.GetBool("telemetry") {
