@@ -18,8 +18,8 @@ package x
 
 import (
 	"crypto/sha256"
-	"io"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strings"
