@@ -505,9 +505,13 @@ func (n *node) initAndStartNode() error {
 		}()
 	}
 
-	if n.server.enterpriseEnabled() {
+	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
+		var e enterprise
+		if err := enterpriseDetails(fpath, &e); err != nil {
+			x.CheckfNoTrace(err)
+		}
+
 		n.server.RLock()
-		e := n.server.enterprise
 		proposal := &pb.ZeroProposal{
 			Enterprise: &pb.Enterprise{
 				Entity:   e.Entity,
@@ -516,6 +520,7 @@ func (n *node) initAndStartNode() error {
 			},
 		}
 		n.server.RUnlock()
+
 		go func() {
 			for {
 				err := n.proposeAndWait(context.Background(), proposal)

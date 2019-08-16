@@ -40,7 +40,6 @@ var (
 )
 
 type enterprise struct {
-	enabled  bool
 	Entity   string    `json:"entity"`
 	MaxNodes uint64    `json:"max_nodes"`
 	Expiry   time.Time `json:"expiry"`
@@ -68,8 +67,6 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
-
-	enterprise enterprise
 }
 
 // Init initializes the zero server.
@@ -90,12 +87,6 @@ func (s *Server) Init() {
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
-	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
-		if err := enterpriseDetails(fpath, &s.enterprise); err != nil {
-			x.CheckfNoTrace(err)
-		}
-		s.enterprise.enabled = true
-	}
 	go s.rebalanceTablets()
 }
 
@@ -279,12 +270,6 @@ func (s *Server) updateZeroLeader() {
 	}
 }
 
-func (s *Server) enterpriseEnabled() bool {
-	s.RLock()
-	defer s.RUnlock()
-	return s.enterprise.enabled
-}
-
 // updateEnterpriseState periodically checks the validity of the enterprise license
 // based on its expiry.
 func (s *Server) updateEnterpriseState() {
@@ -293,15 +278,15 @@ func (s *Server) updateEnterpriseState() {
 
 	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
 	// license file.
-	if !s.enterprise.enabled || s.state == nil || s.state.Enterprise == nil {
+	if s.state.GetEnterprise() == nil {
 		return
 	}
 
 	expiry := time.Unix(s.state.Enterprise.ExpiryTs, 0)
 	if time.Now().Before(expiry) {
-		s.state.EnterpriseEnabled = true
+		s.state.Enterprise.Enabled = true
 	} else {
-		s.state.EnterpriseEnabled = false
+		s.state.Enterprise.Enabled = false
 	}
 }
 
@@ -509,10 +494,11 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	// TODO - Zero MaxNodes should probably be an error.
-	if s.enterprise.enabled && s.enterprise.MaxNodes != 0 &&
-		uint64(numberOfNodes) >= s.enterprise.MaxNodes {
+	maxNodes := s.state.GetEnterprise().GetMaxNodes()
+	if s.state.GetEnterprise().GetEnabled() && maxNodes != 0 &&
+		uint64(numberOfNodes) >= maxNodes {
 		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
-			"number of nodes: [%v] permitted for your enterprise license.", s.enterprise.MaxNodes)
+			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.

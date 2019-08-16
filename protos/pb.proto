@@ -141,6 +141,7 @@ message Enterprise {
 	string entity = 1;
 	uint64 maxNodes = 2;
 	int64 expiryTs = 3;
+	bool enabled = 4;
 }
 
 message ZeroProposal {
@@ -168,8 +169,7 @@ message MembershipState {
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
-	bool enterpriseEnabled = 9;
-	Enterprise enterprise = 10;
+	Enterprise enterprise = 9;
 }
 
 message ConnectionState {
