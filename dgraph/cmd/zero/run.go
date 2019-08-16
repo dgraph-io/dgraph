@@ -95,7 +95,10 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
+	// TODO - Remove this flag and instead have an HTTP endpoint which accepts the signed license.
 	flag.String("enterprise_license", "", "Path to the enterprise license file")
+	// TODO - Only for testing, remove before shipping.
+	flag.String("public_key", "", "Path to public key.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {

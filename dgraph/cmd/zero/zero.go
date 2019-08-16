@@ -17,8 +17,6 @@
 package zero
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"math"
 	"sync"
 	"time"
@@ -93,14 +91,9 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
-		// TODO - Change this
-		// 1. To read a file, break it into data and signed parts.
-		// 2. Verify signature using public key.
-		// 3. Load values from the data file after verifying and use those.
-		b, err := ioutil.ReadFile(fpath)
-		x.CheckfNoTrace(err)
-		err = json.Unmarshal(b, &s.enterprise)
-		x.Checkf(err, "while unmarshalling license file")
+		if err := enterpriseDetails(fpath, &s.enterprise); err != nil {
+			x.CheckfNoTrace(err)
+		}
 		s.enterprise.enabled = true
 	}
 	go s.rebalanceTablets()
