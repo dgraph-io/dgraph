@@ -544,7 +544,7 @@ func (n *node) initAndStartNode() error {
 func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
 	defer closer.Done()
 
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	n.server.updateEnterpriseState()
