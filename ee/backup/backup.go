@@ -263,6 +263,10 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 			if item.DiscardEarlierVersions() || item.IsDeletedOrExpired() {
 				return list, nil
 			}
+
+			// Manually advance the iterator. This cannot be done in the for
+			// statement because ReadPostingList advances the iterator so this
+			// only needs to be done for BitSchemaPosting entries.
 			itr.Next()
 
 		default:
