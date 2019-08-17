@@ -263,13 +263,12 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 			if item.DiscardEarlierVersions() || item.IsDeletedOrExpired() {
 				return list, nil
 			}
+			itr.Next()
 
 		default:
 			return nil, errors.Errorf(
 				"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
 		}
-
-		itr.Next()
 	}
 
 	// This shouldn't be reached but it's being added here because the golang

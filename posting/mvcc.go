@@ -167,8 +167,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-			// No need to do Next here. The outer loop can take care of skipping
-			// more versions of the same key.
+			it.Next()
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
