@@ -96,7 +96,7 @@ instances to achieve high-availability.
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
 	flag.String("enterprise_license", "", "Path to the enterprise license file")
-	// TODO - Only for testing, remove before shipping.
+	// FIXME - Only for testing, remove before shipping.
 	flag.String("public_key", "", "Path to public key.")
 }
 

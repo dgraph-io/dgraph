@@ -75,6 +75,8 @@ func (n *node) uniqueKey() string {
 
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 
+// proposeAndWait makes a proposal to the quorum for Group Zero and waits for it to be accepted by
+// the group before returning. It is safe to call concurrently.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) error {
 	switch {
 	case n.Raft() == nil:
@@ -497,6 +499,7 @@ func (n *node) initAndStartNode() error {
 					return
 				}
 				if err == errInvalidProposal {
+					glog.Errorf("invalid proposal error while proposing cluster id")
 					return
 				}
 				glog.Errorf("While proposing CID: %v. Retrying...", err)
@@ -520,13 +523,15 @@ func (n *node) initAndStartNode() error {
 		}
 
 		go func() {
-			for {
+			for i := 0; i < 10; i++ {
 				err := n.proposeAndWait(context.Background(), proposal)
 				if err == nil {
 					glog.Infof("Enterprise state proposed to the cluster")
 					break
 				}
 				if err == errInvalidProposal {
+					glog.Errorf("invalid proposal error while proposing enterprise state for: %+v",
+						proposal)
 					break
 				}
 				glog.Errorf("While proposing enterprise state: %v. Retrying...", err)

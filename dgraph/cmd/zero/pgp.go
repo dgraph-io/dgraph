@@ -42,6 +42,7 @@ func enterpriseDetails(signedFile string, e *enterprise) error {
 	if err != nil {
 		return errors.Wrapf(err, "while opening signed license file: %v", signedFile)
 	}
+	defer sf.Close()
 
 	// The signed file is expected to be have ASCII encoding, so we have to decode it before
 	// reading.

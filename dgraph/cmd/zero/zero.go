@@ -283,11 +283,7 @@ func (s *Server) updateEnterpriseState() {
 	}
 
 	expiry := time.Unix(s.state.Enterprise.ExpiryTs, 0)
-	if time.Now().Before(expiry) {
-		s.state.Enterprise.Enabled = true
-	} else {
-		s.state.Enterprise.Enabled = false
-	}
+	s.state.Enterprise.Enabled = time.Now().Before(expiry)
 }
 
 func (s *Server) removeZero(nodeId uint64) {
