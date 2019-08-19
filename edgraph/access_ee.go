@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
@@ -40,6 +41,12 @@ import (
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
+	if !worker.EnterpriseEnabled() {
+		return nil, errors.New("Enterprise features are disabled. You can enable them by " +
+			"supplying the appropriate license file to Dgraph Zero using a flag or the" +
+			" HTTP endpoint.")
+	}
+
 	ctx, span := otrace.StartSpan(ctx, "server.Login")
 	defer span.End()
 
