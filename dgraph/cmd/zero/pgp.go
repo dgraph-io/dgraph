@@ -18,35 +18,23 @@ package zero
 
 import (
 	"encoding/json"
+	"io"
 	"io/ioutil"
-	"os"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
 )
 
-func enterpriseDetails(signedFile string, e *enterprise) error {
-	publicKeyFile, err := os.Open(Zero.Conf.GetString("public_key"))
-	if err != nil {
-		return errors.Wrapf(err, "while opening public key file")
-	}
-	defer publicKeyFile.Close()
-
-	entityList, err := openpgp.ReadArmoredKeyRing(publicKeyFile)
+func enterpriseDetails(signedFile, publicKey io.Reader, e *enterprise) error {
+	entityList, err := openpgp.ReadArmoredKeyRing(publicKey)
 	if err != nil {
 		return errors.Wrapf(err, "while reading public key")
 	}
 
-	sf, err := os.Open(signedFile)
-	if err != nil {
-		return errors.Wrapf(err, "while opening signed license file: %v", signedFile)
-	}
-	defer sf.Close()
-
 	// The signed file is expected to be have ASCII encoding, so we have to decode it before
 	// reading.
-	b, err := armor.Decode(sf)
+	b, err := armor.Decode(signedFile)
 	if err != nil {
 		return errors.Wrapf(err, "while decoding license file")
 	}
@@ -62,10 +50,21 @@ func enterpriseDetails(signedFile string, e *enterprise) error {
 	if err != nil {
 		return errors.Wrapf(err, "while reading body from signed license file")
 	}
+	// This could be nil even if signature verification failed, so we also check Signature == nil
+	// below.
+	if md.SignatureError != nil {
+		return errors.Wrapf(md.SignatureError, "signature error while trying to verify license file")
+	}
 	if md.Signature == nil {
 		return errors.New("invalid signature while trying to verify license file")
 	}
 
 	err = json.Unmarshal(buf, e)
-	return errors.Wrapf(err, "while JSON unmarshaling body of license file")
+	if err != nil {
+		return errors.Wrapf(err, "while JSON unmarshaling body of license file")
+	}
+	if e.Entity == "" || e.MaxNodes == 0 || e.Expiry.IsZero() {
+		return errors.Errorf("invalid JSON data, fields shouldn't be zero: %+v\n", e)
+	}
+	return nil
 }

@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"io/ioutil"
 	"math"
 	"sync"
 	"time"
@@ -67,6 +68,8 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+
+	publicKey []byte
 }
 
 // Init initializes the zero server.
@@ -87,6 +90,14 @@ func (s *Server) Init() {
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+
+	publicKeyFile := Zero.Conf.GetString("public_key")
+	if publicKeyFile != "" {
+		var err error
+		s.publicKey, err = ioutil.ReadFile(publicKeyFile)
+		x.Check(err)
+	}
+
 	go s.rebalanceTablets()
 }
 

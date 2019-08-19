@@ -17,9 +17,11 @@
 package zero
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -509,8 +511,16 @@ func (n *node) initAndStartNode() error {
 	}
 
 	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
+		sf, err := os.Open(fpath)
+		if err != nil {
+			return errors.Wrapf(err, "while opening signed license file: %v", fpath)
+		}
+		defer sf.Close()
+
 		var e enterprise
-		if err := enterpriseDetails(fpath, &e); err != nil {
+		// Safe to access n.server.publicKey without a lock as this function is called on startup
+		// and the field is not modified after startup.
+		if err := enterpriseDetails(sf, bytes.NewReader(n.server.publicKey), &e); err != nil {
 			x.CheckfNoTrace(err)
 		}
 
