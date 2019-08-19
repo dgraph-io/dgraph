@@ -27,16 +27,16 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-// QueryResolver can resolve a single GraphQL query field
-type QueryResolver struct {
+// queryResolver can resolve a single GraphQL query field
+type queryResolver struct {
 	query  schema.Query
 	schema schema.Schema
 	dgraph dgraph.Client
 }
 
-// Resolve a single query.
-func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
-
+// resolve a query.
+func (qr *queryResolver) resolve(ctx context.Context) *resolved {
+	res := &resolved{}
 	var qb *dgraph.QueryBuilder
 
 	// currently only handles getT(id: "0x123") queries
@@ -49,16 +49,19 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 			WithSelectionSetFrom(qr.query)
 		// TODO: also builder.withPagination() ... etc ...
 	default:
-		return nil, gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
+		res.err = gqlerror.Errorf("[%s] Only get queries are implemented", api.RequestID(ctx))
+		return res
 	}
 
-	res, err := qr.dgraph.Query(ctx, qb)
+	resp, err := qr.dgraph.Query(ctx, qb)
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
-		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
+		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
+		return res
 	}
 
-	completed, gqlErrs := completeDgraphResult(ctx, qr.query, res)
+	completed, err := completeDgraphResult(ctx, qr.query, resp)
+	res.err = err
 
 	// chop leading '{' and trailing '}' from JSON object
 	//
@@ -76,5 +79,6 @@ func (qr *QueryResolver) Resolve(ctx context.Context) ([]byte, error) {
 	// completeDgraphResult() always returns a valid JSON object.  At least
 	// { q: null }
 	// even in error cases, so this is safe.
-	return completed[1 : len(completed)-1], gqlErrs
+	res.data = completed[1 : len(completed)-1]
+	return res
 }
