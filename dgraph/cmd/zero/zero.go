@@ -17,6 +17,8 @@
 package zero
 
 import (
+	"bytes"
+	"io"
 	"io/ioutil"
 	"math"
 	"sync"
@@ -767,4 +769,26 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 		return &pb.MembershipState{}, nil
 	}
 	return ms, nil
+}
+
+func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reader) error {
+	var e enterprise
+	if err := enterpriseDetails(signedData, bytes.NewReader(s.publicKey), &e); err != nil {
+		return errors.Wrapf(err, "while extracting enterprise details from the license")
+	}
+
+	proposal := &pb.ZeroProposal{
+		Enterprise: &pb.Enterprise{
+			Entity:   e.Entity,
+			MaxNodes: e.MaxNodes,
+			ExpiryTs: e.Expiry.Unix(),
+		},
+	}
+
+	err := s.Node.proposeAndWait(ctx, proposal)
+	if err != nil {
+		return errors.Wrapf(err, "while proposing enterprise state to cluster")
+	}
+	glog.Infof("Enterprise state proposed to the cluster")
+	return nil
 }

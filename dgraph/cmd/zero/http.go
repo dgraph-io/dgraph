@@ -17,8 +17,10 @@
 package zero
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
@@ -230,6 +232,35 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
 	}
+}
+
+func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := st.zero.applyEnterpriseLicense(ctx, bytes.NewReader(b)); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	x.SetStatus(w, x.Success, "Done")
 }
 
 func (st *state) serveHTTP(l net.Listener) {
