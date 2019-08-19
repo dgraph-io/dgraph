@@ -116,7 +116,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	}
 
 	if r.resp.Errors != nil {
-		r.resp.Data.Reset()
 		return r.resp
 	}
 

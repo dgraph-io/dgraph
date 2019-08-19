@@ -24,26 +24,6 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-func TestWithNullData_WritesNull(t *testing.T) {
-	resp := &Response{}
-
-	resp.WithNullData()
-	buf := new(bytes.Buffer)
-	resp.WriteTo(buf)
-
-	assert.JSONEq(t, `{"data":null, "errors":null}`, buf.String())
-}
-
-func TestWithNullData_WritesWithError(t *testing.T) {
-	resp := &Response{Errors: gqlerror.List{gqlerror.Errorf("An Error")}}
-
-	resp.WithNullData()
-	buf := new(bytes.Buffer)
-	resp.WriteTo(buf)
-
-	assert.JSONEq(t, `{"data":null, "errors":[{"message":"An Error"}]}`, buf.String())
-}
-
 func TestAddData_AddInitial(t *testing.T) {
 	resp := &Response{}
 

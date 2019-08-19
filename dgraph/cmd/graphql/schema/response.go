@@ -41,9 +41,8 @@ type Response struct {
 	// - I think we should mostly return 200 status code
 	// - for spec we need to return errors and data in same response
 
-	Errors   gqlerror.List
-	Data     bytes.Buffer
-	NullData bool
+	Errors gqlerror.List
+	Data   bytes.Buffer
 }
 
 // ErrorResponsef returns a Response containing a single GraphQL error with a
@@ -62,13 +61,6 @@ func ErrorResponse(err error) *Response {
 	}
 }
 
-// WithNullData sets the data response of r such that subsequent calls
-// to r.WriteTo will write `"data": null`
-func (r *Response) WithNullData() {
-	r.NullData = true
-	r.Data.Reset()
-}
-
 // AddData adds p to r's data buffer.  If p is empty, the call has no effect.
 // If r.Data is empty before the call, then r.Data becomes {p}
 // If r.Data contains data it always looks like {f,g,...}, and
@@ -77,8 +69,6 @@ func (r *Response) AddData(p []byte) {
 	if r == nil || len(p) == 0 {
 		return
 	}
-
-	r.NullData = false
 
 	if r.Data.Len() > 0 {
 		// The end of the buffer is always the closing `}`
@@ -99,22 +89,14 @@ func (r *Response) AddData(p []byte) {
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	if r == nil {
 		i, err := w.Write([]byte(
-			"{ \"errors\": [ { \"message\": \"Internal error - no response to write.\" } ] }"))
+			`{ "errors": [ { "message": "Internal error - no response to write." } ], ` +
+				` "data": null }`))
 		return int64(i), err
 	}
 
 	var js []byte
 	var err error
 
-	if r.NullData {
-		js, err = json.Marshal(
-			struct {
-				Errors gqlerror.List `json:"errors"`
-				Data   *string       `json:"data"`
-			}{
-				Errors: r.Errors,
-			})
-	} else {
 		js, err = json.Marshal(struct {
 			Errors gqlerror.List   `json:"errors,omitempty"`
 			Data   json.RawMessage `json:"data,omitempty"`
@@ -122,12 +104,11 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 			Errors: r.Errors,
 			Data:   r.Data.Bytes(),
 		})
-	}
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("%v+", errors.Wrap(err, msg))
-		js = []byte(`{ "errors": [ { "message": "` + msg + `" } ] }`)
+		glog.Errorf("%+v", errors.Wrap(err, msg))
+		js = []byte(`{ "errors": [ { "message": "` + msg + `" } ], "data": null }`)
 	}
 
 	i, err := w.Write(js)
