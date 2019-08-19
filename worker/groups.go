@@ -262,7 +262,6 @@ func UpdateMembershipState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// TODO - When is this called, check.
 	g.applyState(state.GetState())
 	return nil
 }

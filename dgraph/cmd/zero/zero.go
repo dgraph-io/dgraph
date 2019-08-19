@@ -474,7 +474,6 @@ func (s *Server) Connect(ctx context.Context,
 	for _, group := range ms.Groups {
 		for _, member := range group.Members {
 			switch {
-			// TODO - Verify if we need the m.Id == 0 condition here and why.
 			// If we have this member, then we should just connect to it and return.
 			case member.Addr == m.Addr:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
@@ -502,10 +501,8 @@ func (s *Server) Connect(ctx context.Context,
 		}
 	}
 
-	// TODO - Zero MaxNodes should probably be an error.
 	maxNodes := s.state.GetEnterprise().GetMaxNodes()
-	if s.state.GetEnterprise().GetEnabled() && maxNodes != 0 &&
-		uint64(numberOfNodes) >= maxNodes {
+	if s.state.GetEnterprise().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
 		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
 			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
 	}
