@@ -131,6 +131,50 @@ type ResolverTrace struct {
 	Dgraph []*LabeledOffsetDuration `json:"dgraph"`
 }
 
+// A TimerFactory makes offset timers that can be used to fill out an OffsetDuration.
+type TimerFactory interface {
+	NewOffsetTimer(storeTo *OffsetDuration) OffsetTimer
+}
+
+// An OffsetTimer is used to fill out an OffsetDuration.  Start starts the timer
+// and calculates the offset.  Stop calculates the duration.
+type OffsetTimer interface {
+	Start()
+	Stop()
+}
+
+type timerFactory struct {
+	offsetFrom time.Time
+}
+
+type offsetTimer struct {
+	offsetFrom time.Time
+	start      time.Time
+	backing    *OffsetDuration
+}
+
+// NewOffsetTimerFactory creates a new TimerFactory given offsetFrom as the
+// reference time to calculate the OffsetDuration.StartOffset from.
+func NewOffsetTimerFactory(offsetFrom time.Time) TimerFactory {
+	return &timerFactory{offsetFrom: offsetFrom}
+}
+
+func (tf *timerFactory) NewOffsetTimer(storeTo *OffsetDuration) OffsetTimer {
+	return &offsetTimer{
+		offsetFrom: tf.offsetFrom,
+		backing:    storeTo,
+	}
+}
+
+func (ot *offsetTimer) Start() {
+	ot.start = time.Now()
+	ot.backing.StartOffset = ot.start.Sub(ot.offsetFrom).Nanoseconds()
+}
+
+func (ot *offsetTimer) Stop() {
+	ot.backing.Duration = time.Since(ot.start).Nanoseconds()
+}
+
 // ErrorResponsef returns a Response containing a single GraphQL error with a
 // message obtained by Sprintf-ing the argugments
 func ErrorResponsef(format string, args ...interface{}) *Response {
