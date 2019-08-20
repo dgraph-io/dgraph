@@ -1682,6 +1682,20 @@ func TestDefaultValueVar2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"data":[]}}`, js)
 }
 
+func TestCountUidWithAlias(t *testing.T) {
+	query := `{
+		me(func: uid(1, 23, 24, 25, 31)) {
+			countUid: count(uid)
+			name
+		}
+	}
+	`
+	js := processToFastJsonNoErr(t, query)
+	require.JSONEq(t,`{"data":{"me":[{"countUid":5},{"name":"Michonne"},{"name":"Rick Grimes"},`+
+	`{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`,js)
+}
+
+
 var maxPendingCh chan uint64
 
 func TestMain(m *testing.M) {
