@@ -195,7 +195,7 @@ func TestGraphQLMutation(t *testing.T) {
 			},
 			queryType: QUERY,
 			explain: "Add data with Mutation and verify return data." +
-				" Time is set to 2019-08-08T00:00:00Z format",
+				" Time is set to 2019-08-08T05:04:33Z format",
 			wantCode: 200,
 			wantResult: MessageMutation{
 				AddMessage: addMessage{
