@@ -4,7 +4,7 @@
 
 # May be called with an argument which is a docker compose file
 # to use *instead of* the default docker-compose.yml.
-function restartCluster() {
+function restartCluster {
   if [[ -z $1 ]]; then
     compose_file="docker-compose.yml"
   else
@@ -25,37 +25,15 @@ function restartCluster() {
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
-
-  [ ! -z "$LICENSE_FILE" ] && applyLicense
   sleep 10 || exit 1
 }
 
-# Reads license from LICENSE_FILE environment variable and applies it to zero. It also retries the
-# command 5 times with a 5 sec sleep in between.
-function applyLicense() {
-  n=0
-  until [ $n -ge 5 ]; do
-    echo "Applying license to Zero"
-    status_code=$(curl -X POST --write-out "%{http_code}\n" --silent --output /dev/null http://localhost:6180/enterpriseLicense \
-      --header 'Content-Type: application/json' \
-      --data-binary "$LICENSE_FILE")
-
-    if [[ "$status_code" -ne 200 ]]; then
-      echo "Got $status_code while applying license. Sleeping for 5 secs."
-      sleep 5
-    else
-      break
-    fi
-    n=$(($n + 1))
-  done
-}
-
-function stopCluster() {
+function stopCluster {
   basedir=$GOPATH/src/github.com/dgraph-io/dgraph
   pushd $basedir/dgraph >/dev/null
-  docker ps --filter label="cluster=test" --format "{{.Names}}" |
-    xargs -r docker stop | sed 's/^/Stopped /'
-  docker ps -a --filter label="cluster=test" --format "{{.Names}}" |
-    xargs -r docker rm | sed 's/^/Removed /'
+  docker ps --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker stop | sed 's/^/Stopped /'
+  docker ps -a --filter label="cluster=test" --format "{{.Names}}" \
+  | xargs -r docker rm | sed 's/^/Removed /'
   popd >/dev/null
 }
