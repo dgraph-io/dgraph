@@ -769,8 +769,8 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 }
 
 func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reader) error {
-	var e license
-	if err := verifySignature(signedData, bytes.NewReader(s.publicKey), &e); err != nil {
+	var l license
+	if err := verifySignature(signedData, bytes.NewReader(s.publicKey), &l); err != nil {
 		return errors.Wrapf(err, "while extracting enterprise details from the license")
 	}
 
@@ -778,16 +778,16 @@ func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reade
 	for _, group := range s.state.GetGroups() {
 		numNodes += len(group.GetMembers())
 	}
-	if uint64(numNodes) > e.MaxNodes {
+	if uint64(numNodes) > l.MaxNodes {
 		return errors.Errorf("Your license only allows: %v (Alpha + Zero) nodes. You have: %v.",
-			e.MaxNodes, numNodes)
+			l.MaxNodes, numNodes)
 	}
 
 	proposal := &pb.ZeroProposal{
 		License: &pb.License{
-			User:     e.User,
-			MaxNodes: e.MaxNodes,
-			ExpiryTs: e.Expiry.Unix(),
+			User:     l.User,
+			MaxNodes: l.MaxNodes,
+			ExpiryTs: l.Expiry.Unix(),
 		},
 	}
 
