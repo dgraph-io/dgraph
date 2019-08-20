@@ -71,7 +71,7 @@ func TestEnterpriseDetails(t *testing.T) {
 		json            string
 		verifyingEntity *openpgp.Entity
 		expectError     bool
-		expectedOutput  enterprise
+		expectedOutput  license
 	}{
 		{
 			"Signing JSON with empty data should return an error",
@@ -79,7 +79,7 @@ func TestEnterpriseDetails(t *testing.T) {
 			`{}`,
 			correctEntity,
 			true,
-			enterprise{},
+			license{},
 		},
 		{
 			"Signing JSON with incorrect private key should return an error",
@@ -87,7 +87,7 @@ func TestEnterpriseDetails(t *testing.T) {
 			correctJSON,
 			correctEntity,
 			true,
-			enterprise{},
+			license{},
 		},
 		{
 			"Verifying data with incorrect public key should return an error",
@@ -95,7 +95,7 @@ func TestEnterpriseDetails(t *testing.T) {
 			correctJSON,
 			incorrectEntity,
 			true,
-			enterprise{},
+			license{},
 		},
 		{
 			"Verifying data with correct public key should return correct data",
@@ -103,16 +103,16 @@ func TestEnterpriseDetails(t *testing.T) {
 			correctJSON,
 			correctEntity,
 			false,
-			enterprise{"entity", 10, correctTime},
+			license{"entity", 10, correctTime},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Logf("Running: %s\n", tt.name)
 		buf := signAndWriteMessage(t, tt.signingEntity, tt.json)
-		e := enterprise{}
+		e := license{}
 		publicKey := encodePublicKey(t, tt.verifyingEntity)
-		err = enterpriseDetails(buf, publicKey, &e)
+		err = verifySignature(buf, publicKey, &e)
 		if tt.expectError {
 			require.Error(t, err)
 			continue

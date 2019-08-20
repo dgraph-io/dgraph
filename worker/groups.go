@@ -959,5 +959,5 @@ func EnterpriseEnabled() bool {
 	g := groups()
 	g.RLock()
 	defer g.RUnlock()
-	return g.state.GetEnterprise().GetEnabled()
+	return g.state.GetLicense().GetEnabled()
 }

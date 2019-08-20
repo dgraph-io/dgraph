@@ -26,7 +26,9 @@ import (
 	"golang.org/x/crypto/openpgp/armor"
 )
 
-func enterpriseDetails(signedFile, publicKey io.Reader, e *enterprise) error {
+// verifySignature verifies the signature given a public key. It also JSON unmarshals the details
+// of the license and stores them in l.
+func verifySignature(signedFile, publicKey io.Reader, l *license) error {
 	entityList, err := openpgp.ReadArmoredKeyRing(publicKey)
 	if err != nil {
 		return errors.Wrapf(err, "while reading public key")
@@ -53,18 +55,19 @@ func enterpriseDetails(signedFile, publicKey io.Reader, e *enterprise) error {
 	// This could be nil even if signature verification failed, so we also check Signature == nil
 	// below.
 	if md.SignatureError != nil {
-		return errors.Wrapf(md.SignatureError, "signature error while trying to verify license file")
+		return errors.Wrapf(md.SignatureError,
+			"signature error while trying to verify license file")
 	}
 	if md.Signature == nil {
 		return errors.New("invalid signature while trying to verify license file")
 	}
 
-	err = json.Unmarshal(buf, e)
+	err = json.Unmarshal(buf, l)
 	if err != nil {
 		return errors.Wrapf(err, "while JSON unmarshaling body of license file")
 	}
-	if e.Entity == "" || e.MaxNodes == 0 || e.Expiry.IsZero() {
-		return errors.Errorf("invalid JSON data, fields shouldn't be zero: %+v\n", e)
+	if l.User == "" || l.MaxNodes == 0 || l.Expiry.IsZero() {
+		return errors.Errorf("invalid JSON data, fields shouldn't be zero: %+v\n", l)
 	}
 	return nil
 }

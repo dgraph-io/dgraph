@@ -358,17 +358,17 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, err
 		}
 	}
-	if p.Enterprise != nil {
+	if p.License != nil {
 		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise
 		// reject the proposal.
 		numNodes := len(state.GetZeros())
 		for _, group := range state.GetGroups() {
 			numNodes += len(group.GetMembers())
 		}
-		if uint64(numNodes) > p.GetEnterprise().GetMaxNodes() {
+		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
 			return p.Key, errInvalidProposal
 		}
-		state.Enterprise = p.Enterprise
+		state.License = p.License
 	}
 
 	if p.MaxLeaseId > state.MaxLeaseId {

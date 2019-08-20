@@ -42,8 +42,8 @@ var (
 	errServerShutDown    = errors.New("Server is being shut down")
 )
 
-type enterprise struct {
-	Entity   string    `json:"entity"`
+type license struct {
+	User     string    `json:"user"`
 	MaxNodes uint64    `json:"max_nodes"`
 	Expiry   time.Time `json:"expiry"`
 }
@@ -289,14 +289,14 @@ func (s *Server) updateEnterpriseState() {
 	s.Lock()
 	defer s.Unlock()
 
-	// Return early if enterprise is not enabled. This would happen when user didn't supply us a
+	// Return early if license is not enabled. This would happen when user didn't supply us a
 	// license file yet.
-	if s.state.GetEnterprise() == nil {
+	if s.state.GetLicense() == nil {
 		return
 	}
 
-	expiry := time.Unix(s.state.Enterprise.ExpiryTs, 0)
-	s.state.Enterprise.Enabled = time.Now().Before(expiry)
+	expiry := time.Unix(s.state.License.ExpiryTs, 0)
+	s.state.License.Enabled = time.Now().Before(expiry)
 }
 
 func (s *Server) removeZero(nodeId uint64) {
@@ -501,8 +501,8 @@ func (s *Server) Connect(ctx context.Context,
 		}
 	}
 
-	maxNodes := s.state.GetEnterprise().GetMaxNodes()
-	if s.state.GetEnterprise().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
+	maxNodes := s.state.GetLicense().GetMaxNodes()
+	if s.state.GetLicense().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
 		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
 			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
 	}
@@ -769,8 +769,8 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 }
 
 func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reader) error {
-	var e enterprise
-	if err := enterpriseDetails(signedData, bytes.NewReader(s.publicKey), &e); err != nil {
+	var e license
+	if err := verifySignature(signedData, bytes.NewReader(s.publicKey), &e); err != nil {
 		return errors.Wrapf(err, "while extracting enterprise details from the license")
 	}
 
@@ -784,8 +784,8 @@ func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reade
 	}
 
 	proposal := &pb.ZeroProposal{
-		Enterprise: &pb.Enterprise{
-			Entity:   e.Entity,
+		License: &pb.License{
+			User:     e.User,
 			MaxNodes: e.MaxNodes,
 			ExpiryTs: e.Expiry.Unix(),
 		},
@@ -793,8 +793,8 @@ func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reade
 
 	err := s.Node.proposeAndWait(ctx, proposal)
 	if err != nil {
-		return errors.Wrapf(err, "while proposing enterprise state to cluster")
+		return errors.Wrapf(err, "while proposing enterprise license state to cluster")
 	}
-	glog.Infof("Enterprise state proposed to the cluster")
+	glog.Infof("Enterprise license state proposed to the cluster")
 	return nil
 }

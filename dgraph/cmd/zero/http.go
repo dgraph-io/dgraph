@@ -234,6 +234,9 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// applyEnterpriseLicense accepts a PGP message as a POST request body, verifies that it was
+// signed using our private key and applies the license which has maxNodes and Expiry to the
+// cluster.
 func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
