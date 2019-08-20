@@ -59,6 +59,7 @@ type mutationResolver struct {
 	mutation schema.Mutation
 	schema   schema.Schema
 	dgraph   dgraph.Client
+	timers   schema.TimerFactory
 }
 
 const (
@@ -141,9 +142,22 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	res.trace = make([]*schema.ResolverTrace, 2)
+	trace, timer := traceWithTimer(mr.timers, mr.mutation, "Mutation")
+	res.trace = append(res.trace, trace)
+	trace.Path = []interface{}{mr.mutation.ResponseName()}
+	timer.Start()
+	defer timer.Stop()
+
 	val := mr.mutation.ArgValue(schema.InputArgName)
 
-	assigned, err := mr.dgraph.Mutate(ctx, buildMutationJSON(mr.mutation, val))
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	assigned, err := mr.dgraph.Mutate(
+		ctx,
+		buildMutationJSON(mr.mutation, val),
+		mr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] mutation %s failed", api.RequestID(ctx), mr.mutation.Name())
@@ -159,20 +173,33 @@ func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 	}
 
 	// All our mutations currently have exactly 1 field
-	f := mr.mutation.SelectionSet()[0]
+	mutQuery := mr.mutation.SelectionSet()[0]
 	qb := dgraph.NewQueryBuilder().
-		WithAttr(f.ResponseName()).
+		WithAttr(mutQuery.ResponseName()).
 		WithUIDRoot(uid).
-		WithSelectionSetFrom(f)
+		WithSelectionSetFrom(mutQuery)
 
-	resp, err := mr.dgraph.Query(ctx, qb)
+	trace, timer =
+		traceWithTimer(mr.timers, mr.mutation.SelectionSet()[0], mr.mutation.ResponseName())
+	res.trace = append(res.trace, trace)
+	trace.Path = []interface{}{
+		mr.mutation.ResponseName(),
+		mutQuery.ResponseName()}
+	timer.Start()
+	defer timer.Stop()
+
+	dgraphDuration = &schema.LabeledOffsetDuration{Label: "query"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	resp, err :=
+		mr.dgraph.Query(ctx, qb, mr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "[%s] mutation %s created node 0x%x but query failed",
 			api.RequestID(ctx), mr.mutation.Name(), uid)
 		return res
 	}
 
-	completed, err := completeDgraphResult(ctx, f, resp)
+	completed, err := completeDgraphResult(ctx, mutQuery, resp)
 	res.data = completed
 	res.err = err
 	return res
@@ -180,6 +207,12 @@ func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	trace, timer := traceWithTimer(mr.timers, mr.mutation, "Mutation")
+	res.trace = []*schema.ResolverTrace{trace}
+	trace.Path = []interface{}{mr.mutation.ResponseName()}
+	timer.Start()
+	defer timer.Stop()
+
 	uid, err := mr.mutation.IDArgValue()
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "[%s] couldn't read ID argument in mutation %s",
@@ -187,14 +220,22 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 		return res
 	}
 
-	err = mr.dgraph.AssertType(ctx, uid, mr.mutation.MutatedTypeName())
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "type check"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+	err = mr.dgraph.AssertType(
+		ctx,
+		uid,
+		mr.mutation.MutatedTypeName(),
+		mr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		return &resolved{
 			err: schema.GQLWrapf(err, "[%s] couldn't complete %s",
 				api.RequestID(ctx), mr.mutation.Name())}
 	}
 
-	err = mr.dgraph.DeleteNode(ctx, uid)
+	dgraphDuration = &schema.LabeledOffsetDuration{Label: "delete"}
+	trace.Dgraph = append(trace.Dgraph, dgraphDuration)
+	err = mr.dgraph.DeleteNode(ctx, uid, mr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		res.err = schema.GQLWrapf(err, "[%s] couldn't complete %s",
 			api.RequestID(ctx), mr.mutation.Name())
@@ -208,6 +249,13 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 
 func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved {
 	res := &resolved{}
+	res.trace = make([]*schema.ResolverTrace, 2)
+	trace, timer := traceWithTimer(mr.timers, mr.mutation, "Mutation")
+	res.trace = append(res.trace, trace)
+	trace.Path = []interface{}{mr.mutation.ResponseName()}
+	timer.Start()
+	defer timer.Stop()
+
 	val := mr.mutation.ArgValue(schema.InputArgName)
 
 	uid, err := mr.mutation.IDArgValue()
@@ -220,7 +268,10 @@ func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved
 	// We'll need to do better than this once there's deepper mutations
 	mut := buildMutationJSON(mr.mutation, val)
 	mut["uid"] = fmt.Sprintf("0x%x", uid)
-	_, err = mr.dgraph.Mutate(ctx, mut)
+
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+	_, err = mr.dgraph.Mutate(ctx, mut, mr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] couldn't run mutation mutation", api.RequestID(ctx))
@@ -234,7 +285,19 @@ func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved
 		WithUIDRoot(uid).
 		WithSelectionSetFrom(f)
 
-	resp, err := mr.dgraph.Query(ctx, qb)
+	trace, timer =
+		traceWithTimer(mr.timers, mr.mutation.SelectionSet()[0], mr.mutation.ResponseName())
+	res.trace = append(res.trace, trace)
+	trace.Path = []interface{}{
+		mr.mutation.ResponseName(),
+		mr.mutation.SelectionSet()[0].ResponseName()}
+	timer.Start()
+	defer timer.Stop()
+
+	dgraphDuration = &schema.LabeledOffsetDuration{Label: "query"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	resp, err := mr.dgraph.Query(ctx, qb, mr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		res.err = schema.GQLWrapf(err,
 			"[%s] mutation %s updated node 0x%x but query failed",

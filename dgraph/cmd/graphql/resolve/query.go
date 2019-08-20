@@ -32,12 +32,19 @@ type queryResolver struct {
 	query  schema.Query
 	schema schema.Schema
 	dgraph dgraph.Client
+	timers schema.TimerFactory
 }
 
 // resolve a query.
 func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	res := &resolved{}
 	var qb *dgraph.QueryBuilder
+
+	trace, timer := traceWithTimer(qr.timers, qr.query, "Query")
+	res.trace = []*schema.ResolverTrace{trace}
+	trace.Path = []interface{}{qr.query.ResponseName()}
+	timer.Start()
+	defer timer.Stop()
 
 	// currently only handles getT(id: "0x123") queries
 	switch qr.query.QueryType() {
@@ -53,7 +60,11 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 		return res
 	}
 
-	resp, err := qr.dgraph.Query(ctx, qb)
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	resp, err :=
+		qr.dgraph.Query(ctx, qb, qr.timers.NewOffsetTimer(&dgraphDuration.OffsetDuration))
 	if err != nil {
 		glog.Infof("[%s] Dgraph query failed : %s", api.RequestID(ctx), err)
 		res.err = schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
@@ -81,4 +92,15 @@ func (qr *queryResolver) resolve(ctx context.Context) *resolved {
 	// even in error cases, so this is safe.
 	res.data = completed[1 : len(completed)-1]
 	return res
+}
+
+func traceWithTimer(tf schema.TimerFactory, field schema.Field, parent string) (*schema.ResolverTrace, schema.OffsetTimer) {
+	trace := &schema.ResolverTrace{
+		ParentType: parent,
+		FieldName:  field.ResponseName(),
+		ReturnType: field.Type().String(),
+	}
+
+	timer := tf.NewOffsetTimer(&trace.OffsetDuration)
+	return trace, timer
 }

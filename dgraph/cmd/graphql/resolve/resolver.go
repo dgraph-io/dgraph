@@ -92,8 +92,9 @@ type RequestResolver struct {
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
 type resolved struct {
-	data []byte
-	err  error
+	data  []byte
+	err   error
+	trace []*schema.ResolverTrace
 }
 
 // New creates a new RequestResolver
