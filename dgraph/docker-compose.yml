@@ -209,7 +209,7 @@ services:
     working_dir: /data/graphql
     volumes:
       - type: bind
-        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema/testdata/input
+        source: $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/cmd/graphql
         target: /schema
         read_only: true
       - type: bind
@@ -221,7 +221,7 @@ services:
     restart: on-failure
     labels:
       cluster: test
-    command: /gobin/dgraph graphql init --schema /schema/schema-simple.txt --alpha alpha1:9180 
+    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 
  
   graphql:
     image: dgraph/dgraph:latest

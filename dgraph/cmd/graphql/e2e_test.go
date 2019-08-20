@@ -30,10 +30,10 @@ import (
 )
 
 /*
-The docker-compose config  in dgraph/docker-compose.yml intializes and runs 
+The docker-compose config  in dgraph/docker-compose.yml intializes and runs
 the GraphQL server.
 
-Check the compose file to find the graphql schema file used to initialize 
+Check the compose file to find the graphql schema file used to initialize
 the server.
 */
 
@@ -65,7 +65,7 @@ type message struct {
 }
 
 type addMessage struct {
-	Messages []message `json:"message"`
+	Message message `json:"message"`
 }
 
 // Data structure respresenting the json response for the auto generated mutation type.
@@ -126,8 +126,8 @@ func toSingleLine(graphqlBody string) string {
 
 // Runs mutations derived from the test schema.
 // Verifies the response.
-// Any changes to the response format for error and 
-// non-error cases for add mutations should be caught by this test.
+// Any changes to the response format for error and
+// non-error cases for addMutations should be caught by this test.
 func TestGraphQLMutation(t *testing.T) {
 
 	type testData struct {
@@ -144,53 +144,10 @@ func TestGraphQLMutation(t *testing.T) {
 		wantCode int
 		// expected Result.
 		wantResult MessageMutation
-		// length of the response Data array.
-		wantDataLen int
 		// is an error response expected.
 		isErr bool
 		// expected error messasge.
 		wantError []x.GqlError
-	}
-
-	// Expected data from the mutations.
-	// Will be used to validate the mutation responses.
-	expectedData := []MessageMutation{
-		// Expected result 1.
-		MessageMutation{
-			AddMessage: addMessage{
-				Messages: []message{
-					message{
-						Content:    "Unit test post",
-						Author:     "Karthic Rao",
-						DatePosted: "2019-07-07T00:00:00Z",
-					},
-				},
-			},
-		},
-		// Expected result 2.
-		MessageMutation{
-			AddMessage: addMessage{
-				Messages: []message{
-					message{
-						Content:    "Unit test second post",
-						Author:     "Michael Compton",
-						DatePosted: "2019-08-08T05:04:33Z",
-					},
-				},
-			},
-		},
-		// Expected result 3.
-		MessageMutation{
-			AddMessage: addMessage{
-				Messages: []message{
-					message{
-						Content:    "Invalid mutation",
-						Author:     "Prashant Shahi",
-						DatePosted: "2019-08-08T05:04:33Z",
-					},
-				},
-			},
-		},
 	}
 
 	// The following image shows an example HTTP POST request body for a graphql query/mutation.
@@ -210,11 +167,18 @@ func TestGraphQLMutation(t *testing.T) {
 					},
 				},
 			},
-			queryType:   QUERY,
-			explain:     "Send Mutation to the GraphQL server and verify response data",
-			wantCode:    200,
-			wantDataLen: 1,
-			wantResult:  expectedData[0],
+			queryType: QUERY,
+			explain:   "Send Mutation to the GraphQL server and verify response data",
+			wantCode:  200,
+			wantResult: MessageMutation{
+				AddMessage: addMessage{
+					Message: message{
+						Content:    "Unit test post",
+						Author:     "Karthic Rao",
+						DatePosted: "2019-07-07T00:00:00Z",
+					},
+				},
+			},
 		},
 		// Test case 2.
 		{
@@ -232,9 +196,16 @@ func TestGraphQLMutation(t *testing.T) {
 			queryType: QUERY,
 			explain: "Add data with Mutation and verify return data." +
 				" Time is set to 2019-08-08T00:00:00Z format",
-			wantCode:    200,
-			wantDataLen: 1,
-			wantResult:  expectedData[1],
+			wantCode: 200,
+			wantResult: MessageMutation{
+				AddMessage: addMessage{
+					Message: message{
+						Content:    "Unit test second post",
+						Author:     "Michael Compton",
+						DatePosted: "2019-08-08T05:04:33Z",
+					},
+				},
+			},
 		},
 		// Test case 3.
 		{
@@ -252,14 +223,12 @@ func TestGraphQLMutation(t *testing.T) {
 			queryType: QUERY,
 			explain: "The mutation name is invalid. Will be checking for " +
 				"valid error response when the mutation function doesn't of given name doesn't exist",
-			wantCode:    200,
-			wantDataLen: 0,
-			wantResult:  expectedData[2],
-			isErr:       true,
+			wantCode: 200,
+			isErr:    true,
 			wantError: []x.GqlError{
 				{
-					Message: "Cannot query field \"addMessagessss\" on type \"Mutation\". "+
-					"Did you mean \"addMessage\"?",
+					Message: "Cannot query field \"addMessagessss\" on type \"Mutation\". " +
+						"Did you mean \"addMessage\"?",
 					Locations: []x.Location{
 						{
 							Line:   1,
@@ -296,7 +265,7 @@ func TestGraphQLMutation(t *testing.T) {
 
 			require.NoError(t, err)
 
-			// Parse the response from the GraphQL server. 
+			// Parse the response from the GraphQL server.
 			var graphqlResponse GraphqlResponse
 			err = json.Unmarshal(bodyBytes, &graphqlResponse)
 			require.NoError(t, err)
@@ -306,29 +275,27 @@ func TestGraphQLMutation(t *testing.T) {
 
 			// validate the result only when a data is expected.
 			// For erroneous cases, data is not returned.
-			if test.wantDataLen > 0 {
+			if !test.isErr {
 				var mutationResponse MessageMutation
 				err = json.Unmarshal(graphqlResponse.Data, &mutationResponse)
 				require.NoError(t, err)
-				// Verify that the response data exist.
-				require.Equal(t, test.wantDataLen, len(mutationResponse.AddMessage.Messages),
-					"Verifying the existance of result in the mutation response from the GraphQL server")
-
-				// Verify that the GraphQL mutation has returned UID of the node from Dgraph.
-				require.NotEmpty(t, mutationResponse.AddMessage.Messages[0].ID)
+				// Verify that the response data exist and
+				// the GraphQL mutation has returned UID of the node from Dgraph.
+				require.NotEmpty(t, mutationResponse.AddMessage.Message.ID)
 
 				// Since the node ID is generated after the mutation,
 				// we cannot have it before hand in the expected data.
 				// We fetch it from the response json of the mutation.
-				test.wantResult.AddMessage.Messages[0].ID =
-					mutationResponse.AddMessage.Messages[0].ID
+				test.wantResult.AddMessage.Message.ID =
+					mutationResponse.AddMessage.Message.ID
 				// Match and verify the mutation response from the GraphQL server.
 				require.Equal(t, test.wantResult, mutationResponse, "Mutation response"+
 					" differs from the expected one.")
 			}
-			
+
 			// Validate the error response for cases
 			// where error is expected.
+			// Explicitly adding if statement for readability.
 			if test.isErr {
 				require.Equal(t, 1, len(graphqlResponse.Errors), "Expected error response"+
 					" differs from the actual one")
