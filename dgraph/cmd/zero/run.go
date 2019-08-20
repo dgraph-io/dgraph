@@ -95,7 +95,6 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
-	flag.String("enterprise_license", "", "Path to the enterprise license file")
 	// FIXME - Only for testing, remove before shipping.
 	flag.String("public_key", "", "Path to public key.")
 }

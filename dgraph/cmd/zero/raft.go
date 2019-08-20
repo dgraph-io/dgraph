@@ -17,11 +17,9 @@
 package zero
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -514,46 +512,6 @@ func (n *node) initAndStartNode() error {
 					return
 				}
 				glog.Errorf("While proposing CID: %v. Retrying...", err)
-				time.Sleep(3 * time.Second)
-			}
-		}()
-	}
-
-	if fpath := Zero.Conf.GetString("enterprise_license"); len(fpath) > 0 {
-		sf, err := os.Open(fpath)
-		if err != nil {
-			return errors.Wrapf(err, "while opening signed license file: %v", fpath)
-		}
-		defer sf.Close()
-
-		var e enterprise
-		// Safe to access n.server.publicKey without a lock as this function is called on startup
-		// and the field is not modified after startup.
-		if err := enterpriseDetails(sf, bytes.NewReader(n.server.publicKey), &e); err != nil {
-			x.CheckfNoTrace(err)
-		}
-
-		proposal := &pb.ZeroProposal{
-			Enterprise: &pb.Enterprise{
-				Entity:   e.Entity,
-				MaxNodes: e.MaxNodes,
-				ExpiryTs: e.Expiry.Unix(),
-			},
-		}
-
-		go func() {
-			for i := 0; i < 10; i++ {
-				err := n.proposeAndWait(context.Background(), proposal)
-				if err == nil {
-					glog.Infof("Enterprise state proposed to the cluster")
-					break
-				}
-				if err == errInvalidProposal {
-					glog.Errorf("invalid proposal error while proposing enterprise state for: %+v",
-						proposal)
-					break
-				}
-				glog.Errorf("While proposing enterprise state: %v. Retrying...", err)
 				time.Sleep(3 * time.Second)
 			}
 		}()
