@@ -110,20 +110,33 @@ type Mutation {
 }
 `
 
-func (dg *dgraphClient) Query(ctx context.Context, query *dgraph.QueryBuilder) ([]byte, error) {
+func (dg *dgraphClient) Query(
+	ctx context.Context,
+	query *dgraph.QueryBuilder,
+	dgTimer schema.OffsetTimer) ([]byte, error) {
 	return []byte(dg.resp), nil
 }
 
-func (dg *dgraphClient) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
+func (dg *dgraphClient) Mutate(
+	ctx context.Context,
+	val interface{},
+	dgTimer schema.OffsetTimer) (map[string]string, error) {
 	return dg.assigned, nil
 }
 
-func (dg *dgraphClient) DeleteNode(ctx context.Context, uid uint64) error {
+func (dg *dgraphClient) DeleteNode(
+	ctx context.Context,
+	uid uint64,
+	dgTimer schema.OffsetTimer) error {
 	// Not needed in testing responses
 	return nil
 }
 
-func (dg *dgraphClient) AssertType(ctx context.Context, uid uint64, typ string) error {
+func (dg *dgraphClient) AssertType(
+	ctx context.Context,
+	uid uint64,
+	typ string,
+	dgTimer schema.OffsetTimer) error {
 	return nil
 }
 

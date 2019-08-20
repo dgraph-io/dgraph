@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/schema"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
@@ -40,21 +41,34 @@ type queryRecorder struct {
 	query string
 }
 
-func (qr *queryRecorder) Query(ctx context.Context, qb *dgraph.QueryBuilder) ([]byte, error) {
+func (qr *queryRecorder) Query(
+	ctx context.Context,
+	qb *dgraph.QueryBuilder,
+	dgTimer schema.OffsetTimer) ([]byte, error) {
 	var err error
 	qr.query, err = qb.AsQueryString()
 	return []byte("{}"), err
 }
 
-func (qr *queryRecorder) Mutate(ctx context.Context, val interface{}) (map[string]string, error) {
+func (qr *queryRecorder) Mutate(
+	ctx context.Context,
+	val interface{},
+	dgTimer schema.OffsetTimer) (map[string]string, error) {
 	return map[string]string{"newnode": "0x4"}, nil
 }
 
-func (qr *queryRecorder) DeleteNode(ctx context.Context, uid uint64) error {
+func (qr *queryRecorder) DeleteNode(
+	ctx context.Context,
+	uid uint64,
+	dgTimer schema.OffsetTimer) error {
 	return nil
 }
 
-func (qr *queryRecorder) AssertType(ctx context.Context, uid uint64, typ string) error {
+func (qr *queryRecorder) AssertType(
+	ctx context.Context,
+	uid uint64,
+	typ string,
+	dgTimer schema.OffsetTimer) error {
 	return nil
 }
 
