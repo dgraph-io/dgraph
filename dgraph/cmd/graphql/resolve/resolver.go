@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -130,6 +131,21 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		return r.resp
 	}
 
+	trace := &schema.Trace{
+		Version:   1,
+		StartTime: time.Now(),
+	}
+	timers := schema.NewOffsetTimerFactory(trace.StartTime)
+	defer func() {
+		trace.EndTime = time.Now()
+		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
+	}()
+
+	r.resp.Extensions = &schema.Extensions{
+		RequestID: api.RequestID(ctx),
+		Tracing:   trace,
+	}
+
 	op, err := r.Schema.Operation(r.GqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
@@ -163,6 +179,7 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 					query:  q,
 					schema: r.Schema,
 					dgraph: r.dgraph,
+					timers: timers,
 				}).resolve(ctx)
 			}(q, i)
 		}
@@ -175,6 +192,8 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 			// AddData handle nil cases.
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
+			r.resp.Extensions.Tracing.Execution =
+				append(r.resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
@@ -192,10 +211,13 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				mutation: m,
 				schema:   r.Schema,
 				dgraph:   r.dgraph,
+				timers:   timers,
 			}
 			res := mr.resolve(ctx)
 			r.WithError(res.err)
 			r.resp.AddData(res.data)
+			r.resp.Extensions.Tracing.Execution =
+				append(r.resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
