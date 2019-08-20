@@ -44,7 +44,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if !worker.EnterpriseEnabled() {
 		x.SetStatus(w, "You must enable enterprise features first. "+
-			"Supply the appropriate license file to Dgraph Zero using a flag or the HTTP endpoint.",
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.",
 			"Backup failed.")
 		return
 	}
