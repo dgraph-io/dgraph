@@ -475,7 +475,7 @@ func (s *Server) Connect(ctx context.Context,
 		for _, member := range group.Members {
 			switch {
 			// If we have this member, then we should just connect to it and return.
-			case member.Addr == m.Addr:
+			case member.Addr == m.Addr && m.Id == 0:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
 				conn.GetPools().Connect(m.Addr)
 				return &pb.ConnectionState{
@@ -772,6 +772,15 @@ func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reade
 	var e enterprise
 	if err := enterpriseDetails(signedData, bytes.NewReader(s.publicKey), &e); err != nil {
 		return errors.Wrapf(err, "while extracting enterprise details from the license")
+	}
+
+	numNodes := len(s.state.GetZeros())
+	for _, group := range s.state.GetGroups() {
+		numNodes += len(group.GetMembers())
+	}
+	if uint64(numNodes) > e.MaxNodes {
+		return errors.Errorf("Your license only allows: %v (Alpha + Zero) nodes. You have: %v.",
+			e.MaxNodes, numNodes)
 	}
 
 	proposal := &pb.ZeroProposal{
