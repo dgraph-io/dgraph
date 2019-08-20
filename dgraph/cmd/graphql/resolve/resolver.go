@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/graphql/dgraph"
@@ -86,6 +87,15 @@ type RequestResolver struct {
 	resp   *schema.Response
 }
 
+// A resolved is the result of resolving a single query or mutation.
+// A schema.Request may contain any number of queries or mutations (never both).
+// RequestResolver.Resolve() resolves all of them by finding the resolved answers
+// of the component queries/mutations and joining into a single schema.Response.
+type resolved struct {
+	data []byte
+	err  error
+}
+
 // New creates a new RequestResolver
 func New(s schema.Schema, dg dgraph.Client) *RequestResolver {
 	return &RequestResolver{
@@ -100,9 +110,9 @@ func (r *RequestResolver) WithError(err error) {
 	r.resp.Errors = append(r.resp.Errors, schema.AsGQLErrors(err)...)
 }
 
-// Resolve processes h.GqlReq and returns a GraphQL response.
-// h.GqlReq should be set with a request before Resolve is called
-// and a schema and backend should have been added.
+// Resolve processes r.GqlReq and returns a GraphQL response.
+// r.GqlReq should be set with a request before Resolve is called
+// and a schema and backend Dgraph should have been added.
 // Resolve records any errors in the response's error field.
 func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	if r == nil {
@@ -116,7 +126,6 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 	}
 
 	if r.resp.Errors != nil {
-		r.resp.Data.Reset()
 		return r.resp
 	}
 
@@ -140,19 +149,31 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		// Queries run in parallel and are independent of each other: e.g.
 		// an error in one query, doesn't affect the others.
 
-		// TODO: this should handle all the queries in parallel.
-		for _, q := range op.Queries() {
-			qr := &QueryResolver{
-				query:  q,
-				schema: r.Schema,
-				dgraph: r.dgraph,
-			}
-			resp, err := qr.Resolve(ctx)
-			r.WithError(err)
+		var wg sync.WaitGroup
+		allResolved := make([]*resolved, len(op.Queries()))
 
+		for i, q := range op.Queries() {
+			wg.Add(1)
+
+			go func(q schema.Query, storeAt int) {
+				defer wg.Done()
+
+				allResolved[storeAt] = (&queryResolver{
+					query:  q,
+					schema: r.Schema,
+					dgraph: r.dgraph,
+				}).resolve(ctx)
+			}(q, i)
+		}
+		wg.Wait()
+
+		// The GraphQL data response needs to be written in the same order as the
+		// queries in the request.
+		for _, res := range allResolved {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
-			r.resp.AddData(resp)
+			r.WithError(res.err)
+			r.resp.AddData(res.data)
 		}
 	case op.IsMutation():
 		// Mutations, unlike queries, are handled serially and the results are
@@ -166,22 +187,14 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 				continue
 			}
 
-			mr := &MutationResolver{
+			mr := &mutationResolver{
 				mutation: m,
 				schema:   r.Schema,
 				dgraph:   r.dgraph,
 			}
-			resp, err := mr.Resolve(ctx)
-			r.WithError(err)
-			if len(resp) > 0 {
-				var b bytes.Buffer
-				b.WriteRune('"')
-				b.WriteString(m.ResponseName())
-				b.WriteString(`":`)
-				b.Write(resp)
-
-				r.resp.AddData(b.Bytes())
-			}
+			res := mr.resolve(ctx)
+			r.WithError(res.err)
+			r.resp.AddData(res.data)
 		}
 	case op.IsSubscription():
 		schema.ErrorResponsef("[%s] Subscriptions not yet supported", api.RequestID(ctx))
