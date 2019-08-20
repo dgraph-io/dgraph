@@ -17,10 +17,9 @@
 package zero
 
 import (
-	"bytes"
 	"io"
-	"io/ioutil"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,8 +69,6 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
-
-	publicKey []byte
 }
 
 // Init initializes the zero server.
@@ -92,13 +89,6 @@ func (s *Server) Init() {
 	s.closer = y.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
-
-	publicKeyFile := Zero.Conf.GetString("public_key")
-	if publicKeyFile != "" {
-		var err error
-		s.publicKey, err = ioutil.ReadFile(publicKeyFile)
-		x.Check(err)
-	}
 
 	go s.rebalanceTablets()
 }
@@ -474,7 +464,6 @@ func (s *Server) Connect(ctx context.Context,
 	for _, group := range ms.Groups {
 		for _, member := range group.Members {
 			switch {
-			// If we have this member, then we should just connect to it and return.
 			case member.Addr == m.Addr && m.Id == 0:
 				glog.Infof("Found a member with the same address. Returning: %+v", member)
 				conn.GetPools().Connect(m.Addr)
@@ -499,12 +488,6 @@ func (s *Server) Connect(ctx context.Context,
 			}
 			numberOfNodes++
 		}
-	}
-
-	maxNodes := s.state.GetLicense().GetMaxNodes()
-	if s.state.GetLicense().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
-		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
-			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
 	}
 
 	// Create a connection and check validity of the address by doing an Echo.
@@ -565,10 +548,20 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	proposal := createProposal()
-	if proposal != nil {
-		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
-			return &emptyConnectionState, err
-		}
+	if proposal == nil {
+		return &pb.ConnectionState{
+			State: ms, Member: m,
+		}, nil
+	}
+
+	maxNodes := s.state.GetLicense().GetMaxNodes()
+	if s.state.GetLicense().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
+		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
+			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
+	}
+
+	if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
+		return &emptyConnectionState, err
 	}
 	resp = &pb.ConnectionState{
 		State:  s.membershipState(),
@@ -770,7 +763,7 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 
 func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reader) error {
 	var l license
-	if err := verifySignature(signedData, bytes.NewReader(s.publicKey), &l); err != nil {
+	if err := verifySignature(signedData, strings.NewReader(publicKey), &l); err != nil {
 		return errors.Wrapf(err, "while extracting enterprise details from the license")
 	}
 
@@ -779,7 +772,7 @@ func (s *Server) applyEnterpriseLicense(ctx context.Context, signedData io.Reade
 		numNodes += len(group.GetMembers())
 	}
 	if uint64(numNodes) > l.MaxNodes {
-		return errors.Errorf("Your license only allows: %v (Alpha + Zero) nodes. You have: %v.",
+		return errors.Errorf("Your license only allows [%v] (Alpha + Zero) nodes. You have: [%v].",
 			l.MaxNodes, numNodes)
 	}
 
