@@ -41,11 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
-	FacetDelimeter = "|"
-)
-
 /*
  * QUERY:
  * Let's take this query from GraphQL as example:
@@ -103,11 +98,11 @@ const (
 // the query. It also contains information about the time it took to convert the
 // result into a format(JSON/Protocol Buffer) that the client expects.
 type Latency struct {
-	Start      time.Time     `json:"-"`
-	Parsing    time.Duration `json:"query_parsing"`
-	Processing time.Duration `json:"processing"`
-	Transport  time.Duration `json:"transport"`
-	Json       time.Duration `json:"json_conversion"`
+	Start           time.Time     `json:"-"`
+	Parsing         time.Duration `json:"query_parsing"`
+	AssignTimestamp time.Duration `json:"assign_timestamp"`
+	Processing      time.Duration `json:"processing"`
+	Json            time.Duration `json:"json_conversion"`
 }
 
 // params contains the list of parameters required to execute a SubGraph.
@@ -2665,6 +2660,7 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 	}
 	er.Subgraphs = req.Subgraphs
 
+	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
@@ -2673,6 +2669,8 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 			return er, errors.Wrapf(err, "while fetching types")
 		}
 	}
+	req.Latency.Processing += time.Since(schemaProcessingStart)
+
 	return er, nil
 }
 

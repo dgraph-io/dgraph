@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package rdf
+package chunker
 
 import (
 	"testing"
@@ -976,7 +976,7 @@ func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
 		t.Logf("Testing %v", test.input)
 		l.Reset(test.input)
-		rnq, err := Parse(test.input, l)
+		rnq, err := ParseRDF(test.input, l)
 		if test.expectedErr && test.shouldIgnore {
 			require.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
 				err.Error())

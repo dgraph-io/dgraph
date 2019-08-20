@@ -465,70 +465,70 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "jN1Hm75ZjUqHxpx/b9nIKxdR0Wg=",
+			"checksumSHA1": "4JtWm1bK1Xyw1Iz1Ir3Dq38Ce9o=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
 			"checksumSHA1": "On87ObyZ4RLZWWmDtW2M5gY997I=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
 			"checksumSHA1": "SHnr7a5ZSRsyrAT8Nw1AxDs1UXw=",
 			"path": "github.com/dgraph-io/badger/pb",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
 			"checksumSHA1": "zWLyKFwJcRNWzpvE+QDrsqi9UlE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
-			"checksumSHA1": "poz2/1kTpQvUf+6jSr3vjahkqtY=",
+			"checksumSHA1": "/hYHtgAA2VVZ+4sdbplyOLGRiEM=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
 			"checksumSHA1": "JxUxrgSrNNTqbX3tqzh3dQIG+uU=",
 			"path": "github.com/dgraph-io/badger/trie",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
-			"checksumSHA1": "HxjNg9sBt3V1Fcmtau1IFZL2OcI=",
+			"checksumSHA1": "pfK0K0RIzPJ4NZ+B27kgq6as/ew=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "f59246cb119d2f7b6f2fc29a835ee5edb366019a",
-			"revisionTime": "2019-08-02T17:43:07Z"
+			"revision": "9d7b751e85c981d34e6351520919f5c0547c1379",
+			"revisionTime": "2019-08-09T12:18:31Z"
 		},
 		{
 			"checksumSHA1": "kKrPMMzl8wnZ8Ml1WGHcNO2X0cI=",
 			"path": "github.com/dgraph-io/dgo",
-			"revision": "3b57e1cfe339248e6533c15837c6925c96afddac",
-			"revisionTime": "2019-08-07T02:29:24Z"
+			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
+			"revisionTime": "2019-08-09T19:03:27Z"
 		},
 		{
-			"checksumSHA1": "qPsGsoFTZRG9sahD7zOvWQ37vjA=",
+			"checksumSHA1": "bxFCBtuL7q+0CwOV93Ujp/IiMtk=",
 			"path": "github.com/dgraph-io/dgo/protos/api",
-			"revision": "3b57e1cfe339248e6533c15837c6925c96afddac",
-			"revisionTime": "2019-08-07T02:29:24Z"
+			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
+			"revisionTime": "2019-08-09T19:03:27Z"
 		},
 		{
 			"checksumSHA1": "6J5Im9lklapzLqF+qbHiATHD9iQ=",
 			"path": "github.com/dgraph-io/dgo/x",
-			"revision": "3b57e1cfe339248e6533c15837c6925c96afddac",
-			"revisionTime": "2019-08-07T02:29:24Z"
+			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
+			"revisionTime": "2019-08-09T19:03:27Z"
 		},
 		{
 			"checksumSHA1": "YOS7SDK4NjeABDXH3c1Jr9OuQYo=",
 			"path": "github.com/dgraph-io/dgo/y",
-			"revision": "3b57e1cfe339248e6533c15837c6925c96afddac",
-			"revisionTime": "2019-08-07T02:29:24Z"
+			"revision": "8c33afc79492d8be94326eee7a7b73b028a4567e",
+			"revisionTime": "2019-08-09T19:03:27Z"
 		},
 		{
 			"checksumSHA1": "vXF9AIdgl4GPyn8/zU6L22dVNHo=",

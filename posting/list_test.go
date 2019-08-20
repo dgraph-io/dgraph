@@ -155,7 +155,7 @@ func TestAddMutation(t *testing.T) {
 func getFirst(l *List, readTs uint64) (res pb.Posting) {
 	l.Iterate(readTs, 0, func(p *pb.Posting) error {
 		res = *p
-		return errStopIteration
+		return ErrStopIteration
 	})
 	return res
 }
@@ -1065,7 +1065,8 @@ func TestMultiPartListMarshal(t *testing.T) {
 	require.Equal(t, key, kvs[0].Key)
 
 	for i, startUid := range ol.plist.Splits {
-		partKey := x.GetSplitKey(key, startUid)
+		partKey, err := x.GetSplitKey(key, startUid)
+		require.NoError(t, err)
 		require.Equal(t, partKey, kvs[i+1].Key)
 		part, err := ol.readListPart(startUid)
 		require.NoError(t, err)

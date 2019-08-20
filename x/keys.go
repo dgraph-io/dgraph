@@ -21,7 +21,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/golang/glog"
+	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
@@ -416,7 +416,9 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 	}
 
 	if backupKey.StartUid > 0 {
-		key = GetSplitKey(key, backupKey.StartUid)
+		var err error
+		key, err = GetSplitKey(key, backupKey.StartUid)
+		Check(err)
 	}
 	return key
 }
@@ -445,11 +447,15 @@ func PredicatePrefix(predicate string) []byte {
 }
 
 // GetSplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
-func GetSplitKey(baseKey []byte, startUid uint64) []byte {
+func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
 
-	p := Parse(baseKey)
+	p, err := Parse(baseKey)
+	if err != nil {
+		return nil, err
+	}
+
 	index := 1 + 2 + len(p.Attr) + 1
 	if index >= len(keyCopy) {
 		panic("Cannot write to key. Key is too small")
@@ -457,17 +463,17 @@ func GetSplitKey(baseKey []byte, startUid uint64) []byte {
 	keyCopy[index] = ByteSplit
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
 
-	return keyCopy
+	return keyCopy, nil
 }
 
 // Parse would parse the key. ParsedKey does not reuse the key slice, so the key slice can change
 // without affecting the contents of ParsedKey.
-func Parse(key []byte) *ParsedKey {
-	p := &ParsedKey{}
+func Parse(key []byte) (ParsedKey, error) {
+	var p ParsedKey
 
 	p.bytePrefix = key[0]
 	if p.bytePrefix == ByteUnused {
-		return p
+		return p, nil
 	}
 
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
@@ -478,7 +484,7 @@ func Parse(key []byte) *ParsedKey {
 
 	switch p.bytePrefix {
 	case byteSchema, byteType:
-		return p
+		return p, nil
 	default:
 	}
 
@@ -491,8 +497,7 @@ func Parse(key []byte) *ParsedKey {
 	switch p.byteType {
 	case ByteData, ByteReverse:
 		if len(k) < 8 {
-			glog.Errorf("Error: Uid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			return nil
+			return p, errors.Errorf("uid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
 
@@ -501,8 +506,7 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 16 {
-			glog.Errorf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			return nil
+			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		k = k[8:]
@@ -514,8 +518,7 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 8 {
-			glog.Errorf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			return nil
+			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		term := k[:len(k)-8]
@@ -524,8 +527,7 @@ func Parse(key []byte) *ParsedKey {
 		p.StartUid = binary.BigEndian.Uint64(startUid)
 	case ByteCount, ByteCountRev:
 		if len(k) < 4 {
-			glog.Errorf("Error: Count length < 4 for key: %q, parsed key: %+v\n", key, p)
-			return nil
+			return p, errors.Errorf("count length < 4 for key: %q, parsed key: %+v", key, p)
 		}
 		p.Count = binary.BigEndian.Uint32(k)
 
@@ -534,17 +536,16 @@ func Parse(key []byte) *ParsedKey {
 		}
 
 		if len(k) < 12 {
-			glog.Errorf("Error: StartUid length < 8 for key: %q, parsed key: %+v\n", key, p)
-			return nil
+			return p, errors.Errorf("StartUid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 
 		k = k[4:]
 		p.StartUid = binary.BigEndian.Uint64(k)
 	default:
 		// Some other data type.
-		return nil
+		return p, errors.Errorf("Invalid data type")
 	}
-	return p
+	return p, nil
 }
 
 var reservedPredicateMap = map[string]struct{}{

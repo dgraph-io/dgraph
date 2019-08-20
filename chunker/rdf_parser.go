@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package rdf
+package chunker
 
 import (
+	"bytes"
 	"strconv"
 	"strings"
 	"unicode"
@@ -51,8 +52,27 @@ func sane(s string) bool {
 	return false
 }
 
-// Parse parses a mutation string and returns the N-Quad representation for it.
-func Parse(line string, l *lex.Lexer) (api.NQuad, error) {
+// ParseRDFs is a convenience wrapper function to get all NQuads in one call. This can however, lead
+// to high memory usage. So, be careful using this.
+func ParseRDFs(b []byte) ([]*api.NQuad, error) {
+	var nqs []*api.NQuad
+	var l lex.Lexer
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		nq, err := ParseRDF(string(line), &l)
+		if err == ErrEmpty {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		nqs = append(nqs, &nq)
+	}
+	return nqs, nil
+}
+
+// ParseRDF parses a mutation string and returns the N-Quad representation for it.
+// It parses N-Quad statements based on http://www.w3.org/TR/n-quads/.
+func ParseRDF(line string, l *lex.Lexer) (api.NQuad, error) {
 	var rnq api.NQuad
 	line = strings.TrimSpace(line)
 	if len(line) == 0 {
@@ -171,7 +191,7 @@ L:
 
 		case itemLeftRound:
 			it.Prev() // backup '('
-			if err := parseFacets(it, &rnq); err != nil {
+			if err := parseFacetsRDF(it, &rnq); err != nil {
 				return rnq, errors.Wrap(err, "could not parse facet")
 			}
 		}
@@ -230,7 +250,7 @@ func parseFunction(it *lex.ItemIterator) (string, error) {
 	return s, nil
 }
 
-func parseFacets(it *lex.ItemIterator, rnq *api.NQuad) error {
+func parseFacetsRDF(it *lex.ItemIterator, rnq *api.NQuad) error {
 	if !it.Next() {
 		return errors.Errorf("Unexpected end of facets.")
 	}

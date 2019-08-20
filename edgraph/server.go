@@ -17,7 +17,6 @@
 package edgraph
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -34,10 +33,8 @@ import (
 	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgo/y"
 
-	nqjson "github.com/dgraph-io/dgraph/chunker/json"
-	"github.com/dgraph-io/dgraph/chunker/rdf"
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -841,11 +838,15 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 		if req.StartTs == 0 {
 			req.StartTs = posting.Oracle().MaxAssigned()
 		}
-		queryRequest.Cache = worker.NoTxnCache
+		queryRequest.Cache = worker.NoCache
 	}
+
 	if req.StartTs == 0 {
+		assignTimestampStart := time.Now()
 		req.StartTs = State.getTimestamp(req.ReadOnly)
+		l.AssignTimestamp = time.Since(assignTimestampStart)
 	}
+
 	queryRequest.ReadTs = req.StartTs
 	resp.Txn = &api.TxnContext{StartTs: req.StartTs}
 	annotateStartTs(span, req.StartTs)
@@ -855,7 +856,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	if er, err = queryRequest.Process(ctx); err != nil {
 		return resp, errors.Wrap(err, "")
 	}
-	l.Transport = time.Since(l.Start) - l.Parsing - l.Processing
 
 	var js []byte
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
@@ -886,9 +886,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 	// TODO(martinmr): Include Transport as part of the latency. Need to do this separately
 	// since it involves modifying the API protos.
 	gl := &api.Latency{
-		ParsingNs:    uint64(l.Parsing.Nanoseconds()),
-		ProcessingNs: uint64(l.Processing.Nanoseconds()),
-		EncodingNs:   uint64(l.Json.Nanoseconds()),
+		AssignTimestampNs: uint64(l.AssignTimestamp.Nanoseconds()),
+		ParsingNs:         uint64(l.Parsing.Nanoseconds()),
+		ProcessingNs:      uint64(l.Processing.Nanoseconds()),
+		EncodingNs:        uint64(l.Json.Nanoseconds()),
 	}
 
 	resp.Latency = gl
@@ -971,22 +972,6 @@ func isAlterAllowed(ctx context.Context) error {
 	return nil
 }
 
-func parseNQuads(b []byte) ([]*api.NQuad, error) {
-	var nqs []*api.NQuad
-	var l lex.Lexer
-	for _, line := range bytes.Split(b, []byte{'\n'}) {
-		nq, err := rdf.Parse(string(line), &l)
-		if err == rdf.ErrEmpty {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		nqs = append(nqs, &nq)
-	}
-	return nqs, nil
-}
-
 // parseMutationObject tries to consolidate fields of the api.Mutation into the
 // corresponding field of the returned gql.Mutation. For example, the 3 fields,
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
@@ -994,29 +979,30 @@ func parseNQuads(b []byte) ([]*api.NQuad, error) {
 // and api.Mutation#Del are merged into the gql.Mutation#Del field.
 func parseMutationObject(mu *api.Mutation) (*gql.Mutation, error) {
 	res := &gql.Mutation{}
+
 	if len(mu.SetJson) > 0 {
-		nqs, err := nqjson.Parse(mu.SetJson, nqjson.SetNquads)
+		nqs, err := chunker.ParseJSON(mu.SetJson, chunker.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DeleteJson) > 0 {
-		nqs, err := nqjson.Parse(mu.DeleteJson, nqjson.DeleteNquads)
+		nqs, err := chunker.ParseJSON(mu.DeleteJson, chunker.DeleteNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Del = append(res.Del, nqs...)
 	}
 	if len(mu.SetNquads) > 0 {
-		nqs, err := parseNQuads(mu.SetNquads)
+		nqs, err := chunker.ParseRDFs(mu.SetNquads)
 		if err != nil {
 			return nil, err
 		}
 		res.Set = append(res.Set, nqs...)
 	}
 	if len(mu.DelNquads) > 0 {
-		nqs, err := parseNQuads(mu.DelNquads)
+		nqs, err := chunker.ParseRDFs(mu.DelNquads)
 		if err != nil {
 			return nil, err
 		}

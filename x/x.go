@@ -94,6 +94,9 @@ const (
 	// AppliedUntil - TxnMarks.DoneUntil() before old transactions start getting aborted.
 	ForceAbortDifference = 5000
 
+	// FacetDelimeter is the symbol used to distinguish predicate names from facets.
+	FacetDelimeter = "|"
+
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
 	// AclPredicates is the JSON representation of the predicates reserved for use

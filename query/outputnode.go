@@ -498,8 +498,9 @@ type Extensions struct {
 }
 
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
+	encodingStart := time.Now()
 	defer func() {
-		l.Json = time.Since(l.Start) - l.Parsing - l.Processing - l.Transport
+		l.Json = time.Since(encodingStart)
 	}()
 
 	var seedNode *fastJsonNode
@@ -598,7 +599,7 @@ func facetName(fieldName string, f *api.Facet) string {
 	if f.Alias != "" {
 		return f.Alias
 	}
-	return fieldName + FacetDelimeter + f.Key
+	return fieldName + x.FacetDelimeter + f.Key
 }
 
 // This method gets the values and children for a subprotos.

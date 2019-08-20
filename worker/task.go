@@ -632,11 +632,10 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			default:
+			case q.FacetParam != nil || facetsTree != nil:
 				if i == 0 {
-					span.Annotate(nil, "default")
+					span.Annotate(nil, "default with facets")
 				}
-
 				uidList := &pb.List{
 					Uids: make([]uint64, 0, pl.ApproxLen()),
 				}
@@ -668,6 +667,15 @@ func (qs *queryState) handleUidPostings(
 				if q.FacetParam != nil {
 					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{FacetsList: fcsList})
 				}
+			default:
+				if i == 0 {
+					span.Annotate(nil, "default no facets")
+				}
+				uidList, err := pl.Uids(opts)
+				if err != nil {
+					return err
+				}
+				out.UidMatrix = append(out.UidMatrix, uidList)
 			}
 		}
 		return nil
@@ -695,19 +703,26 @@ func (qs *queryState) handleUidPostings(
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
+	var total int
+	for _, list := range out.UidMatrix {
+		total += len(list.Uids)
+	}
+	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
 }
 
 const (
 	// UseTxnCache indicates the transaction cache should be used.
 	UseTxnCache = iota
-	// NoTxnCache indicates no transaction caches should be used.
-	NoTxnCache
+	// NoCache indicates no caches should be used.
+	NoCache
 )
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
-	span := otrace.FromContext(ctx)
+	ctx, span := otrace.StartSpan(ctx, "processTask."+q.Attr)
+	defer span.End()
+
 	stop := x.SpanTimer(span, "processTask"+q.Attr)
 	defer stop()
 
@@ -743,9 +758,8 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	if q.Cache == UseTxnCache {
 		qs.cache = posting.Oracle().CacheAt(q.ReadTs)
 	}
-	if qs.cache == nil {
-		qs.cache = posting.NewLocalCache(q.ReadTs)
-	}
+	// For now, remove the query level cache. It is causing contention for queries with high
+	// fan-out.
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
@@ -867,7 +881,7 @@ func (qs *queryState) helpProcessTask(
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
 		span.Annotate(nil, "handleGeoFunction")
-		if err := qs.filterGeoFunction(funcArgs{q, gid, srcFn, out}); err != nil {
+		if err := qs.filterGeoFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -1236,49 +1250,70 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	return nil
 }
 
-func (qs *queryState) filterGeoFunction(arg funcArgs) error {
+func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "filterGeoFunction")
+	defer stop()
+
 	attr := arg.q.Attr
 	uids := algo.MergeSorted(arg.out.UidMatrix)
-	isList := schema.State().IsList(attr)
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
-		if !isList {
-			val, err := pl.Value(arg.q.ReadTs)
-			if err == posting.ErrNoValue {
-				continue
-			} else if err != nil {
-				return err
-			}
-			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
-			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-				filtered.Uids = append(filtered.Uids, uid)
-			}
-
-			continue
-		}
-
-		// list type
-		vals, err := pl.AllValues(arg.q.ReadTs)
-		if err == posting.ErrNoValue {
-			continue
-		} else if err != nil {
-			return err
-		}
-		for _, val := range vals {
-			newValue := &pb.TaskValue{ValType: val.Tid.Enum(), Val: val.Value.([]byte)}
-			if types.MatchGeo(newValue, arg.srcFn.geoQuery) {
-				filtered.Uids = append(filtered.Uids, uid)
-				break
-			}
-		}
+	numGo, width := x.DivideAndRule(len(uids.Uids))
+	if span != nil && numGo > 1 {
+		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
+			len(uids.Uids), numGo, width)
 	}
 
+	filtered := make([]*pb.List, numGo)
+	filter := func(idx, start, end int) error {
+		filtered[idx] = &pb.List{}
+		out := filtered[idx]
+		for _, uid := range uids.Uids[start:end] {
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
+				return err
+			}
+			var tv pb.TaskValue
+			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+				tv.ValType = p.ValType
+				tv.Val = p.Value
+				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
+					out.Uids = append(out.Uids, uid)
+					return posting.ErrStopIteration
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	errCh := make(chan error, numGo)
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > len(uids.Uids) {
+			end = len(uids.Uids)
+		}
+		go func(idx, start, end int) {
+			errCh <- filter(idx, start, end)
+		}(i, start, end)
+	}
+	for i := 0; i < numGo; i++ {
+		if err := <-errCh; err != nil {
+			return err
+		}
+	}
+	final := &pb.List{}
+	for _, out := range filtered {
+		final.Uids = append(final.Uids, out.Uids...)
+	}
+	if span != nil && numGo > 1 {
+		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
+	}
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
 	}
 	return nil
 }
@@ -1980,7 +2015,10 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 		// Parse the key upfront, otherwise ReadPostingList would advance the
 		// iterator.
-		pk := x.Parse(item.Key())
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return err
+		}
 
 		// The following optimization speeds up this iteration considerably, because it avoids
 		// the need to run ReadPostingList.

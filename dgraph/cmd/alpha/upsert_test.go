@@ -1007,7 +1007,7 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err = mutationWithTs(m3, "application/rdf", false, true, true, 0)
+	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, true, 0)
 	require.NoError(t, err)
 
 	// The following mutation should have no effect on the state of the database
@@ -1028,7 +1028,7 @@ upsert {
     }
   }
 }`
-	keys, preds, _, err = mutationWithTs(m4, "application/rdf", false, true, true, 0)
+	_, _, _, err = mutationWithTs(m4, "application/rdf", false, true, true, 0)
 	require.NoError(t, err)
 
 	res, _, err = queryWithTs(fmt.Sprintf(q2, "company1"), "application/graphql+-", "", 0)

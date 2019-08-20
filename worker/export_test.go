@@ -35,6 +35,7 @@ import (
 
 	"github.com/dgraph-io/dgo/protos/api"
 
+	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -42,7 +43,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 
-	"github.com/dgraph-io/dgraph/chunker/rdf"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -97,7 +97,7 @@ func populateGraphExport(t *testing.T) {
 
 	l := &lex.Lexer{}
 	for _, edge := range rdfEdges {
-		nq, err := rdf.Parse(edge, l)
+		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
 		rnq := gql.NQuad{NQuad: &nq}
 		err = facets.SortAndValidate(rnq.Facets)
@@ -220,7 +220,7 @@ func TestExportRdf(t *testing.T) {
 
 	l := &lex.Lexer{}
 	for scanner.Scan() {
-		nq, err := rdf.Parse(scanner.Text(), l)
+		nq, err := chunker.ParseRDF(scanner.Text(), l)
 		require.NoError(t, err)
 		require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4", "0x5", "0x6"}, nq.Subject)
 		if nq.ObjectValue != nil {
