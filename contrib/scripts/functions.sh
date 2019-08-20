@@ -25,7 +25,29 @@ function restartCluster {
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
   $basedir/contrib/wait-for-it.sh -t 60 localhost:9180 || exit 1
-  sleep 10 || exit 1
+
+  # Wait for zero server to become the leader before applying enterprise license.
+  applyLicense
+	sleep 10 || exit 1
+}
+
+function applyLicense {
+  n=0
+  until [ $n -ge 5 ]
+  do
+    echo "Applying license to Zero"
+ 	  status_code=$(curl -X POST --write-out "%{http_code}\n" --silent --output /dev/null http://localhost:6180/enterpriseLicense \
+  		--header 'Content-Type: application/json' \
+  		--data-binary "$LICENSE_FILE")
+
+    if [[ "$status_code" -ne 200 ]] ; then
+    	echo "Got $status_code while applying license. Sleeping for 5 secs."
+  	  sleep 5
+    else
+  		break
+		fi
+    n=$[$n+1]
+  done
 }
 
 function stopCluster {

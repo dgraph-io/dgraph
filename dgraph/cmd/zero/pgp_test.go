@@ -61,7 +61,7 @@ func TestEnterpriseDetails(t *testing.T) {
 		DefaultHash: crypto.SHA512,
 	})
 	require.NoError(t, err)
-	correctJSON := `{"entity": "entity", "max_nodes": 10, "expiry": "2019-08-16T19:09:06+10:00"}`
+	correctJSON := `{"user": "user", "max_nodes": 10, "expiry": "2019-08-16T19:09:06+10:00"}`
 	correctTime, err := time.Parse(time.RFC3339, "2019-08-16T19:09:06+10:00")
 	require.NoError(t, err)
 
@@ -103,7 +103,7 @@ func TestEnterpriseDetails(t *testing.T) {
 			correctJSON,
 			correctEntity,
 			false,
-			license{"entity", 10, correctTime},
+			license{"user", 10, correctTime},
 		},
 	}
 
