@@ -22,9 +22,14 @@ type options struct {
 	DataFormat    string
 }
 
+type readerChunk struct {
+	chunk    *bytes.Buffer
+	filename string
+}
+
 type state struct {
 	opt           options
-	readerChunkCh chan *bytes.Buffer
+	readerChunkCh chan readerChunk
 	foundError    bool
 }
 
@@ -36,7 +41,7 @@ type loader struct {
 func newLoader(opt options) *loader {
 	st := &state{
 		opt:           opt,
-		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
+		readerChunkCh: make(chan readerChunk, opt.NumGoroutines),
 	}
 	ld := &loader{
 		state:   st,
@@ -53,7 +58,7 @@ func newLoader(opt options) *loader {
 func (ld *loader) mapStage() {
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
-		fmt.Println("No data files found in %s.", ld.opt.DataFiles)
+		fmt.Println("No data files found in ", ld.opt.DataFiles)
 		os.Exit(1)
 	}
 
@@ -68,18 +73,17 @@ func (ld *loader) mapStage() {
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
 		go func(m *mapper) {
-			m.run(loadType)
-			mapperWg.Done()
+			m.run(loadType, &mapperWg)
 		}(m)
 	}
 
 	thr := y.NewThrottle(ld.opt.NumGoroutines)
-	for i, file := range files {
+	for _, file := range files {
 		x.Check(thr.Do())
-		fmt.Printf("Processing file (%d out of %d): %s\n", i+1, len(files), file)
 
 		go func(file string) {
 			defer thr.Done(nil)
+			fmt.Printf("Processing file %s\n", file)
 
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
@@ -89,7 +93,10 @@ func (ld *loader) mapStage() {
 			for {
 				chunkBuf, err := chunker.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
-					ld.readerChunkCh <- chunkBuf
+					ld.readerChunkCh <- readerChunk{
+						chunk:    chunkBuf,
+						filename: file,
+					}
 				}
 				if err == io.EOF {
 					break

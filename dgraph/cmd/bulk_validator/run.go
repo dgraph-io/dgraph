@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// BulkValidator is the sub-command for validating input files which can later be
+// used with bulk loader to insert data into dgraph.
 var BulkValidator x.SubCommand
 
 func init() {
@@ -64,7 +66,6 @@ func run() {
 		}
 	}
 
-	// fmt.Println(opt.DataFiles)
 	loader := newLoader(opt)
 	loader.mapStage()
 }
