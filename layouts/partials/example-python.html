@@ -1,0 +1,42 @@
+{{ $currentBranch := getenv "CURRENT_BRANCH" }}
+
+{{ $version := split (slicestr (replace (printf "%-14s" $currentBranch) " " "0") 9) "." }}
+{{ $majorVersion := int (index $version 0) }}
+{{ $minorVersion := int (index $version 1) }}
+{{ $patchVersion := int (index $version 2) }}
+{{ $versionGe105 := or (eq $currentBranch "master") (gt $majorVersion 1) (and (eq $majorVersion 1) (gt $minorVersion 0)) (and (eq $majorVersion 1) (eq $minorVersion 0) (ge $patchVersion 5)) }}
+
+<pre><code class="no-copy" tabindex="-1">import os
+import pydgraph
+import json
+
+DGRAPH = os.getenv('DGRAPH', 'localhost:9080')
+
+def query_data(client):
+
+    query = """<span class="query-content">{{ .Code }}</span>"""
+
+{{ if eq .Vars nil }}
+    res = client.txn(read_only=True).query(query)
+{{ else }}
+    variables = {{ .Vars }}
+    res = client.txn(read_only=True).query(query, variables=variables)
+{{ end }}
+
+    print('Response: ', json.loads(res.json))
+
+def main():
+    client_stub = pydgraph.DgraphClientStub(DGRAPH)
+    client = pydgraph.DgraphClient(client_stub)
+    query_data(client)
+
+    client_stub.close()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        print('Error: {}'.format(e))
+
+</code></pre>
