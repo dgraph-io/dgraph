@@ -214,7 +214,6 @@ func getAlpha(idx int) service {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
 	if opts.Enterprise {
-		svc.Command += " --enterprise_features"
 		if opts.AclSecret != "" {
 			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
 			svc.Volumes = append(svc.Volumes, volume{
