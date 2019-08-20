@@ -265,8 +265,9 @@ const queryUser = `
 
 // authorizeUser queries the user with the given user id, and returns the associated uid,
 // acl groups, and whether the password stored in DB matches the supplied password
-func authorizeUser(ctx context.Context, userid string, password string) (*acl.User,
-	error) {
+func authorizeUser(ctx context.Context, userid string, password string) (
+	*acl.User, error) {
+
 	queryVars := map[string]string{
 		"$userid":   userid,
 		"$password": password,
@@ -276,7 +277,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (*acl.Us
 		Vars:  queryVars,
 	}
 
-	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+	queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, false)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -310,7 +311,7 @@ func RefreshAcls(closer *y.Closer) {
 
 		ctx := context.Background()
 		var err error
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, false)
 		if err != nil {
 			return errors.Errorf("unable to retrieve acls: %v", err)
 		}
@@ -362,7 +363,7 @@ func ResetAcl() {
 			Vars:  queryVars,
 		}
 
-		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest)
+		queryResp, err := (&Server{}).doQuery(ctx, &queryRequest, false)
 		if err != nil {
 			return errors.Wrapf(err, "while querying user with id %s", x.GrootId)
 		}
@@ -379,13 +380,15 @@ func ResetAcl() {
 
 		// Insert Groot.
 		createUserNQuads := acl.CreateUserNQuads(x.GrootId, "password")
-		mu := &api.Mutation{
+		req := &api.Request{
 			StartTs:   startTs,
 			CommitNow: true,
-			Set:       createUserNQuads,
+			Mutations: []*api.Mutation{
+				&api.Mutation{Set: createUserNQuads},
+			},
 		}
 
-		if _, err := (&Server{}).doMutate(context.Background(), mu, false); err != nil {
+		if _, err := (&Server{}).doMutate(context.Background(), req, false); err != nil {
 			return err
 		}
 		glog.Infof("Successfully upserted the groot account")
