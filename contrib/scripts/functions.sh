@@ -35,7 +35,6 @@ function restartCluster() {
 function applyLicense() {
   n=0
   until [ $n -ge 5 ]; do
-    echo "$DUMMY_VAR"
     echo "Applying license to Zero"
     status_code=$(curl -X POST --write-out "%{http_code}\n" --silent --output /dev/null http://localhost:6180/enterpriseLicense \
       --header 'Content-Type: application/json' \
