@@ -576,10 +576,6 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 		return l, nil
 	}
 
-	// if err := authorizeQuery(ctx, req); err != nil {
-	// 	return nil, err
-	// }
-
 	mu := req.Mutations[0]
 	upsertQuery := req.Query
 	needVars := findVars(gmu)
@@ -621,6 +617,10 @@ func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	}
 	if err := validateQuery(parsedReq.Query); err != nil {
 		return nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
+	}
+
+	if err := authorizeQuery(ctx, &parsedReq); err != nil {
+		return nil, err
 	}
 
 	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: req.StartTs}
@@ -771,16 +771,32 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize bool) 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	startTime := time.Now()
+
+	ctx, span := otrace.StartSpan(ctx, methodQuery)
+	span.Annotatef(nil, "Query received: %v", req)
+
+	var l query.Latency
+	l.Start = time.Now()
+	parsedReq, err := gql.Parse(gql.Request{
+		Str:       req.Query,
+		Variables: req.Vars,
+	})
+	l.Parsing += time.Since(l.Start)
+	if err != nil {
+		return resp, err
+	}
+
+	if err = validateQuery(parsedReq.Query); err != nil {
+		return resp, err
+	}
 
 	if authorize {
-		if err := authorizeQuery(ctx, req); err != nil {
+		if err := authorizeQuery(ctx, &parsedReq); err != nil {
 			return nil, err
 		}
 	}
 
 	var measurements []ostats.Measurement
-	ctx, span := otrace.StartSpan(ctx, methodQuery)
 	ctx = x.WithMethod(ctx, methodQuery)
 	defer func() {
 		span.End()
@@ -789,7 +805,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize bool) 
 			v = x.TagValueStatusError
 		}
 		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-		timeSpentMs := x.SinceMs(startTime)
+		timeSpentMs := x.SinceMs(l.Start)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
 	}()
@@ -807,22 +823,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize bool) 
 	if len(req.Query) == 0 {
 		span.Annotate(nil, "Empty query")
 		return resp, errors.Errorf("Empty query")
-	}
-
-	var l query.Latency
-	l.Start = time.Now()
-	span.Annotatef(nil, "Query received: %v", req)
-
-	parsedReq, err := gql.Parse(gql.Request{
-		Str:       req.Query,
-		Variables: req.Vars,
-	})
-	if err != nil {
-		return resp, err
-	}
-
-	if err = validateQuery(parsedReq.Query); err != nil {
-		return resp, err
 	}
 
 	var queryRequest = query.Request{

@@ -384,7 +384,9 @@ func ResetAcl() {
 			StartTs:   startTs,
 			CommitNow: true,
 			Mutations: []*api.Mutation{
-				&api.Mutation{Set: createUserNQuads},
+				{
+					Set: createUserNQuads,
+				},
 			},
 		}
 
@@ -661,23 +663,15 @@ func logAccess(log *accessEntry) {
 }
 
 //authorizeQuery authorizes the query using the aclCachePtr
-func authorizeQuery(ctx context.Context, req *api.Request) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	if len(Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
 	}
 
-	parsedReq, err := gql.Parse(gql.Request{
-		Str:       req.Query,
-		Variables: req.Vars,
-	})
-	if err != nil {
-		return err
-	}
-	preds := parsePredsFromQuery(parsedReq.Query)
-
 	var userId string
 	var groupIds []string
+	preds := parsePredsFromQuery(parsedReq.Query)
 	doAuthorizeQuery := func() error {
 		userData, err := extractUserAndGroups(ctx)
 		if err == nil {
@@ -713,7 +707,7 @@ func authorizeQuery(ctx context.Context, req *api.Request) error {
 		return nil
 	}
 
-	err = doAuthorizeQuery()
+	err := doAuthorizeQuery()
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
