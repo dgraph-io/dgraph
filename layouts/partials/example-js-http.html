@@ -8,10 +8,8 @@
 
 <pre><code class="no-copy" tabindex="-1">const dgraph = require("dgraph-js-http");
 
-const DGRAPH = process.env.DGRAPH || "http://localhost:8080";
-
 async function main() {
-  const clientStub = new dgraph.DgraphClientStub(DGRAPH);
+  const clientStub = new dgraph.DgraphClientStub("http://localhost:8080");
   const dgraphClient = new dgraph.DgraphClient(clientStub);
   const query = `<span class="query-content">{{ .Code }}</span>`;
 {{ if eq .Vars nil }}

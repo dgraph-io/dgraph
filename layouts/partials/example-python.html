@@ -10,8 +10,6 @@
 import pydgraph
 import json
 
-DGRAPH = os.getenv('DGRAPH', 'localhost:9080')
-
 def query_data(client):
 
     query = """<span class="query-content">{{ .Code }}</span>"""
@@ -23,10 +21,10 @@ def query_data(client):
     res = client.txn(read_only=True).query(query, variables=variables)
 {{ end }}
 
-    print('Response: ', json.loads(res.json))
+    print('Response: {}'.format(json.loads(res.json)))
 
 def main():
-    client_stub = pydgraph.DgraphClientStub(DGRAPH)
+    client_stub = pydgraph.DgraphClientStub("localhost:9080")
     client = pydgraph.DgraphClient(client_stub)
     query_data(client)
 

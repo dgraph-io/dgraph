@@ -9,10 +9,8 @@
 <pre><code class="no-copy" tabindex="-1">const dgraph = require("dgraph-js");
 const grpc = require("grpc");
 
-const DGRAPH = process.env.DGRAPH || "localhost:9080";
-
 async function main() {
-  const clientStub = new dgraph.DgraphClientStub(DGRAPH, grpc.credentials.createInsecure());
+  const clientStub = new dgraph.DgraphClientStub("localhost:9080", grpc.credentials.createInsecure());
   const dgraphClient = new dgraph.DgraphClient(clientStub);
   const query = `<span class="query-content">{{ .Code }}</span>`;
 {{ if eq .Vars nil }}
