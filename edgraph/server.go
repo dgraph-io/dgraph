@@ -75,6 +75,14 @@ type ServerState struct {
 	needTs chan tsReq
 }
 
+const (
+	// NeedAuthorize is used to indicate that the request needs to be authorized.
+	NeedAuthorize = iota
+	// NoAuthorize is used to indicate that authorization needs to be skipped.
+	// Used when ACL needs to query information for performing the authorization check.
+	NoAuthorize
+)
+
 // State is the instance of ServerState used by the current server.
 var State ServerState
 
@@ -419,24 +427,24 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 	span.Annotate([]otrace.Attribute{otrace.Int64Attribute("startTs", int64(ts))}, "")
 }
 
-// Mutate handles requests to perform mutations.
-func (s *Server) Mutate(ctx context.Context, mu *api.Mutation) (*api.Assigned, error) {
-	return s.doMutate(ctx, mu, true)
-}
-
-func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool) (
-	resp *api.Assigned, rerr error) {
+func (s *Server) doMutate(ctx context.Context, req *api.Request, authorize int) (
+	resp *api.Response, rerr error) {
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+
+	if len(req.Mutations) != 1 {
+		return nil, errors.Errorf("Only 1 mutation per request is supported")
+	}
+	mu := req.Mutations[0]
 
 	if !isMutationAllowed(ctx) {
 		return resp, errors.Errorf("No mutations allowed.")
 	}
 
 	var parsingTime time.Duration
-	resp = &api.Assigned{}
+	resp = &api.Response{}
 
 	start := time.Now()
 	defer func() {
@@ -466,7 +474,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	}
 
 	ostats.Record(ctx, x.NumMutations.M(1))
-	if mu.Query != "" {
+	if req.Query != "" {
 		span.Annotatef(nil, "Got Mutation with Upsert Block: %s", mu)
 	}
 	if len(mu.SetJson) > 0 {
@@ -482,7 +490,7 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	}
 	parsingTime += time.Since(startParsingTime)
 
-	if authorize {
+	if authorize == NeedAuthorize {
 		if err := authorizeMutation(ctx, gmu); err != nil {
 			return resp, err
 		}
@@ -493,12 +501,12 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		return resp, errors.Errorf("Empty mutation")
 	}
 
-	if mu.StartTs == 0 {
-		mu.StartTs = State.getTimestamp(false)
+	if req.StartTs == 0 {
+		req.StartTs = State.getTimestamp(false)
 	}
-	annotateStartTs(span, mu.StartTs)
+	annotateStartTs(span, req.StartTs)
 
-	l, err := doQueryInUpsert(ctx, mu, gmu)
+	l, err := doQueryInUpsert(ctx, req, gmu)
 	if err != nil {
 		return resp, err
 	}
@@ -514,11 +522,11 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		return resp, err
 	}
 
-	m := &pb.Mutations{Edges: edges, StartTs: mu.StartTs}
+	m := &pb.Mutations{Edges: edges, StartTs: req.StartTs}
 	span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Context, err = query.ApplyMutations(ctx, m)
-	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Context, err)
-	if !mu.CommitNow {
+	resp.Txn, err = query.ApplyMutations(ctx, m)
+	span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+	if !req.CommitNow {
 		if err == y.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
 		}
@@ -531,12 +539,12 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 		// ApplyMutations failed. We now want to abort the transaction,
 		// ignoring any error that might occur during the abort (the user would
 		// care more about the previous error).
-		if resp.Context == nil {
-			resp.Context = &api.TxnContext{StartTs: mu.StartTs}
+		if resp.Txn == nil {
+			resp.Txn = &api.TxnContext{StartTs: req.StartTs}
 		}
 
-		resp.Context.Aborted = true
-		_, _ = worker.CommitOverNetwork(ctx, resp.Context)
+		resp.Txn.Aborted = true
+		_, _ = worker.CommitOverNetwork(ctx, resp.Txn)
 
 		if err == y.ErrConflict {
 			// We have already aborted the transaction, so the error message should reflect that.
@@ -547,36 +555,37 @@ func (s *Server) doMutate(ctx context.Context, mu *api.Mutation, authorize bool)
 	}
 
 	span.Annotatef(nil, "Prewrites err: %v. Attempting to commit/abort immediately.", err)
-	ctxn := resp.Context
+	ctxn := resp.Txn
 	// zero would assign the CommitTs
 	cts, err := worker.CommitOverNetwork(ctx, ctxn)
 	span.Annotatef(nil, "Status of commit at ts: %d: %v", ctxn.StartTs, err)
 	if err != nil {
 		if err == y.ErrAborted {
 			err = status.Errorf(codes.Aborted, err.Error())
-			resp.Context.Aborted = true
+			resp.Txn.Aborted = true
 		}
 
 		return resp, err
 	}
 
 	// CommitNow was true, no need to send keys.
-	resp.Context.Keys = resp.Context.Keys[:0]
-	resp.Context.CommitTs = cts
+	resp.Txn.Keys = resp.Txn.Keys[:0]
+	resp.Txn.CommitTs = cts
 
 	return resp, nil
 }
 
 // doQueryInUpsert processes the query in upsert block.
-func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
+func doQueryInUpsert(ctx context.Context, req *api.Request, gmu *gql.Mutation) (
 	*query.Latency, error) {
 
 	l := &query.Latency{}
-	if mu.Query == "" {
+	if req.Query == "" {
 		return l, nil
 	}
 
-	upsertQuery := mu.Query
+	mu := req.Mutations[0]
+	upsertQuery := req.Query
 	needVars := findVars(gmu)
 	isCondUpsert := strings.TrimSpace(mu.Cond) != ""
 	varName := fmt.Sprintf("__dgraph%d__", rand.Int())
@@ -600,7 +609,7 @@ func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
 		// The variable __dgraph0__ will -
 		//      * be empty if the condition is true
 		//      * have 1 UID (the 0 UID) if the condition is false
-		upsertQuery = strings.TrimSuffix(strings.TrimSpace(mu.Query), "}")
+		upsertQuery = strings.TrimSuffix(strings.TrimSpace(req.Query), "}")
 		upsertQuery += varName + ` as var(func: uid(0)) ` + cond + `}`
 		needVars = append(needVars, varName)
 	}
@@ -618,7 +627,11 @@ func doQueryInUpsert(ctx context.Context, mu *api.Mutation, gmu *gql.Mutation) (
 		return nil, errors.Wrapf(err, "while validating query: %q", upsertQuery)
 	}
 
-	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: mu.StartTs}
+	if err := authorizeQuery(ctx, &parsedReq); err != nil {
+		return nil, err
+	}
+
+	qr := query.Request{Latency: l, GqlQuery: &parsedReq, ReadTs: req.StartTs}
 	if err := qr.ProcessQuery(ctx); err != nil {
 		return nil, errors.Wrapf(err, "while processing query: %q", upsertQuery)
 	}
@@ -751,19 +764,18 @@ func updateMutations(gmu *gql.Mutation, varToUID map[string][]string) {
 
 // Query handles queries and returns the data.
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	if err := authorizeQuery(ctx, req); err != nil {
-		return nil, err
-	}
-	if glog.V(3) {
-		glog.Infof("Got a query: %+v", req)
+	if len(req.Mutations) > 0 {
+		return s.doMutate(ctx, req, NeedAuthorize)
 	}
 
-	return s.doQuery(ctx, req)
+	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Response, rerr error) {
+func (s *Server) doQuery(ctx context.Context, req *api.Request, authorize int) (
+	resp *api.Response, rerr error) {
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -813,6 +825,12 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request) (resp *api.Respo
 
 	if err = validateQuery(parsedReq.Query); err != nil {
 		return resp, err
+	}
+
+	if authorize == NeedAuthorize {
+		if err := authorizeQuery(ctx, &parsedReq); err != nil {
+			return nil, err
+		}
 	}
 
 	var queryRequest = query.Request{
