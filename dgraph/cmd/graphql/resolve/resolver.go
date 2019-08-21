@@ -146,7 +146,10 @@ func (r *RequestResolver) Resolve(ctx context.Context) *schema.Response {
 		Tracing:   trace,
 	}
 
-	op, err := r.Schema.Operation(r.GqlReq)
+	op, err := r.Schema.Operation(
+		r.GqlReq,
+		timers.NewOffsetTimer(&trace.Parsing),
+		timers.NewOffsetTimer(&trace.Validation))
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}

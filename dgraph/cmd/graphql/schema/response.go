@@ -77,8 +77,8 @@ type Trace struct {
 	// Duration in nanoseconds, relative to the request start, as an integer.
 	Duration int64 `json:"duration"`
 
-	Parsing    *OffsetDuration  `json:"parsing,omitempty"`
-	Validation *OffsetDuration  `json:"validation,omitempty"`
+	Parsing    OffsetDuration   `json:"parsing,omitempty"`
+	Validation OffsetDuration   `json:"validation,omitempty"`
 	Execution  []*ResolverTrace `json:"execution,omitempty"`
 }
 

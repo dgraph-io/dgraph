@@ -35,16 +35,24 @@ type Request struct {
 // schema s. If the request is GraphQL valid, it must contain a single valid
 // Operation.  If either the request is malformed or doesn't contain a valid
 // operation, all GraphQL errors encountered are returned.
-func (s schema) Operation(req *Request) (Operation, error) {
+func (s schema) Operation(
+	req *Request,
+	parsingTimer OffsetTimer,
+	validationTimer OffsetTimer) (Operation, error) {
+
 	if req == nil || req.Query == "" {
 		return nil, gqlerror.Errorf("no query string supplied in request")
 	}
 
+	parsingTimer.Start()
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: req.Query})
+	parsingTimer.Stop()
 	if gqlErr != nil {
 		return nil, gqlErr
 	}
 
+	validationTimer.Start()
+	defer validationTimer.Stop() // this time should also include variable validation
 	listErr := validator.Validate(s.schema, doc)
 	if len(listErr) != 0 {
 		return nil, listErr
