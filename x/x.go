@@ -124,7 +124,8 @@ func ShouldCrash(err error) bool {
 	errStr := grpc.ErrorDesc(err)
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
-		strings.Contains(errStr, "NO_ADDR")
+		strings.Contains(errStr, "NO_ADDR") ||
+		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED")
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.

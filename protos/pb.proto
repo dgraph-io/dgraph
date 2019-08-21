@@ -137,6 +137,13 @@ message Group {
 	uint64 checksum             = 4; // Stores a checksum.
 }
 
+message License {
+	string user = 1;
+	uint64 maxNodes = 2;
+	int64 expiryTs = 3;
+	bool enabled = 4;
+}
+
 message ZeroProposal {
 	map<uint32, uint64> snapshot_ts = 1; // Group ID -> Snapshot Ts.
 	Member member = 2;
@@ -147,6 +154,7 @@ message ZeroProposal {
 	api.TxnContext txn = 7;
 	string key = 8;  // Used as unique identifier for proposal id.
 	string cid = 9; // Used as unique identifier for the cluster.
+	License license = 10;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -161,6 +169,7 @@ message MembershipState {
 	uint64 maxRaftId = 6;
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
+	License license = 9;
 }
 
 message ConnectionState {

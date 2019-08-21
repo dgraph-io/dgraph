@@ -2879,6 +2879,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					gq.Var = varName
 					if alias != "" {
 						gq.UidCountAlias = alias
+						// This is a count(uid) node.
+						// Reset the alias here after assigning to UidCountAlias, so that siblings
+						// of this node don't get it.
+						alias = ""
 					}
 					it.Next()
 					it.Next()
