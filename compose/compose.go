@@ -67,7 +67,6 @@ type options struct {
 	NumAlphas     int
 	NumReplicas   int
 	LruSizeMB     int
-	Enterprise    bool
 	AclSecret     string
 	DataDir       string
 	DataVol       bool
@@ -215,17 +214,14 @@ func getAlpha(idx int) service {
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
-	if opts.Enterprise {
-		svc.Command += " --enterprise_features"
-		if opts.AclSecret != "" {
-			svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
-			svc.Volumes = append(svc.Volumes, volume{
-				Type:     "bind",
-				Source:   opts.AclSecret,
-				Target:   "/secret/hmac",
-				ReadOnly: true,
-			})
-		}
+	if opts.AclSecret != "" {
+		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   opts.AclSecret,
+			Target:   "/secret/hmac",
+			ReadOnly: true,
+		})
 	}
 
 	return svc
@@ -357,8 +353,6 @@ func main() {
 		"mount a docker volume as /data in containers")
 	cmd.PersistentFlags().StringVarP(&opts.DataDir, "data_dir", "d", "",
 		"mount a host directory as /data in containers")
-	cmd.PersistentFlags().BoolVarP(&opts.Enterprise, "enterprise", "e", false,
-		"enable enterprise features in alphas")
 	cmd.PersistentFlags().StringVar(&opts.AclSecret, "acl_secret", "",
 		"enable ACL feature with specified HMAC secret file")
 	cmd.PersistentFlags().BoolVarP(&opts.UserOwnership, "user", "u", false,
@@ -407,10 +401,6 @@ func main() {
 	}
 	if opts.LruSizeMB < 1024 {
 		fatal(errors.Errorf("LRU cache size must be >= 1024 MB"))
-	}
-	if opts.AclSecret != "" && !opts.Enterprise {
-		warning("adding --enterprise because it is required by ACL feature")
-		opts.Enterprise = true
 	}
 	if opts.DataVol && opts.DataDir != "" {
 		fatal(errors.Errorf("only one of --data_vol and --data_dir may be used at a time"))
