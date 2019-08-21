@@ -142,7 +142,7 @@ func (mr *mutationResolver) resolve(ctx context.Context) *resolved {
 
 func (mr *mutationResolver) resolveAddMutation(ctx context.Context) *resolved {
 	res := &resolved{}
-	res.trace = make([]*schema.ResolverTrace, 2)
+	res.trace = make([]*schema.ResolverTrace, 0, 2)
 	trace, timer := traceWithTimer(mr.timers, mr.mutation, "Mutation")
 	res.trace = append(res.trace, trace)
 	trace.Path = []interface{}{mr.mutation.ResponseName()}
@@ -249,7 +249,7 @@ func (mr *mutationResolver) resolveDeleteMutation(ctx context.Context) *resolved
 
 func (mr *mutationResolver) resolveUpdateMutation(ctx context.Context) *resolved {
 	res := &resolved{}
-	res.trace = make([]*schema.ResolverTrace, 2)
+	res.trace = make([]*schema.ResolverTrace, 0, 2)
 	trace, timer := traceWithTimer(mr.timers, mr.mutation, "Mutation")
 	res.trace = append(res.trace, trace)
 	trace.Path = []interface{}{mr.mutation.ResponseName()}
