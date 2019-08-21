@@ -23,7 +23,7 @@ import (
 
 // ParseMutation parses a block into a mutation. Returns an object with a mutation or
 // an upsert block with mutation, otherwise returns nil with an error.
-func ParseMutation(mutation string) (mu *api.Mutation, err error) {
+func ParseMutation(mutation string) (req *api.Request, err error) {
 	var lexer lex.Lexer
 	lexer.Reset(mutation)
 	lexer.Run(lexIdentifyBlock)
@@ -39,13 +39,15 @@ func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 	item := it.Item()
 	switch item.Typ {
 	case itemUpsertBlock:
-		if mu, err = parseUpsertBlock(it); err != nil {
+		if req, err = parseUpsertBlock(it); err != nil {
 			return nil, err
 		}
 	case itemLeftCurl:
-		if mu, err = parseMutationBlock(it); err != nil {
+		mu, err := parseMutationBlock(it)
+		if err != nil {
 			return nil, err
 		}
+		req = &api.Request{Mutations: []*api.Mutation{mu}}
 	default:
 		return nil, it.Errorf("Unexpected token: [%s]", item.Val)
 	}
@@ -55,12 +57,12 @@ func ParseMutation(mutation string) (mu *api.Mutation, err error) {
 		return nil, it.Errorf("Unexpected %s after the end of the block", it.Item().Val)
 	}
 
-	return mu, nil
+	return req, nil
 }
 
 // parseUpsertBlock parses the upsert block
-func parseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
-	var mu *api.Mutation
+func parseUpsertBlock(it *lex.ItemIterator) (*api.Request, error) {
+	var req *api.Request
 	var queryText, condText string
 	var queryFound, condFound bool
 
@@ -80,13 +82,13 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 		switch {
 		// upsert {... ===>}<===
 		case item.Typ == itemRightCurl:
-			if mu == nil {
+			if req == nil {
 				return nil, it.Errorf("Empty mutation block")
 			} else if !queryFound {
 				return nil, it.Errorf("Query op not found in upsert block")
 			} else {
-				mu.Query = queryText
-				return mu, nil
+				req.Query = queryText
+				return req, nil
 			}
 
 		// upsert { mutation{...} ===>query<==={...}}
@@ -124,11 +126,12 @@ func parseUpsertBlock(it *lex.ItemIterator) (*api.Mutation, error) {
 			}
 
 			// upsert @if(...) ===>{<=== ....}
-			var err error
-			if mu, err = parseMutationBlock(it); err != nil {
+			mu, err := parseMutationBlock(it)
+			if err != nil {
 				return nil, err
 			}
 			mu.Cond = condText
+			req = &api.Request{Mutations: []*api.Mutation{mu}}
 
 		// upsert { mutation{...} ===>fragment<==={...}}
 		case item.Typ == itemUpsertBlockOp && item.Val == "fragment":

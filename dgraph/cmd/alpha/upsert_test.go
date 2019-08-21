@@ -1244,3 +1244,181 @@ upsert {
 	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.Contains(t, err.Error(), "Matching brackets not found")
 }
+
+func TestUpsertDeleteOnlyYourPost(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+content: string @index(exact) .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user2 <name> "user2" .
+    _:user3 <name> "user3" .
+    _:user4 <name> "user4" .
+
+    _:post1 <content> "post1" .
+    _:post1 <author> _:user1 .
+
+    _:post2 <content> "post2" .
+    _:post2 <author> _:user1 .
+
+    _:post3 <content> "post3" .
+    _:post3 <author> _:user2 .
+
+    _:post4 <content> "post4" .
+    _:post4 <author> _:user3 .
+
+    _:post5 <content> "post5" .
+    _:post5 <author> _:user3 .
+
+    _:post6 <content> "post6" .
+    _:post6 <author> _:user3 .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	// user2 trying to delete the post4
+	m2 := `
+upsert {
+  query {
+    var(func: eq(content, "post4")) {
+      p4 as uid
+      author {
+        n3 as name
+      }
+    }
+
+    u2 as var(func: eq(val(n3), "user2"))
+  }
+
+  mutation @if(eq(len(u2), 1)) {
+    delete {
+      uid(p4) <content> * .
+      uid(p4) <author> * .
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	// post4 must still exist
+	q2 := `
+{
+  post(func: eq(content, "post4")) {
+    content
+  }
+}`
+	res, _, err := queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Contains(t, res, "post4")
+
+	// user3 deleting the post4
+	m3 := `
+upsert {
+  query {
+    var(func: eq(content, "post4")) {
+      p4 as uid
+      author {
+        n3 as name
+      }
+    }
+
+    u4 as var(func: eq(val(n3), "user3"))
+  }
+
+  mutation @if(eq(len(u4), 1)) {
+    delete {
+      uid(p4) <content> * .
+      uid(p4) <author> * .
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	// post4 shouldn't exist anymore
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "post4")
+}
+
+func TestUpsertBulkUpdateBranch(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <branch> "Fuller Street, San Francisco" .
+
+    _:user2 <name> "user2" .
+    _:user2 <branch> "Fuller Street, San Francisco" .
+
+    _:user3 <name> "user3" .
+    _:user3 <branch> "Fuller Street, San Francisco" .
+  }
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	// Bulk Update: update everyone's branch
+	m2 := `
+upsert {
+  query {
+    u as var(func: has(branch))
+  }
+
+  mutation {
+    set {
+      uid(u) <branch> "Fuller Street, SF" .
+    }
+  }
+}`
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	q2 := `
+{
+  q(func: has(branch)) {
+    name
+    branch
+  }
+}`
+	res, _, err := queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "San Francisco")
+	require.Contains(t, res, "user1")
+	require.Contains(t, res, "user2")
+	require.Contains(t, res, "user3")
+	require.Contains(t, res, "Fuller Street, SF")
+
+	// Bulk Delete: delete everyone's branch
+	m3 := `
+  upsert {
+    query {
+      u as var(func: has(branch))
+    }
+
+    mutation {
+      delete {
+        uid(u) <branch> * .
+      }
+    }
+  }`
+	_, _, _, err = mutationWithTs(m3, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+
+	res, _, err = queryWithTs(q2, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "San Francisco")
+	require.NotContains(t, res, "Fuller Street, SF")
+}
