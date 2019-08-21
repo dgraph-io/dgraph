@@ -331,7 +331,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
-			return val, found, emptyCountParams, err
+			return val, false, emptyCountParams, err
 		}
 	}
 
