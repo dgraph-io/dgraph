@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -519,7 +520,7 @@ func (n *node) initAndStartNode() error {
 			proposal := &pb.ZeroProposal{
 				License: &pb.License{
 					MaxNodes: math.MaxUint64,
-					ExpiryTs: time.Now().Add(30 * 24 * time.Hour).Unix(),
+					ExpiryTs: time.Now().Add(humanize.Month).Unix(),
 				},
 			}
 			for {
@@ -550,11 +551,16 @@ func (n *node) updateEnterpriseStatePeriodically(closer *y.Closer) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
+	dailyTicker := time.NewTicker(humanize.Day)
+	defer dailyTicker.Stop()
+
 	n.server.updateEnterpriseState()
 	for {
 		select {
 		case <-ticker.C:
 			n.server.updateEnterpriseState()
+		case <-dailyTicker.C:
+			n.server.licenseExpiryWarning()
 		case <-closer.HasBeenClosed():
 			return
 		}
