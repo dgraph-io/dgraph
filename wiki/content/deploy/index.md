@@ -1244,6 +1244,8 @@ externally to new nodes during data ingestion.
 can remove it and add a new node to the quorum. This endpoint can be used to
 remove a dead Zero or Dgraph Alpha node. To remove dead Zero nodes, pass
 `group=0` and the id of the Zero node.
+* POST `/enterpriseLicense` This is used for applying the enterprise license (a signed PGP message)
+to the cluster.
 
 {{% notice "note" %}}
 Before using the API ensure that the node is down and ensure that it doesn't come back up ever again.

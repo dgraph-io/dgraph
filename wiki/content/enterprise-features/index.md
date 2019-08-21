@@ -9,8 +9,18 @@ Dgraph. If you wish to use enterprise features, please reach out via
 [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss
 forum](https://discuss.dgraph.io).
 
-Regular releases contain proprietary code for these features, and the features
-can enabled via the `--enterprise_features` flag.
+Regular releases contain proprietary code for these features, and the **features
+are enabled by default for 30 days in a new cluster**. After the trial period of
+30 days you must obtain a license from Dgraph to keep on using these features. The
+license can be applied to the cluster by including it as the body of a POST
+request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
+
+
+{{% notice "note" %}}
+Your cluster would keep on running as usual, only the enterprise features
+would stop working after the 30-day trial period.
+{{% /notice %}}
+
 
 [dcl]: https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
 
@@ -25,8 +35,8 @@ binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure backup
 
-To enable the backup feature, each Dgraph Alpha must run with the
-`--enterprise_features` flag enabled.
+To enable the backup feature, you must supply an appropriate license file to Zero or in the 30
+day trial period.
 
 #### Configure Amazon S3 credentials
 
@@ -171,14 +181,16 @@ forum](https://discuss.dgraph.io).
 by Alpha servers to sign JSON Web Tokens (JWT). As you’ve probably guessed, it’s critical to keep
 the secret key as a secret. Another requirement for the secret key is that it must have at least 256-bits, i.e. 32 ASCII characters, as we are using HMAC-SHA256 as the signing algorithm.
 
-3. Start all the alpha servers in your cluster with the
-options `--enterprise_features` and `--acl_secret_file`, and make sure they are all using the same
-secret key file created in Step 2.
+3. Start all the alpha servers in your cluster with the option `--acl_secret_file`, and make sure
+they are all using the same secret key file created in Step 2.
+
+4. You must also obtain the appropriate license from Dgraph Labs Inc. and apply it to the cluster
+using an HTTP endpoint on Zero to use these features after the expiry of the 30 day trial period.
 
 Here is an example that starts one zero server and one alpha server with the ACL feature turned on:
 ```
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1 --bindall --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2
-dgraph alpha --enterprise_features --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr -v=3 --acl_secret_file ./hmac-secret
+dgraph alpha --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080 --logtostderr -v=3 --acl_secret_file ./hmac-secret
 ```
 
 If you are using docker-compose, a sample cluster can be set up by:
