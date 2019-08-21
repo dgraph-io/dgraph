@@ -10,15 +10,16 @@ Dgraph. If you wish to use enterprise features, please reach out via
 forum](https://discuss.dgraph.io).
 
 Regular releases contain proprietary code for these features, and the **features
-are enabled by default for 30 days in a new cluster**. After the trial period of
-30 days you must obtain a license from Dgraph to keep on using these features. The
-license can be applied to the cluster by including it as the body of a POST
-request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
+are enabled by default for 30 days in a new cluster**. After the trial period of thirty (30) days,
+the cluster must obtain a license from Dgraph to continue enjoying the enterprise features
+released in the proprietary code. The license can be applied to the cluster by including it
+as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
 
 
 {{% notice "note" %}}
-Your cluster would keep on running as usual, only the enterprise features
-would stop working after the 30-day trial period.
+At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
+access to the enterprise features will be suspended. The cluster will continue to operate without
+enterprise features.
 {{% /notice %}}
 
 
@@ -35,8 +36,8 @@ binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure backup
 
-To enable the backup feature, you must supply an appropriate license file to Zero or in the 30
-day trial period.
+Backup is only enabled when a valid license file is supplied to a Zero server OR within the thirty
+(30) day trial period, no exceptions.
 
 #### Configure Amazon S3 credentials
 
