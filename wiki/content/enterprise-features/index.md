@@ -4,16 +4,16 @@ title = "Enterprise Features"
 +++
 
 Dgraph enterprise features are proprietary licensed under the [Dgraph Community
-License][dcl]. These features are available with an enterprise contract from
-Dgraph. If you wish to use enterprise features, please reach out via
+License][dcl]. All Dgraph releases contain proprietary code for enterprise features.
+Enabling these features requires an enterprise contract from
 [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss
 forum](https://discuss.dgraph.io).
 
-Regular releases contain proprietary code for these features, and the **features
-are enabled by default for 30 days in a new cluster**. After the trial period of thirty (30) days,
-the cluster must obtain a license from Dgraph to continue enjoying the enterprise features
-released in the proprietary code. The license can be applied to the cluster by including it
-as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
+**Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
+After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
+continue enjoying the enterprise features released in the proprietary code. The license can
+be applied to the cluster by including it as the body of a POST request and calling
+`/enterpriseLicense` HTTP endpoint on any Zero server.
 
 
 {{% notice "note" %}}
@@ -176,7 +176,7 @@ The ACL Feature can be turned on by following these steps
 
 1. Since ACL is an enterprise feature, make sure your use case is covered under a contract with Dgraph Labs Inc.
 You can contact us by sending an email to [contact@dgraph.io](mailto:contact@dgraph.io) or post your request at [our discuss
-forum](https://discuss.dgraph.io).
+forum](https://discuss.dgraph.io) to get an enterprise license.
 
 2. Create a plain text file, and store a randomly generated secret key in it. The secret key is used
 by Alpha servers to sign JSON Web Tokens (JWT). As you’ve probably guessed, it’s critical to keep
@@ -184,9 +184,6 @@ the secret key as a secret. Another requirement for the secret key is that it mu
 
 3. Start all the alpha servers in your cluster with the option `--acl_secret_file`, and make sure
 they are all using the same secret key file created in Step 2.
-
-4. You must also obtain the appropriate license from Dgraph Labs Inc. and apply it to the cluster
-using an HTTP endpoint on Zero to use these features after the expiry of the 30 day trial period.
 
 Here is an example that starts one zero server and one alpha server with the ACL feature turned on:
 ```
