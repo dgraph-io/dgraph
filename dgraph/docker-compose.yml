@@ -221,7 +221,7 @@ services:
     restart: on-failure
     labels:
       cluster: test
-    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 
+    command: /gobin/dgraph graphql init --schema /schema/e2e_test_schema.txt --alpha alpha1:9180 -v3
  
   graphql:
     image: dgraph/dgraph:latest

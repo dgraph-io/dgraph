@@ -19,6 +19,7 @@ package graphql
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -167,7 +168,7 @@ func TestGraphQLMutation(t *testing.T) {
 					},
 				},
 			},
-			queryType: QUERY,
+			queryType: MUTATION,
 			explain:   "Send Mutation to the GraphQL server and verify response data",
 			wantCode:  200,
 			wantResult: MessageMutation{
@@ -193,7 +194,7 @@ func TestGraphQLMutation(t *testing.T) {
 					},
 				},
 			},
-			queryType: QUERY,
+			queryType: MUTATION,
 			explain: "Add data with Mutation and verify return data." +
 				" Time is set to 2019-08-08T05:04:33Z format",
 			wantCode: 200,
@@ -220,7 +221,7 @@ func TestGraphQLMutation(t *testing.T) {
 					},
 				},
 			},
-			queryType: QUERY,
+			queryType: MUTATION,
 			explain: "The mutation name is invalid. Will be checking for " +
 				"valid error response when the mutation function doesn't of given name doesn't exist",
 			wantCode: 200,
@@ -245,26 +246,22 @@ func TestGraphQLMutation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Construct the post request body for the GraphQL request.
 			d2, err := json.Marshal(test.graphqlReq)
-
 			require.NoError(t, err)
 
 			buf := bytes.NewBuffer(d2)
 			// Send the request to the GraphQL server running at "graphqlURL".
 			req, err := http.NewRequest("POST", graphqlURL, buf)
-
 			require.NoError(t, err)
 
 			req.Header.Set("Content-Type", "application/json")
 			client := &http.Client{}
 			resp, err := client.Do(req)
-
 			require.NoError(t, err)
 
 			// read the response body.
 			bodyBytes, err := ioutil.ReadAll(resp.Body)
-
+			fmt.Println(string(bodyBytes))
 			require.NoError(t, err)
-
 			// Parse the response from the GraphQL server.
 			var graphqlResponse GraphqlResponse
 			err = json.Unmarshal(bodyBytes, &graphqlResponse)
@@ -273,26 +270,6 @@ func TestGraphQLMutation(t *testing.T) {
 			// Verify the response status code.
 			require.Equal(t, test.wantCode, resp.StatusCode)
 
-			// validate the result only when a data is expected.
-			// For erroneous cases, data is not returned.
-			if !test.isErr {
-				var mutationResponse MessageMutation
-				err = json.Unmarshal(graphqlResponse.Data, &mutationResponse)
-				require.NoError(t, err)
-				// Verify that the response data exist and
-				// the GraphQL mutation has returned UID of the node from Dgraph.
-				require.NotEmpty(t, mutationResponse.AddMessage.Message.ID)
-
-				// Since the node ID is generated after the mutation,
-				// we cannot have it before hand in the expected data.
-				// We fetch it from the response json of the mutation.
-				test.wantResult.AddMessage.Message.ID =
-					mutationResponse.AddMessage.Message.ID
-				// Match and verify the mutation response from the GraphQL server.
-				require.Equal(t, test.wantResult, mutationResponse, "Mutation response"+
-					" differs from the expected one.")
-			}
-
 			// Validate the error response for cases
 			// where error is expected.
 			// Explicitly adding if statement for readability.
@@ -300,7 +277,28 @@ func TestGraphQLMutation(t *testing.T) {
 				require.Equal(t, 1, len(graphqlResponse.Errors), "Expected error response"+
 					" differs from the actual one")
 				require.Equal(t, test.wantError, graphqlResponse.Errors)
+				// If the test case is to validate the error input,
+				// return after the error validation.
+				return
 			}
+
+			// validation of output for cases where
+			// successful mutation is expected.
+			var mutationResponse MessageMutation
+			err = json.Unmarshal(graphqlResponse.Data, &mutationResponse)
+			require.NoError(t, err)
+			// Verify that the response data exist and
+			// the GraphQL mutation has returned UID of the node from Dgraph.
+			require.NotEmpty(t, mutationResponse.AddMessage.Message.ID)
+
+			// Since the node ID is generated after the mutation,
+			// we cannot have it before hand in the expected data.
+			// We fetch it from the response json of the mutation.
+			test.wantResult.AddMessage.Message.ID =
+				mutationResponse.AddMessage.Message.ID
+			// Match and verify the mutation response from the GraphQL server.
+			require.Equal(t, test.wantResult, mutationResponse, "Mutation response"+
+				" differs from the expected one.")
 		})
 	}
 }
