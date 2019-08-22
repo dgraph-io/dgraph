@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
-
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/net/context"
 
@@ -272,45 +270,6 @@ func (s *Server) updateZeroLeader() {
 	leader := s.Node.Raft().Status().Lead
 	for _, m := range s.state.Zeros {
 		m.Leader = m.Id == leader
-	}
-}
-
-// updateEnterpriseState periodically checks the validity of the enterprise license
-// based on its expiry.
-func (s *Server) updateEnterpriseState() {
-	s.Lock()
-	defer s.Unlock()
-
-	// Return early if license is not enabled. This would happen when user didn't supply us a
-	// license file yet.
-	if s.state.GetLicense() == nil {
-		return
-	}
-
-	enabled := s.state.GetLicense().GetEnabled()
-	expiry := time.Unix(s.state.License.ExpiryTs, 0)
-	s.state.License.Enabled = time.Now().Before(expiry)
-	if enabled && !s.state.License.Enabled {
-		// License was enabled earlier and has just now been disabled.
-		glog.Infof("Enterprise license has expired and enterprise features would be disabled now. " +
-			"Talk to us at contact@dgraph.io to get a new license.")
-	}
-}
-
-// Prints out an info log about the expiry of the license if its about to expire in less than a
-// week.
-func (s *Server) licenseExpiryWarning() {
-	s.RLock()
-	defer s.RUnlock()
-
-	if s.state.GetLicense() == nil {
-		return
-	}
-	enabled := s.state.GetLicense().GetEnabled()
-	expiry := time.Unix(s.state.License.ExpiryTs, 0)
-	timeToExpire := expiry.Sub(time.Now())
-	if enabled && timeToExpire > 0 && timeToExpire < humanize.Week {
-		glog.Infof("Enterprise license is going to expire in %s.", humanize.Time(expiry))
 	}
 }
 

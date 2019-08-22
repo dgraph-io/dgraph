@@ -516,26 +516,7 @@ func (n *node) initAndStartNode() error {
 				time.Sleep(3 * time.Second)
 			}
 
-			// Apply enterprise license valid for 30 days from now.
-			proposal := &pb.ZeroProposal{
-				License: &pb.License{
-					MaxNodes: math.MaxUint64,
-					ExpiryTs: time.Now().Add(humanize.Month).Unix(),
-				},
-			}
-			for {
-				err := n.proposeAndWait(context.Background(), proposal)
-				if err == nil {
-					glog.Infof("Enterprise state proposed to the cluster: %v", proposal)
-					return
-				}
-				if err == errInvalidProposal {
-					glog.Errorf("invalid proposal error while proposing enteprise state")
-					return
-				}
-				glog.Errorf("While proposing enterprise state: %v. Retrying...", err)
-				time.Sleep(3 * time.Second)
-			}
+			n.proposeTrialLicense()
 		}()
 	}
 
