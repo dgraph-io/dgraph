@@ -1301,6 +1301,12 @@
 			"revisionTime": "2019-04-19T16:04:53Z"
 		},
 		{
+			"checksumSHA1": "dQG5zjp8kTNBcgGUkNsrXdacRjg=",
+			"path": "golang.org/x/crypto/openpgp",
+			"revision": "4def268fd1a49955bfb3dda92fe3db4f924f2285",
+			"revisionTime": "2019-07-01T08:59:26Z"
+		},
+		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",
 			"path": "golang.org/x/crypto/pbkdf2",
 			"revision": "22d7a77e9e5f409e934ed268692e56707cd169e5",
