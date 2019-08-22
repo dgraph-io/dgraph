@@ -13,10 +13,14 @@
 package zero
 
 import (
+	"bytes"
+	"io/ioutil"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -83,4 +87,36 @@ func (s *Server) licenseExpiryWarning() {
 	if enabled && timeToExpire > 0 && timeToExpire < humanize.Week {
 		glog.Infof("Enterprise license is going to expire in %s.", humanize.Time(expiry))
 	}
+}
+
+// applyEnterpriseLicense accepts a PGP message as a POST request body, verifies that it was
+// signed using our private key and applies the license which has maxNodes and Expiry to the
+// cluster.
+func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := st.zero.applyEnterpriseLicense(ctx, bytes.NewReader(b)); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	x.SetStatus(w, x.Success, "Done")
 }

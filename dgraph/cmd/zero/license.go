@@ -18,6 +18,8 @@
 
 package zero
 
+import "net/http"
+
 // dummy function as enterprise features are not available in oss binary.
 func (n *node) proposeTrialLicense() {
 	return
@@ -31,4 +33,8 @@ func (s *Server) updateEnterpriseState() {
 // dummy function as enterprise features are not available in oss binary.
 func (s *Server) licenseExpiryWarning() {
 	return
+}
+
+func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
 }
