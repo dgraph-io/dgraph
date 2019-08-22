@@ -35,8 +35,8 @@ type scalar struct {
 
 type directive struct {
 	directiveDefn  *ast.DirectiveDefinition
-	validationFunc func(typ *ast.Definition,
-		field *ast.FieldDefinition, dir *ast.Directive, sch *ast.Schema) *gqlerror.Error
+	validationFunc func(sch *ast.Schema, typ *ast.Definition,
+		field *ast.FieldDefinition, dir *ast.Directive) *gqlerror.Error
 }
 
 var supportedScalars = map[string]scalar{
@@ -104,7 +104,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 
 			for _, dir := range field.Directives {
 				errs = appendIfNotNull(errs,
-					supportedDirectives[dir.Name].validationFunc(typ, field, dir, schema))
+					supportedDirectives[dir.Name].validationFunc(schema, typ, field, dir))
 			}
 		}
 	}
@@ -471,13 +471,10 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 		return ""
 	}
 
-	direcArgs := make([]string, 0, len(direcs))
+	direcArgs := make([]string, len(direcs))
 
-	for _, dir := range direcs {
-		direcArgs = append(
-			direcArgs,
-			fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments)),
-		)
+	for idx, dir := range direcs {
+		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
 	}
 
 	return " " + strings.Join(direcArgs, " ")

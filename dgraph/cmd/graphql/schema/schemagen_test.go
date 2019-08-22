@@ -93,17 +93,21 @@ func TestSchemas(t *testing.T) {
 	err = yaml.Unmarshal(byts, &tests)
 	require.NoError(t, err, "Error Unmarshalling to yaml!")
 
-	for _, sch := range tests["invalid_schemas"] {
-		t.Run(sch.Name, func(t *testing.T) {
-			_, errlist := NewSchemaHandler(sch.Input)
-			require.Equal(t, sch.Errlist, errlist, sch.Name)
-		})
-	}
+	t.Run("Valid Schemas", func(t *testing.T) {
+		for _, sch := range tests["valid_schemas"] {
+			t.Run(sch.Name, func(t *testing.T) {
+				_, errlist := NewSchemaHandler(sch.Input)
+				require.NoError(t, errlist, sch.Name)
+			})
+		}
+	})
 
-	for _, sch := range tests["valid_schemas"] {
-		t.Run(sch.Name, func(t *testing.T) {
-			_, errlist := NewSchemaHandler(sch.Input)
-			require.NoError(t, errlist, sch.Name)
-		})
-	}
+	t.Run("Invalid Schemas", func(t *testing.T) {
+		for _, sch := range tests["invalid_schemas"] {
+			t.Run(sch.Name, func(t *testing.T) {
+				_, errlist := NewSchemaHandler(sch.Input)
+				require.Equal(t, errlist, sch.Errlist, sch.Name)
+			})
+		}
+	})
 }

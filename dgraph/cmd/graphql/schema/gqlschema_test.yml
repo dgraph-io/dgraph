@@ -96,8 +96,8 @@ invalid_schemas:
         f1: X @hasInverse(field: "f2")
       }
     errlist: [
-      {"message":"X.f1 have @hasInverse directive to P.f1, which doesn't point back to it.", "locations":[{"line":2, "column":10}]},
-      {"message":"P.f1 have @hasInverse directive to X.f2, which doesn't point back to it.", "locations":[{"line":6, "column":10}]},
+      {"message":"Type X; Field f1: @hasInverse is required in both the directions to link the fields, but field f1 of type P doesn't have @hasInverse directive pointing to field f1 of type X. To link these add @hasInverse in both directions.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type P; Field f1: @hasInverse is required in both the directions to link the fields, but field f2 of type X doesn't have @hasInverse directive pointing to field f1 of type P. To link these add @hasInverse in both directions.", "locations":[{"line":6, "column":10}]},
     ]
 
   -
@@ -107,7 +107,7 @@ invalid_schemas:
         f1: String @hasInverse(field: "f1")
       }
     errlist: [
-      {"message":"X.f1 is of type String, but @hasInverse directive isn't allowed on non object type field.", "locations":[{"line":2, "column":3}]},
+      {"message":"Type X; Field f1: Field f1 is of type String, but @hasInverse directive only applies to fields with object types.", "locations":[{"line":2, "column":3}]},
     ]
 
   -
@@ -117,7 +117,7 @@ invalid_schemas:
         f1: X @hasInverse
       }
     errlist: [
-      {"message":"hasInverse directive at X.f1 doesn't have field argument.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type X; Field f1: @hasInverse directive doesn't have field argument.", "locations":[{"line":2, "column":10}]},
     ]
 
   -
@@ -130,7 +130,7 @@ invalid_schemas:
         f1: String
       }
     errlist: [
-      {"message":"Unknown field P.f2, inverse field of X.f1(P.f2) doesn't exist.", "locations":[{"line":2, "column":14}]},
+      {"message":"Type X; Field f1: inverse field f2 doesn't exist for type P.", "locations":[{"line":2, "column":14}]},
     ]
 
 valid_schemas:
@@ -162,34 +162,4 @@ valid_schemas:
       }
       type Y {
         f1: [X] @hasInverse(field: "f1")
-      }
-
-  -
-    name: "hasInverse directive on list type 3"
-    input: |
-      type X {
-        f1: [Y!] @hasInverse(field: "f1")
-      }
-      type Y {
-        f1: [X] @hasInverse(field: "f1")
-      }
-
-  -
-    name: "hasInverse directive on list type 4"
-    input: |
-      type X {
-        f1: [Y!] @hasInverse(field: "f1")
-      }
-      type Y {
-        f1: X @hasInverse(field: "f1")
-      }
-
-  -
-    name: "hasInverse directive on list type 5"
-    input: |
-      type X {
-        f1: [Y!]! @hasInverse(field: "f1")
-      }
-      type Y {
-        f1: [X!]! @hasInverse(field: "f1")
       }

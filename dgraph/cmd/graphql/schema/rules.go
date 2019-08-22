@@ -120,15 +120,15 @@ func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
 	return nil
 }
 
-func hasInverseValidation(typ *ast.Definition, field *ast.FieldDefinition,
-	dir *ast.Directive, sch *ast.Schema) *gqlerror.Error {
+func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
+	field *ast.FieldDefinition, dir *ast.Directive) *gqlerror.Error {
 
 	invTypeName := field.Type.Name()
 	if sch.Types[invTypeName].Kind != ast.Object {
 		return gqlerror.ErrorPosf(
 			field.Position,
-			"%s.%s is of type %s, but @hasInverse directive isn't allowed"+
-				" on non object type field.", typ.Name, field.Name, invTypeName,
+			"Type %s; Field %s: Field %[2]s is of type %s, but @hasInverse directive only applies"+
+				" to fields with object types.", typ.Name, field.Name, invTypeName,
 		)
 	}
 
@@ -138,7 +138,7 @@ func hasInverseValidation(typ *ast.Definition, field *ast.FieldDefinition,
 		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"hasInverse directive at %s.%s doesn't have field argument.",
+			"Type %s; Field %s: @hasInverse directive doesn't have field argument.",
 			typ.Name, field.Name,
 		)
 	}
@@ -149,8 +149,8 @@ func hasInverseValidation(typ *ast.Definition, field *ast.FieldDefinition,
 	if invField == nil {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Unknown field %s.%s, inverse field of %s.%s(%[1]s.%[2]s) doesn't exist.",
-			invTypeName, invFieldName, typ.Name, field.Name,
+			"Type %s; Field %s: inverse field %s doesn't exist for type %s.",
+			typ.Name, field.Name, invFieldName, invTypeName,
 		)
 	}
 
@@ -158,8 +158,10 @@ func hasInverseValidation(typ *ast.Definition, field *ast.FieldDefinition,
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			// @TODO: Error message should be more informative.
-			"%s.%s have @hasInverse directive to %s.%s, which doesn't point back to it.",
-			typ.Name, field.Name, invTypeName, invFieldName,
+			"Type %s; Field %s: @hasInverse is required in both the directions to link the fields"+
+				", but field %s of type %s doesn't have @hasInverse directive pointing to field"+
+				" %[2]s of type %[1]s. To link these add @hasInverse in both directions.",
+			typ.Name, field.Name, invFieldName, invTypeName,
 		)
 	}
 
