@@ -1,4 +1,4 @@
-package bulkvalidator
+package validator
 
 import (
 	"fmt"
@@ -11,22 +11,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// BulkValidator is the sub-command for validating input files which can later be
-// used with bulk loader to insert data into dgraph.
-var BulkValidator x.SubCommand
+// Validator is the sub-command for validating input files which can later be
+// used with bulk/live loader to insert data into dgraph.
+var Validator x.SubCommand
 
 func init() {
-	BulkValidator.Cmd = &cobra.Command{
-		Use:   "bulk_validator",
+	Validator.Cmd = &cobra.Command{
+		Use:   "validator",
 		Short: "Validate input file",
 		Run: func(cmd *cobra.Command, args []string) {
-			defer x.StartProfile(BulkValidator.Conf).Stop()
+			defer x.StartProfile(Validator.Conf).Stop()
 			run()
 		},
 	}
-	BulkValidator.EnvPrefix = "BULK_VALIDATOR"
+	Validator.EnvPrefix = "VALIDATOR"
 
-	flag := BulkValidator.Cmd.Flags()
+	flag := Validator.Cmd.Flags()
 	flag.StringP("files", "f", "",
 		"Location of *.rdf(.gz) or *.json(.gz) files(s) to validate.")
 	flag.StringP("schema", "s", "",
@@ -39,10 +39,10 @@ func init() {
 
 func run() {
 	opt := options{
-		DataFiles:     BulkValidator.Conf.GetString("files"),
-		SchemaFile:    BulkValidator.Conf.GetString("schema"),
-		NumGoroutines: BulkValidator.Conf.GetInt("num_go_routines"),
-		DataFormat:    BulkValidator.Conf.GetString("format"),
+		DataFiles:     Validator.Conf.GetString("files"),
+		SchemaFile:    Validator.Conf.GetString("schema"),
+		NumGoroutines: Validator.Conf.GetInt("num_go_routines"),
+		DataFormat:    Validator.Conf.GetString("format"),
 	}
 
 	x.PrintVersion()

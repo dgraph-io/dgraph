@@ -1,4 +1,4 @@
-package bulkvalidator
+package validator
 
 import (
 	"fmt"
