@@ -158,8 +158,8 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	return string(output), startTs, err
 }
 
-func mutationWithTs(m, t string, isJson bool, commitNow bool, ignoreIndexConflict bool,
-	ts uint64) ([]string, []string, uint64, error) {
+func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
+	[]string, []string, uint64, error) {
 
 	params := make([]string, 2)
 	if ts != 0 {
@@ -313,7 +313,7 @@ func TestTransactionBasic(t *testing.T) {
 	}
 	`
 
-	keys, preds, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
+	keys, preds, mts, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 4, len(keys))
@@ -367,7 +367,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 4, len(keys))
@@ -413,7 +413,7 @@ func TestTransactionBasicOldCommitFormat(t *testing.T) {
 	}
 	`
 
-	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, true, ts)
+	keys, _, mts, err := mutationWithTs(m1, "application/rdf", false, false, ts)
 	require.NoError(t, err)
 	require.Equal(t, mts, ts)
 	require.Equal(t, 4, len(keys))
