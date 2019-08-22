@@ -1229,7 +1229,7 @@ Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
 * When a new Alpha joins the cluster, it is assigned a group based on the replication factor. If the replication factor is 1 then each Alpha node will serve different group. If replication factor is 2 and you launch 4 Alphas, then first two Alphas would serve group 1 and next two machines would serve group 2.
 * Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
-Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query (GET request) it
+Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query (**GET** request) it
 to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
@@ -1255,7 +1255,8 @@ You should not use the same `idx` of a node that was removed earlier.
   already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
 
 
-These are the POST endpoints available:
+These are the **POST** endpoints available:
+
 * `/enterpriseLicense` Use endpoint to apply an enterprise license to the cluster by supplying it
 as part of the body.
 
