@@ -84,7 +84,7 @@ func TestSchemaString(t *testing.T) {
 	}
 }
 
-func TestInvalidSchemas(t *testing.T) {
+func TestSchemas(t *testing.T) {
 	fileName := "gqlschema_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
@@ -93,13 +93,21 @@ func TestInvalidSchemas(t *testing.T) {
 	err = yaml.Unmarshal(byts, &tests)
 	require.NoError(t, err, "Error Unmarshalling to yaml!")
 
-	for _, schemas := range tests {
-		for _, sch := range schemas {
+	t.Run("Valid Schemas", func(t *testing.T) {
+		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-
 				_, errlist := NewSchemaHandler(sch.Input)
-				require.Equal(t, sch.Errlist, errlist, sch.Name)
+				require.NoError(t, errlist, sch.Name)
 			})
 		}
-	}
+	})
+
+	t.Run("Invalid Schemas", func(t *testing.T) {
+		for _, sch := range tests["invalid_schemas"] {
+			t.Run(sch.Name, func(t *testing.T) {
+				_, errlist := NewSchemaHandler(sch.Input)
+				require.Equal(t, errlist, sch.Errlist, sch.Name)
+			})
+		}
+	})
 }

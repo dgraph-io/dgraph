@@ -65,6 +65,7 @@ func NewSchemaHandler(input string) (SchemaHandler, error) {
 	}
 
 	addScalars(doc)
+	addDirectives(doc)
 
 	defns := make([]string, len(doc.Definitions))
 
