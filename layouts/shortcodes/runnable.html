@@ -19,6 +19,7 @@
                     <a class="language" data-action="nav-lang" data-target="python" href="#">Python</a>
                     <a class="language" data-action="nav-lang" data-target="js-grpc" href="#">JavaScript (gRPC)</a>
                     <a class="language" data-action="nav-lang" data-target="js-http" href="#">JavaScript (HTTP)</a>
+                    <a class="language" data-action="nav-lang" data-target="java" href="#">Java</a>
                     <a class="language" data-action="nav-lang" data-target="curl" href="#">Curl</a>
                   </nav>
                 </div>
@@ -73,6 +74,14 @@
             <div class="runnable-tab-content" data-tab="js-http">
               {{ partial "example-js-http" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
             </div>
+            <div class="runnable-tab-content" data-tab="java">
+              {{/*
+                TODO: Currently uncommented snippet will work but if any editing done on the query, it doesn't appear in Java example code.
+                {{ partial "example-java" ( dict "Content" . "Code" "blahblah" "Vars" ( .Get "vars" ) ) }}
+              */}}
+              {{ partial "example-java" ( dict "Content" . "Code" $code "Vars" ( .Get "vars" ) ) }}
+            </div>
+
           </div>
 
           <div class="row footer">
