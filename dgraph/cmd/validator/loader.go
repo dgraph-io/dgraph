@@ -2,13 +2,12 @@ package validator
 
 import (
 	"bytes"
-	"fmt"
 	"io"
-	"os"
 	"sync"
 
 	"github.com/dgraph-io/badger/y"
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/prometheus/common/log"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -58,23 +57,19 @@ func newLoader(opt options) *loader {
 func (ld *loader) mapStage() {
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
-		fmt.Println("No data files found in ", ld.opt.DataFiles)
-		os.Exit(1)
+		x.Fatalf("No data files found in %s\n", ld.opt.DataFiles)
 	}
 
 	loadType := chunker.DataFormat(files[0], ld.opt.DataFormat)
 	if loadType == chunker.UnknownFormat {
 		// Dont't try to detect JSON input in bulk loader.
-		fmt.Printf("Need --format=rdf or --format=json to load %s", files[0])
-		os.Exit(1)
+		x.Fatalf("Need --format=rdf or --format=json to load %s\n", files[0])
 	}
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
-		go func(m *mapper) {
-			m.run(loadType, &mapperWg)
-		}(m)
+		go m.run(loadType, &mapperWg)
 	}
 
 	thr := y.NewThrottle(ld.opt.NumGoroutines)
@@ -83,7 +78,7 @@ func (ld *loader) mapStage() {
 
 		go func(file string) {
 			defer thr.Done(nil)
-			fmt.Printf("Processing file %s\n", file)
+			log.Infof("Processing file %s\n", file)
 
 			r, cleanup := chunker.FileReader(file)
 			defer cleanup()
@@ -113,7 +108,7 @@ func (ld *loader) mapStage() {
 	mapperWg.Wait()
 
 	if !ld.foundError {
-		fmt.Println("No Errors found. All inputs files are valid.")
+		log.Infof("No Errors found. All inputs files are valid.\n")
 	}
 
 	for i := range ld.mappers {

@@ -21,9 +21,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
-	"github.com/dgraph-io/dgraph/dgraph/cmd/validator"
-
 	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/bulk"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/cert"
@@ -31,6 +28,8 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/counter"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/debug"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/live"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
+	"github.com/dgraph-io/dgraph/dgraph/cmd/validator"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/x"

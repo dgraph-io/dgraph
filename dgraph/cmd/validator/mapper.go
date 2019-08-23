@@ -1,10 +1,10 @@
 package validator
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/prometheus/common/log"
 )
 
 type mapper struct {
@@ -26,7 +26,7 @@ func (m *mapper) run(inputFormat chunker.InputFormat, wg *sync.WaitGroup) {
 		for chunkBuf := range m.readerChunkCh {
 			if err := chunker.Parse(chunkBuf.chunk); err != nil {
 				m.foundError = true
-				fmt.Println("Error Found in file ", chunkBuf.filename, ": ", err)
+				log.Errorf("Error Found in file %s: %s\n", chunkBuf.filename, err)
 			}
 
 		}
