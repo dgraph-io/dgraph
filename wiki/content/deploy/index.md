@@ -909,13 +909,13 @@ ip-172-20-61-73.us-west-2.compute.internal    Ready     node      2h        v1.8
 
 ### Single Server
 
-Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single.yaml) to start a Zero and Alpha.
+Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero and Alpha.
 
 * From your machine, run the following command to start a StatefulSet that
   creates a Pod with Zero and Alpha running in it.
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single.yaml
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
 ```
 
 Output:
@@ -989,12 +989,12 @@ ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8
 ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
 ```
 
-Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml) to start the cluster.
+Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml) to start the cluster.
 
 * From your machine, run the following command to start the cluster.
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha.yaml
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
 ```
 
 Output:
@@ -1201,7 +1201,7 @@ Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 to copy the data to the pod volume before the Alpha process runs.
 
 See the `initContainers` configuration in
-[dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha.yaml)
+[dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml)
 to learn more.
 
 ## More about Dgraph
@@ -1229,7 +1229,7 @@ Options present for `dgraph zero` can be seen by running `dgraph zero --help`.
 * When a new Alpha joins the cluster, it is assigned a group based on the replication factor. If the replication factor is 1 then each Alpha node will serve different group. If replication factor is 2 and you launch 4 Alphas, then first two Alphas would serve group 1 and next two machines would serve group 2.
 * Zero also monitors the space occupied by predicates in each group and moves them around to rebalance the cluster.
 
-Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query it
+Like Alpha, Zero also exposes HTTP on 6080 (+ any `--port_offset`). You can query (**GET** request) it
 to see useful information, like the following:
 
 * `/state` Information about the nodes that are part of the cluster. Also contains information about
@@ -1253,6 +1253,13 @@ You should not use the same `idx` of a node that was removed earlier.
 
 * `/moveTablet?tablet=name&group=2` This endpoint can be used to move a tablet to a group. Zero
   already does shard rebalancing every 8 mins, this endpoint can be used to force move a tablet.
+
+
+These are the **POST** endpoints available:
+
+* `/enterpriseLicense` Use endpoint to apply an enterprise license to the cluster by supplying it
+as part of the body.
+
 
 
 ## TLS configuration

@@ -84,3 +84,82 @@ invalid_schemas:
     errlist: [
       {"message":"You can't add union definitions. Only type and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
+
+  -
+    name: "Non linking inverse directives"
+    input: |
+      type X {
+        f1: P @hasInverse(field: "f1")
+        f2: String
+      }
+      type P {
+        f1: X @hasInverse(field: "f2")
+      }
+    errlist: [
+      {"message":"Type X; Field f1: @hasInverse is required in both the directions to link the fields, but field f1 of type P doesn't have @hasInverse directive pointing to field f1 of type X. To link these add @hasInverse in both directions.", "locations":[{"line":2, "column":10}]},
+      {"message":"Type P; Field f1: @hasInverse is required in both the directions to link the fields, but field f2 of type X doesn't have @hasInverse directive pointing to field f1 of type P. To link these add @hasInverse in both directions.", "locations":[{"line":6, "column":10}]},
+    ]
+
+  -
+    name: "Inverse Directive on non object field"
+    input: |
+      type X {
+        f1: String @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message":"Type X; Field f1: Field f1 is of type String, but @hasInverse directive only applies to fields with object types.", "locations":[{"line":2, "column":3}]},
+    ]
+
+  -
+    name: "Inverse Directive doesn't have field argument"
+    input: |
+      type X {
+        f1: X @hasInverse
+      }
+    errlist: [
+      {"message":"Type X; Field f1: @hasInverse directive doesn't have field argument.", "locations":[{"line":2, "column":10}]},
+    ]
+
+  -
+    name: "hasInverse on non existing field"
+    input: |
+      type X {
+        f1: [P!]! @hasInverse(field: "f2")
+      }
+      type P  {
+        f1: String
+      }
+    errlist: [
+      {"message":"Type X; Field f1: inverse field f2 doesn't exist for type P.", "locations":[{"line":2, "column":14}]},
+    ]
+
+valid_schemas:
+  -
+    name: "hasInverse directive on singleton"
+    input: |
+      type X {
+        f1: Y @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 1"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: X @hasInverse(field: "f1")
+      }
+
+  -
+    name: "hasInverse directive on list type 2"
+    input: |
+      type X {
+        f1: [Y] @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @hasInverse(field: "f1")
+      }

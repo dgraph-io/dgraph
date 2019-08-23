@@ -10,10 +10,7 @@ type AddPostPayload {
 }
 
 type Author {
-	id: ID!
-	name: String!
-	posts: [Post!]!
-	friends: [Author!]!
+	posts: [Post!]! @hasInverse(field: "author")
 }
 
 type DeleteAuthorPayload {
@@ -25,11 +22,7 @@ type DeletePostPayload {
 }
 
 type Post {
-	id: ID!
-	title: String!
-	text: String
-	author: Author!
-	postType: PostType!
+	author: Author! @hasInverse(field: "posts")
 }
 
 type UpdateAuthorPayload {
@@ -52,12 +45,6 @@ scalar String
 #######################
 # Enum Definitions
 #######################
-enum PostType {
-	Statement
-	Question
-	Answer
-}
-
 #######################
 # Input Definitions
 #######################
@@ -66,31 +53,14 @@ input AuthorFilter {
 }
 
 input AuthorInput {
-	name: String!
 	posts: [PostRef!]!
-	friends: [AuthorRef!]!
 }
 
 input AuthorRef {
-	id: ID!
 }
 
-input UpdateAuthorInput {
-	id: ID!
-	patch: PatchAuthor!
-}
-
-input PatchAuthor {
-	name: String
+input AuthorUpdate {
 	posts: [PostRef!]
-	friends: [AuthorRef!]
-}
-
-input PatchPost {
-	title: String
-	text: String
-	author: AuthorRef
-	postType: PostType
 }
 
 input PostFilter {
@@ -98,19 +68,14 @@ input PostFilter {
 }
 
 input PostInput {
-	title: String!
-	text: String
 	author: AuthorRef!
-	postType: PostType!
 }
 
 input PostRef {
-	id: ID!
 }
 
-input UpdatePostInput {
-	id: ID!
-	patch: PatchPost!
+input PostUpdate {
+	author: AuthorRef
 }
 
 #######################
