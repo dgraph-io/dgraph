@@ -74,7 +74,8 @@ type MessageMutation struct {
 	AddMessage addMessage `json:"addMessage"`
 }
 
-var graphqlURL = "http://localhost:9000/graphql"
+const graphqlURL = "http://localhost:9000/graphql"
+const dgraphAddr = "http://localhost:8180"
 
 type graphqlQueryType int32
 
@@ -123,6 +124,76 @@ func toSingleLine(graphqlBody string) string {
 	graphqlBody = strings.Replace(graphqlBody, "  ", "", -1)
 
 	return graphqlBody
+}
+
+// Types to parse the fetch schema query on Dgraph.
+type DgraphTypeField struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type DgraphType struct {
+	Fields []DgraphTypeField `json:"fields"`
+	Name   string            `json:"name"`
+}
+
+type SchemaData struct {
+	Types []DgraphType `json:"types"`
+}
+
+type SchemaResponse struct {
+	Data SchemaData `json:"data"`
+}
+
+// The Graphql layer autogenerates Dgraph DB schema
+// corresponding to the GraphQL schema that is used to initialize the layer.
+// This test verifies and validates the Dgraph schema with the expected value.
+func TestDgraphSchema(t *testing.T) {
+	// Expected Dgraph types.
+	want := SchemaData{
+		Types: []DgraphType{
+			DgraphType{
+				Fields: []DgraphTypeField{
+					DgraphTypeField{
+						Name: "Message.content",
+						Type: "string",
+					},
+					DgraphTypeField{
+						Name: "Message.author",
+						Type: "string",
+					},
+					DgraphTypeField{
+						Name: "Message.datePosted",
+						Type: "datetime",
+					},
+				},
+				Name: "Message",
+			},
+		},
+	}
+
+	// Query to fetch the database schema.
+	dgraphQuery := "schema {}"
+	contentType := "application/graphql+-"
+	url := dgraphAddr + "/query"
+	// Send the request to the GraphQL server running at "graphqlURL".
+	req, err := http.NewRequest("POST", url, bytes.NewBufferString(dgraphQuery))
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Type", contentType)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// read the response body.
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	// Parse the response from the GraphQL server.
+	var schemaData SchemaResponse
+	err = json.Unmarshal(bodyBytes, &schemaData)
+	require.NoError(t, err)
+	// Verify the response status code.
+	require.Equal(t, want, schemaData.Data)
 }
 
 // Runs mutations derived from the test schema.
