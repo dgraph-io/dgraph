@@ -57,7 +57,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return nil
 }
 
-func authorizeQuery(ctx context.Context, req *api.Request) error {
+func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	// always allow access
 	return nil
 }

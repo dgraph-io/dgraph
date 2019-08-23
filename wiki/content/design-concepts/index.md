@@ -56,8 +56,8 @@ might see X, then Z (and not see Y at all).
 Dgraph supports server-side sequencing of updates, which provides
 linearizability. Unlike sequential consistency which provides sequencing per
 client, this provide sequencing across all clients. This is necessary to make
-upserts work across clients. Thus, once a transaction is committed, it would be
-visible to all future readers, irrespective of client boundaries.
+transactions work across clients. Thus, once a transaction is committed,
+it would be visible to all future readers, irrespective of client boundaries.
 
 - **Causal consistency:** Dgraph does not have a concept of dependencies among transactions. So, does NOT order based on dependencies.
 - **Serializable consistency:** Dgraph does NOT allow arbitrary reordering of transactions, but does provide a linear order per key.
