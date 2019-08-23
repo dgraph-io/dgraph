@@ -2,11 +2,11 @@
 # Generated Types
 #######################
 type AddAuthorPayload {
-	author: Author!
+	author: Author
 }
 
 type AddPostPayload {
-	post: Post!
+	post: Post
 }
 
 type Author {
@@ -17,11 +17,11 @@ type Author {
 }
 
 type DeleteAuthorPayload {
-	msg: String!
+	msg: String
 }
 
 type DeletePostPayload {
-	msg: String!
+	msg: String
 }
 
 type Post {
@@ -33,11 +33,11 @@ type Post {
 }
 
 type UpdateAuthorPayload {
-	author: Author!
+	author: Author
 }
 
 type UpdatePostPayload {
-	post: Post!
+	post: Post
 }
 
 #######################
@@ -117,19 +117,19 @@ input UpdatePostInput {
 # Generated Query
 #######################
 type Query {
-	getPost(id: ID!): Post!
-	queryPost(filter: PostFilter!): [Post!]!
-	getAuthor(id: ID!): Author!
-	queryAuthor(filter: AuthorFilter!): [Author!]!
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter!): [Post!]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter!): [Author!]
 }
 #######################
 # Generated Mutations
 #######################
 type Mutation {
-	addPost(input: PostInput!): AddPostPayload!
+	addPost(input: PostInput!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(id: ID!): DeletePostPayload!
-	addAuthor(input: AuthorInput!): AddAuthorPayload!
+	deletePost(id: ID!): DeletePostPayload
+	addAuthor(input: AuthorInput!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(id: ID!): DeleteAuthorPayload!
+	deleteAuthor(id: ID!): DeleteAuthorPayload
 }
