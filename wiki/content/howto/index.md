@@ -620,6 +620,18 @@ if len(login.Account) == 0 {
 
 ## Upserts
 
+Consider the following example. Let's say we want to update age of a user
+in the database. To do this, we need to first query the UID of the user.
+We can now use the UID to update the age of the user. This whole operation
+requires us two network round trip to the database from the client, one
+for querying the UID and second for updating the age using the UID.
+
+There are many use cases where Upserts are required in order to ensure
+the consistency of the database such as one user for each email in the database,
+<MORE USE CASES!>.
+
+In general, Upsert-style operations are operations where:
+
 Upsert-style operations are operations where:
 
 1. A node is searched for, and then
