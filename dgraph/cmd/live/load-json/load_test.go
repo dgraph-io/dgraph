@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"

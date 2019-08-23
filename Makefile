@@ -21,6 +21,9 @@ BUILD_VERSION ?= $(shell git describe --always --tags)
 
 SUBDIRS = dgraph
 
+## Enable go mod
+export GO111MODULE=on
+
 ###############
 
 .PHONY: $(SUBDIRS) all oss version install install_oss oss_install uninstall test help

@@ -28,7 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	bpb "github.com/dgraph-io/badger/pb"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"

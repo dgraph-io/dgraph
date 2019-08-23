@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )

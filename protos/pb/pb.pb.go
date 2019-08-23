@@ -8,7 +8,7 @@ import (
 	encoding_binary "encoding/binary"
 	fmt "fmt"
 	pb "github.com/dgraph-io/badger/pb"
-	api "github.com/dgraph-io/dgo/v2/protos/api"
+	api "github.com/dgraph-io/dgo/protos/api"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"

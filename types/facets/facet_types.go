@@ -16,7 +16,7 @@
 
 package facets
 
-import "github.com/dgraph-io/dgo/v2/protos/api"
+import "github.com/dgraph-io/dgo/protos/api"
 
 const (
 	// IntID represents the integer type.
