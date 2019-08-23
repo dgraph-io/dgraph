@@ -24,7 +24,7 @@ public class DgraphMain {
         DgraphClient dgraphClient = new DgraphClient(Collections.singletonList(stub));
 
         {{/* TODO: Need to work on converting query logic to java compatible single line since java doesn't support multiline string literal. */}}
-        String query = "<span class="java-query">{{ replace (replace .Code "\n" "\\n") "\"" "\\\"" }}</span>"
+        String query = "<span class="java-query">{{ .Code }}</span>"
 
     {{ if eq .Vars nil }}
         Response res = dgraphClient.newTransaction().query(query);
