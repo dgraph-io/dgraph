@@ -233,7 +233,6 @@ func genAddResultType(defn *ast.Definition) *ast.Definition {
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
-					NonNull:   true,
 				},
 			},
 		},
@@ -249,7 +248,6 @@ func genUpdResultType(defn *ast.Definition) *ast.Definition {
 				Name: strings.ToLower(defn.Name),
 				Type: &ast.Type{
 					NamedType: defn.Name,
-					NonNull:   true,
 				},
 			},
 		},
@@ -265,7 +263,6 @@ func genDelResultType(defn *ast.Definition) *ast.Definition {
 				Name: "msg",
 				Type: &ast.Type{
 					NamedType: "String",
-					NonNull:   true,
 				},
 			},
 		},
@@ -278,7 +275,6 @@ func createGetFld(defn *ast.Definition) *ast.FieldDefinition {
 		Name:        "get" + defn.Name,
 		Type: &ast.Type{
 			NamedType: defn.Name,
-			NonNull:   true,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
@@ -297,7 +293,6 @@ func createQryFld(defn *ast.Definition) *ast.FieldDefinition {
 		Description: "Query " + defn.Name,
 		Name:        "query" + defn.Name,
 		Type: &ast.Type{
-			NonNull: true,
 			Elem: &ast.Type{
 				NamedType: defn.Name,
 				NonNull:   true,
@@ -328,7 +323,6 @@ func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
 		Name:        "add" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Add" + defn.Name + "Payload",
-			NonNull:   true,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
@@ -348,7 +342,6 @@ func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
 		Name:        "update" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Update" + defn.Name + "Payload",
-			NonNull:   false,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
@@ -368,7 +361,6 @@ func createDelFld(defn *ast.Definition) *ast.FieldDefinition {
 		Name:        "delete" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Delete" + defn.Name + "Payload",
-			NonNull:   true,
 		},
 		Arguments: []*ast.ArgumentDefinition{
 			&ast.ArgumentDefinition{
