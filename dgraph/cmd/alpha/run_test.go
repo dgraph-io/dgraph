@@ -133,12 +133,12 @@ func runJSONQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	return err
 }
 
 func runJSONMutation(m string) error {
-	_, _, _, err := mutationWithTs(m, "application/json", true, true, false, 0)
+	_, _, _, err := mutationWithTs(m, "application/json", true, true, 0)
 	return err
 }
 

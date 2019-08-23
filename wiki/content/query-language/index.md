@@ -2238,11 +2238,6 @@ This is how you specify the upsert directive for a predicate.
 email: string @index(exact) @upsert .
 ```
 
-{{% notice "note" %}}
-This replaces the `IgnoreIndexConflict` field which was part of the mutation
-object in previous releases.
-{{% /notice %}}
-
 ### RDF Types
 
 Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/index.md#language-and-rdf-types" >}}).
