@@ -127,9 +127,9 @@ type Query {
 #######################
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload!
-	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload!
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(id: ID!): DeletePostPayload!
 	addAuthor(input: AuthorInput!): AddAuthorPayload!
-	updateAuthor(id: ID!, input: AuthorUpdate): UpdateAuthorPayload!
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(id: ID!): DeleteAuthorPayload!
 }

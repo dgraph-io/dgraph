@@ -10,6 +10,7 @@ type AddPostPayload {
 }
 
 type Author {
+	id: ID!
 	posts: [Post!]! @hasInverse(field: "author")
 }
 
@@ -22,6 +23,7 @@ type DeletePostPayload {
 }
 
 type Post {
+	id: ID!
 	author: Author! @hasInverse(field: "posts")
 }
 
@@ -57,10 +59,20 @@ input AuthorInput {
 }
 
 input AuthorRef {
+	id: ID!
 }
 
-input AuthorUpdate {
+input UpdateAuthorInput {
+	id: ID!
+	patch: PatchAuthor!
+}
+
+input PatchAuthor {
 	posts: [PostRef!]
+}
+
+input PatchPost {
+	author: AuthorRef
 }
 
 input PostFilter {
@@ -72,10 +84,12 @@ input PostInput {
 }
 
 input PostRef {
+	id: ID!
 }
 
-input PostUpdate {
-	author: AuthorRef
+input UpdatePostInput {
+	id: ID!
+	patch: PatchPost!
 }
 
 #######################
@@ -92,9 +106,9 @@ type Query {
 #######################
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload!
-	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload!
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(id: ID!): DeletePostPayload!
 	addAuthor(input: AuthorInput!): AddAuthorPayload!
-	updateAuthor(id: ID!, input: AuthorUpdate): UpdateAuthorPayload!
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(id: ID!): DeleteAuthorPayload!
 }
