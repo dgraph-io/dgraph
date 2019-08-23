@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/y"
+	"github.com/dgraph-io/dgo/v2/y"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
