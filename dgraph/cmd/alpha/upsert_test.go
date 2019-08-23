@@ -1244,3 +1244,53 @@ upsert {
 	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
 	require.Contains(t, err.Error(), "Matching brackets not found")
 }
+
+func TestDeleteCountIndex(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+<game_answer>: uid @count @reverse .
+<name>: int @index(int) .`))
+
+	m1 := `
+{
+set {
+  _:1 <game_answer> _:2 .
+  _:1 <name> "1" .
+  _:2 <game_answer> _:3 .
+  _:2 <name> "2" .
+  _:4 <game_answer> _:2 .
+  _:3 <name> "3" .
+  _:4 <name> "4" .
+}
+}`
+
+	_, _, _, err := mutationWithTs(m1, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	m2 := `
+upsert {
+query {
+  u3 as var(func: eq(name, "3"))
+  u2 as var(func: eq(name, "2"))
+}
+
+mutation {
+  delete {
+      uid(u2) <game_answer> uid(u3) .
+  }
+}
+}`
+	_, _, _, err = mutationWithTs(m2, "application/rdf", false, true, true, 0)
+	require.NoError(t, err)
+
+	q1 := `
+{
+    me(func: eq(count(~game_answer), 1)) {
+      name
+      count(~game_answer)
+    }
+  }`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.NotContains(t, res, "count(~game_answer)")
+}
