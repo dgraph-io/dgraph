@@ -6,8 +6,8 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
