@@ -120,6 +120,74 @@ func listValidityCheck(field *ast.FieldDefinition) *gqlerror.Error {
 	return nil
 }
 
+func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
+	field *ast.FieldDefinition, dir *ast.Directive) *gqlerror.Error {
+
+	invTypeName := field.Type.Name()
+	if sch.Types[invTypeName].Kind != ast.Object {
+		return gqlerror.ErrorPosf(
+			field.Position,
+			"Type %s; Field %s: Field %[2]s is of type %s, but @hasInverse directive only applies"+
+				" to fields with object types.", typ.Name, field.Name, invTypeName,
+		)
+	}
+
+	invFieldArg := dir.Arguments.ForName("field")
+	if invFieldArg == nil {
+		// This check can be removed once gqlparser bug
+		// #107(https://github.com/vektah/gqlparser/issues/107) is fixed.
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: @hasInverse directive doesn't have field argument.",
+			typ.Name, field.Name,
+		)
+	}
+
+	invFieldName := invFieldArg.Value.Raw
+	invType := sch.Types[invTypeName]
+	invField := invType.Fields.ForName(invFieldName)
+	if invField == nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: inverse field %s doesn't exist for type %s.",
+			typ.Name, field.Name, invFieldName, invTypeName,
+		)
+	}
+
+	if !isInverse(typ.Name, field.Name, invField) {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			// @TODO: Error message should be more informative.
+			"Type %s; Field %s: @hasInverse is required in both the directions to link the fields"+
+				", but field %s of type %s doesn't have @hasInverse directive pointing to field"+
+				" %[2]s of type %[1]s. To link these add @hasInverse in both directions.",
+			typ.Name, field.Name, invFieldName, invTypeName,
+		)
+	}
+
+	return nil
+}
+
+func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinition) bool {
+
+	invType := field.Type.Name()
+	if invType != expectedInvType {
+		return false
+	}
+
+	invDirective := field.Directives.ForName("hasInverse")
+	if invDirective == nil {
+		return false
+	}
+
+	invFieldArg := invDirective.Arguments.ForName("field")
+	if invFieldArg == nil || invFieldArg.Value.Raw != expectedInvField {
+		return false
+	}
+
+	return true
+}
+
 func isScalar(s string) bool {
 	_, ok := supportedScalars[s]
 	return ok
