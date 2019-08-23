@@ -75,10 +75,22 @@ input AuthorRef {
 	id: ID!
 }
 
-input AuthorUpdate {
+input UpdateAuthorInput {
+	id: ID!
+	patch: PatchAuthor!
+}
+
+input PatchAuthor {
 	name: String
 	posts: [PostRef!]
 	friends: [AuthorRef!]
+}
+
+input PatchPost {
+	title: String
+	text: String
+	author: AuthorRef
+	postType: PostType
 }
 
 input PostFilter {
@@ -96,11 +108,9 @@ input PostRef {
 	id: ID!
 }
 
-input PostUpdate {
-	title: String
-	text: String
-	author: AuthorRef
-	postType: PostType
+input UpdatePostInput {
+	id: ID!
+	patch: PatchPost!
 }
 
 #######################
@@ -117,9 +127,9 @@ type Query {
 #######################
 type Mutation {
 	addPost(input: PostInput!): AddPostPayload!
-	updatePost(id: ID!, input: PostUpdate): UpdatePostPayload!
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(id: ID!): DeletePostPayload!
 	addAuthor(input: AuthorInput!): AddAuthorPayload!
-	updateAuthor(id: ID!, input: AuthorUpdate): UpdateAuthorPayload!
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(id: ID!): DeleteAuthorPayload!
 }

@@ -157,6 +157,7 @@ func generateCompleteSchema(sch *ast.Schema, definitions []string) {
 		if defn.Kind == ast.Object {
 			sch.Types[defn.Name+"Input"] = genInputType(sch, defn)
 			sch.Types[defn.Name+"Ref"] = genRefType(defn)
+			sch.Types["Patch"+defn.Name] = genPatchType(sch, defn)
 			sch.Types[defn.Name+"Update"] = genUpdateType(sch, defn)
 			sch.Types[defn.Name+"Filter"] = genFilterType(defn)
 			sch.Types["Add"+defn.Name+"Payload"] = genAddResultType(defn)
@@ -186,17 +187,33 @@ func genRefType(defn *ast.Definition) *ast.Definition {
 }
 
 func genUpdateType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
-	updDefn := &ast.Definition{
+	return &ast.Definition{
+		Kind: ast.InputObject,
+		Name: "Update" + defn.Name + "Input",
+		Fields: append(
+			getIDField(defn),
+			&ast.FieldDefinition{
+				Name: "patch",
+				Type: &ast.Type{
+					NamedType: "Patch" + defn.Name,
+					NonNull:   true,
+				},
+			}),
+	}
+}
+
+func genPatchType(schema *ast.Schema, defn *ast.Definition) *ast.Definition {
+	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   defn.Name + "Update",
+		Name:   "Patch" + defn.Name,
 		Fields: getNonIDFields(schema, defn),
 	}
 
-	for _, fld := range updDefn.Fields {
+	for _, fld := range patchDefn.Fields {
 		fld.Type.NonNull = false
 	}
 
-	return updDefn
+	return patchDefn
 }
 
 func genFilterType(defn *ast.Definition) *ast.Definition {
@@ -326,32 +343,22 @@ func createAddFld(defn *ast.Definition) *ast.FieldDefinition {
 }
 
 func createUpdFld(defn *ast.Definition) *ast.FieldDefinition {
-	updArgs := make([]*ast.ArgumentDefinition, 0)
-	updArg := &ast.ArgumentDefinition{
-		Name: "id",
-		Type: &ast.Type{
-			NamedType: idTypeFor(defn),
-			NonNull:   true,
-		},
-	}
-	updArgs = append(updArgs, updArg)
-	updArg = &ast.ArgumentDefinition{
-		Name: "input",
-		Type: &ast.Type{
-			NamedType: defn.Name + "Update",
-			NonNull:   false,
-		},
-	}
-	updArgs = append(updArgs, updArg)
-
 	return &ast.FieldDefinition{
-		Description: "Function for updating " + defn.Name,
+		Description: "Update a " + defn.Name,
 		Name:        "update" + defn.Name,
 		Type: &ast.Type{
 			NamedType: "Update" + defn.Name + "Payload",
-			NonNull:   true,
+			NonNull:   false,
 		},
-		Arguments: updArgs,
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "input",
+				Type: &ast.Type{
+					NamedType: "Update" + defn.Name + "Input",
+					NonNull:   true,
+				},
+			},
+		},
 	}
 }
 
