@@ -272,23 +272,23 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
-	schema.Query.Fields = append(schema.Query.Fields,
-		&ast.FieldDefinition{
-			Description: "Get " + defn.Name + " by ID",
-			Name:        "get" + defn.Name,
-			Type: &ast.Type{
-				NamedType: defn.Name,
-			},
-			Arguments: []*ast.ArgumentDefinition{
-				&ast.ArgumentDefinition{
-					Name: "id",
-					Type: &ast.Type{
-						NamedType: idTypeFor(defn),
-						NonNull:   true,
-					},
+	qry := &ast.FieldDefinition{
+		Description: "Get " + defn.Name + " by ID",
+		Name:        "get" + defn.Name,
+		Type: &ast.Type{
+			NamedType: defn.Name,
+		},
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "id",
+				Type: &ast.Type{
+					NamedType: idTypeFor(defn),
+					NonNull:   true,
 				},
 			},
-		})
+		},
+	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -340,23 +340,23 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 }
 
 func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
-	schema.Mutation.Fields = append(schema.Mutation.Fields,
-		&ast.FieldDefinition{
-			Description: "Update a " + defn.Name,
-			Name:        "update" + defn.Name,
-			Type: &ast.Type{
-				NamedType: "Update" + defn.Name + "Payload",
-			},
-			Arguments: []*ast.ArgumentDefinition{
-				&ast.ArgumentDefinition{
-					Name: "input",
-					Type: &ast.Type{
-						NamedType: "Update" + defn.Name + "Input",
-						NonNull:   true,
-					},
+	upd := &ast.FieldDefinition{
+		Description: "Update a " + defn.Name,
+		Name:        "update" + defn.Name,
+		Type: &ast.Type{
+			NamedType: "Update" + defn.Name + "Payload",
+		},
+		Arguments: []*ast.ArgumentDefinition{
+			&ast.ArgumentDefinition{
+				Name: "input",
+				Type: &ast.Type{
+					NamedType: "Update" + defn.Name + "Input",
+					NonNull:   true,
 				},
 			},
-		})
+		},
+	}
+	schema.Mutation.Fields = append(schema.Mutation.Fields, upd)
 }
 
 func addDeleteMutation(schema *ast.Schema, defn *ast.Definition) {
