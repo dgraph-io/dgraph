@@ -31,11 +31,6 @@ const (
 	inverseArg       = "field"
 )
 
-type scalar struct {
-	name       string
-	dgraphType string
-}
-
 type directiveValidator func(
 	sch *ast.Schema,
 	typ *ast.Definition,

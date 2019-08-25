@@ -175,7 +175,7 @@ func isInverse(expectedInvType, expectedInvField string, field *ast.FieldDefinit
 		return false
 	}
 
-	invDirective := field.Directives.ForName("hasInverse")
+	invDirective := field.Directives.ForName(inverseDirective)
 	if invDirective == nil {
 		return false
 	}
