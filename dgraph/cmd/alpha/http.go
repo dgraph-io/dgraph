@@ -302,7 +302,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	// start parsing the query
 	parseStart := time.Now()
 
-	var mu *api.Mutation
+	var req *api.Request
 	contentType := r.Header.Get("Content-Type")
 	switch strings.ToLower(contentType) {
 	case "application/json":
@@ -312,7 +312,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		mu = &api.Mutation{}
+		mu := &api.Mutation{}
+		req = &api.Request{Mutations: []*api.Mutation{mu}}
 		if setJSON, ok := ms["set"]; ok && setJSON != nil {
 			mu.SetJson = setJSON.bs
 		}
@@ -320,7 +321,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 			mu.DeleteJson = delJSON.bs
 		}
 		if queryText, ok := ms["query"]; ok && queryText != nil {
-			mu.Query, err = strconv.Unquote(string(queryText.bs))
+			req.Query, err = strconv.Unquote(string(queryText.bs))
 			if err != nil {
 				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 				return
@@ -336,7 +337,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "application/rdf":
 		// Parse N-Quads.
-		mu, err = gql.ParseMutation(string(body))
+		req, err = gql.ParseMutation(string(body))
 		if err != nil {
 			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 			return
@@ -351,11 +352,11 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	// end of query parsing
 	parseEnd := time.Now()
 
-	mu.StartTs = startTs
-	mu.CommitNow = commitNow
+	req.StartTs = startTs
+	req.CommitNow = commitNow
 
 	ctx := attachAccessJwt(context.Background(), r)
-	resp, err := (&edgraph.Server{}).Mutate(ctx, mu)
+	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -363,14 +364,14 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp.Latency.ParsingNs = uint64(parseEnd.Sub(parseStart).Nanoseconds())
 	e := query.Extensions{
-		Txn:     resp.Context,
+		Txn:     resp.Txn,
 		Latency: resp.Latency,
 	}
 	sort.Strings(e.Txn.Keys)
 	sort.Strings(e.Txn.Preds)
 
 	// Don't send keys array which is part of txn context if its commit immediately.
-	if mu.CommitNow {
+	if req.CommitNow {
 		e.Txn.Keys = e.Txn.Keys[:0]
 	}
 
@@ -487,11 +488,11 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 		return nil, err
 	}
 
-	resp := &api.Assigned{}
-	resp.Context = tc
-	resp.Context.CommitTs = cts
+	resp := &api.Response{}
+	resp.Txn = tc
+	resp.Txn.CommitTs = cts
 	e := query.Extensions{
-		Txn: resp.Context,
+		Txn: resp.Txn,
 	}
 	e.Txn.Keys = e.Txn.Keys[:0]
 	response := map[string]interface{}{}
